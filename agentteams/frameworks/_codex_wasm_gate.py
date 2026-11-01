@@ -106,5 +106,5 @@ def wasm_gate_output_files() -> list[tuple[str, str]]:
     """
     from agentteams.frameworks import _codex_role_gate_emit as rg
 
-    return [(f"../../{rg.CODEX_ROLE_GATE_PROJECT_PATH}", rg._role_gate_content()),
+    return [(f"../../{rg.CODEX_ROLE_GATE_PROJECT_PATH}", rg.role_gate_content()),
             ("../hooks.json", rg.codex_hooks_json())]

@@ -796,6 +796,28 @@ _YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$
 _YAML_TOOLS_RE = re.compile(r"^tools:\s*\[([^\]]*)\]\s*$", re.MULTILINE)
 
 
+def claude_tool_names(tokens: list[str] | tuple[str, ...]) -> list[str]:
+    """Map canonical tool tokens to the Claude Code tool names they grant (unknown tokens map to nothing).
+
+    An empty result falls back to the blanket default; ``wasm_enforcement.apply_canonical`` refuses that.
+
+    Args:
+        tokens: Canonical tokens (``read``, ``search``, ``edit``, ``execute``, ...); case-insensitive.
+
+    Returns:
+        The Claude names, de-duplicated, in first-seen order.
+
+    Raises:
+        Nothing.
+    """
+    mapped: list[str] = []
+    for token in tokens:
+        for claude_tool in _VSCODE_TO_CLAUDE_TOOLS.get(token.lower(), ()):
+            if claude_tool not in mapped:
+                mapped.append(claude_tool)
+    return mapped
+
+
 def _map_allowed_tools(content: str) -> str:
     """Map an agent's VS Code ``tools:`` list to a Claude ``allowed-tools`` value.
 
@@ -809,11 +831,7 @@ def _map_allowed_tools(content: str) -> str:
     if not tools_match:
         return _CLAUDE_DEFAULT_ALLOWED_TOOLS
     vscode_tools = [item.strip().strip("'\"") for item in tools_match.group(1).split(",") if item.strip()]
-    mapped: list[str] = []
-    for vt in vscode_tools:
-        for claude_tool in _VSCODE_TO_CLAUDE_TOOLS.get(vt.lower(), ()):
-            if claude_tool not in mapped:
-                mapped.append(claude_tool)
+    mapped = claude_tool_names(vscode_tools)
     # `execute` already grants unrestricted Bash, which subsumes the scoped retrieval command.
     # Emitting both would read as though the scope constrained something when it constrains
     # nothing — a misleading least-privilege signal in the generated file.

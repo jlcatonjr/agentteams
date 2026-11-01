@@ -23,9 +23,11 @@ JSON input cannot forge).
 (``team-manifest.schema.json``) and printed as ``[WASM-ENFORCEMENT]`` lines (:func:`notices`). A sub-agent cell keeps
 ``enforced`` / ``conditional`` only when the OS sandbox is on **and** the METAPLAN R1 control-plane rules are merged
 (Claude: ``_sandbox_drift.verify_control_plane_merged`` and ``wasm_mcp.control_plane_advisory``; Goose:
-``control_plane_advisory``; Codex: the confined launcher protects and self-probes them at each launch). Otherwise the
-cell is ``advisory`` with the reason. The top-level session is always ``advisory``. Integrity-pinned: it removes a
-tool from agents (C-3 narrowing) and is the one place enforcement is claimed.
+``control_plane_advisory``; Codex: the confined launcher protects and self-probes them at each launch), and no
+narrowed agent's live file still grants a shell (:func:`live_problems`). Otherwise the cell is ``advisory`` with the
+reason; a convert / interop projection of a WASM team says so too (:func:`projection_notice`). The top-level
+session is always ``advisory``. Integrity-pinned: it removes a tool from agents (C-3 narrowing) and is the one place
+enforcement is claimed.
 """
 
 from __future__ import annotations
@@ -44,8 +46,26 @@ ACTIONS_KEY = "_wasm_exec_actions"
 TERMS: tuple[str, ...] = ("enforced", "conditional", "declared", "advisory")
 #: Per-agent actions recorded during the render.
 NARROW, KEEP, FALLBACK, EXEMPT = "narrow", "keep", "fallback", "exempt"
-#: Frameworks with a per-agent tool channel the canonical narrowing reaches (agents-md has none).
-_TOOL_CHANNEL = frozenset({"claude", "goose", "codex", "grok", "copilot-vscode", "copilot-cli"})
+#: framework -> (base term for narrowed sub-agents, mechanism, evidence, per-agent tool channel). The base is the
+#: strongest claim the host's mechanism supports; :func:`enforcement_report` lowers it (never raises it). Copilot's
+#: base is ``advisory``: its tools classification is real, but no control-plane protection is verified there
+#: (``wasm_mcp.control_plane_advisory``).
+_MECHANISM: Mapping[str, tuple[str, str, str, bool]] = {
+    "claude": ("enforced", "Bash removed from subagent tools (Claude Code enforces subagent tools); run_wasm wired "
+               "per subagent", "in-repo", True),
+    "goose": ("enforced", "developer shell absent from the recipe's available_tools (enforced at dispatch on a direct "
+              "`goose run --recipe`); run_wasm wired per recipe", "spike", True),
+    "codex": ("declared", "execute removed from the role declaration; Codex ignores role tool limits", "in-repo",
+              True),
+    "grok": ("declared", "Bash absent from tools: (deny by absence; no live negative probe yet)", "unverified", True),
+    "copilot-vscode": ("advisory", "execute removed from agent tools (Copilot tools classification); the agent files "
+                       "are not verified write-protected", "in-repo", True),
+    "copilot-cli": ("advisory", "execute removed from agent tools (Copilot tools classification); the agent files "
+                    "are not verified write-protected", "in-repo", True),
+    "agents-md": ("advisory", "AGENTS.md has no tool channel; instructions only", "in-repo", False),
+}
+#: Frameworks with a per-agent tool channel the canonical narrowing reaches (derived from :data:`_MECHANISM`).
+_TOOL_CHANNEL = frozenset(fw for fw, (_b, _m, _e, channel) in _MECHANISM.items() if channel)
 #: Wiring statuses under which an eligible agent receives ``run_wasm`` (P11).
 _WIRED = frozenset({"wired-per-agent", "wired-shared"})
 _ORCHESTRATOR_TEMPLATE = "orchestrator.template.md"
@@ -192,19 +212,39 @@ def begin(manifest: dict[str, Any]) -> None:
     manifest.pop(ACTIONS_KEY, None)
 
 
-def _canonical_tools(content: str) -> tuple[re.Match[str] | None, list[str] | None]:
-    """The front matter's one-line ``tools: [...]`` match and its tokens (None when absent)."""
+def _unparsable_tools(content: str) -> bool:
+    """Whether the front matter has a ``tools:`` key that is not the one-line flow list this module reads."""
     fm = _FRONT_RE.match(content)
-    if fm is None:
-        return None, None
-    m = _FLOW_TOOLS_RE.search(fm.group(1))
+    return (fm is not None and _FLOW_TOOLS_RE.search(fm.group(1)) is None
+            and re.search(r"^tools\s*:", fm.group(1), re.MULTILINE) is not None)
+
+
+def _canonical_tools(content: str) -> tuple[re.Match[str] | None, list[str] | None]:
+    """The front matter's one-line ``tools: [...]`` match and its tokens (None when absent).
+
+    Raises ValueError for a ``tools:`` key in another form (:func:`_unparsable_tools`): fail closed.
+    """
+    if _unparsable_tools(content):
+        raise ValueError("agent file's `tools:` is not a one-line flow list; cannot apply the WASM native-exec "
+                         "policy safely (fail closed)")
+    fm = _FRONT_RE.match(content)
+    m = _FLOW_TOOLS_RE.search(fm.group(1)) if fm is not None else None
     if m is None:
-        if re.search(r"^tools\s*:", fm.group(1), re.MULTILINE):
-            raise ValueError("agent file's `tools:` is not a one-line flow list; cannot apply the WASM native-exec "
-                             "policy safely (fail closed)")
         return None, None
     tokens = [t.strip().strip("'\"") for t in m.group(1).split(",") if t.strip()]
     return m, tokens
+
+
+def _refuse_empty(kept: list[str], slug: str, framework: str) -> None:
+    """Fail closed when narrowing leaves a tool list the framework would read as its default grant (C-3)."""
+    from agentteams.frameworks.claude import claude_tool_names
+
+    if kept and (framework != "claude" or claude_tool_names(kept)):
+        return
+    raise ValueError(
+        f"WASM native-exec policy: removing `execute` leaves agent {slug!r} with no {framework} tool "
+        f"({kept or 'none'}), and an empty list falls back to a default grant that includes the shell; refusing "
+        "(fail closed). Give its template a non-execute tool, or list it in wasm_sandbox.native_exec_keep.")
 
 
 def apply_canonical(content: str, slug: str, manifest: dict[str, Any], framework: str) -> str:
@@ -223,7 +263,8 @@ def apply_canonical(content: str, slug: str, manifest: dict[str, Any], framework
         The content, narrowed when the action is ``narrow``.
 
     Raises:
-        ValueError: A ``tools:`` key that is not a one-line flow list while WASM is on, or a malformed WASM record.
+        ValueError: A ``tools:`` key that is not a one-line flow list while WASM is on, a malformed WASM record, or
+            a narrowed list that maps to no tool on ``framework`` (it would fall back to a default grant).
     """
     if not _wasm_on(manifest):
         return content
@@ -240,6 +281,7 @@ def apply_canonical(content: str, slug: str, manifest: dict[str, Any], framework
     if action != NARROW:
         return content
     kept = [t for t in tokens if t.lower() != "execute"]
+    _refuse_empty(kept, slug, framework)
     fm = _FRONT_RE.match(content)
     assert fm is not None  # _canonical_tools matched it
     start = fm.start(1)
@@ -303,11 +345,9 @@ def _template_tools(manifest: Mapping[str, Any], slug: str) -> list[str] | None:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return None
-    try:
-        _m, tokens = _canonical_tools(text)
-    except ValueError:
+    if _unparsable_tools(text):
         return None
-    return tokens
+    return _canonical_tools(text)[1]
 
 
 def planned_actions(manifest: dict[str, Any], framework: str) -> dict[str, str]:
@@ -340,14 +380,39 @@ def planned_actions(manifest: dict[str, Any], framework: str) -> dict[str, str]:
     return out
 
 
+#: A framework id with no tool channel: :func:`agent_action` there reaches its KEEP branch without touching P11
+#: wiring, so the keep derivation below is framework-independent and side-effect free.
+_NO_CHANNEL = next(fw for fw, row in _MECHANISM.items() if not row[3])
+
+
+def _keep_derivation(manifest: dict[str, Any]) -> tuple[frozenset[str], frozenset[str]]:
+    """``(keep, unknown)``: the one derivation of the native-exec keep set (``gate_keep_set``, ``codex_gate_keep``).
+
+    ``keep`` is exactly the agents :func:`planned_actions` records as :data:`KEEP` (its ``agent_action`` KEEP
+    branch: eligible, non-exempt, policy ``keep``; under ``write_policy`` none). ``unknown`` is every non-exempt
+    agent whose policy is ``keep`` but whose template tools cannot be read: it may hold ``execute``, so it is
+    counted (over-inclusion only asks for more signatures). ``wasm_config`` already refuses a ``native_exec_keep``
+    entry that is not in the team.
+    """
+    from agentteams import write_policy
+
+    if not _wasm_on(manifest) or write_policy.enabled(manifest):
+        return frozenset(), frozenset()
+    keep = frozenset(s for s, a in planned_actions(manifest, _NO_CHANNEL).items() if a == KEEP)
+    slugs = [s for s in manifest.get("agent_slug_list") or [] if isinstance(s, str)]
+    unknown = frozenset(s for s in slugs if not role_exempt(manifest, s) and exec_policy(manifest, s) == "keep"
+                        and _template_tools(manifest, s) is None)
+    return keep, unknown
+
+
 def gate_keep_set(manifest: dict[str, Any]) -> frozenset[str]:
     """Return the agents whose kept native exec is a ``native-exec-keep`` gate effect (P15).
 
-    ``native_exec_keep`` entries always; under ``native_exec: keep`` also every other non-exempt agent that may be
-    eligible (an agent whose template tools cannot be read counts: over-inclusion only asks for more signatures).
-    Under ``write_policy: orchestrator-only`` nothing but the orchestrator keeps ``execute``, so only the explicit
-    entries count. The ``replace`` fallback (no ``run_wasm`` on the host) is not an operator relaxation and is not
-    included.
+    The agents that would actually keep native exec (:func:`planned_actions` KEEP: a ``native_exec_keep`` entry,
+    or under ``native_exec: keep`` any eligible non-exempt agent), plus those that might (template tools
+    unreadable). Under ``write_policy: orchestrator-only`` nothing but the orchestrator
+    keeps ``execute``, so nothing counts; an entry whose template holds no execute-class tool keeps nothing and does
+    not count either. The ``replace`` fallback (no ``run_wasm`` on the host) is not an operator relaxation.
 
     Args:
         manifest: The team manifest.
@@ -358,57 +423,27 @@ def gate_keep_set(manifest: dict[str, Any]) -> frozenset[str]:
     Raises:
         ValueError: A malformed ``wasm_sandbox`` record.
     """
-    if not _wasm_on(manifest):
-        return frozenset()
-    from agentteams import write_policy
-    from agentteams.wasm_config import manifest_wasm_config, wasm_eligible
-
-    cfg = manifest_wasm_config(manifest)
-    keep = set(cfg.native_exec_keep)
-    if cfg.native_exec == "keep" and not write_policy.enabled(manifest):
-        for slug in manifest.get("agent_slug_list") or []:
-            if not isinstance(slug, str) or role_exempt(manifest, slug):
-                continue
-            tools = _template_tools(manifest, slug)
-            if tools is None or wasm_eligible({"slug": slug, "tools": tools}):
-                keep.add(slug)
-    return frozenset(keep)
+    keep, unknown = _keep_derivation(manifest)
+    return keep | unknown
 
 
 def codex_gate_keep(manifest: dict[str, Any]) -> tuple[str, ...]:
-    """Return the agent names the Codex WASM-mode gate lets keep the shell: exempt roles plus ``native_exec_keep``.
+    """Return the agent names the Codex WASM-mode gate lets keep the shell: exempt roles plus :func:`gate_keep_set`.
 
     Args:
         manifest: The team manifest.
 
     Returns:
-        Sorted slugs present in the team.
+        Sorted slugs: the exempt roles present in the team and every gated keep effect.
 
     Raises:
         ValueError: A malformed ``wasm_sandbox`` record.
     """
-    from agentteams.wasm_config import manifest_wasm_config
-
     slugs = [s for s in manifest.get("agent_slug_list") or [] if isinstance(s, str)]
-    keep = {s for s in slugs if role_exempt(manifest, s)} | set(manifest_wasm_config(manifest).native_exec_keep)
-    return tuple(sorted(keep))
+    return tuple(sorted({s for s in slugs if role_exempt(manifest, s)} | gate_keep_set(manifest)))
 
 
 # --- verdict ---------------------------------------------------------------------------------------------------------
-
-#: framework -> (base term for narrowed sub-agents, mechanism, evidence).
-_MECHANISM: Mapping[str, tuple[str, str, str]] = {
-    "claude": ("enforced", "Bash removed from subagent tools (Claude Code enforces subagent tools); run_wasm wired "
-               "per subagent", "in-repo"),
-    "goose": ("enforced", "developer shell absent from the recipe's available_tools (enforced at dispatch on a direct "
-              "`goose run --recipe`); run_wasm wired per recipe", "spike"),
-    "codex": ("declared", "execute removed from the role declaration; Codex ignores role tool limits", "in-repo"),
-    "grok": ("declared", "Bash absent from tools: (deny by absence; no live negative probe yet)", "unverified"),
-    "copilot-vscode": ("enforced", "execute removed from agent tools (Copilot tools classification)", "in-repo"),
-    "copilot-cli": ("enforced", "execute removed from agent tools (Copilot tools classification)", "in-repo"),
-    "agents-md": ("advisory", "AGENTS.md has no tool channel; instructions only", "in-repo"),
-}
-
 
 def _project_root(manifest: Mapping[str, Any], fallback: Path | None) -> Path | None:
     from agentteams.frameworks._write_roots import project_root_of
@@ -456,6 +491,111 @@ def _control_plane(manifest: dict[str, Any], framework: str, root: Path | None) 
     return True, ""
 
 
+_CLAUDE_TOOLS_RE = re.compile(r"^tools[ \t]*:[ \t]*(.*)$", re.MULTILINE)
+_CODEX_KEEP_RE = re.compile(r"AGENTTEAMS_CODEX_NATIVE_KEEP='([^'\n]*)'")
+
+
+def _live_text(path: Path) -> str | None:
+    """A live agent file's text; None when absent. An unreadable or non-regular file reads as ``""`` (fail toward
+    "holds a shell")."""
+    import os
+
+    if not os.path.lexists(path):
+        return None
+    if path.is_symlink() or not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
+def _claude_live_tools(text: str) -> list[str] | None:
+    """The live subagent's ``tools:`` names; None (inherits every tool) when absent, duplicated or unreadable."""
+    fm = _FRONT_RE.match(text)
+    if fm is None:
+        return None
+    found = _CLAUDE_TOOLS_RE.findall(fm.group(1))
+    if len(found) != 1:
+        return None
+    value = found[0].split(" #", 1)[0].strip()
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1]
+    if not value or value.startswith(("|", ">", "{")):
+        return None   # a block list or scalar this reader does not parse: worst case
+    return [t.strip().strip("'\"") for t in value.split(",") if t.strip()]
+
+
+def _claude_holds_shell(tools: list[str] | None) -> bool:
+    """Whether live Claude subagent ``tools:`` grant a shell: absent / empty inherits every tool; ``Bash`` or any
+    ``Bash(...)`` other than the retrieval CLI scope (Rule-12 carve-out 2) counts."""
+    from agentteams.frameworks.claude import claude_tool_names
+
+    if not tools:
+        return True
+    retrieval = set(claude_tool_names(["retrieval"]))
+    return any(t == "Bash" or (t.startswith("Bash(") and t not in retrieval) for t in tools)
+
+
+def _holds_shell(root: Path, framework: str, slug: str) -> bool:
+    """Whether the live agent file of ``slug`` on ``framework`` still grants a native shell (absent: False)."""
+    if framework == "claude":
+        text = _live_text(root / ".claude" / "agents" / f"{slug}.md")
+        return text is not None and _claude_holds_shell(_claude_live_tools(text))
+    if framework == "goose":
+        from agentteams.frameworks.goose_recipe_read import developer_tools, recipe_extension_grants
+
+        text = _live_text(root / ".goose" / "recipes" / f"{slug}.yaml")
+        if text is None:
+            return False
+        grants = recipe_extension_grants(text)
+        return grants is None or "shell" in developer_tools(grants)   # None: Goose loads the user's extensions
+    return False
+
+
+def live_problems(manifest: dict[str, Any], framework: str, root: Path | None,
+                  narrowed: Iterable[str]) -> list[str]:
+    """Return why the live agent files contradict the narrowing (empty when they agree or nothing is checkable).
+
+    Claude: each narrowed agent's ``.claude/agents/<slug>.md`` ``tools:`` (absent = every tool). Goose: each
+    narrowed agent's ``.goose/recipes/<slug>.yaml`` ``developer`` grant. Codex (whose role tool limits are ignored):
+    the live ``.codex/confined-run.example.sh`` must start the WASM-mode gate, and its keep list may not name a
+    narrowed agent. A hand-re-added shell is how an agent file escapes the render; R1's denies are what stop it.
+
+    Args:
+        manifest: The team manifest.
+        framework: The framework id.
+        root: The project root (None: nothing is checked).
+        narrowed: The agents whose native exec the policy removed.
+
+    Returns:
+        Reason strings, e.g. ``"live agent cleanup holds a shell"``.
+
+    Raises:
+        Nothing.
+    """
+    slugs = sorted(set(narrowed))
+    if root is None or not slugs:
+        return []
+    if framework == "codex":
+        from agentteams.frameworks._codex_sandbox_emit import CODEX_RUNNER_PROJECT_PATH
+        from agentteams.frameworks._codex_wasm_gate import codex_wasm_gate_emitted
+
+        try:
+            if not codex_wasm_gate_emitted(manifest):
+                return []
+        except ValueError:
+            return []
+        text = _live_text(root / CODEX_RUNNER_PROJECT_PATH) or ""
+        keep = _CODEX_KEEP_RE.findall(text)
+        if "AGENTTEAMS_CODEX_WASM=1" not in text or len(keep) != 1:
+            return [f"live {CODEX_RUNNER_PROJECT_PATH} does not start the role gate in WASM mode"]
+        holders = [s for s in slugs if s in keep[0].split(",")]
+    else:
+        holders = [s for s in slugs if _holds_shell(root, framework, s)]
+    return [f"live agent {s} holds a shell" for s in holders]
+
+
 def enforcement_report(manifest: dict[str, Any], framework: str, *, project_root: Path | None = None,
                        acts: Mapping[str, str] | None = None) -> dict[str, Any] | None:
     """Return the ``wasm_enforcement`` row for ``framework``, or None while WASM is off.
@@ -468,8 +608,9 @@ def enforcement_report(manifest: dict[str, Any], framework: str, *, project_root
             :func:`planned_actions`.
 
     Returns:
-        ``{subagents, top_level, delegates?, mechanism, evidence, reason, os_sandbox, control_plane_merged, exempt,
-        kept_native, fallback, changed_agents}``.
+        ``{subagents, top_level, delegates?, delegates_native?, mechanism, evidence, reason, os_sandbox,
+        control_plane_merged, exempt, kept_native, fallback, changed_agents}``; the reason names any live agent file
+        that still holds a shell (:func:`live_problems`), which makes the cell ``advisory``.
 
     Raises:
         ValueError: A malformed ``wasm_sandbox`` record.
@@ -485,8 +626,8 @@ def enforcement_report(manifest: dict[str, Any], framework: str, *, project_root
     exempt = sorted({s for s, a in acts.items() if a == EXEMPT} | {
         s for s in manifest.get("agent_slug_list") or [] if isinstance(s, str) and role_exempt(manifest, s)})
     os_on = os_switch_state(manifest)[0]
-    base, mechanism, evidence = _MECHANISM.get(framework, ("advisory", f"no enforcement channel for {framework}",
-                                                           "unverified"))
+    base, mechanism, evidence, _channel = _MECHANISM.get(
+        framework, ("advisory", f"no enforcement channel for {framework}", "unverified", False))
     if framework == "goose":
         from agentteams.frameworks.goose_tool_scoping import grant_mode
 
@@ -507,12 +648,17 @@ def enforcement_report(manifest: dict[str, Any], framework: str, *, project_root
             if codex_role_gate_enabled(manifest):
                 base, mechanism = "conditional", ("write_policy role gate: spawned agents get only agentteams_readfs "
                                                   "(no shell), under .codex/confined-run.example.sh")
+    root = _project_root(manifest, project_root)
     merged, cp_reason = (False, "os sandbox off")
     if os_on:
-        merged, cp_reason = _control_plane(manifest, framework, _project_root(manifest, project_root))
+        merged, cp_reason = _control_plane(manifest, framework, root)
+    live = live_problems(manifest, framework, root, changed)
     reason = ""
     term = base
-    if not changed and not (framework == "codex" and base == "conditional"):
+    if live and term != "advisory":
+        more = f" (+{len(live) - 3} more)" if len(live) > 3 else ""
+        term, reason = "advisory", "; ".join(live[:3]) + more
+    elif not changed and not (framework == "codex" and base == "conditional"):
         term, reason = "advisory", ("no agent's native exec removed on this host" +
                                     (f" (fallback: no run_wasm here for {', '.join(fallback)})" if fallback else ""))
     elif term in ("enforced", "conditional") and not os_on:
@@ -523,13 +669,16 @@ def enforcement_report(manifest: dict[str, Any], framework: str, *, project_root
         reason = "written, not enforced by the host"
     elif framework == "codex" and term == "conditional":
         reason = cp_reason
+    elif term == "advisory":
+        reason = cp_reason if os_on else "os sandbox off"
     row: dict[str, Any] = {
         "subagents": term, "top_level": "advisory", "mechanism": mechanism, "evidence": evidence, "reason": reason,
         "os_sandbox": bool(os_on), "control_plane_merged": bool(merged), "exempt": exempt, "kept_native": kept,
         "fallback": fallback, "changed_agents": changed,
     }
     if framework == "goose":
-        row["delegates"] = "advisory"
+        # Per agent: each narrowed recipe, run as a delegate instead, inherits the orchestrator's extensions.
+        row["delegates"], row["delegates_native"] = "advisory", changed
     return row
 
 
@@ -564,7 +713,8 @@ def notices(framework: str, row: Mapping[str, Any] | None) -> list[str]:
         row: :func:`enforcement_report`'s row.
 
     Returns:
-        The framework line, the exemption / exception line, and an OS-off note when it applies.
+        The framework line, the Goose per-agent delegate line, the exemption / exception line, and an OS-off note
+        when it applies.
 
     Raises:
         Nothing.
@@ -577,8 +727,12 @@ def notices(framework: str, row: Mapping[str, Any] | None) -> list[str]:
     lines = [f"[WASM-ENFORCEMENT] {framework}: subagents {term}{why}; native exec removed from {n} agent"
              f"{'' if n == 1 else 's'}; mechanism: {row['mechanism']}; top-level session ADVISORY"]
     if "delegates" in row:
-        lines[0] += ("; delegates ADVISORY (a Goose delegate inherits the orchestrator's extensions, keeps native "
-                     "exec and cannot add run_wasm: route WASM work to a direct `goose run --recipe`)")
+        lines[0] += ("; delegates ADVISORY (a Goose delegate inherits the orchestrator's extensions and cannot add "
+                     "run_wasm)")
+        native = list(row.get("delegates_native") or [])
+        if native:
+            lines.append(f"[WASM-ENFORCEMENT] goose delegates keeping native exec: {', '.join(native)} (each when run "
+                         "as a delegate, not by a direct `goose run --recipe`; route WASM work to the direct run)")
     if term == "ADVISORY":
         lines[0] = lines[0].replace("subagents ADVISORY", "ADVISORY ONLY: subagents ADVISORY", 1)
     lines.append(f"[WASM-ENFORCEMENT] exempt (fixed): {', '.join(row['exempt']) or '<none>'}; operator exceptions "
@@ -610,6 +764,70 @@ def report(manifest: dict[str, Any], framework: str, *, project_root: Path | Non
              "message": f"WASM native-exec policy on {framework} is advisory only ({row['reason']})"})
 
 
+def projection_notice(framework: str, team_dirs: Iterable[object],
+                      description: Mapping[str, Any] | None = None) -> str | None:
+    """Return the ``[WASM-ENFORCEMENT]`` advisory for a convert / interop write of a WASM team, or None.
+
+    A projection renders each agent from its source tools without this module's policy or P11's ``run_wasm``
+    wiring, so it never claims enforcement: when the brief turns WASM on, or a source / target team recorded (or
+    carries evidence of) WASM, the result says the target is advisory and why.
+
+    Args:
+        framework: The target framework id (a non-framework target such as ``canonical`` gets no notice).
+        team_dirs: The source and target agents directories (``<root>/<config>/<agents>``); entries that are not a
+            path (a CAI's missing ``source_dir``) are skipped. A CAI-supplied path can only add the notice.
+        description: The ``--description`` brief, when given.
+
+    Returns:
+        The notice, or None when no WASM team is involved.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.sandbox_state import previous_sandbox_state
+    from agentteams.wasm_config import wasm_switch
+
+    if framework not in _MECHANISM:
+        return None
+    try:
+        wasm = description is not None and wasm_switch(description)[0]
+    except ValueError:
+        wasm = True   # a malformed record: fail toward reporting
+    for team_dir in team_dirs:
+        if wasm:
+            break
+        if not isinstance(team_dir, (str, Path)) or not str(team_dir):
+            continue
+        try:
+            state = previous_sandbox_state(Path(team_dir), Path(team_dir).parent.parent, framework)
+        except (ImportError, OSError):
+            state, wasm = None, True
+        wasm = wasm or (state is not None and state.wasm)
+    if not wasm:
+        return None
+    return (f"[WASM-ENFORCEMENT] {framework}: ADVISORY ONLY (a convert/interop projection does not apply the WASM "
+            "native-exec policy: each agent keeps its source tools and is not wired to run_wasm; re-render the team "
+            "to enforce it, then run --check-wiring)")
+
+
+def add_projection_notice(notices: list[str], framework: str, team_dirs: Iterable[object],
+                          description: Mapping[str, Any] | None = None) -> None:
+    """Append :func:`projection_notice` to ``notices`` once (convert / interop / multi-sync results).
+
+    Args:
+        notices: The run's notices (mutated).
+        framework: As :func:`projection_notice`.
+        team_dirs: As :func:`projection_notice`.
+        description: As :func:`projection_notice`.
+
+    Raises:
+        Nothing.
+    """
+    notice = projection_notice(framework, team_dirs, description)
+    if notice and notice not in notices:
+        notices.append(notice)
+
+
 __all__ = [
     "ACTIONS_KEY",
     "EXEMPT",
@@ -619,6 +837,7 @@ __all__ = [
     "NARROW",
     "TERMS",
     "actions",
+    "add_projection_notice",
     "agent_action",
     "apply_canonical",
     "begin",
@@ -626,8 +845,10 @@ __all__ = [
     "enforcement_report",
     "exec_policy",
     "gate_keep_set",
+    "live_problems",
     "notices",
     "planned_actions",
+    "projection_notice",
     "record",
     "report",
     "role_exempt",

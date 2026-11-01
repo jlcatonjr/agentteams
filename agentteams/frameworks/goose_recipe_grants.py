@@ -186,7 +186,6 @@ def recipe_extras(manifest: dict[str, Any], agent_slug: str, tools: frozenset[st
         extras.append(runner_mcp.goose_extension(agent_slug, grant["tools"], "staged", runner_mcp.interpreter()))
     if tools is not None and grant_mode(manifest):
         from agentteams.frameworks import _wasm_wiring
-
         from agentteams.wasm_enforcement import wiring_tools  # P13: the pre-narrowing tools decide eligibility
 
         wasm_args = _wasm_wiring.wasm_agent_entry(manifest, "goose", agent_slug,

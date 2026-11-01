@@ -222,7 +222,7 @@ def runner_exceptions(raw: object, *, native_exec_keep: frozenset[str] = frozens
 
     Args:
         raw: As :func:`program_modes`.
-        native_exec_keep: P13's keep set (empty until P13).
+        native_exec_keep: P13's keep set (``wasm_enforcement.gate_keep_set``: each a ``native-exec-keep`` effect).
 
     Returns:
         A :class:`~agentteams.sandbox_state.SandboxExceptions`.
