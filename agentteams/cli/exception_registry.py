@@ -226,7 +226,7 @@ def assert_within_aggregate_cap(
     if current + adding > cap:
         raise ExceptionRegistryError(
             f"activating {adding} more relaxing exception(s) would bring the active total to "
-            f"{current + adding}, over the cap of {cap} (references/{EXCEPTION_REGISTRY_REL} "
+            f"{current + adding}, over the cap of {cap} ({EXCEPTION_REGISTRY_REL} "
             f"cap.max_active_relaxing). Raise the cap deliberately in the registry or retire an "
             f"existing exception (fail-closed)."
         )

@@ -239,9 +239,6 @@ def test_confined_os_off_with_orchestrator_only_is_refused(base: Path, framework
             err[-800:]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "exception_registry.assert_within_aggregate_cap names 'references/references/exception-registry.json' "
-    "(EXCEPTION_REGISTRY_REL already starts with references/); found by the wasm-framework cap refusal above"))
 def test_the_cap_refusal_names_the_registry_path_it_reads(base: Path) -> None:
     team = base / "team"
     (team / "references").mkdir(parents=True)
