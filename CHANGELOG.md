@@ -9,14 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### added (vulnscan: `stage-image`, end-of-life base images)
 
 - **`stage-image REPO`**: a new executor op that moves the Dockerfile `FROM` tag of an end-of-life official runtime
-  image (`python`, `ruby`, `golang`, `php`) to the newest supported release line of the same variant, for example
-  `python:3.9-slim` to `python:3.15-slim`. A full-patch tag becomes the new line's latest release. New module
+  image (`python`, `ruby`, `golang`, `php`) to a supported release line of the same variant, for example
+  `python:3.9-slim` to `python:3.14-slim`: the newest supported line first released at least 90 days ago (S-10,
+  `images.LINE_MIN_AGE_DAYS`, `runtimes.newest_aged_release`). `images.upgrade_tag` computes it for the report's "→"
+  and the edit alike (the report's "→" for an end-of-life image now applies the same age rule). A full-patch tag
+  becomes that line's latest release. New module
   `agentteams.vulnscan.image_fix`. It is constraint-relaxing (Rule 15), so **no existing grant covers it**: the
   operator signs a grant that names it (`grant sign --op stage-image`; `--op` has no default).
 - It never touches `:latest` or untagged references (report-only), digest-pinned references, `ARG` defaults,
-  OS-tagged variants, compose files, databases, `node`, `eclipse-temurin`, or private and unlisted images. Those
-  rows stay plan-only, each with its reason.
-- `validate_diff(..., image=True)` accepts only those `FROM` tag moves (`image_fix.check_from_edit`, offline). It
+  OS-tagged variants, compose files, databases, `node`, `eclipse-temurin`, or private and unlisted images, nor any
+  Dockerfile with a byte-order mark, a heredoc or an `escape` / `syntax` directive. Each such reference with a
+  finding gets an `image-held` row with its reason; an unreadable manifest gets a note. `images.refs` now splits
+  Dockerfile lines on `"\n"` only, as Docker does.
+- The staging calls take one `mode` (`"fix"`, `"major"`, `"image"`; `executor_pr.resolve_mode`): `major=True` with
+  any other mode raises `ValueError`.
+- `validate_diff(..., mode="image")` accepts only those `FROM` tag moves (`image_fix.check_from_edit`, offline). It
   accepts no dependency file, and `stage-fix` / `stage-major` refuse any Dockerfile, so a base-image change is
   never combined with a dependency fix.
 - Commit and PR: `security(image)!: MAJOR upgrade of end-of-life base images (<digest>)`, labelled `vulnscan-major`.

@@ -14,7 +14,7 @@ import pytest
 
 pytest.importorskip("cryptography")
 from agentteams.vulnscan import executor, executor_pr, executor_supersede, fix, grant, image_fix, mcp  # noqa: E402
-from agentteams.vulnscan import ops, retry_guard, runtimes  # noqa: E402
+from agentteams.vulnscan import images, ops, retry_guard, runtimes  # noqa: E402
 from agentteams.vulnscan.__main__ import build_parser  # noqa: E402
 from tests.test_vulnscan_executor import (  # noqa: E402
     GIT,
@@ -25,18 +25,22 @@ from tests.test_vulnscan_executor import (  # noqa: E402
     env,  # noqa: F401  (the shared fixture)
 )
 
-TODAY = _dt.date(2026, 11, 1)
+TODAY = _dt.date(2026, 11, 1)   # the planner's default today is stubbed to this (_feeds)
 _CYCLES: dict[str, list[dict[str, Any]]] = {
-    "python": [{"cycle": "3.9", "eol": "2025-10-31", "is_eol": True, "latest": "3.9.25"},
-               {"cycle": "3.12", "eol": False, "is_eol": False, "latest": "3.12.16"},
-               {"cycle": "3.15", "eol": False, "is_eol": False, "latest": "3.15.0"}],
-    "ruby": [{"cycle": "2.7", "eol": True, "is_eol": True, "latest": "2.7.8"},
-             {"cycle": "3.4", "eol": False, "is_eol": False, "latest": "3.4.7"}],
-    "nodejs": [{"cycle": "18", "eol": True, "is_eol": True, "latest": "18.20.8"},
-               {"cycle": "25", "eol": False, "is_eol": False, "latest": "25.1.0"}],
-    "postgresql": [{"cycle": "12", "eol": True, "is_eol": True, "latest": "12.22"},
-                   {"cycle": "18", "eol": False, "is_eol": False, "latest": "18.1"}],
-    "debian": [{"cycle": "10", "eol": True, "is_eol": True, "latest": "10.13"}],
+    # 3.16 was released yesterday (S-10: never chosen); 3.15 is 120 days old
+    "python": [{"cycle": "3.9", "eol": "2025-10-31", "is_eol": True, "latest": "3.9.25", "release": "2020-10-05"},
+               {"cycle": "3.12", "eol": False, "is_eol": False, "latest": "3.12.16", "release": "2023-10-02"},
+               {"cycle": "3.15", "eol": False, "is_eol": False, "latest": "3.15.0", "release": "2026-07-04"},
+               {"cycle": "3.16", "eol": False, "is_eol": False, "latest": "3.16.0", "release": "2026-10-31"}],
+    "ruby": [{"cycle": "2.7", "eol": True, "is_eol": True, "latest": "2.7.8", "release": "2019-12-25"},
+             {"cycle": "3.4", "eol": False, "is_eol": False, "latest": "3.4.7", "release": "2024-12-25"}],
+    "nodejs": [{"cycle": "18", "eol": True, "is_eol": True, "latest": "18.20.8", "release": "2022-04-19"},
+               {"cycle": "25", "eol": False, "is_eol": False, "latest": "25.1.0", "release": "2025-10-15"}],
+    "postgresql": [{"cycle": "12", "eol": True, "is_eol": True, "latest": "12.22", "release": "2019-10-03"},
+                   {"cycle": "18", "eol": False, "is_eol": False, "latest": "18.1", "release": "2025-09-25"}],
+    "alpine-linux": [{"cycle": "3.18", "eol": True, "is_eol": True, "latest": "3.18.12", "release": "2023-05-09"}],
+    "debian": [{"cycle": "10", "eol": True, "is_eol": True, "latest": "10.13", "release": "2019-07-06"},
+               {"cycle": "13", "eol": False, "is_eol": False, "latest": "13.1", "release": "2025-08-09"}],
 }
 
 
@@ -44,6 +48,13 @@ _CYCLES: dict[str, list[dict[str, Any]]] = {
 def _feeds(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runtimes, "_eol_cycles", lambda slug: _CYCLES[slug])
     monkeypatch.setattr(runtimes, "_security_releases", lambda feed, cycle: [])
+
+    class _Date(_dt.date):
+        @classmethod
+        def today(cls) -> _dt.date:
+            return TODAY
+
+    monkeypatch.setattr(runtimes._dt, "date", _Date)
 
 
 def _plan(tmp_path: Path, text: str, name: str = "Dockerfile") -> image_fix.ImagePlan:
@@ -277,9 +288,9 @@ def test_a_dependabot_docker_pr_holds_the_image_back(env: dict, monkeypatch: pyt
 # ---------------------------------------------------------------- PR text, label and lanes
 
 def test_image_pr_text_and_label() -> None:
-    assert executor_pr.title("vulnscan/20261101-abcdef0123", major=False, image=True) == \
+    assert executor_pr.title("vulnscan/20261101-abcdef0123", mode="image") == \
         "security(image)!: MAJOR upgrade of end-of-life base images (abcdef0123)"
-    body = executor_pr.body("plan", "why", major=False, image=True)
+    body = executor_pr.body("plan", "why", mode="image")
     assert body.startswith("**MAJOR base image upgrade.**") and "build the image and run the tests" in body
     assert "Dockerfile `FROM` tags only" in body
     assert executor_pr.title("vulnscan/20261101-abcdef0123", major=True).startswith("security(deps)!:")
@@ -294,8 +305,8 @@ def test_create_labels_an_image_pr_major(monkeypatch: pytest.MonkeyPatch, tmp_pa
     monkeypatch.setattr(executor_pr.subprocess, "run", lambda argv, **kw: calls.append(argv) or Proc())
     monkeypatch.setattr(executor_pr, "gh_cwd", lambda: str(tmp_path))
     monkeypatch.setattr(executor_pr, "gh_push_env", dict)
-    url = executor_pr.create("github.com/o/app", "main", "vulnscan/20261101-abc", tmp_path / "b.md", major=False,
-                             image=True, open_url=lambda: "")
+    url = executor_pr.create("github.com/o/app", "main", "vulnscan/20261101-abc", tmp_path / "b.md",
+                             mode="image", open_url=lambda: "")
     assert url.endswith("/pull/7")
     create = next(c for c in calls if c[1:3] == ["pr", "create"])
     assert create[-2:] == ["--label", executor_pr.MAJOR_LABEL] and "security(image)!:" in " ".join(create)
@@ -354,3 +365,87 @@ def test_mcp_offers_stage_image_and_refuses_it_for_a_staged_repository(tmp_path:
     assert "stage-image" in mcp.SCHEMAS["request"]["description"]
     with pytest.raises(mcp.ToolError, match="already staged.*not stage-image"):
         srv.call("request", {"op": "stage-image", "target": "/repos/app", "rationale": "python 3.9 EOL"})
+
+
+# ---------------------------------------------------------------- review conditions (S-10, parser, H1/H4/H5/H6)
+
+def test_a_line_released_yesterday_is_never_chosen(tmp_path: Path) -> None:
+    assert runtimes.newest_aged_release("python", min_age_days=0, today=TODAY) == "3.16.0"
+    assert runtimes.newest_aged_release("python", min_age_days=images.LINE_MIN_AGE_DAYS, today=TODAY) == "3.15.0"
+    p = _plan(tmp_path, "FROM python:3.9-slim\n")
+    assert [b.new_tag for b in p.bumps] == ["3.15-slim"]   # not 3.16 (released 2026-10-31)
+
+
+def test_a_line_without_a_release_date_is_never_chosen(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    undated = [{**c, "release": ""} if c["cycle"] != "3.9" else c for c in _CYCLES["python"]]
+    monkeypatch.setattr(runtimes, "_eol_cycles", lambda slug: undated if slug == "python" else _CYCLES[slug])
+    p = _plan(tmp_path, "FROM python:3.9-slim\n")
+    assert p.bumps == [] and "90 days old" in p.held[0][4]
+
+
+@pytest.mark.parametrize("tag", ["3.9-slim", "3.9.18-slim"])
+def test_the_report_and_the_plan_name_the_same_tag(tmp_path: Path, tag: str) -> None:
+    p = _plan(tmp_path, f"FROM python:{tag}\n")
+    ref = images.refs(tmp_path / "Dockerfile")[0][0]
+    report_fix = images.judge(ref, "Dockerfile", ".", TODAY).findings[0].fix
+    assert report_fix == f"python:{p.bumps[0].new_tag}"
+    assert p.bumps[0].new_tag == ("3.15-slim" if tag == "3.9-slim" else "3.15.0-slim")
+
+
+@pytest.mark.parametrize(("text", "reason"), [
+    ("FROM python:3.9-slim\nRUN <<EOT\necho hi\nEOT\n", "heredoc"),
+    ("# escape=`\nFROM python:3.9-slim\n", "parser directive"),
+    ("# syntax=docker/dockerfile:1\nFROM python:3.9-slim\n", "parser directive"),
+    ("﻿FROM python:3.9-slim\nFROM python:3.9-slim AS b\n", "byte-order mark"),
+])
+def test_dockerfiles_docker_may_parse_differently_are_held(tmp_path: Path, text: str, reason: str) -> None:
+    p = _plan(tmp_path, text)
+    assert p.bumps == [] and p.held and all(reason in h[4] for h in p.held), p
+    old = text.encode()
+    with pytest.raises(ValueError, match=reason):
+        image_fix.check_from_edit("Dockerfile", old, old.replace(b"python:3.9-slim", b"python:3.15-slim"))
+
+
+def test_lines_split_on_newline_only_as_docker_does(tmp_path: Path) -> None:
+    text = "FROM node:18\x0bFROM python:3.9-slim\nRUN true\x0cFROM python:3.9-slim\n"   # one FROM line for Docker
+    p = _plan(tmp_path, text)
+    assert p.bumps == []
+    assert [r.repository for r in images.refs(tmp_path / "Dockerfile")[0]] == ["node"]
+    old = text.encode()
+    with pytest.raises(ValueError, match="only a FROM"):
+        image_fix.check_from_edit("Dockerfile", old, old.replace(b"python:3.9-slim", b"python:3.15-slim", 1))
+
+
+def test_crlf_lines_still_move(tmp_path: Path) -> None:
+    p = _plan(tmp_path, "FROM python:3.9-slim\r\nRUN true\r\n")
+    assert [b.new_tag for b in p.bumps] == ["3.15-slim"]
+
+
+def test_an_unreadable_dockerfile_gets_a_note(tmp_path: Path) -> None:
+    (tmp_path / "Dockerfile").write_bytes(b"FROM python:3.9-slim\n\xff\xfe\n")
+    p = image_fix.plan_file(tmp_path / "Dockerfile", "Dockerfile", TODAY)
+    assert p.bumps == [] and p.notes and "not read" in p.notes[0]
+    res = image_fix.fix_result(tmp_path, {})
+    assert res.refused and res.refused[0][0] == "Dockerfile" and "not read" in res.refused[0][1]
+
+
+@pytest.mark.parametrize(("line", "reason"), [
+    ("FROM node:18-slim", "not an official runtime image"),
+    ("FROM postgres:12", "not an official runtime image"),
+    ("FROM debian:buster", "not an official runtime image"),
+    ("FROM myimage:latest", "not an official runtime image"),
+])
+def test_ineligible_images_with_a_finding_get_an_image_held_row(tmp_path: Path, line: str, reason: str) -> None:
+    p = _plan(tmp_path, line + "\n")
+    assert p.bumps == [] and len(p.held) == 1 and reason in p.held[0][4], p
+
+
+def test_one_mode_and_contradictions_are_refused(tmp_path: Path) -> None:
+    assert executor_pr.resolve_mode() == "fix" and executor_pr.resolve_mode(True) == "major"
+    assert executor_pr.resolve_mode(mode="image") == "image"
+    with pytest.raises(ValueError, match="contradictory"):
+        executor_pr.resolve_mode(True, "image")
+    with pytest.raises(ValueError, match="unknown"):
+        executor_pr.title("vulnscan/20261101-abc", mode="images")
+    with pytest.raises(ValueError, match="contradictory"):
+        executor.stage_fix(tmp_path, {}, major=True, mode="image")   # before any git runs

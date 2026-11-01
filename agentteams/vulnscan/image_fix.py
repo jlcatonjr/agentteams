@@ -1,4 +1,4 @@
-"""``stage-image``: move an end-of-life official runtime image's Dockerfile ``FROM`` tag to the newest supported line.
+"""``stage-image``: move an end-of-life official runtime image's Dockerfile ``FROM`` tag to a supported line.
 
 A constraint-relaxing op of its own (Rule 15): only a grant that names ``stage-image`` covers it, and no grant that
 lists ``stage-fix`` or ``stage-major`` implies it. The agent names only the repository; this module decides every
@@ -15,12 +15,17 @@ data :func:`.runtimes.evaluate` reads).
 - it has a version tag (never ``:latest`` or no tag: report-only), no ``@sha256:`` digest (never changed, never
   added), and a variant suffix of letters-only tokens that names no OS release (``-slim``, ``-alpine``, ``-fpm``;
   not ``-bookworm`` or ``-alpine3.19``, which the newer line may not publish);
-- its release line is end-of-life. The new tag is the newest supported line with the **same** suffix, and the same
-  pinning granularity: a line tag stays a line tag (``3.9-slim`` -> ``3.15-slim``), a full-patch tag becomes the
-  newest line's latest release (``3.9.18-slim`` -> ``3.15.0-slim``).
+- its release line is end-of-life. The new tag (:func:`.images.upgrade_tag`, which the fix plan's "→" uses too) is
+  the newest supported line first released at least :data:`.images.LINE_MIN_AGE_DAYS` days ago (S-10: leaving an
+  end-of-life line does not need the newest one), with the **same** suffix and the same pinning granularity: a line
+  tag stays a line tag (``3.9-slim`` -> ``3.14-slim``), a full-patch tag becomes that line's latest release;
+- the Dockerfile has no byte-order mark, no heredoc (``<<``) and no ``escape`` / ``syntax`` parser directive
+  (:func:`hazard`): its lines are split on ``"\n"`` only, as Docker splits them, and anything that could make
+  Docker read a line differently is left to a person.
 
-Every other image finding is held with its reason (``image-held``). :func:`check_from_edit` is the executor's
-offline, byte-level check of a staged change: only those tag edits, upward by a release line.
+Every other reference with an image finding is held with its reason (``image-held``), a manifest that cannot be read
+gets a note (never a silent empty plan), and :func:`check_from_edit` is the executor's offline, byte-level check
+of a staged change: only those tag edits, upward by a release line.
 
 Imports :mod:`.fix` (which imports this module) only inside :func:`fix_result` and :func:`plan_rows`.
 """
@@ -46,7 +51,10 @@ ELIGIBLE: dict[str, str] = {"python": "python", "ruby": "ruby", "golang": "go", 
 _VARIANT = re.compile(r"(?:-[a-z]+)*")
 _NUMERIC = re.compile(r"\d+(?:\.\d+)*")
 #: One physical ``FROM`` line: (prefix incl. options, the image reference, the rest).
-_FROM_LINE = re.compile(r"^(\s*FROM\s+(?:--\S+\s+)*)(\S+)(.*?)(\r?\n)?$", re.IGNORECASE | re.DOTALL)
+_FROM_LINE = re.compile(r"^([ \t]*FROM[ \t]+(?:--[^ \t\r\n]+[ \t]+)*)([^ \t\r\n]+)(.*?)(\r?\n)?$",
+                        re.IGNORECASE | re.DOTALL)
+#: A parser directive that changes how the rest of the file parses (``# escape=``, ``# syntax=``).
+_DIRECTIVE = re.compile(rb"(?im)^[ \t]*#[ \t]*(?:escape|syntax)[ \t]*=")
 HELD = "image-held"
 
 
@@ -68,6 +76,7 @@ class ImagePlan:
     bumps: list[Bump] = field(default_factory=list)
     held: list[tuple[str, int, str, str, str]] = field(default_factory=list)   # (path, line, image, tag, reason)
     feed_errors: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)   # a manifest not planned at all, and why (never silent)
 
 
 def is_dockerfile(name: str) -> bool:
@@ -81,6 +90,31 @@ def is_dockerfile(name: str) -> bool:
     """
     base = str(name).replace("\\", "/").rsplit("/", 1)[-1]
     return images.is_container_manifest(base) and not re.search(r"\.ya?ml$", base, re.IGNORECASE)
+
+
+def _split_lines(text: str) -> list[str]:
+    """Split on "\n" only, as Docker's parser does, keeping each line's ending (``\r\n`` stays on its line)."""
+    parts = text.split("\n")
+    return [p + "\n" for p in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
+
+
+def hazard(data: bytes) -> str:
+    """Return why a Dockerfile's text is outside what ``stage-image`` parses the way Docker does, or "".
+
+    Args:
+        data: The file's bytes.
+
+    Returns:
+        A reason for a byte-order mark, a heredoc (``<<``), or an ``escape`` / ``syntax`` parser directive (a
+        different escape character, or another frontend, changes how every line parses); "" otherwise.
+    """
+    if data.startswith(b"\xef\xbb\xbf"):
+        return "a byte-order mark: change it by hand"
+    if b"<<" in data:
+        return "a heredoc (<<): change it by hand"
+    if _DIRECTIVE.search(data):
+        return "an escape or syntax parser directive: change it by hand"
+    return ""
 
 
 def _shape_problem(ref: images.ImageRef) -> str:
@@ -107,96 +141,91 @@ def _shape_problem(ref: images.ImageRef) -> str:
 
 
 def new_tag(ref: images.ImageRef, today: _dt.date | None = None) -> tuple[str, str]:
-    """Return the tag ``stage-image`` moves ``ref`` to.
+    """Return the tag ``stage-image`` moves ``ref`` to (:func:`.images.upgrade_tag`, the fix plan's "→" too).
 
     Args:
         ref: A reference :func:`.images.refs` read.
         today: Date for EOL comparison (tests); defaults to today.
 
     Returns:
-        ``(tag, "")`` to stage; ``("", reason)`` to hold; ``("", "")`` when there is nothing to move (the line is
-        supported, or the reference is not an end-of-life runtime line at all).
+        ``(tag, "")`` to stage; ``("", reason)`` to hold a reference that has a finding; ``("", "")`` when there is
+        nothing to report (no finding at all).
 
     Raises:
         LookupError: The release data is unavailable (the message says why); nothing is guessed.
     """
-    if ref.source != "FROM" or ref.official not in ELIGIBLE:
-        return "", ""   # not a runtime line stage-image moves: the fix plan's plan-only row stands
-    version, suffix = images.split_tag(ref.tag)
-    if ref.tag in ("", "latest") or not version:
-        return "", _shape_problem(ref) or "tag without a version"
-    kind = ELIGIBLE[ref.official]
-    v = runtimes.evaluate(kind, version, manager="image", today=today)
-    if v.verdict == "unchecked":
-        if v.detail.startswith("release data unavailable"):
-            raise LookupError(f"{kind} {version}: {v.detail}")
-        return "", ""
-    if v.verdict != "eol":
+    judged = images.judge(ref, "", "", today)
+    if judged.feed_errors:
+        raise LookupError("; ".join(judged.feed_errors))
+    if not judged.findings:
         return "", ""
     problem = _shape_problem(ref)
     if problem:
         return "", problem
-    if not v.upgrade_to or not _NUMERIC.fullmatch(v.upgrade_to):
-        return "", "no supported release line known"
-    parts = len(version.split("."))
-    line = runtimes.cycle_of(kind, v.upgrade_to)
-    target = line if parts <= len(line.split(".")) else v.upgrade_to
-    if len(target.split(".")) != parts or version_key(target) <= version_key(version):
-        return "", "no newer supported tag of the same form"
-    return target + suffix, ""
+    version, suffix = images.split_tag(ref.tag)
+    kind = ELIGIBLE[str(ref.official)]
+    if runtimes.evaluate(kind, version, manager="image", today=today).verdict != "eol":
+        return "", "not an end-of-life runtime line (stage-image moves only those)"
+    target = images.upgrade_tag(kind, version, suffix, today)
+    tv = images.split_tag(target)[0]
+    if not target or not _NUMERIC.fullmatch(tv) or len(tv.split(".")) != len(version.split(".")) or \
+            version_key(tv) <= version_key(version):
+        return "", f"no supported release line at least {images.LINE_MIN_AGE_DAYS} days old"
+    return target, ""
 
 
 def plan_file(path: Path, rel: str, today: _dt.date | None = None) -> ImagePlan:
-    """Plan the ``FROM`` tag changes of one Dockerfile.
+    """Plan the ``FROM`` tag changes of one container manifest (only a Dockerfile's are ever bumped).
 
     Args:
-        path: The Dockerfile.
+        path: The Dockerfile or compose file.
         rel: Its path for the plan (scan-root relative).
         today: Date for EOL comparison (tests); defaults to today.
 
     Returns:
-        An :class:`ImagePlan`: bumps, held references (with the reason, the image shown only by
-        :meth:`.images.ImageRef.display`), and feed errors. This function does not raise for bad input.
+        An :class:`ImagePlan`: bumps, held references with a finding (with the reason; the image shown only by
+        :meth:`.images.ImageRef.display`), feed errors, and a note when the file cannot be read. This function does
+        not raise for bad input.
     """
     out = ImagePlan()
-    if not is_dockerfile(path.name):
+    try:
+        data = path.read_bytes()
+        lines = _split_lines(data.decode("utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        out.notes.append(f"{rel}: not read ({type(exc).__name__}): base images not planned")
         return out
     found, _notes = images.refs(path)
-    try:
-        lines = path.read_bytes().decode("utf-8").splitlines(keepends=True)
-    except (OSError, UnicodeDecodeError):
-        return out
+    risk = hazard(data) if is_dockerfile(path.name) else ""
     for ref in found:
         try:
             tag, why = new_tag(ref, today)
         except LookupError as exc:
             out.feed_errors.append(f"{rel}:{ref.line}: {exc}")
             continue
-        if not tag and why:
-            out.held.append((rel, ref.line, ref.display(), ref.tag or "(no tag)", why))
-            continue
-        if not tag:
-            continue
-        m = _FROM_LINE.match(lines[ref.line - 1]) if 0 < ref.line <= len(lines) else None
+        m = _FROM_LINE.match(lines[ref.line - 1]) if tag and 0 < ref.line <= len(lines) else None
         parsed = images.parse_ref(m.group(2), ref.line, "FROM") if m else None
-        if m is None or parsed is None or lines[ref.line - 1].rstrip().endswith("\\") or \
-                (parsed.registry, parsed.repository, parsed.tag, parsed.digest) != \
-                (ref.registry, ref.repository, ref.tag, ref.digest):
-            out.held.append((rel, ref.line, ref.display(), ref.tag, "FROM spans several lines: change it by hand"))
-            continue
-        out.bumps.append(Bump(rel, ref.line, str(ref.official), ref.tag, tag))
+        if tag and risk:
+            why = risk
+        elif tag and (parsed is None or lines[ref.line - 1].rstrip().endswith("\\") or
+                      (parsed.registry, parsed.repository, parsed.tag, parsed.digest) !=
+                      (ref.registry, ref.repository, ref.tag, ref.digest)):
+            why = "FROM spans several lines: change it by hand"
+        if why:
+            out.held.append((rel, ref.line, ref.display(), ref.tag or "(no tag)", why))
+        elif tag:
+            out.bumps.append(Bump(rel, ref.line, str(ref.official), ref.tag, tag))
     return out
 
 
 def plan_tree(root: Path, today: _dt.date | None = None) -> ImagePlan:
-    """Plan every Dockerfile under a working tree (``manifests.discover``; the brief's ``exclude_paths`` honoured).
+    """Plan every container manifest under a working tree (``manifests.discover``; ``exclude_paths`` honoured).
 
     Args:
         root: The executor's worktree (a repository root).
         today: Date for EOL comparison (tests); defaults to today.
 
     Returns:
-        The combined :class:`ImagePlan`. A brief with ``level: off`` plans nothing.
+        The combined :class:`ImagePlan` (bumps only ever in Dockerfiles). A brief with ``level: off`` plans nothing.
     """
     root = root.resolve()
     out = ImagePlan()
@@ -205,13 +234,17 @@ def plan_tree(root: Path, today: _dt.date | None = None) -> ImagePlan:
         return out
     for path in manifests.discover(root):
         rel = path.relative_to(root).as_posix()
-        if not is_dockerfile(path.name) or path.is_symlink() or \
+        if not images.is_container_manifest(path.name) or \
                 (pol.exclude_paths and project_policy.is_excluded(rel, pol.exclude_paths)):
+            continue
+        if path.is_symlink():
+            out.notes.append(f"{rel}: a symlink: never read or edited")
             continue
         one = plan_file(path, rel, today)
         out.bumps += one.bumps
         out.held += one.held
         out.feed_errors += one.feed_errors
+        out.notes += one.notes
     return out
 
 
@@ -233,7 +266,10 @@ def apply(root: Path, bumps: list[Bump]) -> None:
         path = root / rel
         if path.is_symlink():
             raise ValueError(f"{rel}: a symlink: never edited")
-        lines = path.read_bytes().decode("utf-8").splitlines(keepends=True)
+        data = path.read_bytes()
+        if hazard(data):
+            raise ValueError(f"{rel}: {hazard(data)}")
+        lines = _split_lines(data.decode("utf-8"))
         for b in group:
             m = _FROM_LINE.match(lines[b.line - 1]) if 0 < b.line <= len(lines) else None
             if m is None or not m.group(2).endswith(":" + b.old_tag):
@@ -264,10 +300,12 @@ def check_from_edit(rel: str, old: bytes, new: bytes) -> None:
     if not old:
         raise ValueError(f"refusing {rel}: a new file")
     try:
-        before = old.decode("utf-8").splitlines(keepends=True)
-        after = new.decode("utf-8").splitlines(keepends=True)
+        before = _split_lines(old.decode("utf-8"))
+        after = _split_lines(new.decode("utf-8"))
     except UnicodeDecodeError as exc:
         raise ValueError(f"refusing {rel}: not UTF-8 text") from exc
+    if risk := hazard(old) or hazard(new):
+        raise ValueError(f"refusing {rel}: {risk}")
     if len(before) != len(after):
         raise ValueError(f"refusing {rel}: lines added or removed")
     changed = 0
@@ -335,7 +373,25 @@ def fix_result(wt: Path, claims: dict[str, list[int]]) -> FixResult:
     changes += [fix.PinChange(p, name, tag, "", HELD, note=f"line {line}: {why}") for p, line, name, tag, why in plan.held]
     if not plan.feed_errors:
         apply(wt, take)
-    return fix.FixResult(changes=changes, applied=True, resolved=len(take), feed_errors=list(plan.feed_errors))
+    return fix.FixResult(changes=changes, applied=True, resolved=len(take), feed_errors=list(plan.feed_errors),
+                         refused=[(n.split(": ", 1)[0], n.split(": ", 1)[-1]) for n in plan.notes])
+
+
+def futile_detail(changes: list[PinChange]) -> str:
+    """Return ``stage-image``'s refusal when it moved no tag (held per op by :mod:`.retry_guard`).
+
+    Args:
+        changes: The :func:`fix_result` rows.
+
+    Returns:
+        :data:`.retry_guard.IMAGE_FUTILE_DETAIL` with the count of :data:`HELD` rows.
+    """
+    from agentteams.vulnscan import (
+        retry_guard,  # lazy: keep this module's load-time imports small
+    )
+
+    held = sum(1 for c in changes if c.action == HELD)
+    return f"{retry_guard.IMAGE_FUTILE_DETAIL} ({held} base image reference(s) held for a person; see the fix plan)"
 
 
 def plan_rows(path: Path, rel: str, found: list[Finding], errors: list[str]) -> list[PinChange]:
@@ -356,6 +412,7 @@ def plan_rows(path: Path, rel: str, found: list[Finding], errors: list[str]) -> 
     staged = plan_file(path, rel) if found and not errors else ImagePlan()
     moves = {b.line: b for b in staged.bumps}
     held = {line: why for _, line, _, _, why in staged.held}
+    unread = "; ".join(staged.notes)
     rows = []
     for f in found:
         lines = [int(n) for loc in f.locations if (n := loc.rsplit(":", 1)[-1]).isdigit()]
@@ -365,7 +422,7 @@ def plan_rows(path: Path, rel: str, found: list[Finding], errors: list[str]) -> 
                 str(f.fix).startswith(f"{bump.image}:"):
             rows.append(PinChange(rel, f.name, f.version, f"{bump.image}:{bump.new_tag}", "stage-image", note=note))
             continue
-        why = next((held[n] for n in lines if n in held), "")
+        why = next((held[n] for n in lines if n in held), unread)
         rows.append(PinChange(rel, f.name, f.version, f.fix, "plan-only",
                               note=note + (f"; not stage-image: {why}" if why else "")))
     return rows

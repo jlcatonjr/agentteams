@@ -76,6 +76,9 @@ PUBLIC_REGISTRIES = frozenset({"docker.io", "index.docker.io", "registry-1.docke
                                "registry.gitlab.com"})
 _DOCKER_HUB = frozenset({"", "docker.io", "index.docker.io", "registry-1.docker.io"})
 #: Tags that name no release line.
+#: S-10 for a runtime release-line jump: the target line's first release is at least this old, max(the 14-day
+#: release cooldown, 90 days). The newest line is not needed to leave an end-of-life one.
+LINE_MIN_AGE_DAYS = 90
 FLOATING_KEYWORDS = frozenset({"lts", "stable", "current", "mainline", "edge", "rolling", "devel"})
 _UNPINNED = "unpinned tag: rebuilds change silently; release line not judged"
 _ARG_LABEL = " (ARG default; `--build-arg` may override)"
@@ -203,7 +206,9 @@ def _read(path: Path, scan: _Scan) -> list[str] | None:
         scan.notes.append("binary content: base images not judged")
         return None
     try:
-        return data.decode("utf-8").splitlines()
+        # "\n" only, as Docker's parser splits (str.splitlines also splits on \x0b, \x0c, \x1c-\x1e, \x85,
+        # \u2028 and \u2029, which would let a line the report reads differ from the line Docker runs)
+        return [ln.removesuffix("\r") for ln in data.decode("utf-8").split("\n")]
     except UnicodeDecodeError:
         scan.notes.append("not UTF-8 text: base images not judged")
         return None
@@ -370,7 +375,34 @@ def split_tag(tag: str) -> tuple[str, str]:
     return (m.group(1), tag[m.end():]) if m else ("", tag)
 
 
-_split_tag = split_tag
+def upgrade_tag(kind: str, version: str, suffix: str, today: _dt.date | None = None) -> str:
+    """Return the tag an end-of-life ``<version><suffix>`` tag moves to: the one place it is computed.
+
+    The fix plan's "→" and ``stage-image`` both use it, so they always agree. The target is the newest supported
+    release line first released at least :data:`LINE_MIN_AGE_DAYS` ago (S-10 for a runtime line jump: leaving an
+    end-of-life line does not need the newest line, :func:`.runtimes.newest_aged_release`). A line tag stays a line
+    tag (``3.9-slim`` -> ``3.14-slim``); a full-patch tag becomes that line's latest release (``3.9.18-slim`` ->
+    ``3.14.2-slim``). The suffix is kept as is.
+
+    Args:
+        kind: A :data:`runtimes.PRODUCTS` kind (:data:`IMAGE_PRODUCTS`, :data:`MCR_PRODUCTS`).
+        version: The tag's version part (:func:`split_tag`).
+        suffix: The tag's suffix (:func:`split_tag`).
+        today: Date for the comparison (tests); defaults to today.
+
+    Returns:
+        The new tag, or "" when no supported line is old enough or the release data is unavailable.
+
+    Raises:
+        KeyError: ``kind`` is not a :data:`runtimes.PRODUCTS` kind.
+    """
+    target = runtimes.newest_aged_release(kind, min_age_days=LINE_MIN_AGE_DAYS, today=today)
+    if not target:
+        return ""
+    parts = TAG_LINE_PARTS.get(kind, 0)
+    line = ".".join(target.split(".")[:parts]) if parts else runtimes.cycle_of(kind, target)
+    line_tag = version == runtimes.cycle_of(kind, version) or (parts > 0 and len(version.split(".")) <= parts)
+    return (line if line_tag else target) + suffix
 
 
 def tag_os(tag: str) -> tuple[str, str] | None:
@@ -429,7 +461,7 @@ def _judge_os(os_id: str, version: str, ref: ImageRef, rel: str, target: str, ou
 def _judge_product(kind: str, ref: ImageRef, rel: str, target: str, out: Judgement,
                    today: _dt.date | None) -> None:
     product = runtimes.PRODUCTS[kind]
-    version, suffix = _split_tag(ref.tag)
+    version, suffix = split_tag(ref.tag)
     head = ref.tag.lower().split("-")[0]
     if not version:
         why = f"floating tag ({head})" if head in FLOATING_KEYWORDS else "tag without a version"
@@ -442,14 +474,12 @@ def _judge_product(kind: str, ref: ImageRef, rel: str, target: str, out: Judgeme
     v = runtimes.evaluate(kind, version, manager="image", today=today)
     out.checked += 1
     parts = TAG_LINE_PARTS.get(kind, 0)
-    def tag_line(ver: str) -> str:   # the release line as the registry tags it
-        return ".".join(ver.split(".")[:parts]) if parts else runtimes.cycle_of(kind, ver)
     line_tag = version == runtimes.cycle_of(kind, version) or (parts > 0 and len(version.split(".")) <= parts)
     if v.verdict == "unchecked":
         _unchecked(v, ref, rel, out)
     elif v.verdict == "eol":
-        newest = tag_line(v.upgrade_to) if v.upgrade_to else ""
-        fix = f"{ref.display()}:{newest}{suffix}" if newest else ""
+        new = upgrade_tag(kind, version, suffix, today)
+        fix = f"{ref.display()}:{new}" if new else ""
         out.findings.append(_finding(ref, rel, target, 3, f"{v.detail}; change FROM to a supported line", fix))
     elif not line_tag and v.verdict == "security-release-missing":   # a full-patch tag is never rebuilt
         out.findings.append(_finding(ref, rel, target, 3, f"pinned patch tag: {v.detail}",
@@ -485,7 +515,7 @@ def judge(ref: ImageRef, rel: str, target: str, today: _dt.date | None = None) -
                                                   if ref.registry == "mcr.microsoft.com" else None)
     os_image = OS_IMAGES.get(official or "")
     if official == "openjdk":
-        major = _split_tag(ref.tag)[0].split(".")[0]
+        major = split_tag(ref.tag)[0].split(".")[0]
         out.findings.append(_finding(ref, rel, target, 1, "deprecated image; use eclipse-temurin",
                                      f"eclipse-temurin:{major}" if major else "eclipse-temurin"))
     if ref.tag in ("", "latest"):
@@ -495,7 +525,7 @@ def judge(ref: ImageRef, rel: str, target: str, today: _dt.date | None = None) -
             out.findings.append(_finding(ref, rel, target, 1, _UNPINNED))
         return out
     if os_image:
-        version, _ = _split_tag(ref.tag)
+        version, _ = split_tag(ref.tag)
         named = tag_os(ref.tag)
         if not version and named and named[0] == os_image:
             version = named[1]

@@ -977,9 +977,9 @@ The agent requests `stage-major` only for a repository whose fix plan shows `maj
 
 ### Base images (`stage-image`)
 
-`stage-image REPO` (`executor.stage_fix(repo, cfg, image=True)`, module `image_fix`) moves the `FROM` tag of an
-end-of-life base image in a Dockerfile to the newest supported release line of the **same** variant:
-`python:3.9-slim` → `python:3.15-slim`. It is a constraint-relaxing op of its own (Rule 15): only a grant that names
+`stage-image REPO` (`executor.stage_fix(repo, cfg, mode="image")`, module `image_fix`) moves the `FROM` tag of an
+end-of-life base image in a Dockerfile to a supported release line of the **same** variant:
+`python:3.9-slim` → `python:3.14-slim`. It is a constraint-relaxing op of its own (Rule 15): only a grant that names
 it covers it, and a grant naming `stage-fix` or `stage-major` never implies it. The agent names only the
 repository; every edit is derived by the executor from the scan's own data (`images.refs`, the
 `image_fix.ELIGIBLE` table, and the endoflife.date release data `runtimes.evaluate` reads; a feed failure refuses
@@ -987,17 +987,25 @@ the stage, nothing is guessed).
 
 - **What it may change.** Only a one-line `FROM` in a `Dockerfile*`, `*.Dockerfile` or `Containerfile` (never a
   compose file) naming a Docker Hub official image in `image_fix.ELIGIBLE`: `python`, `ruby`, `golang`, `php`. Only
-  the tag changes, only when its release line is end-of-life, and the variant suffix is kept byte for byte. A line
-  tag stays a line tag (`3.9-slim` → `3.15-slim`); a full-patch tag becomes the newest line's latest release
-  (`3.9.18-slim` → `3.15.0-slim`).
+  the tag changes, only when its release line is end-of-life, and the variant suffix is kept byte for byte.
+- **Which line (S-10).** The newest supported line whose first release is at least `images.LINE_MIN_AGE_DAYS` (90:
+  max(the 14-day cooldown, 90 days) for a runtime line jump) days old (`runtimes.newest_aged_release`; a line whose
+  release date endoflife.date does not give is never chosen). Leaving an end-of-life line does not need the newest
+  one. One function, `images.upgrade_tag`, computes it for both the report's "→" and the staged edit, so they
+  always agree: a line tag stays a line tag (`3.9-slim` → `3.14-slim`), a full-patch tag becomes that line's latest
+  release (`3.9.18-slim` → `3.14.2-slim`).
+- **Parsing as Docker does.** Lines are split on `"\n"` only (`\r\n` kept), in `images.refs` and in
+  `check_from_edit` alike. A Dockerfile with a byte-order mark, a heredoc (`<<`) or an `escape` / `syntax` parser
+  directive is held (`image_fix.hazard`), and refused by `check_from_edit`. A manifest that cannot be read gets a
+  note (the staged plan's *Refused* list), never a silent empty plan.
 - **What it holds for a person** (`image-held` rows, with the reason): `:latest` or no tag (report-only: pinning to
   a digest needs a registry query and freezes OS security rebuilds, and the line `:latest` points at is not knowable
   offline), a `@sha256:` digest (never changed, never added), a reference set by an `ARG` default, a tag naming an
   OS release (`-bookworm`, `-alpine3.19`: the newer line may not be published for it), a `FROM` continued over
   several lines, and every other image (databases change their on-disk format across majors; `node` and
-  `eclipse-temurin` because the newest supported line may be a non-LTS one; private and unlisted images are never
-  named).
-- **`validate_diff(..., image=True)`** accepts only Dockerfiles, and in them only `image_fix.check_from_edit`'s
+  `eclipse-temurin` because the newest supported line may be a non-LTS one; compose files; private and unlisted
+  images are never named). Every reference with an image finding that `stage-image` does not move gets such a row.
+- **`validate_diff(..., mode="image")`** accepts only Dockerfiles, and in them only `image_fix.check_from_edit`'s
   edits, offline and byte for byte: same line count and endings, only `FROM` lines differ, same registry and
   repository text, an eligible official image, no digest, no variable, the same letters-only suffix, the same number
   of version parts and a higher release line. Any requirements file, lockfile or `package.json` is refused, so a
@@ -2216,13 +2224,13 @@ the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming t
 `publish.rewrite_paths`); the branch stays and nothing is merged. A grant must name the op; `authorize` and
 `executor_guard` apply as for `open-pr`. Returns `{"repo", "replacement", "closed", "kept"}`.
 
-#### `validate_diff(wt, base, *, major=False, image=False)`
+#### `validate_diff(wt, base, *, major=False, mode='')`
 
 Check a staged change against `base` before `stage-fix` commits it, and before `daily` keeps an
 `apply-worktree` result. Returns a `DiffCheck(changed, kept_off_registry)` named tuple: the changed paths and the lockfile check's
 notes on unchanged off-registry entries it kept; raises `ExecError` on anything else. With `major`
 (`stage-major` only) a `package.json` may change too, within the rules in
-[Major upgrades](#major-upgrades-stage-major) (`npm_major.check_package_json_edit`). With `image`
+[Major upgrades](#major-upgrades-stage-major) (`npm_major.check_package_json_edit`). With mode `"image"`
 (`stage-image` only) Dockerfiles alone may change, only by `image_fix.check_from_edit`'s `FROM` tag moves, and every
 rule below about requirements files and lockfiles is replaced by that one
 ([Base images](#base-images-stage-image)):
