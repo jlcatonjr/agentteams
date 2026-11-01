@@ -1,0 +1,8 @@
+{
+  "patch_id": "060ab898c62e8d0ba40e0c621dab660bf3dbc1c6",
+  "commit": "0e2af9330d20643c8982261134c0919934179a21",
+  "subject": "fix(vulnscan): major_next review fixes (security C-4, hygiene H1-H4)",
+  "impact": "3 symbols added",
+  "note": "Additive only: retry_guard.major_next_since, executor_guard.stage_major_packages, npm_major.direct_majors/in_workspaces/WORKSPACES, mcp.package_name_ok/MAX_PACKAGE_NAME; plan-levels.json gains a major_next key (old readers ignore it). Private fix._npm_workspaces removed (no external callers). Documented in docs_src/api-reference/vulnscan.md.",
+  "recorded_at": "2026-11-01T22:30:31Z"
+}
