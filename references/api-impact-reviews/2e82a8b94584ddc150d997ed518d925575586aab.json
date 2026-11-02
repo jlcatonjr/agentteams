@@ -1,0 +1,8 @@
+{
+  "patch_id": "2e82a8b94584ddc150d997ed518d925575586aab",
+  "commit": "a9dbf0af65ec1af34956b7008e5f11a4e9e46f82",
+  "subject": "feat(vulnscan): grade allowlisted non-npm sources on advisory ranges (vfr-e.E3)",
+  "impact": "1 modules added, 4 symbols added",
+  "note": "vfr-e.E3: new vulnscan.offnpm_sources (allowlisted non-npm sources, judge/match); engine.analyze_sources; Report.sources; Dep.resolved. Documented in docs_src/api-reference/vulnscan.md (vulnscan modules share that page).",
+  "recorded_at": "2026-11-02T22:47:53Z"
+}
