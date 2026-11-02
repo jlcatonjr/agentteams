@@ -343,11 +343,37 @@ def test_al2023_without_updateinfo_lines_gets_no_verdict_and_no_feed_error(dfeed
 
 
 @pytest.mark.parametrize("bad", ["UPDATEINFOREAD\tavailable\tfailed", "UPDATEINFOREAD\tavailable\tweird"])
-def test_al2023_an_unread_updateinfo_pass_is_a_feed_error(dfeed: DistroFeed, bad: str) -> None:
+def test_al2023_an_unread_updateinfo_pass_gives_no_verdict_and_a_low_check(dfeed: DistroFeed, bad: str) -> None:
+    """Host-side and of unverified format: not a feed error (no daily exit 3), never "not affected", not silent."""
     _bastion(dfeed)
     rep = engine.scan_inventory(BASTION + "\n" + bad, "vk-bastion")   # a later failed line wins over "ok"
-    assert any("dnf updateinfo (available) could not be read" in e for e in rep.feed_errors), rep.feed_errors
-    assert all(f.distro_verdict == "" for f in rep.findings) and rep.exit_code("high") == 3
+    assert rep.feed_errors == []
+    pkgs = _by(rep)
+    assert all(f.distro_verdict == "" and "dnf updateinfo (available) was not read" in f.distro_note
+               for f in pkgs.values())
+    checks = [f for f in rep.findings if f.kind == "host"]
+    assert [(f.name, f.severity) for f in checks] == [("distro-updateinfo", 1)]
+    assert "unreadable or unparseable: available" in checks[0].detail
+    # Rule 12: the package rows and grades are those of a scan without any updateinfo, and so is the exit code at
+    # every threshold above LOW (the LOW check is the only addition)
+    plain = engine.scan_inventory("\n".join(ln for ln in BASTION.splitlines() if not ln.startswith("UPDATEINFO")),
+                                  "vk-bastion")
+    assert [(f.name, f.severity, f.key(), f.distro) for f in pkgs.values()] == \
+        [(f.name, f.severity, f.key(), f.distro) for f in _by(plain).values()]
+    for fail_on in ("critical", "high", "moderate"):
+        assert rep.exit_code(fail_on) == plain.exit_code(fail_on) != 3
+    md = rep.markdown()
+    assert "## Distro verdicts" in md and "| `vk-bastion` | 0 | 0 | 0 | 0 | 3 |" in md
+    assert "> **`vk-bastion`: no AL2023 distro verdicts.** `dnf updateinfo pass(es) unreadable or unparseable: " \
+           "available;" in md
+    assert "| LOW | host | distro-updateinfo |" in md
+
+
+def test_al2023_unread_updateinfo_without_package_findings_adds_nothing(dfeed: DistroFeed) -> None:
+    _bastion(dfeed)
+    dfeed.vulns = {}
+    rep = engine.scan_inventory(BASTION + "\nUPDATEINFOREAD\tinstalled\tfailed", "vk-bastion")
+    assert rep.findings == [] and rep.feed_errors == []   # nothing to judge: no verdict lost, no check needed
 
 
 # ---------------------------------------------------------------- helpers

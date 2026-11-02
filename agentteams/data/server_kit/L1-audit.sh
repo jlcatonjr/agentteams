@@ -237,7 +237,7 @@ dnf_autoupd(){  # A1: dnf-automatic's [commands] settings (a key not printed is 
 dnf_updateinfo(){  # A2: per-CVE security advisories from the cached updateinfo, for the AL2023 distro verdicts
   # Cache only (-C), under tmo. The --with-cve listing's format is unverified, so it is read strictly: a pass dnf
   # fails, or with any line that is not "[i] <CVE> <severity>/Sec. <NEVRA>", prints no records and is "failed"
-  # (the workstation then reports a feed error, never "no advisory").
+  # (the workstation then gives no distro verdict and a LOW check, never "no advisory").
   local pass out="" recs="" rc=0
   command -v dnf >/dev/null 2>&1 || return 0
   for pass in installed available; do

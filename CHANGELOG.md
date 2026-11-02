@@ -19,15 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     prints `UPDATEINFO` lines from `dnf -C -q updateinfo list --security --installed|--available --with-cve`
     (cache only, under the kit timeout) and an `UPDATEINFOREAD ok|failed` line per pass. That listing's format is
     unverified on AL2023, so it is read strictly: a dnf failure, or any line other than
-    `[i] <CVE> <severity>/Sec. <NEVRA>`, marks the pass `failed` and prints no records (a feed error, never a
-    verdict). Check the first vk-bastion run (plan step A3).
+    `[i] <CVE> <severity>/Sec. <NEVRA>`, marks the pass `failed` and prints no records. A failed pass gives that
+    host's findings no distro verdict (never "not affected"; the upstream grade stands), a LOW `distro-updateinfo`
+    host check and a note in *Distro verdicts*. It is not a feed error, so a format mismatch cannot make the host's
+    scan exit 3 every day. Check the first vk-bastion run (plan step A3).
 - `summary.md` gains *Distro verdicts*: per host, the count of each verdict and **the `esm-only` count** (operator
   decision OD1). `Finding.distro_verdict` / `distro_note` are in `summary.json`; an older report loads with `""`.
 - **Unowned or third-party files in OS paths are judged upstream.** A finding with any location `unowned` or
   `repo:…` gets no verdict and loses `distro`, so it now counts toward `--fail-on` (it was excluded as OS-managed).
   A PyPI version that is not the owning package's upstream version gets no verdict either.
-- A failed Ubuntu query, an unreadable Ubuntu record or a failed updateinfo pass is a feed error (exit 3), never a
-  verdict.
+- A failed Ubuntu query or an unreadable Ubuntu record is a feed error (exit 3), never a verdict.
 
 ### added (vulnscan server kit: distro sources, not-live labels, held interpreters; plans vfr-a A1, vfr-e E1/E2b, vfr-r R4)
 

@@ -27,13 +27,15 @@ distribution's status for that CVE and the owning package from the ``DISTROPKG``
 - **Amazon Linux 2023** (``OSREL`` ``amzn`` ``2023``): the host's own updateinfo (ALAS), which only the host can
   read. ``UPDATEINFO`` lines (``installed`` or ``available`` pass, advisory, CVE, package NEVRA) join on the owning
   rpm's name: ``available`` is ``fix-available-not-installed``, ``installed`` is ``fixed-in-installed``, neither is
-  ``no-distro-fix``. An ``UPDATEINFOREAD`` line per pass says whether dnf read its cache; a failed pass is a feed
-  error. Without any ``UPDATEINFOREAD`` line (an older kit, or a host without dnf) there is no AL2023 verdict.
+  ``no-distro-fix``. An ``UPDATEINFOREAD`` line per pass says whether dnf read its cache. A pass not ``ok`` gives
+  no verdict and a LOW ``host`` finding named :data:`report.UPDATEINFO_CHECK` (not a feed error: the listing's
+  format is unverified, and a mismatch must not fail the host's scan daily). Without any ``UPDATEINFOREAD`` line (an
+  older kit, or a host without dnf) there is no AL2023 verdict.
 
 No verdict (and a note saying why) when the owning package's origin is not an allowlisted distro archive
 (``unowned``, ``repo:<host>:…``: the vlc-n5 Revision 3 rule), when the PyPI version is not the package's own
 upstream version (the file is not the package's), when no ``DISTROPKG`` line covers a location, for a release
-neither feed covers, or when a feed could not be read. A feed failure is a feed error (``Report.feed_errors``, exit
+neither feed covers, or when a feed could not be read. An OSV failure (Ubuntu) is a feed error (``Report.feed_errors``, exit
 3), never "not affected". A finding with any location ``unowned`` or ``repo:`` is not (only) OS-managed: it loses
 ``distro`` and is judged upstream like any other install, the stricter direction.
 """
@@ -45,7 +47,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from agentteams.vulnscan import _http, osv
-from agentteams.vulnscan.report import DISTRO_VERDICTS, Finding, Report
+from agentteams.vulnscan.report import DISTRO_VERDICTS, UPDATEINFO_CHECK, Finding, Report
 from agentteams.vulnscan.versions import version_key
 
 #: Verdicts, best first: a finding takes the worst of its advisories' verdicts.
@@ -334,10 +336,16 @@ def _al2023(target: str, ups: list[UpdateInfo], reads: dict[str, str], age: str,
         return
     unread = [p for p in UPDATEINFO_PASSES if reads.get(p) != "ok"]
     if unread:
-        report.feed_errors.append(f"{target}: dnf updateinfo ({', '.join(unread)}) could not be read from the "
-                                  "host's cache: AL2023 distro verdicts unknown")
+        # Host-side, and its --with-cve format is unverified: no verdict (never "not affected"; the upstream grade
+        # stands), a LOW host check so it is not silent, and a note in the summary. Not a feed error: a format
+        # mismatch would otherwise make the host's scan exit 3 every day.
+        passes = ", ".join(unread)
+        report.findings.append(Finding(
+            kind="host", target=target, name=UPDATEINFO_CHECK, severity=1,
+            detail=(f"dnf updateinfo pass(es) unreadable or unparseable: {passes}; AL2023 distro verdicts not given "
+                    "(upstream grades stand)")))
         for c in cands:
-            c.finding.distro_note = "no distro verdict: the host's updateinfo could not be read (feed error)"
+            c.finding.distro_note = f"no distro verdict: the host's dnf updateinfo ({passes}) was not read"
         return
     seen: dict[str, set[tuple[str, str]]] = {s: set() for s in UPDATEINFO_PASSES}
     for u in ups:

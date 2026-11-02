@@ -32,6 +32,9 @@ KIND_LABEL = {"range": "requirement range", "image": "base image"}
 #: ``==`` pins).
 #: Distro verdicts of an OS-managed package finding (:mod:`.distro_verdict`), best first.
 DISTRO_VERDICTS = ("fixed-in-installed", "fix-available-not-installed", "esm-only", "no-distro-fix")
+#: ``Finding.name`` of the LOW host check for an AL2023 updateinfo pass that was not read (:mod:`.distro_verdict`);
+#: the summary's distro-verdict section names it too.
+UPDATEINFO_CHECK = "distro-updateinfo"
 RANGE_PLAN_NOTE = ("`stage-fix` never edits a requirement range (it changes only `==` pins), so these rows are for a "
                    "person: raise the lower bound, or better, pin with a lock. The installed version is unknown.")
 
@@ -289,7 +292,8 @@ class Report:
             Markdown lines (none when no finding has a distro verdict or note).
         """
         counts = self.distro_verdict_counts()
-        if not counts:
+        unread = [f for f in self.findings if f.kind == "host" and f.name == UPDATEINFO_CHECK]
+        if not counts and not unread:
             return []
         out = ["## Distro verdicts (OS-managed Python packages; upstream grade unchanged)", "",
                "Each finding keeps its upstream row and severity above; the distro verdict says whether the "
@@ -301,8 +305,9 @@ class Report:
             out.append(f"| {_code(host)} | " + " | ".join(str(row[v]) for v in (*DISTRO_VERDICTS, "none")) + " |")
         esm = ", ".join(f"{_code(host)} {row['esm-only']}" for host, row in counts.items())
         out += ["", f"**esm-only per host** (the only fix is Ubuntu Pro ESM, not enabled; operator decision OD1): "
-                    f"{esm}", ""]
-        return out
+                    f"{esm or 'none'}", ""]
+        out += [f"> **{_code(f.target)}: no AL2023 distro verdicts.** {_code(f.detail)}" for f in unread]
+        return out + ([""] if unread else [])
 
     def markdown(self, new_keys: set[str] | None = None) -> str:
         """Render the report for people.

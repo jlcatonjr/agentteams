@@ -1494,7 +1494,9 @@ and `Finding.distro_note`; its row, severity, key and exit-code treatment do not
   the CVE, or an advisory with no CVE id, is `no-distro-fix`.
 - **Amazon Linux 2023**: the host's `UPDATEINFO` lines, joined on the owning rpm's name: `available` is
   `fix-available-not-installed`, `installed` is `fixed-in-installed`, neither is `no-distro-fix`. Without any
-  `UPDATEINFOREAD` line there is no verdict; a pass that is not `ok` is a feed error.
+  `UPDATEINFOREAD` line there is no verdict. A pass that is not `ok` gives no verdict and a LOW `host` finding named
+  `distro-updateinfo` (`report.UPDATEINFO_CHECK`), which the *Distro verdicts* section names; it is not a feed
+  error (the `--with-cve` format is unverified, and a mismatch must not fail the host's scan daily).
 
 No verdict, with a note, when the origin is `unowned` or `repo:…` (the finding then loses `distro` when any
 location is such, and is judged upstream), when the PyPI version is not the package's upstream version
