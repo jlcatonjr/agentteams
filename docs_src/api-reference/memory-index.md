@@ -334,9 +334,15 @@ Use `--refresh-index` after editing durable sources (for example `workSummaries/
 
 Query CLI synchronization behavior:
 
-- `--query-index` now checks staleness before serving results.
-- When stale, it auto-refreshes `references/memory-index.json` and then executes the query.
-- `--refresh-index` remains useful for proactive pre-warm workflows and CI/operator scripts.
+- `--query-index` is read-only (baseAgent P6, 2026-11-02). It checks staleness (`index_staleness`, with the
+  full source set, so a source added since the build counts too) and reports a stale index on stderr with the
+  reason. It never rebuilds the index or stores the validation sidecar. Until then a stale query rewrote the
+  tracked `memory-index.json`, with or without `--no-scan`.
+- It finds the brief itself when none is given or the one given doesn't exist (`.agentteams/brief.json`,
+  `brief.json`, `.github/agents/_build-description.json`), and queries another surface's copy when the
+  selected one has none.
+- `--refresh-index` rebuilds this surface's index and every other surface's copy in the project
+  ([`memory_index_surfaces`](memory-index-surfaces.md)), from the same sources, each keeping its framework stamp.
 
 Incremental update mode (feature-flagged) — see [`memory_index_incremental`](memory-index-incremental.md):
 
@@ -356,9 +362,10 @@ Domain boundary note:
 
 - **Durable sources** (I7): Caller is responsible for passing explicit source paths; the module never globs `tmp/` or ignored directories
 - **Absence safety** (I5): Empty source list is valid; returns a skeleton index with zero documents
-- **Stale detection** (via `is_index_stale()`, see the [stale-detection guide](../stale-detection-guide.md)) — Query CLI auto-refreshes stale indexes; callers may still refresh proactively
+- **Stale detection** (via `is_index_stale()` / `index_staleness()`, see the [stale-detection guide](../stale-detection-guide.md)) — the query CLI reports a stale index and never rebuilds it; `--refresh-index` rebuilds
 - **Fallback protocol** — `@navigator` consults this index first, then opens referenced files for detail, then falls back to filesystem search
-- **Consumer-declared source dirs:** `brief.json` may add a `memory_index_extra_dirs` list — project-relative directories (recursive `*.md` scan) or glob patterns (literal expansion). Absolute paths are rejected; traversal is rejected via `Path.resolve` + `relative_to`; symlink escapes are rejected via a post-glob `os.path.realpath` check. Resolved paths are threaded through `analyze.build_manifest` and `build_team._memory_index_sources` and merged with the default source set.
+- **Consumer-declared source dirs:** `brief.json` may add a `memory_index_extra_dirs` list — project-relative directories (recursive `*.md` scan) or glob patterns (literal expansion). Absolute paths are rejected; traversal is rejected via `Path.resolve` + `relative_to`; symlink escapes are rejected via a post-glob `os.path.realpath` check. Resolved paths are threaded through `analyze.build_manifest` and `build_team._memory_index_sources` and merged with the default source set. A plain path that names a file is skipped (and reported at build time).
+- **Named files:** `memory_index_extra_files` lists single project-relative `.md` files. Use it to index checked documents (for example deliverables under `Projects/`) one by one, where a folder or open glob would also index, and commit snippets of, every later file there. Every build and `--refresh-index` reports a file entry under `memory_index_extra_dirs`, an entry that matches nothing, each folder or glob entry (it sweeps in later files), and Markdown under `Projects/` or `docs/` that the index leaves out.
 
 ---
 

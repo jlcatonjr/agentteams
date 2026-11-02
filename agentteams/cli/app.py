@@ -72,6 +72,30 @@ def _deprecated_build_team_entry(argv: list[str] | None = None) -> int:
     return main(argv)
 
 
+def _resolve_retrieval_brief(args: argparse.Namespace) -> None:
+    """Find the brief for a retrieval command when none is given or the one given is missing.
+
+    Applies to ``--query-index``, ``--refresh-index`` and ``--query-code``.
+
+    The recall skill runs the bare command, and the agents' fenced retrieval text names
+    ``.agentteams/brief.json``, which many instances don't have. Looks under ``--project`` (else the working
+    directory) in :data:`agentteams.memory_index_surfaces.BRIEF_CANDIDATES` order.
+    """
+    from agentteams.memory_index_surfaces import BRIEF_CANDIDATES, resolve_brief
+
+    if args.description and Path(args.description).is_file():
+        return
+    found = resolve_brief(Path(getattr(args, "project", None) or ".").resolve())
+    if found is None:
+        if not args.description:
+            print(f"  ✗  No brief found (looked for {', '.join(BRIEF_CANDIDATES)}); pass --description.",
+                  file=sys.stderr)
+        return
+    if args.description:
+        print(f"  ℹ  --description {args.description} does not exist; using {found}.", file=sys.stderr)
+    args.description = str(found)
+
+
 def main(argv: list[str] | None = None, *, migrate_exemption: bool = False) -> int:
     """CLI entry point.
 
@@ -622,6 +646,8 @@ def _main_dispatch(
         from agentteams.cli.sync_switch import run_sync_cli
         return run_sync_cli(args)
 
+    if any(getattr(args, flag, None) for flag in ("query_index", "refresh_index", "query_code")):
+        _resolve_retrieval_brief(args)  # baseAgent P6: the recall skills' bare commands
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
 

@@ -121,6 +121,13 @@
         "type": "string"
       }
     },
+    "memory_index_extra_files": {
+      "type": "array",
+      "description": "Named project-relative Markdown files to include in the memory index. Empty when none were declared.",
+      "items": {
+        "type": "string"
+      }
+    },
     "memory_index_exclude": {
       "type": "array",
       "description": "Project-relative paths/globs to exclude from the memory index, even when the built-in defaults or memory_index_extra_dirs would otherwise include them. Empty when none were declared.",

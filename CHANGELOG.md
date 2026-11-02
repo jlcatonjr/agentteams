@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (cross-surface Phase 2: memory-index retrieval is read-only and spans every surface; baseAgent 2026-11-02)
+
+- **`--query-index` never writes.** A stale index used to be rebuilt by the query itself, rewriting the tracked
+  `memory-index.json` (and its `.vcache`) with or without `--no-scan`. The query now reports the staleness and its
+  reason on stderr and leaves the files alone; `--refresh-index` rebuilds.
+- **Retrieval commands find the brief.** `--query-index`, `--refresh-index` and `--query-code` look for
+  `.agentteams/brief.json`, `brief.json`, then `.github/agents/_build-description.json` when no `--description` is
+  given or the one given doesn't exist. The recall skill's bare command and the agents' fenced
+  `--description .agentteams/brief.json` both work now. A query on a surface with no index uses another surface's.
+- **`--refresh-index` rebuilds every surface's copy** (`.github/agents`, `.claude/agents`, `.goose/recipes`,
+  `.codex/agents`, `.grok/agents`, `.agents`) from the same sources, each keeping its framework stamp
+  (`memory_index_surfaces`). baseAgent's three copies had been built from 77, 103 and 103 of 110 sources.
+- **Staleness catches an added source.** `memory_index.index_staleness` gives the reason. With the full source set,
+  it compares the source count too, so a file added with an older modification time is no longer missed.
+- **`memory_index_extra_files`**, a new brief key, names single Markdown files for the index. Each build and
+  `--refresh-index` reports a file entry under `memory_index_extra_dirs` (which is skipped), an entry that matches
+  nothing, a folder or glob entry (it indexes, and commits snippets of, every later file there), and Markdown under
+  `Projects/` or `docs/` the index leaves out.
+- The recall and code-recall skills and the bridge pair doc give the working command and say a query is read-only.
+
 ### fixed (cross-surface Phase 1: user regions, prompt roots, bridge refresh, Copilot notes; baseAgent 2026-11-02)
 
 - **`--update --merge` adds a missing `## Project-Specific Rules` region.** An instruction file rendered before its

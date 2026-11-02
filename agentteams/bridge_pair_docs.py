@@ -153,8 +153,9 @@ def _render_entrypoint(
             "```\n"
             "agentteams --query-index \"<the user's question>\" --query-strategy vector --query-k 5\n"
             "```\n\n"
-            "Some installations require `--description PATH` for read-only queries —\n"
-            "pass the project brief if so. The index covers durable prose (work\n"
+            "The command finds the project brief itself (pass `--description PATH`\n"
+            "when it lives elsewhere) and never rebuilds the index; run\n"
+            "`agentteams --refresh-index` when it reports the index stale. The index covers durable prose (work\n"
             "summaries, plans, CHANGELOG, references), NOT code. For code-symbol\n"
             "lookups, grep remains primary.\n\n"
         )

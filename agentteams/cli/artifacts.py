@@ -975,6 +975,9 @@ def _memory_index_sources(manifest: dict, output_dir: Path) -> list[Path]:
                 except (ValueError, OSError):
                     continue
                 sources.append(c)
+    from agentteams.memory_index_surfaces import extra_files  # named files (baseAgent P7)
+
+    sources.extend(f for f in extra_files(manifest, project_root) if f not in sources)
     exclude = manifest.get("memory_index_exclude")
     if isinstance(exclude, list) and exclude:
         from agentteams.memory_index import apply_memory_index_exclude
@@ -1012,15 +1015,18 @@ def _validate_memory_index_bytes(
     )
 
 
-def _read_memory_index(output_dir: Path) -> dict[str, object]:
+def _read_memory_index(output_dir: Path, *, cache: bool = True) -> dict[str, object]:
     """Load and parse references/memory-index.json (single file or shards) from output_dir.
+
+    With ``cache=False`` the validation runs in full and the ``memory-index.vcache`` sidecar is neither read nor
+    written, so a read-only command (``--query-index``) writes nothing.
 
     Raises RuntimeError when the file, or any shard it lists, is missing or invalid.
     """
     from agentteams.memory_index_store import orphan_part_files, read_memory_index_payload
 
     index, chunks = read_memory_index_payload(output_dir / MEMORY_INDEX_REL_PATH)
-    _validate_memory_index_bytes(index, chunks, output_dir)
+    _validate_memory_index_bytes(index, chunks, output_dir if cache else None)
     if orphans := orphan_part_files(output_dir / MEMORY_INDEX_REL_PATH):  # older writer left them
         print(f"  !  {len(orphans)} unused memory-index.part-*.json file(s) beside a single-file "
               "index (an older agentteams rewrote it?); --refresh-index removes them.", file=sys.stderr)
@@ -1036,29 +1042,45 @@ def _validate_memory_index_schema(index: dict[str, object]) -> None:
     """
     _validate_memory_index_bytes(index, b"", None)
 def _run_refresh_index(manifest: dict, output_dir: Path) -> int:
-    """Rebuild memory-index.json only (no template emit/update path)."""
-    path = _write_memory_index(manifest, output_dir)
-    index = _read_memory_index(output_dir)
-    docs = int(index.get("N", 0))
-    source_count = int(index.get("source_count", 0))
-    print(f"  ✓  Refreshed memory index: {path}")
-    print(f"     Indexed {docs} document(s) from {source_count} source file(s).")
+    """Rebuild memory-index.json for this surface and every other surface of the project that has one.
+
+    The copies are built from the same sources, so they agree afterwards (baseAgent P5: each provider's update
+    refreshed only its own copy). Each keeps its own framework stamp.
+    """
+    from agentteams.memory_index_surfaces import index_surfaces, surface_framework
+
+    root = _memory_index_root(manifest, output_dir)
+    targets = [output_dir] + [d for d in index_surfaces(root) if d.resolve() != output_dir.resolve()]
+    for target in targets:
+        stamped = manifest if target is output_dir else {**manifest, "framework": surface_framework(target, root)}
+        path = _write_memory_index(stamped, target, report=target is output_dir)
+        index = _read_memory_index(target)
+        print(f"  ✓  Refreshed memory index: {path}")
+        print(f"     Indexed {int(index.get('N', 0))} document(s) from {int(index.get('source_count', 0))} "
+              "source file(s).")
     return 0
 def _run_query_index(
     manifest: dict, output_dir: Path, query: str, k: int, strategy: str = "lexical"
 ) -> int:
-    """Query memory-index.json and print ranked hits."""
-    from agentteams.memory_index import is_index_stale, query_index
+    """Query memory-index.json and print ranked hits. Read-only: a stale index is reported, never rebuilt.
 
-    index = _read_memory_index(output_dir)
-    sources = _memory_index_sources(manifest, output_dir)
-    if is_index_stale(index, sources, root=_memory_index_root(manifest, output_dir)):
-        refreshed_path = _write_memory_index(manifest, output_dir)
-        index = _read_memory_index(output_dir)
-        print(
-            "  !  Index was stale relative to source files. "
-            f"Auto-refreshed: {refreshed_path}"
-        )
+    When this surface has no index, another surface's copy of the project is queried instead (baseAgent P6).
+    """
+    from agentteams.memory_index_surfaces import index_surfaces
+    from agentteams.memory_index import index_staleness, query_index
+
+    root = _memory_index_root(manifest, output_dir)
+    if not (output_dir / MEMORY_INDEX_REL_PATH).is_file():
+        others = index_surfaces(root)
+        if others:
+            print(f"  ℹ  No memory index at {output_dir / MEMORY_INDEX_REL_PATH}; querying "
+                  f"{others[0] / MEMORY_INDEX_REL_PATH}.", file=sys.stderr)
+            output_dir = others[0]
+    index = _read_memory_index(output_dir, cache=False)
+    reason = index_staleness(index, _memory_index_sources(manifest, output_dir), root=root, complete_sources=True)
+    if reason:
+        print(f"  !  The memory index is stale ({reason}), so results may miss recent changes. A query never "
+              "rebuilds it; run `agentteams --refresh-index` (it rebuilds every surface's copy).", file=sys.stderr)
 
     hits = query_index(index, query, k=k, strategy=strategy)
 
@@ -1076,7 +1098,7 @@ def _run_query_index(
             f"     snippet: {hit['snippet']}"
         )
     return 0
-def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
+def _write_memory_index(manifest: dict, output_dir: Path, *, report: bool = True) -> Path:
     """Emit the additive lexical memory index (F8).
 
     Always emitted (no opt-in flag): the index is *additive* to the existing
@@ -1125,8 +1147,14 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
                 f"({exc}); falling back to full rebuild."
             )
 
+    sources = _memory_index_sources(manifest, output_dir)
+    if report:  # baseAgent P7: say what the default sources leave out, and what an open entry sweeps in
+        from agentteams.memory_index_surfaces import coverage_notices
+
+        for notice in coverage_notices(manifest, _memory_index_root(manifest, output_dir), sources):
+            print(f"  ℹ  Memory index: {notice}")
     index = build_memory_index(
-        _memory_index_sources(manifest, output_dir),
+        sources,
         project_name=manifest.get("project_name", ""),
         framework=manifest.get("framework", ""),
         root=_memory_index_root(manifest, output_dir),
