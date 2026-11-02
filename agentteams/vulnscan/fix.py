@@ -60,7 +60,7 @@ from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discov
 from agentteams.vulnscan.npm_ops import semver_line as _semver_line
 from agentteams.vulnscan.versions import is_final, major, version_key
 
-PYPI = "https://pypi.org/pypi"
+PYPI = _http.PYPI_JSON
 NPM_REGISTRY = "https://registry.npmjs.org/"    # fixed: a repository .npmrc cannot redirect the unattended fix
 NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
 #: Heads every Cargo.lock section of a fix plan (agents read it through ``get_fix_plans``).

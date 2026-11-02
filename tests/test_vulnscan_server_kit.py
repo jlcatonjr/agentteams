@@ -454,9 +454,12 @@ def test_g21_executor_and_kit_agree_on_host_names(kit: Kit, monkeypatch: pytest.
 # ---------------------------------------------------------------- G27: L1 on unusual hosts
 
 HOST_TOOLS = ("hostname", "uname", "date", "readlink", "xargs", "sort", "grep", "awk", "tr", "cut", "head",
-              "basename", "sed", "cat", "wc", "tail")
+              "basename", "sed", "cat", "wc", "tail", "mktemp", "rm")
 FAKE_FIND = r"""#!/bin/bash
 case " $* " in
+  *' -lname '*) f="${FAKE_FIND_LINKS:-}";;
+  *sitecustomize.py*) f="${FAKE_FIND_PTH:-}";;
+  *.disabled-*) f="${FAKE_FIND_DIS:-}";;
   *site-packages*) f="${FAKE_FIND_SP:-}";;
   *installed.json*) f="${FAKE_FIND_LOCK:-}";;
   *'*/bin/node'*) f="${FAKE_FIND_NODE:-}";;

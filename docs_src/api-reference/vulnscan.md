@@ -675,6 +675,7 @@ A Finding (`report.Finding`):
 | `detail` | string | host-check or runtime message, or the malicious-package note |
 | `spec` | string | `range` only: the requirement's specifier set (`""`: any version); `version` is then `""` |
 | `partial` | boolean | `range` only: part of the allowed range is affected (severity capped at MODERATE) |
+| `location_labels` | object | location → `{label, path, evidence}` for a location a `SCOPE` line covers (a disabled tree, or node_modules nginx refuses); information only, the finding keeps its row and grade. `{}` in a report written before it |
 
 ---
 
@@ -1297,6 +1298,42 @@ another prefix or field count is ignored:
 | `ESM` | esm-infra, esm-apps: `enabled`, `disabled` or `unknown` (Ubuntu only, read from `/var/lib/ubuntu-advantage/status.json`; the kit never runs `pro`) |
 | `HOSTCHECK` | severity, message |
 | `IOC` | message |
+| `SCOPE` | path, label, match (`tree`: the path and everything under it; `exact`: the path only), evidence |
+| `PYSITE` | site-packages location, interpreter line `X.Y` |
+| `DISTROPKG` | location, name, version, owning dpkg/rpm package, source package, that package's version, origin (`unowned` when no package owns it). Read by nothing yet (distro verdicts, plan vfr-a A2) |
+| `AUTOUPD` | manager (`apt` or `dnf`), key, value: unattended-upgrades' allowed origins and `APT::Periodic` values, or dnf-automatic's `[commands]` values and enabled timers, and `lists-age-hours` / `metadata-age-hours`. Read by nothing yet |
+
+`SCOPE` labels locations that are on disk but not the live system; `L1-audit.sh` emits two labels:
+
+- `disabled` (`tree`): a directory renamed `<name>.disabled-YYYYMMDD` (evidence `inert since YYYY-MM-DD`), only
+  when nothing outside it names it: no systemd unit (system, user, transient, generated, `/usr/local/lib/systemd`;
+  including `Environment=` and the `EnvironmentFile=` files), cron or `at` entry, `/etc/profile*` or shell rc file,
+  `/etc/pam.d`, `/etc/default`, `/etc/logrotate.d`, `/etc/php*`, loader configuration (`/etc/ld.so.preload` too),
+  web-server or supervisor configuration (`nginx -T` too), pm2 dump, user dotfile, `.pth`/`.egg-link`/
+  `sitecustomize.py` outside it, symlink into it, container mount (`docker`/`podman inspect`), or running process
+  whose binary, working directory, mapped files or mount table name it. Secret-store dotfiles (`.env`, `.npmrc`,
+  `.pypirc`, `.vault-token`, `.s3cfg`, `.boto`) and `EnvironmentFile=` files are matched with `grep -lF` only (path,
+  never content). It fails closed: a source it cannot read, an `EnvironmentFile=` it cannot resolve to one regular
+  file (quoted, `%`-specifier, several paths, relative, not a regular file, or missing without the optional `-`),
+  or a failed `nginx -T`, `docker ps`/`inspect` (when a docker socket or `dockerd` exists) or `podman` query leaves
+  the tree unlabelled. A missing `-` file loads nothing and blocks nothing. History and credential-only files
+  (`.pgpass`, `.netrc`, `.git-credentials`, `.my.cnf`) are never read.
+- `on-disk-not-served` (`exact`): an npm manifest location whose `node_modules` lies under an nginx `root`, when
+  every server with such a root selects, for each probe URI, a location that holds `deny all`, `internal` or
+  `return 403|404` (with no `allow`, `if`, `rewrite` or nested location). If the server has any regex location, the
+  refusal must be a `^~` or `=` location (the note says so: "a regex location exists; a ^~ or = refusal is needed"). The evidence names the rule. Apache on the host, a failed `nginx -T`, an
+  `include` inside a server block, a location outside every server block (an included snippet), a relative root, or
+  an alias or location-level root reaching the tree leaves it unlabelled.
+
+`engine.apply_scopes` copies a label to every finding location it covers (`Finding.location_labels`). A label
+changes no row, severity, key or exit code; the summary groups the findings whose every location carries one label
+under *On disk, not the live system*, and names a finding also found at a live location apart.
+
+A `PYSITE` location outside the OS-managed paths whose interpreter line is end-of-life (endoflife.date `python`)
+gets one HIGH `runtime` finding named `python` (`engine.held_by_interpreter`) when a PyPI package finding there has
+a fix whose `requires_python` (`engine.requires_python`, from `https://pypi.org/pypi/<name>/<version>/json`) allows
+no release of that line. The detail lists the held packages; the package findings stay. A `requires_python` PyPI
+does not answer, or that does not parse, is a feed error.
 
 A `RUNTIME` manager says where a package-manager install came from. `pkg:<package>` (or
 `pkg:<package>:universe` for Ubuntu universe/multiverse) means the installed version comes from an

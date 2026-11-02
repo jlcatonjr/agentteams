@@ -19,6 +19,10 @@ Server inventory line formats (one per line; anything else is ignored):
 | ``ESM`` | esm-infra, esm-apps: ``enabled``, ``disabled`` or ``unknown`` (Ubuntu Pro, from its status file) |
 | ``HOSTCHECK`` | severity, message |
 | ``IOC`` | message |
+| ``SCOPE`` | path, label, match (``tree`` or ``exact``), evidence: a location that is not the live system |
+| ``PYSITE`` | site-packages location, interpreter line ``X.Y`` |
+| ``DISTROPKG`` | location, name, version, owning package, source package, its version, origin (read by nothing yet) |
+| ``AUTOUPD`` | manager, key, value: automatic-update settings and package-list age (read by nothing yet) |
 
 A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted
 distribution archive; ``repo:<host>:<name>`` and ``repo:unknown:<name>`` come from anywhere else and are
@@ -29,6 +33,11 @@ is the end of *standard* support, so an Ubuntu release past it whose ESM has not
 ``ESM`` line: esm-infra not enabled (or no line) is HIGH; esm-infra enabled is LOW, or MODERATE when a
 universe package (``pkg:<name>:universe``) runtime is present without esm-apps. When whether its ESM still runs is
 unknown (no extended-support data), it is HIGH, "ESM state unknown", whatever the ``ESM`` line says.
+
+A ``SCOPE`` line labels finding locations (:attr:`Finding.location_labels`): ``disabled`` for a renamed tree nothing
+references any more, ``on-disk-not-served`` for an npm location nginx refuses. A label changes no row and no grade
+(Rule 12). A ``PYSITE`` line whose interpreter line is end-of-life, with packages there whose fix release's
+``requires_python`` excludes that line, gives a HIGH ``runtime`` finding (:func:`held_by_interpreter`).
 """
 
 from __future__ import annotations
@@ -548,6 +557,102 @@ def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str
                                    fix=v.upgrade_to, locations=["/etc/os-release"], detail=f"{verdict}: {detail}"))
 
 
+#: ``SCOPE`` match modes: ``tree`` covers the path and everything under it, ``exact`` the path only.
+SCOPE_MATCH = ("tree", "exact")
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,127}$")
+_REQUIRES_PYTHON: dict[tuple[str, str], str] = {}
+
+
+def apply_scopes(scopes: list[tuple[str, str, str, str]], report: Report) -> None:
+    """Label every finding location a ``SCOPE`` record covers; no finding is removed or regraded (Rule 12).
+
+    Args:
+        scopes: (path, label, match, evidence) records. A path that is not absolute, or is ``/``, labels nothing;
+            a match other than ``tree`` covers the path only.
+        report: Report whose findings get :attr:`Finding.location_labels` entries.
+    """
+    usable = [(p.rstrip("/"), lab, m, ev) for p, lab, m, ev in scopes if p.startswith("/") and p.rstrip("/")]
+    for f in report.findings:
+        for loc in f.locations:
+            for path, label, match, evidence in usable:
+                if loc.rstrip("/") == path or (match == "tree" and loc.startswith(path + "/")):
+                    f.location_labels[loc] = {"label": label, "path": path, "evidence": evidence}
+                    break
+
+
+def requires_python(name: str, version: str) -> str:
+    """Return the ``requires_python`` PyPI publishes for one release.
+
+    Args:
+        name: PyPI project name.
+        version: Release version.
+
+    Returns:
+        The specifier text; ``""`` when the release sets none.
+
+    Raises:
+        _http.FeedError: PyPI could not be read, or the name or version is not a plain PyPI identifier.
+    """
+    key = (name.lower(), version)
+    if key not in _REQUIRES_PYTHON:
+        if not (_SAFE_NAME.match(name) and _SAFE_NAME.match(version)):
+            raise _http.FeedError(f"{name[:40]!r} {version[:40]!r} is not a PyPI name and version")
+        data = _http.fetch_json(f"{_http.PYPI_JSON}/{name}/{version}/json")
+        info = (data or {}).get("info") if isinstance(data, dict) else None
+        _REQUIRES_PYTHON[key] = str((info or {}).get("requires_python") or "").strip()
+    return _REQUIRES_PYTHON[key]
+
+
+def held_by_interpreter(target: str, pysites: list[tuple[str, str]], report: Report) -> None:
+    """R4: report an end-of-life interpreter line whose packages cannot reach their fix (``requires_python``).
+
+    For each non-OS ``PYSITE`` location (OS-managed paths get distro fixes, :data:`DISTRO_LOCATION`) whose line is
+    end-of-life upstream, every PyPI package finding there with a fix is checked: it is held when no patch release
+    of the line satisfies the fix release's ``requires_python``. One HIGH ``runtime`` finding per location lists the
+    held packages; the package findings stay as they are. A ``requires_python`` PyPI does not answer, or that does
+    not parse, is a feed error (never read as "not held").
+
+    Args:
+        target: Host label.
+        pysites: (location, ``X.Y``) pairs from ``PYSITE`` lines.
+        report: Report holding the package findings; extended in place.
+    """
+    for loc, line in sorted(set(pysites)):
+        if DISTRO_LOCATION.match(loc) or not re.fullmatch(r"\d+\.\d+", line):
+            continue
+        cands = [f for f in report.findings if f.kind == "package" and f.ecosystem == "PyPI" and f.fix
+                 and loc in f.locations and f.target == target]
+        if not cands:
+            continue
+        v = runtimes.evaluate("python", f"{line}.0", loc)
+        if v.verdict == "unchecked":
+            report.feed_errors.append(f"{target}: python {line} at {loc}: {v.detail}")
+            continue
+        if v.verdict != "eol":
+            continue
+        probe = f"{line}.999"   # held only when no patch release of the line is allowed
+        held: list[str] = []
+        unread: list[str] = []
+        for f in sorted(cands, key=lambda f: f.name.lower()):
+            try:
+                text = requires_python(f.name, f.fix)
+                ok = not text or specifiers.parse_specifier(text).contains(probe)
+            except (_http.FeedError, ValueError):
+                unread.append(f.name)
+                continue
+            if not ok:
+                held.append(f"{f.name} {f.version} → {f.fix} (requires_python {text})")
+        if unread:
+            report.feed_errors.append(f"{target}: requires_python of the fix release unread for {len(unread)} "
+                                      f"package(s) at {loc}: {', '.join(unread[:5])}")
+        if held:
+            report.findings.append(Finding(
+                kind="runtime", target=target, name="python", version=line, severity=3, fix=v.upgrade_to,
+                locations=[loc],
+                detail=(f"runtime-eol: python {line} is end-of-life; {len(held)} package(s) here are held below their "
+                        f"fix by requires_python: {'; '.join(held)}")))
+
+
 def scan_inventory(text: str, target: str) -> Report:
     """Analyze the inventory lines a server-kit audit printed.
 
@@ -563,6 +668,8 @@ def scan_inventory(text: str, target: str) -> Report:
     rts: list[tuple[str, str, str, str]] = []
     osrel: tuple[str, str, str] | None = None
     esm: tuple[str, str] | None = None
+    scopes: list[tuple[str, str, str, str]] = []
+    pysites: list[tuple[str, str]] = []
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
@@ -581,9 +688,15 @@ def scan_inventory(text: str, target: str) -> Report:
         elif tag == "IOC" and len(parts) == 2:
             report.findings.append(Finding(kind="ioc", target=target, name="compromise indicator",
                                            severity=4, detail=parts[1]))
+        elif tag == "SCOPE" and len(parts) == 5:
+            scopes.append((parts[1], parts[2], parts[3] if parts[3] in SCOPE_MATCH else "exact", parts[4]))
+        elif tag == "PYSITE" and len(parts) == 3:
+            pysites.append((parts[1], parts[2]))
     analyze(deps, report, distro_check=True)
     _runtime_findings(target, rts, report)
     _os_findings(target, osrel, esm, [m for _k, _v, _p, m in rts], report)
+    held_by_interpreter(target, pysites, report)
+    apply_scopes(scopes, report)
     return report
 
 

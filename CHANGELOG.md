@@ -101,6 +101,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GOOSE_SANDBOX` precondition, and note that the `DESCRIPTION-FORMAT.md` `wasm_sandbox` example needs two standing
   exceptions, over the registry's default cap of one.
 
+### added (vulnscan server kit: distro sources, not-live labels, held interpreters; plans vfr-a A1, vfr-e E1/E2b, vfr-r R4)
+
+- **`L1-audit.sh` reports where OS-packaged Python comes from (A1).** For each package in an OS-managed path
+  (`/usr/lib*/python3*/{dist,site}-packages`), a `DISTROPKG` line gives the owning dpkg/rpm package, its source
+  package (`${source:Package}`, or the SRPM name), that package's version and its origin (`pkg:`/`repo:`, or
+  `unowned`). `AUTOUPD` lines give unattended-upgrades' allowed origins and `APT::Periodic` values, or
+  dnf-automatic's `apply_updates` / `upgrade_type` and enabled timers, and the package lists' or dnf metadata's age.
+  Nothing reads these yet: the distro verdict is A2.
+- **A renamed, unused tree is labelled, never excluded (E1).** A directory named `<name>.disabled-YYYYMMDD` gets a
+  `SCOPE … disabled` line only when nothing outside it names it: units (with `Environment=`/`EnvironmentFile=`),
+  cron, profiles, loader and web-server configuration (`nginx -T` too), users' dotfiles, `.pth` files, symlinks, or
+  a running process's binary, working directory or mapped files. A source it cannot read leaves it unlabelled. The
+  label is per location and covers every find (packages, runtimes, npm/composer manifests, indicator hits).
+- **node_modules nginx refuses is labelled `on-disk-not-served` (E2b)**, with the rule as evidence, only when every
+  server whose root holds it selects a `deny all` / `return 403|404` location for each probe URI. Apache, a relative
+  root, an alias reaching it, an `allow`, an earlier serving regex or a longer `^~` prefix leave it unlabelled.
+- Review fixes (security, code hygiene): E1 also reads `/etc/ld.so.preload`, `/etc/pam.d`, `/etc/default`,
+  `/etc/logrotate.d`, `/etc/php*`, `at` spools, generated and `/usr/local/lib` units, pm2 dumps, process
+  `mountinfo` and container mounts. Secret-store dotfiles (`.env`, `.npmrc`, `.pypirc`, `.vault-token`, `.s3cfg`,
+  `.boto`) and `EnvironmentFile=` files are matched with `grep -lF` only. An unresolvable `EnvironmentFile=` (a
+  missing optional `-` file is ignored, as systemd does) or a failed container query (docker only when a socket or
+  `dockerd` exists) leaves the tree unlabelled. E2b refuses to
+  label when a server holds an `include`, a location sits outside every server, or a regex location exists and the
+  refusal is not `^~`/`=` (the note names the fix). `nginx -T` runs once (under the 10 s limit) into a mktemp file an EXIT trap removes;
+  the header says it may create its error-log and temp paths as root. One PyPI JSON URL (`_http.PYPI_JSON`).
+- The engine copies labels to `Finding.location_labels` and the report groups fully labelled findings under *On
+  disk, not the live system*. **Grading is unchanged:** every finding keeps its row, severity, key and exit code; a
+  finding also at a live location is named apart, never grouped.
+- **An end-of-life interpreter that holds packages below their fix is its own finding (R4).** `PYSITE` lines name a
+  site-packages directory's Python line; for a non-OS location on an end-of-life line, packages whose fix release's
+  `requires_python` (read from PyPI) allows no release of that line give one HIGH `runtime` finding naming them.
+  An unread `requires_python` is a feed error.
+- Deploy: the daily run streams the packaged kit, so deploying this commit (`vulnscan-deploy.sh`) is enough; the next
+  audit runs the new `L1-audit.sh`. A hand-run `remote.sh` copy needs `vulnscan server-kit` again.
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install
@@ -1234,6 +1269,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `STABILITY.md`.
   - `references/git-procedures.md` documented `mkdocs build --clean` into `docs/`. It now gives the strict
     `_site` build CI uses.
+
 ### Fixed
 
 - **sandbox (macOS): gate 8 no longer scores a declined `rm` prompt as an escape.** `mac-escape-tests.sh` tried to

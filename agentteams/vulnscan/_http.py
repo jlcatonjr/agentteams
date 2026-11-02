@@ -37,6 +37,8 @@ SIZE_BOUNDS: dict[str, tuple[int, int]] = {
     "www.php.net": (2, 4 * 1024 * 1024),
 }
 
+#: PyPI's JSON API root (``<root>/<name>/json``, ``<root>/<name>/<version>/json``); the one copy.
+PYPI_JSON = "https://pypi.org/pypi"
 USER_AGENT = "agentteams-vulnscan/1"
 
 
