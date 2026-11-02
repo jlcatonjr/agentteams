@@ -100,7 +100,9 @@ def npm_moves(lockfile: Path, *, run: Callable[..., str], counts: Callable[..., 
     if not todo:
         return []
     if why_not := _refusal(lockfile, base_lock):
-        return [f"npm update moves not run: {why_not} ({len(todo)} move(s) left; fix by hand)"]
+        lever = ("a stage-fix in the tools container takes them" if not _container_active()
+                 else "left to the repository's own PR")
+        return [f"npm update moves not run: {why_not} ({len(todo)} move(s) left: {lever})"]
     out: list[str] = []
     for names, targets in list(todo.items())[:MAX_NPM_MOVES]:
         before_bytes = lockfile.read_bytes()

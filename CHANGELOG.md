@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (vulnscan: a handoff's review directive is verified by itself, not by the whole ledger)
+
+- **Expired history no longer marks every handoff unverified.** The site-local operator tooling decided a handoff's
+  directive was verified only when `--verify-directives` passed the repository's whole directive ledger, and that
+  fails every row whose expiry has passed. From a repository's second day on, every handoff read "issued, but the
+  ledger did not verify cleanly" (all four such lines on 2026-11-02 were earlier days' expired directives).
+- New `management_directives.verify_handoff_directive` and `python -m agentteams.vulnscan handoff verify-directive
+  --team-dir DIR --handoff-id ID [--directive-id ID] [--json]` return a structured verdict with reason codes (exit 0
+  verified, 1 not). Verified needs: a ledger with an intact `prev_digest` chain (an unchained ledger is never
+  passed); exactly one row with the scope `review-vulnscan-handoff-<id>` (and the issued id, when given); that row
+  valid on every check, expiry included; every other row valid or failing only on expiry. A bad signature,
+  exhaustion, an off-roster manager or a malformed date on any row still fails, even on an expired row:
+  `directive_row_failures` reports every failed check by reason code, so the carve-out never relies on check order.
+  `validate_directive` and `--verify-directives` are unchanged. The directive stays reporting-only.
+
+### changed (vulnscan: no more "fix by hand" in fix plans and notes)
+
+- Rows no executor op can stage now say where they go: "left to the repository's own PR" (`fix.OWN_PR`) for npm
+  workspaces, unusual crate or package forms, held majors, an unrewritable `package.json` and lockfiles that list
+  private packages; skipped `npm update` moves name the tools container or the repository's own PR; the agent prompt
+  reports plan-only commands as left to the repository's own PR; server fix plans call host checks and unlisted
+  Python packages operator decisions. The git-config refusals (environment faults) still say "fix it by hand".
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install

@@ -14,9 +14,10 @@ what it would not:
   upgrades through the package manager or the vendor: no kit level changes them;
 - **L4 Python apps** per ``apps.conf`` entry of the host whose app directory holds the vulnerable packages, with
   candidate ``--pin`` values (the minimal fixed versions; prefer the versions of the reviewed repository fix);
-- **Python packages with no apps.conf entry**: ``run-host.sh`` never updates them; add an entry or fix them by hand;
+- **Python packages with no apps.conf entry**: ``run-host.sh`` never updates them; add an entry (L4 then updates
+  them) or decide to remove an unused one;
 - **Node app dependencies** (npm trees on the host): fixed in the app's repository and redeployed, never by the kit;
-- **host checks** (``kind: host``): the audit's action lines, by hand.
+- **host checks** (``kind: host``): the audit's action lines, each an operator decision (no kit lever).
 
 The plans name hosts, app paths and the kit's location from the operator's own ``hosts.conf`` / ``apps.conf`` and
 audit, so they are written outside the run directory: the agent container mounts ``<run>`` whole, and its CLI's
@@ -179,8 +180,8 @@ def markdown(host: str, findings: list[Finding], apps: list[App], *, kit: str = 
         out.append("")
     if py_orphans:
         out += ["## Python packages with no apps.conf entry", "",
-                "`run-host.sh` never updates these: add an apps.conf entry for the service that uses them, or fix",
-                "them by hand (a package no service uses can be removed).", ""]
+                "`run-host.sh` never updates these: add an apps.conf entry for the service that uses them (L4 then",
+                "updates them), or decide to remove a package no service uses.", ""]
         for where, items in sorted(py_orphans.items()):
             out += [f"### `{where}`", "", *_TABLE, *(_row(f) for f in items), ""]
     if npm:
@@ -191,7 +192,8 @@ def markdown(host: str, findings: list[Finding], apps: list[App], *, kit: str = 
             out += [f"### `{where}`", "", *_TABLE, *(_row(f) for f in items), ""]
     hosts = [f for f in findings if f.kind == "host" and f.name != OS_RELEASE]
     if hosts:
-        out += ["## Host checks (by hand)", ""] + [f"- {f.detail or f.name}" for f in hosts] + [""]
+        out += ["## Host checks (operator decision; no kit lever)", ""]
+        out += [f"- {f.detail or f.name}" for f in hosts] + [""]
     return "\n".join(out)
 
 

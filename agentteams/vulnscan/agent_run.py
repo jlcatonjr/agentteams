@@ -99,7 +99,8 @@ TASK = ("Daily vulnerability remediation: follow your Daily Remediation workflow
         "for a repository whose plan has base-image rows with action stage-image, on its own, once no other fix is "
         "staged there. Fix-plan sections "
         "marked plan-only (no staged edit), such as crates.io Cargo.lock rows, cannot be staged: never request "
-        "stage-fix for them; report each row's command for a person to run. Never poll "
+        "stage-fix for them; report each row's command as left to the repository's own PR (no executor op "
+        "applies it). Never poll "
         "request_status in a loop: queue everything, check each request once near the end, and report pending "
         "ones as pending.")
 
