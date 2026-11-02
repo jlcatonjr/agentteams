@@ -1304,8 +1304,8 @@ another prefix or field count is ignored:
 | `PYSITE` | site-packages location, interpreter line `X.Y` |
 | `DISTROPKG` | location, name, version, owning dpkg/rpm package, source package, that package's version, origin (`unowned` when no package owns it): the distro verdict's join ([`distro_verdict`](#agentteamsvulnscandistro_verdict)) |
 | `AUTOUPD` | manager (`apt` or `dnf`), key, value: unattended-upgrades' allowed origins and `APT::Periodic` values, or dnf-automatic's `[commands]` values and enabled timers, and `lists-age-hours` / `metadata-age-hours` (the dnf age is shown with AL2023 verdicts) |
-| `UPDATEINFO` | pass (`installed` or `available`), ALAS advisory (or `-`), CVE, package NEVRA: Amazon Linux 2023's updateinfo. No kit prints it yet |
-| `UPDATEINFOREAD` | pass, `ok` or `failed`: whether that `dnf -C updateinfo` pass read the host's cache |
+| `UPDATEINFO` | pass (`installed` or `available`), ALAS advisory (or `-`), CVE, package NEVRA: Amazon Linux 2023's updateinfo, printed by `L1-audit.sh` on dnf hosts from `dnf -C -q updateinfo list --security --installed\|--available --with-cve`; advisory is `-` (the listing names CVEs) |
+| `UPDATEINFOREAD` | pass, `ok` or `failed`: whether that `dnf -C updateinfo` pass read the host's cache. A pass dnf fails, or with any line other than `[i] <CVE> <severity>/Sec. <NEVRA>`, is `failed` and prints no records |
 
 `SCOPE` labels locations that are on disk but not the live system; `L1-audit.sh` emits two labels:
 

@@ -23,7 +23,7 @@ Server inventory line formats (one per line; anything else is ignored):
 | ``PYSITE`` | site-packages location, interpreter line ``X.Y`` |
 | ``DISTROPKG`` | location, name, version, owning package, source package, its version, origin |
 | ``AUTOUPD`` | manager, key, value: automatic-update settings and package-list age |
-| ``UPDATEINFO`` | pass (``installed`` / ``available``), ALAS advisory, CVE, package NEVRA (AL2023; no kit prints it yet) |
+| ``UPDATEINFO`` | pass (``installed`` / ``available``), ALAS advisory, CVE, package NEVRA (dnf hosts; ``L1-audit.sh`` ``dnf_updateinfo``) |
 | ``UPDATEINFOREAD`` | pass, ``ok`` or ``failed``: whether that dnf updateinfo pass read the host's cache |
 
 A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted

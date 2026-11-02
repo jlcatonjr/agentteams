@@ -15,9 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Ubuntu: OSV's `Ubuntu:<release>[:LTS]` and `Ubuntu:Pro:…` records by **source** package and the installed
     version (OSV decides whether that version is affected). An ESM-only fix counts as available when the `ESM` line
     shows the needed service enabled (plan step A5).
-  - Amazon Linux 2023: the host's `dnf updateinfo` through new `UPDATEINFO` / `UPDATEINFOREAD` lines. **No kit
-    prints them yet**, so AL2023 findings carry "no distro verdict" until `L1-audit.sh` does; no network source is
-    used for ALAS.
+  - Amazon Linux 2023: the host's own updateinfo; no network source is used for ALAS. `L1-audit.sh` (dnf hosts)
+    prints `UPDATEINFO` lines from `dnf -C -q updateinfo list --security --installed|--available --with-cve`
+    (cache only, under the kit timeout) and an `UPDATEINFOREAD ok|failed` line per pass. That listing's format is
+    unverified on AL2023, so it is read strictly: a dnf failure, or any line other than
+    `[i] <CVE> <severity>/Sec. <NEVRA>`, marks the pass `failed` and prints no records (a feed error, never a
+    verdict). Check the first vk-bastion run (plan step A3).
 - `summary.md` gains *Distro verdicts*: per host, the count of each verdict and **the `esm-only` count** (operator
   decision OD1). `Finding.distro_verdict` / `distro_note` are in `summary.json`; an older report loads with `""`.
 - **Unowned or third-party files in OS paths are judged upstream.** A finding with any location `unowned` or

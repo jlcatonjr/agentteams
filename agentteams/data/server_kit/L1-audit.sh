@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # L1 — READ-ONLY vulnerability inventory of one Linux host. Changes nothing it manages.
 # Run as root, the package tools it queries may still touch their own state: `apt-cache policy` runs with its
-# binary caches off (Dir::Cache::pkgcache= and srcpkgcache=), so it writes no cache file; `dnf -C repoquery`
-# reads the cache only (-C) but may append a line to dnf's own log (/var/log/dnf*.log). `nginx -T` (run once, when
+# binary caches off (Dir::Cache::pkgcache= and srcpkgcache=), so it writes no cache file; `dnf -C repoquery` and
+# `dnf -C updateinfo` read the cache only (-C) but may append a line to dnf's own log (/var/log/dnf*.log). `nginx -T` (run once, when
 # nginx exists) may create the error-log file and temp directories its configuration names, as root, if they are
 # missing; its output goes to one mktemp file that an EXIT trap removes. Nothing else is written.
 # Ubuntu/Debian (apt) and Amazon Linux / RHEL / Fedora (dnf/yum).
@@ -33,6 +33,11 @@
 #                                                     or "on-disk-not-served" (match "exact": one npm manifest location).
 #                                                     A label is information only: every finding keeps its row and grade
 #   PYSITE     location  X.Y                          the interpreter line a site-packages directory belongs to (vfr-r R4)
+#   UPDATEINFO pass  advisory  CVE  NEVRA              dnf only: one CVE of a cached security advisory (`dnf -C updateinfo
+#                                                     list --security --installed|--available --with-cve`); pass is
+#                                                     "installed" or "available", advisory "-" (the listing names CVEs)
+#   UPDATEINFOREAD  pass  ok|failed                   whether that pass was read: dnf failed, or a line was not
+#                                                     "<CVE> <severity>/Sec. <NEVRA>", is "failed" (no records printed)
 # RUNTIME kinds: php node python ruby go java java-corretto dotnet nginx openssl libressl postgresql mysql
 # mariadb redis docker (libressl is reported, not judged). Each probe only prints a version: no service is
 # started, stopped or reloaded, nothing is written (but see above), nothing leaves the host, and each runs under `timeout 10`
@@ -229,6 +234,36 @@ dnf_autoupd(){  # A1: dnf-automatic's [commands] settings (a key not printed is 
   info "dnf metadata age (hours, newest cached repomd.xml): $t"
 }
 
+dnf_updateinfo(){  # A2: per-CVE security advisories from the cached updateinfo, for the AL2023 distro verdicts
+  # Cache only (-C), under tmo. The --with-cve listing's format is unverified, so it is read strictly: a pass dnf
+  # fails, or with any line that is not "[i] <CVE> <severity>/Sec. <NEVRA>", prints no records and is "failed"
+  # (the workstation then reports a feed error, never "no advisory").
+  local pass out="" recs="" rc=0
+  command -v dnf >/dev/null 2>&1 || return 0
+  for pass in installed available; do
+    rc=0; recs=""
+    out=$(tmo dnf -C -q updateinfo list --security "--$pass" --with-cve 2>/dev/null) || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      recs=$(printf '%s\n' "$out" | awk -v p="$pass" '
+        { sub(/\r$/, ""); gsub(/^[ \t]+|[ \t]+$/, "") }
+        $0 == "" { next }
+        { n = split($0, t, /[ \t]+/); i = 1
+          if (t[1] == "i" && n == 4) i = 2                       # an "installed" marker column
+          if (n - i + 1 != 3 || t[i] !~ /^CVE-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]+$/ || t[i+1] !~ /\/Sec\.$/ \
+              || t[i+2] !~ /^[A-Za-z0-9][A-Za-z0-9._+:~^-]*-[^-\/]+-[^-\/]+$/) { bad = 1; exit }
+          printf "UPDATEINFO\t%s\t-\t%s\t%s\n", p, t[i], t[i+2] }
+        END { if (bad) exit 3 }') || rc=$?
+    fi
+    if [ "$rc" -eq 0 ]; then
+      [ -n "$recs" ] && printf '%s\n' "$recs"
+      printf 'UPDATEINFOREAD\t%s\tok\n' "$pass"
+    else
+      printf 'UPDATEINFOREAD\t%s\tfailed\n' "$pass"
+      info "dnf updateinfo --$pass --with-cve unreadable or unparseable: AL2023 distro verdicts unknown"
+    fi
+  done
+}
+
 osrel_get(){  # one os-release value, quotes stripped (the file is parsed, never sourced)
   sed -n "s/^$1=//p" "${AGENTTEAMS_L1_ROOT:-}/etc/os-release" 2>/dev/null | head -1 \
     | sed -e "s/^[\"']//" -e "s/[\"']\$//" | tr -d '\t\r'
@@ -284,6 +319,7 @@ os_section(){
     local pm n; pm=$(command -v dnf || command -v yum)
     n=$($pm -q --cacheonly updateinfo list --security 2>/dev/null | grep -c .)
     [ "$n" -gt 0 ] && check HIGH "$n pending OS security advisories (L2-os-patch.sh)" || ok "no pending security advisories (per cached metadata)"
+    dnf_updateinfo
     if command -v needs-restarting >/dev/null 2>&1; then needs-restarting -r >/dev/null 2>&1 || check MODERATE "reboot required (needs-restarting -r)"; fi
     if systemctl is-enabled dnf-automatic.timer >/dev/null 2>&1 || systemctl is-enabled dnf-automatic-install.timer >/dev/null 2>&1; then
       ok "dnf-automatic timer enabled"

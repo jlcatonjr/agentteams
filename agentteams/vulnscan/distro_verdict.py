@@ -28,7 +28,7 @@ distribution's status for that CVE and the owning package from the ``DISTROPKG``
   read. ``UPDATEINFO`` lines (``installed`` or ``available`` pass, advisory, CVE, package NEVRA) join on the owning
   rpm's name: ``available`` is ``fix-available-not-installed``, ``installed`` is ``fixed-in-installed``, neither is
   ``no-distro-fix``. An ``UPDATEINFOREAD`` line per pass says whether dnf read its cache; a failed pass is a feed
-  error. Without any ``UPDATEINFOREAD`` line (a kit that does not print them) there is no AL2023 verdict.
+  error. Without any ``UPDATEINFOREAD`` line (an older kit, or a host without dnf) there is no AL2023 verdict.
 
 No verdict (and a note saying why) when the owning package's origin is not an allowlisted distro archive
 (``unowned``, ``repo:<host>:…``: the vlc-n5 Revision 3 rule), when the PyPI version is not the package's own

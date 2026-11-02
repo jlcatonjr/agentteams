@@ -375,3 +375,90 @@ def test_rpm_name_and_malformed_lines() -> None:
     assert distro_verdict.parse_updateinfo(["UPDATEINFO", "installed", "-", "not-a-cve", "x-1-1.noarch"]) is None
     assert distro_verdict.parse_updateinfo(["UPDATEINFO", "maybe", "-", "CVE-2024-1234", "x-1-1.noarch"]) is None
     assert distro_verdict.parse_distropkg(["DISTROPKG", DP, "a", "1"]) is None
+
+
+# ---------------------------------------------------------------- L1-audit.sh: the AL2023 updateinfo emitter
+
+from tests.test_vulnscan_server_kit import Kit, _host, kit  # noqa: E402, F401  (kit: fixture)
+from tests.test_vulnscan_server_kit_vfr import _dist, _run  # noqa: E402
+
+
+def _fake_dnf(installed: str, available: str, *, fail: str = "", log: str = "/dev/null") -> str:
+    """A dnf answering the two cache-only ``--with-cve`` passes, logging each call to ``log``; ``fail`` exits 1."""
+    return f"""#!/bin/bash
+echo "$*" >> '{log}'
+case "$*" in
+  *"-C -q updateinfo list --security --installed --with-cve"*) [ "{fail}" = installed ] && exit 1; printf '%b' '{installed}';;
+  *"-C -q updateinfo list --security --available --with-cve"*) [ "{fail}" = available ] && exit 1; printf '%b' '{available}';;
+esac
+exit 0
+"""
+
+
+INSTALLED = r"CVE-2023-43804 Important/Sec. python3-urllib3-1.25.10-5.amzn2023.0.3.noarch\n"
+AVAILABLE = (r"  CVE-2024-35195 Moderate/Sec.  python3-requests-2.25.1-1.amzn2023.0.5.noarch \n\n"
+             r"CVE-2024-6345 Important/Sec. python3-setuptools-1:59.6.0-2.amzn2023.0.6.noarch\n")
+
+
+def _updateinfo(out: str) -> list[str]:
+    return [ln for ln in out.splitlines() if ln.startswith(("UPDATEINFO\t", "UPDATEINFOREAD\t"))]
+
+
+def test_l1_prints_updateinfo_records_from_both_cache_only_passes(kit: Kit) -> None:
+    log = kit.root / "dnf-calls.txt"
+    hb = _host(kit, extra={"dnf": _fake_dnf(INSTALLED, AVAILABLE, log=str(log))})
+    out = _run(hb, kit.root / "hostroot").stdout
+    assert _updateinfo(out) == [
+        "UPDATEINFO\tinstalled\t-\tCVE-2023-43804\tpython3-urllib3-1.25.10-5.amzn2023.0.3.noarch",
+        "UPDATEINFOREAD\tinstalled\tok",
+        "UPDATEINFO\tavailable\t-\tCVE-2024-35195\tpython3-requests-2.25.1-1.amzn2023.0.5.noarch",
+        "UPDATEINFO\tavailable\t-\tCVE-2024-6345\tpython3-setuptools-1:59.6.0-2.amzn2023.0.6.noarch",
+        "UPDATEINFOREAD\tavailable\tok"], out
+    calls = log.read_text().splitlines()
+    assert sum("--with-cve" in c for c in calls) == 2, calls
+    assert all(" -C " in f" {c} " or "--cacheonly" in c for c in calls), calls   # never the network
+    assert not any("--refresh" in c or "upgrade" in c.split() or "install" in c.split() for c in calls)
+
+
+def test_l1_an_empty_pass_is_read_ok_with_no_records(kit: Kit) -> None:
+    hb = _host(kit, extra={"dnf": _fake_dnf("", "")})
+    assert _updateinfo(_run(hb, kit.root / "hostroot").stdout) == ["UPDATEINFOREAD\tinstalled\tok",
+                                                                   "UPDATEINFOREAD\tavailable\tok"]
+
+
+@pytest.mark.parametrize("bad", [
+    r"ALAS2023-2024-500 Important/Sec. python3-urllib3-1.25.10-5.amzn2023.0.3.noarch\n",   # no CVE column
+    r"CVE-2023-43804 Important python3-urllib3-1.25.10-5.amzn2023.0.3.noarch\n",           # not a /Sec. severity
+    r"CVE-2023-43804 Important/Sec.\n",                                                     # no NEVRA
+    r"CVE-2023-43804 Important/Sec. python3-urllib3 extra\n",                               # extra column
+    r"Last metadata expiration check: 0:10:00 ago\n",                                       # chatter
+    r"CVE-2023-43804 Important/Sec. ../../etc/passwd\n"])                                   # not a NEVRA
+def test_l1_an_unparseable_line_fails_the_pass_and_prints_no_records(kit: Kit, bad: str) -> None:
+    hb = _host(kit, extra={"dnf": _fake_dnf(INSTALLED + bad, AVAILABLE)})
+    got = _updateinfo(_run(hb, kit.root / "hostroot").stdout)
+    assert "UPDATEINFOREAD\tinstalled\tfailed" in got and "UPDATEINFOREAD\tavailable\tok" in got
+    assert not any(ln.startswith("UPDATEINFO\tinstalled\t") for ln in got), got
+
+
+def test_l1_a_failing_dnf_pass_is_failed(kit: Kit) -> None:
+    hb = _host(kit, extra={"dnf": _fake_dnf(INSTALLED, AVAILABLE, fail="available")})
+    got = _updateinfo(_run(hb, kit.root / "hostroot").stdout)
+    assert "UPDATEINFOREAD\tavailable\tfailed" in got and not any("\tavailable\t-\t" in ln for ln in got)
+    assert "UPDATEINFOREAD\tinstalled\tok" in got
+
+
+def test_l1_no_dnf_prints_no_updateinfo(kit: Kit) -> None:
+    hb = _host(kit, extra={"yum": "#!/bin/sh\nexit 0\n"})
+    assert _updateinfo(_run(hb, kit.root / "hostroot").stdout) == []
+
+
+def test_l1_updateinfo_feeds_the_al2023_verdict_end_to_end(kit: Kit, dfeed: DistroFeed) -> None:
+    _bastion(dfeed)
+    hb = _host(kit, extra={"dnf": _fake_dnf(INSTALLED, AVAILABLE)})
+    lines = _updateinfo(_run(hb, kit.root / "hostroot").stdout)
+    inv = "\n".join([ln for ln in BASTION.splitlines() if not ln.startswith("UPDATEINFO")] + lines)
+    rep = engine.scan_inventory(inv, "vk-bastion")
+    by = _by(rep)
+    assert rep.feed_errors == []
+    assert (by["urllib3"].distro_verdict, by["requests"].distro_verdict, by["idna"].distro_verdict) == \
+        ("fixed-in-installed", "fix-available-not-installed", "no-distro-fix")
