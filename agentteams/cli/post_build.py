@@ -78,6 +78,15 @@ def project_rules(manifest: dict, output_dir: Path, *, write: bool = True) -> bo
     root = project_root_of(manifest, output_dir)
     if root is None:
         return False
+    if write:  # the agent-surface matrix (baseAgent P3), reported, never enforced
+        from agentteams.surface_matrix import write_matrix
+
+        try:
+            matrix_path, written = write_matrix(root)
+            if written:
+                print(f"  ✓  Agent-surface matrix: {matrix_path}")
+        except OSError as exc:
+            print(f"  !  Agent-surface matrix not written: {exc}", file=sys.stderr)
     configured = manifest.get("project_rules_source") or None
     frozen = manifest.get("frozen_surfaces") or None
     try:
