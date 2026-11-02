@@ -23,10 +23,6 @@ handoffs:
     prompt: "Work summary reporting complete. See workSummaries/."
     send: false
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Work Summarizer — ProjectRepositories
@@ -250,3 +246,7 @@ Implements the orchestrator's *Past-Day Backfill Obligation* — fills **recent 
 - If a target summary already exists, use the selected write mode and state it explicitly in your run notes.
 - Mark uncertain claims as `unverified` instead of inferring.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

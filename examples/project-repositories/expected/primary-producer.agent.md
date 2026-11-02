@@ -24,10 +24,6 @@ handoffs:
     send: false
 
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Primary Producer — ProjectRepositories
@@ -79,3 +75,7 @@ Every deliverable must meet these floors before leaving this agent:
 4. **Crisis and Credit Allocation notebook** (`Crisis and Credit Allocation/Crisis and Credit Allocation Data.ipynb`) — Canonical analysis script for crisis-era banking and credit data
 5. **Sugarscape model source** (`Sugarscape/`) — Agent-based model implementation — Agent.py, Model.py, Patch.py are the authoritative model definitions
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

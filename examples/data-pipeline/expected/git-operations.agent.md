@@ -22,10 +22,6 @@ handoffs:
     prompt: "Tracked repository content changed. Run repository change census and docs/API impact evaluation before closeout."
     send: false
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Git Operations — SalesDataPipeline
@@ -97,3 +93,7 @@ After each operation, report:
 - Branch inventory — `clean` | `N merged-undeleted | N patch-equivalent | N stale-unmerged` (when the session merged or pushed)
 - Sandbox handoff — script path + `status` (`ok` / `failed` / `not-run`), or `N/A — no refused operation`
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

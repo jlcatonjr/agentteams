@@ -27,10 +27,6 @@ handoffs:
     prompt: "A follow-up remediation requires destructive mutation. Review and clear before execution."
     send: false
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Post-Production Auditor — SalesDataPipeline
@@ -248,3 +244,7 @@ These limitations affect operational convenience but **do not block core audit f
 
 This agent is ready for production use when schema-template contract checks pass in CI. Core audit capabilities (source-of-truth sampling, verdict generation, closure gating) are fully functional. The listed gaps are operational enhancements, not functional blockers. Adopt with confidence; upgrade storage and verification as your process matures.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

@@ -24,10 +24,6 @@ handoffs:
     send: false
 
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Primary Producer — WebAppBackend
@@ -76,3 +72,7 @@ Every deliverable must meet these floors before leaving this agent:
 1. **OpenAPI specification** (`docs/openapi.yaml`) — API contract accuracy
 2. **Database schema** (`src/models/schema.sql`) — data model accuracy
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

@@ -15,10 +15,6 @@ handoffs:
     prompt: "Content enrichment complete. All auto-fillable placeholders have been resolved."
     send: false
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Content Enricher — SalesDataPipeline
@@ -139,3 +135,7 @@ Common tokens and their expected values for this project:
 - Do not rewrite Invariant Core sections
 - Flag any token whose value cannot be determined from available source materials
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

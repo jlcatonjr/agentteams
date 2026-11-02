@@ -14,10 +14,6 @@ handoffs:
     prompt: "Adversarial review surfaced assumptions that may conflict with documented facts. Run a targeted conflict audit on the identified areas."
     send: false
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Adversarial Agent — ProjectRepositories
@@ -175,3 +171,7 @@ You do not remediate, and you do not update the probe baseline. Accepting a chan
 outcome is an operator action (`agentteams --redteam --accept-probe-baseline`) precisely so it
 costs a reviewed diff; an agent that could clear its own flag would measure nothing.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
