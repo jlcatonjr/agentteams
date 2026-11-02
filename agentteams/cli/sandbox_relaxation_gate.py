@@ -360,8 +360,9 @@ def _spent_off_decision(team_dir: Path, action: str) -> bool:
         _assert_authorizing_row_is_authentic(row, output_dir=team_dir, signing_active=_decision_signing_active(
             fieldnames), action=action)
         # C-2: this excuse skips authorize(), so it repeats authorize()'s HALT checks (family and exact action).
-        security_gate._assert_no_unretracted_halt(team_dir, action=action.split(":", 1)[0])
-        security_gate._assert_no_unretracted_halt(team_dir, action=action)
+        relaxation_action, relaxation_family = action, action.split(":", 1)[0]
+        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
+        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
     except (RuntimeError, OSError, ValueError):
         return False
     return True
