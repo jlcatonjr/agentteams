@@ -198,6 +198,56 @@ class LockGraph:
         return out
 
 
+#: The action of a transitive row ``stage-major`` moved with its raised direct parent (vfr-b.B3, ``fix.MOVES_WITH``):
+#: fixed by the parent's row, so it is never counted as held or open on its own.
+MOVES_WITH = "moves-with"
+#: The dry-run note :func:`note_carried` adds (removed again once :func:`mark_carried` has checked it).
+CARRIED_NOTE = re.compile(r"; transitive: moves with [^;]* when stage-major raises it")
+
+
+def note_carried(lockfile: Path, held: list[Any], direct: dict[str, str]) -> None:
+    """Name, on each transitive ``major-held`` row, the ``major-held`` direct parents ``stage-major`` would raise.
+
+    Dry run (vfr-b.B3): such a row (tinypool under vitest, esbuild under vite) is not an independent item. It moves
+    when its parent's ``stage-major`` lands, which :func:`mark_carried` confirms against the re-resolved lockfile.
+
+    Args:
+        lockfile: The planned lockfile.
+        held: Its ``major-held`` ``fix.PinChange`` rows (``note`` is extended in place).
+        direct: ``npm_major.direct_majors``'s names (``{}`` when it reported a problem: nothing is named).
+    """
+    if not direct:
+        return
+    graph = LockGraph(load(lockfile))
+    for c in held:
+        if c.name not in direct and (parents := graph.carried_by(c.name, c.old, direct)):
+            c.note += f"; transitive: moves with {', '.join(parents)} when stage-major raises it"
+
+
+def mark_carried(base: LockGraph, after: dict[str, dict[str, Any]], rows: list[Any], notes: dict[int, str],
+                 raised: Iterable[str]) -> None:
+    """After ``stage-major``'s ``npm install``: report each transitive row a raised parent carried as :data:`MOVES_WITH`.
+
+    Args:
+        base: The base lockfile's graph (who installed each vulnerable copy).
+        after: The re-resolved lockfile's ``packages`` (:func:`load`).
+        rows: The transitive ``major-held`` rows (changed in place).
+        notes: ``{id(row): its note without the "stays held" suffix}``.
+        raised: The direct dependencies whose spec was raised.
+    """
+    raised = list(raised)
+    for c in rows:
+        if not (parents := base.carried_by(c.name, c.old, raised)):
+            continue
+        if not installed(after, c.name, c.old):
+            c.action = MOVES_WITH
+            c.note = (f"moves with {', '.join(parents)}: transitive (package.json does not list it), npm install moved "
+                      f"it off {c.old} with that major upgrade; {notes[id(c)]}")
+        else:
+            c.note = (f"{notes[id(c)]}; its parent {', '.join(parents)} moved but {c.name} {c.old} is still "
+                      "installed (another dependent holds it): stays held — a person's change")
+
+
 #: Appended to an npm section's note in a fix plan when a row names a move (:func:`annotate_plan`).
 PLAN_NOTE = (" A row the audit fix leaves vulnerable is then retried with the `npm update` its note names "
              "(`--no-save --package-lock-only --ignore-scripts`: its exact-peer group or direct parent, within "

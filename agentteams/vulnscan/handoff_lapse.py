@@ -151,6 +151,29 @@ def lapsed(repo: Path, branch: str, *, today: date | None = None) -> str:
             f"updates {names} after {LAPSE_DAYS} days, so the executor opens its staged PR (OD10)")
 
 
+def gate(repo: Path, branch: str, problem: str, *, request_id: str = "") -> str:
+    """Return ``open-pr``'s handoff refusal after the lapse rule; "" lets it proceed. Call inside ``ledger.locked()``.
+
+    Args:
+        repo: Canonical repository path.
+        branch: The staged branch ("" when nothing is staged).
+        problem: :func:`.handoff.approval_problem`'s reason ("" when approved).
+        request_id: The request id, for the ledger row.
+
+    Returns:
+        "" when ``problem`` is "" or the ``own-pr`` lapsed (then a :data:`LAPSED_KIND` ledger row is written);
+        else ``problem`` with the lapse date appended for an ``own-pr`` (:func:`pending_detail`).
+    """
+    if not problem or not branch:
+        return problem
+    if lapse := lapsed(repo, branch):
+        from agentteams.vulnscan import ledger   # lazy: only an actual lapse writes
+
+        ledger.append(LAPSED_KIND, op="open-pr", target=str(repo), request_id=request_id, detail=lapse[:1000])
+        return ""
+    return problem + pending_detail(repo, branch)
+
+
 def pending_detail(repo: Path, branch: str) -> str:
     """Return the lapse date to add to an ``own-pr`` refusal (``; lapses on <date> ...``), or "".
 

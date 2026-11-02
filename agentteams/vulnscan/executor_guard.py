@@ -380,7 +380,7 @@ def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
 
 def refuse_repo_op(op: str, target: str, editable: re.Pattern[str]) -> None:
     """Apply the per-repository refusals, in order: :func:`refuse_scan_only`, :func:`refuse_by_brief`,
-    :func:`refuse_plan_only`.
+    :func:`refuse_plan_only`, :func:`refuse_major_over_staged`.
 
     Args:
         op: Requested operation.
@@ -393,6 +393,27 @@ def refuse_repo_op(op: str, target: str, editable: re.Pattern[str]) -> None:
     refuse_scan_only(target)
     refuse_by_brief(op, target)
     refuse_plan_only(op, target, editable)
+    refuse_major_over_staged(op, target)
+
+
+def refuse_major_over_staged(op: str, target: str) -> None:
+    """Refuse ``stage-major`` while the repository has a staged fix with no PR yet (vfr-b.B2).
+
+    ``stage-major`` may now follow a fix PR in the same run; staged before that fix's ``open-pr``, it would replace
+    the staged state (one per repository) and orphan the fix's branch. Checked before a grant use is spent.
+
+    Args:
+        op: Requested operation.
+        target: Canonical repository path.
+
+    Raises:
+        ExecError: ``op`` is ``stage-major`` and the executor's staged record for ``target`` exists.
+    """
+    from agentteams.vulnscan import executor   # lazy: executor imports this module
+
+    if op == "stage-major" and executor.staged_file(Path(target)).is_file():
+        raise _exec_error("a fix is already staged for this repository and has no PR yet: request open-pr for it "
+                          "first; stage-major then stages the major upgrades as a second branch beside that PR")
 
 
 def refuse_by_brief(op: str, target: str) -> None:

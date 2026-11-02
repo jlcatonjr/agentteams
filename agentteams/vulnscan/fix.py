@@ -65,8 +65,7 @@ NPM_REGISTRY = "https://registry.npmjs.org/"    # fixed: a repository .npmrc can
 NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
 #: The action of a transitive row ``stage-major`` moved with its raised direct parent (vfr-b.B3): fixed by the
 #: parent's row, so it is never counted as held or open on its own.
-MOVES_WITH = "moves-with"
-_CARRIED_NOTE = re.compile(r"; transitive: moves with [^;]* when stage-major raises it")
+MOVES_WITH = npm_groups.MOVES_WITH
 #: Heads every Cargo.lock section of a fix plan (agents read it through ``get_fix_plans``).
 CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor refuses the change), so do not "
               "request `stage-fix` for these rows; report them for a person to run the command shown, then "
@@ -508,28 +507,10 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
             "row's version or fix fewer rows. \"≥\" is the smallest version the advisories call fixed.")
     if workspaces:
         note += " This lockfile belongs to npm workspaces, which `stage-fix` refuses (fails closed)."
-    _note_carried(path, changes)
+    if len(held := [c for c in changes if c.action == "major-held"]) > 1:   # B3: name what a parent carries
+        direct, _, problem = npm_major.direct_majors(path, [c.name for c in held])
+        npm_groups.note_carried(path, held, {} if problem else direct)
     return changes, note + npm_groups.annotate_plan(path, changes)   # retried moves (and a new plan digest)
-
-
-def _note_carried(lockfile: Path, rows: list[PinChange]) -> None:
-    """Name, on each transitive ``major-held`` row, the ``major-held`` direct parents ``stage-major`` would raise.
-
-    Dry run (vfr-b.B3): such a row (tinypool under vitest, esbuild under vite) is not an independent item. It moves
-    when its parent's ``stage-major`` lands, which :func:`npm_majors` confirms against the re-resolved lockfile.
-    The rule for "direct" is :func:`npm_major.direct_majors`'s, so workspaces and an unreadable ``package.json``
-    name nothing.
-    """
-    held = [c for c in rows if c.action == "major-held"]
-    if len(held) < 2:
-        return
-    direct, _, problem = npm_major.direct_majors(lockfile, [c.name for c in held])
-    if problem or not direct:
-        return
-    graph = npm_groups.LockGraph(npm_groups.load(lockfile))
-    for c in held:
-        if c.name not in direct and (parents := graph.carried_by(c.name, c.old, direct)):
-            c.note += f"; transitive: moves with {', '.join(parents)} when stage-major raises it"
 
 
 def plan_cargo_lock(path: Path, *, label: str = "", private: tuple[str, ...] = ()) -> list[PinChange]:
@@ -804,7 +785,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             c.path, c.action, c.major = pkg_label, "fix", True
             c.note = f"MAJOR upgrade: package.json {section}.{c.name} → {spec} (lockfile re-resolved by npm install)"
         else:
-            transitive[id(c)] = _CARRIED_NOTE.sub("", c.note)   # the dry run's prediction: confirmed below or not
+            transitive[id(c)] = npm_groups.CARRIED_NOTE.sub("", c.note)   # the dry run's prediction: checked below
             c.note = (transitive[id(c)] + "; transitive only (package.json does not list it): stays held — its "
                       "parent must move first")
     if not specs:
@@ -815,16 +796,8 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
         why = failed or (out.strip().splitlines() or ["no output"])[-1]
         raise ExecError(f"{label}: npm install did not re-resolve the lockfile after package.json was raised "
                         f"({why[:200]}); nothing is staged")
-    after = npm_groups.load(lockfile)   # re-plan (B3): which transitive rows moved with a raised parent
-    for c in rows:
-        parents = graph.carried_by(c.name, c.old, specs) if id(c) in transitive else []
-        if parents and not npm_groups.installed(after, c.name, c.old):
-            c.action = MOVES_WITH
-            c.note = (f"moves with {', '.join(parents)}: transitive (package.json does not list it), npm install moved "
-                      f"it off {c.old} with that major upgrade; {transitive[id(c)]}")
-        elif parents:
-            c.note = (f"{transitive[id(c)]}; its parent {', '.join(parents)} moved but {c.name} {c.old} is still "
-                      "installed (another dependent holds it): stays held — a person's change")
+    npm_groups.mark_carried(graph, npm_groups.load(lockfile), [c for c in rows if id(c) in transitive],
+                            transitive, specs)   # re-plan (B3): which transitive rows moved with a raised parent
     return rows, out
 
 
