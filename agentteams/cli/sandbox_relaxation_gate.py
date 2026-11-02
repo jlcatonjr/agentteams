@@ -355,8 +355,13 @@ def _spent_off_decision(team_dir: Path, action: str) -> bool:
         verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
         if (row.get("consumed") or "").strip().lower() not in {"yes", "true", "1"} or verdict not in _AUTHORIZING:
             return False
+        if verdict == "CONDITIONAL PASS" and (row.get("conditions_verified") or "").strip().lower() != "verified":
+            return False   # the same bar as _unbound_reason: `consumed` is unsigned, so it cannot vouch for one
         _assert_authorizing_row_is_authentic(row, output_dir=team_dir, signing_active=_decision_signing_active(
             fieldnames), action=action)
+        # C-2: this excuse skips authorize(), so it repeats authorize()'s HALT checks (family and exact action).
+        security_gate._assert_no_unretracted_halt(team_dir, action=action.split(":", 1)[0])
+        security_gate._assert_no_unretracted_halt(team_dir, action=action)
     except (RuntimeError, OSError, ValueError):
         return False
     return True

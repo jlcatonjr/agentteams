@@ -18,6 +18,7 @@ what the second render's gate reads:
 from __future__ import annotations
 
 import contextlib
+import csv
 import io
 import json
 from pathlib import Path
@@ -26,11 +27,12 @@ from typing import Any
 import pytest
 
 import build_team
+from agentteams.cli import decision_log as dl
 from agentteams.cli import exception_registry as er
 from agentteams.cli import sandbox_relaxation_gate as gate
 from agentteams.frameworks.registry import agents_dir_for
 from tests._fresh_intel import OFFLINE_FLAG, seed_offline_intel
-from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _log, _row
+from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _log, _row, _stub_sig
 from tests._wasm_framework_helpers import _INTEL_AT
 
 REPO = Path(__file__).resolve().parent.parent
@@ -202,6 +204,74 @@ def test_a_forged_off_record_after_a_signed_off_and_back_on_needs_a_new_os_signa
     _forge_off_record(team)
     rc, err, _ = team.render("--os-sandbox", "off")
     assert rc == 1 and "sandbox-os-off:claude" in err, err[-800:]
+
+
+def _forge_wasm_off_record(team: Team) -> None:
+    log = team.dir / "references" / "build-log.json"
+    data = json.loads(log.read_text(encoding="utf-8"))
+    data["sandbox_state"] = {**data["sandbox_state"], "wasm": "off", "wasm_languages": [], "wasm_grants": {}}
+    log.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _set_decision_cells(team: Team, scope: str, **cells: str) -> None:
+    """Edit the unsigned cells of the newest row scoped to *scope*, as a session that can write the log might."""
+    path = team.dir / "references" / "security-decisions.log.csv"
+    with path.open(newline="") as fh:
+        reader = csv.DictReader(fh)
+        fields, rows = list(reader.fieldnames or []), list(reader)
+    [*_, row] = [r for r in rows if r.get("scope") == scope]
+    row.update(cells)
+    fields += [c for c in cells if c not in fields]   # security_gate adds `consumed` the same way on first use
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def test_a_forged_wasm_off_record_without_a_decision_is_refused(base: Path, stub_ed25519: None) -> None:
+    team = Team(base, "claude", governed=True)
+    _ok(team.render("--os-sandbox", "on"))
+    _forge_wasm_off_record(team)
+    rc, err, _ = team.render("--os-sandbox", "on", "--wasm-sandbox", "off")
+    assert rc == 1 and "sandbox-wasm-off:claude" in err, err[-800:]
+
+
+def test_a_spent_wasm_off_decision_does_not_excuse_a_later_halt(base: Path, stub_ed25519: None) -> None:
+    """C-2: the spent-decision excuse skips authorize(), so it must repeat authorize()'s HALT check itself."""
+    team = Team(base, "claude", governed=True)
+    _ok(team.render("--os-sandbox", "on"))
+    team.sign(_row("sandbox-os-off:claude"), _row("sandbox-wasm-off:claude"))
+    _ok(team.render("--os-sandbox", "off", "--wasm-sandbox", "off"))
+    team.sign(_row("sandbox-wasm-off:claude", verdict="HALT"))
+    rc, err, _ = team.render("--os-sandbox", "off", "--wasm-sandbox", "off")
+    assert rc == 1, err[-800:]
+
+
+def test_an_unverified_conditional_pass_marked_consumed_does_not_excuse(base: Path, stub_ed25519: None) -> None:
+    """``consumed`` is unsigned: flipping it on a CONDITIONAL PASS with pending conditions must not make it spent."""
+    team = Team(base, "claude", governed=True)
+    _ok(team.render("--os-sandbox", "on"))
+    row = _row("sandbox-wasm-off:claude", verdict="CONDITIONAL PASS")
+    row["conditions_verified"] = "pending"
+    row["signature"] = _stub_sig(dl._decision_signature_values(row))
+    team.sign(row)
+    _forge_wasm_off_record(team)
+    _set_decision_cells(team, "sandbox-wasm-off:claude", consumed="yes")
+    rc, err, _ = team.render("--os-sandbox", "on", "--wasm-sandbox", "off")
+    assert rc == 1 and "sandbox-wasm-off:claude" in err, err[-800:]
+
+
+@pytest.mark.xfail(strict=True, reason="disclosed W11R gap: the spent decision is bound to its scope, not to a render; "
+                   "a session that rewrites the build-log after a later WASM-on render can replay it (owner: security)")
+def test_a_spent_wasm_off_decision_cannot_be_replayed_after_wasm_went_back_on(base: Path, stub_ed25519: None) -> None:
+    team = Team(base, "claude", governed=True)
+    _ok(team.render("--os-sandbox", "on"))
+    team.sign(_row("sandbox-os-off:claude"), _row("sandbox-wasm-off:claude"))
+    _ok(team.render("--os-sandbox", "off", "--wasm-sandbox", "off"))
+    _ok(team.render("--os-sandbox", "off", "--wasm-sandbox", "on"))
+    _forge_wasm_off_record(team)
+    rc, err, _ = team.render("--os-sandbox", "off", "--wasm-sandbox", "off")
+    assert rc == 1 and "sandbox-wasm-off:claude" in err, err[-800:]
 
 
 def test_governed_wasm_framework_os_off_needs_the_signature_and_wasm_cannot_be_turned_off(
