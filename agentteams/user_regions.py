@@ -76,7 +76,7 @@ def find_region(text: str, heading: str) -> tuple[int, int, str] | None:
     return start, end, indent
 
 
-def _reindent(region: str, old_indent: str, new_indent: str) -> str | None:
+def reindent(region: str, old_indent: str, new_indent: str) -> str | None:
     """Move *region* from *old_indent* to *new_indent*; None when a line is under-indented (it would end the
     YAML block scalar early, so it can't be carried safely)."""
     if old_indent == new_indent:
@@ -90,6 +90,34 @@ def _reindent(region: str, old_indent: str, new_indent: str) -> str | None:
             return None
         out.append(new_indent + line[len(old_indent):])
     return "".join(out)
+
+
+_reindent = reindent  # older private name (fence_twins)
+
+
+def skip_banner(lines: list[str], start: int = 0) -> int:
+    """Index of the first line after a region's generated USER-EDITABLE note.
+
+    Skips blank lines from *start*, then the note's blockquote paragraph when it is the generated one (its first
+    line names ``USER-EDITABLE``). An operator's own blockquote is not skipped.
+
+    Args:
+        lines: The region's lines, heading excluded.
+        start: Where to start.
+
+    Returns:
+        The index of the first operator line (``len(lines)`` when there is none).
+
+    Raises:
+        Nothing.
+    """
+    i = start
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i < len(lines) and lines[i].lstrip().startswith(">") and "USER-EDITABLE" in lines[i]:
+        while i < len(lines) and lines[i].lstrip().startswith(">"):
+            i += 1
+    return i
 
 
 def _inside_fence(text: str, idx: int) -> bool:
@@ -162,6 +190,11 @@ def carry_regions(old: str, new: str, *, toml: bool = False) -> tuple[str, list[
             problems.append(f"'{heading}' contains a TOML string delimiter; it can't be carried safely")
             continue
         if new_span is None:
+            # A region the render doesn't declare that holds only generated text (the USER-EDITABLE note and a
+            # rules_projection block, which the next projection writes again) has nothing of the operator's to keep.
+            body = _PROJECTED_BLOCK_RE.sub("", region).splitlines(keepends=True)[1:]
+            if not any(ln.strip() for ln in body[skip_banner(body):]):
+                continue
             problems.append(f"the new render has no '{heading}' region to carry the existing one into")
             continue
         n_start, n_end, n_indent = new_span
@@ -170,7 +203,7 @@ def carry_regions(old: str, new: str, *, toml: bool = False) -> tuple[str, list[
             m = re.search(rf"^{re.escape(following)}[ \t]*$", content[n_start:n_end], re.MULTILINE)
             if m:
                 n_end = n_start + m.start()
-        moved = _reindent(region, o_indent, n_indent)
+        moved = reindent(region, o_indent, n_indent)
         if moved is None:
             problems.append(f"'{heading}' has a line indented less than its heading; it can't be carried safely")
             continue
@@ -188,6 +221,10 @@ def carry_regions(old: str, new: str, *, toml: bool = False) -> tuple[str, list[
             return new, [], [f"the carried result is not valid TOML ({exc}); refused"]
     return content, carried, problems
 
+
+#: A generated block of :mod:`agentteams.rules_projection` (a projected copy or a notes pointer).
+_PROJECTED_BLOCK_RE = re.compile(r"^[ \t]*<!-- (PROJECTED-RULES|PROJECT-RULES-POINTER):BEGIN .*?^[ \t]*<!-- \1:END -->[ \t]*\n?",
+                                 re.MULTILINE | re.DOTALL)
 
 #: Instruction files that declare ``## Project-Specific Rules`` (basename match).
 INSTRUCTION_FILES = frozenset({"copilot-instructions.md", "CLAUDE.md", "AGENTS.md"})

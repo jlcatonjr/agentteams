@@ -76,7 +76,7 @@ With \-\-check: also exit 1 when a prompt root (copilot\-instructions.md, AGENTS
 Report whether the project's providers agree, and write nothing: Project\-Specific Rules copies and notes pointers, memory\-index copies, Copilot body limits, agents missing on some provider, notes that differ by provider, and a frozen AGENTS.md with an older constitutional core. Exit code 1 on a failure. Uses \-\-project (else the working directory).
 .TP
 .B \-\-sync\-project\-rules
-Copy the project's Project\-Specific Rules (from the brief's project_rules_source, else the first instruction file that has rules) into every other provider's entry file, and a pointer into the security and orchestrator notes; frozen surfaces skipped, hand\-edited copies refused. Runs after every \-\-update too. Uses \-\-project (else the working directory).
+Copy the project's Project\-Specific Rules (from the brief's project_rules_source, else the one instruction file that has rules) into every other provider's entry file, and a pointer into the security and orchestrator notes; frozen surfaces skipped, hand\-edited copies refused. Runs after every \-\-update too. Runs in the working directory only; with \-\-dry\-run it writes nothing.
 .TP
 .B \-\-refresh\-index
 Rebuild every surface's references/memory\-index.json from the same sources (frozen surfaces skipped; no template emit/update). Useful after editing work summaries or docs.
