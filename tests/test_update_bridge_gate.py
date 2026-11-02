@@ -8,7 +8,10 @@ appearing backtick-quoted in constitutional Rule 14 prose inside a native orches
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from agentteams.cli.generate import _update_target_is_bridge
+from tests._fresh_intel import run_build
 
 
 def _mk_bridge_manifest(root, pair: str):
@@ -61,3 +64,21 @@ def test_rule14_backtick_prose_in_agent_body_is_NOT_a_bridge(tmp_path):
 def test_native_team_with_no_signals_is_not_a_bridge(tmp_path):
     (tmp_path / ".claude" / "agents").mkdir(parents=True)
     assert _update_target_is_bridge(tmp_path, "claude") is False
+
+
+def test_refusal_comes_before_the_render(tmp_path):
+    # baseAgent 2026-11-02: the refusal printed after "Rendering templates...", so it read as a render crash.
+    repo = Path(__file__).resolve().parent.parent
+    brief = tmp_path / "brief.json"
+    brief.write_text((repo / "examples" / "software-project" / "brief.json").read_text(encoding="utf-8"))
+    out = tmp_path / ".claude" / "agents"
+
+    def run(*extra: str):
+        return run_build(brief, tmp_path, "claude", out, *extra)
+
+    assert run().returncode == 0
+    _mk_bridge_manifest(tmp_path, "copilot-vscode-to-claude")
+    proc = run("--update", "--merge", "--dry-run")
+    assert proc.returncode == 1 and "ALSO holds a" in proc.stderr
+    assert "Rendering templates" not in proc.stdout
+    assert run("--update", "--merge", "--dry-run", "--materialize-native").returncode == 0

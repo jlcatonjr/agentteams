@@ -938,6 +938,18 @@ def _handle_check(
     if getattr(args, "strict_prompt_roots", False) and strict_failure():  # #8: warn-only by default
         print("\n--strict-prompt-roots: failing on the PROMPT-ROOT CHANGED warning above.", file=sys.stderr)
         has_any = True
+    from agentteams.copilot_body_limit import COPILOT_FRAMEWORKS, MAX_BODY_CHARS, body_limit_findings
+
+    if manifest.get("framework") in COPILOT_FRAMEWORKS:  # baseAgent P4
+        body_failures, body_advisories = body_limit_findings(output_dir)
+        for line in body_advisories:
+            print(f"  !  Copilot body limit (advisory): {line}")
+        if body_failures:
+            print(f"\nCopilot body limit FAILURES (operator notes past {MAX_BODY_CHARS:,} characters):",
+                  file=sys.stderr)
+            for line in body_failures:
+                print(f"  ✗ {line}", file=sys.stderr)
+            has_any = True
     # Advisory only (exit code unchanged): the grant tool map is pinned to one Goose release.
     if manifest.get("framework") == "goose" and manifest.get("goose_tool_scoping") == "grant":
         from agentteams.frameworks.goose_tool_scoping import goose_version_notice

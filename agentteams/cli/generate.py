@@ -320,6 +320,16 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     # Step 5: Render
     # -----------------------------------------------------------------------
+    # --reconcile-front-matter is exempt: it used to return before this gate, and still reports without writing.
+    if args.update and not getattr(args, "reconcile_front_matter", False):
+        # D3 bridge gate (fail closed on a detected bridge; policy in generate_helpers). Before the render, so
+        # the refusal is not read as a render failure, and stdout is flushed first so it prints in order.
+        refusal = _bridge_gate_refusal(project_root, output_dir, framework_id)
+        if refusal and not getattr(args, "materialize_native", False):
+            sys.stdout.flush()
+            print(refusal, file=sys.stderr)
+            return 1
+
     print("Rendering templates...")
 
     # Compute template hashes for drift detection
@@ -340,11 +350,6 @@ def _run_generate_inner(
     # Step 5b: Handle --update (structural + content drift, manual preservation)
     # -----------------------------------------------------------------------
     if args.update:
-        # D3 bridge gate (fail closed on a detected bridge; policy in generate_helpers).
-        refusal = _bridge_gate_refusal(project_root, output_dir, framework_id)
-        if refusal and not getattr(args, "materialize_native", False):
-            print(refusal, file=sys.stderr)
-            return 1
         if manifest.get("write_policy") == "orchestrator-only":
             print("  ⚠  write_policy orchestrator-only: --update merges the proposal sections and Goose recipe "
                   "extensions (their tool grants follow the template), but never Markdown front matter or Codex TOML "

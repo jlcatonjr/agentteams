@@ -8,6 +8,7 @@ refuses rather than drop one silently. ``--discard-user-regions`` opts out.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +18,7 @@ import yaml
 
 from agentteams import emit, user_regions as U
 from agentteams.fences import PROJECT_NOTES_SECTION
-from tests._fresh_intel import seed_offline_intel
+from tests._fresh_intel import run_build, seed_offline_intel
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"
@@ -198,6 +199,26 @@ def test_region_with_a_fence_marker_is_refused():
     assert not carried and problems and "AGENTTEAMS marker" in problems[0]
 
 
+def test_learned_marker_in_prose_is_carried():
+    # baseAgent's rules name the marker in prose; a substring match refused the whole region on --overwrite.
+    prose = "\n- An agentteams learned block (marker `AGENTTEAMS-LEARNED`) is allowed in agent files.\n"
+    content, carried, problems = U.carry_regions(_md(prose), _md())
+    assert not problems and carried and "marker `AGENTTEAMS-LEARNED`" in content
+
+
+@pytest.mark.parametrize("line", [
+    "<!-- AGENTTEAMS-LEARNED:BEGIN -->",
+    "  <!-- AGENTTEAMS-LEARNED:END -->",
+    "<!--AGENTTEAMS-LEARNED:BEGIN-->",
+])
+def test_learned_marker_line_is_refused(line):
+    # A marker line either ends the region (find_region) or makes carry_regions refuse it; never carried.
+    content, carried, problems = U.carry_regions(_md(f"\nmine\n{line}\nsmuggled\n"), _md())
+    assert "smuggled" not in content and not any("smuggled" in c for c in map(str, carried))
+    if "<!-- AGENTTEAMS" not in line:
+        assert not carried and problems and "AGENTTEAMS marker" in problems[0]
+
+
 def test_rules_heading_appears_once_in_the_template():
     text = (REPO / "agentteams" / "templates" / "copilot-instructions.template.md").read_text(encoding="utf-8")
     assert text.count("## Project-Specific Rules") == 1
@@ -240,3 +261,95 @@ def test_cut_at_a_template_heading_is_reported(tmp_path, capsys):
     result = _emit(tmp_path, [("AGENTS.md", new)])
     note = next(n for n in result.notices if "carried user region" in n)
     assert "cut at the template heading ## Code Style" in note
+
+
+# --- Request 1 (baseAgent P1): --merge adds a user region the template declares but the file lacks ---------
+
+_MANIFEST = ("<!--\nSECTION MANIFEST — t\n| section_id | designation | notes |\n|---|---|---|\n"
+             "| style_rules | USER-EDITABLE | x |\n{extra}| tone | FENCED | y |\n-->\n")
+_RULES_REGION = "## Project-Specific Rules\n\n> ⚙️ **USER-EDITABLE** — banner\n"
+
+
+def _instr(rules: bool, tail: str = "", manifest_row: bool = True) -> str:
+    extra = "| project_specific_rules| USER-EDITABLE | z |\n" if manifest_row else ""
+    body = ("# Team\n<!-- AGENTTEAMS:BEGIN overview v=1 -->\no\n<!-- AGENTTEAMS:END overview -->\n\n"
+            "## Style Rules\n\n- s\n\n---\n\n")
+    return _MANIFEST.format(extra=extra) + body + (_RULES_REGION if rules else "") + tail
+
+
+def test_missing_rules_region_is_appended_with_its_manifest_row():
+    old = _instr(rules=False, manifest_row=False) + "\n- my own unfenced line\n"
+    content, notices = U.insert_missing_regions("../copilot-instructions.md", _instr(rules=True), old)
+    assert notices and content.count("## Project-Specific Rules") == 1
+    assert content.index("my own unfenced line") < content.index("## Project-Specific Rules")
+    assert "| project_specific_rules|" in content
+    assert content.index("| style_rules") < content.index("| project_specific_rules") < content.index("| tone")
+    assert U.insert_missing_regions("../copilot-instructions.md", _instr(rules=True), content) == (content, [])
+
+
+def test_missing_region_goes_before_the_templates_next_section():
+    tail = "\n## Code Style\n\n- c\n"
+    old = _instr(rules=False, tail=tail.lstrip("\n"))
+    content, _ = U.insert_missing_regions("../../AGENTS.md", _instr(rules=True, tail=tail), old)
+    assert content.index("## Project-Specific Rules") < content.index("## Code Style")
+    assert content.count("---\n\n## Project-Specific Rules") == 1
+
+
+def test_existing_region_is_never_touched():
+    old = _instr(rules=False) + "  ## Project-Specific Rules\n  mine\n"  # indented: still present
+    assert U.insert_missing_regions("../CLAUDE.md", _instr(rules=True), old) == (old, [])
+    old = _instr(rules=True) + "\n- mine\n"
+    assert U.insert_missing_regions("../CLAUDE.md", _instr(rules=True), old) == (old, [])
+
+
+def test_region_is_never_inserted_inside_a_fence():
+    # The template's next section heading appears in the file only inside a fence: not an anchor, so append.
+    fenced = "<!-- AGENTTEAMS:BEGIN wrap v=1 -->\n## Code Style\n<!-- AGENTTEAMS:END wrap -->\n"
+    content, _ = U.insert_missing_regions("../CLAUDE.md", _instr(rules=True, tail="\n## Code Style\n"),
+                                          _instr(rules=False, tail=fenced))
+    at = content.index("## Project-Specific Rules")
+    assert not U._inside_fence(content, at) and at > content.index("<!-- AGENTTEAMS:END wrap -->")
+
+
+@pytest.mark.parametrize("variant", ["## Project-specific rules:", "### PROJECT SPECIFIC RULES", "# Project_Specific Rules"])
+def test_a_differently_spelled_rules_heading_counts_as_present(variant):
+    old = _instr(rules=False) + f"\n{variant}\n\n- mine\n"
+    assert U.insert_missing_regions("../CLAUDE.md", _instr(rules=True), old) == (old, [])
+
+
+def test_agent_files_are_not_given_rules():
+    assert U.insert_missing_regions("orchestrator.agent.md", _instr(rules=True), "x\n") == ("x\n", [])
+
+
+def test_merge_adds_rules_region_to_a_predating_instruction_file(tmp_path):
+    from agentteams.frameworks.structural_merge import post_merge_structural
+    fresh = (REPO / "agentteams" / "templates" / "copilot-instructions.template.md").read_text(encoding="utf-8")
+    predating = fresh[:fresh.index("## Project-Specific Rules")].rstrip() + "\n"
+    predating = predating.replace("| project_specific_rules| USER-EDITABLE | Extension home for instruction files"
+                                  "     |\n", "")
+    merged, notices = post_merge_structural("../copilot-instructions.md", fresh, predating)
+    assert merged == fresh and any("Project-Specific Rules" in n for n in notices)
+
+
+def test_update_merge_restores_the_rules_region_end_to_end(tmp_path):
+    """A copilot team whose copilot-instructions.md predates the Rules region gains it on --update --merge."""
+    brief_path = tmp_path / "brief.json"
+    brief_path.write_text(BRIEF.read_text(encoding="utf-8"))
+    out = tmp_path / ".github" / "agents"
+
+    def build(*extra: str):
+        return run_build(brief_path, tmp_path, "copilot-vscode", out, *extra)
+
+    proc = build()
+    assert proc.returncode == 0, proc.stdout[-1000:] + proc.stderr[-1000:]
+    instr = tmp_path / ".github" / "copilot-instructions.md"
+    text = instr.read_text(encoding="utf-8")
+    cut = text.index("## Project-Specific Rules")
+    predating = text[:cut].rstrip().removesuffix("---").rstrip() + "\n\n- an unfenced project line\n"
+    predating = re.sub(r"^\|\s*project_specific_rules\s*\|.*\n", "", predating, flags=re.MULTILINE)
+    instr.write_text(predating, encoding="utf-8")
+    proc = build("--update", "--merge", "--no-backup")
+    assert proc.returncode == 0, proc.stdout[-1000:] + proc.stderr[-1000:]
+    merged = instr.read_text(encoding="utf-8")
+    assert merged.count("## Project-Specific Rules") == 1 and "- an unfenced project line" in merged
+    assert re.search(r"^\|\s*project_specific_rules\s*\|", merged, re.MULTILINE)
