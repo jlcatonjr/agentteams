@@ -11,6 +11,8 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import plistlib
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -21,11 +23,19 @@ from agentteams.vulnscan.__main__ import main
 from agentteams.vulnscan.report import Finding, Report
 from tests.test_vulnscan_core import Feed
 from tests.test_vulnscan_daily import _cfg, feed, xdg  # noqa: F401  (pytest fixtures)
+from tests.test_vulnscan_install_guard import _wrapper
 
 DAY = "2026-11-02"
 OLD_TREE, NEW_TREE = "/root/anaconda3", "/root/anaconda3.disabled-20261101"
 _ROOT = Path(__file__).resolve().parent.parent
 _SCRIPTS = _ROOT / "scripts" / "vulnscan-remediation"
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """``$HOME`` = ``tmp_path``: the refresh script's ancestors are checked up to it (``/private/tmp`` is 1777)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return tmp_path
 
 
 def _f(name: str, version: str, *locs: str, target: str = "host-a", ids: tuple[str, ...] = ("G1",),
@@ -98,7 +108,23 @@ def test_what_is_not_a_rename(old: str, new: str) -> None:
     base = Report(target="h", findings=[_f("Django", "5.1", old)])
     later = Report(target="h", findings=[_f("Django", "5.1", new)])
     cmp = effectiveness.compare(base, later)
-    assert cmp.moves == {} and _status(cmp)[("Django", "5.1")][0] == effectiveness.REMEDIATED
+    assert cmp.moves == {}
+    # not a move, and still not remediated: the package is present elsewhere, and reported
+    assert _status(cmp)[("Django", "5.1")] == (effectiveness.ELSEWHERE, f"found at {new} (5.1)")
+    assert [g.locations for g in cmp.new] == [[new]]
+
+
+def test_a_package_present_elsewhere_is_never_remediated() -> None:
+    """@security: a tree moved other than by an in-place rename must not read as a fix."""
+    base = Report(target="h", findings=[_f("Django", "5.1", "/root/anaconda3/lib"), _f("idna", "3.4", "/usr/lib/py")])
+    later = Report(target="h", findings=[_f("Django", "5.2", "/opt/anaconda3/lib"),       # moved and bumped
+                                         _f("Brotli", "1.0", "/usr/lib/py")])             # a new key
+    cmp = effectiveness.compare(base, later)
+    got = _status(cmp)
+    assert got[("Django", "5.1")] == (effectiveness.ELSEWHERE, "found at /opt/anaconda3/lib (5.2)")
+    assert got[("idna", "3.4")][0] == effectiveness.REMEDIATED
+    assert sorted(g.name for g in cmp.new) == ["Brotli", "Django"]
+    assert cmp.counts()[effectiveness.ELSEWHERE] == 1
 
 
 def test_a_rename_carrying_no_finding_unchanged_is_not_a_move() -> None:
@@ -218,7 +244,7 @@ def _cfg_m(root: Path, **kw: Any) -> dict[str, Any]:
 
 
 def test_a_fix_merged_after_the_morning_scan_is_measured_the_same_day(xdg: Path, feed: Feed,  # noqa: F811
-                                                                       tmp_path: Path) -> None:
+                                                                       tmp_path: Path, home: Path) -> None:
     root, mirror = _repo(tmp_path, "2.3.0")
     _stamp(root, "a" * 40)
     cfg = _cfg_m(root)
@@ -241,7 +267,7 @@ def test_a_fix_merged_after_the_morning_scan_is_measured_the_same_day(xdg: Path,
 
 
 def test_a_second_verification_compares_with_the_morning_commit(xdg: Path, feed: Feed,  # noqa: F811
-                                                                 tmp_path: Path) -> None:
+                                                                 tmp_path: Path, home: Path) -> None:
     root, mirror = _repo(tmp_path, "2.3.0")
     _stamp(root, "a" * 40)
     cfg = _cfg_m(root)
@@ -252,7 +278,8 @@ def test_a_second_verification_compares_with_the_morning_commit(xdg: Path, feed:
     assert code == 0 and rec["rescanned"][0]["before"] == "a" * 40 and rec["counts"][effectiveness.REMEDIATED] == 1
 
 
-def test_a_root_whose_mirror_did_not_move_is_not_rescanned(xdg: Path, feed: Feed, tmp_path: Path) -> None:  # noqa: F811
+def test_a_root_whose_mirror_did_not_move_is_not_rescanned(xdg: Path, feed: Feed,  # noqa: F811
+                                                           tmp_path: Path, home: Path) -> None:
     root, mirror = _repo(tmp_path, "2.3.0")
     _stamp(root, "a" * 40)
     cfg = _cfg_m(root)
@@ -261,7 +288,8 @@ def test_a_root_whose_mirror_did_not_move_is_not_rescanned(xdg: Path, feed: Feed
     assert code == 0 and rec["rescanned"] == [] and rec["findings"] == [] and rec["assessed"] == []
 
 
-def test_a_failed_refresh_or_scan_mirror_off_is_reported(xdg: Path, feed: Feed, tmp_path: Path) -> None:  # noqa: F811
+def test_a_failed_refresh_or_scan_mirror_off_is_reported(xdg: Path, feed: Feed,  # noqa: F811
+                                                         tmp_path: Path, home: Path) -> None:
     root, _mirror = _repo(tmp_path, "2.3.0")
     _stamp(root, "a" * 40)
     daily.run_daily(_cfg_m(root), today=DAY)
@@ -279,7 +307,7 @@ def test_without_a_morning_run_or_while_a_lock_is_held_nothing_is_written(xdg: P
     rec, code = verify.run_verify(_cfg(), today=DAY)
     assert code == 3 and rec["state"] == "no-run"
     run_dir = _run_dir(daily.paths.state_dir(), DAY, [])
-    for lock in (verify.remediation_lock_path(), daily.run_lock_path()):
+    for lock in (daily.remediation_lock_path(), daily.run_lock_path()):
         with open(lock, "a+", encoding="utf-8") as held:
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
             rec, code = verify.run_verify(_cfg(), today=DAY)
@@ -288,18 +316,55 @@ def test_without_a_morning_run_or_while_a_lock_is_held_nothing_is_written(xdg: P
         assert not (run_dir / verify.VERIFY_FILE).exists() and not (run_dir / verify.WORK_DIR).exists()
 
 
-def test_refresh_problem_refuses_what_another_user_could_have_written(tmp_path: Path) -> None:
-    script = tmp_path / "r.sh"
+def test_refresh_problem_refuses_what_another_user_could_have_written(home: Path) -> None:
+    sub = home / "bin"
+    sub.mkdir(mode=0o700)
+    script = sub / "r.sh"
     script.write_text("#!/bin/bash\n", encoding="utf-8")
     script.chmod(0o700)
     assert verify.refresh_problem(script) == ""
     script.chmod(0o720)
-    assert "writable by group or others" in verify.refresh_problem(script)
-    link = tmp_path / "link.sh"
+    assert "r.sh is writable by group or others" in verify.refresh_problem(script)
+    script.chmod(0o700)
+    sub.chmod(0o770)   # a writable parent: someone else could swap the script in
+    assert f"directory {os.path.realpath(sub)} is writable by group or others" in verify.refresh_problem(script)
+    sub.chmod(0o700)
+    link = sub / "link.sh"
     link.symlink_to(script)
-    assert "not a regular file" in verify.refresh_problem(link)
+    assert "link.sh is a symlink" in verify.refresh_problem(link)
     assert "not an absolute path" in verify.refresh_problem(Path("r.sh"))
-    assert verify.refresh_problem(tmp_path / "missing.sh")
+    assert verify.refresh_problem(sub / "missing.sh")
+    (sub / "adir").mkdir(mode=0o700)
+    assert "adir is not a regular file" in verify.refresh_problem(sub / "adir")
+
+
+def test_outside_home_every_ancestor_is_checked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "elsewhere"))
+    script = tmp_path / "r.sh"
+    script.write_text("#!/bin/bash\n", encoding="utf-8")
+    script.chmod(0o700)
+    shared = [d for d in Path(os.path.realpath(tmp_path)).parents if os.stat(d).st_mode & 0o022]
+    why = verify.refresh_problem(script)
+    assert (f"directory {shared[0]} is writable by group or others" == why) if shared else why == ""
+
+
+def test_the_checked_file_is_what_runs_even_if_swapped_after_the_check(home: Path,
+                                                                       monkeypatch: pytest.MonkeyPatch) -> None:
+    script = home / "r.sh"
+    script.write_text('#!/bin/bash\necho "checked $1"\n', encoding="utf-8")
+    script.chmod(0o700)
+    real = subprocess.run
+
+    def swap_then_run(argv: list[str], **kw: Any) -> subprocess.CompletedProcess:
+        evil = home / "evil.sh"
+        evil.write_text('#!/bin/bash\necho "swapped $1"\n', encoding="utf-8")
+        os.replace(evil, script)                       # after every check, before bash starts
+        assert argv[1].startswith("/dev/fd/") and kw["pass_fds"]
+        return real(argv, **kw)
+
+    monkeypatch.setattr(verify.subprocess, "run", swap_then_run)
+    assert verify._refresh(script) == "ok: checked refresh"
+    assert script.read_text(encoding="utf-8").startswith('#!/bin/bash\necho "swapped')
 
 
 def test_audited_hosts_are_todays_server_ops() -> None:
@@ -323,7 +388,7 @@ def test_hosts_an_executor_op_ran_against_are_re_audited(xdg: Path,  # noqa: F81
         seen.append((host, out_dir))
         return Report(target=host)   # openssl is gone
 
-    monkeypatch.setattr(daily, "_scan_server", audit)
+    monkeypatch.setattr(daily, "scan_server", audit)
     rec, code = verify.run_verify(_cfg(servers=["web", "db"]), today=DAY)
     assert code == 0 and seen == [("web", run_dir / verify.WORK_DIR)]
     assert rec["hosts"] == ["web"] and rec["hosts_skipped"] == ["other"] and rec["assessed"] == ["web"]
@@ -350,15 +415,14 @@ def test_the_verify_job_is_guarded_and_installed_by_the_remediation_installer() 
     assert wrapped.index('install_guard "daily${1:+ $1}"') < wrapped.index("  --verify)")
     assert wrapped.index('exec /usr/bin/lockf -t 1800 "$STATE/wrapper.lock"') < wrapped.index("  --verify)")
     install = auto.split("install_job() {", 1)[1].split("\n}\n", 1)[0]
-    assert '"${VS[@]}" verify --help' in install and 'cat > "$VERIFY_PLIST"' in install
-    assert "vulnscan-daily-wrapped.sh\")</string><string>--verify</string>" in install
-    assert "<key>StartCalendarInterval</key><array>$when</array>" in install
+    assert '"${VS[@]}" verify --help' in install and 'write_plist "$VERIFY_PLIST" "$VERIFY_LABEL"' in install
+    assert '"<key>StartCalendarInterval</key><array>$when</array>" "$INSTALL_DIR/vulnscan-daily-wrapped.sh" --verify' \
+        in install
+    assert "notify() { :; }" in case   # verification never pops a notification
     assert 'rm -f "$VERIFY_PLIST"' in auto.split("--uninstall)", 1)[1].split(";;", 1)[0]
 
 
 def test_the_verify_job_refuses_the_wrong_install(tmp_path: Path) -> None:
-    from tests.test_vulnscan_install_guard import _wrapper
-
     out = _wrapper(tmp_path, _SCRIPTS / "vulnscan-daily-wrapped.sh", "--verify")
     assert out.returncode == 4 and "install-guard: REFUSED daily --verify" in out.stderr
 
@@ -369,7 +433,6 @@ def test_the_installer_rejects_a_bad_verify_time(tmp_path: Path) -> None:
     install = body.split("install_job() {", 1)[1].split("\n}\n", 1)[0]
     assert install.index("VULNSCAN_VERIFY_TIMES: not HH:MM") < install.index('bak="$CFG_DIR')
     loop = install.split('for t in $VERIFY_TIMES; do', 1)[1].split("done", 1)[0]
-    import subprocess
 
     def times(value: str) -> subprocess.CompletedProcess:
         return subprocess.run(["/bin/bash", "-c", f'bad() {{ echo "$*"; }}; VERIFY_TIMES="{value}"; when=""; '
@@ -380,3 +443,26 @@ def test_the_installer_rejects_a_bad_verify_time(tmp_path: Path) -> None:
     assert "<integer>8</integer><key>Minute</key><integer>5</integer>" in ok.stdout
     for bad in ("24:00", "7:5", "17:15;x", "noon"):
         assert times(bad).returncode == 2, bad
+
+
+def test_write_plist_writes_both_jobs_as_valid_plists(tmp_path: Path) -> None:
+    """The installer's one plist writer: run with launchctl stubbed, parse what it wrote."""
+    body = (_SCRIPTS / "vulnscan-remediate-auto.sh").read_text(encoding="utf-8")
+    esc = next(ln for ln in body.splitlines() if ln.startswith("xml_esc()"))
+    fn = "write_plist() {" + body.split("write_plist() {", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    (stub / "launchctl").write_text(f'#!/bin/bash\necho "$*" >> "{tmp_path}/launchctl.log"\n', encoding="utf-8")
+    (stub / "launchctl").chmod(0o755)
+    script = (f"{esc}\n{fn}\npath=/usr/bin:/bin\n"
+              f'write_plist "{tmp_path}/v.plist" io.x.verify "{tmp_path}/v&.log" '
+              '"<key>StartCalendarInterval</key><array><dict><key>Hour</key><integer>17</integer></dict></array>" '
+              f'"{tmp_path}/daily wrapped.sh" --verify\n')
+    proc = subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True, timeout=30,
+                          env={"PATH": f"{stub}:/usr/bin:/bin", "HOME": str(tmp_path)})
+    assert proc.returncode == 0, proc.stderr
+    plist = plistlib.loads((tmp_path / "v.plist").read_bytes())
+    assert plist["Label"] == "io.x.verify" and plist["StartCalendarInterval"] == [{"Hour": 17}]
+    assert plist["ProgramArguments"] == ["/bin/bash", f"{tmp_path}/daily wrapped.sh", "--verify"]
+    assert plist["StandardOutPath"] == f"{tmp_path}/v&.log" and plist["EnvironmentVariables"]["PATH"] == "/usr/bin:/bin"
+    assert "bootstrap" in (tmp_path / "launchctl.log").read_text()

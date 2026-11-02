@@ -4,9 +4,9 @@ The daily scan runs once in the morning; fixes merged later that day (the auto-m
 audited again after an executor op are invisible until the next morning. ``vulnscan verify``, scheduled after the
 last auto-merge (``vulnscan-daily-wrapped.sh --verify``, installed by ``vulnscan-remediate-auto.sh --install``):
 
-1. takes the remediation lock (``<state>/remediate.flock``) and the daily run lock (``<state>/daily.lock``), in
-   that order and without waiting: while a remediation attempt, a deploy or a daily run holds either, it writes
-   nothing and exits 3 (the job fires again later the same day);
+1. takes the remediation lock (:func:`daily.remediation_lock_path`) and the daily run lock
+   (:func:`daily.run_lock_path`), in that order and without waiting: while a remediation attempt, a deploy or a
+   daily run holds either, it writes nothing and exits 3 (the job fires again later the same day);
 2. runs the operator's scan-mirror refresh script (``--mirror-refresh``), and re-scans, from its refreshed mirror,
    each root whose mirror moved from one ``ok`` commit to another since the morning (:mod:`.scan_mirror`): a
    repository whose default branch moved today. A root without an ``ok`` record before and after is not re-scanned
@@ -16,7 +16,8 @@ last auto-merge (``vulnscan-daily-wrapped.sh --verify``, installed by ``vulnscan
 4. compares the morning run's findings of the re-scanned targets with the new scan (:func:`effectiveness.compare`:
    per finding, version lines paired, renamed trees reported as moved), and writes ``<run>/verify.json``.
 
-It stages nothing, writes no fix plan, opens no PR, starts no agent and sends no notification; ``summary.*``, the
+It stages nothing, writes no fix plan, opens no PR, starts no agent and sends no notification (the
+wrapper's Docker check stays quiet under ``--verify`` too); ``summary.*``, the
 heartbeat and the morning's ``repos-*.json`` / ``server-*.log`` are untouched (the audits' logs go to
 ``<run>/verify/``). ``verify.json`` names repositories, hosts and packages: it is machine-local and never published.
 The ``effectiveness BASE LATER`` command writes the same per-finding comparison for any two runs.
@@ -34,7 +35,7 @@ import os
 import stat
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -51,23 +52,13 @@ MORNING_MIRRORS = "mirrors-morning.json"
 SCHEMA = 1
 #: Seconds the mirror refresh script may run.
 REFRESH_TIMEOUT = 1800
-_ITEM_ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
-
-
-def remediation_lock_path() -> Path:
-    """Return the remediation runner's lock (``vulnscan-remediate-auto.sh``; ``vulnscan-deploy.sh`` holds it too).
-
-    Returns:
-        ``<state>/remediate.flock``.
-    """
-    return paths.state_dir() / "remediate.flock"
 
 
 @contextlib.contextmanager
 def _locks() -> Iterator[str]:
     """Hold the remediation lock, then the daily run lock (the deploy's order); yield "" or what holds one."""
     with contextlib.ExitStack() as stack:
-        for path, what in ((remediation_lock_path(), "a remediation attempt or a deploy"),
+        for path, what in ((daily.remediation_lock_path(), "a remediation attempt or a deploy"),
                            (daily.run_lock_path(), "a daily run or a deploy")):
             fh = stack.enter_context(open(path, "a+", encoding="utf-8"))   # noqa: SIM115  (held for the block)
             try:
@@ -79,14 +70,6 @@ def _locks() -> Iterator[str]:
         yield ""
 
 
-def _stamp(day: str, path: Path | None = None) -> dict[str, str]:
-    try:
-        data = json.loads((path or scan_mirror.stamp_path(day)).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
-
-
 def _morning_stamp(day: str, work: Path) -> dict[str, str]:
     """Return the mirror record the morning scan read, kept in ``work`` by the day's first verification.
 
@@ -95,52 +78,106 @@ def _morning_stamp(day: str, work: Path) -> dict[str, str]:
     """
     kept = work / MORNING_MIRRORS
     if kept.is_file():
-        return _stamp(day, kept)
-    record = _stamp(day)
-    daily._write_atomic(kept, json.dumps(record, indent=1))
+        return scan_mirror.read_stamp(day, kept)
+    record = scan_mirror.read_stamp(day)
+    daily.write_atomic(kept, json.dumps(record, indent=1))
     return record
 
 
-def refresh_problem(script: Path) -> str:
-    """Return why ``script`` may not be run as the mirror refresh, or "" when it may.
+class RefreshRefused(ValueError):
+    """The mirror refresh script may not be run (:func:`open_refresh`)."""
 
-    The job runs it unattended with the operator's git credentials, so it must be an absolute path to a regular
-    file (not a symlink) that the operator owns and that neither the group nor others can write.
+
+def _owner_mode_problem(st: os.stat_result, what: str, *, root_ok: bool) -> str:
+    owners = (os.getuid(), 0) if root_ok else (os.getuid(),)
+    if st.st_uid not in owners:
+        return f"{what} is not owned by you{' or root' if root_ok else ''}"
+    if st.st_mode & 0o022:
+        return f"{what} is writable by group or others"
+    return ""
+
+
+def open_refresh(script: Path) -> int:
+    """Open the mirror refresh script for running, refusing anything another user could have written.
+
+    The job runs it unattended with the operator's git credentials. The file is opened with ``O_NOFOLLOW`` (a
+    symlink is refused) and checked **on the open descriptor**: a regular file the operator owns that neither the
+    group nor others can write. Every directory above it, up to the home directory (or ``/`` outside it), must be
+    owned by the operator or root and not group- or world-writable, and the path must still name the file that was
+    opened. :func:`_refresh` then runs that descriptor (``bash /dev/fd/N``), never the path again, so a file swapped
+    in after the checks is not what runs.
 
     Args:
         script: The refresh script (``vauto-a-mirrors.sh``, run as ``bash SCRIPT refresh``).
 
     Returns:
-        The problem, or "".
+        An open read-only descriptor; the caller closes it.
+
+    Raises:
+        RefreshRefused: Any check failed (the message names it); nothing is left open.
     """
     if not script.is_absolute():
-        return f"{script} is not an absolute path"
+        raise RefreshRefused(f"{script} is not an absolute path")
     try:
-        st = script.lstat()
+        fd = os.open(script, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except OSError as exc:
-        return f"{script}: {exc.strerror or exc}"
-    if not stat.S_ISREG(st.st_mode):
-        return f"{script} is not a regular file"
-    if st.st_uid != os.getuid():
-        return f"{script} is not owned by you"
-    if st.st_mode & 0o022:
-        return f"{script} is writable by group or others"
+        raise RefreshRefused(f"{script} is a symlink" if os.path.islink(script)
+                             else f"{script}: {exc.strerror or exc}") from exc
+    try:
+        st = os.fstat(fd)
+        why = ("" if stat.S_ISREG(st.st_mode) else f"{script} is not a regular file") or \
+            _owner_mode_problem(st, str(script), root_ok=False)
+        home = Path(os.path.realpath(Path.home()))
+        d = Path(os.path.realpath(script.parent))
+        while not why:
+            why = _owner_mode_problem(os.stat(d), f"directory {d}", root_ok=True)
+            if d == home or d.parent == d:
+                break
+            d = d.parent
+        if not why:
+            now = os.stat(script, follow_symlinks=False)
+            if (now.st_dev, now.st_ino) != (st.st_dev, st.st_ino):
+                why = f"{script} was replaced while it was checked"
+    except OSError as exc:
+        why = f"{script}: {exc.strerror or exc}"
+    if why:
+        os.close(fd)
+        raise RefreshRefused(why)
+    return fd
+
+
+def refresh_problem(script: Path) -> str:
+    """Return why ``script`` may not be run as the mirror refresh (:func:`open_refresh`), or "" when it may.
+
+    Args:
+        script: The refresh script.
+
+    Returns:
+        The problem, or "".
+    """
+    try:
+        os.close(open_refresh(script))
+    except RefreshRefused as exc:
+        return str(exc)
     return ""
 
 
 def _refresh(script: Path | None) -> str:
     if script is None:
         return "not run (no --mirror-refresh)"
-    why = refresh_problem(script)
-    if why:
-        return f"refused: {why}"
     try:
-        proc = subprocess.run(["/bin/bash", str(script), "refresh"], capture_output=True, text=True,
-                              timeout=REFRESH_TIMEOUT, check=False)
+        fd = open_refresh(script)
+    except RefreshRefused as exc:
+        return f"refused: {exc}"
+    try:   # the checked descriptor itself, never the path: no check-then-exec race
+        proc = subprocess.run(["/bin/bash", f"/dev/fd/{fd}", "refresh"], pass_fds=(fd,), capture_output=True,
+                              text=True, timeout=REFRESH_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
         return f"failed: timed out after {REFRESH_TIMEOUT} s"
     except OSError as exc:
         return f"failed: {exc}"
+    finally:
+        os.close(fd)
     last = (proc.stdout.strip().splitlines() or [""])[-1][:300]
     return f"ok: {last}" if proc.returncode == 0 else f"failed: exit {proc.returncode}: {last}"
 
@@ -170,7 +207,7 @@ def audited_hosts(rows: list[dict[str, Any]], day: str) -> list[str]:
 def _rescan_repos(cfg: dict[str, Any], day: str, before: dict[str, str], later: Report,
                   out: dict[str, Any]) -> set[str]:
     """Re-scan every root whose mirror moved today; return the labels re-scanned without an error."""
-    after = _stamp(day)
+    after = scan_mirror.read_stamp(day)
     try:
         entries = registry.load()
     except (OSError, ValueError) as exc:
@@ -196,12 +233,12 @@ def _rescan_repos(cfg: dict[str, Any], day: str, before: dict[str, str], later: 
             continue
         try:
             rep = scan_mirror.scan_root(cfg, spec.path, mirror, exclude, opted_out)
-        except _ITEM_ERRORS as exc:
+        except daily.ITEM_ERRORS as exc:
             later.feed_errors.append(f"re-scan of {spec.label} stopped: {type(exc).__name__}: {exc}"[:400])
             continue
-        daily._drop_excluded(cfg, spec.path, rep)
+        coverage.drop_excluded(cfg, spec.path, rep)
         for f in rep.findings:
-            f.target = daily._under(spec.label, f.target)
+            f.target = coverage.under_root(spec.label, f.target)
         later.findings += rep.findings
         if rep.feed_errors:
             later.feed_errors += rep.feed_errors
@@ -224,7 +261,7 @@ def _reaudit_hosts(cfg: dict[str, Any], day: str, run_dir: Path, later: Report, 
     for host in (h for h in hosts if h in servers):
         try:
             with subproc_confine.scope(cfg):
-                rep = daily._scan_server(host, paths.server_kit_dir(), run_dir / WORK_DIR)
+                rep = daily.scan_server(host, paths.server_kit_dir(), run_dir / WORK_DIR)
         except subproc_confine.Unavailable as exc:
             later.feed_errors.append(f"{host}: not re-audited: {exc}")
             continue
@@ -282,7 +319,7 @@ def _verify_locked(cfg: dict[str, Any], day: str, run_dir: Path, baseline: Repor
         before = _morning_stamp(day, run_dir / WORK_DIR)
     except OSError as exc:   # nothing can be kept or logged: verify what can be, and say so
         later.feed_errors.append(f"could not keep the morning's mirror record in {run_dir / WORK_DIR}: {exc}")
-        before = _stamp(day)
+        before = scan_mirror.read_stamp(day)
     out["mirror_refresh"] = _refresh(mirror_refresh)
     if out["mirror_refresh"].startswith(("failed", "refused")):
         later.feed_errors.append(f"mirror refresh {out['mirror_refresh']}"[:400])
@@ -300,7 +337,7 @@ def _verify_locked(cfg: dict[str, Any], day: str, run_dir: Path, baseline: Repor
                 "new": [{"target": g.target, "kind": g.kind, "ecosystem": g.ecosystem, "name": g.name,
                          "version": g.version, "fix": g.fix} for g in cmp.new]})
     try:
-        daily._write_atomic(run_dir / VERIFY_FILE, json.dumps(out, indent=2))
+        daily.write_atomic(run_dir / VERIFY_FILE, json.dumps(out, indent=2))
     except OSError as exc:
         out["complete"] = False
         out["feed_errors"].append(f"could not write {VERIFY_FILE}: {exc}")
@@ -311,13 +348,16 @@ def _verify_locked(cfg: dict[str, Any], day: str, run_dir: Path, baseline: Repor
 
 
 def _pairs(values: list[str] | None, flag: str) -> dict[str, str]:
-    """``OLD=NEW`` options -> ``{NEW: OLD}`` (later name -> baseline name)."""
+    """``OLD=NEW`` options -> ``{NEW: OLD}`` (later name -> baseline name); a path alias drops a trailing ``/``."""
+    def strip(v: str) -> str:
+        return v.rstrip("/") if flag == "--path-alias" else v
+
     out: dict[str, str] = {}
     for v in values or []:
         old, sep, new = v.partition("=")
-        if not sep or not old or not new:
+        if not (sep and old and new):
             raise ValueError(f"{flag} takes OLD=NEW (got {v!r})")
-        out[new.rstrip("/") if flag == "--path-alias" else new] = old.rstrip("/") if flag == "--path-alias" else old
+        out[strip(new)] = strip(old)
     return out
 
 
@@ -339,8 +379,8 @@ def comparison_markdown(cmp: effectiveness.Comparison, *, baseline: str, later: 
     """
     counts = cmp.counts()
     lines = [f"# Remediation per finding: {baseline} → {later}", "",
-             f"{len(cmp.outcomes)} baseline findings; {len(cmp.new)} later findings of keys the baseline lacks "
-             "(not regressions by themselves: coverage may have widened)."]
+             f"{len(cmp.outcomes)} baseline findings; {len(cmp.new)} later findings paired with none (a new key, "
+             "or a known one at a new place; not regressions by themselves: coverage may have widened)."]
     lines += [f"- target alias: `{n}` = `{o}`" for n, o in aliases.items()]
     lines += [f"- path alias: `{n}` = `{o}`" for n, o in path_aliases.items()]
     lines += ["", "| Status | Count |", "|---|---|", *[f"| {s} | {counts[s]} |" for s in effectiveness.OUTCOMES]]
@@ -385,7 +425,7 @@ def register(sub: Any) -> None:
     sp.add_argument("--out", type=Path, default=None, help="write the Markdown here (default stdout)")
 
 
-def dispatch(args: argparse.Namespace, load_cfg: Any) -> int:
+def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -> int:
     """Run ``verify`` or ``effectiveness``.
 
     Args:
@@ -435,5 +475,5 @@ def dispatch(args: argparse.Namespace, load_cfg: Any) -> int:
     if args.out is None:
         print(md, end="")
     else:
-        print(", ".join(f"{s} {n}" for s, n in cmp.counts().items()) + f"; new keys {len(cmp.new)}")
+        print(", ".join(f"{s} {n}" for s, n in cmp.counts().items()) + f"; unpaired later findings {len(cmp.new)}")
     return 0

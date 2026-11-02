@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### added (vulnscan: same-day verification and per-finding effectiveness, vfr-v V1 + V2)
 
 - **Per finding, not only counts (V2).** `effectiveness.compare` says, for each finding of a baseline run, whether
-  a later run shows it remediated: `remediated`, `partly remediated`, `open`, `moved (not remediated)` or `not
-  assessed`. Each later finding pairs with one baseline finding of its key at the same place, so two version lines
+  a later run shows it remediated: `remediated`, `partly remediated`, `open`, `moved (not remediated)`, `present
+  elsewhere (not remediated)` (its package found at another place, e.g. `/opt/anaconda3`) or `not assessed`. Each later finding pairs with one baseline finding of its key at the same place, so two version lines
   of one package never match each other. `effectiveness.detect_moves` finds a tree renamed on disk
   (`/root/anaconda3` → `/root/anaconda3.disabled-20261101`) without being told: a finding still in the renamed tree
   is "moved", never "remediated". On the 2026-10-31 → 2026-11-02 runs the comparison matches the 9f audit script
@@ -24,7 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lock, Docker. It takes `remediate.flock` and `daily.lock` without waiting and runs the operator's scan-mirror
   refresh (`VULNSCAN_MIRROR_REFRESH`). It then re-scans each root whose mirror moved since the morning, re-audits
   each configured server an executor `server-*` op ran against today, and writes `<run>/verify.json`. It stages
-  nothing and opens no PR. `scan_mirror.scan_root` is split out of the daily scan, so both scan a root the same way.
+  nothing, opens no PR and sends no notification. The refresh script is opened with `O_NOFOLLOW`, checked on its
+  descriptor (and its folders up to `$HOME`), and run as `bash /dev/fd/N`, so a file swapped in after the check
+  is never run. `scan_mirror.scan_root` is split out of the daily scan, so both scan a root the same way;
+  `daily.scan_server`, `write_atomic`, `ITEM_ERRORS` and `remediation_lock_path` are public, and
+  `under_root` / `drop_excluded` moved to `coverage`.
   Deploy with `vulnscan-deploy.sh --with-scripts` to install the job.
 
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)

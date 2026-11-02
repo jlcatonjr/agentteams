@@ -93,11 +93,12 @@ case "${1:-}" in
     [[ $code == 3 ]] && notify "Daily scan is partially unscanned — see today's summary.md"
     exit $code ;;
   --verify)   # stages nothing, opens no PR; takes remediate.flock + daily.lock itself, without waiting (exit 3 if held)
-    ensure || log "Docker not ready: the host re-audits will be reported unscanned"
+    notify() { :; }   # verification never notifies: its result is <run>/verify.json (and this log)
+    ensure || log "Docker not ready: a host re-audit that needs the tools container will be reported unscanned"
     refresh="${VULNSCAN_MIRROR_REFRESH:-$HOME/.local/share/agentteams/vauto/vauto-a-mirrors.sh}"
     args=(verify)
     if [[ -f "$refresh" ]]; then args+=(--mirror-refresh "$refresh")
-    else log "no mirror refresh script at $refresh: no repository is re-scanned"; fi
+    else log "no mirror refresh script at $refresh: mirrors are not refreshed (only one already moved since the morning is re-scanned)"; fi
     "${VS[@]}" "${args[@]}"; code=$?
     log "verify exited $code"
     exit $code ;;

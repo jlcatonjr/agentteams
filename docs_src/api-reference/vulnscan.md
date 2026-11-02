@@ -3169,9 +3169,18 @@ Publish a run when a publish grant is active; `None` otherwise.
 Write a starter config (the defaults, with the given `repo_roots` and `servers`) at `path` (default
 `paths.config_file()`) unless one exists; never overwrites. Returns the path. The `init` command calls it.
 
-#### `daily.run_lock_path()`
+#### `daily.run_lock_path()` / `daily.remediation_lock_path()`
 
-`<state>/daily.lock`, held for a whole daily run.
+`<state>/daily.lock`, held for a whole daily run; `<state>/remediate.flock`, held by the remediation runner, a
+deploy and `verify`.
+
+#### `daily.scan_server(host, kit, out_dir)` / `daily.write_atomic(path, text)` / `daily.ITEM_ERRORS`
+
+`scan_server` runs the packaged server kit's read-only L1 audit on one host (its log `server-<host>.log` in
+`out_dir`) and returns the host's report; `write_atomic` writes through a temporary file and a rename;
+`ITEM_ERRORS` is what stops one scan root or fix plan without stopping the run. `verify` uses all three.
+`coverage.under_root(root_s, target)` names a target under its root's label and `coverage.drop_excluded(cfg, root,
+rep)` drops what lies inside an `exclude` path; both moved from `daily`.
 
 #### Split modules
 
@@ -3192,7 +3201,8 @@ range, every `agent.*` key included ([`validate_agent`](#validate_agenta)).
 The summary's **Remediation effectiveness** section and the PR counts behind it (`PrStats`). Counts
 only, and passed through `publish.rewrite_paths`: no repository, PR, host or path is named. With `scanned` (the
 daily run passes `scanned_targets(run_dir)`) and a previous run, it adds one row per outcome of `compare`: the
-previous run's findings remediated, partly remediated, open, moved (not remediated) and not assessed. Without it
+previous run's findings remediated, partly remediated, open, moved (not remediated), present elsewhere (not
+remediated) and not assessed. Without it
 those rows are left out, so an unscanned target never reads as remediated.
 
 #### `compare(baseline, later, *, scanned=None, aliases=None, path_aliases=None)`
@@ -3203,10 +3213,12 @@ paired with **one** baseline finding of its key at the same place (a shared loca
 whose version is the highest at or below the later one, else the lowest. Two version lines of one package
 therefore never match each other. Statuses (`OUTCOMES`): `remediated`; `partly remediated` (some advisories gone,
 or now at a higher version that is still vulnerable); `open`; `moved (not remediated)` (still there, but only
-under a tree `detect_moves` found renamed); `not assessed` (the target is not in `scanned`). Requirement-range
+under a tree `detect_moves` found renamed); `present elsewhere (not remediated)` (nothing at its place, but the
+later run has its key at a place no baseline finding of that key had, e.g. `/root/anaconda3` → `/opt/anaconda3` or
+another lockfile); `not assessed` (the target is not in `scanned`). Requirement-range
 findings are left out (no installed version). `aliases` maps a later target name to the baseline's (a renamed
 host, e.g. `{"jlc-prod": "vk-prod"}`); `path_aliases` maps a renamed location prefix the same way and reads as
-`open`. Returns a `Comparison` (`outcomes`, `new`: later findings of keys the baseline lacks, `moves`, `counts()`).
+`open`. Returns a `Comparison` (`outcomes`, `new`: the later findings paired with no baseline finding, a new key or a known one at a new place, `moves`, `counts()`).
 `outcome_rows(cmp)` gives one plain row per outcome.
 
 #### `detect_moves(baseline, later, *, aliases=None, path_aliases=None)`
@@ -3479,18 +3491,17 @@ Re-scan what changed since this morning's run and write `<run>/verify.json`. In 
 
 1. Read the morning's `summary.json` (none: exit 3, `state: no-run`, nothing written). A `verify.json` already
    `complete` today is returned as `already-verified` (exit 0) unless `force`.
-2. Take `<state>/remediate.flock` (`remediation_lock_path()`) and then `<state>/daily.lock`, the order
+2. Take `<state>/remediate.flock` (`daily.remediation_lock_path()`) and then `<state>/daily.lock`, the order
    `vulnscan-deploy.sh` takes them, each without waiting. While a remediation attempt, a deploy or a daily run holds
    either one, nothing is written and the exit code is 3 (`state: busy`).
 3. Keep the morning's scan-mirror record as `<run>/verify/mirrors-morning.json` (once a day: a second verification
    compares with the morning's commits, not with the first verification's), then run `bash SCRIPT refresh` for
-   `mirror_refresh` (the operator's refresh job, `vauto-a-mirrors.sh`). `refresh_problem(script)` refuses a path
-   that is relative, not a regular file (a symlink), not owned by the user, or writable by group or others.
+   `mirror_refresh` (the operator's refresh job, `vauto-a-mirrors.sh`) through `open_refresh(script)`: see below.
 4. Re-scan, from its refreshed mirror (`scan_mirror.scan_root`), each effective root whose record went from one
    `ok <sha>` to another since the morning: a repository whose default branch moved today. A root without `ok` before
    and after is listed in `not_rescanned` (its morning scan read the checkout, or the refresh failed); with
    `scan_mirror` off no repository is re-scanned.
-5. Run the read-only L1 audit (`daily._scan_server`, the audit of the daily scan and of the executor's
+5. Run the read-only L1 audit (`daily.scan_server`, the audit of the daily scan and of the executor's
    `server-audit` op) on each configured `servers` host that an executor `server-*` op ran against today
    (`audited_hosts(rows, day)`: `done` or `failed` ledger rows of that local date). Its logs go to `<run>/verify/`;
    a host that is not a configured server is listed in `hosts_skipped` (no morning baseline).
@@ -3503,6 +3514,16 @@ Re-scan what changed since this morning's run and write `<run>/verify.json`. In 
    published. `summary.*`, the heartbeat and the morning's `repos-*.json` and `server-*.log` are left as they were.
 
 Returns `(record, exit code)`: 0 complete, 3 partial (a refresh, re-scan or audit failed), busy or no morning run.
+
+#### `open_refresh(script)` / `refresh_problem(script)`
+
+`open_refresh` opens the mirror refresh script for running and returns the descriptor, or raises `RefreshRefused`
+(a `ValueError`) naming the check that failed. It refuses a relative path, and opens with `O_NOFOLLOW`, so a
+symlink is refused. On the open descriptor (`fstat`) the file must be regular, owned by the user and not group- or
+world-writable. Every directory above it up to the home directory (or `/` outside it) must be owned by the user or
+root and not group- or world-writable, and the path must still name the opened file (same device and inode). The
+script then runs as `bash /dev/fd/N refresh` with that descriptor passed (`pass_fds`), never by path, so a file
+swapped in after the checks is not what runs. `refresh_problem` returns the refusal text, or "".
 
 #### `comparison_markdown(cmp, *, baseline, later, aliases, path_aliases)`
 

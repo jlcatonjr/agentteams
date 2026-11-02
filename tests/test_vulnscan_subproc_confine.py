@@ -490,7 +490,7 @@ def test_daily_server_audit_is_unscanned_when_the_container_fails(world: dict, m
 
     monkeypatch.setattr(ssh, "run_kit", boom)
     with _confined(world["tmp"]):
-        rep = daily._scan_server("web1", kit, world["tmp"])
+        rep = daily.scan_server("web1", kit, world["tmp"])
     assert rep.feed_errors == ["web1: not scanned: tools container unavailable: test"]
 
 

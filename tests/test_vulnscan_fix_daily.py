@@ -292,7 +292,7 @@ def test_server_audit_needs_the_final_result_line(xdg: Path, feed: Feed, monkeyp
     seen: list[tuple[list[str], dict]] = []
     monkeypatch.setenv("AGENTTEAMS_SERVER_KIT_EXTRA", "dropped")
     monkeypatch.setattr(daily.subprocess, "run", lambda argv, **k: seen.append((argv, k["env"])) or Proc())
-    rep = daily._scan_server("web1", kit, xdg)
+    rep = daily.scan_server("web1", kit, xdg)
     assert rep.feed_errors and "did not complete" in rep.feed_errors[0]
     argv, env = seen[0]
     assert argv == ["bash", str(executor.kit_dir() / "remote.sh"), "web1", "L1-audit.sh"]   # P12: packaged kit
@@ -300,7 +300,7 @@ def test_server_audit_needs_the_final_result_line(xdg: Path, feed: Feed, monkeyp
     assert env["AGENTTEAMS_VULNSCAN_NO_REPORT"] == "1" and "AGENTTEAMS_SERVER_KIT_EXTRA" not in env
     assert "AGENTTEAMS_SERVER_KIT_DIR" not in env
     Proc.stdout = "== RESULT\nRESULT clean (package/runtime verdicts come from the workstation report)\n"
-    assert not daily._scan_server("web1", kit, xdg).feed_errors
+    assert not daily.scan_server("web1", kit, xdg).feed_errors
 
 
 @pytest.mark.skipif(not shutil.which("bash"), reason="bash not available")

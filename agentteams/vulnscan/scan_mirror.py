@@ -67,14 +67,26 @@ def mirror_for(cfg: dict[str, Any], root: Path, day: str) -> Path | None:
     mirror = root.parent / f"{root.name}.worktrees" / name
     if mirror.parent.is_symlink() or mirror.is_symlink() or not mirror.is_dir():
         return None
+    record = read_stamp(day)
+    state = record.get(str(root), record.get(str(root.resolve()), ""))
+    return mirror if state.startswith("ok ") else None
+
+
+def read_stamp(day: str, path: Path | None = None) -> dict[str, str]:
+    """Return the refresh job's record for ``day``: checkout path -> ``"ok <sha>"`` or ``"failed <reason>"``.
+
+    Args:
+        day: ``YYYY-MM-DD``.
+        path: Read this copy of a record instead of :func:`stamp_path` (``verify`` keeps the morning's).
+
+    Returns:
+        The record; {} when it is missing, unreadable or not a JSON object (no mirror is then used).
+    """
     try:
-        record = json.loads(stamp_path(day).read_text(encoding="utf-8"))
+        record = json.loads((path or stamp_path(day)).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return None
-    if not isinstance(record, dict):
-        return None
-    state = record.get(str(root), record.get(str(root.resolve())))
-    return mirror if isinstance(state, str) and state.startswith("ok ") else None
+        return {}
+    return {str(k): str(v) for k, v in record.items()} if isinstance(record, dict) else {}
 
 
 def also_under(skips: Iterable[Path], root: Path, mirror: Path) -> list[Path]:

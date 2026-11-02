@@ -74,7 +74,7 @@ _GIT_TIMEOUT = 600            # seconds for any other git step
 _FAIL_ON = ("critical", "high", "moderate", "low", "any", "none")
 _FIX_MODES = ("plan", "apply-worktree")
 #: What stops one scan root or one fix plan (recorded for it; the others are kept). The same as stops a whole run.
-_ITEM_ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
+ITEM_ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
 MAX_SCAN_WORKERS = 8         # each scan already sends up to 8 OSV requests at once: a ceiling, not a target
 _BOOL_KEYS = ("include_worktrees", "include_dev", "local_runtimes", "allow_major", "unpinned_ranges")
 
@@ -271,8 +271,21 @@ def run_lock_path() -> Path:
     return paths.state_dir() / "daily.lock"
 
 
-def _write_atomic(path: Path, text: str) -> None:
+def remediation_lock_path() -> Path:
+    """Return the remediation runner's lock (``vulnscan-remediate-auto.sh``; the deploy and ``verify`` take it too).
+
+    Returns:
+        ``<state>/remediate.flock``.
+    """
+    return paths.state_dir() / "remediate.flock"
+
+
+def write_atomic(path: Path, text: str) -> None:
     """Write ``text`` to ``path`` through a temporary file and a rename, so a reader never sees half of it.
+
+    Args:
+        path: The file.
+        text: Its new content.
 
     Raises:
         OSError: The write or the rename failed (``path`` is then unchanged).
@@ -395,7 +408,7 @@ def catch_up(cfg: dict) -> tuple[Report, int, Path] | None:
         if retry is None:
             return None
         n = _retries(retry) + 1
-        _write_atomic(retry / INFRA_RETRY_FILE, f"{n}\n")
+        write_atomic(retry / INFRA_RETRY_FILE, f"{n}\n")
         print(f"vulnscan daily --catch-up: re-running {retry.name}, left partial by Docker (retry {n} of "
               f"{_max_retries(cfg)})", file=sys.stderr)
         return run_daily(cfg)
@@ -443,7 +456,7 @@ def _git(repo: Path, *args: str, timeout: int = _GIT_TIMEOUT, push: bool = False
     return executor.git_proc(repo, *args, timeout=timeout, push=push)
 
 
-def _scan_server(host: str, kit: Path, out_dir: Path) -> Report:
+def scan_server(host: str, kit: Path, out_dir: Path) -> Report:
     """Run the *packaged* kit's read-only L1 audit on one host and analyze its inventory (P12).
 
     The scripts always come from :func:`executor.kit_dir` (never the user-writable copy); ``kit``
@@ -571,7 +584,7 @@ def _agent_phase(cfg: dict, run_dir: Path) -> None:
     beat["agent"] = {k: status.get(k) for k in ("state", "reason", "exit", "timed_out", "spend", "run_id")}
     beat["publish"] = published
     try:
-        _write_atomic(heartbeat_path(), json.dumps(beat, indent=2))
+        write_atomic(heartbeat_path(), json.dumps(beat, indent=2))
     except OSError as exc:
         print(f"vulnscan daily: could not record the agent run in the heartbeat: {exc}", file=sys.stderr)
     if status.get("state") != "completed":
@@ -648,7 +661,7 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
     def scan(spec: Any) -> Report | Exception:   # network-bound: the roots are looked up at once
         try:
             return scan_mirror.scan_root(cfg, spec.path, mirrors[spec.path], exclude, opted_out)
-        except _ITEM_ERRORS as exc:   # this root is unscanned (recorded below); the other roots are kept
+        except ITEM_ERRORS as exc:   # this root is unscanned (recorded below); the other roots are kept
             return exc
 
     plan_jobs: list[tuple[Path, list[str], Path]] = []
@@ -657,9 +670,9 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         if isinstance(rep, Exception):
             total.feed_errors.append(f"scan of {root_s} stopped: {type(rep).__name__}: {rep}"[:400])
             continue
-        _drop_excluded(cfg, root, rep)   # defence in depth only
+        coverage.drop_excluded(cfg, root, rep)   # defence in depth only
         for row in _freshness(root, rep):   # read-only, no fetch; labels fixed_upstream (T2-D)
-            row["repo"] = _under(root_s, row["repo"])
+            row["repo"] = coverage.under_root(root_s, row["repo"])
             row["scanned"] = (f"mirror `{mirrors[root].name}`" if mirrors[root] else
                               "checkout (no fresh mirror today)" if cfg.get("scan_mirror") else "checkout")
             if (rows := _FRESH.get()) is not None:
@@ -673,7 +686,7 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         total.merge(rep)
         repos = sorted({f.target for f in rep.findings if f.kind == "package" and f.fix and not f.malicious})
         for f in rep.findings:
-            f.target = _under(root_s, f.target)
+            f.target = coverage.under_root(root_s, f.target)
         if cfg.get("fix_mode") == "apply-worktree":
             for t in (f"{root_s}/{r}" if r != "." else root_s for r in repos):
                 repo = Path(t).expanduser()
@@ -691,7 +704,7 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
     for host in cfg.get("servers", []):
         try:
             with subproc_confine.scope(cfg):
-                total.merge(_scan_server(host, kit, run_dir))
+                total.merge(scan_server(host, kit, run_dir))
         except subproc_confine.Unavailable as exc:   # fail closed: the host is reported unscanned
             _note_infra(exc)
             total.feed_errors.append(f"{host}: not scanned: {exc}")
@@ -718,39 +731,13 @@ def _operator_excluded(cfg: dict, path: Path) -> bool:
     return any(coverage.within(path, x) for x in coverage.exclusions(cfg))
 
 
-def _under(root_s: str, target: str) -> str:
-    """Return a scan target (relative to its root, ``"."`` for the root) named under the root's label."""
-    return f"{root_s}/{target}" if target != "." else root_s
-
-
 def _prefix_policy_labels(rep: Report, root_s: str) -> None:
     """Name the repositories in ``opted_out``, ``brief_off``, ``excluded`` and ``withheld`` under the root, as findings are."""
-    rep.opted_out = [_under(root_s, t) for t in rep.opted_out]
-    rep.brief_off = [_under(root_s, t) for t in rep.brief_off]
+    rep.opted_out = [coverage.under_root(root_s, t) for t in rep.opted_out]
+    rep.brief_off = [coverage.under_root(root_s, t) for t in rep.brief_off]
     for name in ("excluded", "withheld"):
-        setattr(rep, name, [f"{_under(root_s, t)}: {rest}" for t, _s, rest in
+        setattr(rep, name, [f"{coverage.under_root(root_s, t)}: {rest}" for t, _s, rest in
                             (label.partition(": ") for label in getattr(rep, name))])
-
-
-def _drop_excluded(cfg: dict, root: Path, rep: Report) -> None:
-    """Drop whatever of a scanned ``root`` lies inside an ``exclude`` path (defence in depth: ``scan_path`` skips them).
-
-    Findings, unscannable files and the brief lists (``opted_out``, ``brief_off``, ``excluded``, ``withheld``).
-    """
-    inner = coverage.excluded_inside(cfg, root)
-    if not inner:
-        return
-    base = root.resolve()
-
-    def kept(rel: str) -> bool:
-        return not any(x == base / rel or x in (base / rel).parents for x in inner)
-
-    rep.findings = [f for f in rep.findings if kept(f.target) and (not f.locations or any(map(kept, f.locations)))]
-    rep.unscannable = [u for u in rep.unscannable if kept(u[0])]
-    rep.opted_out = [t for t in rep.opted_out if kept(t)]
-    rep.brief_off = [t for t in rep.brief_off if kept(t)]
-    rep.excluded = [x for x in rep.excluded if kept(x.partition(": ")[0]) and kept("/".join(x.split(": ", 1)))]
-    rep.withheld = [x for x in rep.withheld if kept(x.partition(": ")[0])]
 
 
 def plan_slug(repo: Path) -> str:
@@ -856,7 +843,7 @@ def _write_fix_plans(cfg: dict, jobs: list[tuple[Path, list[str], Path]], run_di
         try:
             plan = fix.fix_path(source, apply=False, allow_major=bool(cfg["allow_major"]),
                                 cooldown_days=executor.REMEDIATION_COOLDOWN_DAYS, npm=False, manifests=manifests)
-        except _ITEM_ERRORS as exc:   # no plan for this repository (recorded); the others are kept
+        except ITEM_ERRORS as exc:   # no plan for this repository (recorded); the others are kept
             return repo, "", [f"fix plan for {repo} stopped: {type(exc).__name__}: {exc}"[:400]]
         plan.target = str(repo)
         if not (repo / ".git").exists():
@@ -939,7 +926,7 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
         (run_dir / "summary.json").write_text(json.dumps({**total.to_dict(private_names=False),
                                                           "remediation": readiness,
                                                           "infra_codes": sorted(_INFRA.get() or ())}, indent=2), encoding="utf-8")
-        _write_atomic(heartbeat_path(), json.dumps({
+        write_atomic(heartbeat_path(), json.dumps({
             "last_run": _dt.datetime.now(_dt.UTC).isoformat(), "exit": code, "findings": len(total.findings),
             "new": len(new), "unscanned": len(total.feed_errors), "summary": str(run_dir / "summary.md"),
             "agentteams_version": readiness["agentteams_version"], "remediation_blocked": len(readiness["blocked"])},

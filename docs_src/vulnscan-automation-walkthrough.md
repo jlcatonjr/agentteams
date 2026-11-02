@@ -934,10 +934,14 @@ Each run passes the same install guard as the daily job, waits for the wrapper l
 3. It re-runs the read-only L1 audit on each configured server that an executor `server-*` op ran against
    today.
 4. It writes `<run>/verify.json`, with each of the morning's findings for those repositories and hosts:
-   `remediated`, `partly remediated`, `open`, or `moved (not remediated)`. A move is a tree renamed on disk,
-   which is not a remediation.
+   `remediated`, `partly remediated`, `open`, `moved (not remediated)` or `present elsewhere (not
+   remediated)`. A move is a tree renamed on disk; "present elsewhere" is the same package found at another
+   place (another tree or lockfile). Neither is a remediation.
 
-It stages nothing, writes no fix plan, opens no PR, starts no agent and sends no notification. The morning's
+It stages nothing, writes no fix plan, opens no PR, starts no agent and sends no notification (under
+`--verify` the wrapper's Docker check does not notify either; it only logs). The refresh script must be yours
+and not writable by anyone else, and so must every folder above it up to your home folder, or it is not run. The
+morning's
 `summary.*` stays as it was. `verify.json` names your repositories and hosts, so it is never published.
 
 To compare any two runs finding by finding, run

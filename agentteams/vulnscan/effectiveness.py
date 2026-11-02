@@ -16,16 +16,18 @@ state comes from read-only ``gh pr view`` calls on the PR URLs recorded in the e
 :data:`MAX_PR_LOOKUPS` of the newest, each with a timeout); a lookup that fails is counted as unknown,
 never guessed.
 
-**Per finding** (:func:`compare`, vfr-v V2): was each finding of a baseline run remediated by a later run? A
-finding is keyed by target, kind, ecosystem and package name (and, for runtime and host findings, the detail); each
-later finding is paired with one baseline finding of its key at the same place, the one whose version is the highest
-at or below it (else the lowest), so two version lines of one package never match each other. Two things are not
-remediations and are never counted as one: a target renamed between the runs (``aliases``, e.g. a server alias),
-and a tree renamed on disk. The second is found without being told (:func:`detect_moves`): a location that vanished
+**Per finding** (:func:`compare`, vfr-v V2): was each finding of a baseline run remediated by a later run? A finding
+is keyed by target, kind, ecosystem and package name (and, for runtime and host findings, the detail); each later
+finding is paired with one baseline finding of its key at the same place, the one whose version is the highest at or
+below it (else the lowest), so two version lines of one package never match each other. Two things are not
+remediations and are never counted as one: a target renamed between the runs (``aliases``, e.g. a server alias), and
+a tree renamed on disk. The second is found without being told (:func:`detect_moves`): a location that vanished
 while a same-named tree carrying the same finding at the same version appeared (``/root/anaconda3`` →
 ``/root/anaconda3.disabled-20261101``) is a move, and a finding that is still there is reported as "moved (not
-remediated)". ``path_aliases`` names such a rename explicitly. The daily section adds these per-finding counts (counts
-only, like the rest); the ``effectiveness`` command (:mod:`.verify`) writes the per-finding rows, machine-local.
+remediated)". A package found again anywhere else (another tree, another lockfile) is "present elsewhere", and is
+never counted as remediated either. ``path_aliases`` names such a rename explicitly. The daily section adds these
+per-finding counts (counts only, like the rest); the ``effectiveness`` command (:mod:`.verify`) writes the
+per-finding rows, machine-local.
 """
 
 from __future__ import annotations
@@ -75,7 +77,6 @@ def pr_urls(rows: list[dict[str, Any]]) -> list[str]:
         if url:
             seen.setdefault(url, None)
     return list(seen)
-
 
 
 def _gh_view(url: str) -> dict[str, Any] | None:
@@ -272,10 +273,11 @@ def agent_alert(cfg: dict[str, Any], state: Path, today: str, current: str) -> b
 
 # ------------------------------------------------------------------ per finding (vfr-v V2)
 
-REMEDIATED, PARTLY, OPEN, MOVED, NOT_ASSESSED = (
-    "remediated", "partly remediated", "open", "moved (not remediated)", "not assessed")
+REMEDIATED, PARTLY, OPEN, MOVED, ELSEWHERE, NOT_ASSESSED = (
+    "remediated", "partly remediated", "open", "moved (not remediated)", "present elsewhere (not remediated)",
+    "not assessed")
 #: Every per-finding status, in report order. Only :data:`REMEDIATED` is a remediation.
-OUTCOMES: tuple[str, ...] = (REMEDIATED, PARTLY, OPEN, MOVED, NOT_ASSESSED)
+OUTCOMES: tuple[str, ...] = (REMEDIATED, PARTLY, OPEN, MOVED, ELSEWHERE, NOT_ASSESSED)
 #: A renamed tree keeps its name and adds a suffix after one of these (``anaconda3`` → ``anaconda3.disabled-1101``).
 _RENAME_SEPARATORS = ".-_~+"
 _MIRROR_TARGET = re.compile(r"\.worktrees/[^/]+$")
@@ -296,7 +298,7 @@ class Comparison:
     """A baseline run's findings, each with its outcome in a later run (:func:`compare`)."""
 
     outcomes: list[FindingOutcome] = field(default_factory=list)
-    new: list[Finding] = field(default_factory=list)                    # later findings of a key the baseline lacks
+    new: list[Finding] = field(default_factory=list)   # later findings paired with none: a new key, or a new place
     moves: dict[str, dict[str, str]] = field(default_factory=dict)      # target -> {new prefix: old prefix}
 
     def counts(self) -> dict[str, int]:
@@ -353,7 +355,7 @@ def _renamed(old: str, new: str) -> tuple[str, str] | None:
     return "/".join(a[:i + 1]), "/".join(b[:i + 1])
 
 
-def _under(loc: str, prefix: str) -> bool:
+def _has_prefix(loc: str, prefix: str) -> bool:
     return loc == prefix or loc.startswith(prefix + "/")
 
 
@@ -395,8 +397,8 @@ def detect_moves(baseline: Iterable[Finding], later: Iterable[Finding], *, alias
         gone, came = before - later_locs.get(t, set()), later_locs.get(t, set()) - before
         pairs = {p for v in gone for a in came if (p := _renamed(v, a))}
         for old, new in sorted(pairs):
-            had = {k for k, locs in base_items[t] if any(_under(loc, old) for loc in locs)}
-            has = {k for k, locs in later_items[t] if any(_under(loc, new) for loc in locs)}
+            had = {k for k, locs in base_items[t] if any(_has_prefix(loc, old) for loc in locs)}
+            has = {k for k, locs in later_items[t] if any(_has_prefix(loc, new) for loc in locs)}
             if had & has and new not in moves.get(t, {}):
                 moves.setdefault(t, {})[new] = old
     return moves
@@ -409,8 +411,10 @@ def compare(baseline: Report, later: Report, *, scanned: set[str] | None = None,
     Requirement-range findings are left out (they have no installed version; switching ``unpinned_ranges`` off
     would "fix" them). Statuses: :data:`REMEDIATED` (no finding of its key at its place at or below its version),
     :data:`PARTLY` (some of its advisories are gone, or it is now at a higher, still vulnerable, version),
-    :data:`OPEN`, :data:`MOVED` (still there, but only under a tree :func:`detect_moves` found renamed) and
-    :data:`NOT_ASSESSED` (its target is not in ``scanned``).
+    :data:`OPEN`, :data:`MOVED` (still there, but only under a tree :func:`detect_moves` found renamed),
+    :data:`ELSEWHERE` (nothing at its place, but the later run has its key at a place no baseline finding of that
+    key had: ``/root/anaconda3`` → ``/opt/anaconda3``, or a package moved to another lockfile; never remediated)
+    and :data:`NOT_ASSESSED` (its target is not in ``scanned``).
 
     Args:
         baseline: The earlier run.
@@ -420,7 +424,8 @@ def compare(baseline: Report, later: Report, *, scanned: set[str] | None = None,
         path_aliases: Later location prefix -> baseline prefix, an explicit rename (still reported as open).
 
     Returns:
-        The outcomes, the later run's findings of new keys and the moves detected.
+        The outcomes, the later findings paired with no baseline finding (``new``: a new key, or a key at a new
+        place) and the moves detected.
     """
     aliases, explicit = aliases or {}, path_aliases or {}
     base = [f for f in baseline.findings if f.kind != "range"]
@@ -430,6 +435,7 @@ def compare(baseline: Report, later: Report, *, scanned: set[str] | None = None,
     for f in base:
         by_key[_key(f, aliases)].append(f)
     paired: dict[int, list[tuple[Finding, str]]] = defaultdict(list)   # id(baseline finding) -> [(later, moved to)]
+    unpaired: dict[tuple[str, ...], list[Finding]] = defaultdict(list)   # later findings at no baseline place
     for g in after:
         k = _key(g, aliases)
         plain = {_unalias(loc, explicit)[0] for loc in g.locations}
@@ -439,7 +445,7 @@ def compare(baseline: Report, later: Report, *, scanned: set[str] | None = None,
             back, hit = _unalias(loc, moves.get(k[0], {}))
             mapped.add(back)
             if hit:
-                moved_to = moved_to or next(n for n in moves[k[0]] if _under(loc, n))
+                moved_to = moved_to or next(n for n in moves[k[0]] if _has_prefix(loc, n))
         peers = []
         for f in by_key.get(k, []):
             locs = set(f.locations)
@@ -448,6 +454,7 @@ def compare(baseline: Report, later: Report, *, scanned: set[str] | None = None,
             elif locs & mapped:
                 peers.append((f, moved_to))
         if not peers:
+            unpaired[k].append(g)
             continue
         below = [p for p in peers if _at_or_below(p[0].version, g.version)]
         pick = (max(below, key=lambda p: _vkey(p[0].version) or ()) if below
@@ -477,11 +484,15 @@ def compare(baseline: Report, later: Report, *, scanned: set[str] | None = None,
             status = PARTLY
             note = "moved to " + ", ".join(sorted({g.version for g, _ in higher}))
             note += f" (under {', '.join(where)})" if where else ""
+        elif elsewhere := unpaired.get(_key(f, aliases)):
+            places = sorted({loc for g in elsewhere for loc in g.locations} or {"(no location)"})
+            status = ELSEWHERE
+            note = (f"found at {', '.join(places[:3])}{' …' if len(places) > 3 else ''} "
+                    f"({', '.join(sorted({g.version for g in elsewhere}))})")
         else:
             status, note = REMEDIATED, ""
         out.outcomes.append(FindingOutcome(f, status, note))
-    keys = {_key(f, aliases) for f in base}
-    out.new = [g for g in after if _key(g, aliases) not in keys]
+    out.new = [g for gs in unpaired.values() for g in gs]
     return out
 
 
