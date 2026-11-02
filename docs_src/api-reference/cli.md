@@ -56,6 +56,12 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `code_index_artifacts.py` | Writers for the code & API index cache (`references/code-index/`, gitignored). |
 | `json_mode.py` | `--json` output shaping. |
 | `exit_codes.py` | The named exit-code constants, so a status is set in one place and read everywhere. |
+| `os_sandbox_switch.py` | `--os-sandbox` and the brief's `os_sandbox`: sets the effective OS sandbox host features, prints the ENABLED/OFF notice, decides when the sandbox-relaxation gate engages (`gate_engaged`), runs it and records `sandbox_state`. Integrity-pinned. See [below](#sandbox-and-wasm-flags). |
+| `wasm_sandbox_switch.py` | `--wasm-sandbox` and `--wasm-substrate`: validates the WASM half of the state before anything is emitted, prints the WASM notices and the D6 composition advisories (`wasm-without-os-sandbox`, `wasm-only-host`), and reports the per-provider `wasm_enforcement` verdict after the emit. It never claims enforcement itself. |
+| `sandbox_effects.py` | The five sandbox-relaxation effect kinds (`sandbox-os-off`, `sandbox-wasm-off`, `wasm-grant-widen`, `native-exec-keep`, `wasm-to-os-switch`) and their action-id / grant-token spelling, shared by the effect classifier, the directive denylist and the gate. |
+| `sandbox_relaxation_gate.py` | The render-time gate for those five effects (Rule 15, D7): in a governed workspace each needs an exactly scoped, operator Ed25519-signed decision row; standing ones are registered with a 90-day sunset under the aggregate cap; ungoverned workspaces get a `SANDBOX RELAXATION` notice. Integrity-pinned. |
+| `wasm_commands.py` | `--wasm-install`, `--wasm-status`, `--wasm-pin-update` (with `--remediation`, `--tofu`, `--pins-out`): the explicit provisioning commands (D4). The only caller of `wasm_runtime.install` / `pin_update`. |
+| `wasm_agent_commands.py` | The `--framework wasm` launcher: `--run-wasm-agent` (with `--wasm-task` / `--wasm-task-file`, `--wasm-provider`, `--wasm-base-url`), `--revoke-wasm-run` (`--revoke-reason`) and `--verify-wasm-run` (`--tree`). |
 
 ## Two behaviours worth knowing when reading this package
 
@@ -224,6 +230,32 @@ underlying predicates.
 
 The `--verify-integrity` report lines: signed rows that bind their text, those that don't, a missing column, and
 any mismatched row. Empty when the log is absent, unreadable or has no signed row. Advisory only.
+
+## Sandbox and WASM flags
+
+The switches and commands added by the WASM sandbox program, and where each is handled. Option semantics are in the
+[CLI Reference](../cli-reference.md); the concepts are in the
+[Sandboxing Guide, Part IX](../agentteams-sandboxing-guide/reference/part-ix-switching-sandboxes-and-wasm.md).
+
+| Flag | Module | Kind |
+|---|---|---|
+| `--framework wasm` | `frameworks/wasm.py` ([`frameworks`](frameworks.md)) | render target (beta, generate-only); turns WASM on |
+| `--os-sandbox {on,off}` | `os_sandbox_switch.py` | render switch; `off` is `sandbox-os-off` (signed decision when governed) |
+| `--wasm-sandbox {on,off}` | `wasm_sandbox_switch.py` | render switch; `off` after on is `sandbox-wasm-off` |
+| `--wasm-substrate {on,off}` | `wasm_sandbox_switch.py` → [`sandbox_projection`](sandbox-projection.md) | render switch; `off` after on is `sandbox-wasm-off:model-substrate` |
+| `--wasm-install [COMPONENTS]` | `wasm_commands.py` → [`wasm_runtime`](wasm-runtime.md) | standalone operator command (network) |
+| `--wasm-status [COMPONENTS]` | `wasm_commands.py` | standalone, read-only, offline |
+| `--wasm-pin-update COMPONENT VERSION` | `wasm_commands.py` → `_wasm_pin_update.py` | standalone operator tool (network) |
+| `--remediation GHSA-IDS`, `--tofu`, `--pins-out PATH` | `wasm_commands.py` | modifiers of `--wasm-pin-update` only |
+| `--run-wasm-agent SLUG` | `wasm_agent_commands.py` → [`wasm_agent`](wasm-agent.md) | standalone launcher |
+| `--wasm-task TEXT`, `--wasm-task-file PATH` | `wasm_agent_commands.py` | exactly one, with `--run-wasm-agent` |
+| `--wasm-provider NAME`, `--wasm-base-url URL` | `wasm_agent_commands.py` → [`model_providers`](model-providers.md) | with `--run-wasm-agent`; never a key |
+| `--revoke-wasm-run RUN_ID`, `--revoke-reason TEXT` | `wasm_agent_commands.py` | standalone |
+| `--verify-wasm-run RUN_ID`, `--tree` | `wasm_agent_commands.py` | standalone, read-only |
+
+`parser_validate.py` keeps the standalone ones standalone: the provisioning flags are refused alongside
+`--description`, `--self`, `--update` or `--output`, so a render never downloads anything, and each modifier is refused
+without the flag it modifies.
 
 ## Related pages
 

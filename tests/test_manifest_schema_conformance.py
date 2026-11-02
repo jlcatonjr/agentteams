@@ -148,6 +148,20 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # Orchestrator-only-writes pilot (P2): emitted only for "orchestrator-only"; build_manifest
         # omits it otherwise so a team without the switch stays byte-identical.
         "write_policy",
+        # WASM-sandbox P15: populated by the sandbox derivations (P00/P01/P20), the runner and native-exec
+        # inputs (P12/P13) and the relaxation gate; no caller is wired in wave 1, and later only when a sandbox
+        # switch is set, so every other team stays byte-identical.
+        "sandbox_state", "sandbox_exceptions", "sandbox_relaxations",
+        # P00: the dedicated OS-sandbox switch, carried only when the brief sets it.
+        "os_sandbox",
+        # P01: the normalised wasm_sandbox block, carried only when the brief has it.
+        "wasm_sandbox",
+        # P11: the agentteams_wasm wiring record, written at render time and only while WASM is on.
+        "wasm_wiring",
+        # P08: the normalised wasm_runtime block (--framework wasm runtime.json), carried only when the brief has it.
+        "wasm_runtime",
+        # P13: the per-provider native-exec verdict, recorded after the emit and only while WASM is on.
+        "wasm_enforcement",
         # R6: carried only under the switch and only when the brief grants agentteams_runner.
         "mcp_grants",
         # MCP catalogue: carried from the brief only when non-empty, so a team that opts into nothing

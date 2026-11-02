@@ -254,6 +254,19 @@ def run_standalone_modes(
     # -----------------------------------------------------------------------
     if getattr(args, "check_wiring", False):
         framework = str(manifest.get("framework") or "claude")
+        # P00: the drift checks compare live config with the effective OS state, so --os-sandbox counts here too.
+        from agentteams.sandbox_state import OS_SANDBOX_CLI_KEY, effective_sandbox_state
+
+        if getattr(args, "os_sandbox", None) is not None:
+            manifest[OS_SANDBOX_CLI_KEY] = args.os_sandbox
+        from agentteams.wasm_config import WASM_SANDBOX_CLI_KEY
+
+        if getattr(args, "wasm_sandbox", None) is not None:  # P01: WASM on means the control plane is checked too
+            manifest[WASM_SANDBOX_CLI_KEY] = args.wasm_sandbox
+        from agentteams.wasm_config import WASM_SUBSTRATE_CLI_KEY
+
+        if getattr(args, "wasm_substrate", None) is not None:  # P20: the projected model-substrate switch
+            manifest[WASM_SUBSTRATE_CLI_KEY] = args.wasm_substrate
         # The verifiers read <project>/.claude/... and <project>/.goose/...; --output names the
         # team's agents dir, so map a default agents dir back to its project root (a non-default
         # layout is passed through unchanged). Before this, the default layout always reported
@@ -265,6 +278,11 @@ def run_standalone_modes(
         wiring_root = output_dir
         if sub and output_dir.resolve().as_posix().endswith("/" + sub):
             wiring_root = output_dir.resolve().parents[sub.count("/")]
+        from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
+
+        # P01: the WASM half builds host mounts under the CLI's project root (never a brief-supplied one).
+        if not isinstance(manifest.get(PROJECT_ROOT_KEY), Path):
+            manifest[PROJECT_ROOT_KEY] = Path(wiring_root).resolve()
         if framework == "goose":
             # P1-1: goose has its own Seatbelt/GOOSE_SANDBOX wiring verifier (macOS-enforced;
             # honest exit-neutral "not enforceable here" notice on Linux/Windows).
@@ -283,7 +301,7 @@ def run_standalone_modes(
         elif framework == "claude":
             from agentteams.frameworks.claude import verify_sandbox_wiring
 
-            ok, messages = verify_sandbox_wiring(wiring_root)
+            ok, messages = verify_sandbox_wiring(wiring_root, manifest)
             from agentteams.cli.generate_helpers import live_excluded_commands_warning
 
             excluded = live_excluded_commands_warning(wiring_root)
@@ -293,14 +311,23 @@ def run_standalone_modes(
             from agentteams.cli.itest_tripwire import tripwire_notes
 
             messages = list(messages) + tripwire_notes()
+        elif framework == "grok":
+            from agentteams.frameworks._grok_sandbox_emit import verify_grok_sandbox_wiring
+
+            ok, messages = verify_grok_sandbox_wiring(wiring_root, manifest)
         else:
             # codex/copilot have no OS sandbox agentteams configures — report honestly
             # (exit-neutral) rather than running the Claude checker against a foreign tree.
-            ok, messages = True, [
-                f"no OS-enforced sandbox wiring is emitted for the {framework!r} framework — "
-                "nothing to verify. Confine such targets from OUTSIDE the process (container "
-                "+ seccomp-bpf + Landlock on Linux, plus egress filtering)."
-            ]
+            _state = effective_sandbox_state(manifest)
+            if not _state.os and _state.os_reason in ("brief", "cli"):
+                ok, messages = True, [
+                    f"OS sandbox is off for this team by {_state.os_reason}; nothing to verify."]
+            else:
+                ok, messages = True, [
+                    f"no OS-enforced sandbox wiring is emitted for the {framework!r} framework — "
+                    "nothing to verify. Confine such targets from OUTSIDE the process (container "
+                    "+ seccomp-bpf + Landlock on Linux, plus egress filtering)."
+                ]
         from agentteams.frameworks.claude import verify_gate_interpreter  # 1.0 must-fix: the gate can import agentteams
 
         gate_ok, gate_messages = verify_gate_interpreter(wiring_root, framework)
@@ -310,6 +337,22 @@ def run_standalone_modes(
         runner_problems = runner_mcp.wiring_problems(wiring_root, framework, manifest)
         if runner_problems:
             ok, messages = False, [*messages, *(f"ERROR: {p}" for p in runner_problems)]
+        from agentteams.sandbox_projection import wiring_lines  # P20 D8: the projected file exists/parses/matches
+
+        proj_ok, proj_lines = wiring_lines(manifest, Path(wiring_root), output_dir)
+        ok, messages = ok and proj_ok, [*messages, *proj_lines]
+
+        from agentteams.frameworks import _wasm_wiring  # P11: the agentteams_wasm wiring line and live checks
+
+        wasm_line = _wasm_wiring.report_line(manifest, framework)
+        wasm_problems = _wasm_wiring.check_wiring_problems(wiring_root, framework, manifest)
+        messages = [*messages, *([wasm_line] if wasm_line else []), *(f"ERROR: {p}" for p in wasm_problems)]
+        from agentteams import wasm_enforcement  # P13: the verdict re-computed against the live config
+
+        messages += wasm_enforcement.notices(framework, wasm_enforcement.enforcement_report(
+            manifest, framework, project_root=Path(wiring_root),
+            acts=wasm_enforcement.planned_actions(manifest, framework)))
+        ok = ok and not wasm_problems
         # mathAgents M6-F4: an unresolved xcrun launcher fails every confined call (exit 71); advisory, exit-neutral.
         messages = [*messages, *xcrun_launcher_lines(wiring_root, description)]
         print(f"Sandbox wiring check ({framework}): {output_dir}")

@@ -12,6 +12,11 @@ review-relevant safety properties:
    namespaces) is refused — a *validating* token that confined nothing would be exactly the
    false-confidence signal the subsystem exists to avoid.
 
+3. **The OS switch is governed.** `os_sandbox: "off"` (or `--os-sandbox off`) suppresses the boundary
+   independently of the profile; because that relaxes a constraint, a governed workspace (strict decision
+   signing, the default) refuses it without an operator Ed25519-signed decision
+   `sandbox-os-off:<framework>`, and every other workspace prints `SANDBOX RELAXATION`.
+
 The request lives entirely in the manifest; there is no out-of-band sandbox state to audit separately.
 
 *Detail:* [Reference Part II](../reference/part-ii-the-request.md).

@@ -87,6 +87,7 @@ spine, or soften an **honest ceiling**.
 | Integrity & drift (SB18–SB19) | Full | Core | Core | Light |
 | Ceilings & red-team (SB20–SB21) | Full | Core | Full | Core |
 | Synthesis & reference (SB22–SB23) | Full | Core | Full | Light |
+| Switching sandboxes and WASM (SB25–SB30) | Full | Full | Full/Core | Light/Core |
 
 > **Diagrams by edition.** R carries all six canonical graphs. D carries G1 (pipeline), G2 (decision),
 > G3 (mechanisms), and G4 (hook). S carries G1, G2, and G6 (synthesis). E carries none — it tells the

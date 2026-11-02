@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import proposals as P
+from agentteams import runner_wasm as RW
 from agentteams.proposal_policy import Policy
 
 
@@ -49,8 +50,14 @@ def _appended_notice_log(root: Path, rel: str, before: dict[str, Any], after: di
 def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
                 confine: bool = False, timeout_cap: int | None = None, expect_agent: str | None = None,
                 refuse_agents: frozenset[str] = frozenset()) -> dict[str, Any]:
-    """Implementation of :func:`agentteams.proposals.run_request` (see there for the contract)."""
+    """Implementation of :func:`agentteams.proposals.run_request` (see there for the contract).
+
+    A ``sandbox: wasm`` jail (WASM plan P12) takes the wasm branch: ``argv[0]`` must be a ``wasm:<lang>``
+    pseudo-program, the guest is prepared (runtimes re-hashed) before any ledger row, and the run is the pinned
+    wasmtime in a fresh OS wrap (:mod:`agentteams.runner_wasm`); it never resolves a host program.
+    """
     agent = "?"
+    cleanups: list[Any] = []
     try:
         P._check_shape(artifact, "command-request")
         agent = P._identity(root, artifact, dry_run=dry_run, expect_agent=expect_agent, refuse_agents=refuse_agents)
@@ -81,9 +88,26 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 raise P.ProposalError(f"{rel} is the brief that defines this policy; refused (C-3)")
             expected_rel.add(rel)
         env = P._scrubbed_env()
-        program = P._resolve_program(root, argv[0], env)
+        # Per-entry timeout (P5a): a long check (e.g. a kernel audit) may set one, capped at P.MAX_COMMAND_TIMEOUT.
+        timeout = max(1, min(int(entry.get("timeout") or P.COMMAND_TIMEOUT), P.MAX_COMMAND_TIMEOUT))
+        if timeout_cap is not None:
+            timeout = max(1, min(timeout, int(timeout_cap)))
+        declared = policy.confined.get(agent) or {}
+        wasm_cmd = None
+        if declared.get("sandbox") == "wasm":
+            if not confine:
+                raise P.ProposalError(f"{agent} is on sandbox: wasm; its commands run only through the runner")
+            try:
+                wasm_cmd = RW.prepare_command(root, agent, argv, declared, timeout_s=timeout)
+            except RW.RunnerWasmError as exc:
+                raise P.ProposalError(f"confined_programs.{agent}: {exc}") from exc
+        elif argv[0] in RW.WASM_ARGV0 or argv[0].startswith("wasm:"):
+            raise P.ProposalError(f"{argv[0]!r} names a WASM guest, but {agent} is not on sandbox: wasm; refused")
+        program = wasm_cmd.meta["path"] if wasm_cmd else P._resolve_program(root, argv[0], env)
         jail = None
-        if confine:
+        if confine and wasm_cmd is not None:
+            jail = declared
+        elif confine:
             jail = policy.confined.get(agent)
             if jail is None:
                 raise P.ProposalError(f"{agent} has no confined_programs entry; the runner runs nothing unconfined")
@@ -132,21 +156,33 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                                 "refusing to run unchecked (fail-closed)")
         sandbox = P._sandbox_for(policy) if jail is not None else None
         confined_as = sandbox or ("unconfined-opt-out" if jail is not None else None)
+        wasm_row: dict[str, Any] = {}
+        if wasm_cmd is not None:
+            confined_as = f"{confined_as}+wasm"
+            wasm_row = {"sandbox": "wasm", "wasm": {**{k: v for k, v in wasm_cmd.meta.items() if k != "path"},
+                                                     "os_confinement": "nested" if sandbox else "none"}}
         P._consume(root, artifact, agent)
         P.record(root, {"action": "run-request-start", "agent": agent, "argv": argv, "purpose": purpose.strip()[:300],
-                      **({"confined": confined_as} if confined_as else {})})
+                      **({"confined": confined_as} if confined_as else {}), **wasm_row})
+        run_tmp, command, cmd_env, cmd_cwd = None, [program, *argv[1:]], env, cwd
+        if wasm_cmd is not None:
+            try:
+                launch = RW.launch(wasm_cmd, root, sandbox=sandbox)
+                cleanups.append(launch.cleanup)
+                exec_path = RW.exec_literal(launch.argv)  # the wrap's one exec literal (R3'): never a writable place
+                P._confinement.check_roots(root, [exec_path], [wasm_cmd.scratch_rel] if wasm_cmd.scratch_rel else [],
+                                           Path(launch.run_dir, "tmp") if launch.run_dir else None)
+            except (RW.RunnerWasmError, P._confinement.ConfinementError) as exc:
+                raise P.ProposalError(f"confined_programs.{agent}: {exc}") from exc
+            command, cmd_env, cmd_cwd = launch.argv, launch.env, Path(launch.cwd)  # env is empty (R9)
         before = P._snapshot(root, env)  # re-taken after the write-ahead row, so only the command's changes count
         timed_out, group_killed, survivors = False, False, False
-        # Per-entry timeout (P5a): a long check (e.g. a kernel audit) may set one, capped at P.MAX_COMMAND_TIMEOUT.
-        timeout = max(1, min(int(entry.get("timeout") or P.COMMAND_TIMEOUT), P.MAX_COMMAND_TIMEOUT))
-        if timeout_cap is not None:
-            timeout = max(1, min(timeout, int(timeout_cap)))
         started = time.monotonic()
         notice_days = {time.strftime("%Y-%m-%d", time.gmtime())}  # the hook names its log by UTC date (M6-F7)
-        run_tmp = tempfile.mkdtemp(prefix="agentteams-run-") if jail is not None else None
-        command = [program, *argv[1:]]
+        if jail is not None and wasm_cmd is None:
+            run_tmp = tempfile.mkdtemp(prefix="agentteams-run-")
         if run_tmp is not None:
-            env = {**env, "TMPDIR": run_tmp}
+            cmd_env = {**env, "TMPDIR": run_tmp}
             try:
                 checked_roots = P._confinement.check_roots(root, jail["exec"], jail["write"], Path(run_tmp))
             except P._confinement.ConfinementError as exc:
@@ -157,7 +193,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                                             write_roots=checked_roots, tmp_dir=Path(run_tmp), resolver=resolver)
         try:
             # Own process group, so a timeout kills everything the command started before the final check.
-            child = subprocess.Popen(command, cwd=cwd, env=env,
+            child = subprocess.Popen(command, cwd=cmd_cwd, env=cmd_env,
                                      stdin=subprocess.PIPE if stdin_bytes is not None else subprocess.DEVNULL,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,
                                      start_new_session=True)
@@ -203,6 +239,9 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         # write, so changes inside them count as declared; anything else changed is still undeclared.
         # Only when a sandbox actually ran: under the unconfined opt-out nothing at the OS level bounded them.
         roots = [w.strip("/") + "/" for w in jail["write"]] if jail is not None and sandbox else []
+        # Rule-12 carve-out 3 (P12): a wasm agent's scratch counts as declared, only when an OS sandbox bounded it.
+        if wasm_cmd is not None and wasm_cmd.scratch_rel and sandbox:
+            roots.append(wasm_cmd.scratch_rel + "/")
         def exempt(f: str) -> bool:  # inside a root, and never a protected file or the brief (any glob shape)
             return bool(roots) and f.startswith(tuple(roots)) and not P._protected(f, policy.protected_paths) \
                 and not (policy.brief_rel and f.lower() == policy.brief_rel.lower())
@@ -235,11 +274,14 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         P.record(root, {"action": "run-request", "agent": agent, "argv": argv, "exit": proc.returncode,
                       "duration_ms": duration_ms,
                       "undeclared_writes": undeclared, "purpose": purpose.strip()[:300],
-                      **({"confined": confined_as, "survivors_killed": survivors} if confined_as else {})})
+                      **({"confined": confined_as, "survivors_killed": survivors} if confined_as else {}),
+                      **wasm_row})
         (stdout, cut_out), (stderr, cut_err) = P._cap_output(proc.stdout), P._cap_output(proc.stderr)
         result = {"agent": agent, "argv": argv, "exit": proc.returncode, "duration_ms": duration_ms,
                   "stdout": stdout, "stderr": stderr, "truncated": cut_out or cut_err,
                   "undeclared_writes": undeclared, "ran": True}
+        if wasm_cmd is not None:  # diagnostic only: a guest can forge wasmtime's stderr (C-4)
+            result["trap"] = RW._wx.classify_trap(proc.returncode, proc.stderr or b"")
         if undeclared:
             raise P.UndeclaredWritesError(f"command wrote outside its declared writes: {', '.join(undeclared)}", result)
         if survivors:
@@ -252,3 +294,6 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         if not dry_run:
             P._record_refusal(root, "run-request", agent, str(exc))
         raise
+    finally:
+        for cleanup in cleanups:  # after the final snapshot: the run dir existed in both, so it is no change
+            cleanup()

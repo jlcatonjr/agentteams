@@ -10,7 +10,9 @@ the generation-time half (follow-up #2, ``brief-json-privilege-tamper``, 2026-09
   The baseline is read only from the live ``.claude/settings.json`` (protected by the Claude
   sandbox and, since this change, by ``confine-run.sh``); for other frameworks it is empty.
 
-It also prints ``SANDBOX RELAXATION: prompt-root protection removed`` when the live
+:func:`warn_sandbox_relaxation` prints one ``SANDBOX RELAXATION:`` line per sandbox relaxation a render makes
+(OS or WASM sandbox off, a widened WASM grant, native exec kept, a runner program moved off WASM; D7), on every
+framework. It also prints ``SANDBOX RELAXATION: prompt-root protection removed`` when the live
 ``.claude/settings.json`` ``permissions.deny`` carries prompt-root ``Edit`` rules
 (``protect_prompt_roots``, follow-up #8 phase 2) that the new render drops: warn only.
 
@@ -26,7 +28,7 @@ import os
 import shlex
 import sys
 from pathlib import Path
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 from agentteams.frameworks._prompt_root_protect import (
     ALL_PROMPT_ROOT_EDIT_RULES,
@@ -42,6 +44,13 @@ from agentteams.frameworks._write_roots import (
     unaccepted_external_roots,
     validate_write_roots,
 )
+
+if TYPE_CHECKING:
+    from agentteams.sandbox_state import SandboxExceptions, SandboxState
+
+#: The prefix every sandbox-relaxation notice starts with, so a reviewer (or fleet's REVIEW classifier) keys on one
+#: string.
+SANDBOX_RELAXATION_PREFIX = "  !  SANDBOX RELAXATION:"
 
 
 class WriteRootPolicyError(RuntimeError):
@@ -121,6 +130,63 @@ def warn_prompt_root_relaxation(manifest: dict[str, Any], *, framework_id: str, 
     return dropped
 
 
+def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxState, *, framework_id: str,
+                            exceptions: tuple[SandboxExceptions | None, SandboxExceptions] | None = None,
+                            profile_would_emit: bool = True) -> list[str]:
+    """Print one ``SANDBOX RELAXATION`` line per relaxation ``new_state`` makes over ``old_state`` (D7; all frameworks).
+
+    The notice is what an ungoverned workspace gets instead of a signature check, and what a governed one gets beside
+    it. Only new relaxations print; one that continues from an earlier render is the gate's to report.
+
+    Args:
+        old_state: The previous state, or None (a first render, or never confined).
+        new_state: The state this render emits.
+        framework_id: The target framework.
+        exceptions: ``(previous, new)`` native-exec keep / runner program inputs, or None.
+        profile_would_emit: Whether the privilege profile would emit an OS boundary were it not switched off
+            (the gate's own input; P00 passes it so the notice and the gate agree on a first render).
+
+    Returns:
+        The printed lines (each starts with :data:`SANDBOX_RELAXATION_PREFIX`).
+
+    Raises:
+        ValueError: A malformed slug or grant mount in either state.
+    """
+    from agentteams.cli.sandbox_effects import (  # local: keep the gate out of this module's import graph
+        NATIVE_EXEC_KEEP,
+        SANDBOX_OS_OFF,
+        SANDBOX_WASM_OFF,
+        WASM_GRANT_WIDEN,
+        WASM_TO_OS_SWITCH,
+    )
+    from agentteams.cli.sandbox_relaxation_gate import plan_relaxations
+
+    planned = plan_relaxations(old_state, new_state, framework_id=framework_id,
+                               profile_would_emit=profile_would_emit, exceptions=exceptions)
+    lines: list[str] = []
+    for r in (p for p in planned if not p.continuing):
+        if r.kind == SANDBOX_OS_OFF and old_state is not None:
+            lines.append(f"os sandbox OFF for {framework_id} (reason: {new_state.os_reason}); it was on. No OS "
+                         "boundary is emitted; a live block you merged earlier still applies until you remove it "
+                         "(run --check-wiring).")
+        elif r.kind == SANDBOX_OS_OFF:
+            lines.append(f"os sandbox OFF for {framework_id} by {new_state.os_reason}; the profile would emit one.")
+        elif r.kind == SANDBOX_WASM_OFF and r.qualifier == framework_id:
+            lines.append(f"wasm sandbox OFF (reason: {new_state.wasm_reason}); it was on.")
+        elif r.kind == SANDBOX_WASM_OFF:
+            lines.append("model-substrate WASM switch OFF; it was on.")
+        elif r.kind == WASM_GRANT_WIDEN:
+            lines += [f"wasm grant widened: +{token}" for token in r.grants]
+        elif r.kind == NATIVE_EXEC_KEEP:
+            lines += [f"native exec kept for {token.split(':', 1)[1]} while wasm is on" for token in r.grants]
+        elif r.kind == WASM_TO_OS_SWITCH:
+            lines.append(f"runner program for {r.qualifier} moved from sandbox wasm to os")
+    lines = [f"{SANDBOX_RELAXATION_PREFIX} {line}" for line in lines]
+    for line in lines:
+        print(line, file=sys.stderr)
+    return lines
+
+
 def begin(manifest: dict[str, Any], project_root: Path) -> list[str]:
     """Strip input-supplied transient keys, set the project root, and snapshot the brief roots.
 
@@ -156,6 +222,9 @@ def enforce(
     coordination_roots: Iterable[str],
     accepted: Iterable[str] | None,
     confined: bool,
+    sandbox_states: tuple[SandboxState | None, SandboxState] | None = None,
+    sandbox_exceptions: tuple[SandboxExceptions | None, SandboxExceptions] | None = None,
+    sandbox_profile_would_emit: bool = True,
 ) -> None:
     """Validate the final roots, record provenance, print widenings, and require acceptance.
 
@@ -167,10 +236,16 @@ def enforce(
         coordination_roots: Roots added from ``coordination_write_roots``.
         accepted: ``--accept-write-root`` values (operator argv).
         confined: Whether any confinement consumes the roots (inert otherwise).
+        sandbox_states: ``(previous, new)`` sandbox states; when given, :func:`warn_sandbox_relaxation` runs first.
+        sandbox_exceptions: ``(previous, new)`` gate inputs passed to :func:`warn_sandbox_relaxation`.
+        sandbox_profile_would_emit: Passed to :func:`warn_sandbox_relaxation` as ``profile_would_emit``.
 
     Raises:
         WriteRootPolicyError: A root is hard-banned, or an external root is unaccepted.
     """
+    if sandbox_states is not None:
+        warn_sandbox_relaxation(sandbox_states[0], sandbox_states[1], framework_id=framework_id,
+                                exceptions=sandbox_exceptions, profile_would_emit=sandbox_profile_would_emit)
     warn_prompt_root_relaxation(manifest, framework_id=framework_id, confined=confined)
     if not confined:
         return

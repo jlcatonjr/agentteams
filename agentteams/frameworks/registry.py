@@ -23,6 +23,7 @@ from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.goose import GooseAdapter
 from agentteams.frameworks.grok import GrokAdapter
+from agentteams.frameworks.wasm import WasmAdapter
 
 FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     "copilot-vscode": CopilotVSCodeAdapter,
@@ -38,6 +39,9 @@ FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     # xAI Grok Build custom agents (.grok/agents/<slug>.md) + a co-owned repo-root AGENTS.md
     # (frameworks/grok.py, frameworks/_agents_md_ownership.py). Schema enums carry this id too.
     "grok": GrokAdapter,
+    # agentteams' own WASM agent runtime (.agentteams-wasm/agents/<slug>.md, plan P08): not a vendor CLI, so it has
+    # no upstream docs to watch (FormatSpec upstream=False) and no session team key. Schema enums carry this id too.
+    "wasm": WasmAdapter,
 }
 
 # Ordered framework-id list derived from FRAMEWORKS (insertion order).

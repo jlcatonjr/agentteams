@@ -319,3 +319,15 @@ def test_denylist_refuses_inflected_destructive_and_governance_scopes():
                    "migrate-schema", "generate-invoice", "render-chart", "validate-input",
                    "normalize-records", "draft-weekly-report"):
         assert md.scope_is_allowed(benign) is True, benign
+
+
+# --- P15: a directive can never relax a sandbox ---------------------------------------------------
+
+
+def test_every_sandbox_relaxation_spelling_is_refused():
+    from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_TOKENS
+
+    for token in SANDBOX_RELAXATION_TOKENS:
+        assert not md.scope_is_allowed(token), token
+        assert not md.scope_is_allowed(f"run tests with {token.upper()}:claude"), token
+    assert md.scope_is_allowed("format the sandbox docs")

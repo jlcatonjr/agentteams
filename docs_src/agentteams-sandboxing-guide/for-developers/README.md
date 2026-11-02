@@ -9,7 +9,9 @@
 1. Confinement is **emitted by default but inert until wired**: as of 2026-W39 the default
    `privilege_profile` is `confined`, which emits an OS write-confinement boundary (a settings/config
    example you must merge); the deny-hook still stays **fail-open** unless you set an *explicit*
-   `confined`/`exclusive`. Set `cooperative` to emit **no** sandbox at all.
+   `confined`/`exclusive`. Set `os_sandbox: "off"` to emit **no** OS sandbox while keeping the rest of
+   the profile (`cooperative` also emits none). WASM confinement of agent code is a separate, opt-in
+   switch (Part IX).
 2. agentteams **decides** whether it can emit a boundary for your framework × OS, and **emits an
    artifact** — but that artifact is **inert until you wire it**.
 3. On **Linux** you must **wrap** your agent: `sandbox/confine-run.sh --scratch DIR --egress deny --
@@ -25,6 +27,7 @@
 - **[Part VI — Integrity & drift](part-vi-integrity-and-drift.md)** (SB18–SB19)
 - **[Part VII — Ceilings & red-team](part-vii-ceilings-and-red-team.md)** (SB20–SB21)
 - **[Part VIII — Synthesis & reference](part-viii-synthesis-and-reference.md)** (SB22–SB23) — the tables
+- **[Part IX — Switching sandboxes and WASM](part-ix-switching-sandboxes-and-wasm.md)** (SB25–SB30) — the OS and WASM switches, `run_wasm` per provider, WASM-native agents, downloads
 
 *Diagrams in this edition:* G1 (pipeline, Part I), G2 (decision, Part III), G3 (mechanisms, Part IV),
 G4 (hook, Part V).

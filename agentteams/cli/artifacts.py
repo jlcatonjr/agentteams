@@ -424,6 +424,15 @@ class PrivilegeConfinementError(RuntimeError):
     """
 
 
+from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError  # noqa: E402
+from agentteams.cli.write_root_policy import WriteRootPolicyError  # noqa: E402
+
+#: Every refusal :func:`finalize_privilege_wiring` raises for the operator to act on; ``cli/generate.py`` prints it
+#: and exits 1 (P1-2 unenforced host, follow-up #2 write roots, P00/P15 sandbox relaxation).
+PRIVILEGE_WIRING_ERRORS: tuple[type[Exception], ...] = (
+    PrivilegeConfinementError, WriteRootPolicyError, SandboxRelaxationError)
+
+
 def resolve_host_features_and_advise(
     manifest: dict, explicit_tokens: list[str], framework_id: str,
     *, allow_unenforced: bool = True,
@@ -459,28 +468,15 @@ def resolve_host_features_and_advise(
         PrivilegeConfinementError: ``allow_unenforced`` is ``False`` and the requested
             confinement cannot be OS-enforced on ``framework_id``.
     """
-    from agentteams.host_features import merge_profile_features, privilege_profile_advisory
+    from agentteams.cli.os_sandbox_switch import OsSwitchError, resolve_os_switch
+    from agentteams.host_features import privilege_profile_advisory
 
-    manifest["host_features"] = merge_profile_features(
-        explicit_tokens, manifest.get("privilege_profile"), framework_id
-    )
-    if manifest["host_features"]:
-        print(f"  Host features: {', '.join(manifest['host_features'])}")
-    # Default-on notice (2026-W39): privilege_profile now defaults to "confined", so a team
-    # that never set the field gets write-confinement emitted. Mirrors the
-    # enforce_decision_signing "default on at update, notify after, opportunity to switch
-    # off" contract — name the opt-out so the tightening is never silent. Inert until the
-    # operator merges the emitted sandbox example (never writes live settings/config).
-    if manifest.get("privilege_profile") in ("confined", "exclusive"):
-        print(
-            "  🛡  Workspace sandbox (privilege_profile) is ENABLED for this team — the "
-            f"default as of 2026-W39. An OS write-confinement boundary is emitted for "
-            "qualifying providers (inert until you merge the emitted settings/config "
-            "example). To opt out, set \"privilege_profile\": \"cooperative\" in the brief "
-            "and re-run --update."
-        )
+    try:  # P00: the dedicated OS switch (cli/os_sandbox_switch.py)
+        state = resolve_os_switch(manifest, explicit_tokens, framework_id)
+    except OsSwitchError as exc:
+        raise PrivilegeConfinementError(str(exc)) from exc
     advisory = privilege_profile_advisory(
-        manifest.get("privilege_profile"), framework_id, manifest["host_features"]
+        manifest.get("privilege_profile"), framework_id, manifest["host_features"], requested=state.os
     )
     if advisory is not None:
         # Only the UNENFORCEABLE-host advisory is fail-closed: there is no boundary to emit, so
@@ -503,7 +499,9 @@ def resolve_host_features_and_advise(
 def finalize_privilege_wiring(
     manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path,
     *, allow_unenforced: bool = True, team_dir: Path | None = None,
-    accepted_write_roots: list[str] | None = None,
+    accepted_write_roots: list[str] | None = None, dry_run: bool = False, os_sandbox_cli: str | None = None,
+    brief_confined_programs: Any = None,
+    wasm_sandbox_cli: str | None = None,
 ) -> None:
     """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
 
@@ -522,15 +520,31 @@ def finalize_privilege_wiring(
             ``False``, an unenforceable confinement request raises rather than warning.
         team_dir: The run's ``output_dir`` (holder TEAM dir): grant roster + verify keys.
         accepted_write_roots: ``--accept-write-root`` values (operator argv only).
+        dry_run: ``--dry-run``: the sandbox-relaxation gate checks without consuming a decision,
+            registering an exception or retiring one.
+        os_sandbox_cli: ``--os-sandbox`` (operator argv), carried as the transient
+            ``sandbox_state.OS_SANDBOX_CLI_KEY`` (never read from input, never persisted).
+        brief_confined_programs: The brief's ``confined_programs`` (WASM plan P12): with the operator file (which
+            wins, as at the runner) it fills ``SandboxExceptions.wasm_programs`` / ``os_programs`` for the gate.
+        wasm_sandbox_cli: ``--wasm-sandbox`` (operator argv), carried as the transient
+            ``wasm_config.WASM_SANDBOX_CLI_KEY`` (P01; ``cli/wasm_sandbox_switch.py``).
 
     Raises:
-        PrivilegeConfinementError: Unenforceable confinement (P1-2).
-        WriteRootPolicyError: A refused or unaccepted write root (follow-up #2).
+        PrivilegeConfinementError: Unenforceable confinement (P1-2), an invalid ``os_sandbox``
+            value, ``--os-sandbox off`` with an explicit ``*:sandbox`` token, or an invalid
+            ``wasm_sandbox`` / ``--wasm-sandbox`` value or WASM grant (P01).
+        WriteRootPolicyError: A refused or unaccepted write root (follow-up #2), or
+            ``write_policy: orchestrator-only`` with the OS sandbox switched off.
+        SandboxRelaxationError: Turning the OS sandbox or WASM off, or widening a WASM grant, in a
+            governed workspace without the operator's Ed25519-signed decision (Rule 15, P15 gate).
         ValueError: An unknown MCP catalogue id (the catalogue expansion also adds the selected catalogue
             servers to ``manifest["mcp_servers"]``; see ``agentteams.mcp_catalog.expand``).
     """
     from agentteams.cli import write_root_policy
+    from agentteams.sandbox_state import OS_SANDBOX_CLI_KEY
 
+    if os_sandbox_cli is not None:
+        manifest[OS_SANDBOX_CLI_KEY] = os_sandbox_cli
     # R6 review condition 3: the agentteams_runner server installs two levels above the agents dir, so with grants
     # that dir must be the framework's canonical one; its grandparent is then the project root the runner checks.
     canonical = {"claude": (".claude", "agents"), "goose": (".goose", "recipes")}.get(framework_id)
@@ -540,6 +554,13 @@ def finalize_privilege_wiring(
             f"mcp_grants need the agents directory to be the project's {'/'.join(canonical)}; this --output would "
             "install the agentteams_runner server outside the project")
     brief_roots = write_root_policy.begin(manifest, project_root)
+    from agentteams.cli.wasm_sandbox_switch import (WasmSwitchError, advise_wasm, apply_wasm_switch,
+                                                    report_wasm_wiring)
+
+    try:  # P01: --wasm-sandbox and the WASM half, validated before anything reads the state (needs the root)
+        apply_wasm_switch(manifest, wasm_sandbox_cli, project_root=project_root, team_dir=team_dir)
+    except WasmSwitchError as exc:
+        raise PrivilegeConfinementError(str(exc)) from exc
     resolve_host_features_and_advise(
         manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced
     )
@@ -548,12 +569,31 @@ def finalize_privilege_wiring(
 
     for notice in _expand_mcp_catalog(manifest, framework_id):
         print(f"  \u2139  MCP catalogue: {notice}")
+    from agentteams import write_policy as _write_policy
+    from agentteams.sandbox_state import effective_sandbox_state
+
+    state = effective_sandbox_state(manifest)
+    if _write_policy.enabled(manifest) and not state.os:
+        # P00 D6 (Rule 12): the brief case is refused in write_policy.resolve; this catches --os-sandbox off.
+        raise write_root_policy.WriteRootPolicyError(
+            'write_policy "orchestrator-only" needs the session sandbox: --os-sandbox off turns it off')
+    advise_wasm(manifest, state, framework_id)  # P01 D6: composition notices (never an enforcement claim)
+    try:  # P11: [WASM-WIRING] line + wasm_wiring record; widened grants refused on shared-copy hosts
+        report_wasm_wiring(manifest, state, framework_id, team_dir=team_dir)
+    except ValueError as exc:
+        raise PrivilegeConfinementError(str(exc)) from exc
+    from agentteams.cli.os_sandbox_switch import engage_relaxation_gate
+
+    gated = engage_relaxation_gate(manifest, state, framework_id, project_root, team_dir=team_dir, dry_run=dry_run,
+                                   brief_confined_programs=brief_confined_programs)
     grant_roots = apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
     coordination_roots = apply_coordination_roots_to_write_roots(manifest)
     write_root_policy.enforce(
         manifest, framework_id=framework_id, brief_roots=brief_roots, grant_roots=grant_roots,
         coordination_roots=coordination_roots, accepted=accepted_write_roots,
-        confined=_confinement_active(manifest),
+        confined=_confinement_active(manifest), sandbox_states=gated[:2] if gated else None,
+        sandbox_exceptions=gated[2] if gated else None,
+        sandbox_profile_would_emit=manifest.get("privilege_profile") in {"confined", "exclusive"},
     )
     _advise_exclusive_inbound_hardening(manifest, framework_id)
 
@@ -574,8 +614,11 @@ def _advise_exclusive_inbound_hardening(manifest: dict, framework_id: str) -> No
         framework_id: The target framework id.
     """
     from agentteams.host_features import is_sandbox_capable
+    from agentteams.sandbox_state import os_sandbox_requested
 
-    if manifest.get("privilege_profile") != "exclusive" or not is_sandbox_capable(framework_id):
+    # P00 row 11: the advisory claims read-exclusion WAS emitted, so it also needs the OS boundary on.
+    if (manifest.get("privilege_profile") != "exclusive" or not is_sandbox_capable(framework_id)
+            or not os_sandbox_requested(manifest)):
         return
     message = (
         "privilege_profile=exclusive emitted OS read-exclusion (this team cannot READ the "
@@ -647,14 +690,15 @@ def apply_held_grants_to_write_roots(
 def _confinement_active(manifest: dict) -> bool:
     """Return True iff any OS confinement is requested for this team.
 
-    True when ``privilege_profile`` is ``confined``/``exclusive`` or any ``host_features``
-    token ends in ``:sandbox`` (claude:sandbox / goose:sandbox / codex:sandbox). Used to gate write-root
-    widening: when nothing is confined, ``workspace_write_roots`` is inert (no sandbox
-    consumes it), so we leave the manifest byte-identical to baseline.
+    The effective OS-sandbox state (``sandbox_state.os_sandbox_requested(manifest)``, P00): with
+    no ``os_sandbox`` switch, True when ``privilege_profile`` is ``confined``/``exclusive`` or any
+    ``host_features`` token ends in ``:sandbox``, as before. Used to gate write-root widening:
+    when nothing is confined, ``workspace_write_roots`` is inert (no sandbox consumes it), so we
+    leave the manifest byte-identical to baseline.
     """
-    if manifest.get("privilege_profile") in {"confined", "exclusive"}:
-        return True
-    return any(str(t).endswith(":sandbox") for t in (manifest.get("host_features") or []))
+    from agentteams.sandbox_state import os_sandbox_requested
+
+    return os_sandbox_requested(manifest)
 
 
 def apply_coordination_roots_to_write_roots(manifest: dict) -> list[str]:
@@ -739,11 +783,13 @@ def _write_codex_mcp_servers(manifest: dict, project_root: Path) -> "CodexMCPEmi
     data loss if not.
     """
     from agentteams.codex_mcp_emit import emit_codex_mcp_config
+    from agentteams.frameworks._wasm_wiring import codex_first_party_tables
 
     return emit_codex_mcp_config(
         servers=manifest.get("mcp_servers", []) or [],
         features=manifest.get("host_features", []) or [],
         output_root=project_root,
+        first_party_tables=codex_first_party_tables(manifest),  # WASM plan P11: the shared agentteams_wasm copy
     )
 
 
@@ -754,6 +800,16 @@ def _emit_host_mcp_artifacts_if_enabled(manifest: dict, project_root: Path) -> N
     _emit_mcp_servers_if_enabled(manifest, project_root)
     _emit_codex_mcp_if_enabled(manifest, project_root)
     _emit_grok_config_if_enabled(manifest, project_root)
+    from agentteams.sandbox_projection import emit_projection  # P20: the projected model-substrate switch
+
+    emit_projection(manifest, project_root)
+
+    from agentteams.cli.wasm_sandbox_switch import install_wasm_binary
+
+    install_wasm_binary(manifest, project_root)  # WASM plan P11: the bundle's binary file (emit writes text only)
+    from agentteams.cli.wasm_sandbox_switch import report_wasm_enforcement
+
+    report_wasm_enforcement(manifest, project_root)  # WASM plan P13: per-provider verdict + [WASM-ENFORCEMENT]
 
 
 def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
@@ -801,8 +857,10 @@ def _emit_codex_mcp_if_enabled(manifest: dict, project_root: Path) -> None:
     """
     from agentteams.codex_mcp_emit import codex_mcp_enabled
 
+    from agentteams.frameworks._wasm_wiring import codex_first_party_tables
+
     features = manifest.get("host_features", []) or []
-    if not codex_mcp_enabled(features) or not manifest.get("mcp_servers"):
+    if not (codex_mcp_enabled(features) and manifest.get("mcp_servers")) and not codex_first_party_tables(manifest):
         return
     try:
         res = _write_codex_mcp_servers(manifest, project_root)

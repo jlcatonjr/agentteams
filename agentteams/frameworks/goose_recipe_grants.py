@@ -147,10 +147,12 @@ def _mcp_recipe_extensions(
     return extensions, notes
 
 
-def recipe_extras(manifest: dict[str, Any], agent_slug: str) -> tuple[list[dict[str, Any]], list[str]]:
+def recipe_extras(manifest: dict[str, Any], agent_slug: str, tools: frozenset[str] | None = None,
+                  ) -> tuple[list[dict[str, Any]], list[str]]:
     """Return the non-grant extensions one agent's recipe carries, and its recipe-comment notes.
 
-    In emit order: operator MCP servers (opt-in ``goose:mcp``), then ``agentteams_runner`` (R6), then the
+    In emit order: operator MCP servers (opt-in ``goose:mcp``), then ``agentteams_runner`` (R6), then
+    ``agentteams_wasm`` (WASM plan P11: grant mode, an eligible agent, ``_wasm_wiring`` decides), then the
     coordination server (Phase 2). Under ``write_policy: "orchestrator-only"`` a non-orchestrator recipe carries no
     operator MCP server (it can't be classified as read-only) and no coordination server (it writes request/log
     files). In grant mode an operator server whose name clashes with a managed extension is dropped.
@@ -158,6 +160,7 @@ def recipe_extras(manifest: dict[str, Any], agent_slug: str) -> tuple[list[dict[
     Args:
         manifest: The team manifest.
         agent_slug: The agent's slug.
+        tools: The agent's declared tools (eligibility for ``agentteams_wasm``); None offers no WASM copy.
 
     Returns:
         ``(extensions, notes)``: the extension mappings (after the grant-map ones) and the Goose-ignored notes.
@@ -181,6 +184,16 @@ def recipe_extras(manifest: dict[str, Any], agent_slug: str) -> tuple[list[dict[
         from agentteams import runner_mcp
 
         extras.append(runner_mcp.goose_extension(agent_slug, grant["tools"], "staged", runner_mcp.interpreter()))
+    if tools is not None and grant_mode(manifest):
+        from agentteams.frameworks import _wasm_wiring
+        from agentteams.wasm_enforcement import wiring_tools  # P13: the pre-narrowing tools decide eligibility
+
+        wasm_args = _wasm_wiring.wasm_agent_entry(manifest, "goose", agent_slug,
+                                                  wiring_tools(manifest, agent_slug, sorted(tools)))
+        if wasm_args is not None:
+            from agentteams import wasm_mcp
+
+            extras.append(wasm_mcp.goose_extension(wasm_args, wasm_mcp.interpreter()))
     if coordination_enabled(manifest) and agent_slug in COORDINATION_AGENT_SLUGS and not restricted:
         extras.append(coordination_extension())
         mcp_notes = list(mcp_notes) + [
@@ -239,7 +252,12 @@ def member_declared_tools(manifest: dict[str, Any], slug: str, templates_dir: Pa
             recipe = None  # no deployed recipe: the template's tools stand
         on_disk = declared_from_marker(recipe) if recipe is not None else None
         if on_disk is not None:
-            tools = tools & on_disk
+            # WASM plan P13 (Rule-12 carve-out): a recipe narrowed by the WASM native-exec policy lost `execute`
+            # from its marker, but a delegate cannot get run_wasm, so its row keeps the template's shell.
+            from agentteams.wasm_enforcement import NARROW, agent_action
+
+            wasm_narrowed = "execute" in tools and agent_action(manifest, slug, "goose", tools) == NARROW
+            tools = tools & (on_disk | {"execute"} if wasm_narrowed else on_disk)
     return tools
 
 
@@ -260,7 +278,8 @@ def delegation_rows(manifest: dict[str, Any], slugs: list[str], templates_dir: P
     """
     rows: list[tuple[str, str, list[str], list[str]]] = []
     for slug in slugs:
-        extra = tuple(str(e["name"]) for e in recipe_extras(manifest, slug)[0])
-        names, withheld = delegate_extensions(member_declared_tools(manifest, slug, templates_dir), extra)
+        tools = member_declared_tools(manifest, slug, templates_dir)
+        extra = tuple(str(e["name"]) for e in recipe_extras(manifest, slug, tools)[0])
+        names, withheld = delegate_extensions(tools, extra)
         rows.append((_tool_name(slug), slug, names, withheld))
     return rows

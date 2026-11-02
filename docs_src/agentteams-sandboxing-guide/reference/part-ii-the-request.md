@@ -6,7 +6,8 @@
 
 `privilege_profile` has three values, each a superset of the last:
 
-- **`cooperative`** (the opt-out) — no boundary emitted; the agent is trusted, hook fail-open (SB3).
+- **`cooperative`** — no boundary emitted; the agent is trusted, hook fail-open (SB3). The dedicated
+  switch for the boundary alone is `os_sandbox` (below, and SB25).
 - **`confined`** (default as of 2026-W39) — workspace **write-confinement**: the agent writes only inside
   `workspace_write_roots` (default `["."]`, the generated tree). *Network* deny-by-default is a property
   of the mechanisms that emit an egress directive — goose Seatbelt (`deny network*`) and the Linux
@@ -26,6 +27,20 @@ unconfined team that looks confined.
 *Source:* `agentteams/host_features.py` `validate_privilege_profile`;
 `agentteams/frameworks/_sandbox_emit.py` `_exclusive_read_deny_paths`, `_DEFAULT_PROTECTED_READ_PATHS`;
 `agentteams/schemas/project-description.schema.json`.
+
+**The dedicated OS switch (`os_sandbox`, P00).** `os_sandbox: "on" | "off"` in the brief (or
+`--os-sandbox on|off`, which overrides it) switches the OS boundary independently of the profile.
+Absent, the boundary follows the profile exactly as above. `off` suppresses every boundary agentteams
+emits for the framework (settings `sandbox` block, Seatbelt profile, runners, Grok profile, neutral
+launcher) while the rest of the profile (read-exclusion knobs, write roots) is kept for when it is turned
+back on; the control-plane stubs a sibling team's launcher needs are still emitted. `on` emits the
+boundary under `cooperative` and counts as the explicit opt-in that flips the gate hook fail-closed.
+Precedence: `--os-sandbox` > an explicit `--target-host-features <fw>:sandbox` > the brief's
+`os_sandbox` > the profile > any `*:sandbox` token; `--os-sandbox off` with an explicit token is refused.
+Turning the boundary off is constraint-relaxing (Rule 15): in a governed workspace (strict decision
+signing, on by default) it needs an operator Ed25519-signed decision `sandbox-os-off:<framework>`;
+elsewhere it prints `SANDBOX RELAXATION` and is recorded in the build-log `sandbox_state`. It is refused
+with `write_policy: orchestrator-only`. A typo fails closed, like the profile.
 
 ## SB5 — Host-feature tokens and profile expansion  ✅
 

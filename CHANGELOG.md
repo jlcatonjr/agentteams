@@ -93,6 +93,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--update` against a bridge target refuses before rendering.** The refusal printed after "Rendering templates…",
   so a claude or goose dry run over a bridge looked like a render crash.
 - New test: `--update --merge --dry-run` leaves the whole project tree byte-identical (copilot-vscode, claude, goose).
+### security (sandbox switches and WASM)
+
+- **Turning a sandbox off is governed.** Five transitions are constraint-relaxing effects (Rule 15):
+  `sandbox-os-off`, `sandbox-wasm-off` (WASM off after on, or the model-substrate floor lowered),
+  `wasm-grant-widen`, `native-exec-keep` and `wasm-to-os-switch`. In a governed workspace, which is the default
+  (`enforce_decision_signing` defaults to true from the first render), each new relaxation needs an exactly scoped
+  decision row signed with the operator's Ed25519 key; an HMAC signature is not enough and a HALT blocks it. One
+  carve-out: an OS-off state recorded before the workspace was governed, with no exception ever recorded for it
+  (typically set at the ungoverned first render), continues on later renders without a signature, with a
+  `SANDBOX RELAXATION ... predates sandbox governance` notice and a `pre-governance` build-log record. Standing
+  exceptions get a 90-day sunset under the exception registry's aggregate cap (default one). Ungoverned workspaces get a
+  `SANDBOX RELAXATION` notice and a build-log record instead. A team that never used the switches keeps its old,
+  ungated `confined` → `cooperative` move.
+- **With WASM on, the control plane is session-write-denied:** the emitted Claude / Goose session sandboxes deny
+  writes to `.agentteams/`, `.claude/agents/` and every config file that launches the `agentteams_wasm` server.
+- **Enforcement is claimed only where it is checked.** The per-framework verdict (`wasm_enforcement` in the team
+  manifest, `[WASM-ENFORCEMENT]` lines) is `enforced` / `conditional` only with the OS sandbox on and the
+  control-plane rules merged in the live configuration: Claude sub-agents once the settings are merged, Goose for
+  direct recipe runs, Codex `conditional` under its confined launcher. Grok is `declared` only under
+  `native_exec: deny` (under the default `replace` it is `advisory`: no `run_wasm`); Copilot, AGENTS.md and every
+  top-level session are `advisory`. Convert, interop and sync claim nothing (`ADVISORY ONLY`).
+- **Downloads are explicit and pinned.** The WASM runtime and interpreters are fetched only by `--wasm-install`, never
+  during a render, checked against pinned sizes and sha256 before extraction, and re-hashed on every use; any mismatch
+  fails closed. Shipped pins: wasmtime 36.0.20 (adopted inside the 14-day cooldown under a recorded `@security`
+  remediation waiver for its security fixes), CPython WASI 3.15.0, QuickJS-ng 0.17.0.
+- **WASM-native agents never widen through delegation:** a sub-agent's grant is a subset of its delegator's, with no
+  exception.
+
+### added (sandbox switches and WASM)
+
+- **`os_sandbox: "on" | "off"`** in the brief and **`--os-sandbox on|off`**: the OS sandbox on or off independently of
+  `privilege_profile`. `off` suppresses every OS boundary agentteams emits for the framework and keeps the rest of the
+  profile; `on` emits one under `cooperative` and makes the gate hook fail closed.
+- **`wasm_sandbox`** in the brief and **`--wasm-sandbox on|off`** (opt-in, off by default): agent code runs as a
+  WebAssembly guest under a pinned wasmtime (`.wasm` modules, Python, JavaScript), compute-only by default (no files,
+  environment or network; fuel, memory and time limits), with per-agent read-only paths and a private scratch dir as
+  signed widenings. Network is never grantable. Eligible agents (those holding an execute-class tool) lose native exec
+  where their host wires `run_wasm` (`native_exec: replace|deny|keep`); the orchestrator and team builder are exempt,
+  and `native_exec_keep` defaults to `navigator` and `git-operations`.
+- **The `agentteams_wasm` MCP server** with one tool, `run_wasm`, wired per agent on Claude and Goose, shared and
+  compute-only on Codex, as an inert example on Copilot. It wraps wasmtime in its own nested OS profile, because Claude
+  Code and Goose run stdio MCP servers outside their session sandbox (operator spike).
+- **`--framework wasm` (beta, generate-only):** agentteams' own agent runtime, where every agent step is a WASM guest
+  and the host calls Anthropic, OpenAI-compatible services, Gemini, local servers or an offline stub. Run, revoke and
+  verify with `--run-wasm-agent` (`--wasm-task`, `--wasm-task-file`, `--wasm-provider`, `--wasm-base-url`),
+  `--revoke-wasm-run` (`--revoke-reason`) and `--verify-wasm-run` (`--tree`).
+- **Provisioning commands:** `--wasm-install [COMPONENTS]`, `--wasm-status [COMPONENTS]` and the operator tool
+  `--wasm-pin-update COMPONENT VERSION` (`--remediation`, `--tofu`, `--pins-out`), which writes pins only from a
+  verified download and commits nothing.
+- **`wasm_sandbox.model_substrate` / `--wasm-substrate on|off`:** a model-substrate floor projected to
+  `.agentteams/sandbox-state.json` for consumers that run model code (baseAgent); the consumer enforces it.
+- **Docs:** Sandboxing Guide Part IX ("Switching sandboxes and WASM") in all four editions, a WASM
+  agent runtime guide (`docs_src/wasm-agent-runtime.md`), API pages for the new modules (including
+  `model_providers`), and new entries in `docs_src/known-limitations.md`.
+
+### changed (sandbox switches and WASM)
+
+- `cooperative` is no longer described as the only way to turn the OS boundary off: `os_sandbox: "off"` is the
+  dedicated switch, and `cooperative` stays a valid profile (it also keeps the hook fail-open). The
+  `privilege_profile` schema description says so.
+- `--allow-unenforced-confinement` and `--allow-fallback-fail-open` now also cover `os_sandbox: on`.
+- Teams that use none of the new switches render byte-identically (verified per plan across every example brief and
+  framework).
+
+### fixed (sandbox switches and WASM)
+
+- **Goose `enforced` needs `GOOSE_SANDBOX` live.** The verdict no longer counts the emitted `.goose/sandbox.sb` as
+  wired once its deny rules parse: Goose sub-agents read `enforced` only when `GOOSE_SANDBOX` is also on in the live,
+  user-global Goose config (`~/.config/goose/config.yaml`, or the file `AGENTTEAMS_GOOSE_CONFIG` names). Otherwise
+  the cell is `advisory`, "Seatbelt profile not wired". A `sandbox-exec` launch cannot be verified at render, so it
+  never counts.
+- **A governed off → off re-render continues under its exception.** After an Ed25519-cleared `--os-sandbox off
+  --wasm-sandbox off`, an identical render no longer refuses with "no unconsumed decision" because the earlier on
+  render's launcher and server are still on disk: a valid build-log record is the previous state, and leftover
+  evidence is excused only by the operator's authorization of that off state (an active, bound `sandbox-os-off`
+  exception; for WASM, the newest `sandbox-wasm-off` decision spent and still re-verifying). That spent wasm-off
+  excuse refuses a `CONDITIONAL PASS` whose conditions are not verified, and an unretracted HALT on the family or the
+  exact action. A forged "was off" record alone does not get past the gate.
+- **A `:` in the project path is a clean refusal.** wasmtime splits `--dir HOST::GUEST` on `:`, so such a path cannot
+  be mounted; the render now stops with an `Error:` line naming the path (exit 1, before anything is emitted) instead
+  of a traceback.
+- **A widened grant that has no effect is noticed.** A `wasm_sandbox.agents` grant on an agent the framework never
+  wires (not WASM-eligible on Claude or Goose; AGENTS.md and Grok wire none) prints `NOTE (WASM): the
+  wasm_sandbox.agents grant for <slug> has no effect on <framework>: ...` and records a `wasm-grant-no-effect`
+  advisory. The shipped example brief now widens an agent Claude wires.
+- **The exception-cap refusal names `references/exception-registry.json` once** (it printed
+  `references/references/...`).
+- **A host where `run_wasm` cannot nest is noticed.** When no Seatbelt or bwrap profile can start
+  (`_sandbox_profiles.available()` is None), the render prints `NOTE (WASM): run_wasm will run without OS nesting on
+  this host (...)` and records a `wasm-run-unnested` advisory (D6: WASM runs alone, with a notice). The
+  `wasm_enforcement` term is unchanged: it covers native-exec removal only, and `run_wasm` nesting is reported per
+  call as `os_confinement`, where only `nested` counts as OS-enforced. The docs now say so, state the Goose
+  `GOOSE_SANDBOX` precondition, and note that the `DESCRIPTION-FORMAT.md` `wasm_sandbox` example needs two standing
+  exceptions, over the registry's default cap of one.
 
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
@@ -134,6 +228,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image back (D1).
 - Fix plans mark a row `stage-image` where the op would move it. Agent guidance updated: template `invariant_core`
   v5 and `daily_remediation` v8, the run task, and the MCP `request` description.
+
+### fixed (merge: `--shrink-allow` applies under `--shrink-policy=halt`)
+
+- **A digest-matched `--shrink-allow` override now takes effect under `--shrink-policy=halt`.** The override
+  released its section ("template update applied"), but that section's own notice still counted as a shrink, so
+  halt refused the whole file and the override never applied. This repo's self-update hit it on
+  `references/api-impact.reference.md`, whose only "lost" ref was the hook command v2 extends with `--strict-capable`.
+- Halt now counts only notices for sections an override did not release, on both the real run and the dry-run
+  preflight. **Unchanged (Rule 12):** a file with any other shrinking section is still refused whole, the released
+  body still goes to its `.lost` sidecar, and overrides are still refused without a backup dir.
 
 ### fixed (merge: a fence unedited since generation is never shrink-preserved)
 

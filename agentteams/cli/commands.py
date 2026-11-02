@@ -279,6 +279,14 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
         if present:
             print(f"Governance logs: OK ({len(present)} well-formed)")
 
+    from agentteams import sandbox_projection  # P20: a projected floor lowered outside the gate is a finding
+
+    proj_rc, proj_lines = sandbox_projection.verify_projection(
+        output_dir, sandbox_projection.project_root_for(output_dir))
+    for line in proj_lines:
+        print(line, file=sys.stderr if proj_rc else sys.stdout)
+    enforcement_rc |= proj_rc
+
     results = drift.verify_output_integrity(output_dir)
     if not results:
         print(
@@ -554,6 +562,8 @@ def _run_convert(
         print(f"\n  ✗  {len(result.errors)} error(s):")
         for err in result.errors:
             print(f"    {err}")
+    for notice in result.notices:
+        print(f"  {notice}", file=sys.stderr)
 
     verb = "Would convert" if dry_run else "Converted"
     print(

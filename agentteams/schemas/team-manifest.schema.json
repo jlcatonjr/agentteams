@@ -51,7 +51,8 @@
         "goose",
         "agents-md",
         "codex",
-        "grok"
+        "grok",
+        "wasm"
       ]
     },
     "primary_output_dir": {
@@ -510,6 +511,11 @@
       "type": "boolean",
       "description": "Whether the operator EXPLICITLY set privilege_profile in the brief (vs. inheriting the confined default introduced 2026-W39). Recorded at build so the one non-inert privilege-keyed artifact — Claude's constitutional-gate.py fail-open->fail-closed flip (claude._apply_fail_closed_policy) — fires only on an explicit confined/exclusive, never on the defaulted confined; this keeps the default flip inert-until-merged."
     },
+    "os_sandbox": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "P00: the brief's dedicated OS-sandbox switch, carried only when the brief sets it (absent: derived from privilege_profile). The effective state is recorded in sandbox_state; --os-sandbox is transient and never persisted."
+    },
     "enforce_decision_signing": {
       "type": "boolean",
       "description": "Strict agent-privilege switch carried from the project description (defaults true). When true, an unsigned authorizing security-decision row is refused (fail-closed) rather than trusted on its author name. Emitted into the team as references/agent-privilege.json, read by the security gate at enforcement time (see project-description.schema.json)."
@@ -845,6 +851,502 @@
         "on_failure": {
           "type": "string",
           "description": "Shell command run when checks fail (optional)."
+        }
+      }
+    },
+    "wasm_sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P01: the brief's wasm_sandbox block in normalised form (wasm_config.WasmConfig.to_record), carried only when the brief has the block. The effective switch (with --wasm-sandbox, which is transient and never persisted) and the per-agent grants are in sandbox_state.",
+      "required": [
+        "enabled",
+        "languages",
+        "limits",
+        "agents",
+        "native_exec",
+        "native_exec_keep",
+        "model_substrate"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "module",
+              "python",
+              "javascript"
+            ]
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fuel",
+            "max_memory_bytes",
+            "timeout_s"
+          ],
+          "properties": {
+            "fuel": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000000000000
+            },
+            "max_memory_bytes": {
+              "type": "integer",
+              "minimum": 1048576,
+              "maximum": 4294967296
+            },
+            "timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            }
+          }
+        },
+        "agents": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "read_paths",
+              "scratch"
+            ],
+            "properties": {
+              "read_paths": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+                }
+              },
+              "scratch": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "native_exec": {
+          "type": "string",
+          "enum": [
+            "replace",
+            "deny",
+            "keep"
+          ]
+        },
+        "native_exec_keep": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "model_substrate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "on",
+            "off",
+            null
+          ]
+        }
+      }
+    },
+    "wasm_runtime": {
+      "type": "object",
+      "description": "P08: the brief's wasm_runtime block in normalised form (wasm_agent.team.normalize_wasm_runtime), carried only when the brief has the block."
+    },
+    "sandbox_state": {
+      "type": "object",
+      "description": "P15 (METAPLAN 2.1): the render's effective sandbox state (SandboxState.to_record). Project-relative only; recorded in references/build-log.json so the next render can tell an OS/WASM 'off' that was on (a constraint-relaxing effect, Rule 15) from one that never was.",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "os_reason",
+        "wasm",
+        "wasm_reason",
+        "wasm_languages",
+        "wasm_grants",
+        "model_substrate"
+      ],
+      "properties": {
+        "os": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ]
+        },
+        "os_reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9:._-]{0,127}$",
+          "description": "brief | cli | profile:<p> | host-feature:<tok> | unknown"
+        },
+        "wasm": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ]
+        },
+        "wasm_reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9:._-]{0,127}$",
+          "description": "brief | cli | default-off | unknown"
+        },
+        "wasm_languages": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "module",
+              "python",
+              "javascript"
+            ]
+          }
+        },
+        "wasm_grants": {
+          "type": "object",
+          "description": "Agent slug -> the grant tokens beyond compute-only and the run limits. Raising limits mints no token.",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tokens",
+              "limits"
+            ],
+            "properties": {
+              "tokens": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^wasm:[a-z0-9][a-z0-9-]*:(read:[A-Za-z0-9._/-]+|scratch)$"
+                }
+              },
+              "limits": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fuel",
+                  "max_memory_bytes",
+                  "timeout_s"
+                ],
+                "properties": {
+                  "fuel": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_memory_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "timeout_s": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "model_substrate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "on",
+            "off",
+            null
+          ]
+        }
+      }
+    },
+    "sandbox_exceptions": {
+      "type": "object",
+      "description": "P15: relaxation-gate inputs outside SandboxState: agents keeping native exec while WASM is on (P13), and runner confined_programs entries on sandbox: wasm / sandbox: os (P12).",
+      "additionalProperties": false,
+      "required": [
+        "native_exec_keep",
+        "wasm_programs"
+      ],
+      "properties": {
+        "native_exec_keep": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "wasm_programs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "os_programs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        }
+      }
+    },
+    "sandbox_relaxations": {
+      "type": "array",
+      "description": "P15: one record per sandbox relaxation this render made and how it was authorized (sandbox_relaxation_gate.authorize). Identifiers only, never conditions text.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "action",
+          "authorization"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sandbox-os-off",
+              "sandbox-wasm-off",
+              "wasm-grant-widen",
+              "native-exec-keep",
+              "wasm-to-os-switch"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "pattern": "^[a-z-]+:[a-z0-9][a-z0-9-]*$"
+          },
+          "authorization": {
+            "type": "string",
+            "enum": [
+              "ed25519-decision",
+              "notice-only",
+              "pre-governance",
+              "active-exception"
+            ]
+          },
+          "exception_id": {
+            "type": "string"
+          },
+          "decision_date": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "signature_prefix": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "wasm_wiring": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "WASM plan P11: where agentteams_wasm is launched for the framework rendered (frameworks/_wasm_wiring.py). Present only while WASM is on. Never an enforcement claim (P13 owns wasm_enforcement).",
+      "required": [
+        "protected_config_paths",
+        "frameworks"
+      ],
+      "properties": {
+        "protected_config_paths": {
+          "type": "array",
+          "description": "Every emitted file that launches agentteams_wasm (project-relative); METAPLAN R1 write-protects each (session denyWrite + Edit deny).",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+          }
+        },
+        "frameworks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "agents",
+              "grant_scope",
+              "reason",
+              "verified",
+              "config_paths"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "wired-per-agent",
+                  "wired-shared",
+                  "example-only",
+                  "not-wired",
+                  "unverified-format",
+                  "instructions-only"
+                ]
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                }
+              },
+              "grant_scope": {
+                "type": "string",
+                "enum": [
+                  "per-agent",
+                  "session-compute-only",
+                  "none"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "verified": {
+                "type": "boolean",
+                "description": "False wherever the host format or behaviour is unverified; such a row never says wired."
+              },
+              "config_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "wasm_enforcement": {
+      "type": "object",
+      "description": "WASM plan P13: per-provider verdict on denying native code execution to WASM-eligible agents (wasm_enforcement.py), keyed by framework id. Present only while WASM is on.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subagents",
+          "top_level",
+          "mechanism",
+          "evidence",
+          "reason",
+          "os_sandbox",
+          "control_plane_merged",
+          "exempt",
+          "kept_native",
+          "fallback",
+          "changed_agents"
+        ],
+        "properties": {
+          "subagents": {
+            "type": "string",
+            "enum": [
+              "enforced",
+              "conditional",
+              "declared",
+              "advisory"
+            ],
+            "description": "Native-exec denial for sub-agents. enforced/conditional only when the OS sandbox is on and the METAPLAN R1 control-plane rules are merged; otherwise advisory with the reason."
+          },
+          "top_level": {
+            "type": "string",
+            "enum": [
+              "advisory"
+            ],
+            "description": "The top-level session (orchestrator / operator) is always advisory."
+          },
+          "delegates": {
+            "type": "string",
+            "enum": [
+              "advisory"
+            ],
+            "description": "Goose only: a delegate inherits the orchestrator's extensions (native exec kept, no run_wasm)."
+          },
+          "delegates_native": {
+            "type": "array",
+            "description": "Goose only: the narrowed agents that keep native exec when run as a delegate (not on a direct goose run --recipe).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "mechanism": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "in-repo",
+              "spike",
+              "unverified"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the cell is advisory, declared or conditional (empty when enforced)."
+          },
+          "os_sandbox": {
+            "type": "boolean"
+          },
+          "control_plane_merged": {
+            "type": "boolean"
+          },
+          "exempt": {
+            "type": "array",
+            "description": "Fixed exempt roles (orchestrator, team builder).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "kept_native": {
+            "type": "array",
+            "description": "Eligible agents keeping native exec by native_exec_keep or native_exec: keep (each a native-exec-keep effect).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "fallback": {
+            "type": "array",
+            "description": "Eligible agents keeping native exec because run_wasm is not available on this host (replace fallback; not an operator relaxation).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "changed_agents": {
+            "type": "array",
+            "description": "Agents whose native exec (canonical execute) was removed.",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          }
         }
       }
     }

@@ -8,6 +8,10 @@ the read-only file server Goose uses under the policy (``.agentteams/bin/goose-r
 ``agent_type``/``agent_id`` (probed live on codex-cli 0.160.1), and the gate limits those to the read-only
 tools. The runner (``_codex_sandbox_emit``) checks these files against their pins before launch.
 
+With WASM on and no write policy (WASM plan P13), ``_codex_wasm_gate`` emits the same pinned gate and hooks file,
+without the read-only server, through :func:`role_gate_content`; the runner starts the gate in WASM mode, where it
+denies a spawned agent outside the keep list only the shell.
+
 Integrity-pinned: it pins the gate's hash and builds the hook wiring.
 """
 
@@ -26,6 +30,7 @@ __all__ = [
     "codex_hooks_json",
     "codex_hooks_json_is_ours",
     "codex_role_gate_enabled",
+    "role_gate_content",
     "role_gate_output_files",
 ]
 
@@ -36,7 +41,7 @@ CODEX_ROLE_GATE_PROJECT_PATH = ".agentteams/bin/codex-role-gate.py"
 CODEX_HOOKS_PROJECT_PATH = ".codex/hooks.json"
 #: sha256 of the shipped gate (``agentteams/data/codex-role-gate.py``). This module is integrity-pinned, so the
 #: runner checks the installed copy against it; ``tests/test_codex_role_gate.py`` keeps it current.
-CODEX_ROLE_GATE_SHA256 = "8e2a3bea7a3b0022c85db521431699506641859bcc7577360bb82031e9f874c1"
+CODEX_ROLE_GATE_SHA256 = "163ef4dc89d99e747fbe78e40fea3998019bf0bb0e8bc4a23ec008485aad623c"
 #: The hook's timeout. Codex lets a call through when a hook times out (probed live), so this is generous and
 #: the gate is kept fast; it is stated so the bound is visible rather than Codex's unstated default.
 HOOK_TIMEOUT_SECONDS = 60
@@ -100,8 +105,10 @@ def codex_hooks_json_is_ours(path: Path) -> bool:
                                   for c in commands)
 
 
-def _role_gate_content() -> str:
+def role_gate_content() -> str:
     """Return the shipped role gate, refusing a copy that doesn't match :data:`CODEX_ROLE_GATE_SHA256`.
+
+    Used by both modes: :func:`role_gate_output_files` (write policy) and ``_codex_wasm_gate`` (WASM).
 
     Returns:
         The gate source.
@@ -117,9 +124,9 @@ def _role_gate_content() -> str:
                                 f"({_ROLE_GATE_SOURCE}); reinstall agentteams") from exc
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != CODEX_ROLE_GATE_SHA256:
         raise ValueError("the installed Codex role gate does not match its pinned hash (CODEX_ROLE_GATE_SHA256); "
-                         "reinstall agentteams before rendering under write_policy orchestrator-only")
+                         "reinstall agentteams before rendering a Codex team under write_policy orchestrator-only or "
+                         "with WASM on (the role gate's WASM mode)")
     return text
-
 
 
 def role_gate_output_files() -> list[tuple[str, str]]:
@@ -136,6 +143,6 @@ def role_gate_output_files() -> list[tuple[str, str]]:
     from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH
 
     readfs = pinned_readfs_mcp_content()
-    return [(f"../../{CODEX_ROLE_GATE_PROJECT_PATH}", _role_gate_content()),
+    return [(f"../../{CODEX_ROLE_GATE_PROJECT_PATH}", role_gate_content()),
             (f"../../{READFS_PROTECTED_PATH}", readfs),
             ("../hooks.json", codex_hooks_json())]

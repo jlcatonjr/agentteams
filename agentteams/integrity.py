@@ -64,12 +64,15 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
     "agentteams/audit_agent_contract.py",  # R6: AR_WRITE_POLICY decides which agentteams_runner grants are canonical
     "agentteams/confinement.py",  # orchestrator-only-writes pilot: the runner's OS sandbox (C-3/C-5 boundary)
+    "agentteams/_sandbox_profiles.py",  # the Seatbelt/bwrap builders confinement.py imports (WASM P02 R2);
+                                       # pinned with it so the extraction does not move the profile out of the manifest
     "agentteams/proposal_runner.py",  # orchestrator-only-writes pilot: sole holder of the ledger key
     "agentteams/sealed_result.py",  # seals the orchestrator's runner results in the session-readable status tree
     "agentteams/proposal_policy.py",  # orchestrator-only-writes pilot: the policy half of proposals.py
     "agentteams/proposals.py",  # orchestrator-only-writes pilot: the one path that applies agents'
                                 # proposals and runs their commands; a silent widening defeats the policy
     "agentteams/proposal_run.py",  # R2 carve: the command-request half of proposals.py (runs agents' commands)
+    "agentteams/runner_wasm.py",  # WASM P12: the runner's sandbox: wasm jails (shape, grant, verified wasmtime launch)
     "agentteams/proposal_staging.py",  # R3: staged/direct agent writes and the orchestrator's approvals
     "agentteams/runner_mcp.py",  # R4: the agentteams_runner server's install path and pinned hash
     "agentteams/data/agentteams-runner-mcp.py",  # R4: the server granted agents launch to write and execute
@@ -120,6 +123,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # Opt-in prompt-root protection (follow-up #8 phase 2, 2026-10-01): the Edit rules and
     # present-only denyWrite set _sandbox_emit.py emits, and the RELAXATION-notice rule set.
     "agentteams/frameworks/_prompt_root_protect.py",
+    # WASM-sandbox P00 (METAPLAN R1): the .agentteams control-plane write protection every emitter applies whenever
+    # WASM is on (or under the write policy). A silent edit dropping a rule re-opens the WASM runtime and MCP bundle
+    # to session writes. And the read-only drift checks --check-wiring runs (P13 reads verify_control_plane_merged).
+    "agentteams/frameworks/_control_plane_protect.py",
+    "agentteams/frameworks/_sandbox_drift.py",
     # The write-root chokepoint (follow-up #2, 2026-09-30; @security CLEAR_WITH_CONDITIONS). Every
     # emitter refuses hard-banned roots through it, and the CLI acceptance gate below uses it; a
     # silent edit here re-opens `~`, `/` or shell injection into the operator-run goose runner.
@@ -313,6 +321,133 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
     "agentteams/cli/frozen_surfaces.py",        # Rule 15: frozen-surface owned paths + unfreeze vocabulary
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
+    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the five sandbox-relaxation kinds + token vocabulary
+    "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
+    "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
+    "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
+    "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
+    # P16 (2026-11-01, @security review-pending): host_features holds DEFAULT_PRIVILEGE_PROFILE ("confined") and the
+    # profile -> *:sandbox token expansion every emitter reads, and since P00 the os_sandbox="off" token strip and the
+    # advisory's requested= override. A silent edit drops a framework's sandbox token, or strips them when the switch
+    # is absent, turning the OS boundary off without the relaxation gate seeing an "off".
+    "agentteams/host_features.py",
+    # WASM configuration (P01). wasm_config is the one validator between the agent-writable brief's wasm_sandbox
+    # block and a guest's mounts: its read-path bans (control plane, credentials, trust roots, symlinks), the fixed
+    # scratch location, the WASM switch R1's control-plane protection reads, and wasm_eligible (offering run_wasm is
+    # a C-3 grant). cli/wasm_sandbox_switch carries --wasm-sandbox and validates the WASM half before the gate runs.
+    # A silent edit widens what a guest may read or write, or turns WASM off without the gate seeing it.
+    "agentteams/wasm_config.py",
+    "agentteams/cli/wasm_sandbox_switch.py",
+    # The model-substrate projection (P20). sandbox_projection writes .agentteams/sandbox-state.json, a floor a
+    # consumer (baseAgent's battery) trusts for its own --wasm switch, and its schema is the exact shape a consumer
+    # checks. A silent edit lowers that floor, or loosens the shape, without the relaxation gate seeing it.
+    "agentteams/sandbox_projection.py",
+    "agentteams/schemas/sandbox-state.schema.json",
+    # The WASM sandbox (2026-10-31, wave-1 @security S4). wasm_exec is the one place wasmtime starts: its grant
+    # shape check, mount-host refusals ('::'/':', control chars) and empty environment ARE the compute-only
+    # boundary (C-3). wasm_pins is the one hash check every resolve goes through (R10), wasm_runtime/_wasm_archive
+    # the verify-on-use wrapper and the safe extractor, _wasm_pin_update the S-10 / remediation-decision gate, and
+    # cli/wasm_commands the only caller of install/pin_update. A silent edit to any of them runs an unverified
+    # wasmtime or interpreter, or widens what a guest may touch, without tripping --verify-integrity.
+    "agentteams/wasm_exec.py",
+    "agentteams/wasm_pins.py",
+    "agentteams/wasm_runtime.py",
+    "agentteams/_wasm_archive.py",
+    "agentteams/_wasm_pin_update.py",
+    "agentteams/cli/wasm_commands.py",
+    # WASM guests (P04): wasm_guests turns Python / JavaScript / a core module into one executor run. It picks the
+    # interpreter, the pins-sourced /lib runtime mounts, the private read-only /src file and the interpreter flags
+    # (-I -S -B), and refuses unsupported languages with no native fallback; the probe scripts are what
+    # probe_language trusts to report a widening. A silent edit widens a guest or blinds the deny probe.
+    "agentteams/wasm_guests.py",
+    "agentteams/data/wasm_probes/probe.py",
+    "agentteams/data/wasm_probes/probe.mjs",
+    # P16 (2026-11-01, @security review-pending): the core-module deny probe wasm_exec.available() runs before it
+    # trusts a wasmtime, shipped as binary (the .wat is test source only). wasm_mcp.BUNDLE_SHA256 checks the
+    # installed copy, but nothing pinned the package bytes: a swapped probe that never attempts the denied access
+    # reports every widened runtime as confined.
+    "agentteams/data/wasm_deny_probe.wasm",
+    # The trust anchor of every WASM resolve: the pinned versions, URLs and sha256s. An unpinned edit swaps in
+    # another binary's hash and resolve() then vouches for it (wasm_runtime.PINS_SHA256 is computed from this file
+    # at import, so it cannot pin itself; the manifest does).
+    "agentteams/data/wasm_runtime_pins.json",
+    # The agentteams_wasm MCP server (WASM P10, D8). Unlike agentteams_runner it is a trust boundary: no runner
+    # re-checks what it runs. wasm_mcp pins the server's sha256 and every bundle file's (the server carries the same
+    # constants and executes only the bytes it hashed), and builds the launch flags that ARE each agent's grant.
+    # A silent edit widens a grant, swaps the executor the server runs, or blinds its deny probes.
+    "agentteams/wasm_mcp.py",
+    "agentteams/data/agentteams-wasm-mcp.py",
+    # Who gets an agentteams_wasm copy and where it is written (WASM P11): the one place an execute-class agent is
+    # given run_wasm (C-3), and the list of launching configs R1 write-protects. A silent edit hands the tool to an
+    # auditor or drops a config from the session denyWrite.
+    "agentteams/frameworks/_wasm_wiring.py",
+    # P16 (2026-11-01, @security review-pending): the two emitters that carry _wasm_wiring's decision into a config.
+    # codex_mcp_emit's first_party_tables carve-out (P11) is the one path that writes a non-read-only server into
+    # .codex/config.toml without codex:mcp, bounded by _first_party_problems to the compute-only agentteams_wasm
+    # session table; goose_recipe_grants picks each recipe's managed extensions (runner, agentteams_wasm) and drops
+    # operator servers from restricted recipes, and holds P13's delegation-row execute carve-out. A silent edit
+    # wires a widened server, hands a recipe an extension its agent was not granted, or loosens either carve-out.
+    "agentteams/codex_mcp_emit.py",
+    "agentteams/frameworks/goose_recipe_grants.py",
+    # The native-exec policy and its per-provider verdict (WASM P13): which agents lose native exec (C-3 narrowing,
+    # and the pre-narrowing tools P11 grants run_wasm on), the gate keep set (native-exec-keep effects), and the one
+    # place enforcement is claimed. _codex_wasm_gate decides when the Codex role gate runs in WASM mode and carries
+    # its keep list. A silent edit claims enforcement without R1, drops an effect, or keeps a shell unannounced.
+    "agentteams/wasm_enforcement.py",
+    "agentteams/frameworks/_codex_wasm_gate.py",
+    # The WASM text each generated agent reads (P14): what run_wasm runs, the agent's grant, what happened to its
+    # shell, and @security's review rows. It grants nothing, but its claims must match the grant (verify_claims); a
+    # silent edit tells an agent it holds a wider grant than it does, or drops the laundering rule.
+    "agentteams/wasm_policy.py",
+    # Host-mediated model access (WASM P06). The provider key travels only to the vetted base URL, and the
+    # request/reply validation bounds what crosses the wire (C-4); a silent edit leaks the key or widens what a reply
+    # may carry.
+    "agentteams/model_providers/__init__.py",
+    "agentteams/model_providers/_anthropic.py",
+    "agentteams/model_providers/_common.py",
+    "agentteams/model_providers/_config.py",
+    "agentteams/model_providers/_gemini.py",
+    "agentteams/model_providers/_openai.py",
+    "agentteams/model_providers/_stub.py",
+    "agentteams/model_providers/_transport.py",
+    "agentteams/model_providers/_validate.py",
+    # The WASM agent host (P05, ARCH-B). It alone holds the provider key and decides what a guest op may cause:
+    # protocol's closed frames and size caps, host's toolset/pending-id checks (C-3/C-4), mediation's DLP,
+    # journal-before-call and the HMAC-bound reserved-key vault, budget's caps, transcript's Stage-0-only chain and
+    # known-secret withholding (R4), broker's grant-holding preparer (a requester never supplies a grant), launch's
+    # key pipe, env scrub and credential-store denyRead host profile (R5), and stage1's bootstrap. A silent edit to
+    # any of them leaks the key, widens a guest or rewrites the run record without tripping --verify-integrity.
+    "agentteams/wasm_agent/__init__.py",
+    "agentteams/wasm_agent/broker.py",
+    "agentteams/wasm_agent/budget.py",
+    "agentteams/wasm_agent/host.py",
+    "agentteams/wasm_agent/launch.py",
+    "agentteams/wasm_agent/mediation.py",
+    "agentteams/wasm_agent/protocol.py",
+    "agentteams/wasm_agent/stage1.py",
+    "agentteams/wasm_agent/tools.py",
+    "agentteams/wasm_agent/transcript.py",
+    # The WASM agent guest (P07): the program inside every agent's guest, plus the module that loads it only after
+    # re-hashing it against its pin. The guest decides which in-guest tool paths it touches and which host ops it
+    # asks for; a silent edit makes it read outside the grant it reports, forge results, or drop the R8
+    # instruction-file refusal, without tripping --verify-integrity.
+    "agentteams/wasm_agent/guest_source.py",
+    "agentteams/data/wasm_agent_guest.py",
+    # --framework wasm (P08). _wasm_tool_scoping decides what a WASM agent may do (C-3: fail closed, no widening
+    # default); wasm_agent/team is the lock writer and the strict loader every run goes through (drift, planted or
+    # symlinked files, tools beyond the grant, non-canonical mounts); frameworks/wasm renders the grants and the
+    # runtime config; cli/wasm_agent_commands is the launcher and the only chooser of the inherited guest confinement (R5).
+    "agentteams/frameworks/_wasm_tool_scoping.py",
+    "agentteams/frameworks/_wasm_team_docs.py",
+    "agentteams/frameworks/wasm.py",
+    "agentteams/wasm_agent/team.py",
+    "agentteams/cli/wasm_agent_commands.py",
+    # WASM delegation (P09, D11). delegation holds the grant algebra (a sub-agent's grant is never wider than its
+    # delegator's), the depth/fan-out/tree caps, cycle refusal, budget carving and the tree verifier; child_runs is
+    # Stage 0's child-run service (it alone builds a child's attenuated grant, run dir and preparer). A silent edit
+    # widens a child's grant, lifts a cap, or lets a child run escape the tree's transcript linkage.
+    "agentteams/wasm_agent/delegation.py",
+    "agentteams/wasm_agent/child_runs.py",
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
     # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude

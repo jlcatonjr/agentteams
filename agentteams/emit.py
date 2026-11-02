@@ -473,8 +473,8 @@ def emit_all(
                 # T5.1 / IV.1: in dry-run, also pre-flight the halt decision
                 # so operators see what a real --shrink-policy=halt run would
                 # block, without actually modifying any file.
-                if (
-                    mr.shrink_notices
+                if (  # a --shrink-allow-released section's notice never halts (same rule as the real run below)
+                    any(_shrink_notice_sid(n) not in mr.shrink_overridden for n in mr.shrink_notices)
                     and shrink_policy == "halt"
                     and result.dry_run_report is not None
                 ):
@@ -703,12 +703,13 @@ def emit_all(
             result.notices.extend(
                 _shrink_notice_lines(rel_path, merge_result, shrink_policy, backup_path)
             )
-            if merge_result.shrink_notices and shrink_policy == "halt":
-                # Skip the write entirely; record the path for operator review.
+            if shrink_policy == "halt" and (_halting := [
+                    n for n in merge_result.shrink_notices if _shrink_notice_sid(n) not in merge_result.shrink_overridden]):
+                # Skip the write; record the path for review. (A --shrink-allow-released section never halts.)
                 result.shrink_blocked.append(str(target))
                 print(
                     f"  ⛔  shrink-halt: refused to write {rel_path} "
-                    f"({len(merge_result.shrink_notices)} shrink notice(s)). "
+                    f"({len(_halting)} shrink notice(s)). "
                     f"Re-run with --shrink-policy=warn or allow to override.",
                     file=sys.stderr,
                 )

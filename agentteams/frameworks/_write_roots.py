@@ -58,6 +58,8 @@ _FORBIDDEN_CHARS = frozenset("\"'$`\\;&|<>*?[]{}()!#")
 _PROJECT_PROTECTED: tuple[str, ...] = (
     ".git", ".claude", ".goose", ".codex", ".grok", ".github/agents", ".github/hooks", "sandbox", ".agentteams",
 )
+#: Public name for other modules (``wasm_config``'s read-path check) that must refuse the same paths.
+PROJECT_PROTECTED: tuple[str, ...] = _PROJECT_PROTECTED
 
 #: Home persistence and credential paths (``~``-relative) a write root may not be at or inside.
 _HOME_PROTECTED: tuple[str, ...] = (
@@ -346,3 +348,30 @@ def runner_exclude_flags(manifest: dict[str, Any]) -> tuple[str, str]:
         note = (f'echo "NOTE: {len(raw) - len(safe)} protected_read_path(s) SKIPPED from --exclude '
                 '(unsafe chars, or a ~ form other than ~/); their read-exclusion is NOT enforced - fix the manifest." >&2\n')
     return flags, note
+
+
+def runner_root_expr(root: str) -> str:
+    """Return the bash expression for one VALIDATED write root in the goose Linux runner.
+
+    ``.`` is the repo root, ``~/x`` is under ``$HOME``, an absolute root is itself (never
+    ``$REPO_ROOT//abs``), anything else is under ``$REPO_ROOT``. The literal part is
+    ``shlex.quote``-d, so it can never expand even if validation were bypassed. Shared by the goose, codex
+    and grok runner emitters (moved here from ``_goose_sandbox_emit``, which re-exports it as ``_runner_root_expr``).
+
+    Args:
+        root: A write root that passed :func:`validate_write_roots`.
+
+    Returns:
+        The bash expression.
+
+    Raises:
+        Nothing.
+    """
+    rel = posixpath.normpath(root)
+    if rel == ".":
+        return '"$REPO_ROOT"'
+    if root.startswith("~/"):
+        return '"$HOME"/' + shlex.quote(posixpath.normpath(root[2:]))
+    if posixpath.isabs(root):
+        return shlex.quote(rel)
+    return '"$REPO_ROOT"/' + shlex.quote(rel)

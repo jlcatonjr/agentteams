@@ -630,3 +630,15 @@ def test_serve_requests_without_a_brief_reports_instead_of_crashing(tmp_path, ca
     args = argparse.Namespace(description=None, project=str(tmp_path), output=None, once=True)
     assert run_serve_requests(args) == 1
     assert "requires --description" in capsys.readouterr().err
+
+
+def test_runner_start_refuses_when_a_wasm_jails_runtime_is_absent(project, key_file):
+    """WASM plan P12: a sandbox: wasm jail whose wasmtime/interpreter is not installed refuses at start (fail closed)."""
+    root, _ = project
+    brief = json.loads((root / "brief.json").read_text())
+    brief["confined_programs"] = {"producer": {"sandbox": "wasm", "wasm": {"languages": ["python"]}}}
+    (root / "brief.json").write_text(json.dumps(brief))
+    with pytest.raises(R.RunnerError, match="sandbox: wasm.*--wasm-install"):
+        R.Runner(root, root / "brief.json", P.load_policy(brief, brief_rel="brief.json"))
+    assert R.Runner(root, root / "brief.json", P.load_policy({**brief, "confined_programs": {}},
+                                                             brief_rel="brief.json")).close() is None

@@ -70,7 +70,7 @@ is a requested OS sandbox selected by a **privilege profile**:
 
 | Profile | OS boundary | Emits |
 |---|---|---|
-| **`cooperative`** | None — the opt-out | No sandbox request |
+| **`cooperative`** | None (`os_sandbox: "off"` is the dedicated off switch) | No sandbox request |
 | **`confined`** | Requested — **today's default** | A sandbox request token |
 | **`exclusive`** | Requested + read-exclusion | A sandbox request token **and** `denyRead` |
 

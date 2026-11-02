@@ -56,6 +56,8 @@ The runner refuses to start when:
 - another runner holds the lock;
 - the key file is unusable. It must sit in `~/.config/agentteams/keys`, be owned by you, have mode 0600, and
   not be a symlink.
+- a `confined_programs` entry is on `sandbox: wasm` and wasmtime or one of its languages' interpreters is not
+  installed or does not match its pin (`check_wasm_runtimes`; see [`runner_wasm`](runner-wasm.md)).
 
 ## Crash recovery
 
