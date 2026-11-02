@@ -240,6 +240,17 @@ def _build_parser() -> argparse.ArgumentParser:
              "it the PROMPT-ROOT CHANGED warning is advisory",
     )
     parser.add_argument(
+        "--doctor",
+        action="store_true",
+        dest="doctor",
+        help=(
+            "Report whether the project's providers agree, and write nothing: Project-Specific Rules copies and "
+            "notes pointers, memory-index copies, Copilot body limits, agents missing on some provider, notes "
+            "that differ by provider, and a frozen AGENTS.md with an older constitutional core. Exit code 1 on "
+            "a failure. Uses --project (else the working directory)."
+        ),
+    )
+    parser.add_argument(
         "--sync-project-rules",
         action="store_true",
         dest="sync_project_rules",

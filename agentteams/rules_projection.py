@@ -226,7 +226,8 @@ def projection_content(source: str, body: str, mode: str) -> str:
         Nothing.
     """
     note = (f"> **Projected from `{source}`** (`## Project-Specific Rules`) by agentteams. Edit the rules there; "
-            "this block is regenerated on `--update` and by `--sync-project-rules`.\n\n")
+            "this block is regenerated on `--update` and by `--sync-project-rules`. Agents missing on this provider "
+            "are listed in `references/agent-surface-matrix.md`.\n\n")
     if mode == "copy":
         return note + body
     titles, kept = "", 0

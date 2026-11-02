@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
+
+- **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one
+  row per agent and one column per surface. Each agent missing somewhere has its declared tools (front-matter
+  `tools`, a recipe's `extensions`, a Codex `sandbox_mode`) and whether they write or run. The file also states that
+  another provider's file is a role description, never a grant, and lists notes that differ by surface and skills on
+  some surfaces only. Every projected rules block points to it. It is reported, never enforced.
+- **`--doctor`** reports, without writing, whether the project's providers agree: rules copies and pointers (FAIL),
+  memory-index copies built from different sources (WARN), Copilot operator notes past the body limit (FAIL), agents
+  missing by surface and notes that differ (INFO), and a frozen `AGENTS.md` with an older constitutional core
+  (WARN). Exits 1 on a FAIL.
+
 ### added (cross-surface Phase 3: one project's rules reach every provider; baseAgent 2026-11-02)
 
 - **Project-Specific Rules are projected into every enabled provider's entry file** (`rules_projection`). The source

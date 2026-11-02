@@ -649,6 +649,9 @@ def _main_dispatch(
         from agentteams.cli.sync_switch import run_sync_cli
         return run_sync_cli(args)
 
+    if getattr(args, "doctor", False):
+        from agentteams.doctor import run_doctor
+        return run_doctor(getattr(args, "project", None))
     if getattr(args, "sync_project_rules", False):
         from agentteams.cli.post_build import run_sync_project_rules
         return run_sync_project_rules(getattr(args, "project", None))

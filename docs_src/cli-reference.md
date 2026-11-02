@@ -443,6 +443,20 @@ This is detection only: the build-log is agent-writable, and a fresh generate or
 re-baselines (it prints a `PROMPT-ROOT RE-BASELINE` notice first when it re-records over a detected
 change). See [`prompt_roots`](api-reference/prompt-roots.md).
 
+### `--doctor`
+
+Report whether the project's providers agree, and write nothing ([`doctor`](api-reference/doctor.md)). Uses `--project`,
+else the working directory, and the brief found there. The report covers:
+
+- **Rules projection (FAIL):** a Project-Specific Rules copy or notes pointer that is missing, out of date or refused.
+- **Memory index (WARN):** surface copies built from different sources.
+- **Copilot body limit (FAIL):** operator notes past 30,000 characters.
+- **Agents (INFO):** agents missing on some surface (the full list is in `references/agent-surface-matrix.md`, written on
+  every generate and `--update`), and notes that differ by surface.
+- **Shared AGENTS.md (WARN):** a root `AGENTS.md` whose `constitutional_core` is older than the other entry files'.
+
+Exits `1` when any FAIL is reported.
+
 ### `--sync-project-rules`
 
 Copy the project's `## Project-Specific Rules` into every other enabled provider's entry file, so a rule written in one
