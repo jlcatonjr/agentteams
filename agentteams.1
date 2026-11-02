@@ -73,7 +73,7 @@ Check for template drift and structural changes without writing any files (exit 
 With \-\-check: also exit 1 when a prompt root (copilot\-instructions.md, AGENTS.md, .github/prompts/**, a team agent file, ...) changed since the last build. Without it the PROMPT\-ROOT CHANGED warning is advisory
 .TP
 .B \-\-refresh\-index
-Rebuild references/memory\-index.json only (no template emit/update). Useful after editing work summaries or docs.
+Rebuild every surface's references/memory\-index.json from the same sources (frozen surfaces skipped; no template emit/update). Useful after editing work summaries or docs.
 .TP
 .B \-\-agent\-check
 Run the ≤24h framework\-conformance check and exit (no template emit/update, no fetch, no adapter edits; records only a small local ledger). Prints STATUS=/NEEDS_AGENT_ACTION=/ROUTE=; on a route it names the drifting frameworks for @framework\-adapters\-expert. See references/provider\-adapter\-refresh.procedure.md §7.
@@ -85,7 +85,7 @@ Cadence window for \-\-agent\-check (default 24). Ignored without \-\-agent\-che
 With \-\-agent\-check: bypass the 24h ledger gate and check now. Ignored otherwise.
 .TP
 .B \-\-query\-index TEXT
-Query references/memory\-index.json and print ranked hits. Requires a pre\-existing index in the output directory.
+Query references/memory\-index.json and print ranked hits. Read\-only: a stale index is reported, not rebuilt. Uses another surface's index when the output directory has none.
 .TP
 .B \-\-query\-k N
 Number of ranked results to return with \-\-query\-index (default: 5).

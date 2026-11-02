@@ -1,8 +1,8 @@
 """recall.py — ``agentteams-recall``: read-only queries of the team's memory index and code index over MCP.
 
 For agents with no shell (Goose readers, Codex read-only agents) that need what ``--query-index`` and
-``--query-code`` give. Unlike those CLI commands, this server **never refreshes a stale index**: the CLI rewrites
-the index when it is stale, which is a write. It reads the existing files and returns each result set with the
+``--query-code`` give. Like ``--query-index`` (read-only since 2026-11-02), and unlike ``--query-code``, whose
+gitignored cache refreshes itself, this server **never refreshes a stale index**. It reads the existing files and returns each result set with the
 index's build time, so the caller can ask the orchestrator to refresh.
 """
 
