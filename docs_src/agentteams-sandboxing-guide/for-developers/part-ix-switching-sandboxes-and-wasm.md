@@ -26,12 +26,13 @@ environment, no network, limits 10^10 fuel / 64 MiB / 120 s. Widen one agent at 
 "wasm_sandbox": {
   "enabled": true,
   "languages": ["module", "python"],
-  "agents": {"primary-producer": {"read_paths": ["docs", "src"], "scratch": true}}
+  "agents": {"format-converter": {"read_paths": ["docs", "src"], "scratch": true}}
 }
 ```
 
 `read_paths` are mounted read-only; `scratch` is one private writable dir at
-`.agentteams/wasm/scratch/<agent>/`. There is no network key. Key reference:
+`.agentteams/wasm/scratch/<agent>/`. Widen a WASM-eligible agent (one that holds an execute tool): any other
+agent gets no `agentteams_wasm`, so its grant has no effect, and the render says so. There is no network key. Key reference:
 [`DESCRIPTION-FORMAT.md`](../../DESCRIPTION-FORMAT.md#wasm_sandbox).
 
 **The four combinations:**

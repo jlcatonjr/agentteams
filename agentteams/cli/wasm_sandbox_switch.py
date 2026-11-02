@@ -186,6 +186,9 @@ def report_wasm_wiring(manifest: dict, state: SandboxState, framework_id: str, *
 def report_wasm_enforcement(manifest: dict, project_root: Path) -> None:
     """Record ``manifest["wasm_enforcement"]`` and print the ``[WASM-ENFORCEMENT]`` lines (P13), after the emit.
 
+    First, a ``NOTE (WASM)`` (and a ``wasm-grant-no-effect`` advisory) for every widened grant the framework did not
+    wire (``_wasm_wiring.inert_grants``): a grant that does nothing is never silent (D2).
+
     Runs after the files are written, so the R1 merge check reads what this render emitted. Nothing while WASM is
     off.
 
@@ -195,11 +198,19 @@ def report_wasm_enforcement(manifest: dict, project_root: Path) -> None:
 
     Raises:
         ValueError: A malformed ``wasm_sandbox`` record.
+        ImportError: WASM is on and ``agentteams.wasm_exec`` is not importable (fail closed).
     """
     from agentteams import wasm_enforcement
+    from agentteams.frameworks._wasm_wiring import inert_grants
+    from agentteams.sandbox_state import effective_sandbox_state
 
     framework = str(manifest.get("framework") or "")
     if framework:
+        for slug, why in inert_grants(manifest, framework, effective_sandbox_state(manifest)):
+            message = (f"the wasm_sandbox.agents grant for {slug} has no effect on {framework}: {why}; widen an "
+                       "agent the framework wires, or drop the grant")
+            print(f"  NOTE (WASM): {message}", file=sys.stderr)
+            manifest.setdefault("advisories", []).append({"code": "wasm-grant-no-effect", "message": message})
         wasm_enforcement.report(manifest, framework, project_root=Path(project_root))
 
 
