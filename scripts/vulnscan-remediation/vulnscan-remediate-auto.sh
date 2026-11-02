@@ -40,7 +40,7 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 INSTALL_DIR="$CFG_DIR/vulnscan-remediation"
 # The tracked scripts --install copies (vulnscan-operator-actions.sh is site-local: never copied, never removed).
 FILES=(vulnscan-handoff-lib.sh vulnscan-target-agents.sh vulnscan-remediate-auto.sh
-       vulnscan-ensure-docker.sh vulnscan-daily-wrapped.sh)
+       vulnscan-ensure-docker.sh vulnscan-daily-wrapped.sh vulnscan-install-guard.sh)
 OPERATOR_ACTIONS="${VULNSCAN_OPERATOR_ACTIONS:-$INSTALL_DIR/vulnscan-operator-actions.sh}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-8}"
 GIVE_UP_HOUR="${GIVE_UP_HOUR:-17}"
@@ -107,6 +107,11 @@ case "${1:-}" in
 esac
 
 # ------------------------------------------------------------------------------------------- run once
+# Never remediate on the wrong code (vulnscan-install-guard.sh; an install from before the guard has no guard file)
+if [[ -f "$SRC/vulnscan-install-guard.sh" ]]; then
+  . "$SRC/vulnscan-install-guard.sh"
+  install_guard remediation || exit 4
+fi
 LOCK="$STATE_DIR/remediate.flock"
 LEGACY_LOCK="$STATE_DIR/remediate.lock"   # the mkdir lock of earlier versions (a directory holding a pid file)
 mkdir -p "$STATE_DIR"

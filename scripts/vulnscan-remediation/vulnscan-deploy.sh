@@ -75,6 +75,13 @@ sys.exit(subprocess.call(argv))' "$wait" "$STATE/remediate.flock" "$STATE/daily.
 PY="$HOME/.local/pipx/venvs/agentteams/bin/python"
 VS=("$PY" -P -m agentteams.vulnscan)
 "$PY" -P -c 'import importlib.metadata as m; print("agentteams", m.version("agentteams"))'
+# What the scheduled jobs check before they run (vulnscan-install-guard.sh): this commit is the deployed one.
+/usr/bin/python3 -I -c 'import json, os, sys, datetime
+tmp = sys.argv[2] + ".tmp"
+json.dump({"commit": sys.argv[1], "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")},
+          open(tmp, "w"))
+os.replace(tmp, sys.argv[2])' "$SHA" "$STATE/deployed.json"
+echo "  recorded the deployed commit in $STATE/deployed.json (the scheduled jobs refuse any other install)"
 agent_on="$("$PY" -P -c 'from agentteams.vulnscan import daily, agent_run as ar
 import sys
 try: a = ar.agent_cfg(daily.load_config())
