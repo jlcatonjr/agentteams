@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (cross-surface Phase 3: one project's rules reach every provider; baseAgent 2026-11-02)
+
+- **Project-Specific Rules are projected into every enabled provider's entry file** (`rules_projection`). The source
+  is the brief's new `project_rules_source`, else the first of `.claude/CLAUDE.md`, `CLAUDE.md`,
+  `.github/copilot-instructions.md`, `AGENTS.md` whose Rules region holds rules. Each target gets the rules in its own
+  Rules region between `PROJECTED-RULES` markers: `.github/copilot-instructions.md`, `.claude/CLAUDE.md` or
+  `CLAUDE.md`, `AGENTS.override.md` when it exists (else `AGENTS.md`), and `.goosehints`. Past Codex's 32 KiB budget
+  the Codex block is a binding reference with the rules' titles. `frozen_surfaces` are skipped; since Goose gets
+  `.goosehints`, a Codex freeze of the shared `AGENTS.md` no longer keeps rules from Goose. A copy edited by hand,
+  or a file with two Rules regions, is refused, not overwritten. Projection runs after every generate and
+  `--update`, and on the new `--sync-project-rules`. `--check` exits 1 when a copy is out of date or refused.
+- **`security` and `orchestrator` notes point to the rules** on each Markdown and Goose surface
+  (`PROJECT-RULES-POINTER`), because a delegated agent may not load its provider's entry file. A Codex TOML agent is
+  reported, not edited.
+- The generate and update paths share one eval-suite and memory-index write (`cli/post_build.py`).
+
+### fixed
+
+- **`--check` no longer fails on an operator's own notes.** When the manifest fingerprint moved (the live intel
+  moves it daily), `--check` compared each file with a fresh render, so any text in `## Project-Specific Notes` or
+  `## Project-Specific Rules` failed it. The comparison now carries the file's user regions into the render first,
+  as `--update` keeps them. An edit inside a fence still fails.
+
 ### fixed (cross-surface Phase 2: memory-index retrieval is read-only and spans every surface; baseAgent 2026-11-02)
 
 - **`--query-index` never writes.** A stale index used to be rebuilt by the query itself, rewriting the tracked

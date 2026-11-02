@@ -56,6 +56,7 @@ from agentteams.errors import (
 from agentteams.frameworks.registry import FRAMEWORKS
 # Pipeline helpers carved to generate_helpers.py (CH-07); re-imported so call sites and
 # tests/redteam references that resolve them via cli.generate keep working.
+from agentteams.cli.post_build import project_rules, write_suite_and_index
 from agentteams.cli.generate_helpers import (  # noqa: F401
     _sweep_capability_key,
     _apply_sibling_team_denies,
@@ -702,22 +703,9 @@ def _run_generate_inner(
                     f"  !  Delivery receipt write failed (build-log healed): {exc}",
                     file=sys.stderr,
                 )
-            try:
-                _write_eval_suite(manifest, output_dir)
-            except (OSError, EvalSuiteError) as exc:
-                # Non-fatal, same contract as the receipt: next --update
-                # re-emits the suite.
-                print(
-                    f"  !  Eval suite write failed (build-log healed): {exc}",
-                    file=sys.stderr,
-                )
-            try:
-                _write_memory_index(manifest, output_dir)
-            except (OSError, MemoryIndexError) as exc:
-                print(
-                    f"  !  Memory index write failed: {exc}",
-                    file=sys.stderr,
-                )
+            # Non-fatal, same contract as the receipt: the next --update re-emits both.
+            write_suite_and_index(manifest, output_dir, after="build-log healed")
+            project_rules(manifest, output_dir)  # every provider gets the project's rules (baseAgent P1/P2)
             # Code index (F-CODEIDX) — lazy: keep an *existing* gitignored cache
             # fresh on --update (query-time is the primary trigger). §8.2.
             _refresh_existing_code_index(manifest, output_dir)
@@ -940,20 +928,8 @@ def _run_generate_inner(
         # RCC2 unified the render pipeline. Non-fatal, same contract as on
         # --update; eval-suite.json is drift-excluded by construction so it
         # does not perturb snapshot comparisons (.md-only).
-        try:
-            _write_eval_suite(manifest, output_dir)
-        except (OSError, EvalSuiteError) as exc:
-            print(
-                f"  !  Eval suite write failed (team generated): {exc}",
-                file=sys.stderr,
-            )
-        try:
-            _write_memory_index(manifest, output_dir)
-        except (OSError, MemoryIndexError) as exc:
-            print(
-                f"  !  Memory index write failed: {exc}",
-                file=sys.stderr,
-            )
+        write_suite_and_index(manifest, output_dir, after="team generated")
+        project_rules(manifest, output_dir)
         if args.cost_routing:
             try:
                 _write_model_routing(manifest, output_dir)
