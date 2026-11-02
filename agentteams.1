@@ -73,7 +73,7 @@ Check for template drift and structural changes without writing any files (exit 
 With \-\-check: also exit 1 when a prompt root (copilot\-instructions.md, AGENTS.md, .github/prompts/**, a team agent file, ...) changed since the last build. Without it the PROMPT\-ROOT CHANGED warning is advisory
 .TP
 .B \-\-sync\-project\-rules
-Copy the project's Project\-Specific Rules (from the brief's project_rules_source, else the first instruction file that has rules) into every other provider's entry file, and a pointer into the security and orchestrator notes; frozen surfaces skipped, hand\-edited copies refused. Runs after every \-\-update too. Uses \-\-project (else the working directory).
+Copy the project's Project\-Specific Rules (from the brief's project_rules_source, else the one instruction file that has rules) into every other provider's entry file, and a pointer into the security and orchestrator notes; frozen surfaces skipped, hand\-edited copies refused. Runs after every \-\-update too. Runs in the working directory only; with \-\-dry\-run it writes nothing.
 .TP
 .B \-\-refresh\-index
 Rebuild every surface's references/memory\-index.json from the same sources (frozen surfaces skipped; no template emit/update). Useful after editing work summaries or docs.

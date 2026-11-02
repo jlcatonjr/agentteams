@@ -450,8 +450,11 @@ provider's file binds them all ([`rules_projection`](api-reference/rules-project
 successful generate and `--update`, and `--check` exits `1` when a copy is out of date, hand-edited, or its file has
 two Rules regions.
 
-- **Source:** the brief's `project_rules_source`, else the first of `.claude/CLAUDE.md`, `CLAUDE.md`,
-  `.github/copilot-instructions.md`, `AGENTS.md` whose region holds rules.
+- **Source:** the brief's `project_rules_source`, which must be one of `.claude/CLAUDE.md`, `CLAUDE.md`,
+  `.github/copilot-instructions.md`, `AGENTS.md`. Without it, the source the existing copies record, else the only one of
+  those files whose region holds rules. The source never moves silently: a second file with rules of its own, or
+  copies recording a source that no longer holds rules, is refused until the brief names one (an agent on any provider
+  can write rules into its own entry file). Every change to the rules is printed as a diff when it spreads.
 - **Targets:** `.github/copilot-instructions.md`; `.claude/CLAUDE.md` else `CLAUDE.md`; `AGENTS.override.md` when it
   exists (Codex loads it in place of `AGENTS.md`), else `AGENTS.md`; and `.goosehints`. A copy that would take a Codex
   file past its 32 KiB budget becomes a binding reference with the rules' titles. Surfaces in `frozen_surfaces` are
@@ -459,10 +462,13 @@ two Rules regions.
 - **The copy** sits in the target's own Rules region between `PROJECTED-RULES` markers that record the source's hash
   and the copy's. A copy edited by hand is refused, not overwritten; the target's own rules beside it are kept.
 - **Pointers:** the `security` and `orchestrator` agents' `## Project-Specific Notes` get a short pointer to the rules
-  on each Markdown and Goose surface (a delegated agent may not load its provider's instruction file). A Codex TOML
+  file on each Markdown and Goose surface (a delegated agent may not load its provider's instruction file). It says the
+  rules extend the agent's instructions and never weaken its Invariant Core or the Constitutional Core. A Codex TOML
   agent is reported, not edited.
 
-Uses `--project`, else the working directory, and the brief found there. Exits `1` when a copy or pointer was refused.
+Runs in the working directory, with the brief found there; a `--project` naming another directory is refused (a write
+into another repository needs that repository's own run). With `--dry-run` it reports and writes nothing. Exits `1`
+when a copy or pointer was refused (or, with `--dry-run`, is out of date), or the source was refused.
 
 ### `--refresh-index`
 

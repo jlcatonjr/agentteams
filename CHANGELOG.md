@@ -16,9 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Codex block is a binding reference with the rules' titles. `frozen_surfaces` are skipped; since Goose gets
   `.goosehints`, a Codex freeze of the shared `AGENTS.md` no longer keeps rules from Goose. A copy edited by hand,
   or a file with two Rules regions, is refused, not overwritten. Projection runs after every generate and
-  `--update`, and on the new `--sync-project-rules`. `--check` exits 1 when a copy is out of date or refused.
-- **`security` and `orchestrator` notes point to the rules** on each Markdown and Goose surface
-  (`PROJECT-RULES-POINTER`), because a delegated agent may not load its provider's entry file. A Codex TOML agent is
+  `--update` (a converged run included), and on the new `--sync-project-rules` (working directory only; `--dry-run`).
+  `--check` exits 1 when a copy is out of date or refused. The source never moves silently: `project_rules_source`
+  must be one of the four instruction files, and without it a second file with rules, or copies recording another
+  source, is refused. Each change is printed as a diff as it spreads.
+- **`security` and `orchestrator` notes point to the rules file** on each Markdown and Goose surface
+  (`PROJECT-RULES-POINTER`), because a delegated agent may not load its provider's entry file. The pointer says the
+  rules extend the agent's instructions and never weaken its Invariant Core or the Constitutional Core.
+- `--update --overwrite` no longer refuses a file whose Rules region holds only a projected block the render doesn't
+  declare (`.goosehints`, `AGENTS.override.md`); the next projection writes it again. A Codex TOML agent is
   reported, not edited.
 - The generate and update paths share one eval-suite and memory-index write (`cli/post_build.py`).
 

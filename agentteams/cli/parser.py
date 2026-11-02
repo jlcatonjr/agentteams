@@ -244,10 +244,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="sync_project_rules",
         help=(
-            "Copy the project's Project-Specific Rules (from the brief's project_rules_source, else the first "
+            "Copy the project's Project-Specific Rules (from the brief's project_rules_source, else the one "
             "instruction file that has rules) into every other provider's entry file, and a pointer into the "
             "security and orchestrator notes; frozen surfaces skipped, hand-edited copies refused. Runs after "
-            "every --update too. Uses --project (else the working directory)."
+            "every --update too. Runs in the working directory only; with --dry-run it writes nothing."
         ),
     )
     parser.add_argument(
