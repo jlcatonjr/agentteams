@@ -477,6 +477,14 @@
         ["docs/**/*.md"]
       ]
     },
+    "memory_index_extra_files": {
+      "type": "array",
+      "description": "Optional named Markdown files merged into the durable memory index. Each entry is a project-relative path to one .md file; globs, absolute paths, directories, missing files and files whose real path leaves the project are skipped. Use it to index checked documents one by one (for example deliverables under Projects/) where an open folder or glob in memory_index_extra_dirs would also index, and commit snippets of, every later file there. See docs_src/api-reference/memory-index.md.",
+      "items": { "type": "string" },
+      "examples": [
+        ["Projects/Alpha/00-scope.md", "docs/operator/runbook.md"]
+      ]
+    },
     "memory_index_exclude": {
       "type": "array",
       "description": "Optional consumer-declared project-relative paths/globs to EXCLUDE from the durable memory index, even when they would otherwise be swept in by the built-in defaults (workSummaries/, docs_src/, references/) or by memory_index_extra_dirs. Each entry is matched against a source's project-relative posix path as a directory prefix (entry, or entry + '/') or an fnmatch glob. Use this when durable content has been relocated out of the repository (e.g. to a private work-docs repo) so its paths and content snippets are not embedded in the committed, publicly-visible index. Absolute paths are ignored. See docs_src/api-reference/memory-index.md.",

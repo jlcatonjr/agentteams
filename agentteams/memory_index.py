@@ -629,14 +629,7 @@ def _finish_index(
 def is_index_stale(
     index: dict[str, Any], sources: Iterable[Path | str], *, root: Path | None = None
 ) -> bool:
-    """Return True when any source file is newer than the index build time.
-
-    Invalid/missing timestamp metadata, or an ``index_format_version`` other than
-    :data:`INDEX_FORMAT_VERSION`, is treated as stale for safety. A document marked
-    ``"origin": "text"`` was built from in-memory text
-    (:func:`build_memory_index_from_texts`) and is skipped, so an index built only from
-    texts is stale only when *sources* holds a file newer than it. Every other document
-    is hash-checked against its file; a missing or unreadable file is stale.
+    """Return True when the index no longer describes its sources (:func:`index_staleness`).
 
     Args:
         index: A parsed index payload.
@@ -644,21 +637,47 @@ def is_index_stale(
         root: The project root the index was built against. **Required when the
             index stores relative paths** — without it, each ``path`` resolves
             against the process CWD, the hash read fails, and the index is reported
-            stale on every call, triggering a full rebuild per query. Defaults to
-            ``None`` for indexes that store absolute paths.
+            stale on every call. Defaults to ``None`` for indexes that store absolute paths.
 
     Returns:
         ``True`` when the index is stale and should be rebuilt.
     """
+    return index_staleness(index, sources, root=root) is not None
+
+
+def index_staleness(
+    index: dict[str, Any], sources: Iterable[Path | str], *, root: Path | None = None,
+    complete_sources: bool = False,
+) -> str | None:
+    """Say why the index is stale, or return None when it is current.
+
+    Invalid/missing timestamp metadata, or an ``index_format_version`` other than
+    :data:`INDEX_FORMAT_VERSION`, is stale for safety. A document marked
+    ``"origin": "text"`` was built from in-memory text (:func:`build_memory_index_from_texts`)
+    and is skipped. Every other document is hash-checked against its file; a missing or
+    unreadable file is stale. With *complete_sources*, a file-built index whose ``source_count``
+    differs from the number of sources is stale too: a source added since the build can be older
+    than ``built_at`` (a copied or checked-out file), which the mtime gate alone misses (baseAgent P5).
+
+    Args:
+        index: A parsed index payload.
+        sources: The current source files.
+        root: The project root the index was built against (see :func:`is_index_stale`).
+        complete_sources: *sources* is the full source set the index is built from (the CLI's), so a
+            different count means a source was added or dropped.
+
+    Returns:
+        A short reason, or ``None``.
+    """
     if index.get("index_format_version") != INDEX_FORMAT_VERSION:
-        return True
+        return "its format version is not the current one"
     built_at = index.get("built_at")
     if not isinstance(built_at, str) or not built_at:
-        return True
+        return "it has no build time"
     try:
         built_dt = datetime.fromisoformat(built_at.replace("Z", "+00:00"))
     except ValueError:
-        return True
+        return "its build time is invalid"
     built_ts = built_dt.timestamp()
 
     # Hash-aware freshness when available. We still keep the legacy mtime gate
@@ -674,14 +693,21 @@ def is_index_stale(
         if isinstance(path_str, str) and isinstance(expected_hash, str) and expected_hash:
             actual_hash = _source_text_hash(resolve_path(path_str, root))
             if not actual_hash or actual_hash != expected_hash:
-                return True
+                return f"{path_str} changed or is gone"
 
+    source_list = list(sources)
+    recorded = index.get("source_count")
+    from_files = not any(isinstance(d, dict) and d.get("origin") == _TEXT_ORIGIN for d in index.get("documents", []))
+    if complete_sources and from_files and isinstance(recorded, int) and recorded != len(source_list):
+        return f"it was built from {recorded} source file(s); there are {len(source_list)} now"
     latest_source_ts = 0.0
-    for p in sources:
+    for p in source_list:
         mtime = _source_mtime(Path(p))
         if mtime > latest_source_ts:
             latest_source_ts = mtime
-    return latest_source_ts > built_ts
+    if latest_source_ts > built_ts:
+        return "a source file is newer than the index"
+    return None
 
 
 def _ranked_hits(
@@ -889,6 +915,7 @@ __all__ = [
     "FALLBACK_POLICY",
     "build_memory_index",
     "build_memory_index_from_texts",
+    "index_staleness",
     "is_index_stale",
     "query_index",
 ]
