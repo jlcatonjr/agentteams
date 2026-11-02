@@ -11,9 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Turning a sandbox off is governed.** Five transitions are constraint-relaxing effects (Rule 15):
   `sandbox-os-off`, `sandbox-wasm-off` (WASM off after on, or the model-substrate floor lowered),
   `wasm-grant-widen`, `native-exec-keep` and `wasm-to-os-switch`. In a governed workspace, which is the default
-  (`enforce_decision_signing` defaults to true from the first render), each needs an exactly scoped decision row
-  signed with the operator's Ed25519 key; an HMAC signature is not enough and a HALT blocks it. Standing exceptions
-  get a 90-day sunset under the exception registry's aggregate cap (default one). Ungoverned workspaces get a
+  (`enforce_decision_signing` defaults to true from the first render), each new relaxation needs an exactly scoped
+  decision row signed with the operator's Ed25519 key; an HMAC signature is not enough and a HALT blocks it. One
+  carve-out: an OS-off state recorded before the workspace was governed, with no exception ever recorded for it
+  (typically set at the ungoverned first render), continues on later renders without a signature, with a
+  `SANDBOX RELAXATION ... predates sandbox governance` notice and a `pre-governance` build-log record. Standing
+  exceptions get a 90-day sunset under the exception registry's aggregate cap (default one). Ungoverned workspaces get a
   `SANDBOX RELAXATION` notice and a build-log record instead. A team that never used the switches keeps its old,
   ungated `confined` → `cooperative` move.
 - **With WASM on, the control plane is session-write-denied:** the emitted Claude / Goose session sandboxes deny
@@ -21,8 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enforcement is claimed only where it is checked.** The per-framework verdict (`wasm_enforcement` in the team
   manifest, `[WASM-ENFORCEMENT]` lines) is `enforced` / `conditional` only with the OS sandbox on and the
   control-plane rules merged in the live configuration: Claude sub-agents once the settings are merged, Goose for
-  direct recipe runs, Codex `conditional` under its confined launcher. Grok is `declared`; Copilot, AGENTS.md and
-  every top-level session are `advisory`. Convert, interop and sync claim nothing (`ADVISORY ONLY`).
+  direct recipe runs, Codex `conditional` under its confined launcher. Grok is `declared` only under
+  `native_exec: deny` (under the default `replace` it is `advisory`: no `run_wasm`); Copilot, AGENTS.md and every
+  top-level session are `advisory`. Convert, interop and sync claim nothing (`ADVISORY ONLY`).
 - **Downloads are explicit and pinned.** The WASM runtime and interpreters are fetched only by `--wasm-install`, never
   during a render, checked against pinned sizes and sha256 before extraction, and re-hashed on every use; any mismatch
   fails closed. Shipped pins: wasmtime 36.0.20 (adopted inside the 14-day cooldown under a recorded `@security`
