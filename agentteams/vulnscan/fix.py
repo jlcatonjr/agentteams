@@ -57,6 +57,7 @@ from pathlib import Path
 from agentteams.vulnscan import _http, image_fix, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
+from agentteams.vulnscan.npm_ops import OWN_PR  # noqa: F401  (re-export: defined in the leaf npm_ops)
 from agentteams.vulnscan.npm_ops import semver_line as _semver_line
 from agentteams.vulnscan.versions import is_final, major, version_key
 
@@ -65,18 +66,15 @@ NPM_REGISTRY = "https://registry.npmjs.org/"    # fixed: a repository .npmrc can
 NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
 #: Heads every Cargo.lock section of a fix plan (agents read it through ``get_fix_plans``).
 CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor refuses the change), so do not "
-              "request `stage-fix` for these rows; report them for a person to run the command shown, then "
-              "`cargo build` and the tests. \"→\" is the smallest version the advisories call fixed.")
+              "request `stage-fix` for these rows; report each, with the command shown (then `cargo build` and the "
+              f"tests), as {OWN_PR}. \"→\" is the smallest version the advisories call fixed.")
 #: Heads every base-image section of a fix plan.
 IMAGE_NOTE = ("Plan-only for `stage-fix` and `stage-major`: they never edit a Dockerfile or compose file, so do not "
               "request them for these rows. A row whose action is `stage-image` (an end-of-life official runtime "
               "image in a Dockerfile `FROM`) may be staged with `stage-image`, on its own, when the grant names it: "
-              "it moves the tag to the one under \"→\". Report every other row for a person to change `FROM <ref>` "
-              "(or `image:`) to a supported line, e.g. the tag under \"→\", then rebuild and run the tests. The "
-              "image contents are not scanned.")
-#: The lever a row no executor op can stage is left to: the repository's own PR (its team, or a handoff ``own-pr``
-#: verdict), never an unnamed hand fix.
-OWN_PR = "left to the repository's own PR"
+              "it moves the tag to the one under \"→\". Report every other row, with its change (`FROM <ref>` or "
+              "`image:` to a supported line, e.g. the tag under \"→\", then a rebuild and the tests), as "
+              f"{OWN_PR}. The image contents are not scanned.")
 #: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
 #: repository content: a name that could break the command or the table gets no command).
 _CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
@@ -92,8 +90,9 @@ def lockfile_note(name: str) -> str:
         The note.
     """
     return (f"Plan-only: `stage-fix` never edits a `{name}` (the executor refuses the change), so do not request "
-            "`stage-fix` for these rows; report them for a person to run the command shown, then "
-            f"{lockfiles.FORMATS[name].then}. \"→\" is the smallest version the advisories call fixed.")
+            "`stage-fix` for these rows; report each, with the command shown (then "
+            f"{lockfiles.FORMATS[name].then}), as {OWN_PR}. \"→\" is the smallest version the advisories call "
+            "fixed.")
 
 
 def _plain(text: str) -> str:

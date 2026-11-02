@@ -532,14 +532,14 @@ def _load_directive_ledger(log_path: Path) -> tuple[list[str], list[dict[str, st
         The stripped header columns and the rows as dicts (missing cells coerced to ``""``).
 
     Raises:
-        MgmtDirectiveError: The file cannot be read or is not parseable CSV.
+        MgmtDirectiveError: The file cannot be read, is not UTF-8, or is not parseable CSV.
     """
     try:
         with log_path.open("r", encoding="utf-8", newline="") as fh:
             reader = csv.DictReader(fh)
             columns = [c.strip() for c in (reader.fieldnames or [])]
             rows = [{k: (v or "") for k, v in row.items()} for row in reader]
-    except (OSError, csv.Error) as exc:
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
         raise MgmtDirectiveError(f"unable to read management-directives log: {exc}") from exc
     return columns, rows
 

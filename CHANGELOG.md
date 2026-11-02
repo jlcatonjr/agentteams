@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   private packages; skipped `npm update` moves name the tools container or the repository's own PR; the agent prompt
   reports plan-only commands as left to the repository's own PR; server fix plans call host checks and unlisted
   Python packages operator decisions. The git-config refusals (environment faults) still say "fix it by hand".
+- The same wording now reaches the agent from every side: the Cargo.lock, base-image and lockfile plan notes, the
+  `stage-image` hold reasons, the plan-only refusal of `stage-fix` and the `repo-held` notice ("sign a grant naming
+  stage-major for it, or leave the upgrade to the repository's own PR"). `OWN_PR` lives in `npm_ops` and is
+  re-exported by `fix`. A directive ledger that is not UTF-8 now fails closed as unreadable instead of raising.
 
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 

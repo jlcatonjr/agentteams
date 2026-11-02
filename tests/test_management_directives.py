@@ -500,3 +500,47 @@ def test_directive_row_failures_reports_every_check(tmp_path):
     assert codes == [md.ROW_BAD_SIGNATURE, md.ROW_EXPIRED]
     ok, reason = md.validate_directive(rec, tmp_path, key=_KEY)
     assert not ok and "invalid signature" in reason   # first failure, unchanged
+
+
+def test_handoff_verdict_unreadable_ledger_is_unverified(tmp_path):
+    """A ledger that is not UTF-8 is reported (VERDICT_UNREADABLE), never an escaping decode error."""
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    _ledger(tmp_path).write_bytes(_ledger(tmp_path).read_bytes() + b"\xff\xfe\x00bad\n")
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_UNREADABLE
+    with pytest.raises(md.MgmtDirectiveError, match="unable to read"):
+        md._read_directive_rows(tmp_path)
+
+
+def test_handoff_verdict_malformed_header_is_unverified(tmp_path):
+    """A chained ledger missing another required column (here signature) is VERDICT_MALFORMED."""
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    rows = _rows(tmp_path)
+    _rewrite(tmp_path, rows, columns=[c for c in md.MGMT_DIRECTIVE_COLUMNS if c != "signature"])
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_MALFORMED
+
+
+def test_issue_directive_cli_prints_the_id_line_the_handoff_tooling_parses(tmp_path, capsys, monkeypatch):
+    """Pins the ``--issue-directive`` stdout line the operator's handoff tooling reads the new id from.
+
+    The site-local vulnscan-operator-actions.sh extracts the id with
+    ``sed -nE 's/^Issued management directive (directive-[0-9a-f]{16}): .*/\\1/p'``; a changed line means every
+    handoff reads unverified (fail-closed), so a format change must update that script too.
+    """
+    import re
+
+    from build_team import main
+
+    _write_roster(tmp_path, "ops-team")
+    monkeypatch.setenv(md.MGMT_KEY_ENV, _KEY)
+    rc = main(["--issue-directive", "--output", str(tmp_path), "--manager-team", "ops-team",
+               "--managed-team", "svc", "--task-scope", _SCOPE, "--expires-at", _FAR_FUTURE,
+               "--max-uses", "3", "--approver", "operator:test"])
+    assert rc == 0
+    lines = capsys.readouterr().out.splitlines()
+    ids = [m.group(1) for ln in lines
+           if (m := re.match(r"^Issued management directive (directive-[0-9a-f]{16}): ", ln))]
+    assert len(ids) == 1, lines
+    assert _rows(tmp_path)[-1]["directive_id"] == ids[0]
+    assert md.verify_handoff_directive(tmp_path, task_scope=_SCOPE, directive_id=ids[0], key=_KEY).verified

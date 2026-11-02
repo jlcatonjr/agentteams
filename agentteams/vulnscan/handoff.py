@@ -554,11 +554,13 @@ def _dispatch_verify_directive(args: argparse.Namespace) -> int:
 def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -> int:
     """Run ``handoff status`` (or ``handoff verify-directive``, :func:`_dispatch_verify_directive`).
 
-    Each repository shows its delivery (handoff or direct), the staged branch, the newest verdict for that fix
-    (``approved`` means ``open-pr`` may push it) and the packets no verdict answers yet.
+    ``status``: each repository shows its delivery (handoff or direct), the staged branch, the newest verdict for
+    that fix (``approved`` means ``open-pr`` may push it) and the packets no verdict answers yet.
+    ``verify-directive`` never loads the config.
 
     Args:
-        args: Parsed arguments (``repo``, ``json``).
+        args: Parsed arguments (``action``, ``json``; ``repo`` for status; ``team_dir``, ``handoff_id`` and
+            ``directive_id`` for verify-directive).
         load_cfg: Loads the daily config.
 
     Returns:
