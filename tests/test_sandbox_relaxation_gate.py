@@ -300,7 +300,10 @@ def test_pre_governance_os_off_continues_with_a_notice(tmp_path, capsys):
     later = gate.plan_relaxations(_st(os=False), _st(os=False), framework_id="claude", profile_would_emit=True)
     [rec] = gate.authorize(team, later, consume=True, now=_T0)
     assert rec["authorization"] == "pre-governance"
-    assert "SANDBOX RELAXATION: sandbox-os-off:claude predates sandbox governance" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "SANDBOX RELAXATION: sandbox-os-off:claude predates sandbox governance" in err
+    # W13R: this path reads no decision rows, so the notice must not offer signing as the remedy.
+    assert "turning the sandbox back on ends it" in err and "sign a decision to record it" not in err
 
 
 def test_runner_switch_is_standing_per_agent_and_retired_on_return(tmp_path, stub_ed25519):

@@ -456,8 +456,8 @@ def _authorize(team_dir: Path, relaxations: list[Relaxation], *, consume: bool,
             records[i] = _record(r, "active-exception", exception_id=";".join(str(e.get("id")) for e in entries))
         elif status == "pre-governance":
             print(f"  !  SANDBOX RELAXATION: {r.action} predates sandbox governance (no exception was ever "
-                  "recorded for it) and continues without a signature; turn the sandbox back on, or sign a decision "
-                  "to record it.", file=sys.stderr)
+                  "recorded for it) and continues without a signature; turning the sandbox back on ends it (a signed "
+                  "decision is not read on this path).", file=sys.stderr)
             records[i] = _record(r, "pre-governance")
         elif status == "refuse":
             message, lapsed = detail  # type: ignore[misc]
