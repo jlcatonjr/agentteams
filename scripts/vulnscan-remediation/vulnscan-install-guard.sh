@@ -39,11 +39,21 @@ print(json.loads(d).get("url", "") if d else "")' 2>/dev/null || true)"
     rm -f "$state/install-guard.json"
     return 0
   fi
-  /usr/bin/python3 -I -c 'import json, sys, datetime
+  # Record the refusal; notify for a new problem, else at most every 6 hours (the runner ticks every 30 minutes).
+  local quiet
+  quiet="$(/usr/bin/python3 -I -c 'import json, sys, datetime
+now = datetime.datetime.now(datetime.timezone.utc)
+try:
+    old = json.load(open(sys.argv[3]))
+    last = datetime.datetime.fromisoformat(old.get("notified", ""))
+    quiet = old.get("refused") == sys.argv[1] and (now - last).total_seconds() < 6 * 3600
+except (OSError, ValueError, TypeError, AttributeError):
+    old, quiet = {}, False
 json.dump({"refused": sys.argv[1], "job": sys.argv[2], "fix": "re-run scripts/vulnscan-remediation/vulnscan-deploy.sh",
-           "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}, open(sys.argv[3], "w"))' \
-    "$problem" "$who" "$state/install-guard.json" 2>/dev/null || true
+           "at": now.isoformat(timespec="seconds"),
+           "notified": old.get("notified") if quiet else now.isoformat(timespec="seconds")}, open(sys.argv[3], "w"))
+print(1 if quiet else 0)' "$problem" "$who" "$state/install-guard.json" 2>/dev/null || echo 0)"
   echo "$(date -u +%FT%TZ) install-guard: REFUSED $who: $problem; re-run vulnscan-deploy.sh" >&2
-  osascript -e "display notification \"${who//\"/\'} refused: ${problem//\"/\'}. Re-run vulnscan-deploy.sh.\" with title \"vulnscan: wrong agentteams installed\"" >/dev/null 2>&1 || true
+  [[ "$quiet" == 1 ]] || osascript -e "display notification \"${who//\"/\'} refused: ${problem//\"/\'}. Re-run vulnscan-deploy.sh.\" with title \"vulnscan: wrong agentteams installed\"" >/dev/null 2>&1 || true
   return 1
 }

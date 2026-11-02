@@ -872,6 +872,7 @@ mode, and it is recorded in `operator-clearances.log`.
 | `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
 | `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster. Both are operator-only: in auto mode it only reports what is missing, because a roster is a trust root and the brief is drafted from README text |
 | `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
+| `vulnscan-install-guard.sh` | Sourced first by the daily wrapper and the remediation runner: refuses a venv without `agentteams.vulnscan` or not installed from the commit `vulnscan-deploy.sh` recorded (exit 4, a notification at most every 6 hours) |
 | `vulnscan-deploy.sh` | Reinstalls the package from a commit; see [Deploying a new version](#deploying-a-new-version) |
 
 The handoff steps themselves come from a site-local `vulnscan-operator-actions.sh` in the install folder

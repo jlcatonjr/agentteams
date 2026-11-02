@@ -28,6 +28,10 @@ esac
 
 
 def _guard(tmp_path: Path, *, import_rc: int = 0, url: str = "", deployed: object = None) -> tuple[int, str, Path]:
+    stub = tmp_path / "bin"   # a stub osascript first on PATH: tests never pop a real notification; it logs each call
+    stub.mkdir(exist_ok=True)
+    (stub / "osascript").write_text(f'#!/bin/bash\necho notified >> "{tmp_path}/notified.log"\n', encoding="utf-8")
+    (stub / "osascript").chmod(0o755)
     py = tmp_path / "python"
     py.write_text(_FAKE_PY, encoding="utf-8")
     py.chmod(0o755)
@@ -38,7 +42,7 @@ def _guard(tmp_path: Path, *, import_rc: int = 0, url: str = "", deployed: objec
                                              encoding="utf-8")
     proc = subprocess.run(
         ["/bin/bash", "-c", f'. "{_GUARD}"; install_guard daily "$GUARD_STATE"'],
-        env={"PATH": "/usr/bin:/bin", "PY": str(py), "GUARD_STATE": str(state), "STATE": "/nonexistent-inherited", "FAKE_IMPORT_RC": str(import_rc),
+        env={"PATH": f"{stub}:/usr/bin:/bin", "PY": str(py), "GUARD_STATE": str(state), "STATE": "/nonexistent-inherited", "FAKE_IMPORT_RC": str(import_rc),
              "FAKE_URL": url, "HOME": str(tmp_path)},
         capture_output=True, text=True, timeout=60)
     return proc.returncode, proc.stderr, state
@@ -89,3 +93,58 @@ def test_both_scheduled_jobs_source_the_guard_and_the_installer_copies_it() -> N
     assert 'install_guard remediation "$STATE_DIR" || exit 4' in auto
     assert "vulnscan-install-guard.sh)" in auto.split("FILES=(", 1)[1].split("\n", 2)[1]
     assert '"$SHA" "$STATE/deployed.json"' in deploy
+
+
+def _notified(tmp_path: Path) -> int:
+    log = tmp_path / "notified.log"
+    return len(log.read_text().splitlines()) if log.exists() else 0
+
+
+def test_a_repeated_refusal_notifies_once_then_stays_quiet(tmp_path: Path) -> None:
+    for _ in range(3):
+        rc, _err, state = _guard(tmp_path, import_rc=1)
+        assert rc == 1
+    assert _notified(tmp_path) == 1
+    rec = json.loads((state / "install-guard.json").read_text())
+    rec["notified"] = "2000-01-01T00:00:00+00:00"   # six hours later: a reminder
+    (state / "install-guard.json").write_text(json.dumps(rec))
+    _guard(tmp_path, import_rc=1)
+    assert _notified(tmp_path) == 2
+    _guard(tmp_path, url="https://github.com/x/agentteams.git", deployed={"commit": _SHA})   # a new problem
+    assert _notified(tmp_path) == 3
+
+
+def _wrapper(tmp_path: Path, script: Path, *args: str, guard: bool = True) -> subprocess.CompletedProcess:
+    """Run an installed-style copy of a job script beside the guard, its interpreter lacking agentteams.vulnscan."""
+    inst = tmp_path / "installed"
+    inst.mkdir(exist_ok=True)
+    for f in (script, _GUARD, _DIR / "vulnscan-ensure-docker.sh"):
+        (inst / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    if not guard:   # an installed copy from before the guard existed
+        (inst / _GUARD.name).unlink()
+    (inst / "vulnscan-ensure-docker.sh").write_text("#!/bin/bash\necho 'READY stub'\n", encoding="utf-8")
+    home = tmp_path / "home"
+    venv = home / ".local" / "pipx" / "venvs" / "agentteams" / "bin"
+    venv.mkdir(parents=True, exist_ok=True)
+    (venv / "python").write_text("#!/bin/bash\nexit 1\n", encoding="utf-8")   # no agentteams.vulnscan
+    (venv / "python").chmod(0o755)
+    stub = tmp_path / "bin"
+    stub.mkdir(exist_ok=True)
+    (stub / "osascript").write_text("#!/bin/bash\n", encoding="utf-8")
+    (stub / "osascript").chmod(0o755)
+    return subprocess.run(["/bin/bash", str(inst / script.name), *args], capture_output=True, text=True, timeout=60,
+                          env={"PATH": f"{stub}:/usr/bin:/bin", "HOME": str(home), "VDR_WRAPPER_LOCKED": "1",
+                               "AGENTTEAMS_VULNSCAN_STATE_DIR": str(tmp_path / "state")})
+
+
+def test_the_daily_wrapper_refuses_but_ensure_only_still_runs(tmp_path: Path) -> None:
+    daily = _DIR / "vulnscan-daily-wrapped.sh"
+    refused = _wrapper(tmp_path, daily)
+    assert refused.returncode == 4 and "install-guard: REFUSED daily" in refused.stderr
+    drill = _wrapper(tmp_path, daily, "--ensure-only")
+    assert drill.returncode == 0 and "READY stub" in drill.stdout
+
+
+def test_an_installed_copy_without_the_guard_file_runs_as_before(tmp_path: Path) -> None:
+    out = _wrapper(tmp_path, _DIR / "vulnscan-daily-wrapped.sh", "--catch-up", guard=False)
+    assert "install-guard" not in out.stderr and out.returncode != 4
