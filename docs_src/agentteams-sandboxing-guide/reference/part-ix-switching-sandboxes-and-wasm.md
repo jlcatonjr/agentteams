@@ -37,7 +37,11 @@ default grant is **compute only**: stdio, no preopened directory, an empty envir
 fuel / memory / timeout limits (defaults 10^10 fuel, 64 MiB, 120 s; bounds in `wasm_exec.LIMIT_BOUNDS`).
 Per-agent widening in `wasm_sandbox.agents.<slug>` is read-only project paths (`read_paths`, mounted at
 `/project/<path>`) and/or one private writable scratch dir (`scratch: true`, always
-`.agentteams/wasm/scratch/<agent>/`). There is no network key. The full key reference is in
+`.agentteams/wasm/scratch/<agent>/`). A grant reaches an agent only through its `agentteams_wasm` copy: on
+Claude and Goose only a WASM-eligible agent (one holding an execute-class tool) gets one, and AGENTS.md and
+Grok wire none. A grant on any other agent has no effect, and the render prints `NOTE (WASM): the
+wasm_sandbox.agents grant for <slug> has no effect on <framework>: ...` and records a `wasm-grant-no-effect`
+advisory (`_wasm_wiring.inert_grants`, D2). There is no network key. The full key reference is in
 [`DESCRIPTION-FORMAT.md`](../../DESCRIPTION-FORMAT.md#wasm_sandbox).
 
 **What each confines.**
