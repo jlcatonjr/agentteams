@@ -158,6 +158,43 @@ def major_next_since(target: str, rows: list[dict[str, Any]]) -> str:
     return found[0]
 
 
+def major_beside_since(target: str, rows: list[dict[str, Any]]) -> str:
+    """Return the day ``target``'s non-major fix PR was opened, when ``stage-major`` is next beside it (vfr-b.B2).
+
+    A plan with both ``fix`` and ``major-held`` rows never reaches :func:`major_next_since`: its ``stage-fix``
+    succeeds, so it is never held, and the major rows were never requested while a patch row existed. Once the
+    ``fix`` rows have their PR, ``stage-major`` can stage the major rows as a second branch beside it (its own
+    ``close-superseded`` lane, :func:`.ops.lane_of`, so neither PR closes the other). That is: ``target``'s last
+    ``open-pr`` ``done`` row opened (or claimed) a PR that is neither ``major`` nor ``image``, the current fix plan
+    is the one of that day (a changed plan means new ``fix`` rows to stage first), and no ``stage-major`` row of any
+    kind follows it. The caller still checks the plan for major rows ``stage-major`` can take.
+
+    Args:
+        target: Canonical repository path.
+        rows: Ledger rows, in ledger order.
+
+    Returns:
+        The local date (``YYYY-MM-DD``) of that ``open-pr`` result, or "".
+    """
+    last = None
+    for i, r in enumerate(rows):
+        if r.get("op") == "open-pr" and r.get("target") == target and r.get("kind") == "done":
+            last = i
+    if last is None:
+        return ""
+    try:
+        result = json.loads(str(rows[last].get("detail", "")))
+        day = datetime.fromisoformat(str(rows[last]["ts"])).astimezone().date().isoformat()
+    except (KeyError, ValueError):   # a truncated or odd detail is unknown: nothing is marked
+        return ""
+    if not isinstance(result, dict) or result.get("major") is True or result.get("image") is True:
+        return ""
+    if any(r.get("op") == "stage-major" and r.get("target") == target for r in rows[last + 1:]):
+        return ""
+    then, now = plan_digest(target, day), plan_digest(target)
+    return day if then and then == now else ""
+
+
 def _read_held() -> dict[str, str]:
     try:
         data = json.loads(_held_file().read_text(encoding="utf-8"))

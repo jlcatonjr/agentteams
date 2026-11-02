@@ -20,7 +20,9 @@ operator tooling, outside this package.
 
 A verdict applies to a staged fix by its **content digest**, the suffix of the branch name
 ``vulnscan/<YYYYMMDD>-<digest>``: a fix re-staged on a later day is the same change under a new branch name. The
-newest row for a digest wins, so a later ``reject`` or ``defer`` withdraws an earlier approval.
+newest row for a digest wins, so a later ``reject`` or ``defer`` withdraws an earlier approval. An ``own-pr`` verdict
+lapses after seven days without an owner PR (:mod:`.handoff_lapse`, OD10); until then each record names the lapse date
+and the request the next packet carries.
 
 Delivery is ``handoff`` when the project's brief says ``vulnerability_scanning.delivery: handoff``, or for every
 repository when the operator's ``vulnscan.json`` sets ``"handoff_required": true`` (:func:`required`).
@@ -38,6 +40,7 @@ import stat
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +91,8 @@ class RepoHandoff:
     launcher: str = ""               # the sandbox/confine-run.sh the handoff's goose session would run under, or ""
     launcher_state: str = ""         # agentteams.launcher_lineage state, or "unknown" (lineage unreadable)
     launcher_detail: str = ""
+    lapses: str = ""                 # own-pr: the date it lapses (handoff_lapse, OD10), or ""
+    ask: str = ""                    # own-pr: the request the next handoff packet carries (handoff_lapse.packet_ask)
 
     @property
     def launcher_warning(self) -> str:
@@ -116,7 +121,8 @@ class RepoHandoff:
         return {"repo": self.repo, "required": self.required, "state": self.state, "staged_branch": self.staged_branch,
                 "verdict": self.verdict, "verdict_handoff": self.verdict_handoff, "homes": self.homes,
                 "pending": self.pending, "problems": self.problems, "launcher": self.launcher,
-                "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail}
+                "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail,
+                "lapses": self.lapses, "ask": self.ask}
 
 
 def digest_of(branch: str) -> str:
@@ -425,6 +431,12 @@ def status(cfg: dict[str, Any] | None, repos: list[Path], *, fallback: Path | No
             found, rec.problems = latest_verdict(repo, rec.staged_branch)
             if found is not None:
                 rec.verdict, rec.verdict_handoff = found.verdict, found.handoff_id
+            if rec.verdict == "own-pr":   # B1b: the clock starts at the first sight of the verdict (OD10)
+                from agentteams.vulnscan import handoff_lapse   # lazy: it imports this module
+
+                clock = handoff_lapse.clock(repo, rec.staged_branch)
+                rec.lapses = clock["lapses"] if clock else ""
+                rec.ask = handoff_lapse.packet_ask(repo, rec.staged_branch)
         out.append(rec)
     return out
 
@@ -460,6 +472,10 @@ def markdown(records: list[RepoHandoff]) -> str:
             bits.append(f"staged {r.staged_branch}")
         if r.pending:
             bits.append(f"{len(r.pending)} packet(s) awaiting a verdict")
+        if r.lapses:
+            due = r.lapses <= date.today().isoformat()
+            bits.append(f"own-pr {'lapsed' if due else 'lapses'} {r.lapses}"
+                        + (" (the executor opens its PR unless an owner PR updates the packages)" if due else ""))
         if r.launcher_state and r.launcher_state != "current":
             bits.append(f"launcher {r.launcher_state}")
         lines.append(f"- {Path(r.repo).name} ({mode}): " + "; ".join(bits))
@@ -522,6 +538,9 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
             print(f"  verdict: {rec.verdict} (handoff {rec.verdict_handoff})")
         if rec.pending:
             print(f"  packets awaiting a verdict: {', '.join(rec.pending)}")
+        if rec.lapses:
+            print(f"  own-pr lapses: {rec.lapses}")
+            print(f"  ask (for the next handoff packet): {rec.ask}")
         print(f"  launcher: {rec.launcher or '—'} ({rec.launcher_state}: {rec.launcher_detail})")
         if rec.launcher_warning:
             print(f"  warning: {rec.launcher_warning}")

@@ -464,20 +464,22 @@ def require_remote_branch(wt: Path, branch: str) -> None:
 _PLAN_NPM = re.compile(r"^## npm: `([^`\n]+)`$")
 
 
-def stage_major_packages(plan: str, repo: Path) -> list[str]:
+def stage_major_packages(plan: str, repo: Path, *, beside: bool = False) -> list[str]:
     """Return the ``major-held`` packages of a fix plan that ``stage-major`` could take, or [] when it has a ``fix`` row.
 
     The rules are :func:`agentteams.vulnscan.fix.fix_path`'s with ``allow_major``: a requirements pin (the plan's
     top table) is taken; an npm package only when :func:`.npm_major.direct_majors` (the rule
     :func:`agentteams.vulnscan.fix.npm_majors` applies) places it: listed directly in the ``package.json`` beside
     its lockfile, outside npm workspaces, the file neither a symlink nor unreadable. A lockfile path outside
-    ``repo`` takes nothing. Any ``fix`` row returns [] (the non-major fix is staged first). Only names
+    ``repo`` takes nothing. Any ``fix`` row returns [] (the non-major fix is staged first), unless ``beside``: the
+    ``fix`` rows already have their PR (:func:`.retry_guard.major_beside_since`), so they are skipped. Only names
     :func:`.mcp.package_name_ok` accepts are returned: they go into host-authored text the agent reads (C-4).
     The executor re-checks all of it when it stages.
 
     Args:
         plan: The fix plan's Markdown (:meth:`agentteams.vulnscan.fix.FixResult.markdown`).
         repo: The plan's repository (its ``stage-fix`` target).
+        beside: The plan's ``fix`` rows have an open PR: skip them instead of returning [] (vfr-b.B2).
 
     Returns:
         Package names, in plan order, without duplicates.
@@ -497,7 +499,7 @@ def stage_major_packages(plan: str, repo: Path) -> list[str]:
         if len(cells) <= action_at:
             continue
         name, action = cells[name_at], cells[action_at]
-        if action == "fix":
+        if action == "fix" and not beside:
             return []
         if action == "major-held" and section == "" and mcp.package_name_ok(name, "pypi"):
             pins.append(name)
@@ -513,7 +515,10 @@ def stage_major_packages(plan: str, repo: Path) -> list[str]:
 
 
 def _major_next(plans: list[tuple[str, str]]) -> dict[str, dict[str, Any]]:
-    """Return ``{target: {"since", "packages"}}`` for the plans whose next step is ``stage-major`` (see the caller)."""
+    """Return ``{target: {"since", "packages"[, "after"]}}`` for the plans whose next step is ``stage-major``.
+
+    See the caller. ``after: "fix-pr"`` marks the second case (vfr-b.B2): the plan's ``fix`` rows already have their PR.
+    """
     from agentteams.vulnscan import executor, ledger, retry_guard   # lazy: the executor imports this module
 
     try:
@@ -523,10 +528,17 @@ def _major_next(plans: list[tuple[str, str]]) -> dict[str, dict[str, Any]]:
     staged = {r.rstrip("/") for rec in executor.staged_records() if isinstance(r := rec.get("repo"), str)}
     out: dict[str, dict[str, Any]] = {}
     for target, text in plans:
-        since = "" if target.rstrip("/") in staged else retry_guard.major_next_since(target, rows)
+        if target.rstrip("/") in staged:
+            continue
+        since = retry_guard.major_next_since(target, rows)
         packages = stage_major_packages(text, Path(target)) if since else []
         if packages:
             out[target] = {"since": since, "packages": packages}
+            continue
+        since = retry_guard.major_beside_since(target, rows)   # B2: the fix rows have their PR; majors beside it
+        packages = stage_major_packages(text, Path(target), beside=True) if since else []
+        if packages:
+            out[target] = {"since": since, "packages": packages, "after": "fix-pr"}
     return out
 
 
@@ -541,13 +553,16 @@ def write_plan_levels(run_dir: Path) -> Path:
     after it): the repository's last ``stage-fix`` found nothing fixable without a major jump and is held at
     this plan (:func:`.retry_guard.major_next_since`), no ``stage-major`` followed, no fix is staged for it, and
     the plan has no ``fix`` row but has ``major-held`` rows ``stage-major`` can take (:func:`stage_major_packages`).
+    Or (vfr-b.B2, ``"after": "fix-pr"``): the plan has ``fix`` rows too, but its last non-major PR was opened at this
+    plan and no ``stage-major`` followed (:func:`.retry_guard.major_beside_since`), so the major rows go next, beside
+    that PR.
 
     Args:
         run_dir: The run directory (host side, before the agent starts).
 
     Returns:
         The file written: ``{"scan_only": {target: level}, "registry_problem": str,
-        "major_next": {target: {"since": date, "packages": [name, ...]}}}``.
+        "major_next": {target: {"since": date, "packages": [name, ...][, "after": "fix-pr"]}}}``.
     """
     try:
         entries = registry.load()

@@ -220,6 +220,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/ops.py",              # REPO_OPS: which ops get executor_guard and a repo-root grant
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
+    "agentteams/vulnscan/handoff_lapse.py",    # B1b/OD10: when an own-pr verdict stops deferring open-pr
     "agentteams/vulnscan/remediation_status.py",  # what blocks the executor (summary + notifications)
     "agentteams/vulnscan/remediation_report.py",  # infra (retried) vs policy (final): the anchored classification
     "agentteams/vulnscan/server_fixplan.py",   # per-host server fix plans (read-only)

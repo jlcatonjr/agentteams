@@ -63,7 +63,7 @@ from typing import Any, NamedTuple
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
 from agentteams.vulnscan import executor_pr, executor_supersede, image_fix, npm_major, open_prs, report_store
-from agentteams.vulnscan import repo_alias, retry_guard
+from agentteams.vulnscan import handoff_lapse, repo_alias, retry_guard
 from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.executor_env import (  # leaf: re-exported for callers and tests (H2)
     GIT_IDENTITY,
@@ -220,7 +220,8 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
         The grant used.
 
     Raises:
-        ExecError: An open escalation blocks the target; a repo op targets the publish grant's
+        ExecError: An open escalation blocks the target; a ``stage-major`` targets a repository with a staged fix and
+            no PR yet (it would replace that staged state, vfr-b.B2); a repo op targets the publish grant's
             ops repository, a protected repository (by common dir or origin) or a repository the
             registry enrols below ``remediate`` (:mod:`.executor_guard`); no grant
             covers the action, uses are exhausted, the decision log is missing,
@@ -243,11 +244,17 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
         executor_guard.refuse_repo_op(op, target, ALLOWED_CHANGED)   # enrolment, brief, plan-only manifests
         if why := retry_guard.futile_reason(op, target, rows):   # nothing fixable, plan unchanged since
             raise ExecError(why)
+        if op == "stage-major" and staged_file(Path(target)).is_file():   # B2: never over a fix that has no PR yet
+            raise ExecError("a fix is already staged for this repository and has no PR yet: request open-pr for it "
+                            "first; stage-major then stages the major upgrades as a second branch beside that PR")
     if op == "open-pr" and handoff.required(cfg, Path(target)):   # H3: the repository's orchestrator approves first
         branch = handoff.staged_branch(Path(target))
         problem = handoff.approval_problem(Path(target), branch) if branch else ""   # no staged fix: open_pr says so
+        if problem and (lapse := handoff_lapse.lapsed(Path(target), branch)):   # B1b/OD10: own-pr only, after 7 days
+            ledger.append(handoff_lapse.LAPSED_KIND, op=op, target=target, request_id=request_id, detail=lapse[:1000])
+            problem = ""
         if problem:
-            raise ExecError(problem)
+            raise ExecError(problem + handoff_lapse.pending_detail(Path(target), branch))
     grants, problems = grant.load_active()
     usable = [g for g in grants if grant.covers(g, op, target) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
     if not usable:

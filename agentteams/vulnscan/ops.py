@@ -33,19 +33,25 @@ def pr_of(row: dict[str, Any]) -> str:
 
 
 def lane_of(row: dict[str, Any]) -> str:
-    """Return the PR lane of a successful ``open-pr`` ledger row: ``"image"`` (a ``stage-image`` PR) or ``"deps"``.
+    """Return the PR lane of a successful ``open-pr`` ledger row: ``"image"``, ``"major"`` or ``"deps"``.
+
+    A ``stage-major`` PR has its own lane (vfr-b.B2): it is staged beside the repository's fix PR, so its
+    ``close-superseded`` must never close that fix PR, nor a later fix PR the MAJOR one.
 
     Args:
         row: A ledger row.
 
     Returns:
-        ``"image"`` when the row's JSON detail records ``"image": true``, else ``"deps"`` (older rows included).
+        ``"image"`` when the row's JSON detail records ``"image": true``, ``"major"`` when it records
+        ``"major": true``, else ``"deps"`` (older rows included).
     """
     try:
         detail = json.loads(str(row.get("detail") or "{}"))
     except ValueError:
         return "deps"
-    return "image" if isinstance(detail, dict) and detail.get("image") is True else "deps"
+    if not isinstance(detail, dict):
+        return "deps"
+    return "image" if detail.get("image") is True else "major" if detail.get("major") is True else "deps"
 
 
 def repo_of(url: str) -> str:

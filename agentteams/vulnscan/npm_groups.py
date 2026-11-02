@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -148,6 +149,27 @@ class LockGraph:
                     todo.append(user)
         return sorted(n for n in found if NPM_NAME.fullmatch(n))
 
+    def carried_by(self, name: str, version: str, raised: Iterable[str]) -> list[str]:
+        """Return the ``raised`` direct dependencies through which the transitive ``name@version`` is installed.
+
+        ``stage-major`` raises a direct dependency's ``package.json`` spec; a vulnerable package that only such a
+        dependency pulls in moves with it (vfr-b.B3: tinypool and esbuild under vitest and vite), so the plan names
+        the parent instead of calling the row independently held.
+
+        Args:
+            name: The vulnerable package (not itself a direct dependency).
+            version: Its installed version.
+            raised: The direct dependencies ``stage-major`` raises (or, in a dry run, could raise).
+
+        Returns:
+            The parents, sorted; ``[]`` when ``name`` is itself direct or no raised parent installs that copy.
+        """
+        parents = self.direct_parents(name, version)
+        if name in parents:
+            return []
+        wanted = set(raised)
+        return [p for p in parents if p in wanted]
+
     def moves(self, name: str, version: str) -> list[tuple[tuple[str, ...], str]]:
         """Return the ``npm update`` name sets that may fix ``name@version`` when ``npm audit fix`` did not, with why.
 
@@ -181,6 +203,20 @@ PLAN_NOTE = (" A row the audit fix leaves vulnerable is then retried with the `n
              "(`--no-save --package-lock-only --ignore-scripts`: its exact-peer group or direct parent, within "
              "the ranges `package.json` declares, never changing them), kept only when it removes an advisory "
              "and adds none.")
+
+
+def installed(packages: dict[str, dict[str, Any]], name: str, version: str) -> bool:
+    """Return whether a lockfile's ``packages`` map (:func:`load`) still installs ``name`` at ``version`` anywhere.
+
+    Args:
+        packages: :func:`load`'s map.
+        name: Package name.
+        version: Exact version.
+
+    Returns:
+        True when any non-root entry is that name at that version.
+    """
+    return any(k and npm_entry_name(k, v) == name and v.get("version") == version for k, v in packages.items())
 
 
 def annotate_plan(lockfile: Path, rows: list[Any]) -> str:

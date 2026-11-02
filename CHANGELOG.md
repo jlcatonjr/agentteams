@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (vulnscan: majors beside a fix PR, transitive rows that move with their parent, the own-pr lapse)
+
+- **vfr-b.B2: major upgrades are requested beside a fix PR.** A plan with both `fix` and `major-held` rows never
+  had its majors requested: its `stage-fix` succeeds, so it is never held (traffic-file-enrichment-app: a `qs` fix
+  PR, eight major rows). `executor_guard.write_plan_levels` now also marks such a plan in `major_next` with
+  `"after": "fix-pr"` once its last non-major PR was opened at the current plan and no `stage-major` followed
+  (`retry_guard.major_beside_since`), and `get_fix_plans` tells the agent to request `stage-major` now, as a
+  second branch. A `stage-major` PR now has its own `close-superseded` lane (`ops.lane_of`: `major`), so the MAJOR
+  PR never closes the fix PR beside it, nor the reverse. `authorize` refuses
+  `stage-major` (before a grant use) while a fix is staged with no PR, which it would otherwise replace. The task
+  text, the `request` tool description and the recipe's `daily_remediation` fence (v=9) allow it.
+- **vfr-b.B3: transitive rows that move with their parent are reported so.** After `stage-major` raises a direct
+  dependency, `fix.npm_majors` re-reads the re-resolved lockfile: a transitive `major-held` row the raised parent
+  installed and that is gone now becomes `moves-with` (`fix.MOVES_WITH`, naming the parent), not "stays held". A
+  dry-run plan notes on such rows `transitive: moves with <parent> when stage-major raises it` (this changes those
+  plans' digests once, so a `held:` mark lifts once). New `npm_groups.LockGraph.carried_by` and
+  `npm_groups.installed`.
+- **vfr-b.B1b: an `own-pr` verdict lapses after seven days (OD10).** New `agentteams.vulnscan.handoff_lapse`: the
+  clock starts at the first sight of `own-pr` for a staged fix's digest (a new digest or fix plan restarts it).
+  Until it runs out `open-pr` stays refused, naming the lapse date, and `handoff status` / the summary show the date
+  and the `ask` text the handoff packet should carry. After it, with no open owner PR updating the staged packages
+  (`open_prs.owner_prs`), `open-pr` proceeds under the existing grant and a `handoff-lapsed` ledger row is logged.
+  No new op or capability.
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install

@@ -341,6 +341,8 @@ def test_lane_of_defaults_to_deps() -> None:
     assert ops.lane_of({"detail": json.dumps({"pr": "x"})}) == "deps"
     assert ops.lane_of({"detail": "not json"}) == "deps"
     assert ops.lane_of({"detail": json.dumps({"pr": "x", "image": True})}) == "image"
+    assert ops.lane_of({"detail": json.dumps({"pr": "x", "major": True})}) == "major"   # vfr-b.B2: its own lane
+    assert ops.lane_of({"detail": json.dumps(["x"])}) == "deps"
 
 
 # ---------------------------------------------------------------- fix plan and MCP
@@ -449,3 +451,12 @@ def test_one_mode_and_contradictions_are_refused(tmp_path: Path) -> None:
         executor_pr.title("vulnscan/20261101-abc", mode="images")
     with pytest.raises(ValueError, match="contradictory"):
         executor.stage_fix(tmp_path, {}, major=True, mode="image")   # before any git runs
+
+
+def test_a_major_pr_beside_a_fix_pr_never_closes_it() -> None:   # vfr-b.B2
+    u = [f"https://github.com/o/app/pull/{n}" for n in (29, 30)]
+    rows = [_row(u[0]), {**_row(u[1]), "detail": json.dumps({"pr": u[1], "major": True})}]
+    closed: list[str] = []
+    out = executor_supersede.close_superseded(Path("/repos/app"), rows, view=lambda url: _pr(),
+                                              close=lambda url, c: closed.append(url))
+    assert out["replacement"] == u[1] and closed == []
