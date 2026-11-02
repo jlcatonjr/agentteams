@@ -43,6 +43,7 @@ import csv
 import hashlib
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -359,6 +360,89 @@ def _manager_on_roster(manager_team: str, root: Path) -> tuple[bool, str]:
     return (True, "")
 
 
+#: Per-row reason codes returned by :func:`directive_row_failures` (stable: callers branch on them,
+#: never on the human-readable message that accompanies each).
+ROW_NO_KEY = "no-key"
+ROW_BAD_SIGNATURE = "bad-signature"
+ROW_MALFORMED_EXPIRY = "malformed-expiry"
+ROW_EXPIRED = "expired"
+ROW_MALFORMED_USES = "malformed-uses"
+ROW_EXHAUSTED = "exhausted"
+ROW_OFF_ROSTER = "off-roster"
+ROW_REFUSED_SCOPE = "refused-scope"
+
+
+def directive_row_failures(
+    record: dict[str, str], root: Path, *, now: datetime | None = None, key: str | None = None,
+) -> list[tuple[str, str]]:
+    """Return EVERY check a directive row fails, as ``(reason_code, message)`` pairs in check order.
+
+    The checks are the five of :func:`validate_directive` (a. signature, b. expiry, c. use-counter,
+    d. manager roster, e. scope denylist), each evaluated independently: a row that is both expired
+    and badly signed reports BOTH codes, so a caller that tolerates one failure class (expired
+    history, :func:`verify_handoff_directive`) never has to rely on check order to know the rest
+    passed. An empty list means the row is fully valid.
+
+    Args:
+        record: The directive row.
+        root: The managed workspace root (for the roster lookup).
+        now: Reference time for expiry (defaults to now, UTC).
+        key: Override the signing key.
+
+    Returns:
+        The failures, each a ``ROW_*`` code with its human-readable message; empty when valid.
+    """
+    failures: list[tuple[str, str]] = []
+    did = record.get("directive_id")
+
+    # (a) signature — a missing key fails closed here rather than escaping.
+    try:
+        if not verify_directive_signature(record, key=key):
+            failures.append((ROW_BAD_SIGNATURE, f"directive {did!r} has an invalid signature"))
+    except MgmtDirectiveError as exc:
+        failures.append((ROW_NO_KEY, str(exc)))
+
+    # (b) expiry — a malformed deadline fails CLOSED as invalid (not an unhandled ValueError).
+    try:
+        if is_expired(record.get("expires_at", ""), now=now):
+            failures.append(
+                (ROW_EXPIRED, f"directive {did!r} has expired ({record.get('expires_at')})")
+            )
+    except (ValueError, KeyError) as exc:
+        failures.append((
+            ROW_MALFORMED_EXPIRY,
+            f"directive {did!r} has a malformed expires_at ({record.get('expires_at')!r}): {exc}",
+        ))
+
+    # (c) use-counter.
+    try:
+        max_uses = int(record.get("max_uses", ""))
+        uses = int(record.get("uses", ""))
+    except (TypeError, ValueError):
+        failures.append((ROW_MALFORMED_USES, f"directive {did!r} has non-integer max_uses/uses"))
+    else:
+        if max_uses <= 0 or uses >= max_uses:
+            failures.append((
+                ROW_EXHAUSTED,
+                f"directive {did!r} is exhausted (uses={uses}, max_uses={max_uses})",
+            ))
+
+    # (d) manager roster (non-empty roster required).
+    on_roster, reason = _manager_on_roster(record.get("manager_team", ""), root)
+    if not on_roster:
+        failures.append((ROW_OFF_ROSTER, reason))
+
+    # (e) scope denylist / recognized-scope gate — the security boundary.
+    if not scope_is_allowed(record.get("task_scope", "")):
+        failures.append((
+            ROW_REFUSED_SCOPE,
+            f"directive {did!r} names a refused task_scope ({record.get('task_scope')!r}) — a "
+            "directive can never clear a destructive, bulk, cross-repo, or governance/trust scope "
+            "(a valid signature cannot override this)",
+        ))
+    return failures
+
+
 def validate_directive(
     record: dict[str, str], root: Path, *, now: datetime | None = None, key: str | None = None,
 ) -> tuple[bool, str]:
@@ -373,9 +457,10 @@ def validate_directive(
     d. ``manager_team`` is on the authorized-managers roster (a non-empty roster is required);
     e. ``task_scope`` passes :func:`scope_is_allowed` (the denylist / recognized-scope gate).
 
-    Any failure returns ``(False, reason)``. Uncertainty refuses. This does NOT verify that the
-    directive authorizes a *particular* requested task — that is EXACT-scope, decided by
-    :func:`directive_authorizes`.
+    Any failure returns ``(False, reason)`` for the FIRST failed check (every failure, with its
+    reason code, is available from :func:`directive_row_failures`). Uncertainty refuses. This does
+    NOT verify that the directive authorizes a *particular* requested task — that is EXACT-scope,
+    decided by :func:`directive_authorizes`.
 
     Args:
         record: The directive row.
@@ -386,56 +471,9 @@ def validate_directive(
     Returns:
         ``(True, "ok")`` when every check passes; ``(False, reason)`` on the first failure.
     """
-    # (a) signature — a missing key fails closed here rather than escaping.
-    try:
-        signature_ok = verify_directive_signature(record, key=key)
-    except MgmtDirectiveError as exc:
-        return (False, str(exc))
-    if not signature_ok:
-        return (False, f"directive {record.get('directive_id')!r} has an invalid signature")
-
-    # (b) expiry — a malformed deadline fails CLOSED as invalid (not an unhandled ValueError).
-    try:
-        expired = is_expired(record.get("expires_at", ""), now=now)
-    except (ValueError, KeyError) as exc:
-        return (
-            False,
-            f"directive {record.get('directive_id')!r} has a malformed expires_at "
-            f"({record.get('expires_at')!r}): {exc}",
-        )
-    if expired:
-        return (
-            False,
-            f"directive {record.get('directive_id')!r} has expired ({record.get('expires_at')})",
-        )
-
-    # (c) use-counter.
-    try:
-        max_uses = int(record.get("max_uses", ""))
-        uses = int(record.get("uses", ""))
-    except (TypeError, ValueError):
-        return (False, f"directive {record.get('directive_id')!r} has non-integer max_uses/uses")
-    if max_uses <= 0 or uses >= max_uses:
-        return (
-            False,
-            f"directive {record.get('directive_id')!r} is exhausted "
-            f"(uses={uses}, max_uses={max_uses})",
-        )
-
-    # (d) manager roster (non-empty roster required).
-    on_roster, reason = _manager_on_roster(record.get("manager_team", ""), root)
-    if not on_roster:
-        return (False, reason)
-
-    # (e) scope denylist / recognized-scope gate — the security boundary.
-    if not scope_is_allowed(record.get("task_scope", "")):
-        return (
-            False,
-            f"directive {record.get('directive_id')!r} names a refused task_scope "
-            f"({record.get('task_scope')!r}) — a directive can never clear a destructive, bulk, "
-            "cross-repo, or governance/trust scope (a valid signature cannot override this)",
-        )
-
+    failures = directive_row_failures(record, root, now=now, key=key)
+    if failures:
+        return (False, failures[0][1])
     return (True, "ok")
 
 
@@ -488,6 +526,44 @@ def assert_directive_chain_intact(rows: list[dict[str, str]], columns: list[str]
         previous = _directive_chain_digest(row)
 
 
+def _load_directive_ledger(log_path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    """Parse a directive ledger file into ``(columns, rows)`` without validating header or chain.
+
+    Args:
+        log_path: The ledger CSV.
+
+    Returns:
+        The stripped header columns and the rows as dicts (missing cells coerced to ``""``).
+
+    Raises:
+        MgmtDirectiveError: The file cannot be read, is not UTF-8, or is not parseable CSV.
+    """
+    try:
+        with log_path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.DictReader(fh)
+            columns = [c.strip() for c in (reader.fieldnames or [])]
+            rows = [{k: (v or "") for k, v in row.items()} for row in reader]
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
+        raise MgmtDirectiveError(f"unable to read management-directives log: {exc}") from exc
+    return columns, rows
+
+
+def _require_directive_header(columns: list[str]) -> None:
+    """Raise unless ``columns`` carries every :data:`MGMT_DIRECTIVE_COLUMNS` column.
+
+    Args:
+        columns: The ledger's header columns.
+
+    Raises:
+        MgmtDirectiveError: A required column is absent.
+    """
+    if not set(MGMT_DIRECTIVE_COLUMNS).issubset(columns):
+        raise MgmtDirectiveError(
+            "management-directives log is malformed: expected header "
+            + ",".join(MGMT_DIRECTIVE_COLUMNS)
+        )
+
+
 def _read_directive_rows(root: Path) -> list[dict[str, str]]:
     """Return all directive rows from the managed workspace's ledger (empty list if absent).
 
@@ -506,18 +582,8 @@ def _read_directive_rows(root: Path) -> list[dict[str, str]]:
     log_path = root / MGMT_DIRECTIVES_LOG_REL
     if not log_path.exists():
         return []
-    try:
-        with log_path.open("r", encoding="utf-8", newline="") as fh:
-            reader = csv.DictReader(fh)
-            columns = [c.strip() for c in (reader.fieldnames or [])]
-            if not set(MGMT_DIRECTIVE_COLUMNS).issubset(columns):
-                raise MgmtDirectiveError(
-                    "management-directives log is malformed: expected header "
-                    + ",".join(MGMT_DIRECTIVE_COLUMNS)
-                )
-            rows = [{k: (v or "") for k, v in row.items()} for row in reader]
-    except (OSError, csv.Error) as exc:
-        raise MgmtDirectiveError(f"unable to read management-directives log: {exc}") from exc
+    columns, rows = _load_directive_ledger(log_path)
+    _require_directive_header(columns)
     assert_directive_chain_intact(rows, columns)
     return rows
 
@@ -550,6 +616,168 @@ def verify_directives(
         if not ok:
             problems.append(reason)
     return problems
+
+
+#: Ledger-level verdict codes returned by :func:`verify_handoff_directive` (stable: the operator's
+#: handoff tooling branches on these, never on printed prose).
+VERDICT_VERIFIED = "verified"
+VERDICT_NO_LEDGER = "no-ledger"
+VERDICT_UNREADABLE = "unreadable-ledger"
+VERDICT_UNCHAINED = "unchained-ledger"
+VERDICT_MALFORMED = "malformed-ledger"
+VERDICT_CHAIN_BROKEN = "chain-broken"
+VERDICT_CURRENT_MISSING = "current-missing"
+VERDICT_CURRENT_DUPLICATE = "current-duplicate"
+VERDICT_CURRENT_INVALID = "current-invalid"
+VERDICT_HISTORY_INVALID = "history-invalid"
+
+
+@dataclass(frozen=True)
+class HandoffDirectiveVerdict:
+    """The structured result of :func:`verify_handoff_directive`.
+
+    Attributes:
+        verified: True only when :attr:`reason` is :data:`VERDICT_VERIFIED`.
+        reason: One ``VERDICT_*`` code.
+        detail: A human-readable explanation (for display only; never parse it).
+        directive_id: The current row's directive id ("" when no single current row was found).
+        expired_history: How many OTHER rows failed only by having expired (normal ledger history).
+        problems: ``(directive_id, ROW_* code, message)`` for every failing check on every row,
+            including the tolerated expired-history ones.
+    """
+
+    verified: bool
+    reason: str
+    detail: str
+    directive_id: str = ""
+    expired_history: int = 0
+    problems: tuple[tuple[str, str, str], ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the verdict as a JSON-ready dict.
+
+        Returns:
+            The fields, with ``problems`` as a list of ``{directive_id, code, message}`` dicts.
+        """
+        return {
+            "verified": self.verified, "reason": self.reason, "detail": self.detail,
+            "directive_id": self.directive_id, "expired_history": self.expired_history,
+            "problems": [
+                {"directive_id": d, "code": c, "message": m} for d, c, m in self.problems
+            ],
+        }
+
+
+def verify_handoff_directive(
+    root: Path, *, task_scope: str, directive_id: str = "",
+    now: datetime | None = None, key: str | None = None,
+) -> HandoffDirectiveVerdict:
+    """Verify ONE directive (the *current* row) against a whole ledger; return a structured verdict.
+
+    ``--verify-directives`` fails a ledger on ANY invalid row, so a ledger whose older directives
+    have simply expired reads as failed forever after its first day. This verdict separates the
+    one row the caller cares about from the ledger's history, fail-closed everywhere else:
+
+    * **Ledger.** The ledger must exist, carry the full header INCLUDING ``prev_digest`` (an
+      unchained ledger is :data:`VERDICT_UNCHAINED`, never passed), and its hash chain must be
+      intact (:func:`assert_directive_chain_intact`, the same check every reader runs).
+    * **Current row.** Exactly one row has ``task_scope == task_scope`` (exact equality). When
+      ``directive_id`` is given, that row must carry it and the id must occur exactly once in the
+      ledger. Zero matches is :data:`VERDICT_CURRENT_MISSING`; more than one (a replayed or
+      duplicated row) is :data:`VERDICT_CURRENT_DUPLICATE`. The current row must pass EVERY check
+      of :func:`directive_row_failures` — an expired current row is :data:`VERDICT_CURRENT_INVALID`.
+    * **History (every other row).** A row whose ONLY failure is :data:`ROW_EXPIRED` is tolerated
+      and counted in ``expired_history``. Any other failure on any row — bad signature, missing
+      key, exhausted, off-roster, refused scope, malformed expiry or use-counter — even
+      alongside expiry, is :data:`VERDICT_HISTORY_INVALID`. The carve-out is decided by reason
+      code over every check, never by check order or message text.
+
+    Read-only: consumes nothing. Verifying a directive grants nothing either; a directive only
+    waives a re-ask (see the module docstring).
+
+    Args:
+        root: The managed team directory holding :data:`MGMT_DIRECTIVES_LOG_REL` and the roster.
+        task_scope: The exact scope the current directive must carry.
+        directive_id: The id the caller just issued ("" when it is not known, e.g. on a resume).
+        now: Reference time for expiry (defaults to now, UTC).
+        key: Override the signing key.
+
+    Returns:
+        The verdict; :attr:`HandoffDirectiveVerdict.verified` is True only for a clean result.
+    """
+    scope = (task_scope or "").strip()
+    wanted_id = (directive_id or "").strip()
+    log_path = root / MGMT_DIRECTIVES_LOG_REL
+    if not log_path.is_file():
+        return HandoffDirectiveVerdict(
+            False, VERDICT_NO_LEDGER, f"no directive ledger at {log_path}",
+        )
+    try:
+        columns, rows = _load_directive_ledger(log_path)
+    except MgmtDirectiveError as exc:
+        return HandoffDirectiveVerdict(False, VERDICT_UNREADABLE, str(exc))
+    if "prev_digest" not in columns:
+        return HandoffDirectiveVerdict(
+            False, VERDICT_UNCHAINED,
+            "the directive ledger has no prev_digest chain column (an unchained ledger is never "
+            "treated as verified)",
+        )
+    try:
+        _require_directive_header(columns)
+    except MgmtDirectiveError as exc:
+        return HandoffDirectiveVerdict(False, VERDICT_MALFORMED, str(exc))
+    try:
+        assert_directive_chain_intact(rows, columns)
+    except MgmtDirectiveError as exc:
+        return HandoffDirectiveVerdict(False, VERDICT_CHAIN_BROKEN, str(exc))
+
+    in_scope = [i for i, r in enumerate(rows) if scope and r["task_scope"].strip() == scope]
+    with_id = [i for i, r in enumerate(rows) if wanted_id and r["directive_id"].strip() == wanted_id]
+    if len(in_scope) > 1 or len(with_id) > 1:
+        return HandoffDirectiveVerdict(
+            False, VERDICT_CURRENT_DUPLICATE,
+            f"task scope {scope!r} occurs {len(in_scope)} time(s) and directive id {wanted_id!r} "
+            f"{len(with_id)} time(s) in the ledger (a replayed or duplicated directive)",
+        )
+    if not in_scope or (wanted_id and with_id != in_scope):
+        return HandoffDirectiveVerdict(
+            False, VERDICT_CURRENT_MISSING,
+            f"no single directive with task scope {scope!r}"
+            + (f" and id {wanted_id!r}" if wanted_id else "") + " in the ledger",
+        )
+    current = in_scope[0]
+    current_id = rows[current].get("directive_id", "")
+
+    problems: list[tuple[str, str, str]] = []
+    current_bad: list[str] = []
+    history_bad: list[str] = []
+    expired_history = 0
+    for index, row in enumerate(rows):
+        failures = directive_row_failures(row, root, now=now, key=key)
+        problems.extend((row.get("directive_id", ""), code, msg) for code, msg in failures)
+        if index == current:
+            current_bad.extend(msg for _, msg in failures)
+        elif failures and {code for code, _ in failures} == {ROW_EXPIRED}:
+            expired_history += 1
+        elif failures:
+            history_bad.extend(msg for code, msg in failures if code != ROW_EXPIRED)
+    if current_bad:
+        return HandoffDirectiveVerdict(
+            False, VERDICT_CURRENT_INVALID, "; ".join(current_bad),
+            current_id, expired_history, tuple(problems),
+        )
+    if history_bad:
+        return HandoffDirectiveVerdict(
+            False, VERDICT_HISTORY_INVALID, "; ".join(history_bad),
+            current_id, expired_history, tuple(problems),
+        )
+    note = (
+        f"; {expired_history} earlier directive(s) expired (normal)" if expired_history else ""
+    )
+    return HandoffDirectiveVerdict(
+        True, VERDICT_VERIFIED, f"directive {current_id}, scope {scope}{note}",
+        current_id, expired_history, tuple(problems),
+    )
 
 
 def issue_directive(
@@ -634,16 +862,19 @@ def _append_directive_row(root: Path, record: dict[str, str]) -> None:
 
 __all__ = [
     "AUTHORIZED_MANAGERS_REL",
+    "HandoffDirectiveVerdict",
     "MGMT_DIRECTIVE_COLUMNS",
     "MGMT_DIRECTIVES_LOG_REL",
     "MGMT_KEY_ENV",
     "MgmtDirectiveError",
     "assert_directive_chain_intact",
     "directive_authorizes",
+    "directive_row_failures",
     "issue_directive",
     "scope_is_allowed",
     "sign_directive",
     "validate_directive",
     "verify_directive_signature",
     "verify_directives",
+    "verify_handoff_directive",
 ]

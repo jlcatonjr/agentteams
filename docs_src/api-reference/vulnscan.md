@@ -499,8 +499,8 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 `__main__` defines most commands. The rest come from modules that add their own (`register(sub)`) and run
 them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `publish-grant`, `publish`,
 `agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`),
-`handoff` (`handoff status`), `remediation_report` (`remediation-report`), `docker_readiness` (`ready`) and
-`verify` (`verify`, `effectiveness`).
+`handoff` (`handoff status`, `handoff verify-directive`), `remediation_report` (`remediation-report`),
+`docker_readiness` (`ready`) and `verify` (`verify`, `effectiveness`).
 
 | Command | Purpose |
 |---|---|
@@ -528,6 +528,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `status [--project DIR] [--json]` | One project's status, read-only and without the network: identity, enrolment level, fix checkout, whether the daily run scans it, last scan time, its open package findings by severity in the latest run, the `stage-fix` / `open-pr` actions the ledger recorded for it (branch and PR URL, not checked online), and whether a valid grant covers its fix checkout |
 | `halts` | Open escalations and decision-log HALTs, with how to clear each |
 | `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)) |
+| `handoff verify-directive --team-dir DIR --handoff-id ID [--directive-id ID] [--json]` | One handoff's review directive against its team's ledger (`management_directives.verify_handoff_directive`): verified only when the `prev_digest` chain is intact, exactly one row carries the scope `review-vulnscan-handoff-<id>` (and `--directive-id`, when given), that row passes every check, and every other row is valid or only expired. Prints one line (or the verdict as JSON, with a reason code); exit 0 verified, 1 not, 2 bad arguments. Reporting only: it authorizes nothing ([handoff](#agentteamsvulnscanhandoff)) |
 | `remediation-report LEDGER SINCE [--log FILE] [--run NAME] [--attempt N] [--out FILE] [--agent-since TS] [--agent-until TS]` | One unattended remediation attempt's outcome from the executor's ledger rows at or after `SINCE` (ISO, UTC or with an offset): one JSON object (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) on stdout, and `remediation.md` written to `--out`. `--agent-since`/`--agent-until` (the agent run's `started`/`finished`) add its executor rows, never past `SINCE`, in their own section; a bad or out-of-range time is a Needs-you note, never a usage error (listed under Needs you, never counted as infra). Run by `scripts/vulnscan-remediation/vulnscan-remediate-auto.sh` ([remediation_report](#agentteamsvulnscanremediation_report)) |
 | `ready [--ensure] [--json]` | Docker readiness, layer by layer (`cli`, `daemon`, `tools_image`, `agent_image`, `tools_selftest`, `agent_selftest`), each with its state and, when it fails, a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). Read-only without `--ensure`; `--ensure` makes the repairs the `docker` config allows (start Docker, re-run a stale self-test) under the daily run lock, and only checks while a daily run holds it. `--json` prints `{layer: {state, code, message}}`. Never builds an image ([`docker_readiness`](#agentteamsvulnscandocker_readiness)) |
 | `verify [--mirror-refresh SCRIPT] [--force] [--date DATE]` | Same-day verification, run by the afternoon job (`vulnscan-daily-wrapped.sh --verify`, installed by `vulnscan-remediate-auto.sh --install`): refresh the scan mirrors with `--mirror-refresh` (`bash SCRIPT refresh`), re-scan each root whose mirror moved since the morning run, re-audit the hosts an executor `server-*` op ran against today, and write `<run>/verify.json` with each assessed morning finding's outcome. Takes `remediate.flock` and `daily.lock` without waiting; stages nothing and opens no PR. `--force` verifies again although today's `verify.json` is complete; `--date` names the run (default today). Prints one JSON line ([verify](#agentteamsvulnscanverify)) |
@@ -617,6 +618,7 @@ its fixes from `origin/HEAD` against the checkout, so use `scan_mirror` with the
 | `status` | printed | — | no such directory, or an unusable config | — | — |
 | `tools-image build`, `tools-selftest` | built / passed | failed | a setup error (an unusable config) | — | — |
 | `handoff status` | printed | — | an unusable config | — | — |
+| `handoff verify-directive` | verified | unverified (any reason code) | no `--team-dir`, or not a handoff id | — | — |
 | `remediation-report` | reported (an unreadable ledger is reported, as `error`) | — | a bad `SINCE`, or `--out` not writable | — | — |
 | `ready` | ready (no layer failed) | — | an unusable config | degraded (a layer failed; the first line names its reason code) | — |
 | `verify` | verified (or already verified today) | — | no config, or a bad `--date` | partial (a refresh, re-scan or audit failed), a lock held, or no morning run today | — |
@@ -1184,7 +1186,7 @@ or kind word; otherwise nothing is sent.
 | `publish-done` | Run report published to the ops repository. |
 | `run-stale` | No daily run has completed for {hours}h: running the missed scan now. Check: vulnscan schedule status |
 | `run-missing` | No daily run has completed yet: running it now. Check: vulnscan schedule status |
-| `repo-held` | A repository is held: nothing is fixable without a major upgrade and its fix plan has not changed. Upgrade it by hand. Run: vulnscan review |
+| `repo-held` | A repository is held: nothing is fixable without a major upgrade and its fix plan has not changed. Sign a grant naming stage-major for it, or leave the upgrade to the repository's own PR. Run: vulnscan review |
 | `stale-prs` | {count} remediation PR(s) waiting: {old} older than {days} days, {failing} failing CI. Run: vulnscan review |
 | `agent-down` | The remediation agent has not completed for {count} runs in a row. Run: vulnscan review |
 | `remediation-blocked` | Remediation is blocked ({count} reason(s)): see Remediation readiness in the summary. Run: vulnscan halts |
@@ -1812,7 +1814,7 @@ told never to request `stage-fix` for them, and `executor.validate_diff` refuses
 Plan-only rows for one `lockfiles.FORMATS` file (`go.mod`, `pnpm-lock.yaml`, `bun.lock`, `Gemfile.lock`,
 `gradle.lockfile`, `packages.lock.json`), from OSV, as `plan_cargo_lock` makes them: `plan-only` with `new` the
 minimal fixed version and the format's command in the note, `no-clean-release`, or `malicious`. A command is written
-only when the name, the installed and the fixed version all match the format's patterns, else "fix by hand".
+only when the name, the installed and the fixed version all match the format's patterns, else "left to the repository's own PR".
 Private packages are never sent to OSV. `markdown()` renders them under
 `## <label>: <lock> — plan-only (no staged edit)` (labels `Go`, `npm (pnpm)`, `npm (Bun)`, `RubyGems`,
 `Maven (Gradle)`, `NuGet`), headed by `lockfile_note(name)`; `executor.validate_diff` refuses a change to any of
@@ -3228,7 +3230,7 @@ image id and `flags_sha256`; only a full pass unlocks confined operations.
 
 Add `tools-image build` and `tools-selftest` to the vulnscan parser, and run one: 0 done or passed, 1
 failed, 2 a setup error. `handoff.register` / `handoff.dispatch` do the same for `handoff status` (0
-printed, 2 an unusable config).
+printed, 2 an unusable config) and `handoff verify-directive` (0 verified, 1 unverified, 2 bad arguments).
 
 ### `agentteams.vulnscan.docker_readiness`
 

@@ -20,7 +20,7 @@
 | ``tools-image build`` / ``tools-selftest`` | Build the tools image git, npm and the server kit run in, and prove its isolation (:mod:`.tools_image`) |
 | ``enroll`` / ``roots`` / ``status --project DIR`` | Enrol projects (operator only), effective scan roots, one project's status (:mod:`.project_cli`) |
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
-| ``handoff status`` | Staged fixes, the repository orchestrators' verdicts and pending packets (:mod:`.handoff`) |
+| ``handoff status`` / ``verify-directive`` | Staged fixes, verdicts and packets; one directive's verdict (:mod:`.handoff`) |
 | ``remediation-report LEDGER SINCE`` | One unattended remediation attempt's outcome (JSON) and ``remediation.md`` (:mod:`.remediation_report`) |
 | ``ready [--ensure] [--json]`` | Docker, the images and their self-tests, layer by layer with reason codes (:mod:`.docker_readiness`) |
 | ``verify [--mirror-refresh SCRIPT]`` | Same-day verification: re-scan what changed since the morning run, write ``verify.json`` (:mod:`.verify`) |

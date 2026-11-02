@@ -223,6 +223,6 @@ def test_fixplan_gives_the_os_release_its_own_line_and_non_node_runtimes_no_kit_
     assert any(ln.startswith("- nginx 1.26.1: behind-patch") and
                ln.endswith("— upgrade through the package manager or the vendor (no kit lever)") for ln in lines)
     assert "- node 18.19.0: eol: end of life" in lines and "--node-major" in md
-    host_checks = md.split("## Host checks (by hand)", 1)[1]
+    host_checks = md.split("## Host checks (operator decision; no kit lever)", 1)[1]
     assert "reboot required" in host_checks and "os-release" not in host_checks and "end-of-life" not in host_checks
     assert "--apply" in md and "--apply --os" not in md        # no new kit lever

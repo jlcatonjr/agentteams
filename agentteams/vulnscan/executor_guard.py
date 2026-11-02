@@ -367,6 +367,7 @@ def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
     if op not in ops.STAGE_OPS or op == "stage-image":   # stage-major too (same files); stage-image edits Dockerfiles
         return
     from agentteams.vulnscan import manifests, project_policy   # lazy: only stage-fix walks the repository
+    from agentteams.vulnscan.npm_ops import OWN_PR
 
     repo = Path(target)
     excl = project_policy.read_policy(repo).exclude_paths
@@ -375,7 +376,7 @@ def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
     plan_only = [rel for rel in found if rel.rsplit("/", 1)[-1] in manifests.PLAN_ONLY_LOCKS]
     if plan_only and not any(editable.search(rel) for rel in found):
         raise _exec_error(f"{repo.name}: only plan-only fixes here ({len(plan_only)} plan-only lockfile(s) such as "
-                          "Cargo.lock or go.mod); stage-fix never edits them: run the fix plan's commands by hand")
+                          f"Cargo.lock or go.mod); stage-fix never edits them: their fix-plan commands are {OWN_PR}")
 
 
 def refuse_repo_op(op: str, target: str, editable: re.Pattern[str]) -> None:

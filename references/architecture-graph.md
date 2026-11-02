@@ -5,7 +5,7 @@
 
 - Modules mapped: **416**
 - Packages: **14**
-- Internal import edges: **1503**
+- Internal import edges: **1507**
 - Distinct external dependencies: **11**
 
 ---
@@ -122,7 +122,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.grants` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger` | `agentteams.branch_cleanup`, `agentteams.cli.artifacts`, `agentteams.cli.decision_log`, `agentteams.cli.grant_commands`, `agentteams.cli.operator_signing` |
 | `agentteams.cli.itest_tripwire` | — | `agentteams.cli.standalone_modes` |
 | `agentteams.cli.json_mode` | — | `agentteams.cli.adopt_only`, `agentteams.cli.app`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate` |
-| `agentteams.cli.management_directives` | `agentteams.atomicio`, `agentteams.cli.frozen_surfaces`, `agentteams.cli.governance_targets`, `agentteams.cli.sandbox_effects`, `agentteams.cli.signed_ledger` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.effect_classifier`, `agentteams.cli.generate_helpers` |
+| `agentteams.cli.management_directives` | `agentteams.atomicio`, `agentteams.cli.frozen_surfaces`, `agentteams.cli.governance_targets`, `agentteams.cli.sandbox_effects`, `agentteams.cli.signed_ledger` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.effect_classifier`, `agentteams.cli.generate_helpers`, `agentteams.vulnscan.handoff` |
 | `agentteams.cli.mcp_grant_commands` | `agentteams.atomicio`, `agentteams.cli.operator_signing`, `agentteams.ingest`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy` | `agentteams.cli.app` |
 | `agentteams.cli.operator_signing` | `agentteams`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.cli.decision_text`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.cli.signer_location`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec`, `agentteams.integrity`, `agentteams.mcp_direct_grants` | `agentteams.cli.commands`, `agentteams.cli.grant_commands`, `agentteams.cli.mcp_grant_commands`, `agentteams.vulnscan.grant` |
 | `agentteams.cli.os_sandbox_switch` | `agentteams._sandbox_profiles`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._control_plane_protect`, `agentteams.host_features`, `agentteams.runner_wasm`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_enforcement` | `agentteams.cli.artifacts`, `agentteams.multi_sync` |
@@ -366,7 +366,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.agent_drivers_codex` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.mcp` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
 | `agentteams.vulnscan.agent_drivers_copilot` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.mcp` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
 | `agentteams.vulnscan.agent_recipe` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.vulnscan.agent_driver_base` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.selftest_cli` |
-| `agentteams.vulnscan.agent_run` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.docker_mode`, `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.run_records`, `agentteams.vulnscan.selftest_probe`, `agentteams.vulnscan.team_dir` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.report_store` |
+| `agentteams.vulnscan.agent_run` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.docker_mode`, `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.npm_ops`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.run_records`, `agentteams.vulnscan.selftest_probe`, `agentteams.vulnscan.team_dir` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.report_store` |
 | `agentteams.vulnscan.agent_settings` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.gateway_context` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.review` |
 | `agentteams.vulnscan.agent_upstreams` | `agentteams.vulnscan.gateway_dialects` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.team_dir` |
 | `agentteams.vulnscan.checkout_freshness` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.report` | `agentteams.vulnscan.daily` |
@@ -382,7 +382,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.escalations` | `agentteams.cli.signed_ledger`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.remediation_status`, `agentteams.vulnscan.review` |
 | `agentteams.vulnscan.executor` | `agentteams.cli.decision_log`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor_env`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.executor_pr`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.executor_supersede`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.handoff`, `agentteams.vulnscan.handoff_lapse`, `agentteams.vulnscan.image_fix`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.npm_major`, `agentteams.vulnscan.open_prs`, `agentteams.vulnscan.ops`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.repo_alias`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.retry_guard`, `agentteams.vulnscan.subproc_confine`, `agentteams.vulnscan.subproc_confine_ssh` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.effectiveness`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.executor_supersede`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.handoff`, `agentteams.vulnscan.handoff_lapse`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.worktree_fixes` |
 | `agentteams.vulnscan.executor_env` | `agentteams.vulnscan.paths` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_pr`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.handoff_lapse`, `agentteams.vulnscan.open_prs` |
-| `agentteams.vulnscan.executor_guard` | `agentteams`, `agentteams.cli.signed_ledger`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.mcp`, `agentteams.vulnscan.npm_major`, `agentteams.vulnscan.ops`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.registry`, `agentteams.vulnscan.repo_alias`, `agentteams.vulnscan.retry_guard` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant` |
+| `agentteams.vulnscan.executor_guard` | `agentteams`, `agentteams.cli.signed_ledger`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.mcp`, `agentteams.vulnscan.npm_major`, `agentteams.vulnscan.npm_ops`, `agentteams.vulnscan.ops`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.registry`, `agentteams.vulnscan.repo_alias`, `agentteams.vulnscan.retry_guard` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant` |
 | `agentteams.vulnscan.executor_pr` | `agentteams.vulnscan.executor_env`, `agentteams.vulnscan.publish` | `agentteams.vulnscan.executor` |
 | `agentteams.vulnscan.executor_serve` | `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.retry_guard`, `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.executor` |
 | `agentteams.vulnscan.executor_supersede` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.ops`, `agentteams.vulnscan.publish` | `agentteams.vulnscan.executor` |
@@ -393,9 +393,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.gateway_dlp` | `agentteams.vulnscan.gateway_dialects` | `agentteams.vulnscan.gateway`, `agentteams.vulnscan.gateway_context`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.mediation` |
 | `agentteams.vulnscan.gateway_peer` | — | `agentteams.vulnscan.gateway` |
 | `agentteams.vulnscan.grant` | `agentteams.cli.operator_signing`, `agentteams.cli.signed_ledger`, `agentteams.mcp_direct_grants`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.ops`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.registry` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.coverage`, `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.registry`, `agentteams.vulnscan.remediation_status`, `agentteams.vulnscan.review` |
-| `agentteams.vulnscan.handoff` | `agentteams.launcher_lineage`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.handoff_lapse`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.project_policy` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.handoff_lapse` |
+| `agentteams.vulnscan.handoff` | `agentteams.cli.management_directives`, `agentteams.launcher_lineage`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.handoff_lapse`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.project_policy` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.handoff_lapse` |
 | `agentteams.vulnscan.handoff_lapse` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_env`, `agentteams.vulnscan.handoff`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.open_prs`, `agentteams.vulnscan.retry_guard` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.handoff` |
-| `agentteams.vulnscan.image_fix` | `agentteams.vulnscan.fix`, `agentteams.vulnscan.images`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.open_prs`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.report`, `agentteams.vulnscan.retry_guard`, `agentteams.vulnscan.runtimes`, `agentteams.vulnscan.versions` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix` |
+| `agentteams.vulnscan.image_fix` | `agentteams.vulnscan.fix`, `agentteams.vulnscan.images`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.npm_ops`, `agentteams.vulnscan.open_prs`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.report`, `agentteams.vulnscan.retry_guard`, `agentteams.vulnscan.runtimes`, `agentteams.vulnscan.versions` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix` |
 | `agentteams.vulnscan.images` | `agentteams.vulnscan.manifests`, `agentteams.vulnscan.report`, `agentteams.vulnscan.runtimes` | `agentteams.vulnscan.engine`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.image_fix` |
 | `agentteams.vulnscan.infra_retry` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report` | `agentteams.vulnscan.daily` |
 | `agentteams.vulnscan.ledger` | `agentteams.vulnscan.paths` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.effectiveness`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.executor_supersede`, `agentteams.vulnscan.handoff`, `agentteams.vulnscan.handoff_lapse`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.review`, `agentteams.vulnscan.verify` |
@@ -407,7 +407,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.notify` | `agentteams.vulnscan.escalations` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.effectiveness`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_serve`, `agentteams.vulnscan.remediation_status` |
 | `agentteams.vulnscan.npm_groups` | `agentteams.vulnscan.manifests` | `agentteams.vulnscan.fix`, `agentteams.vulnscan.npm_ops` |
 | `agentteams.vulnscan.npm_major` | — | `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.npm_ops` |
-| `agentteams.vulnscan.npm_ops` | `agentteams.vulnscan._http`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.npm_groups`, `agentteams.vulnscan.npm_major`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.fix` |
+| `agentteams.vulnscan.npm_ops` | `agentteams.vulnscan._http`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.npm_groups`, `agentteams.vulnscan.npm_major`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.image_fix` |
 | `agentteams.vulnscan.offnpm_sources` | `agentteams.vulnscan.osv`, `agentteams.vulnscan.specifiers`, `agentteams.vulnscan.versions` | `agentteams.vulnscan.engine` |
 | `agentteams.vulnscan.open_prs` | `agentteams.vulnscan.executor_env` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.handoff_lapse`, `agentteams.vulnscan.image_fix` |
 | `agentteams.vulnscan.operator_cli` | `agentteams.cli.decision_log`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish` | `agentteams.vulnscan.__main__` |
@@ -4458,6 +4458,7 @@ digraph "agentteams architecture" {
         "agentteams.vulnscan.ledger",
         "agentteams.vulnscan.notes",
         "agentteams.vulnscan.notify",
+        "agentteams.vulnscan.npm_ops",
         "agentteams.vulnscan.paths",
         "agentteams.vulnscan.report_store",
         "agentteams.vulnscan.run_records",
@@ -4722,6 +4723,7 @@ digraph "agentteams architecture" {
         "agentteams.vulnscan.manifests",
         "agentteams.vulnscan.mcp",
         "agentteams.vulnscan.npm_major",
+        "agentteams.vulnscan.npm_ops",
         "agentteams.vulnscan.ops",
         "agentteams.vulnscan.project_policy",
         "agentteams.vulnscan.publish",
@@ -4873,6 +4875,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/vulnscan/handoff.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.cli.management_directives",
         "agentteams.launcher_lineage",
         "agentteams.vulnscan.executor",
         "agentteams.vulnscan.handoff_lapse",
@@ -4906,6 +4909,7 @@ digraph "agentteams architecture" {
         "agentteams.vulnscan.fix",
         "agentteams.vulnscan.images",
         "agentteams.vulnscan.manifests",
+        "agentteams.vulnscan.npm_ops",
         "agentteams.vulnscan.open_prs",
         "agentteams.vulnscan.project_policy",
         "agentteams.vulnscan.report",
@@ -10132,6 +10136,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.npm_ops"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
       "target": "agentteams.vulnscan.paths"
     },
     {
@@ -10620,6 +10628,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.vulnscan.executor_guard",
+      "target": "agentteams.vulnscan.npm_ops"
+    },
+    {
+      "source": "agentteams.vulnscan.executor_guard",
       "target": "agentteams.vulnscan.ops"
     },
     {
@@ -10836,6 +10848,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.vulnscan.handoff",
+      "target": "agentteams.cli.management_directives"
+    },
+    {
+      "source": "agentteams.vulnscan.handoff",
       "target": "agentteams.launcher_lineage"
     },
     {
@@ -10893,6 +10909,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.vulnscan.image_fix",
       "target": "agentteams.vulnscan.manifests"
+    },
+    {
+      "source": "agentteams.vulnscan.image_fix",
+      "target": "agentteams.vulnscan.npm_ops"
     },
     {
       "source": "agentteams.vulnscan.image_fix",

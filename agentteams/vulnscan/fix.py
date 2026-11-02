@@ -57,6 +57,7 @@ from pathlib import Path
 from agentteams.vulnscan import _http, image_fix, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
+from agentteams.vulnscan.npm_ops import OWN_PR  # noqa: F401  (re-export: defined in the leaf npm_ops)
 from agentteams.vulnscan.npm_ops import semver_line as _semver_line
 from agentteams.vulnscan.versions import is_final, major, version_key
 
@@ -68,15 +69,15 @@ NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
 MOVES_WITH = npm_groups.MOVES_WITH
 #: Heads every Cargo.lock section of a fix plan (agents read it through ``get_fix_plans``).
 CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor refuses the change), so do not "
-              "request `stage-fix` for these rows; report them for a person to run the command shown, then "
-              "`cargo build` and the tests. \"→\" is the smallest version the advisories call fixed.")
+              "request `stage-fix` for these rows; report each, with the command shown (then `cargo build` and the "
+              f"tests), as {OWN_PR}. \"→\" is the smallest version the advisories call fixed.")
 #: Heads every base-image section of a fix plan.
 IMAGE_NOTE = ("Plan-only for `stage-fix` and `stage-major`: they never edit a Dockerfile or compose file, so do not "
               "request them for these rows. A row whose action is `stage-image` (an end-of-life official runtime "
               "image in a Dockerfile `FROM`) may be staged with `stage-image`, on its own, when the grant names it: "
-              "it moves the tag to the one under \"→\". Report every other row for a person to change `FROM <ref>` "
-              "(or `image:`) to a supported line, e.g. the tag under \"→\", then rebuild and run the tests. The "
-              "image contents are not scanned.")
+              "it moves the tag to the one under \"→\". Report every other row, with its change (`FROM <ref>` or "
+              "`image:` to a supported line, e.g. the tag under \"→\", then a rebuild and the tests), as "
+              f"{OWN_PR}. The image contents are not scanned.")
 #: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
 #: repository content: a name that could break the command or the table gets no command).
 _CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
@@ -92,8 +93,9 @@ def lockfile_note(name: str) -> str:
         The note.
     """
     return (f"Plan-only: `stage-fix` never edits a `{name}` (the executor refuses the change), so do not request "
-            "`stage-fix` for these rows; report them for a person to run the command shown, then "
-            f"{lockfiles.FORMATS[name].then}. \"→\" is the smallest version the advisories call fixed.")
+            "`stage-fix` for these rows; report each, with the command shown (then "
+            f"{lockfiles.FORMATS[name].then}), as {OWN_PR}. \"→\" is the smallest version the advisories call "
+            "fixed.")
 
 
 def _plain(text: str) -> str:
@@ -495,7 +497,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
             c.note = (f"{dev}semver-major {ver} → {c.new}: stage-fix leaves it; stage-major takes it when package.json "
                       "lists it directly")
         elif workspaces:
-            c.action, c.note = "workspace-held", f"{dev}npm workspaces: stage-fix fails closed here — fix by hand"
+            c.action, c.note = "workspace-held", f"{dev}npm workspaces: stage-fix fails closed here; " + OWN_PR
         elif not have_npm:
             c.action, c.note = "npm-unavailable", f"{dev}npm is not on PATH, so stage-fix cannot run it"
         elif unfixed:
@@ -556,7 +558,7 @@ def plan_cargo_lock(path: Path, *, label: str = "", private: tuple[str, ...] = (
             c.action, c.note = "no-clean-release", f"{len(ids)} advisories; no advisory names a fixed version"
             continue
         if not (_CRATE_SPEC.fullmatch(name) and _CRATE_SPEC.fullmatch(ver)):
-            c.note = f"{len(ids)} advisories; the crate name or version has an unusual form: fix by hand"
+            c.note = f"{len(ids)} advisories; the crate name or version has an unusual form, so no command: {OWN_PR}"
             continue
         c.note = f"`cargo update -p {name}@{ver} --precise {c.new}` ({len(ids)} advisories"
         c.note += f", {unfixed} without a fix)" if unfixed else ")"
@@ -577,8 +579,8 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
     ``bun update <name>@<ver>``, ``bundle update --conservative <name>``, a Gradle build-script change then
     ``./gradlew dependencies --write-locks``, ``dotnet add package <name> --version <ver>``); ``malicious``;
     ``no-clean-release``. A command is written only when the name, the installed and the fixed version are all of
-    the format's plain form (the lockfile and the feed are data), else the note says to fix it by hand. Nothing is
-    applied, and ``stage-fix`` cannot stage these files.
+    the format's plain form (the lockfile and the feed are data), else the note leaves it to the repository's own
+    PR (:data:`OWN_PR`). Nothing is applied, and ``stage-fix`` cannot stage these files.
 
     Args:
         path: The lockfile (``go.mod`` for Go).
@@ -616,7 +618,7 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
             c.action, c.note = "no-clean-release", f"{len(ids)} advisories; no advisory names a fixed version"
             continue
         if not (fmt.name.fullmatch(name) and fmt.version.fullmatch(ver) and fmt.version.fullmatch(c.new)):
-            c.note = f"{len(ids)} advisories; the name or a version has an unusual form: fix by hand"
+            c.note = f"{len(ids)} advisories; the name or a version has an unusual form, so no command: {OWN_PR}"
             continue
         c.note = f"{fmt.command(name, ver, c.new)} ({len(ids)} advisories"
         c.note += f", {unfixed} without a fix)" if unfixed else ")"
@@ -748,7 +750,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
     if problem:   # workspaces, or a package.json that cannot be read: nothing here is rewritten, and the rows say why
         for c in rows:
             c.note += ("; npm workspaces: stage-major fails closed here" if problem == npm_major.WORKSPACES
-                       else f"; {problem}: stays held — fix by hand")
+                       else f"; {problem}: stays held, {OWN_PR}")
         return rows, ""
     graph = npm_groups.LockGraph(npm_groups.load(lockfile))   # the base lockfile: who installs each copy
     specs: dict[str, tuple[str, str]] = {}
@@ -760,7 +762,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             new_text = npm_major.rewrite_specs(text, specs)
         except ValueError as exc:
             for c in rows:
-                c.note += f"; package.json not rewritten ({exc}): fix by hand"
+                c.note += f"; package.json not rewritten ({exc}): {OWN_PR}"
             return rows, ""
         if subproc_confine.active() is None:   # S1: npm install resolves every spec; only ever in the container
             raise ExecError(f"{label}: stage-major refuses npm install outside the tools container (confinement is "
@@ -884,7 +886,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         if private and path.name in NPM_LOCKFILES and any(project_policy.is_private(d.name, private, d.ecosystem)
                                                           for d in parse(path).deps):
             res.refused.append((rel, ("lists private packages (project brief): npm would send them to the registry "
-                                      "— fix this lockfile by hand")))
+                                      "— this lockfile is " + OWN_PR)))
             continue
         linked = [path] if REQ_NAME.match(path.name) else \
             [path.parent / n for n in ("package.json", *NPM_LOCKFILES)] if path.name in NPM_LOCKFILES else []

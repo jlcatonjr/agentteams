@@ -19,6 +19,10 @@ from agentteams.vulnscan import _http, npm_groups, osv, project_policy, subproc_
 from agentteams.vulnscan.npm_major import in_workspaces
 from agentteams.vulnscan.manifests import npm_off_registry, parse
 
+#: Where a row no executor op can stage goes: the repository's own PR (its team, or a handoff ``own-pr`` verdict),
+#: never an unnamed hand fix. Defined here, a leaf for it, and re-exported by :mod:`.fix` (which imports this module).
+OWN_PR = "left to the repository's own PR"
+
 #: What ``counts`` returns: (ecosystem, package, advisory) occurrences, or None when not measurable.
 Counted = Counter[tuple[str, str, str]] | None
 
@@ -100,7 +104,9 @@ def npm_moves(lockfile: Path, *, run: Callable[..., str], counts: Callable[..., 
     if not todo:
         return []
     if why_not := _refusal(lockfile, base_lock):
-        return [f"npm update moves not run: {why_not} ({len(todo)} move(s) left; fix by hand)"]
+        lever = ("a stage-fix in the tools container takes them" if not _container_active()
+                 else OWN_PR)
+        return [f"npm update moves not run: {why_not} ({len(todo)} move(s) left: {lever})"]
     out: list[str] = []
     for names, targets in list(todo.items())[:MAX_NPM_MOVES]:
         before_bytes = lockfile.read_bytes()

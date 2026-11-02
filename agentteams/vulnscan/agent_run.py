@@ -62,6 +62,7 @@ from agentteams.vulnscan import (agent_drivers, agent_recipe, agent_upstreams, d
                                  executor_serve, gateway_context, ledger, notes, notify, paths, report_store,
                                  run_records, selftest_probe)
 from agentteams.vulnscan.agent_drivers import Driver
+from agentteams.vulnscan.npm_ops import OWN_PR
 from agentteams.vulnscan.agent_settings import (  # noqa: F401  (re-exports: the settings live there)
     BUDGET_USD_CEILING, DEFAULT_AGENT, MAX_MINUTES_CEILING, MAX_TOKENS_TOTAL_CEILING, _positive_int, agent_cfg,
     driver_of, positive_number, run_limits, validate_agent)
@@ -100,7 +101,8 @@ TASK = ("Daily vulnerability remediation: follow your Daily Remediation workflow
         "for a repository whose plan has base-image rows with action stage-image, on its own, once no other fix is "
         "staged there. Fix-plan sections "
         "marked plan-only (no staged edit), such as crates.io Cargo.lock rows, cannot be staged: never request "
-        "stage-fix for them; report each row's command for a person to run. Never poll "
+        "stage-fix for them; report each row's command as " + OWN_PR + " (no executor op "
+        "applies it). Never poll "
         "request_status in a loop: queue everything, check each request once near the end, and report pending "
         "ones as pending.")
 

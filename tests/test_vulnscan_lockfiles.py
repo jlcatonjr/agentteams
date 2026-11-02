@@ -434,7 +434,7 @@ def test_fix_plan_writes_no_command_for_an_unusual_fixed_version(tmp_path: Path,
     feed.records["GHSA-test-0002"] = _adv("GHSA-test-0002", "npm", "lodash", "0", "4.17.21")
     monkeypatch.setattr(fix.osv, "minimal_fix", lambda *_a: ("4.17.21`id`", 0))   # the feed is data too
     [row] = fix.plan_lockfile(tmp_path / "bun.lock")
-    assert "fix by hand" in row.note and "`id`" not in row.note
+    assert fix.OWN_PR in row.note and "`id`" not in row.note
     res = fix.FixResult(lock_plan=[row])
     assert "`id`" not in res.markdown() and "(unusual)" in res.markdown()
 

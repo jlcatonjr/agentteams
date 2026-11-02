@@ -16,7 +16,8 @@ container never mounts.
 A *home* is the checkout itself or one of its linked worktrees under ``<repo>.worktrees/<name>/`` (where an
 operator can render the repository's goose team without touching the checkout). Every home's handoff directory is
 read (:func:`handoff_dirs`). agentteams ships the reading side only: writing packets and issuing the directive is
-operator tooling, outside this package.
+operator tooling, outside this package. ``handoff verify-directive`` gives that tooling a structured verdict on the one
+directive it issued (:func:`verify_directive`), so expired history rows no longer read as a failed ledger.
 
 A verdict applies to a staged fix by its **content digest**, the suffix of the branch name
 ``vulnscan/<YYYYMMDD>-<digest>``: a fix re-staged on a later day is the same change under a new branch name. The
@@ -494,38 +495,108 @@ def markdown(records: list[RepoHandoff]) -> str:
     return "\n".join(lines) + "\n"
 
 
-# ---------------------------------------------------------------- CLI: handoff status
+# ---------------------------------------------------------------- CLI: handoff status / verify-directive
 
 COMMANDS = ("handoff",)
+#: The exact management-directive scope a handoff's review directive carries.
+DIRECTIVE_SCOPE_PREFIX = "review-vulnscan-handoff-"
 
 
 def register(sub: Any) -> None:
-    """Add ``handoff status [--repo PATH ...] [--json]`` to the vulnscan parser.
+    """Add ``handoff status`` and ``handoff verify-directive`` to the vulnscan parser.
 
     Args:
         sub: The parser's subparsers action.
     """
     sp = sub.add_parser("handoff", help="remediation handoffs to each repository's own orchestrator")
-    sp.add_argument("action", choices=("status",))
+    sp.add_argument("action", choices=("status", "verify-directive"))
     sp.add_argument("--repo", action="append", default=[], type=Path,
-                    help="a repository (default: every repository with a staged fix)")
-    sp.add_argument("--json", action="store_true", help="one JSON object per repository")
+                    help="status: a repository (default: every repository with a staged fix)")
+    sp.add_argument("--json", action="store_true", help="JSON output (status: one object per repository)")
+    sp.add_argument("--team-dir", type=Path, default=None,
+                    help="verify-directive: the managed team directory holding the directive ledger")
+    sp.add_argument("--handoff-id", default="",
+                    help=f"verify-directive: the handoff id (scope {DIRECTIVE_SCOPE_PREFIX}<id>)")
+    sp.add_argument("--directive-id", default="",
+                    help="verify-directive: the directive id just issued (omit on a resume)")
+
+
+def verify_directive(team_dir: Path, handoff_id: str, directive_id: str = "") -> dict[str, Any]:
+    """Return the structured verdict for one handoff's review directive.
+
+    Wraps :func:`agentteams.cli.management_directives.verify_handoff_directive` with the handoff's
+    exact scope (``review-vulnscan-handoff-<id>``): verified only when that one row is valid, the
+    ledger's chain is intact, and every other row is valid or merely expired. The operator's
+    handoff tooling branches on the returned ``verified``/``reason`` (exit code of the CLI), never
+    on printed text. The directive is reporting-only: verifying it authorizes nothing.
+
+    Args:
+        team_dir: The managed team directory (holds ``references/management-directives.log.csv``
+            and the authorized-managers roster).
+        handoff_id: The handoff id.
+        directive_id: The directive id just issued, or "" when it is not known.
+
+    Returns:
+        The verdict as a dict (see ``HandoffDirectiveVerdict.to_dict``).
+
+    Raises:
+        ValueError: ``handoff_id`` is not a handoff id.
+    """
+    from agentteams.cli import management_directives as mgmt
+
+    if not _HANDOFF_ID.match(handoff_id or ""):
+        raise ValueError(f"not a handoff id: {handoff_id!r}")
+    verdict = mgmt.verify_handoff_directive(
+        team_dir, task_scope=DIRECTIVE_SCOPE_PREFIX + handoff_id, directive_id=directive_id,
+    )
+    return verdict.to_dict()
+
+
+def _dispatch_verify_directive(args: argparse.Namespace) -> int:
+    """Run ``handoff verify-directive``: one status line (or JSON) and an exit code.
+
+    Args:
+        args: Parsed arguments (``team_dir``, ``handoff_id``, ``directive_id``, ``json``).
+
+    Returns:
+        0 verified, 1 unverified, 2 bad arguments.
+    """
+    if args.team_dir is None:
+        print("verify-directive needs --team-dir", file=sys.stderr)
+        return 2
+    try:
+        verdict = verify_directive(Path(args.team_dir).expanduser(), args.handoff_id, args.directive_id)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(verdict))
+    elif verdict["verified"]:
+        print(verdict["detail"])
+    else:
+        print(f"unverified ({verdict['reason']}): {verdict['detail']}")
+    return 0 if verdict["verified"] else 1
 
 
 def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -> int:
-    """Run ``handoff status``.
+    """Run ``handoff status`` (or ``handoff verify-directive``, :func:`_dispatch_verify_directive`).
 
-    Each repository shows its delivery (handoff or direct), the staged branch, the newest verdict for that fix
-    (``approved`` means ``open-pr`` may push it) and the packets no verdict answers yet.
+    ``status``: each repository shows its delivery (handoff or direct), the staged branch, the newest verdict for
+    that fix (``approved`` means ``open-pr`` may push it) and the packets no verdict answers yet.
+    ``verify-directive`` never loads the config.
 
     Args:
-        args: Parsed arguments (``repo``, ``json``).
+        args: Parsed arguments (``action``, ``json``; ``repo`` for status; ``team_dir``, ``handoff_id`` and
+            ``directive_id`` for verify-directive).
         load_cfg: Loads the daily config.
 
     Returns:
-        0 printed, 2 an unusable config.
+        0 printed, 2 an unusable config (verify-directive: 0 verified, 1 unverified, 2 bad arguments).
     """
     from agentteams.vulnscan import paths
+
+    if args.action == "verify-directive":
+        return _dispatch_verify_directive(args)
 
     try:
         cfg = load_cfg() if paths.config_file().exists() else {}
