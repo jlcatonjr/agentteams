@@ -318,12 +318,55 @@ def strip_marked_block(text: str, header: str, footer: str) -> str:
     return text[:start] + text[end + len(footer):]
 
 
+#: The only first-party server ids ``first_party_tables`` may carry, and the exact keys of each table.
+_FIRST_PARTY_IDS = ("agentteams_wasm",)
+_FIRST_PARTY_KEYS = frozenset({"command", "args", "default_tools_approval_mode"})
+
+
+def _first_party_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
+    """Why ``first_party_tables`` is not exactly agentteams' canonical shared ``agentteams_wasm`` table (or ``[]``).
+
+    Bound for the carve-out: only ``mcp_servers.agentteams_wasm``; keys exactly ``command``/``args``/
+    ``default_tools_approval_mode``; approval ``prompt``; args launch the installed server as the compute-only
+    ``--agent _session`` instance (``wasm_mcp.session_launch_args``).
+    """
+    from agentteams import wasm_mcp
+
+    problems: list[str] = []
+    for name, fields in tables.items():
+        sid = name.split(".", 1)[1] if name.startswith("mcp_servers.") else ""
+        if sid not in _FIRST_PARTY_IDS:
+            problems.append(f"first_party_tables: {name!r} is not an agentteams first-party server")
+            continue
+        args = fields.get("args") if isinstance(fields, dict) else None
+        if (not isinstance(fields, dict) or set(fields) != _FIRST_PARTY_KEYS
+                or fields.get("default_tools_approval_mode") != _DEFAULT_TOOLS_APPROVAL_MODE
+                or not isinstance(args, list) or args[:6] != [*wasm_mcp.PYTHON_FLAGS, wasm_mcp.PROTECTED_PATH,
+                                                               "--agent", wasm_mcp.SESSION_AGENT]
+                or any(a in args for a in ("--read", "--scratch"))):
+            problems.append(f"first_party_tables: {name} is not the canonical compute-only agentteams_wasm table")
+    return problems
+
+
+def _existing_mcp_ids(path: Path) -> list[str]:
+    """The ``[mcp_servers.*]`` ids an existing ``config.toml`` defines (``[]`` when absent or unparsable)."""
+    import tomllib
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    servers = data.get("mcp_servers")
+    return list(servers) if isinstance(servers, dict) else []
+
+
 def emit_codex_mcp_config(
     *,
     servers: list[dict[str, Any]],
     features: list[str],
     output_root: Path,
     dry_run: bool = False,
+    first_party_tables: dict[str, dict[str, Any]] | None = None,
 ) -> CodexMCPEmissionResult:
     """Splice wirable MCP servers into ``.codex/config.toml``'s ``[mcp_servers.*]``
     tables. Every other line is intended to survive unchanged; a
@@ -336,15 +379,30 @@ def emit_codex_mcp_config(
             ``codex:mcp`` is present.
         output_root: Project root; writes to ``output_root/.codex/config.toml``.
         dry_run: When True, compute the result without writing.
+        first_party_tables: agentteams' own servers (WASM plan P11: ``{"mcp_servers.agentteams_wasm": ...}`` from
+            ``frameworks._wasm_wiring.codex_first_party_tables``), merged after the wirable-bar loop. They bypass
+            ``mcp_wirable`` and the ``codex:mcp`` gate (turning WASM on is the opt-in), so
+            :func:`_first_party_problems` bounds them to the exact canonical shape (Rule-12 carve-out 3). Without
+            ``codex:mcp`` an existing config's other ``[mcp_servers.*]`` tables refuse the write rather than be
+            dropped (carve-out 4).
 
     Returns:
         CodexMCPEmissionResult.
+
+    Raises:
+        ValueError: A ``first_party_tables`` entry that is not the canonical ``agentteams_wasm`` session table.
     """
     result = CodexMCPEmissionResult()
+    first_party = dict(first_party_tables or {})
+    problems = _first_party_problems(first_party)
+    if problems:
+        raise ValueError("; ".join(problems))
     if not codex_mcp_enabled(features):
-        result.gated_off = True
-        return result
-    if not servers:
+        if not first_party:
+            result.gated_off = True
+            return result
+        servers = []  # codex:mcp off: no operator server is wired, only agentteams' own
+    if not servers and not first_party:
         return result
 
     valid: list[dict[str, Any]] = []
@@ -366,9 +424,18 @@ def emit_codex_mcp_config(
         tables[f"mcp_servers.{sid}"] = fields
         result.wired.append(sid)
 
+    tables.update(first_party)
+    result.wired.extend(name.split(".", 1)[1] for name in first_party)
     out_path = Path(output_root) / ".codex" / "config.toml"
     if not tables:
         return result
+    if first_party and not codex_mcp_enabled(features):
+        others = sorted(set(_existing_mcp_ids(out_path)) - {n.split(".", 1)[1] for n in tables})
+        if others:
+            result.errors.append(f"{out_path} already defines [mcp_servers.*] {', '.join(others)}; wiring "
+                                 "agentteams_wasm without codex:mcp would drop them, so nothing was written (declare "
+                                 "them in mcp_servers[] with codex:mcp, or remove them)")
+            return result
 
     from agentteams.team_dir_advisories import codex_config_security_keys
 

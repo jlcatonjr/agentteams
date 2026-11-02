@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "sandbox-state.schema.json",
+  "title": "AgentTeams projected sandbox state (agentteams-sandbox-state/v1)",
+  "description": "The file agentteams writes to <project>/.agentteams/sandbox-state.json when the brief sets wasm_sandbox.model_substrate (or --wasm-substrate is passed); never written otherwise. It projects a model-substrate WASM switch to consumers that run model code (for example baseAgent's battery), which read it as the default and the floor of their own switch and enforce it themselves. agentteams never runs or confines model code. It is data (C-4): consumers parse it with an exact-shape check and refuse a malformed file rather than guess. Writer: agentteams/sandbox_projection.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "producer",
+    "agentteams_version",
+    "team",
+    "os_sandbox",
+    "os_sandbox_reason",
+    "wasm_sandbox",
+    "wasm_sandbox_reason",
+    "model_substrate_wasm",
+    "model_substrate_wasm_source",
+    "require_enforced"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agentteams-sandbox-state/v1"
+    },
+    "producer": {
+      "const": "agentteams",
+      "description": "agentteams rewrites only a file it produced; a foreign file is kept untouched."
+    },
+    "agentteams_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "team": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(\\.|(?!\\.\\.?(/|$))[A-Za-z0-9._-]+(/(?!\\.\\.?(/|$))[A-Za-z0-9._-]+)*)$",
+      "description": "Project-relative agents dir of the render that wrote the file (several teams: the last writer wins, with a SANDBOX STATE CHANGED notice when a value changes)."
+    },
+    "os_sandbox": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "The render-time OS-sandbox intent of that team. Informational for row stamps: it is not proof that the consumer's process is confined."
+    },
+    "os_sandbox_reason": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9:-]*$",
+      "description": "SandboxState.os_reason: brief | cli | profile:<p> | host-feature:<tok> | unknown."
+    },
+    "wasm_sandbox": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "Whether agentteams confines AGENT code in WASM for that team (wasm_sandbox.enabled). Independent of model_substrate_wasm."
+    },
+    "wasm_sandbox_reason": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9:-]*$",
+      "description": "SandboxState.wasm_reason: brief | cli | default-off | unknown."
+    },
+    "model_substrate_wasm": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "The projected switch. on: the consumer must run model code WASM-confined under an enforcing runner and must refuse rather than fall back to native or to an unenforced runner. off: native substrates by default. A floor, never a ceiling."
+    },
+    "model_substrate_wasm_source": {
+      "type": "string",
+      "enum": ["brief", "cli"]
+    },
+    "require_enforced": {
+      "const": true,
+      "description": "Always true: a consumer must never satisfy on with an unenforced runner, and must refuse a file that lacks this field."
+    }
+  }
+}

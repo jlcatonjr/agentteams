@@ -58,6 +58,17 @@ from agentteams.cli.frozen_surfaces import (
 )
 from agentteams.cli.governance_targets import target_is_governance_root
 from agentteams.cli.management_directives import scope_is_allowed
+from agentteams.cli.sandbox_effects import (
+    NATIVE_EXEC_KEEP,
+    SANDBOX_OS_OFF,
+    SANDBOX_RELAXATION_KINDS,
+    SANDBOX_WASM_OFF,
+    WASM_GRANT_WIDEN,
+    WASM_TO_OS_SWITCH,
+    is_relaxation_token,
+    names_sandbox_relaxation,
+    relaxation_kind_of,
+)
 
 #: The three derived classes. ``INDETERMINATE`` is not a third policy outcome — every caller
 #: collapses it to "treat as relaxing" (fail-closed) — but it is tracked distinctly so the
@@ -121,6 +132,41 @@ def is_unfreeze(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...]
     if kind not in {"decision", "directive"}:
         raise ValueError(f"kind must be 'decision' or 'directive', not {kind!r}")
     return _frozen_signal(row, effect_profile_from_row(row), kind=kind, frozen_paths=frozen_paths) == RELAXING
+
+
+def _sandbox_signal(row: dict[str, str], profile: "EffectProfile", *, kind: str) -> str:
+    """The sandbox axis (D7, Rule 15): relaxing when any text column names a sandbox relaxation, ``effect_relaxes``
+    names a relaxation kind or one of its action ids, or ``effect_grants`` holds a ``wasm:`` or ``native-exec:`` token.
+    Decides nothing otherwise.
+
+    Without it a row scoped ``sandbox-os-off:claude`` with no effect columns would read non-relaxing on the text axis
+    (no denylist stem) and a plain HMAC row would clear it."""
+    if any(names_sandbox_relaxation(t) for t in _unfreeze_texts(row, kind=kind)):
+        return RELAXING
+    if any(relaxation_kind_of(r) for r in profile.relaxes):
+        return RELAXING
+    if any(is_relaxation_token(g) for g in profile.grants_capabilities):
+        return RELAXING
+    return INDETERMINATE
+
+
+def is_sandbox_relaxation(row: dict[str, str], *, kind: str) -> bool:
+    """Return True when a row turns a sandbox off or widens a WASM grant (the five kinds in
+    :mod:`agentteams.cli.sandbox_effects`). Derived from the row's text and effect columns, never declared.
+
+    Args:
+        row: The authorizing row.
+        kind: ``"decision"`` or ``"directive"``.
+
+    Returns:
+        Whether the row is a sandbox relaxation.
+
+    Raises:
+        ValueError: ``kind`` is neither ``"decision"`` nor ``"directive"``.
+    """
+    if kind not in {"decision", "directive"}:
+        raise ValueError(f"kind must be 'decision' or 'directive', not {kind!r}")
+    return _sandbox_signal(row, effect_profile_from_row(row), kind=kind) == RELAXING
 
 
 class EffectClassifierError(RuntimeError):
@@ -309,7 +355,7 @@ def derive_effect_class(row: dict[str, str], *, kind: str, frozen_paths: tuple[s
 
     A third axis covers unfreezes (frozen surfaces, Rule 15): any text column naming an unfreeze derives relaxing,
     and so, when ``frozen_paths`` is given, does a write target touching a frozen surface's owned path, whatever the
-    action is called.
+    action is called. A fourth covers sandbox relaxations (:func:`is_sandbox_relaxation`).
 
     Args:
         row: The authorizing row (decision-log or directive).
@@ -327,7 +373,8 @@ def derive_effect_class(row: dict[str, str], *, kind: str, frozen_paths: tuple[s
         raise ValueError(f"kind must be 'decision' or 'directive', not {kind!r}")
     profile = effect_profile_from_row(row)
     return _combine(_profile_signal(profile), _text_signal(row, kind=kind),
-                    _frozen_signal(row, profile, kind=kind, frozen_paths=frozen_paths))
+                    _frozen_signal(row, profile, kind=kind, frozen_paths=frozen_paths),
+                    _sandbox_signal(row, profile, kind=kind))
 
 
 def classify_row(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...] = ()) -> str:
@@ -435,7 +482,8 @@ def requires_operator_signature(row: dict[str, str], *, kind: str, frozen_paths:
     intent — the operator asked to retain a signable path for ADX-like *exceptions*.
 
     An unfreeze (:func:`is_unfreeze`) is in the subset: it re-enables renders into a surface the operator froze, so it
-    relaxes a constraint (frozen-surfaces Rule 15), and an HMAC row can't authorize it.
+    relaxes a constraint (frozen-surfaces Rule 15), and an HMAC row can't authorize it. So is a sandbox relaxation
+    (:func:`is_sandbox_relaxation`): turning a sandbox off or widening a WASM grant (D7).
 
     Args:
         row: The authorizing row.
@@ -451,6 +499,8 @@ def requires_operator_signature(row: dict[str, str], *, kind: str, frozen_paths:
     """
     relaxing = is_relaxing(row, kind=kind, frozen_paths=frozen_paths)  # raises on a dangerous self-declaration
     if is_unfreeze(row, kind=kind, frozen_paths=frozen_paths):
+        return True
+    if is_sandbox_relaxation(row, kind=kind):
         return True
     if not relaxing:
         return False
@@ -488,6 +538,12 @@ __all__ = [
     "RELAXING",
     "NON_RELAXING",
     "INDETERMINATE",
+    "NATIVE_EXEC_KEEP",
+    "SANDBOX_OS_OFF",
+    "SANDBOX_RELAXATION_KINDS",
+    "SANDBOX_WASM_OFF",
+    "WASM_GRANT_WIDEN",
+    "WASM_TO_OS_SWITCH",
     "EffectClassifierError",
     "EffectProfile",
     "FROZEN_SURFACE_PATHS",
@@ -496,6 +552,7 @@ __all__ = [
     "effect_profile_from_row",
     "frozen_owned_paths",
     "is_relaxing",
+    "is_sandbox_relaxation",
     "is_unfreeze",
     "non_eligibility_reason",
     "requires_operator_signature",

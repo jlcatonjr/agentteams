@@ -31,3 +31,4 @@ get one, how the lock actually works, and — honestly — what the lock does an
 - **[Part VI — The tamper-evident seal](part-vi-integrity-and-drift.md)**
 - **[Part VII — What the lock can't do](part-vii-ceilings-and-red-team.md)**
 - **[Part VIII — The whole story](part-viii-synthesis-and-reference.md)**
+- **[Part IX — Two locks, and who may open them](part-ix-switching-sandboxes-and-wasm.md)** — the room lock, the glovebox, and the owner's signature

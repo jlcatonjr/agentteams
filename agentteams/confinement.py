@@ -39,18 +39,26 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import stat
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, NamedTuple
+from typing import Any, Callable, NamedTuple, TypedDict
 
+from agentteams import _sandbox_profiles as _profiles
+from agentteams import runner_wasm as _runner_wasm
+from agentteams._sandbox_profiles import (  # noqa: F401  re-exported: one source (METAPLAN v2 R2)
+    ConfinementError,
+    _clean,
+    _real,
+    available,
+    kind,
+)
 from agentteams.atomicio import read_regular_nofollow, write_new_atomic
 
 #: Project paths a confined command may never write, even inside a declared write root.
-PROTECTED_REL = (".agentteams", ".agentteams-queue", ".agentteams-status", ".git", ".claude", ".goose", ".codex", ".grok", ".github")
+PROTECTED_REL = (".agentteams", ".agentteams-queue", ".agentteams-status", ".git", ".claude", ".goose", ".codex", ".grok", ".github", ".agentteams-wasm")
 #: Read-denied to every confined command: the ledger key and the operator signing keys (one source of truth).
 from agentteams.frameworks._sandbox_emit import SIGNING_KEY_DIR as KEY_DIR  # noqa: E402
 
@@ -60,62 +68,7 @@ from agentteams.frameworks._sandbox_emit import CONFINED_PROGRAMS_DIR as CONFINE
 MAX_CONFINED_BYTES = 64 * 1024
 
 _DEV_WRITES = ("/dev/null", "/dev/zero", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/dtracehelper")
-_BAD_PATH_CHARS = ('"', "\n", "\r", "\\", "\0")
-
-
-class ConfinementError(Exception):
-    """A path can't be expressed safely, or no sandbox is usable."""
-
-
-def kind() -> str | None:
-    """The sandbox this platform would use: ``"seatbelt"``, ``"bwrap"`` or ``None``.
-
-    Returns:
-        The sandbox kind, from the platform and the presence of its binary (not yet probed).
-
-    Raises:
-        Nothing.
-    """
-    if sys.platform == "darwin" and shutil.which("sandbox-exec", path="/usr/bin"):
-        return "seatbelt"
-    if sys.platform.startswith("linux") and shutil.which("bwrap"):
-        return "bwrap"
-    return None
-
-
-def available() -> str | None:
-    """Probe for a usable sandbox by applying a trivial profile.
-
-    Returns:
-        ``"seatbelt"`` or ``"bwrap"`` when a trivial confined ``true`` succeeds here, else ``None``. That
-        includes inside an already-sandboxed process, where Seatbelt can't nest.
-
-    Raises:
-        Nothing.
-    """
-    sandbox = kind()
-    if sandbox == "seatbelt":
-        argv = ["/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)", "/usr/bin/true"]
-    elif sandbox == "bwrap":
-        argv = [shutil.which("bwrap") or "bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--unshare-pid",
-                "--die-with-parent", "true"]
-    else:
-        return None
-    try:
-        ok = subprocess.run(argv, capture_output=True, timeout=20).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        ok = False
-    return sandbox if ok else None
-
-
-def _clean(path: str) -> str:
-    if any(c in path for c in _BAD_PATH_CHARS) or any(ord(c) < 0x20 or ord(c) == 0x7F for c in path):
-        raise ConfinementError(f"path {path!r} contains a character that can't be expressed safely; refused")
-    return path
-
-
-def _real(path: str) -> str:
-    return _clean(os.path.realpath(os.path.expanduser(path)))
+_BAD_PATH_CHARS = _profiles.BAD_PATH_CHARS
 
 
 def seatbelt_profile(*, root: Path, exec_paths: list[str], write_roots: list[str], tmp_dir: Path,
@@ -136,31 +89,9 @@ def seatbelt_profile(*, root: Path, exec_paths: list[str], write_roots: list[str
     Raises:
         ConfinementError: When a path contains a character SBPL can't carry safely.
     """
-    real_root = _real(str(root))
-    writes = [_real(str(tmp_dir))] + [_real(str(root / w)) for w in write_roots]
-    protected = [_real(str(root / p)) for p in PROTECTED_REL]
-    lines = [
-        "(version 1)",
-        "(allow default)",
-        "(deny file-write*)",
-        "(allow file-write*",
-        *[f'    (subpath "{w}")' for w in writes],
-        *[f'    (literal "{d}")' for d in _DEV_WRITES],
-        ")",
-        "(deny file-write*",
-        *[f'    (subpath "{p}")' for p in protected],
-        f'    (literal "{real_root}")',
-        f'    (subpath "{_real(KEY_DIR)}")',
-        '    (regex #"/\\.[gG][iI][tT](/|$)")',  # a nested repo inside a write root (case-insensitive: APFS)
-        ")",
-        f'(deny file-read* (subpath "{_real(KEY_DIR)}"))',
-        "(deny process-exec*)",
-        "(allow process-exec*",
-        *[f'    (subpath "{_real(e)}")' for e in exec_paths],
-        *[f'    (literal "{_real(e)}")' for e in exec_literals],
-        ")",
-    ]
-    return "\n".join(lines) + "\n"
+    return _profiles.seatbelt_profile(root=root, exec_paths=exec_paths, write_roots=write_roots,
+                                      tmp_dir=tmp_dir, exec_literals=exec_literals,
+                                      protected_rel=PROTECTED_REL, key_dir=KEY_DIR, dev_writes=_DEV_WRITES)
 
 
 # --- macOS xcrun launchers (mathAgents M6) ----------------------------------------------------------------------
@@ -546,21 +477,8 @@ def bwrap_argv(*, root: Path, write_roots: list[str], tmp_dir: Path, cwd: Path) 
     Raises:
         ConfinementError: When a path contains a character that can't be carried safely.
     """
-    argv = [shutil.which("bwrap") or "bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
-            "--bind", _real(str(tmp_dir)), _real(str(tmp_dir))]
-    for w in write_roots:
-        target = _real(str(root / w))
-        argv += ["--bind", target, target]
-    for p in PROTECTED_REL:  # re-mount read-only on top of any writable root that contains them
-        target = root / p
-        if target.exists():
-            argv += ["--ro-bind", _real(str(target)), _real(str(target))]
-    keys = Path(os.path.expanduser(KEY_DIR))
-    if keys.exists():
-        argv += ["--tmpfs", _real(str(keys))]
-    argv += ["--unshare-pid", "--unshare-ipc", "--die-with-parent", "--new-session",
-             "--chdir", _real(str(cwd))]
-    return argv
+    return _profiles.bwrap_argv(root=root, write_roots=write_roots, tmp_dir=tmp_dir, cwd=cwd,
+                                protected_rel=PROTECTED_REL, key_dir=KEY_DIR)
 
 
 def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: list[str],
@@ -637,12 +555,24 @@ def launcher_store_refusal(agent: str, unresolved: list[str], store_warnings: li
             f"outputs, fix xcrun (xcode-select -p), or set confined_programs.{agent}.{OPT_IN_LAUNCHER_STORE}: true")
 
 
-def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[str], Any]) -> dict[str, dict[str, Any]]:
+class Jail(TypedDict, total=False):
+    """One validated ``confined_programs`` entry (:func:`load_confined`). ``exec`` and ``write`` are always present
+    (empty for a ``sandbox: wasm`` jail); ``sandbox`` and ``wasm`` only for a wasm jail (WASM plan P12)."""
+
+    exec: list[str]
+    write: list[str]
+    allow_unresolved_launcher_with_package_store: bool
+    sandbox: str
+    wasm: dict[str, Any]
+
+
+def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[str], Any]) -> dict[str, Jail]:
     """Validate ``confined_programs`` and gates' optional ``exec``.
 
     Exec paths must be absolute (or ``~/``). Write roots must be safe relative paths clear of the project
     root, the ledger, the queue, ``.git`` and the control plane. No exec path may lie inside a write root, or a
-    command could build a binary there and then run it.
+    command could build a binary there and then run it. An entry may set ``sandbox`` to ``"os"`` (the default, the
+    shape above) or ``"wasm"`` (:func:`agentteams.runner_wasm.validate_entry`: no ``exec``, a ``wasm`` block).
 
     Args:
         raw: ``confined_programs``, from the operator-owned file (P5b) or else the brief.
@@ -650,7 +580,8 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
         control_plane_of: :func:`agentteams.frameworks._write_roots.control_plane_of`.
 
     Returns:
-        ``{agent: {"exec": [...], "write": [...]}}``, plus ``OPT_IN_LAUNCHER_STORE: True`` when set.
+        ``{agent: {"exec": [...], "write": [...]}}``, plus ``OPT_IN_LAUNCHER_STORE: True`` when set; a wasm jail is
+        ``{"sandbox": "wasm", "exec": [], "write": [], "wasm": {...}}``.
 
     Raises:
         ConfinementError: On any malformed or unsafe entry.
@@ -661,8 +592,18 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
         for path in gate.get("exec") or []:
             if not (isinstance(path, str) and (path.startswith("/") or path.startswith("~/"))):
                 raise ConfinementError(f"proposal_gates.{name}.exec entries must be absolute or ~/ paths")
-    confined: dict[str, dict[str, list[str]]] = {}
+    confined: dict[str, Jail] = {}
     for agent, spec in raw.items():
+        sandbox = spec.get("sandbox", "os") if isinstance(spec, dict) else None
+        if sandbox not in _runner_wasm.SANDBOX_KINDS and isinstance(spec, dict):
+            raise ConfinementError(f"confined_programs.{agent}.sandbox must be one of "
+                                   f"{', '.join(_runner_wasm.SANDBOX_KINDS)}")
+        if sandbox == "wasm":
+            confined[agent] = _runner_wasm.validate_entry(agent, spec, control_plane_of,  # type: ignore[assignment]
+                                                          protected_rel=PROTECTED_REL)
+            continue
+        if isinstance(spec, dict) and "sandbox" in spec:
+            spec = {k: v for k, v in spec.items() if k != "sandbox"}  # an explicit "os" is the default shape
         if not (isinstance(spec, dict) and set(spec) <= {"exec", "write", OPT_IN_LAUNCHER_STORE}):
             raise ConfinementError(f"confined_programs.{agent} must be {{exec, write}} (and optionally "
                                    f"{OPT_IN_LAUNCHER_STORE})")

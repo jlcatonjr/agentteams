@@ -65,12 +65,15 @@ class ConvertResult:
         skipped:   Source paths that were not converted (already up-to-date or
                    excluded).
         errors:    Descriptions of any files that could not be processed.
+        notices:   Advisory lines (e.g. ``[WASM-ENFORCEMENT]`` for a WASM team: a
+                   conversion never applies the native-exec policy).
         dry_run:   Whether this result reflects a dry run (no files written).
     """
 
     converted: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    notices: list[str] = field(default_factory=list)
     dry_run: bool = False
 
     @property
@@ -214,6 +217,9 @@ def convert_team(
                 dest.chmod(m | ((m & 0o444) >> 2))
         result.converted.append(str(dest))
 
+    from agentteams.wasm_enforcement import add_projection_notice  # WASM plan P13 (D2): never a silent claim
+
+    add_projection_notice(result.notices, target_framework, (source_dir, target_dir), description)
     return result
 
 

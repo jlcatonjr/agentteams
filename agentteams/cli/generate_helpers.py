@@ -599,6 +599,8 @@ def _emit_privilege_artifacts(manifest: dict, output_dir: Path) -> None:
 
     _emit_agent_privilege_config(manifest, output_dir)
     _emit_management_authority_config(manifest, output_dir)
+    from agentteams.frameworks.wasm import lock_wasm_team  # P08: the WASM team's control-plane lock (else no-op)
+    lock_wasm_team(manifest, output_dir)
     try:
         created = write_control_plane_stubs(output_dir, manifest.get("framework") or "", manifest)
     except OSError as exc:

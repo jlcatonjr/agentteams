@@ -33,6 +33,7 @@ from agentteams.analyze_tools import (  # CH-07 carve; re-exported
     _REFERENCE_TOOLS,
 )
 from agentteams.mcp_detect import detect_mcp_candidates
+from agentteams.wasm_policy import ROUTING_ROWS_PLACEHOLDER, SECURITY_ROWS_PLACEHOLDER
 
 from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
     _normalize_recipe_parameters,
@@ -215,6 +216,25 @@ ALWAYS_INCLUDED_DOMAIN_AGENTS = [
 # Public entry point
 # ---------------------------------------------------------------------------
 
+def _wasm_sandbox_record(description: dict[str, Any], agent_slugs: list[str]) -> dict[str, Any]:
+    """Return the normalised ``wasm_sandbox`` record for the manifest (P01; fail closed).
+
+    The symlink check runs against ``existing_project_path`` when it names a directory (brief data: it can only
+    refuse more); the effective state repeats it under the CLI's real project root.
+
+    Raises:
+        ValueError: A malformed block (``wasm_config.normalize_wasm_sandbox``), naming the key path.
+    """
+    from agentteams.wasm_config import normalize_wasm_sandbox
+
+    raw = description["wasm_sandbox"]
+    if not isinstance(raw, dict):
+        raise ValueError(f"wasm_sandbox must be an object (got {type(raw).__name__})")
+    existing = description.get("existing_project_path")
+    root = Path(existing) if isinstance(existing, str) and existing and Path(existing).is_dir() else None
+    return normalize_wasm_sandbox(raw, agent_slugs=agent_slugs, project_root=root).to_record()
+
+
 def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vscode") -> dict[str, Any]:
     """Build and return a team manifest from a normalized project description.
 
@@ -270,6 +290,11 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     privilege_profile = host_features.validate_privilege_profile(
         description.get("privilege_profile")
     )
+    # P00: the dedicated OS-sandbox switch, independent of the profile. Carried only when the
+    # brief sets it (so a team without it keeps a byte-identical manifest); a typo fails closed.
+    from agentteams.sandbox_state import validate_os_sandbox
+
+    os_sandbox = validate_os_sandbox(description.get("os_sandbox"))
     workspace_write_roots = description.get("workspace_write_roots")
     # Sanctioned loopback egress proxy for an EXCLUSIVE goose team (network-isolated). Wired
     # here so it is reachable (audit 2026-W39, C1): the goose Seatbelt emitter re-allows this
@@ -514,6 +539,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Adopted-agent routing rows: empty until adopt_orphan_agents fills them, so a team
     # with no adopted agents renders its orchestrator routing table byte-identically.
     auto_resolved["ADOPTED_AGENT_ROUTING_ROWS"] = ""
+    # WASM plan P14: wasm_policy.populate_placeholders fills these once the switch is resolved ("" while off).
+    auto_resolved[SECURITY_ROWS_PLACEHOLDER] = auto_resolved[ROUTING_ROWS_PLACEHOLDER] = ""
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)
@@ -562,6 +589,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "team_id": team_id,
         "privilege_profile": privilege_profile,
         "privilege_profile_explicit": privilege_profile_explicit,
+        **({"os_sandbox": os_sandbox} if os_sandbox is not None else {}),
         "enforce_decision_signing": enforce_decision_signing,
         **({"is_management_repo": True} if is_management_repo else {}),
         **({"authorized_managers": authorized_managers} if authorized_managers else {}),
@@ -638,6 +666,11 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         components=[c["slug"] for c in components])
     if mcp_candidates:
         manifest["mcp_candidates"] = [c.to_manifest_entry() for c in mcp_candidates]
+    if "wasm_sandbox" in description:  # P01: carried only when the brief has the block (else byte-identical)
+        manifest["wasm_sandbox"] = _wasm_sandbox_record(description, all_slugs)
+    if "wasm_runtime" in description:  # P08 (--framework wasm runtime.json): carried only when present
+        from agentteams.wasm_agent.team import normalize_wasm_runtime
+        manifest["wasm_runtime"] = normalize_wasm_runtime(description["wasm_runtime"])
     # Specified-server automation (report §5.4/§6): copy operator-DECLARED server
     # definitions through to the manifest verbatim. Populated solely when the
     # description declares mcp_servers, so manifests without specified servers are

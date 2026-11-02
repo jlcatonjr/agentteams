@@ -249,3 +249,6 @@ references/redteam-judgment-layer.report.md
 references/qwen38max-judgment-handoff.plan.md
 references/durable-canonical-agent-format-system-report.md
 references/feature-audit-handoff.reference.md
+# WASM deny-probe canaries (agentteams/wasm_guests.py probe_language): a temporary
+# .agentteams-wasm-probe-<hex>/ dir in the project root, removed after the probe; never commit a leftover.
+.agentteams-wasm-probe-*

@@ -342,3 +342,94 @@ def test_plugins_dir_is_stubbed_protected_and_plugin_keys_warn(tmp_path: Path) -
         warned = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True,
                                 text=True, check=True)
         assert "security-relevant keys" in warned.stderr, key
+
+
+# --- WASM mode (WASM plan P13) --------------------------------------------------------------------------------
+
+_KEEP = frozenset({"orchestrator", "navigator"})
+
+
+@pytest.mark.parametrize("event, allowed", [
+    ({"hook_event_name": "PreToolUse", "tool_name": "Bash"}, True),                                    # top-level
+    ({"hook_event_name": "PreToolUse", "agent_type": "cleanup", "tool_name": "Bash"}, False),          # narrowed
+    ({"hook_event_name": "PreToolUse", "agent_type": "cleanup", "tool_name": "exec_command"}, False),  # defensive
+    ({"hook_event_name": "PreToolUse", "agent_type": "cleanup",
+      "tool_name": "mcp__agentteams_wasm__run_wasm"}, True),                                            # the steer
+    ({"hook_event_name": "PreToolUse", "agent_type": "cleanup", "tool_name": "apply_patch"}, True),    # not exec
+    ({"hook_event_name": "PreToolUse", "agent_type": "navigator", "tool_name": "Bash"}, True),         # kept
+    ({"hook_event_name": "PreToolUse", "agent_type": "orchestrator", "tool_name": "Bash"}, True),      # exempt
+    ({"hook_event_name": "PreToolUse", "agent_id": "01a1", "tool_name": "Bash"}, False),               # unnamed
+    ({"hook_event_name": "PreToolUse", "agent_type": "cleanup", "tool_name": 7}, False),               # malformed
+    ({"hook_event_name": "PreToolUse", "agent_type": "cleanup", "tool_name": "renamed_shell"}, True),  # Rule 12: passes
+    ({"hook_event_name": "PostToolUse", "agent_type": "navigator", "tool_name": "Bash"}, False),
+])
+def test_decide_in_wasm_mode(event: object, allowed: bool) -> None:
+    assert (_gate_module().decide(event, True, True, _KEEP) is None) is allowed
+
+
+def test_wasm_mode_still_requires_the_runner() -> None:
+    assert _gate_module().decide({"hook_event_name": "PreToolUse", "tool_name": "Bash"}, False, True, _KEEP)
+
+
+def _run_wasm_gate(event: dict, keep: str) -> subprocess.CompletedProcess:
+    env = {"PATH": os.environ.get("PATH", ""), "AGENTTEAMS_CODEX_CONFINED": "1", "AGENTTEAMS_CODEX_WASM": "1",
+           "AGENTTEAMS_CODEX_NATIVE_KEEP": keep}
+    return subprocess.run([sys.executable, "-I", "-S", str(GATE)], input=json.dumps(event).encode(), env=env,
+                          capture_output=True)
+
+
+def test_wasm_mode_exit_codes_and_a_malformed_keep_list_denies_everything() -> None:
+    shell = {"hook_event_name": "PreToolUse", "agent_type": "cleanup", "tool_name": "Bash"}
+    run = {**shell, "tool_name": "mcp__agentteams_wasm__run_wasm"}
+    assert _run_wasm_gate(shell, "navigator").returncode == 2
+    assert b"run_wasm" in _run_wasm_gate(shell, "navigator").stderr
+    assert _run_wasm_gate(run, "navigator").returncode == 0
+    assert _run_wasm_gate(shell, "cleanup").returncode == 0
+    for bad in ("Cleanup", "-x", "a b", "nav;rm"):
+        assert _run_wasm_gate(run, bad).returncode == 2, bad
+
+
+def test_without_the_wasm_variable_the_write_policy_shape_applies() -> None:
+    # AGENTTEAMS_CODEX_WASM unset -> the stricter readfs-only mode (fail toward the narrower gate).
+    deny = _run_gate(json.dumps({"hook_event_name": "PreToolUse", "agent_type": "qa",
+                                 "tool_name": "mcp__agentteams_wasm__run_wasm"}).encode())
+    assert deny.returncode == 2
+
+
+_WASM_TEAM = {"privilege_profile": "confined", "workspace_write_roots": ["."], "_wasm_sandbox_cli": "on",
+              "agent_slug_list": ["orchestrator", "navigator", "cleanup"],
+              "output_files": [{"path": "orchestrator.agent.md", "template": "universal/orchestrator.template.md",
+                                "type": "agent"}]}
+
+
+def test_wasm_team_emits_the_gate_without_the_readfs_server_and_selects_wasm_mode(tmp_path: Path) -> None:
+    files = dict(emit.codex_sandbox_output_files(dict(_WASM_TEAM), platform="linux"))
+    assert f"../../{gate_emit.CODEX_ROLE_GATE_PROJECT_PATH}" in files and "../hooks.json" in files
+    assert f"../../{READFS_PROTECTED_PATH}" not in files
+    proj, env = _project(tmp_path, dict(_WASM_TEAM), _ARGV_LAUNCHER)
+    argv = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True,
+                          text=True, check=True).stdout.splitlines()
+    assert "--dangerously-bypass-hook-trust" in argv and "AGENTTEAMS_PROBE_GATE=1" in argv
+    assert "AGENTTEAMS_CODEX_WASM=1" in argv and "AGENTTEAMS_CODEX_NATIVE_KEEP=navigator,orchestrator" in argv
+    assert not (Path(env["AGENTTEAMS_CODEX_HOME"]) / "config.toml").read_text(encoding="utf-8")  # no readfs entry
+
+
+def test_wasm_runner_refuses_a_changed_gate(tmp_path: Path) -> None:
+    proj, env = _project(tmp_path, dict(_WASM_TEAM), _ARGV_LAUNCHER)
+    with open(proj / gate_emit.CODEX_ROLE_GATE_PROJECT_PATH, "a", encoding="utf-8") as fh:
+        fh.write("\n# changed\n")
+    bad = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True, text=True)
+    assert bad.returncode == 2 and "not the pinned copy" in bad.stderr
+
+
+@pytest.mark.parametrize("extra", [{"_wasm_sandbox_cli": "off"}, {"write_policy": "orchestrator-only"},
+                                   {"wasm_sandbox": {"enabled": True, "native_exec": "keep"}}])
+def test_no_wasm_mode_gate_when_off_under_the_policy_or_under_keep(extra: dict) -> None:
+    from agentteams.frameworks._codex_wasm_gate import codex_wasm_gate_enabled
+
+    team = {**_WASM_TEAM, **extra}
+    if "wasm_sandbox" in extra:
+        team.pop("_wasm_sandbox_cli")
+    assert not codex_wasm_gate_enabled(team)
+    runner = dict(emit.codex_sandbox_output_files(team, platform="linux"))["../confined-run.example.sh"]
+    assert "AGENTTEAMS_CODEX_WASM" not in runner

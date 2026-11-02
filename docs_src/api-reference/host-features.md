@@ -34,6 +34,22 @@ class HostFeatureError(ValueError): ...
 ```
 Raised by `parse_tokens` / `validate` for any malformed token.
 
+```python
+merge_profile_features(features, profile, framework=None, *, os_sandbox: str | None = None) -> list[str]
+```
+Union the explicit tokens with the `privilege_profile` expansion (order-preserving, deduped). `os_sandbox`
+is the effective dedicated OS switch (P00): `"off"` drops every `*:sandbox` token (explicit ones included;
+the caller has already refused `--os-sandbox off` with an explicit token), `"on"` adds the framework's own
+sandbox token even under `cooperative`, and `None` (absent) is the historical behaviour, byte-identical.
+
+```python
+privilege_profile_advisory(profile, framework_id, host_features=None, *, platform=None,
+                           mechanism_available=None, requested: bool | None = None) -> dict | None
+```
+The unenforced-host / manual-wire advisory. `requested` is the effective OS state when the caller knows it
+(`sandbox_state.effective_sandbox_state(manifest).os`); `None` infers it from the profile and the
+`claude:`/`goose:`/`codex:`/`grok:sandbox` tokens, as before; `False` returns `None`.
+
 ## Currently Recognized Subselectors
 
 | Token | Effect |

@@ -59,7 +59,7 @@ Existing project directory to scan. Overrides `existing_project_path` in the des
 
 ### `--framework NAME` / `-f NAME`
 
-Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`, `grok`, plus `canonical` (interop-only pseudo-framework — pair with `--interop-from`).
+Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`, `grok`, `wasm`, plus `canonical` (interop-only pseudo-framework — pair with `--interop-from`).
 
 | Value | Format | Description |
 |-------|--------|-------------|
@@ -70,6 +70,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. Generate-only for convert/bridge; the CAI interop path supports it as a target (best-effort: its rendered output carries no front matter). |
 | `codex` | TOML `.toml` | OpenAI Codex CLI. Emits Codex custom agents as `.codex/agents/<slug>.toml` (`name`, `description`, `developer_instructions`, `sandbox_mode = "read-only"` for read-only roles; no model/provider/approval keys). The repo-root `AGENTS.md` is written only when absent or already Codex-generated; a shared or project-owned one is skipped with a notice. Under `write_policy: "orchestrator-only"`, a goose-generated `AGENTS.md` gets only the `codex_write_policy` block (the top-level session's "Write Policy: You Are the Orchestrator" section), and goose's re-render keeps it; a hand-written one is never written, and the block goes to `.codex/examples/AGENTS.codex-write-policy-block.md` with a notice. `config.toml` MCP server emission is opt-in via `--target-host-features codex:mcp` (see [`codex_mcp_emit`](api-reference/codex-mcp-emit.md)). Same generate-only convert/bridge posture as `agents-md`. |
 | `grok` **(beta)** | Claude-compatible front matter `.md` | xAI Grok Build (`grok` CLI). Emits custom agents as `.grok/agents/<slug>.md` with `name`, `description`, `tools` (Claude tool vocabulary; `Task`→`Agent`, `TodoWrite` dropped, an unknown name refuses the render) plus `injectDefaultTools: false` and `mcpInheritance: none`, which make `tools:` the declared exact limit (no live negative test yet; see STABILITY section 6). `name:` values match the Claude render (whether a `.grok/agents` file shadows its `.claude/agents` twin is not confirmed). A scoped tool entry and `MCPTool` are dropped (each makes Grok Build discard the list and widen the agent); because Grok Build ignores `disallowedTools`, every denied tool is left out of `tools:`; a `[GROK-SCOPE]` notice names each change. Run an agent as `grok --agent .grok/agents/<slug>.md`: custom agents are not resolved by name and cannot be spawned as subagents in the pinned release. The repo-root `AGENTS.md` is co-owned: written in full only when absent or Grok-generated; in a Codex/goose/agents-md/fenced file only the `grok_runtime` block is added or refreshed; a hand-written file is never written (the block goes to `.grok/examples/AGENTS.grok-block.md`). Codex posture: an interop target and source and an absorb source; convert and bridge refuse `grok`. Pinned to Grok Build `FORMAT_SPECS["grok"].pinned_version`; see `references/grok-agent-infrastructure-expert.md`. |
+| `wasm` **(beta)** | Strict front matter `.md` | agentteams' own WASM agent runtime (no vendor CLI). Emits `.agentteams-wasm/agents/<slug>.md` (`name`, `description`, `tools` in the runtime vocabulary, `model` = a tier, `delegates`), `.agentteams-wasm/TEAM.md`, `grants.json`, `runtime.json` and `README.md`, and hashes them into the control-plane lock `.agentteams/wasm-team.lock.json`. The framework choice turns WASM confinement on (reason `framework`); an explicit `--wasm-sandbox off` or `wasm_sandbox.enabled: false` refuses. Run an agent with `--run-wasm-agent`. Generate-only. See [WASM agent runtime](wasm-agent-runtime.md). |
 | `canonical` | Exploded CAI directory | Durable on-disk canonical format (`team.cai.json` + `agents/<slug>.md` + `skills/<slug>/SKILL.md` + `references/**`), default `<project>/.agentteams/canonical/`. Interop-only: there is no generate/convert/bridge path for it. |
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
@@ -87,6 +88,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `agents-md` **(beta)** | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
 | `codex` **(beta)** | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
 | `grok` **(beta)** | ✓ | ✗ <sup>5</sup> | ✓ <sup>5</sup> | ✗ <sup>5</sup> |
+| `wasm` **(beta)** | ✓ | ✗ <sup>6</sup> | ✗ <sup>6</sup> | ✗ <sup>6</sup> |
 | `canonical` | ✗ <sup>4</sup> | ✗ <sup>4</sup> | ✓ <sup>4</sup> | ✗ <sup>4</sup> |
 
 **✓** available · **✗** not a valid target (by design)
@@ -107,6 +109,8 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 <sup>4</sup> `canonical` is an interop-only pseudo-framework — the durable exploded CAI directory (`team.cai.json` + `agents/` + `skills/` + `references/`). Export: `--interop-from <src> --framework canonical`. Import: `--interop-from <canonical dir> --interop-source-framework canonical --framework <target>`. Bundle mode is refused for the canonical target; its carried MCP servers re-validate against `mcp-server.schema.json` (security-review hard gates included) at import time.
 
 <sup>5</sup> `grok` follows codex's posture: convert and bridge refuse it as a target (its instructions live in the shared repo-root `AGENTS.md`), and it is never a bridge source. The CAI interop path supports it as a target and a source, and it is an `--absorb-source-framework`. On import, the repo-root `AGENTS.md` goes only through Grok's co-ownership guard: written in full when absent or Grok-owned; otherwise only the `grok_runtime` block (with `--merge` or `--overwrite`), and a hand-written file is never written. Ownership notices and the Grok block from a CAI never reach another target's `AGENTS.md`. A grok source is detected by its `.grok/` directory (the innermost framework directory wins) or by its Grok-only front-matter keys; an agent without both exact-toolset keys exports as full capabilities, with a notice.
+
+<sup>6</sup> `wasm` is generate-only in v1: convert, bridge, interop (either direction) and absorb refuse it, because CAI has no mapping for its `delegates` and grants yet.
 
 Auto-detected **source** frameworks (for `--convert-from` / `--interop-from` / `--bridge-from` without an explicit `--*-source-framework`) are `copilot-vscode`, `copilot-cli`, `claude`, `goose` (`.goose/recipes`), `agents-md` (`.agents`), `codex` (`.codex/agents`), `grok` (`.grok/agents`, or Grok-only front-matter keys), and `canonical` (any directory holding `team.cai.json`).
 
@@ -609,9 +613,49 @@ brief's, and each gate's `exec`). For each xcrun launcher in `/usr/bin` it print
 paths the Seatbelt profile will allow (the real tool as a `literal`, git's helpers as a `subpath`). When they can't be resolved it prints a `WARNING` naming the
 launcher: confined calls to it will fail (exit 71). These lines are advisory and don't change the exit status.
 
+### `--os-sandbox {on,off}`
+
+Overrides the brief's `os_sandbox` for this run. `off` suppresses every OS boundary agentteams emits for the
+selected framework (the Claude settings `sandbox` block, the Goose Seatbelt profile, the Codex/Goose/Grok runners,
+the Grok profile, and the neutral launcher `sandbox/confine-run.sh`); everything else `privilege_profile` controls
+stays as it is. `on` emits the boundary even under `cooperative`, and counts as the explicit opt-in that makes the
+Claude gate hook fail closed.
+
+Turning the OS sandbox off is constraint-relaxing (Rule 15). In a governed workspace (strict decision signing, on by
+default) it needs an operator Ed25519-signed decision for `sandbox-os-off:<framework>`; elsewhere generation prints a
+`SANDBOX RELAXATION` notice and records it. It is refused with `write_policy: orchestrator-only`, and together with
+an explicit `--target-host-features <fw>:sandbox`. It never changes live settings, the launcher, or the runner's
+`confined_programs` sandbox. `--check-wiring --os-sandbox off` reports live config that still enables a sandbox.
+
+### `--wasm-sandbox {on,off}`
+
+Overrides the brief's `wasm_sandbox.enabled` for this run (WASM confinement is opt-in: off unless the brief or this
+flag turns it on). `on` uses the brief's `languages`, `limits` and per-agent grants, or the compute-only defaults
+when the block is absent, and write-protects the `.agentteams` control plane in the emitted session sandbox
+(METAPLAN R1). `off` after WASM was on is constraint-relaxing (Rule 15): in a governed workspace it needs an operator
+Ed25519-signed decision for `sandbox-wasm-off:<framework>`; elsewhere generation prints a `SANDBOX RELAXATION` notice.
+Grants, native-exec exceptions and network are never set from argv. With WASM on, generation also prints the D6
+composition notes (`wasm-without-os-sandbox` when the OS sandbox is off, `wasm-only-host` on a host with no OS
+sandbox) and records them in the team manifest's `advisories`; it never claims enforcement.
+`--check-wiring --wasm-sandbox on` checks the control-plane denies too.
+
+### `--wasm-substrate {on,off}`
+
+Overrides the brief's `wasm_sandbox.model_substrate` for this run: the model-substrate WASM switch agentteams projects
+to consumers that run model code (for example baseAgent's battery) in `.agentteams/sandbox-state.json` (schema
+`agentteams-sandbox-state/v1`). `on` means the consumer must run model code WASM-confined under an enforcing runner and
+refuse rather than fall back to native or to an unenforced runner; `off` means native substrates by default. The file
+is written only when the brief or this flag sets the switch, and it is a floor, never a ceiling: the consumer enforces
+it (agentteams never runs or confines model code). The switch is independent of `--wasm-sandbox`, which confines agent
+code. `off` after `on` is constraint-relaxing (Rule 15): in a governed workspace it needs an operator Ed25519-signed
+decision for `sandbox-wasm-off:model-substrate`; elsewhere generation prints a `SANDBOX RELAXATION` notice. A foreign
+file (`producer` other than `agentteams`) is never rewritten. `--check-wiring --wasm-substrate on` reports whether the
+file exists, parses and matches; `--verify-integrity` exits 1 when the file projects a lower floor than the last render
+recorded.
+
 ### `--allow-unenforced-confinement`
 
-Permit `generate` to proceed when a `confined`/`exclusive` `privilege_profile` is requested on a target with no OS-level sandbox to enforce it (Goose, Codex, Copilot, native Windows). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
+Permit `generate` to proceed when the OS sandbox (a `confined`/`exclusive` `privilege_profile`, or `os_sandbox: on`) is requested on a target with no OS-level sandbox to enforce it (native Windows and other hosts with no emittable boundary; Linux and macOS have the neutral launcher). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
 
 ### `--accept-write-root PATH`
 
@@ -637,7 +681,7 @@ environment variable or an `@file`.
 
 ### `--allow-fallback-fail-open`
 
-CC-2 opt-out. For a `confined`/`exclusive` `privilege_profile`, agentteams emits the constitutional-gate hook **fail-closed**: an unexpected crash in the gate emits a `deny` decision rather than letting the harness fail open (a crash → silent allow), because a workspace that opted into a boundary must not have it silently dropped by a gate error. This flag restores the historical **fail-open** behavior for those profiles — use it only when a buggy gate bricking the session is a worse risk than a missed block. Cooperative teams are unaffected (they are always fail-open) and remain byte-identical.
+CC-2 opt-out. When the OS sandbox is on and was explicitly requested (an explicit `confined`/`exclusive` `privilege_profile`, or `os_sandbox: on`), agentteams emits the constitutional-gate hook **fail-closed**: an unexpected crash in the gate emits a `deny` decision rather than letting the harness fail open (a crash → silent allow), because a workspace that opted into a boundary must not have it silently dropped by a gate error. This flag restores the historical **fail-open** behavior — use it only when a buggy gate bricking the session is a worse risk than a missed block. Teams with the OS sandbox off (cooperative, or `os_sandbox: off`) are unaffected: they are always fail-open.
 
 **Hook decision log (environment, not a flag).** The emitted constitutional-gate hook reads two optional
 environment variables at run time. `AGENTTEAMS_GATE_LOG=<absolute path>` appends one JSON line per hook
@@ -1775,6 +1819,113 @@ Do not query GitHub. Merged-by-PR is not evaluated, and no remote deletion is pl
   log's `project_name`.
 
 ---
+
+## WASM Runtime Provisioning
+
+Explicit operator commands (D4) that fetch and check the pinned WASM runtime and guest interpreters. They are
+standalone: each is refused alongside `--description`, `--self`, `--update` or `--output`, so a render never
+downloads anything. Exit codes: `0` ok, `1` verification failure or refusal, `2` usage, `3` network. Module:
+[`wasm_runtime`](api-reference/wasm-runtime.md).
+
+### `--wasm-install [COMPONENTS]`
+
+Download the pinned components into `<project>/.agentteams/wasm/` (`--project`, default the current directory).
+`COMPONENTS` is a comma list of `wasmtime`, `python`, `javascript`, or `all`; the default is `wasmtime`. It prints
+the plan (version, URL, size, sha256, license, target) and asks `y/N` unless `--yes`; a non-tty without `--yes`
+refuses. `--dry-run` prints the plan only, with no network access and no writes. The archive is checked against
+its pinned size and sha256 before extraction, extraction refuses unsafe members, and the extracted files are
+verified before an atomic move into place. A component whose pin still reads `TODO-PIN` is refused before any
+network access. A previous install that fails re-verification is moved to `.quarantine/`, never deleted.
+
+### `--wasm-status [COMPONENTS]`
+
+Read-only and network-free. Re-hashes each installed component against the packaged pins and prints `ok <version>`,
+`absent`, `MISMATCH: …` or `pin incomplete`. Exits `0` only when every requested component (default `all`) is ok.
+
+### `--wasm-pin-update COMPONENT VERSION`
+
+Operator tool; needs network access to `api.github.com` and the GitHub release asset host. Re-pins one component
+from release metadata and a verified download: S-10 applies (at least 14 days old and the newest such release on
+its major line), every platform asset is checked against its API digest, extracted with the same safe extractor,
+and hashed. The pins file is written only after every platform verified; the unified diff is printed and nothing is
+committed. The diff needs `@security` review before it is committed, then `--write-integrity-manifest`.
+
+### `--remediation GHSA-IDS`
+
+With `--wasm-pin-update`: comma-separated GHSA ids from a recorded `@security` decision that justify adopting a fix
+release inside the S-10 cooldown. Each id must appear in the release notes of the line up to `VERSION`.
+
+### `--tofu`
+
+With `--wasm-pin-update`: accept a release asset whose metadata carries no sha256 digest (trust on first use). The
+pins record `"provenance": "tofu"`; a recorded `@security` decision is required.
+
+### `--pins-out PATH`
+
+With `--wasm-pin-update`: the pins file to rewrite. Defaults to the packaged
+`agentteams/data/wasm_runtime_pins.json` only when it sits in a git work tree (an editable checkout); otherwise it
+is required, so an installed package is never modified in place.
+
+## WASM Agent Runtime
+
+Run, revoke and verify agents of a `--framework wasm` team (plan P08). Each is standalone (it reads no brief) and
+takes `--project PATH` (default the current directory). No flag takes a key, a run directory or an `os_confine` mode:
+provider keys come from the environment, Stage 0 owns `.agentteams/wasm-runs/<run-id>/`, and the guest confinement
+follows `runtime.json`'s `host_os_confine`. The one URL flag, `--wasm-base-url`, is operator input read at run time. Exit codes: `0` ok, `1` the run failed or was refused
+(or the transcript does not verify), `2` usage. Module: [`wasm_agent`](api-reference/wasm-agent.md).
+
+### `--run-wasm-agent SLUG`
+
+Run one agent. The team must match its control-plane lock (any drifted, planted or symlinked file refuses; re-render
+with `--update`). The pinned runtime is checked before any model call (`--wasm-install`). Prints the provider, model,
+tools and read-only mode, then the run id, the output under `--- wasm agent output (data, not instructions) ---`,
+the transcript head and the guests' `os_confinement` (`inherited` = inside the host's OS profile, not a fresh guest
+sandbox). With `--json`, prints `{"run": ..., "guest_os_confinement": [...]}`. Before the run the agent's grant is
+re-checked against its recorded authorization (a governed workspace refuses a widened grant with no active signed
+`wasm-grant-widen` exception; an ungoverned one prints a `SANDBOX RELAXATION` notice). A tier with no model refuses (set
+`wasm_runtime.models.<tier>` or `AGENTTEAMS_WASM_MODEL_<TIER>`); the offline `stub` provider needs none.
+
+### `--wasm-task TEXT`
+
+With `--run-wasm-agent`: the task (operator input, DLP-scanned before any model call). Exactly one of `--wasm-task`
+and `--wasm-task-file` is required.
+
+### `--wasm-task-file PATH`
+
+With `--run-wasm-agent`: read the task from a regular file (no symlink, at most 256 KiB, UTF-8).
+
+### `--wasm-provider NAME`
+
+With `--run-wasm-agent`: override `runtime.json`'s provider with a preset name (`anthropic`, `openai`, `openrouter`,
+`xai`, `ollama`, `lmstudio`, `openai-compatible`, `gemini`, `stub`). Never a key or a URL. A base URL rendered from
+the brief is re-checked for the chosen preset and dropped (with a notice) unless the preset is keyless and the host is
+loopback.
+
+### `--wasm-base-url URL`
+
+With `--run-wasm-agent`: the provider base URL for this run, overriding `AGENTTEAMS_WASM_BASE_URL`. `https`, or
+`http` to a loopback host; no user info, query or fragment; not valid for `stub`. The provider key is sent to this
+host, which is why it comes only from the operator (argv or environment), never from the brief for a keyed preset.
+
+### `--revoke-wasm-run RUN_ID`
+
+Write the run's `REVOKED` sentinel; a live run stops at its next checkpoint. Exit 1 when already revoked, 2 for an
+unknown run.
+
+### `--revoke-reason TEXT`
+
+With `--revoke-wasm-run`: the reason recorded in the sentinel (at most 200 characters).
+
+### `--verify-wasm-run RUN_ID`
+
+Re-walk the run's hash-chained transcript (read-only) and print the record count, completeness, status and head.
+
+### `--tree`
+
+With `--verify-wasm-run`: treat the run as the root of a delegation tree and verify every sub-agent run below it:
+each transcript chain, each parent `delegate-start` / child `run-start` / parent `delegate-end` binding, and the
+child budgets. A run dir naming a run of the tree as its parent without being referenced (an orphan or a forged
+link) fails it. Exit 0 when the whole tree verifies, 1 otherwise.
 
 ## Exit Codes
 

@@ -333,7 +333,170 @@
       "type": "string",
       "enum": ["cooperative", "confined", "exclusive"],
       "default": "confined",
-      "description": "Workspace write-confinement posture. DEFAULT IS `confined` as of 2026-W39 (was `cooperative`): sandbox write-confinement is ENABLED BY DEFAULT for every qualifying provider (Claude macOS/Linux; Goose and Codex macOS/Linux via agentteams' launcher examples; any framework via the neutral launcher), inert until the operator merges the emitted settings example or launches through the emitted runner; non-enforcing hosts (Copilot, native Windows) degrade to the fail-closed advisory, never a silent no-op. Set `cooperative` to opt out: agents are trusted to respect the workspace, no OS boundary emitted (the pre-2026-W39 behavior). `confined` and `exclusive` expand to the framework's sandbox host feature (`claude:sandbox`, `goose:sandbox`, or `codex:sandbox` since 2026-10-08), on claude that emits Claude Code's native OS-level sandbox block (write-confines Bash and child processes to workspace_write_roots) into the settings example the operator merges; on goose and codex it emits a runner around the neutral launcher. Both are inert until the operator uses them. `exclusive` adds OS read-exclusion on top of `confined` (P3a): it also denies this team reading a default deny set plus any `protected_read_paths`, and prints a P3b inbound-hardening advisory. This is OUTBOUND (it seals this team's reads); keeping OTHER teams out of this workspace is operator filesystem hardening, not something exclusive enforces. The effective feature set is the UNION of this expansion and any --target-host-features tokens, so cooperative never strips an explicitly-requested claude:sandbox token. Claude enforces this through its session sandbox; Goose and Codex through agentteams' launcher examples (`.goose/confined-run.example.sh`, `.codex/confined-run.example.sh`), which hold only when the operator launches through them (on Codex, per-role limits stay instruction-level unless write_policy orchestrator-only turns on its role gate); on non-sandbox hosts (Copilot, native Windows) selecting confined/exclusive emits an advisory notice, not enforcement."
+      "description": "Workspace write-confinement posture. DEFAULT IS `confined` as of 2026-W39 (was `cooperative`): sandbox write-confinement is ENABLED BY DEFAULT for every qualifying provider (Claude macOS/Linux; Goose and Codex macOS/Linux via agentteams' launcher examples; any framework via the neutral launcher), inert until the operator merges the emitted settings example or launches through the emitted runner; non-enforcing hosts (Copilot, native Windows) degrade to the fail-closed advisory, never a silent no-op. `cooperative` is one way to opt out: agents are trusted to respect the workspace, no OS boundary emitted, gate hook fail-open (the pre-2026-W39 behavior). The dedicated switch for the OS boundary alone is `os_sandbox` (`off` suppresses it under any profile and keeps the rest of the profile; `on` emits it even under `cooperative`); turning the boundary off is constraint-relaxing and, in a governed workspace (strict decision signing, on by default), needs an operator Ed25519-signed decision. WASM confinement of agent code is separate (`wasm_sandbox`). `confined` and `exclusive` expand to the framework's sandbox host feature (`claude:sandbox`, `goose:sandbox`, or `codex:sandbox` since 2026-10-08), on claude that emits Claude Code's native OS-level sandbox block (write-confines Bash and child processes to workspace_write_roots) into the settings example the operator merges; on goose and codex it emits a runner around the neutral launcher. Both are inert until the operator uses them. `exclusive` adds OS read-exclusion on top of `confined` (P3a): it also denies this team reading a default deny set plus any `protected_read_paths`, and prints a P3b inbound-hardening advisory. This is OUTBOUND (it seals this team's reads); keeping OTHER teams out of this workspace is operator filesystem hardening, not something exclusive enforces. The effective feature set is the UNION of this expansion and any --target-host-features tokens, so cooperative never strips an explicitly-requested claude:sandbox token. Claude enforces this through its session sandbox; Goose and Codex through agentteams' launcher examples (`.goose/confined-run.example.sh`, `.codex/confined-run.example.sh`), which hold only when the operator launches through them (on Codex, per-role limits stay instruction-level unless write_policy orchestrator-only turns on its role gate); on non-sandbox hosts (Copilot, native Windows) selecting confined/exclusive emits an advisory notice, not enforcement."
+    },
+    "os_sandbox": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "Dedicated OS-sandbox switch, independent of privilege_profile (P00). Absent: derived from privilege_profile (confined/exclusive = on, cooperative = off), exactly as before. \"off\" suppresses every OS boundary agentteams emits for the selected framework (settings sandbox block, Seatbelt profile, runners, neutral launcher) while everything else privilege_profile controls stays as it is; it is refused with write_policy orchestrator-only, and it is constraint-relaxing (Rule 15): in a governed workspace (strict decision signing, on by default) it needs an operator Ed25519-signed decision sandbox-os-off:<framework>, elsewhere a SANDBOX RELAXATION notice. \"on\" emits the boundary even under cooperative. --os-sandbox overrides this key. Never touches live settings or the runner's confined_programs sandbox."
+    },
+    "wasm_sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Opt-in WASM confinement of agent code execution (P01; D6: off unless this block's enabled or --wasm-sandbox on turns it on). Agents run code (prebuilt .wasm modules, Python, JavaScript) inside a pinned wasmtime grant: stdio only, no preopened directory, no environment, no network, with fuel/memory/timeout limits. When an OS sandbox is available the host process still runs inside it; WASM never replaces it. While WASM is on, the .agentteams control plane is session-write-denied (METAPLAN R1). Per-agent widening (read-only paths, a private scratch dir) is a capability grant: in a governed workspace it needs an operator Ed25519-signed decision wasm-grant-widen:<framework> granting exactly the added tokens. Network is never granted (there is no key for it). Turning WASM off after it was on is constraint-relaxing (sandbox-wasm-off:<framework>). Enforcement varies by provider and is reported per provider; it is never claimed silently. Every unknown key or out-of-range value refuses the render.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Turn WASM confinement on. --wasm-sandbox on|off overrides it for one run."
+        },
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "module",
+              "python",
+              "javascript"
+            ]
+          },
+          "description": "Workloads agents may run. Default: all three. A language not listed is refused at run time."
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fuel": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000000000000
+            },
+            "memory_mib": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            }
+          },
+          "description": "Per-run limits for every agent. Defaults: fuel 10000000000, memory 64 MiB, timeout 120 s (wasm_exec.DEFAULT_LIMITS). Out-of-range values are refused, never clamped. Raising a limit within these bounds is not a capability widening."
+        },
+        "agents": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "read_paths": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Project-relative directories or files this agent's guests may READ, mounted read-only at /project/<path>. Each segment may use only letters, digits, '.', '_' and '-'. No absolute or ~ paths, no '..', no '.', no control plane or an ancestor of it (.git, .agentteams, .claude, .goose, .codex, .grok, .github/agents, .github/hooks, sandbox), no credential material (.env*, *.pem, *.key, id_*, ...), no governance / trust root, nothing that resolves through a symlink."
+              },
+              "scratch": {
+                "type": "boolean",
+                "description": "Give this agent's guests one private writable directory, mounted at /scratch. agentteams chooses its location (.agentteams/wasm/scratch/<agent>/), never the brief."
+              }
+            }
+          },
+          "description": "Per-agent grant widening beyond compute-only (D5). Keys are agent slugs in this team; unknown slugs are refused, and an entry with neither read_paths nor scratch is refused. Grants are inert while WASM is off."
+        },
+        "native_exec": {
+          "type": "string",
+          "enum": [
+            "replace",
+            "deny",
+            "keep"
+          ],
+          "default": "replace",
+          "description": "What happens to WASM-eligible agents' native shell tools while WASM is on (applied per provider by agentteams; see the enforcement notice). replace: remove the shell tool and offer run_wasm where it is wired; deny: remove it everywhere the host enforces tools; keep: leave it (steer only), which is constraint-relaxing (native-exec-keep for every eligible agent). Ignored while WASM is off."
+        },
+        "native_exec_keep": {
+          "type": "array",
+          "uniqueItems": true,
+          "default": [
+            "git-operations",
+            "navigator"
+          ],
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "description": "Agents that keep native execution while WASM is on (every agent holding an execute-class tool is otherwise WASM-eligible and loses native exec). When the key is absent the default is navigator and git-operations (they need git), restricted to the agents in this team. An explicit list replaces the default: list navigator and git-operations too to extend it, or [] to keep none. Each entry is constraint-relaxing (native-exec-keep): in a governed workspace it needs the operator's Ed25519-signed decision once (the default entries included); elsewhere a SANDBOX RELAXATION notice is printed and the keep is recorded. The orchestrator and the team builder are exempt by design and may not be listed."
+        },
+        "model_substrate": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ],
+          "description": "Project a model-substrate WASM switch to consumers that run model code (for example baseAgent's battery), written to .agentteams/sandbox-state.json (schema agentteams-sandbox-state/v1). Absent: nothing is projected. \"on\": the consumer must run model code WASM-confined under an enforcing runner, and must refuse rather than fall back to native or to an unenforced runner. \"off\": the consumer runs native substrates by default. Independent of wasm_sandbox.enabled (which confines agent code). Turning it from on to off is constraint-relaxing (sandbox-wasm-off:model-substrate)."
+        }
+      }
+    },
+    "wasm_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P08: configuration of agentteams' own WASM agent runtime (--framework wasm), rendered into .agentteams-wasm/runtime.json. Provider keys are never configured here: Stage 0 reads them from the launcher's environment only. No model id is built in: a tier with no model (here or AGENTTEAMS_WASM_MODEL_<TIER>) refuses the run, except for the offline stub provider. Every unknown key or invalid value refuses the render.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["anthropic", "openai", "openrouter", "xai", "ollama", "lmstudio", "openai-compatible", "gemini", "stub"],
+          "description": "Provider preset (model_providers.PROVIDERS). --wasm-provider overrides it for one run."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Base URL for a keyless local preset only (ollama, lmstudio) on a loopback host (127.0.0.1, ::1, localhost). The provider key is sent to the base URL, so for any preset that sends a key the render refuses it: the operator sets AGENTTEAMS_WASM_BASE_URL or --wasm-base-url at run time instead (@security S5)."
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Tier -> model id. Absent tiers stay null in runtime.json.",
+          "properties": {
+            "primary": {"type": "string"},
+            "cheap": {"type": "string"}
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-run caps (wasm_agent.budget.Budget); omitted fields keep agentteams' defaults.",
+          "properties": {
+            "max_model_calls": {"type": "integer", "minimum": 0},
+            "max_total_tokens": {"type": "integer", "minimum": 0},
+            "max_output_tokens_per_call": {"type": "integer", "minimum": 1},
+            "max_steps": {"type": "integer", "minimum": 0},
+            "max_tool_calls": {"type": "integer", "minimum": 0},
+            "wall_clock_s": {"type": "number", "exclusiveMinimum": 0},
+            "max_usd": {"type": ["number", "null"], "minimum": 0},
+            "max_delegation_depth": {"type": "integer", "minimum": 0},
+            "max_child_runs": {"type": "integer", "minimum": 0}
+          }
+        },
+        "prices_file": {
+          "type": "string",
+          "description": "Project-relative operator price table (vulnscan gateway_dialects.load_prices format) for the USD cap."
+        },
+        "delegation": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "P09: multi-agent delegation settings. A sub-agent's grant is always the intersection of its own rendered grant and its delegator's (never wider, D11); no field can change that. Depth and per-run fan-out caps are budget.max_delegation_depth and budget.max_child_runs (hard caps 4 and 32).",
+          "properties": {
+            "default_share": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Fraction of the delegator's remaining model calls, tokens, wall clock and USD a sub-agent gets by default (0.5)."},
+            "max_tree_runs": {"type": "integer", "minimum": 1, "description": "Runs in one delegation tree, the root included (default 16; clamped to the hard cap 64)."}
+          }
+        }
+      }
     },
     "goose_egress_proxy": {
       "type": "string",
@@ -355,7 +518,7 @@
     "write_policy_frameworks": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["claude", "goose", "codex"]}, "description": "Orchestrator-only-writes pilot (P5a): the frameworks the switch covers when one brief emits several. Each listed framework renders under write_policy; every other framework renders as if the switch were off and is outside the pilot's guarantee. codex is supported only when Codex is launched through .codex/confined-run.example.sh (codex:sandbox, from an explicit confined/exclusive privilege_profile); generation can't verify the launch. goose stays a valid value for compatibility but is refused at render (agentteams #204). Unset: the switch applies to the framework being generated and is refused off claude/goose/codex."},
     "agent_policies": {"type": "object", "description": "Per-agent policy for --apply-proposal / --run-request. write_scopes: files, directories ending in '/', or patterns (P5b: '*', '?' and '[...]' match within one segment and never match a dot-segment (a trailing '/' covers everything below, dot-files included), e.g. 'reports/dossiers/*/strategy.md'; the first segment literal; no '**', '..' or control plane) the agent may change via proposals (never the brief itself). commands: allowed command requests, each an exact argv prefix plus one regex per remaining argument (fullmatch; patterns admitting options or parent/absolute paths are refused), with an optional pinned cwd, variadic last pattern, owned writes and stdin gates.", "additionalProperties": {"type": "object", "additionalProperties": false, "properties": {"write_scopes": {"type": "array", "items": {"type": "string"}}, "commands": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["prefix"], "properties": {"prefix": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "args": {"type": "array", "items": {"type": "string"}}, "cwd": {"type": "string", "description": "Pinned working directory (project-relative, default \".\"); a request must use exactly this."}, "variadic": {"type": "boolean", "description": "When true, the last argument pattern matches one or more trailing arguments."}, "writes": {"type": "array", "items": {"type": "string"}, "description": "Globs this command may change (e.g. a protected record its script owns); expected_writes outside them must be in the agent's write_scopes."}, "stdin_gates": {"type": "array", "items": {"type": "string"}, "description": "Gates run on stdin_from_content before it is piped; without this key, stdin content is refused."}, "timeout": {"type": "integer", "minimum": 1, "maximum": 7200, "description": "Seconds before the command is killed (P5a; default 600)."}}}}}}},
     "proposal_gates": {"type": "object", "description": "Pre-write gates run on the proposed content: {name: {glob, argv, exec?}}. glob is fnmatch on the lowercased path, so '*' crosses '/' (unlike a write_scopes pattern, where '*' matches one segment). exec (P4b): the programs the gate may run inside the runner's sandbox (default: its own program and a shebang interpreter). P5c: set it in the operator-owned confined file's reserved gate_exec key instead, to keep machine paths out of the committed brief; setting both is refused. In argv, {file} (a temporary copy of the proposed content) and {path} (the destination, context only) must be whole arguments; shells are refused. A non-zero exit refuses the proposal.", "additionalProperties": {"type": "object", "additionalProperties": false, "required": ["argv"], "properties": {"glob": {"type": "string"}, "argv": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "exec": {"type": "array", "items": {"type": "string"}}}}},
-    "confined_programs": {"type": "object", "description": "Orchestrator-only-writes pilot (P4b): per-agent OS sandbox for the commands the out-of-session runner runs for that agent: {agent: {exec, write}}. exec: absolute or ~/ paths (programs or toolchain roots, matched as subpaths; macOS only, decision C) the command may execute. write: project-relative directories it may write (never the project root, .agentteams, .agentteams-queue, .git or the control plane; never containing an exec path). Changes inside write roots count as declared. An agent without an entry gets no --run-request. P5b: prefer the operator-owned file ~/.config/agentteams/confined/<project>-<hash>.json (agentteams --confined-path / --install-confined), which keeps machine paths out of the committed brief; the runner reads it instead of this block and refuses when both are set.", "additionalProperties": {"type": "object", "additionalProperties": false, "properties": {"exec": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "write": {"type": "array", "items": {"type": "string"}}, "allow_unresolved_launcher_with_package_store": {"type": "boolean", "description": "macOS: let a run proceed when its program (or lake, which runs git) needs an xcrun launcher that could not be resolved AND a write root covers a package store (.lake/packages, node_modules, ...). The runner refuses that combination otherwise; each condition alone only warns."}}, "required": ["exec"]}},
+    "confined_programs": {"type": "object", "description": "Orchestrator-only-writes pilot (P4b): per-agent OS sandbox for the commands the out-of-session runner runs for that agent: {agent: {exec, write}} or, P12, {agent: {sandbox: \"wasm\", wasm: {languages, read, scratch, limits}}}. exec: absolute or ~/ paths (programs or toolchain roots, matched as subpaths; macOS only, decision C) the command may execute. write: project-relative directories it may write (never the project root, .agentteams, .agentteams-queue, .git or the control plane; never containing an exec path). Changes inside write roots count as declared. An agent without an entry gets no --run-request. P5b: prefer the operator-owned file ~/.config/agentteams/confined/<project>-<hash>.json (agentteams --confined-path / --install-confined), which keeps machine paths out of the committed brief; the runner reads it instead of this block and refuses when both are set.", "additionalProperties": {"oneOf": [{"type": "object", "additionalProperties": false, "properties": {"sandbox": {"type": "string", "enum": ["os"], "description": "P12: the default runner sandbox (an OS sandbox around a native program). May be omitted."}, "exec": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "write": {"type": "array", "items": {"type": "string"}}, "allow_unresolved_launcher_with_package_store": {"type": "boolean", "description": "macOS: let a run proceed when its program (or lake, which runs git) needs an xcrun launcher that could not be resolved AND a write root covers a package store (.lake/packages, node_modules, ...). The runner refuses that combination otherwise; each condition alone only warns."}}, "required": ["exec"]}, {"type": "object", "additionalProperties": false, "required": ["sandbox", "wasm"], "properties": {"sandbox": {"type": "string", "enum": ["wasm"], "description": "P12 (D2 strong mode): the runner runs this agent's queued commands only as WASM guests (argv[0] wasm:module | wasm:python | wasm:javascript, argv[1] a project-relative guest file under wasm.read), as the pinned wasmtime inside a fresh Seatbelt/bwrap wrap. No exec list (the only program is the pinned wasmtime) and no write roots. Moving an entry back to os is the constraint-relaxing wasm-to-os-switch effect (Ed25519-signed decision when governed)."}, "wasm": {"type": "object", "additionalProperties": false, "required": ["languages"], "properties": {"languages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "enum": ["module", "python", "javascript"]}}, "read": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/?$"}, "description": "Project-relative directories preopened read-only at /project/<rel> (never the ledger, .git, the control plane or a secret). Granting one is a C-3 capability change (@security)."}, "scratch": {"type": "boolean", "description": "Preopen a private writable /scratch, the runner-created .agentteams/wasm/scratch/<agent>/ (R8/R11). Its changes count as declared only when an OS sandbox bounded the run."}, "limits": {"type": "object", "additionalProperties": false, "properties": {"fuel": {"type": "integer", "minimum": 1}, "memory_mib": {"type": "integer", "minimum": 1}, "timeout_s": {"type": "integer", "minimum": 1, "description": "Never exceeds the matched command entry's timeout or the MCP channel cap (proposal_runner.MCP_COMMAND_TIMEOUT)."}}}}}}}]}},
     "allow_unconfined_runs": {"type": "boolean", "description": "Orchestrator-only-writes pilot (P4b, decision A): let the runner run commands and gates unconfined when no OS sandbox is usable. Off by default (refuse); every unconfined run is logged in the ledger."},
     "protected_paths": {"type": "array", "items": {"type": "string"}, "description": "Globs no proposal may touch (records changed only through their own scripts); a pattern without wildcards also covers everything below it. The project control plane and the brief are always refused as well."},
     "goose_tool_scoping": {
@@ -605,7 +768,7 @@
     "frozen_surfaces": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"type": "string", "enum": ["codex", "goose", "agents-md", "claude", "copilot-vscode", "copilot-cli", "grok"]},
+      "items": {"type": "string", "enum": ["codex", "goose", "agents-md", "claude", "copilot-vscode", "copilot-cli", "grok", "wasm"]},
       "description": "Layer-2 key (Rule 15): the agent surfaces (framework ids) the project keeps frozen; updates leave the paths each one owns (agentteams.cli.frozen_surfaces.FROZEN_SURFACE_PATHS) to the project. The working brief is not the freeze baseline: the effect classifier takes the recorded freeze state. [] or absent freezes nothing."
     },
     "researchteam_notes": {

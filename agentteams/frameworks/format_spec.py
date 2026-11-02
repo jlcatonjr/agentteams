@@ -80,6 +80,9 @@ class FormatSpec:
             against (e.g. ``"1.0.52"``); ``None`` where the published docs are the whole
             contract. The only literal in code: adapters must not restate it (guarded by
             tests/test_grok_adapter.py); the expert ref states it on purpose and must match.
+        upstream: The format belongs to a published third-party tool whose docs the watcher fetches. ``False``
+            only for agentteams' own runtime format (``wasm``, METAPLAN §2.5 docs-watch exemption): it has no
+            upstream page, so ``framework_research`` skips it (:data:`UPSTREAM_SPECS`) and ``source_url`` is empty.
     """
 
     research_id: str
@@ -93,6 +96,7 @@ class FormatSpec:
     extra_source_urls: tuple[str, ...] = ()
     toml_keys: bool = False
     pinned_version: str | None = None
+    upstream: bool = True
 
 
 #: Canonical Claude Code sub-agents doc URL (re-exported by ``framework_research``
@@ -203,7 +207,21 @@ FORMAT_SPECS: dict[str, FormatSpec] = {
         emitted_front_matter_keys=("name", "description", "tools", "injectDefaultTools", "mcpInheritance"),
         pinned_version="1.0.52",
     ),
+    # agentteams' own WASM agent runtime (plan P08): the format is defined here, by agentteams.wasm_agent.team, so
+    # there is nothing upstream to watch (docs-watch exemption, METAPLAN §2.5).
+    "wasm": FormatSpec(
+        research_id="wasm",
+        adapter_id="wasm",
+        label="agentteams WASM agent runtime",
+        source_url="",
+        expert_ref="references/wasm-agent-runtime-expert.md",
+        emitted_front_matter_keys=("name", "description", "tools", "model", "delegates"),
+        upstream=False,
+    ),
 }
+
+#: The specs the upstream-doc watcher covers (every spec but agentteams' own formats).
+UPSTREAM_SPECS: dict[str, FormatSpec] = {rid: spec for rid, spec in FORMAT_SPECS.items() if spec.upstream}
 
 
 def spec_by_adapter_id(adapter_id: str) -> FormatSpec | None:

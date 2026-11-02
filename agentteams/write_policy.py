@@ -279,6 +279,9 @@ def resolve(description: dict[str, Any], framework: str) -> str | None:
                              'ledger key; goose is refused: its delegates inherit the orchestrator\'s write tools) and on '
                              'codex only when launched through '
                              f'.codex/confined-run.example.sh; {framework} has no such sandbox')
+        if description.get("os_sandbox") == "off":
+            # P00 (Rule 12): the dedicated switch must not step around the session-sandbox requirement.
+            raise ValueError('write_policy "orchestrator-only" needs the session sandbox: os_sandbox "off" turns it off')
         if description.get("privilege_profile") == "cooperative":
             raise ValueError('write_policy "orchestrator-only" needs the session sandbox: privilege_profile '
                              '"cooperative" turns it off')

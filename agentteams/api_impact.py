@@ -309,11 +309,11 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
                 continue
             module = new if status != "D" else old
             for name in sorted(after.keys() - before.keys()):
-                (imp.cli_added if name.startswith("cli") else imp.symbols_added).append(
-                    name.split(":", 1)[1] if name.startswith("cli") else f"{module}::{name}")
+                (imp.cli_added if name.startswith("cli:") else imp.symbols_added).append(
+                    name.split(":", 1)[1] if name.startswith("cli:") else f"{module}::{name}")
             for name in sorted(before.keys() - after.keys()):
-                (imp.cli_removed if name.startswith("cli") else imp.symbols_removed).append(
-                    name.split(":", 1)[1] if name.startswith("cli") else f"{module}::{name}")
+                (imp.cli_removed if name.startswith("cli:") else imp.symbols_removed).append(
+                    name.split(":", 1)[1] if name.startswith("cli:") else f"{module}::{name}")
             for name in sorted(before.keys() & after.keys()):
                 if before[name] != after[name]:
                     imp.symbols_changed.append(f"{module}::{name}")

@@ -389,7 +389,8 @@ Core; `agentteams/templates/universal/security.template.md`;
 
 ### S18 — Sandbox emission and privilege profiles  ✅ *(Linux bwrap deny-tested)* / ⚙ *(macOS Seatbelt UNVERIFIED, Windows design-only)*
 **Canonical facts.**
-1. **Three privilege profiles:** `cooperative` (no OS boundary — the opt-out), `confined` (the default
+1. **Three privilege profiles:** `cooperative` (no OS boundary; the dedicated
+   off switch for the boundary alone is `os_sandbox: "off"`), `confined` (the default
    as of 2026-W39), `exclusive`. `confined`/`exclusive` emit a sandbox request token; `exclusive` additionally emits
    `denyRead` read-exclusion. An **unknown** profile **fails closed** (raises, never silently downgrades).
 2. **agentteams emits configuration, it does not enforce.** For Claude it injects an **inert `sandbox`

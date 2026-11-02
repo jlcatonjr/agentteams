@@ -606,7 +606,25 @@ def load_prices(path: Path) -> dict[str, dict[str, float]]:
     Raises:
         ValueError: Not a JSON object of models to finite non-negative prices.
     """
-    table = json.loads(path.read_text(encoding="utf-8"))
+    return parse_prices(path.read_text(encoding="utf-8"))
+
+
+def parse_prices(text: str) -> dict[str, dict[str, float]]:
+    """Parse a price table already read by the caller (:func:`load_prices`' format and checks).
+
+    The WASM agent launcher passes the bytes its control-plane lock verified, so the table it prices with is the one
+    it hashed (no second read).
+
+    Args:
+        text: The JSON text.
+
+    Returns:
+        The table with every field filled in.
+
+    Raises:
+        ValueError: Not a JSON object of models to finite non-negative prices.
+    """
+    table = json.loads(text)
     if not isinstance(table, dict):
         raise ValueError("the price table must be a JSON object of model -> prices")  # noqa: TRY004 - one error type for callers
     out: dict[str, dict[str, float]] = {}

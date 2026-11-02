@@ -272,7 +272,7 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Tracking:** 1.0 known limitation. A version pin that fails closed on an untested codex-cli is planned for 1.0.x
   (found by baseAgent).
 
-## Copilot (`--framework copilot-vscode`)
+## Copilot (`--framework copilot-vscode`, `--framework copilot-cli`)
 
 ### The orchestrator and security agents exceed GitHub's custom-agent size limit
 
@@ -282,6 +282,126 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Workaround:** rely on the Claude or Codex surface for those two roles, or trim their Project-Specific Notes.
 - **Tracking:** 1.0 known limitation. Splitting long sections into references, with an emit-time size check, is
   planned for 1.0.x (found by masterTeacher).
+
+### The projected model-substrate floor is not write-protected
+
+- **What:** the Copilot surfaces emit no session sandbox, so nothing stops a Copilot session from editing or deleting
+  `.agentteams/sandbox-state.json` (the `wasm_sandbox.model_substrate` floor a consumer such as baseAgent enforces).
+  Claude and Goose write-protect the file, and the Codex and Grok runners protect all of `.agentteams`.
+- **Who:** copilot-cli and copilot-vscode teams that set `wasm_sandbox.model_substrate`.
+- **Workaround:** run `agentteams --verify-integrity` before a run that depends on the floor: it exits 1 when the file
+  is absent, unusable or `off` while the last render recorded `on`. The consumer's own check is in the baseAgent
+  handoff (`references/cross-orchestrator-requests/2026-W44-wasm-grant-spec-and-substrate.md` §4.3 item 8).
+- **Tracking:** WASM sandbox P20 residual (Rule 12).
+
+## WASM sandbox and the OS sandbox switch
+
+The two switches are described in the [Sandboxing Guide, Part IX](agentteams-sandboxing-guide/reference/part-ix-switching-sandboxes-and-wasm.md).
+The verdict agentteams records per framework is `wasm_enforcement` in the team manifest (printed as
+`[WASM-ENFORCEMENT]`); only `enforced` and `conditional` are claims of enforcement.
+
+### A WASM guest cannot run Bash, git or npm
+
+- **What:** a guest runs prebuilt `.wasm` modules, Python (CPython WASI) and JavaScript (QuickJS-ng) only, with no
+  subprocess. Shell commands, git, package managers and any other native tool are not available through `run_wasm`.
+- **Who:** every team with `wasm_sandbox.enabled` (and every `--framework wasm` team).
+- **Workaround:** agents that need native tools keep native exec through `native_exec_keep` (default `navigator` and
+  `git-operations`), a `native-exec-keep` effect that needs the operator's signature in a governed workspace.
+- **Tracking:** WASM sandbox decision D3 (workloads).
+
+### Vendor CLIs are not confined by WASM
+
+- **What:** Claude Code, Codex, Goose, Grok and Copilot run natively. WASM confines only the code they send to
+  `run_wasm`. The CLI process itself is confined only by the OS sandbox, and only once that boundary is wired.
+- **Who:** every vendor-CLI team with WASM on.
+- **Workaround:** keep the OS sandbox on (`os_sandbox` absent under `confined`, or `on`) and wire it.
+- **Tracking:** WASM sandbox architecture A (shared brief, ARCH).
+
+### Some providers are advisory only
+
+- **What:** the verdict is `advisory` (instructions plus a tool offer, nothing that stops native exec) for
+  copilot-vscode and copilot-cli (only an inert MCP example is emitted; no `run_wasm` in agent tools), agents-md (no
+  tool channel), grok under `native_exec: replace` (no `run_wasm` yet; `deny` gives `declared`), goose delegates,
+  goose under legacy scoping, and every top-level session on every framework. It is also `advisory` on every
+  framework while the OS sandbox is off, or while the control-plane rules are not merged in the live configuration
+  (a fresh Claude render reads `advisory` until the settings are merged). A narrowed sub-agent can still ask an
+  agent that keeps exec (the orchestrator) to run something natively.
+- **Who:** teams that read WASM on as a boundary on those hosts.
+- **Workaround:** read `wasm_enforcement` / `[WASM-ENFORCEMENT]`, and run `--check-wiring` after merging settings.
+  Use Claude or Goose (direct recipe runs) with the OS sandbox on where enforcement matters; on Goose that also
+  needs `GOOSE_SANDBOX` on in the live Goose config, or the verdict reads `advisory` ("Seatbelt profile not wired").
+- **Tracking:** WASM sandbox plan P13 (Rule 12 carve-outs 1 and 6).
+
+### Windows has WASM but no OS sandbox, and no read-only mounts
+
+- **What:** native Windows has no OS sandbox for the agent process (for every framework, including Claude), so WASM
+  runs alone and generation prints `wasm-only-host` ("No OS sandbox on this host; WASM runs alone"). A read-only mount (`read_paths`) without an OS sandbox is enforced
+  by a per-run snapshot copy, which needs `dir_fd` support that Windows lacks, so a grant with read paths is refused
+  there. Exit codes and the `SYSTEMROOT`-only environment are untested on Windows.
+- **Who:** Windows hosts with `wasm_sandbox.enabled`.
+- **Workaround:** keep Windows grants compute-only, or run under WSL or a Linux / macOS host.
+- **Tracking:** WASM sandbox plan P02 (open items).
+
+### The launching-config scan is name-based
+
+- **What:** to decide which config files must be write-protected, agentteams scans the known MCP config locations
+  for launch strings that name `agentteams-wasm-mcp.py`. A shell wrapper (or any indirection) that builds the
+  server path at run time does not name it, so its config is not required to be write-protected and the verdict
+  can miss it.
+- **Who:** operators who hand-write MCP configs that launch the server indirectly.
+- **Workaround:** launch the server with the emitted command line only; do not wrap it.
+- **Tracking:** WASM sandbox plan P11 (Rule 12 residual).
+
+### The credential and config scans are point-in-time
+
+- **What:** a granted read directory is scanned for credential-named entries and symlinks when the grant is built
+  and when a run or the MCP server starts; the launching-config scan runs at render and at `--check-wiring`. A file
+  created after a scan (time of check to time of use) is not seen until the next one: for example a credential
+  file written into a granted read directory while an `agentteams_wasm` server is running.
+- **Who:** WASM grants with `read_paths`.
+- **Workaround:** grant narrow directories that nothing writes credentials into; restart the session after
+  changing them.
+- **Tracking:** WASM sandbox plans P01 / P10 (Rule 12 residual).
+
+### File denies do not block macOS Keychain access
+
+- **What:** the nested OS profiles deny reads of credential directories (`~/.ssh`, `~/.aws`, `~/Library/Keychains`
+  and others), but a process can still reach Keychain items through the macOS Security framework (a Mach
+  service), which file denies do not cover. A guest has no such access; the host process does.
+- **Who:** macOS hosts.
+- **Workaround:** keep secrets the agent must not reach out of the login Keychain, or run on a host without them.
+- **Tracking:** WASM sandbox plan P02 (`wasm_exec.NEST_DENY_READS`).
+
+### The projected model-substrate file can be deleted
+
+- **What:** `.agentteams/sandbox-state.json` (the `wasm_sandbox.model_substrate` floor) is write-protected only
+  where an OS session sandbox is emitted. With the OS sandbox off, or on Copilot (see
+  [below](#the-projected-model-substrate-floor-is-not-write-protected) — its launchers do not write-protect the
+  file), a session can delete or lower it. agentteams detects that only at `--verify-integrity` (exit 1 when the
+  last render recorded `on`) or at the next render; a consumer that never saw `on` cannot tell a deleted file
+  from "nothing projected".
+- **Who:** teams that set `model_substrate: on` for a consumer such as baseAgent.
+- **Workaround:** run `agentteams --verify-integrity` before a run that depends on the floor.
+- **Tracking:** WASM sandbox plan P20 (Rule 12 residual).
+
+### Convert, interop and sync apply no WASM narrowing
+
+- **What:** `--convert-from`, `--interop-from` and multi-sync render agents from their source tools without the
+  `native_exec` policy or the `run_wasm` wiring. For a WASM team they print `[WASM-ENFORCEMENT] <framework>:
+  ADVISORY ONLY` and claim nothing. A re-projected team keeps its source files' (already narrowed) tools, but those
+  agents get no `run_wasm` on the target.
+- **Who:** teams that move a WASM team between frameworks.
+- **Workaround:** re-render on the target framework from the brief (`--description … --framework <fw>`).
+- **Tracking:** WASM sandbox plan P13 (open items).
+
+### Several standing sandbox exceptions can hit the aggregate cap
+
+- **What:** each standing relaxation (OS off, a grant widening, a native-exec keep, a runner switch) is one active
+  exception in the registry, and the registry's aggregate cap defaults to one. A governed workspace that needs two
+  at once (for example the default `native_exec_keep` and a widened grant) is refused until the cap is raised.
+- **Who:** governed workspaces with WASM on and more than one exception.
+- **Workaround:** raise `max_active_relaxing` in the exception registry deliberately (it is git-tracked).
+- **Tracking:** WASM sandbox METAPLAN §7 (accepted limitation).
 
 ## Rendering
 

@@ -23,6 +23,15 @@ DECISION RULE
 * ``AGENTTEAMS_CODEX_CONFINED`` not ``1`` (Codex not started by ``.codex/confined-run.example.sh``):
   everything is denied, so a direct launch that trusts this hook still cannot run tools.
 
+WASM MODE (WASM plan P13)
+-------------------------
+Without ``write_policy`` but with WASM on, the runner sets ``AGENTTEAMS_CODEX_WASM=1`` and
+``AGENTTEAMS_CODEX_NATIVE_KEEP`` (comma-separated agent names that keep the shell: the exempt orchestrator and the
+operator's ``native_exec_keep``). Then a spawned agent outside that list is denied the shell tool names in
+:data:`SHELL_TOOLS` and steered to ``run_wasm``; every other tool (``run_wasm`` included) passes. Only ``Bash``
+was probed live (codex-cli 0.160.1); the other names are unprobed defensive spellings, and an unknown shell
+tool name passes (stated in the team's ``wasm_enforcement`` record). A malformed keep list denies everything.
+
 FAIL-CLOSED
 -----------
 Codex blocks a call when the hook exits 2 and lets it through on exit 1 (probed live), so every
@@ -50,16 +59,41 @@ import sys
 #: The read-only server's tools (``goose_tool_scoping.READFS_TOOLS``), as Codex names MCP tools.
 READFS_PREFIX = "mcp__agentteams_readfs__"
 READFS_TOOLS = frozenset({"read_file", "list_dir", "find", "grep", "stat"})
+#: WASM mode: shell tool names denied to a spawned agent ("Bash" probed live; the rest defensive, unprobed).
+SHELL_TOOLS = frozenset({"Bash", "shell", "local_shell", "exec_command", "unified_exec"})
+#: The keep list's agent-name grammar (agentteams slugs).
+_NAME_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-")
 #: Hard cap on the stdin read, so a huge payload can't stall the gate.
 _MAX_INPUT = 4 * 1024 * 1024
 
 
-def decide(event: object, confined: bool) -> str | None:
+def parse_keep(raw: str) -> frozenset[str]:
+    """Parse ``AGENTTEAMS_CODEX_NATIVE_KEEP`` (comma-separated agent names; empty allowed).
+
+    Args:
+        raw: The variable's value.
+
+    Returns:
+        The names.
+
+    Raises:
+        ValueError: A name outside ``[a-z0-9-]`` or starting with ``-``.
+    """
+    names = frozenset(n for n in raw.split(",") if n)
+    for name in names:
+        if name.startswith("-") or not set(name) <= _NAME_CHARS:
+            raise ValueError("malformed AGENTTEAMS_CODEX_NATIVE_KEEP")
+    return names
+
+
+def decide(event: object, confined: bool, wasm: bool = False, keep: frozenset[str] = frozenset()) -> str | None:
     """Return a deny reason for one PreToolUse event, or ``None`` to allow it.
 
     Args:
         event: The parsed hook input.
         confined: Whether the runner started Codex (``AGENTTEAMS_CODEX_CONFINED=1``).
+        wasm: WASM mode (``AGENTTEAMS_CODEX_WASM=1``): deny only :data:`SHELL_TOOLS` to spawned agents.
+        keep: WASM mode: agent names that keep the shell.
 
     Returns:
         ``None`` to allow; otherwise the reason shown to the agent.
@@ -77,6 +111,11 @@ def decide(event: object, confined: bool) -> str | None:
     if not isinstance(agent_type, str) or not agent_type:
         agent_type = f"<unnamed {agent_id!r}>"
     tool = event.get("tool_name")
+    if wasm:
+        if not isinstance(tool, str) or tool in SHELL_TOOLS and agent_type not in keep:
+            return (f"WASM sandbox: agent {agent_type!r} may not use native exec ({tool!r}); run code with "
+                    "mcp__agentteams_wasm__run_wasm instead")
+        return None
     if isinstance(tool, str) and tool.startswith(READFS_PREFIX) and tool[len(READFS_PREFIX):] in READFS_TOOLS:
         return None
     return (f"write_policy orchestrator-only: agent {agent_type!r} may use only the read-only "
@@ -94,8 +133,10 @@ def main() -> int:
         if len(raw) > _MAX_INPUT:
             reason: str | None = "hook input too large"
         else:
+            wasm = os.environ.get("AGENTTEAMS_CODEX_WASM") == "1"
+            keep = parse_keep(os.environ.get("AGENTTEAMS_CODEX_NATIVE_KEEP", "")) if wasm else frozenset()
             reason = decide(json.loads(raw.decode("utf-8")),
-                            os.environ.get("AGENTTEAMS_CODEX_CONFINED") == "1")
+                            os.environ.get("AGENTTEAMS_CODEX_CONFINED") == "1", wasm, keep)
     except BaseException as exc:  # noqa: BLE001 - any failure must deny, never fall through to allow
         reason = f"role gate error ({type(exc).__name__}); denying"
     if reason is None:

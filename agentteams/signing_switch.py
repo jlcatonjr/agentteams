@@ -41,6 +41,7 @@ import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams.atomicio import replace_no_follow
 from agentteams.drift import is_interop_marker
 from agentteams.frameworks._sandbox_emit import TEAM_MARKER_REL
 
@@ -248,33 +249,12 @@ def is_governed(*dirs: Path) -> bool:
 def _replace_no_follow(path: Path, text: str) -> None:
     """Atomically write ``path`` (inside a real ``references/`` dir), never through a link.
 
+    Delegates to :func:`agentteams.atomicio.replace_no_follow` (shared with ``sandbox_projection``).
+
     Raises:
         OSError: ``references/`` is not a real directory, or the switch is a link / non-regular.
     """
-    refs = path.parent
-    refs.mkdir(parents=True, exist_ok=True)
-    if not stat.S_ISDIR(os.lstat(refs).st_mode):
-        raise OSError(f"{refs} is not a real directory (symlink?)")
-    dir_fd = os.open(refs, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0))
-    tmp = f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
-    try:
-        try:
-            st = os.stat(path.name, dir_fd=dir_fd, follow_symlinks=False)
-        except FileNotFoundError:
-            st = None
-        if st is not None and not stat.S_ISREG(st.st_mode):
-            raise OSError(f"{path} is a symlink or not a regular file; left untouched")
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        fd = os.open(tmp, flags, 0o644, dir_fd=dir_fd)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                fh.write(text)
-            os.replace(tmp, path.name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
-        except OSError:
-            os.unlink(tmp, dir_fd=dir_fd)
-            raise
-    finally:
-        os.close(dir_fd)
+    replace_no_follow(path, text)
 
 
 def _js(value: bool) -> str:

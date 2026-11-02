@@ -20,13 +20,12 @@ from typing import Any
 from agentteams import capability_map as _capability_map
 from agentteams import interop_grant_check as _igc
 from agentteams import interop_write_policy as _iwp
+from agentteams import wasm_enforcement as _wasm_enforcement
 from agentteams import write_policy as _write_policy
 from agentteams.frameworks.base import FrameworkAdapter as _FrameworkAdapter
 from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
 from agentteams.projection_marker import mark_interop_projection, write_projection_marker  # noqa: F401
-from agentteams.yaml_frontmatter import (
-    parse_yaml_front_matter as _parse_yaml_front_matter,
-)
+from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 _INSTRUCTIONS_NAMES = {"copilot-instructions.md", "CLAUDE.md", "AGENTS.md"}
 # Subdirectories under (or beside) an agents dir whose .md files are NOT agents:
@@ -632,6 +631,7 @@ def import_from_cai(
     if target_framework == "grok":
         result.notices += _grok_import_parity(pending, target_dir)
     result.converted.extend(_iwp.install_server(manifest, target_framework, target_dir, dry_run=dry_run))
+    _wasm_enforcement.add_projection_notice(result.notices, target_framework, (target_dir, cai.get("source_dir")))
     instructions_content = str(cai.get("instructions_binding", {}).get("content", ""))
     if instructions_content:
         # F.2: instructions filename + placement is framework-owned. goose's
