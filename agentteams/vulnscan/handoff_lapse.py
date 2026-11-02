@@ -57,7 +57,9 @@ def clock(repo: Path, branch: str, *, record: bool = True) -> dict[str, str] | N
 
     With ``record`` this appends a :data:`CLOCK_KIND` row, so call it inside ``ledger.locked()``: a ``start`` when the
     newest verdict is ``own-pr`` and no start for this digest, plan and verdict exists, a ``stop`` when the verdict is
-    anything else and the clock was running.
+    anything else and the clock was running. Besides the executor's ``open-pr`` gate, ``handoff status`` and the daily
+    summary call it with ``record``, so those read-only views can write clock rows too (only where the ledger key is
+    reachable; elsewhere the write fails and nothing is recorded).
 
     Args:
         repo: Canonical repository path.
