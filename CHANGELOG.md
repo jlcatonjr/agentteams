@@ -12,12 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `memory-index.json` (and its `.vcache`) with or without `--no-scan`. The query now reports the staleness and its
   reason on stderr and leaves the files alone; `--refresh-index` rebuilds.
 - **Retrieval commands find the brief.** `--query-index`, `--refresh-index` and `--query-code` look for
-  `.agentteams/brief.json`, `brief.json`, then `.github/agents/_build-description.json` when no `--description` is
-  given or the one given doesn't exist. The recall skill's bare command and the agents' fenced
+  `.agentteams/brief.json`, `brief.json`, then `.github/agents/_build-description.json` (the canonical fleet lookup)
+  when no `--description` is given; a read-only query also does when the one given doesn't exist. A symlinked brief,
+  or one naming another project, is not used, and `--refresh-index` never swaps in a brief nobody named. The recall skill's bare command and the agents' fenced
   `--description .agentteams/brief.json` both work now. A query on a surface with no index uses another surface's.
 - **`--refresh-index` rebuilds every surface's copy** (`.github/agents`, `.claude/agents`, `.goose/recipes`,
   `.codex/agents`, `.grok/agents`, `.agents`) from the same sources, each keeping its framework stamp
-  (`memory_index_surfaces`). baseAgent's three copies had been built from 77, 103 and 103 of 110 sources.
+  (`memory_index_surfaces`). It skips surfaces in `frozen_surfaces`, creates no index for a provider the project
+  doesn't use, and exits 1, naming each copy, when any copy fails. baseAgent's three copies had been built from 77, 103 and 103 of 110 sources.
 - **Staleness catches an added source.** `memory_index.index_staleness` gives the reason. With the full source set,
   it compares the source count too, so a file added with an older modification time is no longer missed.
 - **`memory_index_extra_files`**, a new brief key, names single Markdown files for the index. Each build and

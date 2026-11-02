@@ -445,7 +445,7 @@ change). See [`prompt_roots`](api-reference/prompt-roots.md).
 
 ### `--refresh-index`
 
-Rebuild `references/memory-index.json` in the output directory, and every other surface's copy in the project (`.github/agents`, `.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`, `.agents`), from the same sources, so the copies agree. Each keeps its own framework stamp. The brief is found as for `--query-index`. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
+Rebuild `references/memory-index.json` on every surface of the project that has one (`.github/agents`, `.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`, `.agents`), from the same sources, so the copies agree. Each keeps its own framework stamp. The output directory's index is rebuilt when it exists, when `--output` names it, or when no surface has one yet; a surface in the brief's `frozen_surfaces` is left alone. Without `--description` the project's brief is found as for `--query-index`; a `--description` that doesn't exist is an error here, since this mode writes. Exits `1` when any copy could not be rebuilt. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
 
 The index is written in a compact one-line-per-entry layout. When it is larger than 20 MiB (override with `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES`), it is split into `references/memory-index.part-NNNN.json` shards, each under the cap, and `memory-index.json` becomes a manifest recording each shard's size and sha256. Commit the shards with the manifest. Every reader loads the shards directly, so nothing has to be reassembled after a pull and no git hook is needed. A missing or corrupt shard fails the read with a pointer back to this flag. See [`memory_index_store`](api-reference/memory-index-store.md).
 
@@ -453,7 +453,7 @@ The index is written in a compact one-line-per-entry layout. When it is larger t
 
 Query an existing `references/memory-index.json` and print ranked hits (title, path, score, snippet). Exits `0` when at least one hit is found and `1` when no matches are found.
 
-The query is read-only. A stale index (a source changed, added or removed since the build) is reported on stderr with the reason and is never rebuilt; run `--refresh-index`. Without `--description`, or with one that doesn't exist, the brief is found under `--project` (else the working directory): `.agentteams/brief.json`, then `brief.json`, then `.github/agents/_build-description.json`. When the selected surface has no index, another surface's copy is queried and named on stderr.
+The query is read-only. A stale index (a source changed, added or removed since the build) is reported on stderr with the reason and is never rebuilt; run `--refresh-index`. Without `--description`, or with one that doesn't exist, the project's brief is found under `--project` (else the working directory): `.agentteams/brief.json`, then `brief.json`, then `.github/agents/_build-description.json`. A symlinked brief, or one whose `existing_project_path` names another project, is not used. When the selected surface has no index, another surface's copy is queried and named on stderr.
 
 ### `--query-k N`
 

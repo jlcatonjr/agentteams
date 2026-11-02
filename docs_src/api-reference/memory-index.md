@@ -338,11 +338,11 @@ Query CLI synchronization behavior:
   full source set, so a source added since the build counts too) and reports a stale index on stderr with the
   reason. It never rebuilds the index or stores the validation sidecar. Until then a stale query rewrote the
   tracked `memory-index.json`, with or without `--no-scan`.
-- It finds the brief itself when none is given or the one given doesn't exist (`.agentteams/brief.json`,
+- It finds the project's brief itself when none is given or the one given doesn't exist (`.agentteams/brief.json`,
   `brief.json`, `.github/agents/_build-description.json`), and queries another surface's copy when the
   selected one has none.
-- `--refresh-index` rebuilds this surface's index and every other surface's copy in the project
-  ([`memory_index_surfaces`](memory-index-surfaces.md)), from the same sources, each keeping its framework stamp.
+- `--refresh-index` rebuilds every surface's copy that exists ([`memory_index_surfaces`](memory-index-surfaces.md)),
+  from the same sources, each keeping its framework stamp, and skips surfaces in `frozen_surfaces`.
 
 Incremental update mode (feature-flagged) — see [`memory_index_incremental`](memory-index-incremental.md):
 

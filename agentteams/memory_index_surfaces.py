@@ -6,8 +6,8 @@ built from 77, 103 and 103 of 110 sources. This module:
 
 * finds every surface of a project that holds an index (:func:`index_surfaces`), so ``--refresh-index`` rebuilds
   them together and a query can fall back to another surface's copy;
-* finds the brief when a retrieval command names none, or names one that does not exist
-  (:func:`resolve_brief`), so the recall skill's bare command and the agents' fenced
+* finds the brief when a retrieval command names none (:func:`resolve_brief`), or, for a read-only query, names
+  one that does not exist, so the recall skill's bare command and the agents' fenced
   ``--description .agentteams/brief.json`` both work;
 * reports what the default index sources leave out (:func:`coverage_notices`).
 
@@ -22,54 +22,90 @@ import json
 import os
 from pathlib import Path
 
-#: Each framework's agents directory (project-relative) and the framework an index there is stamped with.
-SURFACE_DIRS: dict[str, str] = {
-    ".github/agents": "copilot-vscode",
-    ".claude/agents": "claude",
-    ".goose/recipes": "goose",
-    ".codex/agents": "codex",
-    ".grok/agents": "grok",
-    ".agents": "agents-md",
-}
-#: Where a brief is looked for, in order (the rich brief before the thin ``_build-description.json`` stub).
-BRIEF_CANDIDATES: tuple[str, ...] = (".agentteams/brief.json", "brief.json", ".github/agents/_build-description.json")
 _INDEX_REL = Path("references") / "memory-index.json"
 #: Folders that commonly hold deliverables and operator docs outside the default index sources.
 _DELIVERABLE_DIRS: tuple[str, ...] = ("Projects", "docs")
 
 
 def resolve_brief(project_root: Path) -> Path | None:
-    """The project's brief, from :data:`BRIEF_CANDIDATES`.
+    """The project's own brief, found as fleet discovery finds it (:func:`agentteams.fleet._resolve_descriptor`).
+
+    A brief that is a symlink, resolves outside *project_root*, or names another project in
+    ``existing_project_path`` is not this project's, and is not used (adversarial review, 2026-11-02).
 
     Args:
         project_root: The project root.
 
     Returns:
-        The first candidate that is a file, or ``None``.
+        The brief, or ``None``.
 
     Raises:
         Nothing.
     """
-    for rel in BRIEF_CANDIDATES:
-        candidate = project_root / rel
-        if candidate.is_file():
-            return candidate
-    return None
+    from agentteams.fleet import _resolve_descriptor  # the canonical lookup (redteam F-3)
+
+    root = project_root.resolve()
+    path = _resolve_descriptor(project_root)
+    if path is None or path.is_symlink() or not path.resolve().is_relative_to(root):
+        return None
+    try:
+        brief = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    other = brief.get("existing_project_path") if isinstance(brief, dict) else None
+    if isinstance(other, str) and other and (project_root / other).resolve() != root:
+        return None
+    return path
 
 
-def index_surfaces(project_root: Path) -> list[Path]:
-    """Every agents directory under *project_root* that holds a memory index, in :data:`SURFACE_DIRS` order.
+def surface_dirs(project_root: Path) -> dict[Path, str]:
+    """Each registered framework's agents directory under *project_root*, mapped to its framework.
+
+    From :func:`agentteams.frameworks.registry.agents_dir_for`, so there is no second framework→directory table
+    (CH-05). Frameworks that share a directory (copilot-vscode and copilot-cli) keep the first.
 
     Args:
         project_root: The project root.
 
     Returns:
-        The agents directories (absolute).
+        ``{agents_dir: framework}`` in registry order.
 
     Raises:
         Nothing.
     """
-    return [project_root / rel for rel in SURFACE_DIRS if (project_root / rel / _INDEX_REL).is_file()]
+    from agentteams.frameworks.registry import FRAMEWORK_IDS, agents_dir_for
+
+    out: dict[Path, str] = {}
+    for framework in FRAMEWORK_IDS:
+        out.setdefault(agents_dir_for(framework, project_root), framework)
+    return out
+
+
+def index_surfaces(project_root: Path, frozen: object = None) -> list[Path]:
+    """Every agents directory of the project holding a memory index, inside the project and not frozen.
+
+    Args:
+        project_root: The project root.
+        frozen: The brief's ``frozen_surfaces``. A surface whose directory a frozen surface owns is left out:
+            a cross-surface rebuild must not write it.
+
+    Returns:
+        The agents directories, in registry order.
+
+    Raises:
+        ValueError: *frozen* is not a list of known surface ids.
+    """
+    from agentteams.cli.frozen_surfaces import frozen_owned_paths, touches_frozen
+    from agentteams.confinement import _inside
+
+    frozen_paths = frozen_owned_paths(frozen)
+    out: list[Path] = []
+    for agents_dir in surface_dirs(project_root):
+        rel = agents_dir.relative_to(project_root).as_posix()
+        if ((agents_dir / _INDEX_REL).is_file() and _inside(agents_dir, project_root)
+                and not touches_frozen(rel + "/", frozen_paths)):
+            out.append(agents_dir)
+    return out
 
 
 def surface_framework(agents_dir: Path, project_root: Path) -> str:
@@ -92,11 +128,7 @@ def surface_framework(agents_dir: Path, project_root: Path) -> str:
     framework = head.get("framework") if isinstance(head, dict) else None
     if isinstance(framework, str) and framework:
         return framework
-    try:
-        rel = agents_dir.resolve().relative_to(project_root.resolve()).as_posix()
-    except (ValueError, OSError):
-        return ""
-    return SURFACE_DIRS.get(rel, "")
+    return surface_dirs(project_root).get(agents_dir, "")
 
 
 def _md_files(folder: Path) -> list[Path]:
@@ -170,24 +202,16 @@ def extra_files(manifest: dict, project_root: Path) -> list[Path]:
     Raises:
         Nothing.
     """
-    try:
-        root = project_root.resolve()
-    except OSError:
-        root = project_root
+    from agentteams.confinement import _inside
+
     out: list[Path] = []
     for raw in manifest.get("memory_index_extra_files") or []:
         if not isinstance(raw, str) or not raw.strip() or Path(raw).is_absolute() or any(ch in raw for ch in "*?["):
             continue
         candidate = project_root / raw
-        if candidate.suffix == ".md" and candidate.is_file() and _inside(candidate, root):
+        if candidate.suffix == ".md" and candidate.is_file() and _inside(candidate, project_root):
             out.append(candidate)
     return out
 
 
-def _inside(path: Path, root: Path) -> bool:
-    """Whether *path*'s real path lies under *root* (a symlink may not lead out of the project)."""
-    return Path(os.path.realpath(path)).is_relative_to(root)
-
-
-__all__ = ["BRIEF_CANDIDATES", "SURFACE_DIRS", "coverage_notices", "extra_files", "index_surfaces",
-           "resolve_brief", "surface_framework"]
+__all__ = ["coverage_notices", "extra_files", "index_surfaces", "resolve_brief", "surface_dirs", "surface_framework"]

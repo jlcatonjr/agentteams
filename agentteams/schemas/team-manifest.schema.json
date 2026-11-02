@@ -128,6 +128,13 @@
         "type": "string"
       }
     },
+    "frozen_surfaces": {
+      "type": "array",
+      "description": "The brief's frozen_surfaces: surfaces a cross-surface write (such as --refresh-index rebuilding every surface's memory index) leaves alone. Empty when none were declared.",
+      "items": {
+        "type": "string"
+      }
+    },
     "memory_index_exclude": {
       "type": "array",
       "description": "Project-relative paths/globs to exclude from the memory index, even when the built-in defaults or memory_index_extra_dirs would otherwise include them. Empty when none were declared.",
