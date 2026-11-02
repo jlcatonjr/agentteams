@@ -1,0 +1,8 @@
+{
+  "patch_id": "8425549f481272db3ea0f4576cef37d335175331",
+  "commit": "fdc9fcae19d9a3befcd2e74a8ae8857085bca287",
+  "subject": "fix(vulnscan): verify a handoff's review directive by itself; name the lever, not \"fix by hand\" (vfr X1, X2)",
+  "impact": "5 symbols added, 1 symbols changed, 3 cli added",
+  "note": "vfr X1+X2: verify_handoff_directive/directive_row_failures/HandoffDirectiveVerdict + handoff verify-directive CLI; fix.OWN_PR; reworded notes",
+  "recorded_at": "2026-11-02T21:50:24Z"
+}
