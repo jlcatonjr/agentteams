@@ -28,7 +28,10 @@
 #
 # --install copies the tracked scripts to ~/.config/agentteams/vulnscan-remediation/ (so the job does not depend
 # on this checkout or its branch), writes ~/Library/LaunchAgents/io.agentteams.vulnscan-remediate.plist and loads
-# it. Installing is your standing authorization for auto mode; it is recorded in the clearance log. Deploy the
+# it. It also installs the same-day verification job io.agentteams.vulnscan-verify (vulnscan-daily-wrapped.sh
+# --verify at VULNSCAN_VERIFY_TIMES, default "17:15 18:45": after the 16:30 auto-merge and the remediation runner's
+# GIVE_UP_HOUR; the second time does nothing once the first completed, and retries when a lock was held). It
+# re-scans what merged after the morning scan and writes <run>/verify.json; it stages and opens nothing. Installing is your standing authorization for auto mode; it is recorded in the clearance log. Deploy the
 # package first (vulnscan-deploy.sh): the installed script calls the installed package's remediation-report.
 
 set -euo pipefail
@@ -37,6 +40,9 @@ export VULNSCAN_AUTO=1
 . "$SRC/vulnscan-handoff-lib.sh"
 LABEL="io.agentteams.vulnscan-remediate"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+VERIFY_LABEL="io.agentteams.vulnscan-verify"
+VERIFY_PLIST="$HOME/Library/LaunchAgents/$VERIFY_LABEL.plist"
+VERIFY_TIMES="${VULNSCAN_VERIFY_TIMES:-17:15 18:45}"
 INSTALL_DIR="$CFG_DIR/vulnscan-remediation"
 # The tracked scripts --install copies (vulnscan-operator-actions.sh is site-local: never copied, never removed).
 FILES=(vulnscan-handoff-lib.sh vulnscan-target-agents.sh vulnscan-remediate-auto.sh
@@ -64,10 +70,19 @@ install_job() {
   [[ -d "$REPOS_ROOT" ]] || { bad "VULNSCAN_REPOS_ROOT $REPOS_ROOT does not exist: not installing"; exit 2; }
   "${VS[@]}" remediation-report --help >/dev/null 2>&1 ||
     { bad "the installed agentteams has no 'remediation-report' (deploy the package first): not installing"; exit 2; }
+  "${VS[@]}" verify --help >/dev/null 2>&1 ||
+    { bad "the installed agentteams has no 'verify' (deploy the package first): not installing"; exit 2; }
+  local t when=""
+  for t in $VERIFY_TIMES; do
+    [[ "$t" =~ ^([01]?[0-9]|2[0-3]):([0-5][0-9])$ ]] || { bad "VULNSCAN_VERIFY_TIMES: not HH:MM: $t"; exit 2; }
+    when+="<dict><key>Hour</key><integer>$((10#${BASH_REMATCH[1]}))</integer><key>Minute</key><integer>$((10#${BASH_REMATCH[2]}))</integer></dict>"
+  done
+  [[ -n "$when" ]] || { bad "VULNSCAN_VERIFY_TIMES is empty: not installing"; exit 2; }
   # Only now replace what the loaded job runs (a refused install changes nothing), keeping what it replaces.
   bak="$CFG_DIR/vulnscan-remediation-backups/$(date +%Y%m%dT%H%M%S)"
   for f in "${FILES[@]}"; do [[ -f "$INSTALL_DIR/$f" ]] && { mkdir -p "$bak"; cp -p "$INSTALL_DIR/$f" "$bak/"; }; done
   [[ -f "$PLIST" ]] && { mkdir -p "$bak"; cp -p "$PLIST" "$bak/"; }
+  [[ -f "$VERIFY_PLIST" ]] && { mkdir -p "$bak"; cp -p "$VERIFY_PLIST" "$bak/"; }
   [[ -d "$bak" ]] && ok "backed up the replaced scripts and plist to $bak"
   for f in "${FILES[@]}"; do install -m 0755 "$SRC/$f" "$INSTALL_DIR/$f"; done
   path="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$(dirname "$(command -v node 2>/dev/null || echo /usr/bin/node)"):/usr/bin:/bin:/usr/sbin:/sbin"
@@ -95,13 +110,39 @@ EOF
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
   clearance "installed $LABEL: unattended remediation in auto mode every $((interval / 60)) min after each daily scan"
   ok "installed: $PLIST → $INSTALL_DIR/vulnscan-remediate-auto.sh (every $((interval / 60)) min; acts once per scan)"
+  # Same-day verification (read-only: re-scans and re-audits, writes <run>/verify.json; no staging, no PR).
+  cat > "$VERIFY_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$(xml_esc "$VERIFY_LABEL")</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>$(xml_esc "$INSTALL_DIR/vulnscan-daily-wrapped.sh")</string><string>--verify</string></array>
+  <key>StartCalendarInterval</key><array>$when</array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>$(xml_esc "$HOME")</string>
+    <key>PATH</key><string>$(xml_esc "$path")</string>
+  </dict>
+  <key>StandardOutPath</key><string>$(xml_esc "$STATE_DIR/verify-scheduler.log")</string>
+  <key>StandardErrorPath</key><string>$(xml_esc "$STATE_DIR/verify-scheduler.log")</string>
+  <key>ProcessType</key><string>Background</string>
+</dict>
+</plist>
+EOF
+  launchctl bootout "gui/$(id -u)/$VERIFY_LABEL" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$VERIFY_PLIST"
+  clearance "installed $VERIFY_LABEL: same-day verification scan at $VERIFY_TIMES (read-only; writes verify.json)"
+  ok "installed: $VERIFY_PLIST → $INSTALL_DIR/vulnscan-daily-wrapped.sh --verify (at $VERIFY_TIMES)"
   echo "  Re-run --install after editing the scripts in this repo so the installed copies match."
 }
 
 case "${1:-}" in
   --install) install_job "${2:-1800}"; exit 0 ;;
   --uninstall) launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true; rm -f "$PLIST"
-               clearance "uninstalled $LABEL"; ok "uninstalled"; exit 0 ;;
+               launchctl bootout "gui/$(id -u)/$VERIFY_LABEL" 2>/dev/null || true; rm -f "$VERIFY_PLIST"
+               clearance "uninstalled $LABEL and $VERIFY_LABEL"; ok "uninstalled"; exit 0 ;;
   "") ;;
   *) echo "usage: $0 [--install [interval-seconds] | --uninstall]"; exit 2 ;;
 esac

@@ -210,6 +210,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/effectiveness.py",    # what the published summary says about remediation (counts only)
     "agentteams/vulnscan/executor_supersede.py",   # close-superseded: the executor's only PR-closing code
     "agentteams/vulnscan/scan_mirror.py",      # which tree the daily scan reads (mirror or checkout) and its naming
+    "agentteams/vulnscan/verify.py",           # same-day verification: runs the operator's mirror refresh, re-scans
     "agentteams/vulnscan/executor_env.py",     # ExecError, the executor's git identity and hardened git/gh envs
     "agentteams/vulnscan/executor_pr.py",
     "agentteams/vulnscan/open_prs.py",         # D1: packages another open PR updates are left to it      # stage-*'s commit and open-pr's PR text, label and gh pr create

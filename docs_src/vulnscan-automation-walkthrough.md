@@ -863,13 +863,14 @@ prints the result (`publish.publish`) and exits 0 only on `done`:*
 On macOS, `scripts/vulnscan-remediation/` runs the remediation loop after each daily scan without you.
 `vulnscan-remediate-auto.sh --install` copies the scripts to `~/.config/agentteams/vulnscan-remediation/`
 and loads a launchd job that runs every 30 minutes. Installing it is your standing authorization for auto
-mode, and it is recorded in `operator-clearances.log`.
+mode, and it is recorded in `operator-clearances.log`. It also loads the same-day verification job
+`io.agentteams.vulnscan-verify` ([Same-day verification](#same-day-verification)).
 
 | Script | What it does |
 |---|---|
 | `vulnscan-remediate-auto.sh` | Once per scan: preflight (goose, route proxy, grants, `halts`, Docker), then target setup and the handoff steps, then `remediation.md` and a notification |
 | `vulnscan-ensure-docker.sh` | Starts Docker Desktop if needed and checks the tools and agent images and their self-test records. It prints `READY …` or a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). `--no-start` only checks |
-| `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
+| `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date. `--verify` is the verification job's entry: Docker, then `verify` |
 | `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster. Both are operator-only: in auto mode it only reports what is missing, because a roster is a trust root and the brief is drafted from README text |
 | `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
 | `vulnscan-install-guard.sh` | Sourced first by the daily wrapper and the remediation runner: refuses a venv without `agentteams.vulnscan` or not installed from the commit `vulnscan-deploy.sh` recorded (exit 4, a notification at most every 6 hours) |
@@ -913,6 +914,35 @@ its recorded pid runs and removed once that owner is gone.
 Never done unattended: grant signing, destructive deletes, server `--apply`, merging, and pushing a
 team's own branch.
 
+### Same-day verification
+
+The daily scan runs once in the morning, so a fix merged by the 11:30 or 16:30 auto-merge job, or a host
+changed after an executor op, stays invisible until the next morning. The verification job measures it the
+same day. `vulnscan-remediate-auto.sh --install` loads `io.agentteams.vulnscan-verify`, which runs
+`vulnscan-daily-wrapped.sh --verify` at 17:15 and 18:45 (`VULNSCAN_VERIFY_TIMES`, space-separated `HH:MM`
+values, read at install time). That is after the last auto-merge and after the remediation runner's
+`GIVE_UP_HOUR`. The second run does nothing once the first has completed.
+
+Each run passes the same install guard as the daily job, waits for the wrapper lock like it, and then runs
+`python -m agentteams.vulnscan verify`:
+
+1. It takes `remediate.flock` and `daily.lock` without waiting. While a remediation attempt, a deploy or a
+   daily run holds either one, it writes nothing and exits 3. The 18:45 run then tries again.
+2. It runs your scan-mirror refresh job, `bash SCRIPT refresh` (`VULNSCAN_MIRROR_REFRESH`, by default
+   `~/.local/share/agentteams/vauto/vauto-a-mirrors.sh`; skipped when no file is there). Then it re-scans
+   each repository whose mirror moved to a new commit since the morning: one whose default branch moved today.
+3. It re-runs the read-only L1 audit on each configured server that an executor `server-*` op ran against
+   today.
+4. It writes `<run>/verify.json`, with each of the morning's findings for those repositories and hosts:
+   `remediated`, `partly remediated`, `open`, or `moved (not remediated)`. A move is a tree renamed on disk,
+   which is not a remediation.
+
+It stages nothing, writes no fix plan, opens no PR, starts no agent and sends no notification. The morning's
+`summary.*` stays as it was. `verify.json` names your repositories and hosts, so it is never published.
+
+To compare any two runs finding by finding, run
+`python -m agentteams.vulnscan effectiveness BASE LATER [--alias OLD=NEW] [--path-alias OLD=NEW] [--csv FILE]`.
+
 ### Deploying a new version
 
 `scripts/vulnscan-remediation/vulnscan-deploy.sh [REF]` (default `origin/main`) reinstalls the package
@@ -931,7 +961,8 @@ sign, merge or push.
    `schedule status`.
 
 `--with-scripts` also re-runs `vulnscan-remediate-auto.sh --install` from the same commit, so the
-installed scripts match the package. Deploy outside the daily job's window.
+installed scripts match the package and the launchd jobs it installs (the remediation runner and the
+verification job) are loaded. Deploy outside the daily job's window.
 
 **The deployed commit is the only one the jobs run.** The deploy records its commit in
 `<state>/deployed.json`. Before each run, the daily job and the remediation runner check that the venv

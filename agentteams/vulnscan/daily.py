@@ -42,6 +42,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -528,6 +529,7 @@ def _run_locked(cfg: dict, today: str, state: Path, run_dir: Path) -> tuple[Repo
     run_dir.mkdir(parents=True, exist_ok=True)
     total = Report(target="daily")
     staged: list[str] = []
+    started = time.time() - 1   # this run's records are newer (a second of slack for coarse file times)
     with docker_readiness.using(docker_readiness.ensure(cfg, start=True)), _fresh_rows():
         try:
             _collect(cfg, today, run_dir, total, staged)
@@ -535,7 +537,7 @@ def _run_locked(cfg: dict, today: str, state: Path, run_dir: Path) -> tuple[Repo
             # Deliberately wide (named, not broad): whatever stops collection, the run must still write its
             # summary and heartbeat and exit 3 (unscanned), visibly naming the error, rather than die silently.
             total.feed_errors.append(f"daily run stopped early: {type(exc).__name__}: {exc}")
-        report, code, written = _finish(cfg, state, today, run_dir, total, staged)
+        report, code, written = _finish(cfg, state, today, run_dir, total, staged, started=started)
         agent = cfg.get("agent") or {}
         if written and agent.get("enabled"):
             _agent_phase(cfg, run_dir)
@@ -644,12 +646,8 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
     mirrors = {s.path: scan_mirror.mirror_for(cfg, s.path, today) for s in specs}   # None: scan the checkout
 
     def scan(spec: Any) -> Report | Exception:   # network-bound: the roots are looked up at once
-        m = mirrors[spec.path]
         try:
-            return engine.scan_path(m or spec.path, include_worktrees=bool(cfg["include_worktrees"]),
-                                    exclude=scan_mirror.also_under(exclude, spec.path, m) if m else exclude,
-                                    opted_out=set(scan_mirror.also_under(opted_out, spec.path, m)) if m else opted_out,
-                                    unpinned_ranges=bool(cfg.get("unpinned_ranges", False)))   # excluded: never read
+            return scan_root(cfg, spec.path, mirrors[spec.path], exclude, opted_out)
         except _ITEM_ERRORS as exc:   # this root is unscanned (recorded below); the other roots are kept
             return exc
 
@@ -697,6 +695,32 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         except subproc_confine.Unavailable as exc:   # fail closed: the host is reported unscanned
             _note_infra(exc)
             total.feed_errors.append(f"{host}: not scanned: {exc}")
+
+
+def scan_root(cfg: dict, root: Path, mirror: Path | None, exclude: Sequence[Path], opted_out: set[Path]) -> Report:
+    """Scan one effective root as the daily run does: its fresh mirror when there is one, else the checkout.
+
+    The operator's exclusions and opted-out checkouts hold in the mirror too (:func:`scan_mirror.also_under`);
+    excluded paths are never read. Findings keep the targets :func:`engine.scan_path` gives them (relative to
+    what was scanned); the caller files them under the checkout.
+
+    Args:
+        cfg: Daily config (``include_worktrees``, ``unpinned_ranges``).
+        root: The checkout (an effective root's path).
+        mirror: Its scan mirror for today (:func:`scan_mirror.mirror_for`), or None.
+        exclude: The operator's resolved exclude paths (:func:`coverage.operator_skips`).
+        opted_out: The opted-out checkouts.
+
+    Returns:
+        The root's report.
+
+    Raises:
+        OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError: The scan stopped.
+    """
+    return engine.scan_path(mirror or root, include_worktrees=bool(cfg["include_worktrees"]),
+                            exclude=scan_mirror.also_under(exclude, root, mirror) if mirror else exclude,
+                            opted_out=set(scan_mirror.also_under(opted_out, root, mirror)) if mirror else opted_out,
+                            unpinned_ranges=bool(cfg.get("unpinned_ranges", False)))
 
 
 #: The run's checkout-freshness rows (:func:`_freshness`), from _collect to _finish (None outside a run).
@@ -907,7 +931,7 @@ def _handoff_section(cfg: dict) -> str:
 
 
 def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
-            staged: list[str]) -> tuple[Report, int, bool]:
+            staged: list[str], *, started: float | None = None) -> tuple[Report, int, bool]:
     """Write summary + heartbeat, notify, and return (report, exit code, whether the files were written).
 
     A write that fails (disk full, a directory in the way) is caught: the run becomes unscanned
@@ -923,7 +947,8 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     if notes:
         md += "\n## Notes\n\n" + "".join(f"- {n}\n" for n in notes)
     md += "\n" + coverage.section(cfg, report=total)
-    eff_md, eff = effectiveness.section(total, previous)   # counts only: the summary is published
+    # counts only (the summary is published); per-finding outcomes only for targets this run has a scan record for
+    eff_md, eff = effectiveness.section(total, previous, scanned=effectiveness.scanned_targets(run_dir, since=started))
     merge_digest.write(run_dir, eff.green)   # machine-local, 0700, never published; asks per merge
     md += "\n" + eff_md
     readiness = remediation_status.collect(cfg)   # B1/B4: what would stop the executor; never raises

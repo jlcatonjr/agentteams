@@ -6,6 +6,10 @@
 #   vulnscan-daily-wrapped.sh                  # 09:00 job: ensure Docker, then daily
 #   vulnscan-daily-wrapped.sh --catch-up       # interval/login job: catch-up when stale, or retry an infra-partial run
 #   vulnscan-daily-wrapped.sh --ensure-only    # drill: ensure Docker and print the result
+#   vulnscan-daily-wrapped.sh --verify         # afternoon job: same-day verification (`vulnscan verify`) after the
+#                                              # last auto-merge; refreshes the scan mirrors first with
+#                                              # VULNSCAN_MIRROR_REFRESH (default ~/.local/share/agentteams/vauto/
+#                                              # vauto-a-mirrors.sh) when that script exists
 #
 # Bounded retry: when today's run exited partial because the tools container was unavailable, and Docker is now
 # ready, the scan is re-run — at most MAX_INFRA_RETRIES times per date (counter in <run>/infra-retry.count), with the
@@ -88,5 +92,14 @@ case "${1:-}" in
     fi
     [[ $code == 3 ]] && notify "Daily scan is partially unscanned — see today's summary.md"
     exit $code ;;
-  *) echo "usage: $0 [--catch-up | --ensure-only]"; exit 2 ;;
+  --verify)   # stages nothing, opens no PR; takes remediate.flock + daily.lock itself, without waiting (exit 3 if held)
+    ensure || log "Docker not ready: the host re-audits will be reported unscanned"
+    refresh="${VULNSCAN_MIRROR_REFRESH:-$HOME/.local/share/agentteams/vauto/vauto-a-mirrors.sh}"
+    args=(verify)
+    if [[ -f "$refresh" ]]; then args+=(--mirror-refresh "$refresh")
+    else log "no mirror refresh script at $refresh: no repository is re-scanned"; fi
+    "${VS[@]}" "${args[@]}"; code=$?
+    log "verify exited $code"
+    exit $code ;;
+  *) echo "usage: $0 [--catch-up | --ensure-only | --verify]"; exit 2 ;;
 esac
