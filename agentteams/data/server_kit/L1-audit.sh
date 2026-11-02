@@ -18,6 +18,19 @@
 #                                                     /var/lib/ubuntu-advantage/status.json (`pro` is never run)
 #   HOSTCHECK  severity  message                      OS patch state, reboot, exposure checks
 #   IOC        message                                compromise indicator (from ioc-*.txt data)
+#   DISTROPKG  location  name  version  binary  source  pkgversion  origin
+#                                                     a package in an OS-managed Python path (/usr/lib*/python3*): the
+#                                                     dpkg/rpm package owning it, its source package, that package's
+#                                                     installed version and its origin (pkg:/repo: as for RUNTIME);
+#                                                     "-" and origin "unowned" when no package owns it (plan vfr-a A1)
+#   AUTOUPD    manager  key  value                    automatic-update settings: unattended-upgrades' allowed origins
+#                                                     and APT::Periodic values, or dnf-automatic's [commands] values and
+#                                                     enabled timers; and the package lists' / metadata's age in hours
+#   SCOPE      path  label  match  evidence           a location on disk that is not the live system (plan vfr-e):
+#                                                     label "disabled" (match "tree": the path and everything under it)
+#                                                     or "on-disk-not-served" (match "exact": one npm manifest location).
+#                                                     A label is information only: every finding keeps its row and grade
+#   PYSITE     location  X.Y                          the interpreter line a site-packages directory belongs to (vfr-r R4)
 # RUNTIME kinds: php node python ruby go java java-corretto dotnet nginx openssl libressl postgresql mysql
 # mariadb redis docker (libressl is reported, not judged). Each probe only prints a version: no service is
 # started, stopped or reloaded, nothing is written (but see above), nothing leaves the host, and each runs under `timeout 10`
@@ -30,12 +43,20 @@
 # repo: installs are judged against upstream versions on the workstation; pkg: installs are left to distro updates.
 # Exit: 0 nothing local to flag · 1 action needed · 4 compromise indicator.
 #
-# Secret-bearing surfaces are never read or printed by default: no process environment (/proc/*/environ),
-# no unit file or `systemctl cat`, no journal, no .env or credential file contents; a running service is shown
-# by its executable path only (never its arguments, which can carry inline secrets). `env` indicator rules
-# need process environments, so they run only with --deep (an operator decision per host).
+# Secret-bearing surfaces are never printed, and by default never read: no process environment (/proc/*/environ),
+# no `systemctl cat`, no journal; a running service is shown by its executable path only (never its arguments,
+# which can carry inline secrets). `env` indicator rules need process environments, so they run only with --deep
+# (an operator decision per host). The one exception to "never read" is the disabled-tree check below.
 #
-# AGENTTEAMS_L1_ROOT (tests only) prefixes the two files read for OSREL and ESM; unset on a real host.
+# AGENTTEAMS_L1_ROOT (tests only) prefixes the files read for OSREL, ESM and dnf-automatic, the configuration and
+# /proc entries the disabled-tree check reads, and the dnf metadata cache, and is stripped from a site-packages path
+# before the OS-managed test; unset on a real host.
+#
+# The disabled-tree check (E1) runs only when a <name>.disabled-YYYYMMDD tree exists. It reads unit files (and the
+# EnvironmentFile= files they name), cron, profile, loader and web-server configuration and every user's dotfiles
+# only for a fixed-string match on the tree's name (grep -l), and prints at most the path of the file that matched,
+# never its content. Shell history and credential-only files (.pgpass, .netrc, .git-credentials, .my.cnf) are not
+# read: they start and load nothing.
 #
 # Indicator rules come from the ioc-*.txt data files beside remote.sh. remote.sh embeds
 # them as a quoted heredoc (data, never executed) in AGENTTEAMS_IOC_DATA; one rule per line:
@@ -56,6 +77,12 @@ done <<< "${AGENTTEAMS_IOC_DATA:-}"
 unset _line _kind _a _b
 
 SCAN_ROOTS="/usr/lib /usr/lib64 /usr/local /opt /srv /var/www /home /root"
+# Python package locations the OS package manager owns (engine.DISTRO_LOCATION), and the interpreter line in a path.
+DISTRO_SP_RE='^/usr/lib(64)?/python3[^/]*/(dist|site)-packages/?$'
+PYSITE_RE='/python([0-9]+\.[0-9]+)/(site|dist)-packages/?$'
+# A renamed tree's suffix: <name>.disabled-YYYYMMDD (E1).
+DISABLED_RE='\.disabled-(20[0-9][0-9])(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])$'
+DISABLED_TREES=""   # "<tree>\t<YYYY-MM-DD>" lines: the disabled trees labelled inert by disabled_section
 RC=0
 flag(){ [ "$1" -gt "$RC" ] && RC=$1; }
 ok(){   printf 'OK          %s\n' "$*"; }
@@ -147,6 +174,53 @@ manager_of(){  # how a binary was installed
   echo tarball
 }
 
+distro_pkg(){  # A1: one DISTROPKG line for package dir $2 (PyPI name $3, version $4) in OS-managed path $1
+  local o="" src="" pv="" alt="" org=unowned
+  o=$(pkg_owner "$2"); o="${o%%,*}"; o="${o%% *}"
+  if [ -n "$o" ]; then
+    if command -v dpkg >/dev/null 2>&1; then
+      IFS=$'\t' read -r src pv alt < <(dpkg-query -W -f='${source:Package}\t${Version}\t${Source}\n' "$o" 2>/dev/null | head -1)
+      [ -n "$src" ] || src="${alt%% *}"; [ -n "$src" ] || src="$o"   # an empty Source field means "same as binary"
+    else
+      IFS=$'\t' read -r src pv < <(rpm -q --qf '%{SOURCERPM}\t%{VERSION}-%{RELEASE}\n' "$o" 2>/dev/null | head -1)
+      src="${src%.src.rpm}"; src="${src%-*}"; src="${src%-*}"   # name-version-release.src.rpm -> name
+    fi
+    org=$(pkg_origin "$o")
+  fi
+  printf 'DISTROPKG\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$3" "$4" "${o:--}" "${src:--}" "${pv:--}" "$org" | tr -d '\r'
+}
+apt_autoupd(){  # A1: what unattended-upgrades may install ($1 = package-list age in hours, or "unknown")
+  local out=""
+  if command -v apt-config >/dev/null 2>&1; then
+    out=$(tmo apt-config dump 2>/dev/null | awk '
+      $1 ~ /^(Unattended-Upgrade::(Allowed-Origins|Origins-Pattern|Package-Blacklist|Automatic-Reboot)|APT::Periodic::(Enable|Update-Package-Lists|Unattended-Upgrade))(::)?$/ {
+        k = $1; sub(/::$/, "", k); v = $0; sub(/^[^ ]+ /, "", v); sub(/;[ \t\r]*$/, "", v); gsub(/^"|"$/, "", v)
+        gsub(/\t/, " ", v); if (v != "") printf "AUTOUPD\tapt\t%s\t%s\n", k, v }')
+    if [ -n "$out" ]; then printf '%s\n' "$out"; else printf 'AUTOUPD\tapt\tconfig\tnothing set\n'; fi
+  else printf 'AUTOUPD\tapt\tconfig\tunreadable (no apt-config)\n'; fi
+  printf 'AUTOUPD\tapt\tlists-age-hours\t%s\n' "$1"
+}
+dnf_autoupd(){  # A1: dnf-automatic's [commands] settings (a key not printed is unset: dnf's default), timers, cache age
+  local f="${AGENTTEAMS_L1_ROOT:-}/etc/dnf/automatic.conf" t m c newest=0
+  if [ -r "$f" ]; then
+    awk '/^[ \t]*\[/{s = $0; gsub(/[ \t\r]/, "", s); next}
+         s == "[commands]" && /^[ \t]*(apply_updates|upgrade_type|download_updates)[ \t]*=/ {
+           k = $0; sub(/[ \t]*=.*/, "", k); gsub(/[ \t]/, "", k); v = $0; sub(/^[^=]*=[ \t]*/, "", v)
+           sub(/[ \t\r]+$/, "", v); printf "AUTOUPD\tdnf\t%s\t%s\n", k, v }' "$f"
+  else printf 'AUTOUPD\tdnf\tconfig\tunreadable (no /etc/dnf/automatic.conf)\n'; fi
+  for t in dnf-automatic.timer dnf-automatic-install.timer dnf-automatic-download.timer dnf-automatic-notifyonly.timer; do
+    systemctl is-enabled "$t" >/dev/null 2>&1 && printf 'AUTOUPD\tdnf\ttimer\t%s enabled\n' "$t"
+  done
+  for m in "${AGENTTEAMS_L1_ROOT:-}"/var/cache/dnf/*/repodata/repomd.xml; do
+    [ -f "$m" ] || continue
+    c=$(stat -c %Y "$m" 2>/dev/null || stat -f %m "$m" 2>/dev/null || echo 0)
+    [ "$c" -gt "$newest" ] && newest=$c
+  done
+  if [ "$newest" -gt 0 ]; then t=$(( ( $(date +%s) - newest ) / 3600 )); else t=unknown; fi
+  printf 'AUTOUPD\tdnf\tmetadata-age-hours\t%s\n' "$t"
+  info "dnf metadata age (hours, newest cached repomd.xml): $t"
+}
+
 osrel_get(){  # one os-release value, quotes stripped (the file is parsed, never sourced)
   sed -n "s/^$1=//p" "${AGENTTEAMS_L1_ROOT:-}/etc/os-release" 2>/dev/null | head -1 \
     | sed -e "s/^[\"']//" -e "s/[\"']\$//" | tr -d '\t\r'
@@ -196,6 +270,8 @@ os_section(){
     if dpkg -s unattended-upgrades >/dev/null 2>&1 && systemctl is-enabled apt-daily-upgrade.timer >/dev/null 2>&1; then
       ok "unattended-upgrades installed and apt-daily-upgrade.timer enabled"
     else check MODERATE "no automatic security patching (unattended-upgrades not active)"; fi
+    [ "$stamp" -gt 0 ] || age=unknown
+    apt_autoupd "$age"
   elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
     local pm n; pm=$(command -v dnf || command -v yum)
     n=$($pm -q --cacheonly updateinfo list --security 2>/dev/null | grep -c .)
@@ -204,6 +280,7 @@ os_section(){
     if systemctl is-enabled dnf-automatic.timer >/dev/null 2>&1 || systemctl is-enabled dnf-automatic-install.timer >/dev/null 2>&1; then
       ok "dnf-automatic timer enabled"
     else check MODERATE "no automatic security patching (dnf-automatic not enabled)"; fi
+    dnf_autoupd
   else check MODERATE "unknown package manager — OS security patch state was not assessed (patch this host by hand)"; fi
 }
 
@@ -284,6 +361,103 @@ server_section(){
   done < <(bins_of docker)
 }
 
+# E1: what outside tree $1 still names it, or why that could not be read; nothing printed = inert. The check fails
+# closed (Rule 12): any reference, or a source it cannot read, leaves the tree unlabelled, so its findings read as live.
+tree_ref(){
+  local t="$1" R="${AGENTTEAMS_L1_ROOT:-}" base f h out rc u e c
+  local srcs=() envf=() roots=()
+  base=$(basename "$t")
+  # configuration that starts or loads code: units (system, user, transient), cron, profiles, loader, web servers
+  for f in "$R"/etc/systemd "$R"/run/systemd/system "$R"/run/systemd/transient "$R"/lib/systemd/system \
+           "$R"/usr/lib/systemd/system "$R"/usr/lib/systemd/user "$R"/etc/crontab "$R"/etc/cron.d "$R"/etc/cron.hourly \
+           "$R"/etc/cron.daily "$R"/etc/cron.weekly "$R"/etc/cron.monthly "$R"/etc/anacrontab "$R"/var/spool/cron \
+           "$R"/etc/profile "$R"/etc/profile.d "$R"/etc/environment "$R"/etc/bash.bashrc "$R"/etc/bashrc "$R"/etc/zsh \
+           "$R"/etc/zshrc "$R"/etc/ld.so.conf "$R"/etc/ld.so.conf.d "$R"/etc/nginx "$R"/etc/apache2 "$R"/etc/httpd \
+           "$R"/etc/supervisor "$R"/etc/supervisord.conf "$R"/etc/supervisord.d "$R"/etc/uwsgi "$R"/etc/rc.local \
+           "$R"/etc/init.d "$R"/etc/xdg/autostart; do
+    [ -e "$f" ] && srcs+=("$f")
+  done
+  # every user's dotfiles and user-level units (shell history and credential-only files load nothing: not read)
+  for h in "$R"/root "$R"/home/*; do
+    [ -d "$h" ] || continue
+    for f in "$h"/.[!.]*; do
+      [ -f "$f" ] || continue
+      case "$(basename "$f")" in *_history|*-history|.lesshst|.viminfo|.pgpass|.netrc|.git-credentials|.my.cnf) continue;; esac
+      srcs+=("$f")
+    done
+    for f in "$h"/.config/systemd "$h"/.config/environment.d "$h"/.config/autostart; do [ -e "$f" ] && srcs+=("$f"); done
+  done
+  # files a unit loads its environment from (EnvironmentFile=, "-" = optional): matched, never printed
+  if [ ${#srcs[@]} -gt 0 ]; then
+    while IFS= read -r f; do [ -f "$R$f" ] && envf+=("$R$f"); done < <(grep -rhoE '^[[:space:]]*EnvironmentFile=-?[^[:space:]]+' \
+        ${srcs[@]+"${srcs[@]}"} 2>/dev/null | sed -E 's/^[[:space:]]*EnvironmentFile=-?//' | sort -u)
+    out=$(grep -rlF -- "$base" "${srcs[@]}" ${envf[@]+"${envf[@]}"} 2>/dev/null); rc=$?
+    out=$(printf '%s\n' "$out" | grep -vF -- "$t/" | head -1)
+    [ -n "$out" ] && { echo "referenced by $out"; return; }
+    [ "$rc" -eq 2 ] && { echo "unverified: a configuration file could not be read"; return; }
+  fi
+  if command -v nginx >/dev/null 2>&1; then   # -T: the whole configuration, includes outside /etc/nginx too
+    out=$(tmo nginx -T 2>/dev/null) || { echo "unverified: nginx -T failed"; return; }
+    printf '%s\n' "$out" | grep -qF -- "$base" && { echo "referenced by the nginx configuration (nginx -T)"; return; }
+  fi
+  # .pth / .egg-link / site- and usercustomize files outside the tree that name it (a find error: unverified)
+  for f in $SCAN_ROOTS; do [ -d "$f" ] && [ ! -L "$f" ] && roots+=("$f"); done
+  if [ ${#roots[@]} -gt 0 ]; then
+    out=$(find "${roots[@]}" -xdev -maxdepth 9 -type f \( -name '*.pth' -o -name '*.egg-link' -o -name sitecustomize.py \
+          -o -name usercustomize.py \) -print 2>/dev/null) || { echo "unverified: the .pth search failed"; return; }
+    while IFS= read -r f; do
+      [ -n "$f" ] && [ -f "$f" ] || continue
+      case "$f" in "$t"/*) continue;; esac
+      grep -qF -- "$base" "$f" 2>/dev/null && { echo "referenced by $f"; return; }
+    done <<< "$out"
+  fi
+  # symlinks outside the tree into it (a link reaches it only by naming it, or through another such link)
+  for f in /usr/bin /usr/sbin /bin /sbin /etc; do [ -d "$f" ] && [ ! -L "$f" ] && roots+=("$f"); done
+  if [ ${#roots[@]} -gt 0 ]; then
+    out=$(find "${roots[@]}" -xdev -maxdepth 8 -type l -lname "*$base*" -print 2>/dev/null) \
+      || { echo "unverified: the symlink search failed"; return; }
+    while IFS= read -r f; do
+      [ -n "$f" ] && [ -L "$f" ] || continue
+      case "$f" in "$t"/*) continue;; esac
+      echo "symlink $f points into it"; return
+    done <<< "$out"
+  fi
+  # a running process whose binary or working directory is in it, or that has one of its files mapped
+  for u in "$R"/proc/[0-9]*; do
+    [ -d "$u" ] || continue
+    e=$(readlink "$u/exe" 2>/dev/null); c=$(readlink "$u/cwd" 2>/dev/null)
+    case "$e|$c" in *"$base"*) echo "running process $(basename "$u") runs from it"; return;; esac
+    grep -qF -- "$base" "$u/maps" 2>/dev/null && { echo "running process $(basename "$u") has its files loaded"; return; }
+  done
+}
+
+disabled_section(){
+  sec "Disabled trees (renamed <name>.disabled-YYYYMMDD; their findings keep their rows and grades)"
+  local t base ref since any=0
+  while IFS= read -r t; do
+    [ -n "$t" ] && [ -d "$t" ] && [ ! -L "$t" ] || continue
+    base=$(basename "$t")
+    [[ "$base" =~ $DISABLED_RE ]] || continue
+    since="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"; any=1
+    ref=$(tree_ref "$t")
+    if [ -z "$ref" ]; then
+      printf 'SCOPE\t%s\tdisabled\ttree\tinert since %s\n' "$t" "$since"
+      DISABLED_TREES="$DISABLED_TREES$t"$'\t'"$since"$'\n'
+      info "disabled tree $t: inert since $since (no unit, cron, profile, dotfile, loader, web-server, .pth, symlink or process reference)"
+    else
+      info "disabled tree $t: not labelled, $ref (its findings read as live)"
+    fi
+  done < <(find $SCAN_ROOTS -xdev -maxdepth 4 -type d -name '*.disabled-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]' -prune -print 2>/dev/null | sort -u)
+  [ "$any" -eq 0 ] && ok "no disabled trees"
+}
+scope_note(){  # " (in disabled tree <t>, inert since <d>)" when path $1 lies in a tree disabled_section labelled
+  local t d
+  while IFS=$'\t' read -r t d; do
+    [ -n "$t" ] || continue
+    case "$1" in "$t"|"$t"/*) printf ' (in disabled tree %s, inert since %s)' "$t" "$d"; return;; esac
+  done <<< "$DISABLED_TREES"
+}
+
 runtime_section(){
   sec "Language runtimes"
   local b v
@@ -307,16 +481,28 @@ runtime_section(){
 
 packages_section(){
   sec "Installed packages (judged on the workstation)"
-  local sp d f n
+  local sp d f n line distro xy _t _e _n _v _l
   for sp in $(find $SCAN_ROOTS -xdev -maxdepth 8 -path '*/node_modules' -prune -o -type d \( -name site-packages -o -name dist-packages \) -print 2>/dev/null | sort -u); do
-    n=0
+    n=0; distro=0; [[ "${sp#"${AGENTTEAMS_L1_ROOT:-}"}" =~ $DISTRO_SP_RE ]] && distro=1
     for d in "$sp"/*.dist-info "$sp"/*.egg-info; do
       [ -e "$d" ] || continue
       f="$d/METADATA"; [ -f "$f" ] || f="$d/PKG-INFO"; [ -f "$f" ] || continue
-      awk -v loc="$sp" 'BEGIN{FS=": "} /^Name: /{n=$2} /^Version: /{v=$2} /^$/{exit} END{if(n!=""&&v!="") printf "INV\tPyPI\t%s\t%s\t%s\n", n, v, loc}' "$f" | tr -d '\r'
+      line=$(awk -v loc="$sp" 'BEGIN{FS=": "} /^Name: /{n=$2} /^Version: /{v=$2} /^$/{exit} END{if(n!=""&&v!="") printf "INV\tPyPI\t%s\t%s\t%s\n", n, v, loc}' "$f" | tr -d '\r')
+      [ -n "$line" ] && printf '%s\n' "$line"
+      if [ "$distro" -eq 1 ] && [ -n "$line" ]; then   # A1: which OS package owns it, and where that came from
+        IFS=$'\t' read -r _t _e _n _v _l <<< "$line"
+        distro_pkg "$sp" "$d" "$_n" "$_v"
+      fi
       n=$((n+1))
     done
-    [ "$n" -gt 0 ] && info "$sp: $n packages"
+    [ "$n" -gt 0 ] || continue
+    info "$sp: $n packages$(scope_note "$sp")"
+    xy=""   # R4: the interpreter line, from the path or (Debian's python3/dist-packages) the system python3
+    if [[ "$sp" =~ $PYSITE_RE ]]; then xy="${BASH_REMATCH[1]}"
+    elif [ "$sp" = /usr/lib/python3/dist-packages ] && [ -x /usr/bin/python3 ]; then
+      xy=$(tmo /usr/bin/python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null)
+    fi
+    [[ "$xy" =~ ^[0-9]+\.[0-9]+$ ]] && printf 'PYSITE\t%s\t%s\n' "$sp" "$xy"
   done
   local manifests
   manifests=$(find /var/www /srv /opt /home /root -xdev -maxdepth 7 \( -path '*/node_modules/*/node_modules' -prune \) -o \( -path '*/node_modules/.package-lock.json' -o -path '*/vendor/composer/installed.json' \) -print 2>/dev/null)
@@ -344,6 +530,165 @@ else:
         print(f"INV\tPackagist\t{p['name']}\t{str(p.get('version', '')).lstrip('v')}\t{loc}")
 PY
   done
+  served_labels "$manifests"
+}
+
+# E2b: an npm manifest location whose node_modules sits under a web root but which every nginx server covering it
+# refuses (deny all / return 403|404) gets SCOPE "on-disk-not-served", with the rule as evidence. Fails closed: no
+# label when nginx -T fails, Apache is present (its rules are not read), a root or alias is relative, an alias or a
+# location-level root reaches the tree, a regex does not compile, or any probe URI selects a location that serves.
+served_labels(){
+  local locs
+  command -v nginx >/dev/null 2>&1 || return 0
+  locs=$(printf '%s\n' "$1" | sed -n 's#/node_modules/\.package-lock\.json$##p')
+  [ -n "$locs" ] || return 0
+  if command -v apache2ctl >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1; then
+    info "Apache present: no node_modules location is labelled not-served (Apache rules are not read)"; return 0
+  fi
+  python3 -I - "$locs" <<'PY'
+import os, re, subprocess, sys
+
+def tokens(text):
+    for t in re.findall(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|#[^\n]*|[{};]|[^\s{};"\']+', text):
+        if t.startswith("#"):
+            continue
+        yield t[1:-1] if t[:1] in "\"'" else t
+
+def parse(text):
+    top, stack, cur = [], [], []
+    stack.append(top)
+    for t in tokens(text):
+        if t == ";":
+            stack[-1].append((cur, None)); cur = []
+        elif t == "{":
+            blk = []; stack[-1].append((cur, blk)); stack.append(blk); cur = []
+        elif t == "}":
+            if len(stack) == 1:
+                raise ValueError("unbalanced")
+            stack.pop(); cur = []
+        else:
+            cur.append(t)
+    if len(stack) != 1:
+        raise ValueError("unbalanced")
+    return top
+
+def under(path, root):
+    root = os.path.realpath(root).rstrip("/") or "/"
+    return path == root or path.startswith(root + "/")
+
+def walk(block, want):
+    for args, sub in block:
+        if args and args[0] in want:
+            yield args, sub
+        if sub is not None:
+            yield from walk(sub, want)
+
+def location(args):
+    a = args[1:]
+    if len(a) == 2 and a[0] in ("=", "^~", "~", "~*"):
+        return a[0], a[1]
+    if len(a) == 1 and not a[0].startswith("~"):
+        for m in ("^~", "="):   # these two may be written glued to the path
+            if a[0].startswith(m) and len(a[0]) > len(m):
+                return m, a[0][len(m):]
+        return "", a[0]
+    return None, None
+
+def select(locs, uri):
+    best = None
+    for mod, arg, sub in locs:
+        if mod == "=" and arg == uri:
+            return mod, arg, sub
+        if mod in ("", "^~") and uri.startswith(arg) and (best is None or len(arg) > len(best[1])):
+            best = (mod, arg, sub)
+    if best and best[0] == "^~":
+        return best
+    for mod, arg, sub in locs:   # regex locations in file order; re.error is caught by the caller (not served: no)
+        if mod in ("~", "~*") and re.search(arg, uri, re.I if mod == "~*" else 0):
+            return mod, arg, sub
+    return best
+
+def refuses(sel):
+    if sel is None:
+        return ""
+    mod, arg, sub = sel
+    if any(a and a[0] in ("location", "allow", "if", "rewrite") for a, _s in sub):
+        return ""   # nested locations, allow rules, conditionals or rewrites: not judged
+    for a, s in sub:
+        if s is None and (a == ["deny", "all"] or a == ["internal"]
+                          or (a[:1] == ["return"] and a[1:2] in (["403"], ["404"]))):
+            return f"location {mod + ' ' if mod else ''}{arg} {{ {' '.join(a)}; }}"
+    return ""
+
+def judge(conf, loc):
+    """(evidence, "") when every server whose root holds loc/node_modules refuses it, else ("", why)."""
+    nm = os.path.realpath(loc + "/node_modules")
+    top = list(conf) + [x for a, sub in conf if a[:1] == ["http"] and sub is not None for x in sub]
+    if any(a[:1] == ["root"] and s is None for a, s in top):
+        return "", "an http-level root"
+    ev = []
+    # nginx -T prints each included file on its own, so server blocks can sit at the top level too
+    for _a, srv in walk(conf, ("server",)):
+        if srv is None:
+            continue   # an upstream's "server host:port;"
+        if any(d[:1] == ["rewrite"] and s is None for d, s in srv):
+            return "", "a server-level rewrite"
+        for d, _s in walk(srv, ("root", "alias")):
+            if len(d) < 2 or not d[1].startswith("/"):
+                return "", f"a relative or variable {d[0]}"
+        for d, _s in walk([x for x in srv if x[1] is not None], ("root", "alias")):
+            if under(nm, d[1]) or under(os.path.realpath(d[1]), nm):
+                return "", f"a location-level {d[0]} {d[1]}"
+        root = next((d[1] for d, s in srv if d[:1] == ["root"] and s is None and under(nm, d[1])), None)
+        if root is None:
+            continue
+        locs = []
+        for d, sub in srv:
+            if d[:1] == ["location"] and sub is not None:
+                mod, arg = location(d)
+                if mod is None:
+                    return "", "a location this check does not read: " + " ".join(d[1:])
+                if not arg.startswith("@"):
+                    locs.append((mod, arg, sub))
+        base = "/" + os.path.relpath(nm, os.path.realpath(root))
+        rules = set()
+        for uri in (base + "/", base + "/x/package.json", base + "/x/index.js", base + "/x/README.md",
+                    base + "/.package-lock.json"):
+            try:
+                r = refuses(select(locs, uri))
+            except re.error:
+                r = ""
+            if not r:
+                return "", f"{uri} is served"
+            rules.add(r)
+        names = next((" ".join(d[1:]) for d, s in srv if d[:1] == ["server_name"] and s is None), "_")
+        ev.append(f"server {names}: " + " / ".join(sorted(rules)))
+    return ("nginx " + "; ".join(ev), "") if ev else ("", "under no nginx root")
+
+def main():
+    try:   # run here, not in the shell: the dump can exceed one argument's size limit
+        res = subprocess.run(["nginx", "-T"], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        res = None
+    if res is None or res.returncode != 0:
+        print("INFO        nginx -T failed: no node_modules location is labelled not-served")
+        return
+    try:
+        conf = parse(res.stdout)
+    except ValueError:
+        print("INFO        nginx configuration unreadable: no node_modules location is labelled not-served")
+        return
+    for loc in [x for x in sys.argv[1].splitlines() if x]:
+        evidence, why = judge(conf, loc)
+        evidence = " ".join(evidence.split())
+        if why:
+            print(" ".join(f"INFO        {loc}/node_modules: not labelled ({why})".split("\t")))
+            continue
+        print(f"SCOPE\t{loc}\ton-disk-not-served\texact\t{evidence}")
+        print(f"INFO        {loc}/node_modules: on disk, not served ({evidence})")
+
+main()
+PY
 }
 
 services_section(){
@@ -365,7 +710,7 @@ ioc_section(){
   sec "Compromise indicators (${#_IF[@]} path, ${#_IN[@]} name, ${#_IE[@]} env, ${#_IG[@]} content rules)"
   # ${a[@]+"${a[@]}"}: an empty array is "unbound" under set -u before bash 4.4 (RHEL 7, Amazon Linux 2)
   local g p name pat e any=0
-  for g in ${_IF[@]+"${_IF[@]}"}; do for p in $g; do [ -e "$p" ] && { ioc "indicator path present: $p"; any=1; }; done; done
+  for g in ${_IF[@]+"${_IF[@]}"}; do for p in $g; do [ -e "$p" ] && { ioc "indicator path present: $p$(scope_note "$p")"; any=1; }; done; done
   if $DEEP; then
     for e in ${_IE[@]+"${_IE[@]}"}; do grep -qsl -- "$e" /proc/[0-9]*/environ 2>/dev/null && { ioc "a process has $e in its environment"; any=1; }; done
   elif [ ${#_IE[@]} -gt 0 ]; then
@@ -378,9 +723,9 @@ ioc_section(){
     done
     while IFS= read -r p; do
       [ -n "$p" ] || continue
-      for name in ${_IN[@]+"${_IN[@]}"}; do [ "$(basename "$p")" = "$name" ] && { ioc "indicator file: $p"; any=1; }; done
+      for name in ${_IN[@]+"${_IN[@]}"}; do [ "$(basename "$p")" = "$name" ] && { ioc "indicator file: $p$(scope_note "$p")"; any=1; }; done
       for g in ${_IG[@]+"${_IG[@]}"}; do
-        [ "$(basename "$p")" = "${g%%:*}" ] && grep -qiE -- "${g#*:}" "$p" 2>/dev/null && { ioc "indicator content in $p"; any=1; }
+        [ "$(basename "$p")" = "${g%%:*}" ] && grep -qiE -- "${g#*:}" "$p" 2>/dev/null && { ioc "indicator content in $p$(scope_note "$p")"; any=1; }
       done
     done < <(find $SCAN_ROOTS -xdev -maxdepth 9 \( "${expr[@]}" \) 2>/dev/null)
   fi
@@ -406,7 +751,7 @@ docroot_section(){
 }
 
 main(){
-  os_section; runtime_section; server_section; packages_section; services_section; ioc_section; docroot_section
+  os_section; disabled_section; runtime_section; server_section; packages_section; services_section; ioc_section; docroot_section
   sec "RESULT"
   case "$RC" in
     0) echo "RESULT clean (package/runtime verdicts come from the workstation report)";;

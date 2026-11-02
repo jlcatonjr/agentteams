@@ -457,6 +457,9 @@ HOST_TOOLS = ("hostname", "uname", "date", "readlink", "xargs", "sort", "grep", 
               "basename", "sed", "cat", "wc", "tail")
 FAKE_FIND = r"""#!/bin/bash
 case " $* " in
+  *' -lname '*) f="${FAKE_FIND_LINKS:-}";;
+  *sitecustomize.py*) f="${FAKE_FIND_PTH:-}";;
+  *.disabled-*) f="${FAKE_FIND_DIS:-}";;
   *site-packages*) f="${FAKE_FIND_SP:-}";;
   *installed.json*) f="${FAKE_FIND_LOCK:-}";;
   *'*/bin/node'*) f="${FAKE_FIND_NODE:-}";;

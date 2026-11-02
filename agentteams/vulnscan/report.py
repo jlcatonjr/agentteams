@@ -60,6 +60,9 @@ class Finding:
     fixed_upstream: bool = False    # name==version is gone from the same file at origin/HEAD (the checkout is behind)
     spec: str = ""                  # range: the requirement's specifier set ("" = any version); version stays ""
     partial: bool = False           # range: only part of the allowed range is affected (capped at MODERATE)
+    # location -> {"label", "path", "evidence"}: a location that is not the live system (a ``SCOPE`` line: a disabled
+    # tree, or node_modules nginx refuses). Information only: the finding keeps its row and grade (Rule 12).
+    location_labels: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -221,6 +224,41 @@ class Report:
                         for f in data.get("findings", [])]   # an older report counted neither (R8)
         return rep
 
+    def _not_live_markdown(self) -> list[str]:
+        """The summary's groups of findings whose every location carries one label (vfr-e E1/E2b).
+
+        A finding also found at a live location, or labelled by more than one record, is named apart and never
+        grouped. Every grouped finding still has its own row in the tables above, with its grade.
+
+        Returns:
+            Markdown lines (none when no finding has a label).
+        """
+        groups: dict[tuple[str, str, str, str], list[Finding]] = {}
+        apart: dict[str, list[Finding]] = {}
+        for f in self.findings:
+            labs = f.location_labels or {}
+            if not labs:
+                continue
+            kinds = {(lab.get("label", ""), lab.get("path", ""), lab.get("evidence", "")) for lab in labs.values()}
+            if len(kinds) == 1 and all(loc in labs for loc in f.locations):
+                label, path, evidence = kinds.pop()
+                groups.setdefault((f.target, label, path, evidence), []).append(f)
+            else:
+                apart.setdefault(f.target, []).append(f)
+        if not groups and not apart:
+            return []
+        out = ["## On disk, not the live system (labelled, still graded)", "",
+               "Each finding below keeps its row and severity in the tables above; a label explains, it does not "
+               "exclude. Removing the tree, or the files, is what remediates them.", ""]
+        for (target, label, path, evidence), items in sorted(groups.items()):
+            worst = SEVERITY_NAME.get(max(f.severity for f in items), "?")
+            text = _label_text({"label": label, "path": path, "evidence": evidence})
+            out.append(f"- {_code(target)}: {_code(text)}: {len(items)} finding(s), worst {worst}")
+        for target, items in sorted(apart.items()):
+            names = ", ".join(sorted({f.name for f in items}, key=str.lower))
+            out.append(f"- {_code(target)}: {len(items)} finding(s) also at a live location (not grouped): {names}")
+        return out + [""]
+
     def markdown(self, new_keys: set[str] | None = None) -> str:
         """Render the report for people.
 
@@ -281,12 +319,18 @@ class Report:
                     notes.append(f.detail)
                 if f.locations:
                     notes.append("at " + ", ".join(f"`{loc}`" for loc in f.locations[:2]))
+                live = [loc for loc in f.locations if loc not in (f.location_labels or {})]
+                for loc, lab in sorted((f.location_labels or {}).items()):
+                    notes.append(f"not live: {_code(loc)} {_code(_label_text(lab))}")
+                if f.location_labels and live:
+                    notes.append(f"also at {len(live)} live location(s)")
                 if f.fixed_upstream:   # last, so the existing notes keep their place
                     notes.append("fixed upstream (checkout behind)")
                 fix = f">={f.fix}" if f.kind == "range" and f.fix else _fix_cell(f.fix)
                 out.append(f"| {mark} | {sev} | {KIND_LABEL.get(f.kind, f.kind)} | {item} | {f.version} | {fix} "
                            f"| {'; '.join(notes)} |")
             out.append("")
+        out += self._not_live_markdown()
         raises = [f for f in self.findings if f.kind == "range" and f.fix and f.locations]
         if raises:
             out += ["## Requirement ranges — plan-only (no staged edit)", "", RANGE_PLAN_NOTE, ""]
@@ -310,6 +354,14 @@ class Report:
             if items:
                 out += [f"## {title}", ""] + [f"- {i}" for i in items] + [""]
         return "\n".join(out)
+
+
+def _label_text(lab: dict[str, str]) -> str:
+    """One location label as text: ``disabled tree <path>, inert since <date>`` or ``<label> (<evidence>)``."""
+    label, path, evidence = (str(lab.get(k, "")) for k in ("label", "path", "evidence"))
+    if label == "disabled":
+        return f"disabled tree {path}, {evidence}"
+    return f"{label} ({evidence})" if evidence else label
 
 
 def _code(text: object) -> str:
