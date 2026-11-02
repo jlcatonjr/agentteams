@@ -51,18 +51,20 @@
 # (an operator decision per host). The one exception to "never read" is the disabled-tree check below.
 #
 # AGENTTEAMS_L1_ROOT (tests only) prefixes the files read for OSREL, ESM and dnf-automatic, the configuration and
-# /proc entries the disabled-tree check reads, and the dnf metadata cache, and is stripped from a site-packages path
+# /proc entries (and the docker socket test) the disabled-tree check reads, and the dnf metadata cache, and is stripped from a site-packages path
 # before the OS-managed test; unset on a real host.
 #
 # The disabled-tree check (E1) runs only when a <name>.disabled-YYYYMMDD tree exists. It reads unit files (and the
 # EnvironmentFile= files they name), cron and at spools, profile, PAM, /etc/default, logrotate, PHP, loader and
 # web-server configuration, pm2 dumps, process mountinfo, container mount sources and every user's dotfiles only
 # for a fixed-string match on the tree's name (grep -l), and prints at most the path of the file that matched,
-# never its content. Dotfiles it never reads:
-#   *_history *-history .lesshst .viminfo .pgpass .netrc .git-credentials .my.cnf   skipped: they load nothing
-#   .env .npmrc .pypirc .vault-token .s3cfg .boto                                   present: the tree is unverified
-#                                                                                   (they can hold secrets and
-#                                                                                   point at code), so no label
+# never its content. Dotfiles:
+#   *_history *-history .lesshst .viminfo .pgpass .netrc .git-credentials .my.cnf   never read: they load nothing
+#   .env .npmrc .pypirc .vault-token .s3cfg .boto                                   secret stores that can also
+#                                                                                   point at code: only grep -lF for
+#                                                                                   the tree's name, as for
+#                                                                                   EnvironmentFile= files (path
+#                                                                                   only, stderr discarded)
 #
 # Indicator rules come from the ioc-*.txt data files beside remote.sh. remote.sh embeds
 # them as a quoted heredoc (data, never executed) in AGENTTEAMS_IOC_DATA; one rule per line:
@@ -370,7 +372,7 @@ server_section(){
 # E1: what outside tree $1 still names it, or why that could not be read; nothing printed = inert. The check fails
 # closed (Rule 12): any reference, or a source it cannot read, leaves the tree unlabelled, so its findings read as live.
 tree_ref(){
-  local t="$1" R="${AGENTTEAMS_L1_ROOT:-}" base f h out rc u e c
+  local t="$1" R="${AGENTTEAMS_L1_ROOT:-}" base f h out rc u e c opt
   local srcs=() envf=() roots=()
   base=$(basename "$t")
   # configuration that starts or loads code: units (system, user, transient, generated), cron and at, profiles,
@@ -394,7 +396,7 @@ tree_ref(){
       [ -f "$f" ] || continue
       case "$(basename "$f")" in
         *_history|*-history|.lesshst|.viminfo|.pgpass|.netrc|.git-credentials|.my.cnf) continue;;
-        .env|.npmrc|.pypirc|.vault-token|.s3cfg|.boto) echo "unverified: $f is not read (it can hold secrets)"; return;;
+        .env|.npmrc|.pypirc|.vault-token|.s3cfg|.boto) envf+=("$f"); continue;;   # grep -lF only, never -h
       esac
       srcs+=("$f")
     done
@@ -402,16 +404,25 @@ tree_ref(){
       [ -e "$f" ] && srcs+=("$f")
     done
   done
-  # the files units load their environment from: matched, never printed. A value this check cannot resolve to one
-  # existing file (quoted, a %-specifier, optional "-", several paths, missing) leaves the tree unverified.
+  # the files units load their environment from: matched with grep -lF, never printed. One leading "-" makes the file
+  # optional: missing, it loads nothing (systemd ignores it). Anything else this check cannot resolve to one regular
+  # file (quoted, a %-specifier, several paths, relative, not a regular file, missing without "-") is unverified.
   if [ ${#srcs[@]} -gt 0 ]; then
     while IFS= read -r f; do
-      f="${f#*EnvironmentFile=}"; f="${f%"${f##*[![:space:]]}"}"
-      case "$f" in ""|-*|*\"*|*\'*|*%*|*[[:space:]]*) echo "unverified: EnvironmentFile=$f is not resolved"; return;; esac
-      [ -f "$R$f" ] || { echo "unverified: EnvironmentFile=$f does not exist"; return; }
-      envf+=("$R$f")
+      f="${f#*EnvironmentFile=}"; f="${f%"${f##*[![:space:]]}"}"; opt=0
+      case "$f" in -*) opt=1; f="${f#-}";; esac
+      case "$f" in ""|*\"*|*\'*|*%*|*[[:space:]]*) echo "unverified: EnvironmentFile=$f is not resolved"; return;;
+                   /*) ;; *) echo "unverified: EnvironmentFile=$f is not an absolute path"; return;; esac
+      if [ -e "$R$f" ] || [ -L "$R$f" ]; then
+        [ -f "$R$f" ] || { echo "unverified: EnvironmentFile=$f is not a regular file"; return; }
+        envf+=("$R$f")
+      elif [ "$opt" -eq 0 ]; then
+        echo "unverified: EnvironmentFile=$f does not exist"; return
+      fi
     done < <(grep -rhE '^[[:space:]]*EnvironmentFile=' "${srcs[@]}" 2>/dev/null | sort -u)
-    out=$(grep -rlF -- "$base" "${srcs[@]}" ${envf[@]+"${envf[@]}"} 2>/dev/null); rc=$?
+  fi
+  if [ ${#srcs[@]} -gt 0 ] || [ ${#envf[@]} -gt 0 ]; then
+    out=$(grep -rlF -- "$base" ${srcs[@]+"${srcs[@]}"} ${envf[@]+"${envf[@]}"} 2>/dev/null); rc=$?
     out=$(printf '%s\n' "$out" | grep -vF -- "$t/" | head -1)
     [ -n "$out" ] && { echo "referenced by $out"; return; }
     [ "$rc" -eq 2 ] && { echo "unverified: a configuration file could not be read"; return; }
@@ -423,6 +434,8 @@ tree_ref(){
   # a container that mounts it (bind mounts outside containers show in mountinfo, below); unreadable: unverified
   for c in docker podman; do
     command -v "$c" >/dev/null 2>&1 || continue
+    # no daemon socket and no daemon binary: a docker client alone runs no container (podman needs no daemon)
+    [ "$c" = docker ] && [ ! -e "$R"/var/run/docker.sock ] && ! command -v dockerd >/dev/null 2>&1 && continue
     out=$(DOCKER_HOST=unix:///var/run/docker.sock tmo "$c" ps -aq 2>/dev/null) || { echo "unverified: $c ps failed"; return; }
     [ -n "$out" ] || continue
     # shellcheck disable=SC2086   # container ids: one word each
@@ -705,7 +718,7 @@ def judge(conf, loc):
             if not r:
                 return "", f"{uri} is served"
             if regex and sel[0] not in ("^~", "="):   # regex order and captures: only ^~ / = refusals are trusted
-                return "", "a regex location exists and the refusal is not a ^~ or = location"
+                return "", "a regex location exists; a ^~ or = refusal is needed"
             rules.add(r)
         names = next((" ".join(d[1:]) for d, s in srv if d[:1] == ["server_name"] and s is None), "_")
         ev.append(f"server {names}: " + " / ".join(sorted(rules)))

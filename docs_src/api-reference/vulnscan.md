@@ -1311,15 +1311,17 @@ another prefix or field count is ignored:
   `/etc/pam.d`, `/etc/default`, `/etc/logrotate.d`, `/etc/php*`, loader configuration (`/etc/ld.so.preload` too),
   web-server or supervisor configuration (`nginx -T` too), pm2 dump, user dotfile, `.pth`/`.egg-link`/
   `sitecustomize.py` outside it, symlink into it, container mount (`docker`/`podman inspect`), or running process
-  whose binary, working directory, mapped files or mount table name it. It fails closed: a source it cannot read,
-  an `EnvironmentFile=` it cannot resolve to one existing file (quoted, `%`-specifier, `-` prefix, several paths,
-  missing), a failed `nginx -T` / `docker ps` / `inspect`, or a secret-store dotfile it never reads (`.env`,
-  `.npmrc`, `.pypirc`, `.vault-token`, `.s3cfg`, `.boto`) leaves the tree unlabelled. History and credential-only
-  files (`.pgpass`, `.netrc`, `.git-credentials`, `.my.cnf`) are skipped.
+  whose binary, working directory, mapped files or mount table name it. Secret-store dotfiles (`.env`, `.npmrc`,
+  `.pypirc`, `.vault-token`, `.s3cfg`, `.boto`) and `EnvironmentFile=` files are matched with `grep -lF` only (path,
+  never content). It fails closed: a source it cannot read, an `EnvironmentFile=` it cannot resolve to one regular
+  file (quoted, `%`-specifier, several paths, relative, not a regular file, or missing without the optional `-`),
+  or a failed `nginx -T`, `docker ps`/`inspect` (when a docker socket or `dockerd` exists) or `podman` query leaves
+  the tree unlabelled. A missing `-` file loads nothing and blocks nothing. History and credential-only files
+  (`.pgpass`, `.netrc`, `.git-credentials`, `.my.cnf`) are never read.
 - `on-disk-not-served` (`exact`): an npm manifest location whose `node_modules` lies under an nginx `root`, when
   every server with such a root selects, for each probe URI, a location that holds `deny all`, `internal` or
   `return 403|404` (with no `allow`, `if`, `rewrite` or nested location). If the server has any regex location, the
-  refusal must be a `^~` or `=` location. The evidence names the rule. Apache on the host, a failed `nginx -T`, an
+  refusal must be a `^~` or `=` location (the note says so: "a regex location exists; a ^~ or = refusal is needed"). The evidence names the rule. Apache on the host, a failed `nginx -T`, an
   `include` inside a server block, a location outside every server block (an included snippet), a relative root, or
   an alias or location-level root reaching the tree leaves it unlabelled.
 

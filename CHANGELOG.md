@@ -24,10 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root, an alias reaching it, an `allow`, an earlier serving regex or a longer `^~` prefix leave it unlabelled.
 - Review fixes (security, code hygiene): E1 also reads `/etc/ld.so.preload`, `/etc/pam.d`, `/etc/default`,
   `/etc/logrotate.d`, `/etc/php*`, `at` spools, generated and `/usr/local/lib` units, pm2 dumps, process
-  `mountinfo` and container mounts. An unresolvable `EnvironmentFile=`, a failed container query, or a present
-  `.env`/`.npmrc`/`.pypirc`/`.vault-token`/`.s3cfg`/`.boto` (never read) leaves the tree unlabelled. E2b refuses to
+  `mountinfo` and container mounts. Secret-store dotfiles (`.env`, `.npmrc`, `.pypirc`, `.vault-token`, `.s3cfg`,
+  `.boto`) and `EnvironmentFile=` files are matched with `grep -lF` only. An unresolvable `EnvironmentFile=` (a
+  missing optional `-` file is ignored, as systemd does) or a failed container query (docker only when a socket or
+  `dockerd` exists) leaves the tree unlabelled. E2b refuses to
   label when a server holds an `include`, a location sits outside every server, or a regex location exists and the
-  refusal is not `^~`/`=`. `nginx -T` runs once (under the 10 s limit) into a mktemp file an EXIT trap removes;
+  refusal is not `^~`/`=` (the note names the fix). `nginx -T` runs once (under the 10 s limit) into a mktemp file an EXIT trap removes;
   the header says it may create its error-log and temp paths as root. One PyPI JSON URL (`_http.PYPI_JSON`).
 - The engine copies labels to `Finding.location_labels` and the report groups fully labelled findings under *On
   disk, not the live system*. **Grading is unchanged:** every finding keeps its row, severity, key and exit code; a

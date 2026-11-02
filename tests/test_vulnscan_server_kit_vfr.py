@@ -319,7 +319,7 @@ REGEX_DENY = DENY.replace("location ^~ /app/node_modules/", "location ~ /node_mo
     (DENY.replace("location ^~ /app/node_modules/ { deny all; }", ""), "is served"),
     (DENY.replace("{ deny all; }", "{ allow 10.0.0.0/8; deny all; }"), "is served"),
     # security review 2: a regex refusal is never trusted (regex order, captures), even when it wins today
-    (REGEX_DENY, "a regex location exists"),
+    (REGEX_DENY, "a regex location exists; a ^~ or = refusal is needed"),
     # an earlier regex location that serves .js wins over a later regex deny: refused as a regex refusal first
     (REGEX_DENY.replace("location / {", "location ~ \\.js$ { expires 1d; }\n  location / {"),
      "a regex location exists"),
@@ -522,8 +522,8 @@ def test_r4_requires_python_refuses_names_that_are_not_pypi_identifiers(name: st
 
 # ---------------------------------------------------------------- review fixes (security 1, 3, 4, 5; hygiene a, b)
 
-@pytest.mark.parametrize("value", ['"/opt/app/env"', "/etc/app/%i.env", "-/etc/default/app", "/opt/missing.env",
-                                   "/a.env /b.env"])
+@pytest.mark.parametrize("value", ['"/opt/app/env"', "/etc/app/%i.env", "-/etc/default", "-etc/default/app",
+                                   "--/etc/default/app", "/opt/missing.env", "/a.env /b.env"])
 def test_e1_an_environment_file_it_cannot_resolve_leaves_the_tree_unverified(kit: Kit, value: str) -> None:
     """Security 1: a unit environment file the check cannot read as one existing file is never assumed clean."""
     h = DisabledHost(kit)
@@ -573,6 +573,7 @@ def test_e1_container_mounts_are_checked_and_unreadable_fails_closed(kit: Kit, p
     docker = (f'#!/bin/sh\ncase "$1" in\n  ps) echo abc123; exit {ps_rc};;\n'
               f'  inspect) printf "%s" "{mounts.replace("TREE", TREE)}";;\nesac\n')
     h = DisabledHost(kit, extra={"docker": docker})
+    _write(h.root / "var/run/docker.sock", "")   # a daemon socket exists: its failure is unverified
     out = h.run().stdout
     assert "SCOPE\t" not in out and want in out, out
 
@@ -580,16 +581,45 @@ def test_e1_container_mounts_are_checked_and_unreadable_fails_closed(kit: Kit, p
 def test_e1_a_container_without_the_tree_does_not_block(kit: Kit) -> None:
     docker = '#!/bin/sh\ncase "$1" in\n  ps) echo abc123;;\n  inspect) printf "/srv/data ";;\nesac\n'
     h = DisabledHost(kit, extra={"docker": docker})
+    _write(h.root / "var/run/docker.sock", "")
     assert f"SCOPE\t{h.tree}\tdisabled\t" in h.run().stdout
 
 
 @pytest.mark.parametrize("name", [".env", ".npmrc", ".pypirc", ".vault-token", ".s3cfg", ".boto"])
-def test_e1_a_secret_store_dotfile_is_not_read_and_leaves_the_tree_unverified(kit: Kit, name: str) -> None:
-    """Security 4: it may name the tree, but it is never read, so the tree cannot be shown inert."""
+def test_e1_a_secret_store_dotfile_blocks_only_when_it_names_the_tree(kit: Kit, name: str) -> None:
+    """Security ruling Q2: matched with grep -lF (path only, never its content)."""
     h = DisabledHost(kit)
-    _write(h.root / "root" / name, "token=x\n")
+    f = _write(h.root / "root" / name, "token=s3cr3t-value\n")
+    proc = h.run()
+    assert f"SCOPE\t{h.tree}\tdisabled\t" in proc.stdout, proc.stdout
+    f.write_text(f"token=s3cr3t-value\nprefix={h.tree}\n")
+    proc = h.run()
+    assert "SCOPE\t" not in proc.stdout and f"referenced by {f}" in proc.stdout, proc.stdout
+    assert "s3cr3t" not in proc.stdout + proc.stderr
+
+
+def test_e1_an_optional_environment_file(kit: Kit) -> None:
+    """Security ruling Q1: "-" missing loads nothing; "-" present is read like any other environment file."""
+    h = DisabledHost(kit)
+    _write(h.root / "etc/systemd/system/w.service", "[Service]\nEnvironmentFile=-/etc/default/app\nExecStart=/x\n")
+    assert f"SCOPE\t{h.tree}\tdisabled\t" in h.run().stdout            # missing: systemd ignores it
+    _write(h.root / "etc/default/app", "X=1\n")
+    assert f"SCOPE\t{h.tree}\tdisabled\t" in h.run().stdout            # present, does not name the tree
+    env = _write(h.root / "opt/app.env", f"PYTHONPATH={h.sp}\n")
+    _write(h.root / "etc/systemd/system/w.service", "[Service]\nEnvironmentFile=-/opt/app.env\nExecStart=/x\n")
     out = h.run().stdout
-    assert "SCOPE\t" not in out and f"unverified: {h.root / 'root' / name} is not read" in out, out
+    assert "SCOPE\t" not in out and f"referenced by {env}" in out, out
+
+
+def test_e1_a_docker_client_without_a_daemon_contributes_nothing(kit: Kit) -> None:
+    h = DisabledHost(kit, extra={"docker": "#!/bin/sh\nexit 1\n"})
+    assert f"SCOPE\t{h.tree}\tdisabled\t" in h.run().stdout
+
+
+def test_e1_a_failing_podman_stays_fail_closed(kit: Kit) -> None:
+    h = DisabledHost(kit, extra={"podman": "#!/bin/sh\nexit 1\n"})
+    out = h.run().stdout
+    assert "SCOPE\t" not in out and "unverified: podman ps failed" in out, out
 
 
 def test_nginx_dump_runs_once_and_its_temp_file_is_removed(kit: Kit) -> None:
