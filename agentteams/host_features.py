@@ -202,13 +202,15 @@ VALID_PRIVILEGE_PROFILES: frozenset[str] = frozenset(_PROFILE_FEATURE_TOKENS)
 #: The default privilege_profile a missing/empty field normalizes to. As of 2026-W39 this
 #: is ``"confined"`` (was ``"cooperative"``): sandbox write-confinement is ENABLED BY
 #: DEFAULT for every qualifying provider — enforcing hosts (Claude on macOS/Linux; Goose on
-#: macOS Seatbelt / any framework via the Linux+macOS neutral launcher) emit their OS
-#: boundary; non-enforcing hosts (Codex, Copilot, native Windows) degrade to the
+#: macOS Seatbelt; any framework, Codex and Copilot included, via the Linux+macOS neutral
+#: launcher) emit their OS boundary; hosts with no emittable boundary (native Windows and
+#: other non-Linux, non-macOS hosts, except Claude) degrade to the
 #: :func:`privilege_profile_advisory`, never a silent no-op. This is constraint-TIGHTENING
 #: and INERT UNTIL MERGED (agentteams emits a settings/config EXAMPLE, never writes the
-#: operator's live settings.json / ~/.config/goose/config.yaml). Opt out by setting
-#: ``privilege_profile: "cooperative"`` in the brief. Changing this constant is the single
-#: source of truth for the default (schema ``default`` mirrors it for documentation).
+#: operator's live settings.json / ~/.config/goose/config.yaml). Opt out of the OS boundary
+#: by setting ``os_sandbox: "off"`` in the brief (or ``privilege_profile: "cooperative"``,
+#: which also changes the gate hook and write-policy behaviour). Changing this constant is the
+#: single source of truth for the default (schema ``default`` mirrors it for documentation).
 DEFAULT_PRIVILEGE_PROFILE: str = "confined"
 
 
@@ -419,6 +421,7 @@ def privilege_profile_advisory(
     *,
     platform: str | None = None,
     mechanism_available: bool | None = None,
+    requested: bool | None = None,
 ) -> dict[str, str] | None:
     """Return an advisory dict when confinement is requested but unenforceable on this host.
 
@@ -447,6 +450,10 @@ def privilege_profile_advisory(
             (:func:`os_sandbox_mechanism_available`). ``None`` (default) consults the live
             probe; pass ``True``/``False`` to evaluate the mechanism-unavailable branch
             deterministically without depending on the test host's ``bwrap``/``sandbox-exec``.
+        requested: The effective OS-sandbox state when the caller knows it
+            (``sandbox_state.effective_sandbox_state(manifest).os``, P00). ``None`` (default)
+            infers the request from ``profile`` and the tokens, as before; ``False`` means the
+            OS sandbox is switched off, so nothing is requested and no advisory is returned.
 
     Returns:
         An advisory ``{"code", "message"}`` dict when confinement is requested that the
@@ -454,15 +461,16 @@ def privilege_profile_advisory(
     """
     hf = list(host_features or [])
     sandbox_token = next(
-        (t for t in ("claude:sandbox", "goose:sandbox", "codex:sandbox") if t in hf), None
+        (t for t in ("claude:sandbox", "goose:sandbox", "codex:sandbox", "grok:sandbox") if t in hf), None
     )
-    requested = profile in {"confined", "exclusive"} or sandbox_token is not None
+    if requested is None:
+        requested = profile in {"confined", "exclusive"} or sandbox_token is not None
     if not requested:
         return None
     how = (
         f"privilege_profile={profile!r}"
         if profile in {"confined", "exclusive"}
-        else (sandbox_token or "claude:sandbox")
+        else (sandbox_token or "os_sandbox='on'")
     )
     plat = sys.platform if platform is None else platform
 
@@ -605,13 +613,15 @@ def privilege_profile_advisory(
 
 
 def merge_profile_features(
-    features: Iterable[str], profile: str | None, framework: str | None = None
+    features: Iterable[str], profile: str | None, framework: str | None = None,
+    *, os_sandbox: str | None = None,
 ) -> list[str]:
     """Union explicit feature tokens with a privilege_profile's expansion.
 
     Order-preserving and idempotent: explicit tokens keep their position and a
     profile-implied token already present is not duplicated. ``cooperative`` adds
-    nothing and therefore never strips an explicitly requested ``claude:sandbox``.
+    nothing and therefore never strips an explicitly requested ``claude:sandbox``;
+    ``os_sandbox="off"`` does (P00: the dedicated switch removes every ``*:sandbox`` token).
 
     Args:
         features: The explicitly-selected tokens (e.g. from --target-host-features).
@@ -620,6 +630,10 @@ def merge_profile_features(
             so ``goose`` unions ``goose:sandbox`` and ``codex`` unions ``codex:sandbox`` (not
             ``claude:sandbox``). ``None`` keeps
             the historical ``claude:sandbox`` expansion.
+        os_sandbox: The effective OS-sandbox switch (P00). ``"off"`` drops every token ending
+            ``:sandbox`` (explicit ones included: the caller has already refused an argv
+            conflict); ``"on"`` adds the framework's own sandbox token even under
+            ``cooperative``; ``None`` (absent) is the historical behaviour, byte-identical.
 
     Returns:
         The merged, deduped token list.
@@ -628,6 +642,12 @@ def merge_profile_features(
     for tok in expand_privilege_profile(profile, framework):
         if tok not in merged:
             merged.append(tok)
+    if os_sandbox == "off":
+        return [t for t in merged if not str(t).endswith(":sandbox")]
+    if os_sandbox == "on":
+        own = _sandbox_token_for(framework)
+        if own not in merged:
+            merged.append(own)
     return merged
 
 

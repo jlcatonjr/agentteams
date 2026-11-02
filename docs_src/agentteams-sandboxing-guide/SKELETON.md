@@ -6,7 +6,8 @@
 > write-confinement, read-exclusion, egress control, and the runtime deny-hook* are requested,
 > decided, emitted, wired, enforced, tamper-tracked, and honestly bounded — plus (SB24) the opt-in
 > *orchestrator-only write policy* and its `agentteams_runner` MCP server, which ride on that
-> confinement.
+> confinement, and (Part IX, SB25–SB30) the independent OS and WASM sandbox switches, WASM tools for
+> vendor CLIs and WASM-native agents.
 >
 > It fixes two things the editions may **not** diverge on — the **section structure** (stable IDs
 > `SB1`…) and the **canonical facts** each section asserts. How deep and in what voice each edition
@@ -34,7 +35,8 @@
      agentteams **emits** an OS write-confinement boundary (as a settings/config example the operator
      must merge), but it enforces nothing until wired. The deny-hook still stays **fail-open by
      default** — only an *explicit* `confined`/`exclusive` flips it fail-closed, not the defaulted
-     `confined`. Opt out with `cooperative`.
+     `confined`. Turn the boundary off with `os_sandbox: "off"` (the dedicated switch, SB25); the
+     `cooperative` profile also emits none, and changes the hook and write-policy behaviour too.
   2. **Inert until wired.** Every emitted boundary is an *example/launcher the operator must
      activate* (merge settings, set `GOOSE_SANDBOX`, or WRAP the process). agentteams never writes an
      operator's live config or auto-invokes the launcher. An emitted-but-unwired boundary confines
@@ -139,7 +141,8 @@ flowchart LR
 ### SB4 — Three privilege profiles  ✅
 **Canonical facts.**
 1. `privilege_profile` has three values, each a superset of the last:
-   - **`cooperative`** (the opt-out) — no boundary emitted; the agent is trusted, fail-open hook.
+   - **`cooperative`** — no boundary emitted; the agent is trusted, fail-open hook. (The dedicated
+     on/off switch for the boundary alone is `os_sandbox`, SB25.)
    - **`confined`** (default as of 2026-W39) — workspace **write-confinement**: the agent writes only inside
      `workspace_write_roots` (default `["."]`, the generated tree). *Network* deny-by-default is a
      property of the mechanisms that emit an egress directive — goose Seatbelt (`deny network*`) and
@@ -722,3 +725,175 @@ flowchart TD
    + ceilings; E carries the four ceilings in plain words.
 **Source.** this SKELETON.
 **Dial.** R Full · D Full · S Core · E Light.
+
+---
+
+## Part IX — Switching sandboxes and WASM
+
+> Added 2026-11 (WASM sandbox program). Two independent switches: the **OS sandbox** confines the
+> *agent process*; the **WASM sandbox** confines the *code an agent runs*, and is also the whole
+> execution model of agentteams' own WASM-native agents. Neither replaces the other.
+
+### SB25 — Two switches, what each confines, and the 2×2 matrix  ✅/⚙
+**Canonical facts.**
+1. **The OS switch** is `os_sandbox: "on" | "off"` in the brief, or `--os-sandbox on|off` for one run
+   (the flag wins). Absent, it follows `privilege_profile` (SB4): `confined` / `exclusive` = on,
+   `cooperative` = off. `off` suppresses every OS boundary agentteams emits for the framework (the
+   Claude settings `sandbox` block, the Goose Seatbelt profile, the Codex / Goose / Grok runners, the
+   Grok profile, the neutral launcher) and keeps the rest of the profile. `on` emits the boundary even
+   under `cooperative` and flips the gate hook fail-closed (SB17). `os_sandbox` is the dedicated
+   on/off switch; `cooperative` remains a valid profile that also turns the boundary off, but it changes
+   the hook and write-policy behaviour too.
+2. **The WASM switch** is `wasm_sandbox.enabled` in the brief, or `--wasm-sandbox on|off` (the flag
+   wins). **Off unless turned on** (opt-in); `--framework wasm` turns it on by itself (reason
+   `framework`) and refuses an explicit off. When on, agent code runs as a WebAssembly guest under a
+   pinned wasmtime: prebuilt `.wasm` modules, Python (CPython WASI build) and JavaScript (QuickJS-ng).
+   The default grant is **compute only**: stdio, no preopened directory, no environment, no network,
+   with fuel / memory / timeout limits (default 10^10 fuel, 64 MiB, 120 s). Per-agent widening is
+   read-only project paths and/or one private scratch dir under `.agentteams/wasm/scratch/<agent>/`;
+   network is never grantable.
+3. **What each confines.** OS sandbox: the agent *process* (the vendor CLI, or agentteams' WASM host),
+   with every command it runs natively. WASM sandbox: the *code* an agent runs through `run_wasm`
+   (vendor CLIs, SB27) or every step of a WASM-native agent (SB28). WASM never replaces the OS sandbox
+   (D6): when an OS sandbox is available the host process still runs inside it.
+4. **The 2×2 matrix.**
+   - *OS on, WASM off* — today's behaviour: the agent process is write-confined once wired (SB14); code
+     runs natively inside it.
+   - *OS on, WASM on* — the strongest combination: the process is OS-confined, eligible agents lose
+     native exec where the host gives them `run_wasm` (SB27), the `.agentteams` control plane is
+     session-write-denied (R1), and only here can a provider row read `enforced` / `conditional`.
+   - *OS off, WASM on* — guest code is still WASM-confined, but nothing protects the control plane from
+     the session, so every provider row is `advisory`; generation prints `wasm-without-os-sandbox`.
+     On a host with no OS sandbox (native Windows) WASM runs alone with `wasm-only-host`.
+   - *OS off, WASM off* — nothing is confined.
+5. **A third, independent switch: `wasm_sandbox.model_substrate`** (`--wasm-substrate on|off`) is not
+   agent confinement. It projects a floor to consumers that run model code (for example baseAgent) in
+   `.agentteams/sandbox-state.json`; the consumer enforces it, agentteams never runs model code.
+**Source.** `agentteams/sandbox_state.py` `effective_sandbox_state`, `os_switch_state`;
+`agentteams/wasm_config.py` `wasm_switch`, `composition_advisories`; `agentteams/wasm_exec.py`
+`GRANT_SPEC`, `COMPUTE_ONLY`; `agentteams/sandbox_projection.py`;
+`agentteams/schemas/project-description.schema.json` (`os_sandbox`, `wasm_sandbox`).
+**Dial.** R Full · D Full · S Core · E Light.
+
+### SB26 — Turning a sandbox off is governed (D7)  ✅
+**Canonical facts.**
+1. Five transitions are **constraint-relaxing** (Rule 15): `sandbox-os-off`, `sandbox-wasm-off` (WASM
+   off after on, and the model-substrate floor lowered), `wasm-grant-widen`, `native-exec-keep` and
+   `wasm-to-os-switch` (a runner `confined_programs` entry moved from `sandbox: wasm` back to `os`).
+   Gate action ids are `<kind>:<framework>` (or `:model-substrate`, or `:<agent>` for the runner
+   switch).
+2. **"Governed" means strict decision signing is on, and it is on by default** (`enforce_decision_signing`
+   defaults to true and is written at the first render). So on every render after the first, each of the
+   five needs an **operator Ed25519-signed decision row** whose scope and effect match exactly; an HMAC
+   signature is valid but insufficient, and an unretracted HALT blocks it. The switch is read from disk
+   before the render, so the very first render of a new team is not yet governed.
+3. Standing relaxations (OS off, a widening, a native-exec keep, a runner switch) are registered as
+   exceptions with a 90-day sunset, bound to the decision row, and share the exception registry's
+   aggregate cap (default one active relaxing exception), so a workspace that needs several must raise the
+   cap. `sandbox-wasm-off` is not standing.
+4. **Ungoverned workspaces** never refuse: generation prints a `SANDBOX RELAXATION` notice and records
+   it. `os_sandbox: off` is refused outright with `write_policy: orchestrator-only`.
+5. Rule-12 carve-out: the gate engages only when a switch is in play (set now, WASM on, or recorded by an
+   earlier render). A team that never used the switches and moves `confined` → `cooperative` stays as
+   ungoverned as before the switches existed.
+**Source.** `agentteams/cli/sandbox_effects.py`; `agentteams/cli/sandbox_relaxation_gate.py`;
+`agentteams/cli/os_sandbox_switch.py` `gate_engaged`; `agentteams/analyze.py`
+(`enforce_decision_signing` default); `agentteams/cli/exception_registry.py`.
+**Dial.** R Full · D Full · S Full · E Core.
+
+### SB27 — WASM tools for vendor CLIs (`run_wasm`) and the per-provider verdict  ✅/⚙
+**Canonical facts.**
+1. Vendor CLIs (Claude Code, Codex, Goose, Grok, Copilot) cannot be compiled to WASM and stay native.
+   With WASM on, agentteams installs a first-party MCP server, `agentteams_wasm`
+   (`.agentteams/bin/agentteams-wasm-mcp.py`), whose one tool `run_wasm` runs code in a guest. Its grant
+   is fixed by launch flags per agent; call arguments cannot widen it.
+2. **Eligibility (D12):** every agent holding an execute-class tool. With the default
+   `native_exec: replace`, an eligible agent loses native exec where its host gives it `run_wasm`, and
+   keeps it (a listed *fallback*) where the host does not. Fixed exemptions: the orchestrator and the team
+   builder. Default `native_exec_keep`: `navigator` and `git-operations` (they need git), signed once as
+   one `native-exec-keep` decision in a governed workspace. `deny` removes exec wherever a tool channel
+   exists; `keep` changes no tools.
+3. **Operator spike B (run on the operator's macOS host with the development wasmtime 36.0.16):** Claude Code (session sandbox on and off) and
+   Goose run stdio MCP servers **outside** their own sandbox. The `agentteams_wasm` server therefore
+   self-nests: it wraps wasmtime in its own OS profile (Seatbelt / bwrap) where it can, and every config
+   that launches it is session-write-denied.
+4. **The verdict** is recorded per framework as `wasm_enforcement` and printed as `[WASM-ENFORCEMENT]`;
+   it is the one place enforcement is claimed. `enforced` / `conditional` require the OS sandbox on **and**
+   the R1 control-plane rules merged in the live configuration; otherwise `advisory` with a reason:
+   - **claude** — `enforced` only when the live settings carry the R1 denies (`.agentteams` denyWrite,
+     the `Edit` denies, the shell-side deny on `.claude` or at least `.claude/agents`, and every
+     launching config) and no narrowed agent's live file still grants a shell. A fresh render, before
+     the operator merges the settings, reads `advisory`.
+   - **goose** — `enforced` for a direct `goose run --recipe` when `.goose/sandbox.sb` carries the
+     rules and `GOOSE_SANDBOX` is on in the live Goose config (else `advisory`, "Seatbelt profile not wired"); delegates are always `advisory`; legacy scoping is `advisory`.
+   - **codex** — `conditional` under the confined launcher's role gate (protect + self-probe at each
+     launch, not verifiable at render); `declared` without it.
+   - **grok** — `declared` under `deny` (Bash absent; no live probe); `advisory` under `replace`
+     (no `run_wasm`).
+   - **copilot-vscode / copilot-cli, agents-md, and every top-level session** — `advisory`.
+5. Convert, interop and multi-sync projections apply no narrowing and claim nothing (an `ADVISORY ONLY`
+   notice).
+**Source.** `agentteams/wasm_mcp.py`; `agentteams/data/agentteams-wasm-mcp.py`;
+`agentteams/frameworks/_wasm_wiring.py` `_static_row`, `scan_launching_configs`;
+`agentteams/wasm_enforcement.py` `_MECHANISM`, `enforcement_report`, `projection_notice`;
+`agentteams/wasm_config.py` `NATIVE_EXEC_EXEMPT`, `NATIVE_EXEC_KEEP_DEFAULT`, `wasm_eligible`.
+**Dial.** R Full · D Full · S Full · E Core.
+
+### SB28 — WASM-native agents (`--framework wasm`) and delegation  ✅/⚙
+**Canonical facts.**
+1. `--framework wasm` (beta, generate-only) renders a team for agentteams' own runtime: each agent runs as
+   a sequence of WASM guest steps, and the host process calls the chosen model provider (Anthropic,
+   OpenAI-compatible services, Gemini, local servers, or an offline `stub`). Keys come only from the
+   operator's environment and reach the host over a pipe, never a guest.
+2. With the OS switch on, the launcher wraps the host in a fresh OS sandbox where the machine allows it;
+   the guests then report `os_confinement: inherited` (inside the host's profile, not a fresh guest
+   sandbox). Where none can start, the run says `WASM host not OS-confined`.
+3. The team files are hashed into `.agentteams/wasm-team.lock.json`; a drifted team refuses to run. The
+   lock is a hash list, not a signature: its integrity rests on R1 and on the launch-time grant
+   authorization check (a widened grant needs an active signed `wasm-grant-widen` exception in a governed
+   workspace).
+4. **Delegation (D11):** a sub-agent's grant is never wider than its delegator's (mounts, scratch,
+   limits, languages) and there is no amplification exception. Over-wide parts are narrowed and listed;
+   a target outside `delegates`, a cycle, the depth / fan-out / tree caps (hard caps 4 / 32 / 64) or an
+   exhausted budget refuse. `--verify-wasm-run <root> --tree` verifies the whole tree.
+**Source.** `agentteams/frameworks/wasm.py`; `agentteams/wasm_agent/` (`launch`, `host`, `team`,
+`delegation`, `child_runs`); `agentteams/model_providers/`; `agentteams/cli/wasm_agent_commands.py`.
+**Dial.** R Full · D Full · S Core · E Light.
+
+### SB29 — Downloads and pins (D4, D9, D10)  ✅/⚙
+**Canonical facts.**
+1. agentteams downloads the runtime and the guest interpreters **only on an explicit operator command**
+   (`--wasm-install [COMPONENTS]`), never as a side effect of rendering; the provisioning flags are
+   refused alongside `--description`, `--self`, `--update` and `--output`.
+2. Every archive is checked against a pinned size and sha256 before extraction; extraction refuses unsafe
+   members; installed files are re-hashed on every use; a mismatch fails closed and a bad install is
+   quarantined, never deleted. A `TODO-PIN` entry refuses before any network access.
+3. Shipped pins (verified downloads, operator run 2026-11-01): wasmtime **36.0.20** (adopted inside the
+   14-day S-10 cooldown under a recorded `@security` remediation waiver for eleven GHSA fixes),
+   CPython WASI **3.15.0**, QuickJS-ng **0.17.0**.
+4. `--wasm-pin-update COMPONENT VERSION` (operator, on a host that can download) re-pins from release
+   metadata and a verified download, writes the pins file only after every platform verifies, prints the
+   diff and commits nothing; the diff needs `@security` review, then `--write-integrity-manifest`.
+   `--wasm-status` re-verifies offline.
+**Source.** `agentteams/wasm_runtime.py`; `agentteams/_wasm_archive.py`; `agentteams/_wasm_pin_update.py`;
+`agentteams/data/wasm_runtime_pins.json`; `agentteams/cli/wasm_commands.py`.
+**Dial.** R Full · D Full · S Core · E Light.
+
+### SB30 — What the WASM layer does not close  ✅/⚙
+**Canonical facts.**
+1. A guest runs only `.wasm` modules, Python and JavaScript: no Bash, git, npm or other native tools.
+   Vendor CLIs themselves are not confined by WASM; only the code they send to `run_wasm` is.
+2. Wherever the verdict is `advisory` (Copilot, AGENTS.md, Grok under `replace`, top-level sessions, any
+   OS-off combination), WASM is guidance plus a tool offer, not a boundary.
+3. Native Windows has WASM but no OS sandbox, and read-only mounts there are refused (the un-nested
+   snapshot needs `dir_fd`).
+4. Residuals: the launching-config scan is name-based (a shell wrapper that builds the server path at run
+   time evades it); the credential and config scans are point-in-time (TOCTOU); the nested profiles' file
+   denies do not stop Keychain access through the macOS Security framework; with the OS sandbox off (or on
+   Copilot) a session can delete the projected model-substrate file, which agentteams detects only at
+   `--verify-integrity` or the next render; Copilot launchers do not write-protect that file.
+5. Ceiling #4 still holds: a same-host operator or key-holder is out of scope.
+**Source.** `agentteams/wasm_guests.py` `LANGUAGES`; `agentteams/_sandbox_profiles.py` `snapshot_tree`;
+`agentteams/wasm_exec.py` `NEST_DENY_READS`; `agentteams/frameworks/_wasm_wiring.py` `_launches`;
+`agentteams/sandbox_projection.py` (residuals); `docs_src/known-limitations.md`.
+**Dial.** R Full · D Core · S Full · E Core.

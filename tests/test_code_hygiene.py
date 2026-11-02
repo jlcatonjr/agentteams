@@ -63,6 +63,22 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # runners -> per-topic runner modules), deferred as a larger blast-radius refactor.
     # commands.py grew to 1207 before the 2026-09-30 pin-signing-cli-modules carve moved the
     # --sign-decision body into the integrity-pinned cli/operator_signing.py (now 1092).
+    # artifacts.py was 1229 before the P00 os_sandbox switch (2026-10-31) took it to 1336; the wave-2
+    # @code-hygiene H1 carve moved the switch resolution and the relaxation-gate engagement into the
+    # integrity-pinned cli/os_sandbox_switch.py (1253: the remaining delta is P00's
+    # PRIVILEGE_WIRING_ERRORS tuple, the write_policy refusal and docstrings, which belong beside
+    # finalize_privilege_wiring). WASM wave 3 (P01 --wasm-sandbox, P12 brief_confined_programs) took it to
+    # 1268: two finalize_privilege_wiring kwargs + their docstrings, the three-line apply_wasm_switch /
+    # advise_wasm calls and the gate-exceptions hand-off to the notice (wave-3 S2), which are the
+    # wiring itself (the logic lives in cli/wasm_sandbox_switch.py and cli/os_sandbox_switch.py).
+    # P20 (wave 4) took it to 1271: the three-line emit_projection call in _emit_host_mcp_artifacts_if_enabled
+    # (the logic lives in the integrity-pinned sandbox_projection.py). The per-topic CH-07 carve above remains
+    # the genuine fix.
+    # WASM P11 (wave 5) added the Codex first_party_tables hand-off and gate, the [WASM-WIRING] report call
+    # and the binary-bundle install call (logic in frameworks/_wasm_wiring.py, cli/wasm_sandbox_switch.py): 1284.
+    # WASM P13 (wave 6) added the three-line report_wasm_enforcement call in _emit_host_mcp_artifacts_if_enabled
+    # (the verdict lives in the integrity-pinned wasm_enforcement.py): 1287. commands.py is 1155 after P13's
+    # two-line printing of --convert-from's [WASM-ENFORCEMENT] notices (logic in wasm_enforcement.projection_notice).
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
     # fences.py (1130; 1442 after the 2026-10-10 fence-twins hook): itself a CH-07 carve of emit.py (the fence/merge extraction the

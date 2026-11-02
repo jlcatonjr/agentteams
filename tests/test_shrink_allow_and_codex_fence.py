@@ -119,6 +119,38 @@ def test_override_refused_without_a_backup_dir(tmp_path, capsys):
     assert "retired-doc.md" in (tmp_path / "agent.agent.md").read_text(encoding="utf-8")
 
 
+_DISK2 = _DISK + ("\n<!-- AGENTTEAMS:BEGIN protocols v=1 -->\n- `references/old-proto.md`\n"
+                  "<!-- AGENTTEAMS:END protocols -->\n")
+_NEW2 = _NEW + "\n<!-- AGENTTEAMS:BEGIN protocols v=1 -->\n- `references/proto.md`\n<!-- AGENTTEAMS:END protocols -->\n"
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_halt_honours_an_override_for_the_only_shrinking_section(tmp_path, dry_run):
+    """2026-11-02: under halt the released section's own notice refused the file, so --shrink-allow never applied."""
+    out, backup = tmp_path / "team", tmp_path / "bk"
+    out.mkdir()
+    (out / "agent.agent.md").write_text(_DISK, encoding="utf-8")
+    result = emit.emit_all([("agent.agent.md", _NEW)], output_dir=out, merge=True, yes=True, dry_run=dry_run,
+                           backup_path=backup, shrink_policy="halt", shrink_allow=frozenset({_entry()}))
+    assert result.shrink_blocked == []
+    assert any("operator override" in n for n in result.notices)
+    assert ("new.md" in (out / "agent.agent.md").read_text(encoding="utf-8")) is not dry_run
+    if not dry_run:
+        assert any("retired-doc.md" in p.read_text() for p in backup.rglob("*.lost.*"))
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_halt_still_refuses_a_file_with_another_unreleased_shrink(tmp_path, dry_run):
+    out, backup = tmp_path / "team", tmp_path / "bk"
+    out.mkdir()
+    target = out / "agent.agent.md"
+    target.write_text(_DISK2, encoding="utf-8")
+    result = emit.emit_all([("agent.agent.md", _NEW2)], output_dir=out, merge=True, yes=True, dry_run=dry_run,
+                           backup_path=backup, shrink_policy="halt", shrink_allow=frozenset({_entry(_DISK2)}))
+    assert result.shrink_blocked == [str(target)]
+    assert target.read_text(encoding="utf-8") == _DISK2
+
+
 def test_review_report_lists_pinned_sections_with_provenance(tmp_path, monkeypatch):
     out = tmp_path / "team"
     out.mkdir()

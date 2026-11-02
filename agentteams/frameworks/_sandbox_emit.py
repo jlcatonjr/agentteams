@@ -18,6 +18,8 @@ import os
 import sys
 from typing import Any
 
+from agentteams.frameworks._control_plane_protect import permission_rules as cp_permission_rules  # R1, P00 D11
+from agentteams.frameworks._control_plane_protect import write_denies as cp_write_denies
 from agentteams.frameworks._prompt_root_protect import (
     PROMPT_ROOT_COMMENT_LINES,
     present_prompt_roots,
@@ -396,16 +398,14 @@ def _exclusive_read_deny_paths(manifest: dict[str, Any]) -> list[str] | None:
 def _sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     """Return True iff workspace write-confinement is requested on this manifest.
 
-    Reads BOTH sources of truth so the emitter is self-sufficient on every code path,
-    not only the CLI generate path:
-
-    * ``"claude:sandbox" in host_features`` — the token, set from --target-host-features
-      and from privilege_profile expansion (the established gate convention, ``bridge.py``).
-    * ``privilege_profile in {confined, exclusive}`` — the source field itself. This
-      matters because ``extra_output_files`` is also invoked from ``convert.py`` and
-      ``render_pipeline.py``, which do NOT run the profile→host_features union that
-      ``cli/generate.py`` does; without this a confined manifest would silently emit no
-      sandbox there.
+    A delegate to ``sandbox_state.os_sandbox_requested(token="claude:sandbox")`` (P00), which reads the
+    effective OS-sandbox state: the dedicated ``os_sandbox`` switch (``--os-sandbox`` / the brief; ``off`` emits
+    nothing, ``on`` emits even under ``cooperative``), then the ``claude:sandbox`` host-feature token, then a
+    ``confined``/``exclusive`` ``privilege_profile``. The profile still counts on its own because
+    ``extra_output_files`` is also invoked from ``convert.py`` and ``render_pipeline.py``, which do NOT run the
+    profile->host_features union that ``cli/generate.py`` does; without it a confined manifest would silently emit
+    no sandbox there. A boundary that is on only because of ANOTHER framework's ``*:sandbox`` token is not
+    Claude's.
 
     Args:
         manifest: The team manifest.
@@ -413,9 +413,9 @@ def _sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     Returns:
         Whether the sandbox settings block should be emitted.
     """
-    if "claude:sandbox" in (manifest.get("host_features") or []):
-        return True
-    return manifest.get("privilege_profile") in {"confined", "exclusive"}
+    from agentteams.sandbox_state import os_sandbox_requested
+
+    return os_sandbox_requested(manifest, token="claude:sandbox")
 
 
 #: Default read-exclusion paths for the `exclusive` profile (P3a). High-value secret
@@ -786,6 +786,8 @@ def _build_sandbox_block(
     project_root: str | None = None,
     protect_prompt_roots: bool = False,
     protect_ledger: bool = False,
+    control_plane_protect: tuple[str, ...] | None = None,
+    substrate_protect: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
@@ -809,6 +811,10 @@ def _build_sandbox_block(
             project-ancestor ban and the prompt-root presence check; ``None`` skips both.
         protect_prompt_roots: Append the PRESENT prompt roots (:func:`present_prompt_roots`) to
             ``denyWrite`` (follow-up #8 phase 2, opt-in).
+        control_plane_protect: METAPLAN R1 (``_control_plane_protect.control_plane_for``): None, or the extra MCP config
+            paths to deny beside ``.agentteams`` whenever WASM is on.
+        substrate_protect: P20 D5 (``_control_plane_protect.substrate_protect_paths``): the projected
+            model-substrate file, denied on its own when the control plane is not protected.
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
@@ -842,9 +848,11 @@ def _build_sandbox_block(
     if protect_prompt_roots:
         filesystem["denyWrite"] += [p for p in present_prompt_roots(project_root)
                                     if p not in filesystem["denyWrite"]]
-    if protect_ledger:
-        # write_policy "orchestrator-only" (P4a): only the out-of-session runner writes the ledger and its status.
-        filesystem["denyWrite"] += [p for p in (LEDGER_DIR_REL, STATUS_DIR_REL) if p not in filesystem["denyWrite"]]
+    # write_policy "orchestrator-only" (P4a): only the out-of-session runner writes the ledger and its status; R1:
+    # .agentteams (and the agentteams_wasm configs) whenever WASM is on too.
+    deny_write = filesystem["denyWrite"]
+    deny_write += [p for p in cp_write_denies(protect_ledger, control_plane_protect, substrate_protect)
+                   if p not in deny_write]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:
@@ -872,6 +880,8 @@ def _inject_sandbox_block(
     project_root: str | None = None,
     protect_prompt_roots: bool = False,
     protect_ledger: bool = False,
+    control_plane_protect: tuple[str, ...] | None = None,
+    substrate_protect: tuple[str, ...] = (),
 ) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
@@ -899,6 +909,10 @@ def _inject_sandbox_block(
         project_root: Forwarded to :func:`_build_sandbox_block` (write-root validation).
         protect_prompt_roots: Add the prompt-root ``Edit`` rules, ``denyWrite`` entries and
             comment (follow-up #8 phase 2, opt-in; off leaves the output unchanged).
+        control_plane_protect: METAPLAN R1: the ``.agentteams`` / agent-file ``Edit`` rules (see
+            :mod:`._control_plane_protect`); None leaves the output unchanged.
+        substrate_protect: P20 D5: the projected model-substrate file's denyWrite + ``Edit`` rule; ``()`` leaves
+            the output unchanged.
 
     Returns:
         The settings example JSON text with the sandbox block merged in.
@@ -924,6 +938,7 @@ def _inject_sandbox_block(
         write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath,
         sibling_deny_dirs=sibling_deny_dirs, project_root=project_root,
         protect_prompt_roots=protect_prompt_roots, protect_ledger=protect_ledger,
+        control_plane_protect=control_plane_protect, substrate_protect=substrate_protect,
     )
     # Same branch as the sandbox block, never one without the other (R11): the built-in tools
     # are bound by permissions, not by the sandbox.
@@ -932,21 +947,10 @@ def _inject_sandbox_block(
     rules = permission_deny_rules("claude")
     if protect_prompt_roots:
         rules += prompt_root_edit_rules(project_root)
-    if protect_ledger:
-        # Under the switch the control plane (ledger, dispatch records, queue results, the installed read-only
-        # file server Goose launches) is the runner's alone. The sandbox's denyWrite doesn't bind the built-in
-        # Write/Edit tools, so they need this rule too; CLI and runner writes don't go through those tools.
-        rules.append(f"Edit(/{LEDGER_DIR_REL}/**)")
-        # R1 (@security C4): the request queue and the runner's control plane hold raw dispatch nonces, so no agent
-        # may read them. Claude Code (2.1.246, measured 2026-10-11) applies these Read denies to sandboxed commands
-        # too, the orchestrator's own CLI included: so the runner publishes the heartbeat and the orchestrator's
-        # results, sealed to each request's reply key, in the session-readable .agentteams-status/ tree, which no
-        # Read rule may cover and nothing in the session may write. Goose's read-only file server refuses the two
-        # denied trees.
-        rules += [f"Read(/{LEDGER_DIR_REL}/**)", "Read(/.agentteams-queue/**)", f"Edit(/{STATUS_DIR_REL}/**)"]
-        # R7 (@security C11): the agent files carry each granted agent's agentteams_runner block; the sandbox's
-        # denyWrite .claude binds only the shell, so the built-in Edit/Write tools need their own rule.
-        rules.append("Edit(/.claude/agents/**)")
+    # Under the switch the control plane (ledger, dispatch records, queue results, the installed read-only file
+    # server Goose launches) is the runner's alone; R1: .agentteams whenever WASM is on too. Rule rationale (R1 C4,
+    # R7 C11, the Claude Code 2.1.246 Read-deny measurement) lives in _control_plane_protect.permission_rules.
+    rules += cp_permission_rules(protect_ledger, control_plane_protect, substrate_protect)
     for rule in rules:
         if rule not in deny:
             deny.append(rule)

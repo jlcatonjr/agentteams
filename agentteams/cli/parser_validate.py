@@ -71,6 +71,9 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("--prune-backups", getattr(args, "prune_backups", None) is not None),
         ("--stale-check", bool(getattr(args, "stale_check", False))),
         ("--stale-restore", getattr(args, "stale_restore", None) is not None),
+        ("--wasm-install", getattr(args, "wasm_install", None) is not None),
+        ("--wasm-status", getattr(args, "wasm_status", None) is not None),
+        ("--wasm-pin-update", getattr(args, "wasm_pin_update", None) is not None),
     ]
     _active_ops = [flag for flag, on in _standalone_ops if on]
     if len(_active_ops) > 1:
@@ -78,6 +81,25 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             f"{' and '.join(_active_ops)} are mutually exclusive "
             "(each is a standalone, dispatch-shadowing integrity/retention operation)"
         )
+
+    # P03 (D4): the WASM provisioning commands are standalone operator acts; they never ride along with
+    # a render, so combining one with a generation flag is refused rather than silently ignored.
+    _wasm_ops = [f for f in ("--wasm-install", "--wasm-status", "--wasm-pin-update") if f in _active_ops]
+    if _wasm_ops:
+        _wasm_generation = [flag for flag, on in (
+            ("--description", bool(getattr(args, "description", None))),
+            ("--self", bool(getattr(args, "self_update", False))),
+            ("--update", bool(getattr(args, "update", False))),
+            ("--output", bool(getattr(args, "output", None))),
+        ) if on]
+        if _wasm_generation:
+            parser.error(f"{_wasm_ops[0]} cannot be combined with {', '.join(_wasm_generation)} "
+                         "(WASM provisioning is a standalone operator command, never part of a render)")
+    for _flag, _on in (("--remediation", getattr(args, "remediation", None) is not None),
+                       ("--tofu", bool(getattr(args, "tofu", False))),
+                       ("--pins-out", getattr(args, "pins_out", None) is not None)):
+        if _on and getattr(args, "wasm_pin_update", None) is None:
+            parser.error(f"{_flag} requires --wasm-pin-update")
 
     # --stale-remediate / --stale-no-git are modifiers for --stale-check.
     if getattr(args, "stale_remediate", False) and not getattr(args, "stale_check", False):
@@ -188,6 +210,34 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                     f"`--framework {fw} --description …`, or use the interop "
                     f"path (`--interop-from`), which supports {fw} targets."
                 )
+
+    # The WASM agent launcher (P08): --wasm-task/--wasm-task-file/--wasm-provider/--wasm-base-url only with
+    # --run-wasm-agent, which needs exactly one task source; --revoke-reason only with --revoke-wasm-run; one launcher
+    # action per invocation.
+    _wasm_actions = [f for a, f in (("run_wasm_agent", "--run-wasm-agent"), ("revoke_wasm_run", "--revoke-wasm-run"),
+                                    ("verify_wasm_run", "--verify-wasm-run")) if getattr(args, a, None) is not None]
+    if len(_wasm_actions) > 1:
+        parser.error(f"{' and '.join(_wasm_actions)} are mutually exclusive")
+    _tasks = [getattr(args, a, None) is not None for a in ("wasm_task", "wasm_task_file")]
+    if getattr(args, "run_wasm_agent", None) is not None and sum(_tasks) != 1:
+        parser.error("--run-wasm-agent needs exactly one of --wasm-task TEXT or --wasm-task-file PATH")
+    if getattr(args, "run_wasm_agent", None) is None and (any(_tasks) or getattr(args, "wasm_provider", None)
+                                                          or getattr(args, "wasm_base_url", None) is not None):
+        parser.error("--wasm-task, --wasm-task-file, --wasm-provider and --wasm-base-url require --run-wasm-agent")
+    if getattr(args, "revoke_reason", None) is not None and getattr(args, "revoke_wasm_run", None) is None:
+        parser.error("--revoke-reason requires --revoke-wasm-run")
+    if getattr(args, "wasm_tree", False) and getattr(args, "verify_wasm_run", None) is None:
+        parser.error("--tree requires --verify-wasm-run")
+
+    # wasm (plan P08): agentteams' own runtime format is generate-only in v1. No convert, bridge, interop (either
+    # direction) or absorb: those paths would need CAI mappings for `delegates` and grants (plan Q-2).
+    _wasm_uses = (getattr(args, "framework", None) == "wasm" and any(
+        getattr(args, a, None) for a in ("convert_from", "bridge_from", "interop_from", "absorb_from")))
+    if _wasm_uses or "wasm" in (getattr(args, "interop_source_framework", None),
+                                getattr(args, "absorb_source_framework", None)):
+        parser.error("--framework wasm is generate-only in v1: it cannot be a --convert-from / --bridge-from / "
+                     "--interop-from / --absorb-from target or source. Render it with "
+                     "`--framework wasm --description …`.")
 
     # F.2: interop-to-goose is now supported — the old refusal predates C.3
     # (CAI captures handoffs and the goose adapter renders sub_recipes from

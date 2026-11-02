@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.atomicio import atomic_rewrite_csv_rows
+from agentteams.atomicio import atomic_rewrite_csv_rows, replace_no_follow
 
 _FIELDS = ["a", "b", "c"]
 
@@ -115,3 +115,23 @@ def test_a_brand_new_file_still_defaults_to_unix_line_endings(tmp_path: Path):
     atomic_rewrite_csv_rows(path, [{"a": "1", "b": "2", "c": "3"}], _FIELDS)
     raw = path.read_bytes()
     assert b"\r\n" not in raw
+
+
+def test_replace_no_follow_writes_and_never_follows_a_link(tmp_path: Path):
+    """W6R F3: the shared no-follow replace (signing_switch, sandbox_projection) refuses a link file or dir."""
+    path = tmp_path / "d" / "f.json"
+    replace_no_follow(path, "one")
+    replace_no_follow(path, "two")
+    assert path.read_text() == "two" and [p.name for p in path.parent.iterdir()] == ["f.json"]
+    target = tmp_path / "target"
+    target.write_text("keep")
+    path.unlink()
+    path.symlink_to(target)
+    with pytest.raises(OSError, match="symlink"):
+        replace_no_follow(path, "x")
+    real = tmp_path / "real"
+    real.mkdir()
+    (tmp_path / "linked").symlink_to(real)
+    with pytest.raises(OSError, match="real directory"):
+        replace_no_follow(tmp_path / "linked" / "f.json", "x")
+    assert target.read_text() == "keep" and not list(real.iterdir())

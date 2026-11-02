@@ -321,6 +321,7 @@ def test_every_gate_call_site_is_listed():
     call = _re.compile(r"(?:_assert_destructive_action_allowed|check_clearance|_assert_no_unretracted_halt)"
                        r"\([^)]*?action=(\"[^\"]+\"|[A-Za-z_]+)")
     dynamic = []
+    sandbox_sites: list[str] = []
     for path, text in sources.items():
         for arg in call.findall(text):
             if arg.startswith('"'):
@@ -329,9 +330,16 @@ def test_every_gate_call_site_is_listed():
                 assert constants[arg] in GATE_ACTIONS, (path.name, arg)
             elif arg == "action" and path.name in {"branch_cleanup.py", "security_gate.py"}:
                 dynamic.append(path.name)
+            elif arg in {"relaxation_action", "relaxation_family"} and path.name == "sandbox_relaxation_gate.py":
+                sandbox_sites.append(arg)  # <kind>:<qualifier> and the bare <kind>, both checked below
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
     assert "branch-cleanup" in GATE_ACTIONS and dynamic
+    # The sandbox gate's ids are built from SANDBOX_RELAXATION_KINDS, every family of which is listed.
+    from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_KINDS
+
+    assert set(sandbox_sites) == {"relaxation_action", "relaxation_family"}
+    assert set(SANDBOX_RELAXATION_KINDS) <= set(GATE_ACTIONS)
     # A call shape the regex cannot parse would be skipped silently; the count makes such a miss fail.
     assert sum(len(call.findall(t)) for t in sources.values()) >= 11
 

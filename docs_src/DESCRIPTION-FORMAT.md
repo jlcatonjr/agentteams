@@ -178,6 +178,90 @@ Each entry:
 
 ---
 
+### `os_sandbox`
+
+**Type:** `"on"` or `"off"` · **Default:** absent (follows `privilege_profile`: confined/exclusive = on, cooperative = off)
+**Purpose:** Switches the OS sandbox boundary independently of `privilege_profile`:
+- `"off"` suppresses every OS boundary agentteams emits for the selected framework (the Claude settings `sandbox`
+  block, the Goose Seatbelt profile, the Codex/Goose/Grok runners, the Grok profile, the neutral launcher); the rest
+  of `privilege_profile` is unchanged, and the control-plane stubs a sibling team's launcher needs are still emitted;
+- `"on"` emits the boundary even under `cooperative`, and counts as the explicit opt-in that makes the Claude gate
+  hook fail closed.
+
+`--os-sandbox on|off` overrides it for one run. Any other value fails closed. Turning the boundary off is
+constraint-relaxing (Rule 15): in a governed workspace (strict decision signing, on by default) it needs an
+operator Ed25519-signed decision `sandbox-os-off:<framework>`; otherwise generation prints a `SANDBOX RELAXATION`
+notice. The effective state is recorded in the build-log `sandbox_state`, and `--check-wiring` reports live config
+that still enables a sandbox. Never touches live settings or the runner's `confined_programs` sandbox.
+
+---
+
+### `wasm_sandbox`
+
+**Type:** object · **Default:** absent (WASM confinement off)
+**Purpose:** Opt-in WASM confinement of agent code execution. Agents run prebuilt `.wasm` modules, Python and
+JavaScript inside a pinned wasmtime grant: stdio only, no preopened directory, no environment, no network, with
+fuel / memory / timeout limits. When an OS sandbox is available the host process still runs inside it.
+
+```json
+"wasm_sandbox": {
+  "enabled": true,
+  "languages": ["module", "python"],
+  "limits": {"fuel": 10000000000, "memory_mib": 64, "timeout_s": 120},
+  "agents": {"format-converter": {"read_paths": ["docs", "src"], "scratch": true}},
+  "native_exec": "replace",
+  "native_exec_keep": ["git-operations", "navigator"]
+}
+```
+
+- `enabled` (boolean, default `false`); `--wasm-sandbox on|off` overrides it for one run.
+- `languages`: a non-empty subset of `module`, `python`, `javascript` (default: all three).
+- `limits`: `fuel` 1..10^15, `memory_mib` 1..4096, `timeout_s` 1..3600. Out-of-range values are refused, never clamped.
+- `agents`: per-agent widening beyond compute-only. `read_paths` are project-relative and mounted read-only at
+  `/project/<path>`; `scratch: true` gives one private writable `/scratch` at `.agentteams/wasm/scratch/<agent>/`
+  (agentteams picks the location). A grant reaches an agent only through its `agentteams_wasm` copy. On Claude and
+  on Goose under `goose_tool_scoping: grant`, only a WASM-eligible agent (one holding an execute-class tool) gets
+  one; Goose under legacy scoping, Grok and AGENTS.md wire none. A grant that reaches no copy has no effect, and the
+  render prints a `NOTE (WASM): ... has no effect on <framework>` line and records a `wasm-grant-no-effect`
+  advisory. Codex and Copilot (VS Code, CLI) take one shared compute-only copy, so a widened grant there is refused
+  and the render stops. `--framework wasm` honours grants in its own runtime. Read paths may not be absolute or `~`,
+  contain `..`, name the whole project, reach
+  the control plane (`.git`, `.agentteams`, `.claude`, `.goose`, `.codex`, `.grok`, `.github/agents`,
+  `.github/hooks`, `sandbox`, or an ancestor of one), credential material (`.env*`, `*.pem`, `*.key`, `id_*`, ...), a
+  governance / trust root, or anything that resolves through a symlink. A read directory that holds credential-named
+  entries anywhere below it (or is too large to scan: 20,000 entries or 32 levels) is refused when the grant is
+  built and again before each run. There is no network key.
+- `native_exec`: `replace` (default), `deny` or `keep`; `native_exec_keep`: agents that keep native execution while
+  WASM is on. Every agent holding an execute-class tool is WASM-eligible. When the key is absent the default is
+  `navigator` and `git-operations` (they need git), restricted to the team's agents; an explicit list replaces the
+  default (list both to extend it, `[]` to keep none). The orchestrator and the team builder are exempt by design and
+  may not be listed.
+- `model_substrate` (`on` / `off`; absent: nothing is projected): a model-substrate WASM switch projected to consumers
+  that run model code (for example baseAgent's battery), written to `.agentteams/sandbox-state.json` (schema
+  `agentteams-sandbox-state/v1`). `on`: the consumer must run model code WASM-confined under an enforcing runner and
+  refuse rather than fall back to native or to an unenforced runner; `off`: native substrates by default. Independent
+  of `enabled` (which confines agent code). `--wasm-substrate on|off` overrides it for one run. Turning it from `on` to
+  `off` is constraint-relaxing (`sandbox-wasm-off:model-substrate`). Removing the key leaves the file in place as the
+  consumer's floor (a notice says so). See [`sandbox_projection`](api-reference/sandbox-projection.md).
+
+Every unknown key, wrong type or unknown agent slug refuses the render, naming the key path. Widening a grant and
+keeping native execution (the default keep entries included) are constraint-relaxing
+(`wasm-grant-widen:<framework>`, `native-exec-keep:<framework>`, under any `write_policy`), and so is
+turning WASM off after it was on (`sandbox-wasm-off:<framework>`): in a governed workspace each needs an operator
+Ed25519-signed decision; elsewhere generation prints a `SANDBOX RELAXATION` notice. Grants are carried but inert while
+WASM is off. See [`wasm_config`](api-reference/wasm-config.md).
+
+**The example needs two standing exceptions in a governed workspace.** Each of those decisions also registers a
+standing exception in `references/exception-registry.json`: one `wasm-grant-widen:<framework>` and one
+`native-exec-keep:<framework>` (one per framework, however many agents or paths it lists). Both count toward
+`cap.max_active_relaxing`, which defaults to `1` when the registry sets none. With the default cap, the example above
+(a widening plus a keep list, and the default keep counts too) is refused before anything is consumed: `activating 2
+more relaxing exception(s) would bring the active total to 2, over the cap of 1 ...`. Signing them one at a time does
+not help: once the first is active, the second is refused the same way. Either raise `cap.max_active_relaxing`
+deliberately in the git-tracked registry, or drop one of the two (`native_exec_keep: []`, or no `agents` widening).
+
+---
+
 ### `write_policy`
 
 **Type:** `"default"` or `"orchestrator-only"` · **Default:** absent (off)
@@ -187,7 +271,7 @@ Each entry:
 - the operator's out-of-session runner applies everything.
 
 **Requirements and support:**
-- an explicit `privilege_profile` of `"confined"` or `"exclusive"`;
+- an explicit `privilege_profile` of `"confined"` or `"exclusive"`, and `os_sandbox` not `"off"`;
 - **supported on Claude** (and Codex through its launcher);
 - **refused on Goose**: Goose delegates inherit the orchestrator's write tools (agentteams #204).
 

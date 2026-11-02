@@ -1,0 +1,69 @@
+# Verbatim excerpt of baseAgent experiments/battery/wasmtime_cmd_runner.mjs (read-only copy; data, never executed).
+# baseAgent commit: 49e0e1a6daf2b9f2656fae8cf2dc0efc33983449 (file last changed in 39c9fa65, 2026-10-02); copied 2026-10-31 by agentteams P19.
+# Parsed by tests/test_wasm_grant_spec.py and compared to agentteams.wasm_exec.GRANT_SPEC.
+# Each '@@ lines A-B @@' block must appear verbatim in the live file (test_fixture_matches_live_baseagent).
+# To refresh: copy the same ranges from baseAgent, update the commit above, review the diff (@security).
+@@ lines 26-28 @@
+// Security condition (references/security-decisions.log.csv, D5/D6 row): never --dir, --env or
+// -S inherit-network. assertGrantFlags() enforces it by EXACT SHAPE before spawning: the flags must be this file's
+// pinned grant with only the numeric fuel/timeout/max-memory-size values varied (within LIMIT_BOUNDS).
+@@ lines 37-37 @@
+export const DEFAULT_LIMITS = Object.freeze({ fuel: "10000000000", maxMemory: "67108864", timeout: "120s" });
+@@ lines 49-105 @@
+// The pinned grant. Only the three numeric -W values (fuel, timeout, max-memory-size) may vary, within LIMIT_BOUNDS.
+const GRANT_C = "cache=n";
+const GRANT_S = "cli=y,inherit-env=n,inherit-network=n,tcp=n,udp=n,allow-ip-name-lookup=n,http=n";
+const W_FIXED = "trap-on-grow-failure=y,max-instances=1,max-memories=1,max-tables=1";
+// COMPONENT profile (report #17 §11.3 gap 2; wasm/scripts/build-inguest-wasmtime.sh): a composed model component holds
+// several core instances (the model core, the wasi_snapshot_preview1 adapter and its shims, the decide provider), so
+// max-instances=1 refuses to instantiate it. These counts are the EXACT structural need of the largest composed
+// component, measured 2026-10-02 by bisection on wasmtime 36.0.16 (c/cpp/julia 10, rust 9, js/endojs 8, python 19
+// core instances; 2 memories = model + provider; 4 tables), not a margin. They are Layer-4 count bounds, not
+// authority: the -C and -S grant elements are IDENTICAL to the module profile. max-memory-size applies PER linear
+// memory, so with max-memories=2 a composed component's total linear memory is bounded by 2 x max-memory-size.
+const W_FIXED_COMPONENT = "trap-on-grow-failure=y,max-instances=19,max-memories=2,max-tables=4";
+const W_FIXED_BY_PROFILE = Object.freeze({ module: W_FIXED, component: W_FIXED_COMPONENT });
+const wFixed = (profile) => {
+  if (!Object.hasOwn(W_FIXED_BY_PROFILE, profile)) throw new Error(`wasmtime_cmd_runner: unknown profile ${JSON.stringify(profile)}`);
+  return W_FIXED_BY_PROFILE[profile];
+};
+// Sane bounds for the variable -W values (inclusive). fuel <= 1e15 admits test_deny_probe W4's "fuel effectively
+// unlimited" override; max-memory-size <= 4 GiB is the wasm32 linear-memory ceiling; timeout 1 ms .. 1 h.
+export const LIMIT_BOUNDS = Object.freeze({ fuel: [1n, 10n ** 15n], maxMemory: [65536n, 4294967296n], timeoutMs: [1n, 3600000n] });
+
+export function wasmtimeFlags(limits = {}, profile = "module") {
+  const L = {
+    fuel: process.env.BA_WASMTIME_FUEL || DEFAULT_LIMITS.fuel,
+    maxMemory: process.env.BA_WASMTIME_MAXMEM || DEFAULT_LIMITS.maxMemory,
+    timeout: process.env.BA_WASMTIME_TIMEOUT || DEFAULT_LIMITS.timeout,
+    ...limits,
+  };
+  return [
+    "-C", GRANT_C,
+    "-W", `fuel=${L.fuel},timeout=${L.timeout},max-memory-size=${L.maxMemory},${wFixed(profile)}`,
+    "-S", GRANT_S,
+  ];
+}
+
+// EXACT-SHAPE grant check (security condition; replaces a deny-list that missed http=y/tcp=y/udp=y,
+// allow-ip-name-lookup=y, the --wasi= and -S<opts> spellings, a later -S overriding an earlier one, --preload, ...).
+// `flags` must equal wasmtimeFlags({fuel, timeout, maxMemory}) element for element, where the three values are read
+// back from the candidate's own -W argument and must be plain decimals (timeout: <n>ms | <n>s) inside LIMIT_BOUNDS.
+// Any other flag, spelling, order, repetition or value is refused. Throws on violation; returns true.
+// `profile` (default "module", the command route) selects the fixed -W tail; "component" is the composed-component
+// tail above. The -C and -S elements are the same pinned strings in both profiles.
+export function assertGrantFlags(flags, profile = "module") {
+  const refuse = (why) => { throw new Error(`wasmtime_cmd_runner: refused grant flags (${why}): ${JSON.stringify(flags)}`); };
+  if (!Array.isArray(flags) || flags.length !== 6 || !flags.every((f) => typeof f === "string")) refuse("not the pinned 6-element shape");
+  const m = /^fuel=(\d+),timeout=(\d+)(ms|s),max-memory-size=(\d+),(.*)$/.exec(flags[3]);
+  if (!m) refuse("-W is not fuel=<n>,timeout=<n>(ms|s),max-memory-size=<n>,...");
+  const inB = (v, [lo, hi]) => v >= lo && v <= hi;
+  const fuel = BigInt(m[1]), tms = BigInt(m[2]) * (m[3] === "s" ? 1000n : 1n), mem = BigInt(m[4]);
+  if (!inB(fuel, LIMIT_BOUNDS.fuel)) refuse(`fuel ${m[1]} outside [${LIMIT_BOUNDS.fuel.join(", ")}]`);
+  if (!inB(tms, LIMIT_BOUNDS.timeoutMs)) refuse(`timeout ${m[2]}${m[3]} outside [1ms, 3600s]`);
+  if (!inB(mem, LIMIT_BOUNDS.maxMemory)) refuse(`max-memory-size ${m[4]} outside [${LIMIT_BOUNDS.maxMemory.join(", ")}]`);
+  const want = wasmtimeFlags({ fuel: m[1], timeout: m[2] + m[3], maxMemory: m[4] }, profile);
+  const at = want.findIndex((w, i) => w !== flags[i]);
+  if (at !== -1) refuse(`element ${at} is ${JSON.stringify(flags[at])}, pinned ${JSON.stringify(want[at])}`);
+  return true;
+}

@@ -25,6 +25,7 @@ from pathlib import Path
 from agentteams import confinement as _confinement
 from agentteams import ingest
 from agentteams import proposal_runner as R
+from agentteams import runner_wasm
 from agentteams.proposal_policy import GATE_ARGV_KEY, GATE_EXEC_KEY, gate_argv_digest
 from agentteams.proposals import (
     Policy,
@@ -274,6 +275,12 @@ def run_install_confined(args: argparse.Namespace) -> int:
         # Static checks only: the runner repeats check_roots against the live tree before every command, and a
         # write root such as lean/.lake may not exist yet.
         policy = load_policy(brief, brief_rel=brief_rel, confined_file=(data, "candidate"))
+        # WASM plan P12 / P15: moving an agent from sandbox: wasm back to os is constraint-relaxing (Rule 15). In a
+        # governed workspace the operator's Ed25519-signed decision must exist before the file is installed; the
+        # render consumes it and registers the standing exception. Elsewhere a SANDBOX RELAXATION notice.
+        installed = _confinement.read_confined_file(root)
+        previous = installed[0] if installed is not None else brief.get("confined_programs") or {}
+        runner_wasm.gate_policy_change(root, previous, data, output=getattr(args, "output", None))
         for agent, jail in sorted(policy.confined.items()):  # warn, never refuse (mathAgents M6)
             for note in _confinement.package_store_warnings(jail["write"], root):
                 print(f"[install-confined] confined_programs.{agent}: {note}", file=sys.stderr)

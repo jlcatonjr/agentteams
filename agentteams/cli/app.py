@@ -122,6 +122,22 @@ def _main_dispatch(
         from agentteams.cli.agent_doc_sync_switch import run_agent_doc_sync_cli
         return run_agent_doc_sync_cli(args)
 
+    # --wasm-install / --wasm-status / --wasm-pin-update (P03, D4): explicit operator commands, dispatched
+    # before anything renders, so a render can never download or install the WASM runtime.
+    if (getattr(args, "wasm_install", None) is not None or getattr(args, "wasm_status", None) is not None
+            or getattr(args, "wasm_pin_update", None) is not None):
+        from agentteams.cli import wasm_commands
+        if getattr(args, "wasm_install", None) is not None:
+            return wasm_commands.run_wasm_install(args)
+        if getattr(args, "wasm_status", None) is not None:
+            return wasm_commands.run_wasm_status(args)
+        return wasm_commands.run_wasm_pin_update(args)
+
+    # --run-wasm-agent / --revoke-wasm-run / --verify-wasm-run (P08): the WASM agent runtime launcher; read no brief.
+    if any(getattr(args, a, None) is not None for a in ("run_wasm_agent", "revoke_wasm_run", "verify_wasm_run")):
+        from agentteams.cli import wasm_agent_commands
+        return wasm_agent_commands.dispatch(args)
+
     # --branch-inventory / --branch-cleanup / --branch-post-merge: standalone, read no brief.
     from agentteams.cli.branch_switch import branch_mode_active
     if branch_mode_active(args):

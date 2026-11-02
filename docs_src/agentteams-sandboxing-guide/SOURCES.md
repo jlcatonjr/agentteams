@@ -93,6 +93,26 @@ Line numbers are as of `origin/main` after the `fix/convert-bridge-write-policy`
 | Hook uncovered surfaces are the operator's responsibility | `agentteams/templates/universal/security.template.md` (delete-gate limits) |
 | Write-policy layer: runner/operator host is the TCB; covered frameworks | `agentteams/proposals.py:109-115`; `agentteams/mcp_direct_grants.py:1-18`; `agentteams/write_policy.py:179-240` |
 
+## Switching sandboxes and WASM (SB25–SB30)
+
+| Fact | Source |
+|---|---|
+| OS switch (`os_sandbox` / `--os-sandbox`), derived state, precedence | `agentteams/sandbox_state.py` `effective_sandbox_state`, `os_switch_state`; `agentteams/cli/os_sandbox_switch.py` |
+| WASM switch opt-in; `framework` reason; composition notices `wasm-without-os-sandbox` / `wasm-only-host` | `agentteams/wasm_config.py` `wasm_switch`, `composition_advisories`; `agentteams/cli/wasm_sandbox_switch.py` |
+| Compute-only default grant and limits (10^10 fuel, 64 MiB, 120 s) | `agentteams/wasm_exec.py` `GRANT_SPEC`, `DEFAULT_LIMITS`, `COMPUTE_ONLY` |
+| Model-substrate projection (`.agentteams/sandbox-state.json`) | `agentteams/sandbox_projection.py`; `agentteams/schemas/sandbox-state.schema.json` |
+| Five relaxation kinds; action ids and tokens | `agentteams/cli/sandbox_effects.py` |
+| Governed = `enforce_decision_signing`, default true; Ed25519 required; 90-day sunset; aggregate cap | `agentteams/analyze.py` (default); `agentteams/cli/sandbox_relaxation_gate.py` (`SANDBOX_EXCEPTION_TTL_DAYS`); `agentteams/cli/exception_registry.py` (`_DEFAULT_MAX_ACTIVE_RELAXING`) |
+| Gate engagement carve-out | `agentteams/cli/os_sandbox_switch.py` `gate_engaged` |
+| `agentteams_wasm` server, `run_wasm`, launch-flag grant | `agentteams/wasm_mcp.py`; `agentteams/data/agentteams-wasm-mcp.py` |
+| Per-framework wiring status; spike B note; launching-config scan (name-based) | `agentteams/frameworks/_wasm_wiring.py` `_static_row`, `_HOST_NOTE`, `scan_launching_configs`, `_launches` |
+| Eligibility, exemptions, default keep list | `agentteams/wasm_config.py` `wasm_eligible`, `NATIVE_EXEC_EXEMPT`, `NATIVE_EXEC_KEEP_DEFAULT` |
+| Per-provider verdict and its preconditions; projection notice | `agentteams/wasm_enforcement.py` `_MECHANISM`, `enforcement_report`, `live_problems`, `projection_notice`; `agentteams/frameworks/_sandbox_drift.py` `verify_control_plane_merged` |
+| WASM-native runtime, lock, host confinement | `agentteams/frameworks/wasm.py`; `agentteams/wasm_agent/launch.py`, `team.py` |
+| Delegation subset (D11) and caps | `agentteams/wasm_agent/delegation.py`; `agentteams/wasm_agent/child_runs.py` |
+| Explicit downloads, pins, fail-closed verification, pin update | `agentteams/wasm_runtime.py`; `agentteams/_wasm_archive.py`; `agentteams/_wasm_pin_update.py`; `agentteams/data/wasm_runtime_pins.json`; `agentteams/cli/wasm_commands.py` |
+| Guest languages; Windows read-only mounts need `dir_fd`; Keychain residual | `agentteams/wasm_guests.py` `LANGUAGES`; `agentteams/_sandbox_profiles.py` `snapshot_tree`; `agentteams/wasm_exec.py` `NEST_DENY_READS` |
+
 ## Related, authoritative
 
 - [`workspace-privilege-scoping`](../api-reference/workspace-privilege-scoping.md) — the API reference

@@ -37,9 +37,6 @@ source of truth shared with the Claude path.
 
 from __future__ import annotations
 
-import posixpath
-import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -47,6 +44,14 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.host_features import is_sandbox_capable
+from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
+from agentteams.frameworks._control_plane_protect import substrate_protect_paths  # P20 D5
+from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
+from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
+from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
+from agentteams.frameworks._sandbox_drift import live_goose_config_path
+from agentteams.frameworks._sandbox_drift import live_goose_sandbox_enabled_at as _live_goose_sandbox_enabled
+from agentteams.sandbox_state import effective_sandbox_state
 from agentteams.frameworks._sandbox_emit import (
     _DEFAULT_PROTECTED_READ_PATHS,
     VERIFY_KEY_STORE_SENTINEL_REL,
@@ -79,16 +84,15 @@ GOOSE_SANDBOX_PROFILE_PROJECT_PATH = ".goose/sandbox.sb"
 def _goose_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     """Return True iff workspace write-confinement is REQUESTED on this goose manifest.
 
-    Reads both sources of truth (mirrors ``_sandbox_emit._sandbox_feature_enabled``): the
-    ``goose:sandbox`` host-feature token (set from ``--target-host-features`` and from the
-    privilege_profile expansion) and the ``privilege_profile`` field itself (so a confined
-    manifest emits even on the ``convert``/``render`` paths that do not run the
-    profile→host_features union). This is the REQUEST test — platform enforceability is a
-    separate gate applied in :func:`goose_sandbox_output_files`.
+    A delegate to ``sandbox_state.os_sandbox_requested(token="goose:sandbox")`` (P00; mirrors the claude twin in
+    ``_sandbox_emit``): the effective state, so the ``os_sandbox`` switch wins (``off`` emits nothing, ``on``
+    emits under ``cooperative``), then the ``goose:sandbox`` token, then a ``confined``/``exclusive`` profile (so a
+    confined manifest emits even on the ``convert``/``render`` paths without the profile→host_features union). The
+    REQUEST test only: platform enforceability is a separate gate in :func:`goose_sandbox_output_files`.
     """
-    if "goose:sandbox" in (manifest.get("host_features") or []):
-        return True
-    return manifest.get("privilege_profile") in {"confined", "exclusive"}
+    from agentteams.sandbox_state import os_sandbox_requested
+
+    return os_sandbox_requested(manifest, token="goose:sandbox")
 
 
 def _goose_read_deny_paths(manifest: dict[str, Any]) -> list[str] | None:
@@ -225,6 +229,8 @@ def _build_seatbelt_profile(
     *,
     copilot_present: bool = False,
     protect_ledger: bool = False,
+    control_plane_protect: tuple[str, ...] | None = None,
+    substrate_protect: tuple[str, ...] = (),
 ) -> str:
     """Build the ``sandbox.sb`` Apple-Seatbelt profile text for goose confinement.
 
@@ -254,6 +260,9 @@ def _build_seatbelt_profile(
         copilot_present: A copilot agentteams team (``.github/agents``) was present at generation.
             Only then are the ``.github`` ancestor-rename literals emitted: a create-deny on the
             ``.github`` literal would stop a goose agent CREATING ``.github`` in a repo without one.
+        control_plane_protect: METAPLAN R1 (``_control_plane_protect.control_plane_for``); None = off.
+        substrate_protect: P20 D5 (``_control_plane_protect.substrate_protect_paths``): the projected
+            model-substrate file, denied on its own when the control plane is not protected.
 
     Returns:
         The profile text (ends with a trailing newline).
@@ -357,7 +366,7 @@ def _build_seatbelt_profile(
     # live settings.json allowWrite baseline. A subpath deny covers the dir entry itself (rename).
     # write_policy "orchestrator-only" (P4a): the ledger dir too; only the out-of-session runner writes it.
     # R7 (@security C11): the recipes too, which carry each granted agent's agentteams_runner launch arguments.
-    ledger = (".agentteams", ".agentteams-status", ".goose/recipes") if protect_ledger else ()
+    ledger = seatbelt_denies(protect_ledger, control_plane_protect, substrate_protect)  # R1 (P00); P20 D5
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
         *control_plane, framework_config_dir("claude"), framework_config_dir("grok"),
         *sib["copilot"], *sib["codex"], *sib["grok"],
@@ -620,9 +629,10 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     from agentteams.frameworks._sandbox_emit import SIBLING_DENY_DIRS, sibling_deny_dirs
 
     profile_text = _build_seatbelt_profile(
-        write_roots, deny_read, egress_endpoint, deny_network=deny_network,
+        write_roots, deny_read, egress_endpoint, deny_network=deny_network, control_plane_protect=control_plane_for(manifest),
         copilot_present=SIBLING_DENY_DIRS["copilot"] in sibling_deny_dirs(manifest),
-        protect_ledger=manifest.get("write_policy") == "orchestrator-only",
+        protect_ledger=manifest.get("write_policy") == "orchestrator-only",  # P4a; R1 above: or wasm
+        substrate_protect=substrate_protect_paths(manifest),  # P20 D5
     )
     config_text = _build_config_example(
         write_roots, exclusive=deny_read is not None, egress_endpoint=egress_endpoint
@@ -637,23 +647,6 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),
     ]
-
-
-def _runner_root_expr(root: str) -> str:
-    """Return the bash expression for one VALIDATED write root in the goose Linux runner.
-
-    ``.`` is the repo root, ``~/x`` is under ``$HOME``, an absolute root is itself (never
-    ``$REPO_ROOT//abs``), anything else is under ``$REPO_ROOT``. The literal part is
-    ``shlex.quote``-d, so it can never expand even if validation were bypassed.
-    """
-    rel = posixpath.normpath(root)
-    if rel == ".":
-        return '"$REPO_ROOT"'
-    if root.startswith("~/"):
-        return '"$HOME"/' + shlex.quote(posixpath.normpath(root[2:]))
-    if posixpath.isabs(root):
-        return shlex.quote(rel)
-    return '"$REPO_ROOT"/' + shlex.quote(rel)
 
 
 def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
@@ -704,6 +697,8 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
     from agentteams.frameworks._write_roots import runner_exclude_flags
 
     exclude_flags, skipped_note = runner_exclude_flags(manifest)
+    protect_block, protect_flag = runner_protect_block(control_plane_for(manifest), "REPO_ROOT",  # R1 (P00)
+                                                       substrate_protect_paths(manifest))  # P20 D5
     return (
         "#!/usr/bin/env bash\n"
         "# .goose/confined-run.example.sh — EXAMPLE: run goose CONFINED on Linux. INERT / operator-run.\n"
@@ -747,8 +742,8 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
         '  echo "Use GOOSE_CONFINE_EGRESS=proxy (a pinned sole-egress netns; see the sandboxing guide)," >&2\n'
         '  echo "or set GOOSE_CONFINE_ACCEPT_OPEN_EGRESS=1 to accept the risk on a trusted single-tenant box." >&2\n'
         '  exit 2\n'
-        'fi\n'
-        'exec "$LAUNCHER" --scratch "$SCRATCH" ' + writable_flags + exclude_flags + ' --egress "$EGRESS" \\\n'
+        'fi\n' + protect_block +
+        'exec "$LAUNCHER" --scratch "$SCRATCH" ' + writable_flags + protect_flag + exclude_flags + ' --egress "$EGRESS" \\\n'
         '  --setenv XDG_STATE_HOME="$SCRATCH/state" --setenv XDG_DATA_HOME="$SCRATCH/data" --setenv XDG_CACHE_HOME="$SCRATCH/cache" \\\n'
         '  --setenv GOOSE_DISABLE_KEYRING=1 --env-allow "$KEY_ENV" \\\n'
         '  -- goose run "$@"\n'
@@ -771,31 +766,6 @@ def goose_linux_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str
     if not sys.platform.startswith("linux"):
         return []
     return [(GOOSE_LINUX_RUNNER_REL, _build_linux_goose_runner(manifest))]
-
-
-#: Truthy YAML/env values for GOOSE_SANDBOX in a live Goose config.
-_GOOSE_SANDBOX_TRUTHY = frozenset({"1", "true", "yes", "on"})
-#: Matches ``GOOSE_SANDBOX: 1`` / ``GOOSE_SANDBOX = true`` / ``export GOOSE_SANDBOX=on``.
-_GOOSE_SANDBOX_LINE = re.compile(
-    r"(?im)^\s*(?:export\s+)?GOOSE_SANDBOX\s*[:=]\s*[\"']?([A-Za-z0-9]+)[\"']?\s*$"
-)
-
-
-def _live_goose_sandbox_enabled(config_path: Path) -> bool | None:
-    """Return whether GOOSE_SANDBOX is enabled in the operator's LIVE Goose config.
-
-    Output-only, secret-safe: reads the live config but NEVER echoes its content (it may
-    hold API keys) — the caller reports a boolean, mirroring the Claude verifier's
-    discipline. Returns None when the file is absent or unreadable (cannot confirm).
-    """
-    try:
-        text = config_path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    match = _GOOSE_SANDBOX_LINE.search(text)
-    if match is None:
-        return False
-    return match.group(1).strip().lower() in _GOOSE_SANDBOX_TRUTHY
 
 
 def verify_goose_sandbox_wiring(
@@ -825,8 +795,13 @@ def verify_goose_sandbox_wiring(
     * **macOS, confinement requested but the boundary is missing/unmerged** — ``ok=False``.
     * **macOS, wired correctly** — ``ok=True`` with an OK line plus the honest build-variance
       reminder to run the manual deny test.
-    * **no confinement requested** — ``ok=True`` (nothing to verify).
+    * **no confinement requested** — ``ok=True`` (nothing to verify). **Switched off / WASM on** (P00): ``_sandbox_drift``.
     """
+    state = effective_sandbox_state(manifest) if manifest is not None else None
+    cfg = live_config_path or live_goose_config_path()
+    recorded = previous_boundary_recorded(project_root / ".goose" / "recipes")  # S2: a profile off after a boundary
+    if switched_off(state, previous_boundary=recorded):  # DRIFT while the live, user-global GOOSE_SANDBOX is on
+        return goose_off_drift(state, _live_goose_sandbox_enabled(cfg))
     requested = manifest is not None and _goose_sandbox_feature_enabled(manifest)
     plat = sys.platform
 
@@ -921,21 +896,21 @@ def verify_goose_sandbox_wiring(
                     f"expectation (missing write-allow for {root!r}) — regenerate."
                 )
 
+    ok = goose_control_plane_ok(state, profile_text, _seatbelt_path_expr, msgs) and ok  # METAPLAN R1
     # (a) GOOSE_SANDBOX enabled in the operator's LIVE config (the unmerged-boundary case).
-    cfg = live_config_path or (Path.home() / ".config" / "goose" / "config.yaml")
     live = _live_goose_sandbox_enabled(cfg)
     if live is None:
         ok = False
         msgs.append(
             f"WARNING: unmerged boundary — {cfg} is absent/unreadable, so GOOSE_SANDBOX is "
             "not enabled live. Merge the emitted config.yaml.agentteams.example (or launch "
-            "goose under `sandbox-exec -f .goose/sandbox.sb`)."
+            "goose under `sandbox-exec -f .goose/sandbox.sb`). " + GOOSE_USER_GLOBAL_NOTE
         )
     elif live is False:
         ok = False
         msgs.append(
             "WARNING: unmerged boundary — GOOSE_SANDBOX is not enabled in your live goose "
-            "config. Merge the emitted example, or use the sandbox-exec launch path."
+            "config. Merge the emitted example, or use the sandbox-exec launch path. " + GOOSE_USER_GLOBAL_NOTE
         )
 
     # Build detection: report what we can actually establish; never claim goose-native
