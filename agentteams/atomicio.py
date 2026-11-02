@@ -232,6 +232,49 @@ def read_regular_nofollow(path: Path, max_bytes: int,
     return data
 
 
+def replace_no_follow(path: Path, text: str) -> None:
+    """Atomically replace ``path`` with *text*, never through a link: temp-then-``os.replace`` relative to the dir fd.
+
+    The parent is created when missing and must then be a real directory (opened ``O_NOFOLLOW``); an existing
+    ``path`` must be a regular file. The temp file is created ``O_EXCL | O_NOFOLLOW`` beside it and removed on
+    failure. Shared by ``signing_switch`` (the decision-signing switch) and ``sandbox_projection`` (P20).
+
+    Args:
+        path: The file to write.
+        text: The new UTF-8 content.
+
+    Returns:
+        None.
+
+    Raises:
+        OSError: The parent is not a real directory, ``path`` is a link / non-regular, or the write failed.
+    """
+    parent = path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    if not stat.S_ISDIR(os.lstat(parent).st_mode):
+        raise OSError(f"{parent} is not a real directory (symlink?)")
+    dir_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0))
+    tmp = f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+    try:
+        try:
+            st = os.stat(path.name, dir_fd=dir_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            st = None
+        if st is not None and not stat.S_ISREG(st.st_mode):
+            raise OSError(f"{path} is a symlink or not a regular file; left untouched")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(tmp, flags, 0o644, dir_fd=dir_fd)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            os.replace(tmp, path.name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        except OSError:
+            os.unlink(tmp, dir_fd=dir_fd)
+            raise
+    finally:
+        os.close(dir_fd)
+
+
 def write_new_atomic(directory: Path, name: str, data: bytes, *, mode: int = 0o600) -> Path:
     """Write *data* to ``directory/name`` atomically: an exclusive temp file, fsync, then a rename (CH-08).
 

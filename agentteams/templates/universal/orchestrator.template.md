@@ -228,7 +228,7 @@ new operational rule remains a manual edit in each deployed team.
 | Complex request with several separable items | `@orchestrator` → Workflow 0C | Two or more features/defects/findings that each need a plan; "make a metaplan"; parallel implementation of several plans |
 | Coordinated concurrent dispatch of overlapping plan steps | `@orchestrator` → Workflow 0B | Overlapping footprints without shared mutable state; "work these together"; steps that would otherwise serialize on file overlap |
 | User-facing query from a delegated (spawned) orchestrator | `@orchestrator` → Workflow 12 | A sub-orchestrator or adjacent-repo orchestrator this session spawned needs a decision; prime resolves or consolidates before any user prompt |
-| Spawn a scoped child orchestrator for a coordinating sub-body-of-work (in-repo) | `@orchestrator` → Workflow 13 | "Spin up an orchestrator for X"; a delegated body of work that itself needs coordination, not a single domain subagent |{ADOPTED_AGENT_ROUTING_ROWS}
+| Spawn a scoped child orchestrator for a coordinating sub-body-of-work (in-repo) | `@orchestrator` → Workflow 13 | "Spin up an orchestrator for X"; a delegated body of work that itself needs coordination, not a single domain subagent |{ADOPTED_AGENT_ROUTING_ROWS}{WASM_ROUTING_ROWS}
 <!-- AGENTTEAMS:END routing_table_rows -->
 
 <!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=1 -->

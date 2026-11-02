@@ -496,6 +496,140 @@ def _build_parser() -> argparse.ArgumentParser:
         "plain python3 can import agentteams, and fails with the fix when neither can.",
     )
     parser.add_argument(
+        "--wasm-install",
+        nargs="?",
+        const="wasmtime",
+        default=None,
+        metavar="COMPONENTS",
+        dest="wasm_install",
+        help="Operator command (D4): download the pinned WASM runtime and guest interpreters into "
+        "<project>/.agentteams/wasm/. COMPONENTS is a comma list of wasmtime, python, javascript, or "
+        "'all' (default: wasmtime). Each artifact is checked against its pinned size and sha256 before "
+        "extraction; a component whose pin still reads TODO-PIN is refused. Prints the plan and asks to "
+        "confirm unless --yes; a non-tty without --yes refuses. --dry-run prints the plan only. Never "
+        "runs during rendering. Exit 0 ok, 1 verification failure, 2 usage, 3 network.",
+    )
+    parser.add_argument(
+        "--wasm-status",
+        nargs="?",
+        const="all",
+        default=None,
+        metavar="COMPONENTS",
+        dest="wasm_status",
+        help="Read-only, network-free: re-verify the installed WASM components under "
+        "<project>/.agentteams/wasm/ against the packaged pins (ok, absent, MISMATCH, pin incomplete). "
+        "Exits 0 only when every requested component (default: all) is ok.",
+    )
+    parser.add_argument(
+        "--wasm-pin-update",
+        nargs=2,
+        default=None,
+        metavar=("COMPONENT", "VERSION"),
+        dest="wasm_pin_update",
+        help="Operator tool (network): re-pin COMPONENT at VERSION from GitHub release metadata and a "
+        "verified download (S-10 cooldown applies unless --remediation). Writes the pins file "
+        "(--pins-out; defaults to the packaged file only in a git work tree) and prints the diff; never "
+        "commits. The diff needs @security review before it is committed.",
+    )
+    parser.add_argument(
+        "--remediation",
+        default=None,
+        metavar="GHSA-IDS",
+        dest="remediation",
+        help="With --wasm-pin-update: comma-separated GHSA ids that justify adopting a fix release inside the "
+        "S-10 cooldown; each must appear in the release notes and be named by a recorded wasm-pin-remediation "
+        "PASS decision in <--project>/references/security-decisions.log.csv (consumed on write).",
+    )
+    parser.add_argument(
+        "--tofu",
+        action="store_true",
+        dest="tofu",
+        help="With --wasm-pin-update: accept a release asset that has no sha256 digest in its metadata "
+        "(trust on first use, recorded as provenance 'tofu'); needs a recorded @security decision.",
+    )
+    parser.add_argument(
+        "--pins-out",
+        default=None,
+        metavar="PATH",
+        dest="pins_out",
+        help="With --wasm-pin-update: the pins file to rewrite. Required unless the packaged "
+        "agentteams/data/wasm_runtime_pins.json sits in a git work tree.",
+    )
+    # --run-wasm-agent / --revoke-wasm-run / --verify-wasm-run (P08): the WASM agent runtime launcher. No flag takes a
+    # key, a run dir or an os_confine mode: keys come from the environment, Stage 0 owns the run dir (R4) and only the
+    # launcher module chooses the guest confinement (R5). --wasm-base-url is the operator's run-time base URL (S5).
+    parser.add_argument(
+        "--run-wasm-agent",
+        metavar="SLUG",
+        default=None,
+        dest="run_wasm_agent",
+        help="Run one agent of the --framework wasm team in --project (the WASM agent runtime: every step is a "
+        "fresh WASM guest; the host calls the model provider). The team must match its control-plane lock. Needs "
+        "--wasm-task or --wasm-task-file and the pinned runtime (--wasm-install). Provider keys come only from the "
+        "environment (ANTHROPIC_API_KEY, OPENAI_API_KEY, ...; the stub needs none). Exit 0 ok, 1 the run failed or "
+        "was refused, 2 usage.",
+    )
+    parser.add_argument(
+        "--wasm-task",
+        metavar="TEXT",
+        default=None,
+        dest="wasm_task",
+        help="With --run-wasm-agent: the task (operator input; DLP-scanned before any model call).",
+    )
+    parser.add_argument(
+        "--wasm-task-file",
+        metavar="PATH",
+        default=None,
+        dest="wasm_task_file",
+        help="With --run-wasm-agent: read the task from a regular file (no symlink, at most 256 KiB).",
+    )
+    parser.add_argument(
+        "--wasm-provider",
+        metavar="NAME",
+        default=None,
+        dest="wasm_provider",
+        help="With --run-wasm-agent: override the team's provider preset (a preset name only: no key, no URL).",
+    )
+    parser.add_argument(
+        "--wasm-base-url",
+        metavar="URL",
+        default=None,
+        dest="wasm_base_url",
+        help="With --run-wasm-agent: the provider base URL for this run (operator input; overrides "
+        "AGENTTEAMS_WASM_BASE_URL). https, or http to a loopback host; no userinfo, query or fragment. The provider "
+        "key is sent to it, so it is never read from the brief for a keyed preset.",
+    )
+    parser.add_argument(
+        "--revoke-wasm-run",
+        metavar="RUN_ID",
+        default=None,
+        dest="revoke_wasm_run",
+        help="Revoke a WASM agent run in --project: writes its REVOKED sentinel; the run stops at its next "
+        "checkpoint. --revoke-reason is recorded.",
+    )
+    parser.add_argument(
+        "--verify-wasm-run",
+        metavar="RUN_ID",
+        default=None,
+        dest="verify_wasm_run",
+        help="Verify a WASM agent run's hash-chained transcript in --project (read-only). Exit 0 when it verifies.",
+    )
+    parser.add_argument(
+        "--tree",
+        action="store_true",
+        default=False,
+        dest="wasm_tree",
+        help="With --verify-wasm-run: verify the whole delegation tree under that root run (every sub-agent's "
+        "transcript and each parent/child binding; orphaned or forged child runs fail it).",
+    )
+    parser.add_argument(
+        "--revoke-reason",
+        metavar="TEXT",
+        default=None,
+        dest="revoke_reason",
+        help="With --revoke-wasm-run: the reason recorded in the sentinel (at most 200 characters).",
+    )
+    parser.add_argument(
         "--self",
         action="store_true",
         dest="self_update",
@@ -954,14 +1088,57 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--os-sandbox",
+        choices=("on", "off"),
+        dest="os_sandbox",
+        default=None,
+        help=(
+            "Override the brief's os_sandbox for this run (on|off). \"off\" suppresses every "
+            "OS boundary agentteams emits for the selected framework; it is refused with "
+            "write_policy orchestrator-only and, in a governed workspace, needs an operator "
+            "Ed25519-signed decision sandbox-os-off:<framework> (Rule 15). Does not change live "
+            "settings, the launcher, or the runner's confined_programs sandbox. Conflicts with "
+            "an explicit --target-host-features <fw>:sandbox."
+        ),
+    )
+    parser.add_argument(
+        "--wasm-sandbox",
+        choices=("on", "off"),
+        dest="wasm_sandbox",
+        default=None,
+        help=(
+            "Override the brief's wasm_sandbox.enabled for this run (on|off). \"on\" uses the brief's "
+            "languages, limits and per-agent grants (compute-only defaults when the block is absent) and "
+            "write-protects the .agentteams control plane. \"off\" after WASM was on is constraint-relaxing: "
+            "in a governed workspace it needs an operator Ed25519-signed decision "
+            "sandbox-wasm-off:<framework> (Rule 15). Grants, native-exec exceptions and network are never "
+            "set from argv."
+        ),
+    )
+    parser.add_argument(
+        "--wasm-substrate",
+        choices=("on", "off"),
+        dest="wasm_substrate",
+        default=None,
+        help=(
+            "Override the brief's wasm_sandbox.model_substrate for this run (on|off): the model-substrate WASM "
+            "switch agentteams projects to consumers that run model code (for example baseAgent's battery) in "
+            ".agentteams/sandbox-state.json. \"on\": the consumer must run model code WASM-confined under an "
+            "enforcing runner and refuse rather than fall back. Independent of --wasm-sandbox (agent code). "
+            "\"off\" after on is constraint-relaxing: in a governed workspace it needs an operator Ed25519-signed "
+            "decision sandbox-wasm-off:model-substrate (Rule 15). agentteams never runs or confines model code."
+        ),
+    )
+    parser.add_argument(
         "--allow-unenforced-confinement",
         action="store_true",
         dest="allow_unenforced_confinement",
         default=False,
         help=(
-            "Permit generation to proceed when a confined/exclusive privilege_profile "
-            "is requested on a target that has no OS-level sandbox to enforce it (e.g. "
-            "Goose, Codex, Copilot, native Windows). Without this flag, generate FAILS "
+            "Permit generation to proceed when the OS sandbox (a confined/exclusive "
+            "privilege_profile, or os_sandbox on) is requested on a target that has no "
+            "OS-level sandbox to enforce it (native Windows and other hosts with no "
+            "emittable boundary; Linux and macOS have the neutral launcher). Without this flag, generate FAILS "
             "CLOSED (non-zero exit) rather than emit a boundary that silently does not "
             "take effect; with it, the request degrades to the advisory notice."
         ),
@@ -985,9 +1162,11 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="allow_fallback_fail_open",
         help=(
             "CC-2: keep the emitted constitutional-gate hook fail-OPEN (a gate crash is a "
-            "harness allow) even for a confined/exclusive privilege_profile, whose default "
-            "is now fail-CLOSED (a crash emits a deny, so it cannot become a silent allow "
-            "in a workspace that opted into a boundary). Use only if a buggy gate bricking "
+            "harness allow) even when the OS sandbox is on and was explicitly requested (an "
+            "explicit confined/exclusive privilege_profile, or os_sandbox on), whose default "
+            "is fail-CLOSED (a crash emits a deny, so it cannot become a silent allow "
+            "in a workspace that opted into a boundary). With the OS sandbox off the hook "
+            "stays fail-open anyway. Use only if a buggy gate bricking "
             "the session is a worse risk than a missed block for this workspace."
         ),
     )

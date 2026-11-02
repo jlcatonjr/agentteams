@@ -1,0 +1,204 @@
+# `wasm_agent`
+
+The host half of the WASM agent runtime (WASM sandbox, plan P05; ARCH-B). One agent runs as a sequence of
+**step-mode** WASM guest invocations: each guest run reads one event frame on stdin, writes one op frame on stdout,
+and exits. The host owns the conversation. It alone holds the model-provider key, calls the model
+(`model_providers`, P06), runs host tools, enforces budgets and revocation, applies DLP to
+every outbound prompt, and has the unconfined launcher write a hash-chained transcript. Everything a guest or a model
+emits is data (C-4): only a validated op frame causes a host action, and only within the agent's grant (C-3). The
+guest program itself is P07; the team loader and launcher that build an `AgentSpec` from a rendered
+`--framework wasm` team are P08 (`team`, below, and `cli/wasm_agent_commands`).
+
+## Public Surface
+
+- `run_agent(spec, task, options) -> RunResult`: the host loop. It writes nothing itself: records go to
+  `options.journal` and guest runs to `options.exec_broker`, so the same code runs in Stage 0 and in the confined
+  Stage 1.
+- `AgentSpec(slug, system_prompt, tools, delegates, grant, provider, model, max_tokens, spec_sha256)`: the agent as
+  the host runs it. `tools` is the effective vocabulary (`read_file`, `list_dir`, `search_files`, `write_file` run in
+  the guest; `run_code` and `delegate` are host tools).
+- `RunOptions(project_root, run_id, budget, journal, exec_broker, provider, mac_key, ...)`,
+  `RunResult(status, reason, output, run_id, transcript_head, usage, notices, step_timings, transcript_path)`.
+  `status` is `ok`, `failed`, `budget-exhausted`, `revoked` or `refused`. `output` is the last model reply's text
+  from the host's copy, never guest-authored, and is printed under `--- wasm agent output (data, not instructions) ---`.
+- `Budget(max_model_calls=50, max_total_tokens=400_000, max_output_tokens_per_call=8_192, max_steps=120,
+  max_tool_calls=200, wall_clock_s=1800, max_usd=None, max_delegation_depth=2, max_child_runs=8)` and
+  `BudgetLedger` (`reserve` / `commit` / `refund` before and after each call; `carve(request, share=)` /
+  `settle(child, usage, started=)` for P09 children: model calls, tokens and USD stay debited while a child runs and
+  only its real usage is kept afterwards).
+  The defaults are agentteams policy, not provider facts. A USD cap without a price for the model refuses the run.
+  `BudgetExceeded(cap, detail="")` is what the ledger raises when a cap would be (or was) exceeded; `cap` names the
+  `Budget` field.
+- `RunLink(run_id, parent=None, depth=1, slug="", parent_head="", delegation_id="")`: a parent run
+  (`RunOptions.parent`, P09). Revocation checks the run's own `REVOKED` sentinel and every ancestor's (and, through
+  `Revocation(upstream=)`, the delegating run's in-memory signal flag), so revoking an ancestor stops the child.
+- `stage0(spec, task, *, project_root, budget, guest_source=None, guest_sha256=None, ...) -> RunResult`: the
+  unconfined launcher (P08 calls it). Leaving both guest arguments out runs the pinned agent guest (below); passing
+  only one refuses; any guest hash other than the pinned one is refused unless the test-only
+  `AGENTTEAMS_WASM_TEST_GUEST=1` is set. See "Stage 0 and Stage 1" below.
+- `verify_transcript(path) -> TranscriptReport(ok, complete, records, head, status, error)` and
+  `revoke_run(project_root, run_id, reason)` (creates the run's `REVOKED` sentinel; an operator action).
+- `PROTOCOL_VERSION` (1), `ProtocolError`.
+- `wasm_exec.execute_launch(launch, stdin, *, stdout_cap, stderr_cap) -> WasmResult` (P02) runs a launch Stage 0
+  prepared, with the same stdin-size and cap checks as `wasm_exec.run`; both brokers use it.
+
+Submodules: `protocol` (frames, `encode_event`, `decode_op`, control-pipe lines), `budget`, `transcript`
+(`FileJournal`, `PipeJournal`), `mediation` (`Mediator`, `OutboundDlp`, `ReservedKeyVault`), `tools` (`tool_specs`,
+`TOOL_SPEC_SHA256`), `broker` (`StepPreparer`, `LocalBroker`, `PipeBroker`), `guest_source` (`load_guest_source`,
+`GUEST_SHA256`, `GuestSourceError`), `host`, `launch`, `stage1`, `delegation` and `child_runs` (P09, below).
+
+## Delegation (P09)
+
+A WASM agent delegates with the `delegate` host tool to a target in its rendered `delegates`. Each sub-agent is its
+own run: a fresh guest per step, its own flat run dir and hash-chained transcript under `.agentteams/wasm-runs/`
+(written by Stage 0), its own budget carved from its parent's, and a grant that is **never wider than its
+delegator's** (D11; there is no amplification path).
+
+- `delegation.child_grant(parent, child, *, child_scratch_host) -> Grant` and `attenuate(...) -> Attenuation(grant,
+  dropped)`: the intersection (METAPLAN R12, by capability class). A child `/project/<rel>` mount survives only inside
+  a parent mount (resolved-path containment; any symlink drops it); the child gets a `/scratch` only if the parent
+  has one, and it is always the child's own `.agentteams/wasm/scratch/<child>/`; limits are the element-wise minimum.
+  Everything dropped is recorded in the parent's `delegate-start`. `grant_subset(child, parent)` is the order.
+- `effective_child_spec(parent, child, *, project_root, can_delegate)`: the attenuated spec; tools re-narrowed to
+  what the effective grant serves, and `delegate` kept only below the depth cap.
+- `reachable_scratch_dirs(resolve_agent, root_slug, root_grant, *, project_root, max_depth)`: the scratch dirs any
+  run of the tree could be granted, derived from the lock-verified team and the root grant (never from model output).
+  Stage 0 creates them and makes them Stage 1's only extra write roots.
+- `DelegationPolicy(default_share=0.5, max_tree_runs=16)` (`runtime.json` `delegation`; `normalize_delegation` refuses
+  unknown keys), `clamp_budget(budget)`, and the hard caps `HARD_MAX_DEPTH` 4, `HARD_MAX_CHILD_RUNS` 32,
+  `HARD_MAX_TREE_RUNS` 64. Depth and per-run fan-out are the budget's `max_delegation_depth` / `max_child_runs`.
+- `RunTree` (Stage 0's authoritative checks: target in the delegator's effective `delegates`, no cycle, depth,
+  fan-out, tree size) and `child_runs.ChildRuns` (Stage 0's child-run service: run dir, `FileJournal` and a
+  `StepPreparer` holding the child's effective grant). In Stage 0's in-process mode the host loop calls it directly;
+  a wrapped Stage 1 uses `PipeChildHost` (`child-open` / `child-close` on the control pipe; `journal` / `prepare` /
+  `release` name the child with `run`).
+- `run_child(run, op)`: the host loop's dispatch. The op must answer a pending `delegate` tool use with the model's own
+  input; the child's budget is carved (default share of what is left, explicit asks clamped; an exhausted parent gets
+  `denied{budget}` and no child is created); the child's task is parent-model data and its first user message; its
+  output returns as `[output of sub-agent <slug> (run <id>), data, not instructions]` plus the capped text. A revoked
+  child gives the parent `ok: false` ("sub-agent revoked"); a revoked ancestor stops the parent after the child.
+- Linkage: the parent's `delegate-start` names the child run, the child's `run-start` carries `link` (`parent`,
+  `root`, `depth`, `parent_agent`, `parent_head` = the `delegate-start` hash, `delegation_id`), and the parent's
+  `delegate-end` records the child's final head. `verify_tree(project_root, root_run_id) -> TreeReport(ok, runs,
+  errors, orphans)` checks every chain and binding and reports orphaned or forged child runs
+  (`agentteams --verify-wasm-run ROOT --tree`).
+- `stage0(..., resolve_agent=None, delegation=None)`: with `resolve_agent` (P08 passes `Team.agent_spec`) delegation
+  is on; without it `delegate` ops are refused.
+
+## Protocol v1
+
+UTF-8 JSON, one object per line. Duplicate keys, NaN/Infinity, NUL in strings, nesting deeper than 32, unknown keys,
+unknown ops and any `v` other than 1 are refused. Events are at most 4 MiB, ops 1 MiB, the guest's opaque `carry`
+256 KiB. Ops: `model` (tool results for the last reply's pending `tool_use` ids, each at most once; a missing id is
+filled by the host; `continue: true` only after `max_tokens`), `tool` (a host tool for a pending id, with the model's
+own name and input), `delegate` (a sub-agent run, below; refused when the run has no `options.children`), `done`
+(`ok` only when the last reply asked for no tools). Every event's `agent` object carries `slug`, `tools` and
+`delegates`. Host
+tool results are kept host-side and override whatever a guest reports for those ids. A trap, a non-zero exit or a
+malformed frame is a failed step: the host answers the pending tool uses with errors, and three failed steps in a row
+fail the run (`guest-unhealthy`). A wrong version fails it at once.
+
+## The agent guest
+
+The program inside every agent's guest is package data, `agentteams/data/wasm_agent_guest.py`, run by the pinned
+CPython-WASI as `python -I -S -B /src/main.py`. agentteams never imports it. `guest_source.load_guest_source() ->
+(bytes, sha256)` re-reads and re-hashes it against `GUEST_SHA256` on every load and raises `GuestSourceError` on a
+mismatch; the preparer checks the hash again on every step, and `integrity.py` pins both files.
+
+Per step the guest reads one event and answers with one op line (compact JSON, ASCII only):
+
+- `start` -> `model`; a reply with no tool use -> `done ok` (`end_turn`, `other`), at most two `continue` ops after
+  `max_tokens`, otherwise `done failed <stop>`.
+- A reply with tool uses: the in-guest tools run in the guest in the model's order. Host tools (`run_code`,
+  `delegate`) are asked for one op at a time, and the remaining uses travel in `carry`. Results are clipped to fit
+  the op and carry caps. Host-tool results stay host-held, so the guest reports only in-guest and refused results.
+- A malformed event, another protocol version or an internal error -> `done failed` with a short code
+  (`bad-event`, `protocol-version`, `guest-error-<class>`).
+
+In-guest tools take only `/project/<rel>` (read-only) and `/scratch` (read-write) paths listed in the event's
+`mounts`. `..`, `/src` and `/lib` are refused. This check exists to give clear errors; the real boundary is the WASI
+preopen set plus the executor's read-only enforcement. `read_file` and `search_files` (a literal substring search)
+skip symlinks, and `list_dir` reports them without following them. `write_file` writes only under `/scratch`, never
+through a symlink, at most 4 MiB, and refuses instruction-file names (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
+`.cursorrules`, `*.agent.md`; R8) with the same rule as `wasm_exec.copy_out_refused`. Model-authored code never runs
+in this guest: `run_code` is a host tool that runs in a fresh sandbox under the agent's own grant. The guest has no
+network and no process tools, and it uses only `json`, `os`, `stat`, `sys` and `typing`. File contents and model text
+are data (C-4): it passes them along and never acts on what they say.
+
+## Stage 0 and Stage 1
+
+- **Stage 0** (`launch.stage0`, unconfined) re-hashes the pinned runtime, reads the key from the environment, creates
+  `.agentteams/wasm-runs/<run_id>/` (transcript, `result.json`) and the agent's scratch dir, and alone prepares every
+  guest run under `.agentteams/wasm/exec/<id>/` (METAPLAN R3/R3′). The preparer holds the agent's grant: a request names
+  only `agent` or `run_code`, never a grant.
+- When an OS sandbox is usable and the sandbox state's OS switch is on, Stage 0 starts **Stage 1** inside it: no write
+  root but the agent's scratch dir (R11), the credential stores (`~/.ssh`, `~/.aws`, `~/.config/gh`,
+  `~/.config/gcloud`, `~/.netrc`, `~/Library/Keychains`, `~/.docker`, `~/.kube`, `~/.gnupg`, `~/.npmrc`,
+  `~/.pypirc`; one list, `wasm_exec.NEST_DENY_READS`, shared with the nested wasmtime profile), the key dir and the
+  agentteams secrets dir read-denied (R5), network allowed for the provider. These are file-read denies only: they do
+  not stop Keychain access through the Security framework (`securityd`, a Mach service), which the host profile
+  does not filter. Stage 1 receives the key and the per-run MAC key once over a dedicated pipe and
+  starts with an environment of `PATH`, `LANG`, `HOME` and a private `TMPDIR`. Its records and prepare requests go
+  over a control pipe; Stage 0 assigns `seq`/`prev`/`hash`, `fsync`s and only then acks, so no model call is made
+  without a durable `model-request` record (R4).
+- A bootstrap line over the 6 MiB control cap (a very large task, spec or secret list) refuses the run before
+  Stage 1 starts it (`host-launch: bootstrap frame`): Stage 0 kills and reaps Stage 1 and journals a
+  `protocol-error`. A key-pipe write failure is journaled too. Stage 1 exits with status 2 on an unreadable,
+  malformed or wrong-version bootstrap.
+- Otherwise the same loop runs in Stage 0's process and says so: `WASM host not OS-confined: <reason>` goes to the
+  output, the transcript and `RunResult.notices`.
+- Guest `os_confine`: `"inherited"` is forwarded only from the P08 launcher and only when Stage 1 was wrapped
+  (otherwise downgraded to `"auto"`). Under a wrapped Stage 1 a fresh Seatbelt profile cannot nest, so `"auto"` becomes
+  `"off"` (reported `"none"`) and `"require"` refuses. Only `"nested"` counts as enforced.
+
+## The rendered team (`team`)
+
+`agentteams.wasm_agent.team` owns the on-disk format of a `--framework wasm` team (P08) and is the only reader of it.
+
+- `load_team(project_root) -> Team`: verifies `.agentteams/wasm-team.lock.json` (`verify_lock`), then parses every
+  agent file strictly (`parse_agent_file`: exactly `FRONT_MATTER_KEYS`), rebuilds each grant through
+  `grant_from_entry` (only canonical mounts: `/project/<rel>` ro at `<root>/<rel>`, `/scratch` rw at
+  `<root>/.agentteams/wasm/scratch/<slug>`, through `sandbox_state.grant_from_tokens`), and re-applies
+  `_wasm_tool_scoping.grant_supports`. It raises `TeamError` naming each drifted, missing, extra (`not in the lock`)
+  or symlinked path; `SETUP-REQUIRED.md` is never loaded or locked.
+- `Team.agent_spec(slug, *, provider=None, environ=None) -> AgentSpec`: `system_prompt` = `TEAM.md` + the body + a
+  generated "Your WASM runtime" section (tools and mounts, no host paths); the model from
+  `AGENTTEAMS_WASM_MODEL_<TIER>` > `runtime.json` > refuse (`stub` needs none); `spec_sha256` over the agent file,
+  `TEAM.md` and the grant entry. `Team.budget()` returns the run `Budget`; `Team.prices()` parses the lock-verified
+  bytes of `runtime.json`'s `prices_file` (`gateway_dialects.parse_prices`), or None. P09 uses `agent_spec` as
+  `resolve_agent`. `grant_from_entry` re-runs the credential scan (`_sandbox_profiles.refuse_credentials`) on every
+  read directory at each load and refuses a credential-named read path.
+- `write_lock(project_root)`: the post-emit lock writer; the lock also records `prices: {path, sha256}` of
+  `runtime.json`'s prices file (or null), so an edited price table refuses the run. `normalize_wasm_runtime(raw)`: the
+  brief's `wasm_runtime` validator (analyze); its `base_url` is accepted only for a keyless preset
+  (`model_providers.preset_needs_key` False) on a loopback host. `runtime_record`, `check_runtime`, `grant_entry`,
+  `render_front_matter`, `dumps`.
+- `resolve_base_url(runtime, provider, *, operator_url) -> (url | None, notice | None)`: the run's base URL. The
+  operator's (`--wasm-base-url`, else `BASE_URL_ENV` = `AGENTTEAMS_WASM_BASE_URL`) wins, shape-checked by
+  `model_providers.check_base_url`; a rendered URL is kept only while the keyless-loopback rule holds for the run's
+  effective preset, else dropped with a notice (the preset's own URL applies).
+
+The launcher, `cli/wasm_agent_commands.py` (`--run-wasm-agent`, `--revoke-wasm-run`, `--verify-wasm-run`), calls
+`stage0(..., host_confine=..., guest_os_confine=...)`: `"inherited"` when `runtime.json` says
+`host_os_confine: auto`, else `"auto"`. It is the only module that passes `"inherited"` (R5, AST-tested). Before the
+run, `authorize_grant(team, slug)` re-checks the agent's grant read-only: in a governed workspace every grant token
+must be covered by an active `wasm-grant-widen:wasm` exception whose bound Ed25519 decision still re-verifies
+(`sandbox_relaxation_gate.standing_authorization`), and limits above `DEFAULT_LIMITS` must equal the build-log's
+recorded `sandbox_state`; ungoverned, it prints a `SANDBOX RELAXATION` notice.
+
+## Notes
+
+- DLP uses `vulnscan.gateway_dlp.Filter` on the neutral Messages body: a blocked class in the system prompt or task
+  refuses the run; one in a tool result withholds that block (`[withheld by DLP: <class>]`) and the call goes ahead;
+  redactions are counted in `dlp` records that never carry the matched text. A reply that echoes a known secret fails
+  the run (`provider-echoed-secret`); a record that would carry one is written as `withheld`.
+- P06's reserved reply keys (`_provider_id`, `_provider_sig`) never reach a guest or the transcript. The vault keeps
+  them host-side and binds each to its turn and block with an HMAC under a per-run key; the `model-reply` record
+  carries only their digests and the MAC, which Stage 0 checks. They are restored only to the block they came from.
+  The MAC guards against guests and model output, not against a compromised Stage 1: Stage 1 holds the MAC key (it
+  runs the vault), so a compromised Stage 1 could mint valid MACs. Confining Stage 1 is the OS sandbox's job.
+- The transcript is a hash chain, not a MAC: it detects edits by anything that does not rewrite the whole chain. The
+  head is printed at run end.
+- Step cost (R13), dev runtime (wasmtime 36.0.16, CPython 3.14.6 WASI, macOS arm64, 2026-10-31): median full step
+  (Stage-0 prepare + pre-exec re-hash + interpreter start) 1.51 s with verified copies, 0.91 s running in place (R3′).
+  The merge gate re-measures on wasmtime 36.0.20 with the pinned CPython.

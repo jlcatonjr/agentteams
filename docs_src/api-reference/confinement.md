@@ -152,7 +152,8 @@ runner starts inside an OS sandbox.
 | `launcher_store_refusal(agent, unresolved, store_warnings, jail)` | The runner's refusal for an unresolved launcher plus a package-store write root, unless `OPT_IN_LAUNCHER_STORE` is set. |
 | `package_store_warnings(write_roots, root=None) -> list[str]` | Warnings for write roots over a package store (`PACKAGE_STORES`). |
 | `seatbelt_profile(...)` / `bwrap_argv(...)` | The profile text or argv prefix. |
-| `load_confined(raw, gates, control_plane_of)` | Validate `confined_programs` and gates' `exec`. |
+| `load_confined(raw, gates, control_plane_of)` | Validate `confined_programs` and gates' `exec`; returns `{agent: Jail}`. An entry with `"sandbox": "wasm"` is validated by [`runner_wasm.validate_entry`](runner-wasm.md) (no `exec`, a `wasm` block); `"os"` is the default shape. |
+| `Jail` | `TypedDict` of one validated entry: `exec` and `write` always (empty for a wasm jail); `sandbox` and `wasm` for a wasm jail. |
 | `confined_file_for(root) -> Path` | P5b: the operator-owned file's path for a project. |
 | `read_confined_file(root) -> tuple[dict, str] \| None` | P5b: read it with custody checks, as `(confined_programs, sha256)`. |
 | `confined_bytes(data) -> bytes` | P5b: the exact bytes installed (sorted, indented JSON): what the operator reviews and hashes. |

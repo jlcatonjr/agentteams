@@ -195,3 +195,49 @@ def test_same_chain():
     assert er.same_chain("c1", "c1") is True
     assert er.same_chain("c1", "c2") is False
     assert er.same_chain("", "") is False  # unknown chain never auto-matches
+
+
+# --- P15: lookup by action, retirement, and the gate's retiring exclusion ---------------------------
+
+
+def test_active_entry_for_and_entries_for(tmp_path):
+    _write(tmp_path, {"version": 1, "cap": {}, "exceptions": [
+        _entry("a@1", action="sandbox-os-off:claude", status="sunset"),
+        _entry("a@2", action="sandbox-os-off:claude"),
+        _entry("b@1", action="sandbox-os-off:goose", expires=_PAST),
+    ]})
+    assert [e["id"] for e in er.entries_for(tmp_path, "SANDBOX-OS-OFF:claude")] == ["a@1", "a@2"]
+    assert er.active_entry_for(tmp_path, "sandbox-os-off:claude")["id"] == "a@2"
+    assert er.active_entry_for(tmp_path, "sandbox-os-off:goose") is None  # expired
+    assert er.active_entry_for(tmp_path, "sandbox-os-off:codex") is None
+
+
+def test_retire_exception_is_terminal_and_not_counted(tmp_path):
+    _write(tmp_path, {"version": 1, "cap": {}, "exceptions": [_entry("x", action="wasm-grant-widen:claude")]})
+    with pytest.raises(er.ExceptionRegistryError):
+        er.assert_within_aggregate_cap(tmp_path, adding=1)
+    er.retire_exception(tmp_path, "x", reason="grant removed")
+    entry = er.list_exceptions(tmp_path)[0]
+    assert entry["status"] == "sunset" and entry["retired_reason"] == "grant removed"
+    er.assert_within_aggregate_cap(tmp_path, adding=1)  # a terminal id no longer counts
+    with pytest.raises(er.ExceptionRegistryError, match="terminal"):
+        er.register_exception(tmp_path, {"id": "x"})
+
+
+def test_retire_exception_never_relabels_a_terminal_entry(tmp_path):
+    _write(tmp_path, {"version": 1, "cap": {}, "exceptions": [_entry("d", status="declined")]})
+    er.retire_exception(tmp_path, "d", reason="r")
+    assert er.list_exceptions(tmp_path)[0]["status"] == "declined"
+    with pytest.raises(er.ExceptionRegistryError):
+        er.retire_exception(tmp_path, "missing", reason="r")
+    with pytest.raises(er.ExceptionRegistryError):
+        er.retire_exception(tmp_path, "d", reason=" ")
+
+
+def test_retiring_excludes_only_the_named_lapsed_entry(tmp_path):
+    _write(tmp_path, {"version": 1, "cap": {}, "exceptions": [_entry("stale", expires=_PAST)]})
+    with pytest.raises(er.ExceptionRegistryError, match="active-but-expired"):
+        er.assert_within_aggregate_cap(tmp_path, adding=1)
+    er.assert_within_aggregate_cap(tmp_path, adding=1, retiring=["stale"])
+    with pytest.raises(er.ExceptionRegistryError):
+        er.assert_within_aggregate_cap(tmp_path, adding=1, retiring=["other"])

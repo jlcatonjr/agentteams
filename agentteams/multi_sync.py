@@ -160,7 +160,11 @@ def _reject_directory_collisions(root: Path, frameworks: list[str]) -> None:
 # is a TEAM/brief-level property (never in agent files), so it is captured from the pin's
 # .agentteams/brief.json into a team-level cai["privilege"] block (which round-trips through
 # team.cai.json), and the projection re-emits only the sandbox/privilege artifacts per
-# framework (NOT .goosehints etc. — no unrelated churn on the sync path).
+# framework (NOT .goosehints etc. — no unrelated churn on the sync path). P00: the dedicated
+# os_sandbox switch is captured raw beside the profile (absent: derived from privilege_profile as
+# before; "off" suppresses the projected boundary; "on" projects one under cooperative); the
+# projection recomputes the effective state (sandbox_state.effective_sandbox_state) — no derived
+# "effective" key is ever stored.
 # ---------------------------------------------------------------------------
 
 #: Rel-path basenames (and suffixes) of the sandbox/privilege artifacts to (re)emit during
@@ -207,18 +211,143 @@ def _read_brief_privilege(root: Path) -> dict[str, Any]:
     # so the fail-closed hook flip is NOT triggered for a defaulted team (stays fail-open).
     from agentteams.host_features import validate_privilege_profile
 
+    from agentteams.sandbox_state import validate_os_sandbox
+
     profile = validate_privilege_profile(brief.get("privilege_profile"))
-    if profile == "cooperative":
+    try:
+        os_sandbox = validate_os_sandbox(brief.get("os_sandbox"))
+    except ValueError as exc:
+        print(f"  note: {path.name}: {exc}; no privilege posture is projected", file=sys.stderr)
+        return {}
+    if profile == "cooperative" and os_sandbox != "on":
         return {}  # explicit opt-out → no boundary to propagate
     priv: dict[str, Any] = {
         "privilege_profile": profile,
         "privilege_profile_explicit": "privilege_profile" in brief,
     }
+    if os_sandbox is not None:
+        priv["os_sandbox"] = os_sandbox
     for key in ("workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
                 "resolve_deny_read_abspath"):
         if brief.get(key) is not None:
             priv[key] = brief[key]
+    # R1 on sync (wave-4 @security P20 finding 1): a team with WASM on or orchestrator-only had its control plane
+    # write-protected; sync re-emits the boundary, so it must re-emit that protection too.
+    wblock = brief.get("wasm_sandbox")
+    if brief.get("write_policy") == "orchestrator-only" or (isinstance(wblock, dict) and wblock.get("enabled") is True):
+        priv["control_plane_protect"] = True
+    # P20 D7: the projected model-substrate switch rides with the posture, so a sync keeps the file current.
+    block = brief.get("wasm_sandbox")
+    substrate = block.get("model_substrate") if isinstance(block, dict) else None
+    if substrate is not None:
+        from agentteams.wasm_config import validate_wasm_substrate_cli
+
+        try:
+            priv["model_substrate"] = validate_wasm_substrate_cli(substrate)
+        except ValueError:
+            print(f"  note: {path.name}: wasm_sandbox.model_substrate must be \"on\" or \"off\"; no privilege "
+                  "posture is projected", file=sys.stderr)
+            return {}
     return priv
+
+
+def _write_store_sentinel(root: Path, framework: str, *, dry_run: bool) -> list[str]:
+    """Write the verify-key store sentinel for an agentteams team that projects no boundary (write-if-absent).
+
+    2026-09-30: a cooperative agentteams team (marker present) still needs its store sentinel, or a confined
+    sibling's launcher refuses the project. Never follows a planted symlink: the store dir must resolve inside the
+    team, and the file is created O_EXCL|O_NOFOLLOW (nothing, not even a dangling link, may already be there).
+    """
+    from agentteams.control_plane_io import _create_exclusive
+
+    agents_dir = framework_agents_dir(root, framework)
+    sentinel = agents_dir / VERIFY_KEY_STORE_SENTINEL_REL
+    if not (agents_dir / TEAM_MARKER_REL).is_file() or sentinel.exists() or sentinel.is_symlink():
+        return []
+    team = agents_dir.resolve()
+    if not sentinel.parent.resolve().is_relative_to(team):
+        return []
+    if not dry_run:
+        sentinel.parent.mkdir(parents=True, exist_ok=True)
+        if not sentinel.parent.resolve().is_relative_to(team):  # raced into a link
+            return []
+        if not _create_exclusive(sentinel, VERIFY_KEY_STORE_SENTINEL_TEXT):
+            return []
+    return [str(team / VERIFY_KEY_STORE_SENTINEL_REL)]
+
+
+def _projected_privilege_manifest(root: Path, framework: str, privilege: dict[str, Any]) -> dict[str, Any]:
+    """Build the privilege-bearing manifest a projection renders the boundary from (P00: carries ``os_sandbox``)."""
+    from agentteams.host_features import merge_profile_features
+
+    profile = privilege.get("privilege_profile")
+    manifest: dict[str, Any] = {
+        "project_name": "SyncedTeam",
+        "privilege_profile": profile,
+        "privilege_profile_explicit": bool(privilege.get("privilege_profile_explicit")),
+        # os_sandbox None == expand_privilege_profile(profile, framework), as before.
+        "host_features": merge_profile_features([], profile, framework, os_sandbox=privilege.get("os_sandbox")),
+        # Transient, never persisted: the project root for the write-root hard bans (#2).
+        PROJECT_ROOT_KEY: Path(root).resolve(),
+    }
+    for key in ("os_sandbox", "workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
+                "resolve_deny_read_abspath"):
+        if privilege.get(key) is not None:
+            manifest[key] = privilege[key]
+    if privilege.get("control_plane_protect") is True:
+        from agentteams.frameworks._control_plane_protect import SYNC_PROTECT_KEY
+
+        manifest[SYNC_PROTECT_KEY] = True
+    # P20 D7: the model-substrate switch (the WASM half stays off here, as before: enabled defaults to false), or the
+    # floor a pipeline file holds when the brief no longer sets it (so the gate sees no change).
+    from agentteams.wasm_config import WASM_SUBSTRATE_KEPT_KEY
+
+    if privilege.get("model_substrate") in ("on", "off"):
+        manifest["wasm_sandbox"] = {"model_substrate": privilege["model_substrate"]}
+    else:
+        from agentteams.sandbox_projection import kept_value
+
+        kept = kept_value(Path(root))
+        if kept is not None:
+            manifest[WASM_SUBSTRATE_KEPT_KEY] = kept
+    return manifest
+
+
+def _sync_projection(root: Path, framework: str, manifest: dict[str, Any], *, dry_run: bool) -> list[str]:
+    """Keep ``.agentteams/sandbox-state.json`` current on sync (P20 D7); the dry pass only preflights it."""
+    from agentteams import sandbox_projection
+
+    if dry_run:
+        sandbox_projection.preflight(Path(root))  # ProjectionError is a ValueError: aborts before touching disk
+        return []
+    outcome = sandbox_projection.emit_projection(manifest, Path(root), framework_agents_dir(root, framework))
+    return [str(outcome.path.resolve())] if outcome is not None and outcome.status == "written" else []
+
+
+def _check_projected_relaxation(root: Path, framework: str, manifest: dict[str, Any], state: Any,
+                                *, notice: bool = False) -> None:
+    """Check (never consume) the P15 gate for a projection that changes the OS boundary (P00 D7, wave-2 S1).
+
+    Engaged when a switch is in play or the previous state (record OR on-disk evidence) had the OS
+    sandbox on and the projected state has it off, whatever the reason
+    (``cli.os_sandbox_switch.check_projected_relaxation``). ``notice`` prints the ``SANDBOX RELAXATION``
+    lines (the sync path records no ``sandbox_state``: the next generate does).
+
+    Raises:
+        ValueError: The relaxation is refused (governed workspace, no signed decision or active exception).
+    """
+    from agentteams.cli import sandbox_relaxation_gate as gate
+    from agentteams.cli.os_sandbox_switch import check_projected_relaxation
+
+    try:
+        states = check_projected_relaxation(framework_agents_dir(root, framework), root, framework, manifest, state)
+    except gate.SandboxRelaxationError as exc:
+        raise ValueError(f"[{framework}] sync refused: {exc}") from exc
+    if notice and states is not None:
+        from agentteams.cli.write_root_policy import warn_sandbox_relaxation
+
+        warn_sandbox_relaxation(states[0], states[1], framework_id=framework,
+                                profile_would_emit=manifest.get("privilege_profile") in {"confined", "exclusive"})
 
 
 def _emit_privilege_artifacts(
@@ -232,48 +361,38 @@ def _emit_privilege_artifacts(
     projected across the pinned-sync frameworks without re-emitting unrelated extras. With no
     confining privilege, only the verify-key store sentinel is written, and only if absent in an
     agentteams team (build-log marker present). Returns the project-relative paths written.
+
+    P00: the projected manifest carries the brief's ``os_sandbox``; its effective state decides
+    whether a boundary is projected. ``off`` projects none (but keeps the sentinel and, for a
+    confined/exclusive profile, the control-plane stubs a sibling launcher needs). A governed
+    workspace refuses a sync that would drop a boundary (the switch, or any on -> off over the
+    previous state, wave-2 S1) with no active exception: the P15 gate is checked with
+    ``consume=False`` (sync never consumes a clearance); ungoverned, the non-dry pass prints the notice.
+
+    Raises:
+        ValueError: A refused sandbox relaxation (governed workspace), or an emitter refusal.
     """
-    if not privilege or privilege.get("privilege_profile") not in {"confined", "exclusive"}:
-        # 2026-09-30: a cooperative agentteams team (marker present) still needs its store
-        # sentinel, or a confined sibling's launcher refuses the project. Write-if-absent.
-        # Never follows a planted symlink: the store dir must resolve inside the team, and the file
-        # is created O_EXCL|O_NOFOLLOW (nothing, not even a dangling link, may already be there).
-        from agentteams.control_plane_io import _create_exclusive
+    manifest = _projected_privilege_manifest(root, framework, privilege) if privilege else None
+    from agentteams.sandbox_state import effective_sandbox_state
 
-        agents_dir = framework_agents_dir(root, framework)
-        sentinel = agents_dir / VERIFY_KEY_STORE_SENTINEL_REL
-        if not (agents_dir / TEAM_MARKER_REL).is_file() or sentinel.exists() or sentinel.is_symlink():
-            return []
-        team = agents_dir.resolve()
-        if not sentinel.parent.resolve().is_relative_to(team):
-            return []
-        if not dry_run:
-            sentinel.parent.mkdir(parents=True, exist_ok=True)
-            if not sentinel.parent.resolve().is_relative_to(team):  # raced into a link
-                return []
-            if not _create_exclusive(sentinel, VERIFY_KEY_STORE_SENTINEL_TEXT):
-                return []
-        return [str(team / VERIFY_KEY_STORE_SENTINEL_REL)]
-    from agentteams.host_features import expand_privilege_profile
+    state = effective_sandbox_state(manifest) if manifest is not None else None
+    if manifest is not None:  # no privilege block projects nothing (and removes nothing): no relaxation to gate
+        _check_projected_relaxation(root, framework, manifest, state, notice=not dry_run)
+    projected = _sync_projection(root, framework, manifest, dry_run=dry_run) if manifest is not None else []
+    if state is None or not state.os:
+        written = projected + _write_store_sentinel(root, framework, dry_run=dry_run)
+        if manifest is not None and manifest.get("privilege_profile") in {"confined", "exclusive"}:
+            # Rule 12 (P00 row 18): the switch must never remove stubs a sibling confined launcher needs.
+            from agentteams.control_plane_io import write_control_plane_stubs
 
-    profile = privilege["privilege_profile"]
-    manifest: dict[str, Any] = {
-        "project_name": "SyncedTeam",
-        "privilege_profile": profile,
-        "privilege_profile_explicit": bool(privilege.get("privilege_profile_explicit")),
-        "host_features": expand_privilege_profile(profile, framework),
-        # Transient, never persisted: the project root for the write-root hard bans (#2).
-        PROJECT_ROOT_KEY: Path(root).resolve(),
-    }
-    for key in ("workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
-                "resolve_deny_read_abspath"):
-        if privilege.get(key) is not None:
-            manifest[key] = privilege[key]
+            written += [str(p.resolve()) for p in write_control_plane_stubs(
+                framework_agents_dir(root, framework), framework, manifest, dry_run=dry_run)]
+        return written
 
     agents_dir = framework_agents_dir(root, framework)
     adapter = FRAMEWORKS[framework]()
     project = Path(root).resolve()
-    written: list[str] = []
+    written: list[str] = list(projected)
     from agentteams.frameworks.claude import guard_gate_pin_files
 
     # Never project a pin over/without its ignore rule (an operator-owned .gitignore is left alone).
@@ -481,8 +600,10 @@ def _check_projected_write_roots(
     Raises:
         ValueError: A hard-banned or unaccepted external root (raised before any write).
     """
-    if privilege.get("privilege_profile") not in {"confined", "exclusive"}:
-        return
+    from agentteams.sandbox_state import effective_sandbox_state
+
+    if not any(effective_sandbox_state(_projected_privilege_manifest(root, fw, privilege)).os for fw in frameworks):
+        return  # P00: no projected boundary consumes the roots
     from agentteams.cli.write_root_policy import live_claude_allow_write
     from agentteams.frameworks._write_roots import (
         is_external_root,

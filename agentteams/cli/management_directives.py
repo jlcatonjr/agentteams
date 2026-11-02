@@ -49,6 +49,7 @@ from pathlib import Path
 from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
 from agentteams.cli.frozen_surfaces import UNFREEZE_TOKENS
 from agentteams.cli.governance_targets import target_is_governance_root
+from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_TOKENS
 from agentteams.cli.signed_ledger import (
     canonical_payload,
     hmac_sign,
@@ -115,6 +116,9 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     # (3) unfreezing a frozen surface re-enables renders into it: a constraint-relaxing effect (Rule 15),
     # so a scope that names it is never benign (shared vocabulary; covers --unfreeze, unfrozen, un-freeze, thaw)
     *UNFREEZE_TOKENS,
+    # (4) turning a sandbox off, widening a WASM grant, keeping native exec, or moving a runner program off WASM is a
+    # constraint-relaxing effect (Rule 15, D7) that needs the operator's Ed25519 decision; a directive never relaxes one
+    *SANDBOX_RELAXATION_TOKENS,
 )
 
 

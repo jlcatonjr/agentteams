@@ -94,8 +94,9 @@ skeleton.
 - **CONDITIONAL PASS / `conditions_verified`** (S8) — a verdict that allows only
   when `conditions_verified == "verified"`; while `pending` the gate blocks "as if
   HALT."
-- **`cooperative` (privilege profile)** (S18) — the **opt-out** (no longer the
-  default as of 2026-W39): **no OS boundary** — sandbox off, hook fail-open.
+- **`cooperative` (privilege profile)** (S18) — a profile-level opt-out (no longer the
+  default as of 2026-W39): **no OS boundary** — sandbox off, hook fail-open. The
+  dedicated off switch for the boundary alone is `os_sandbox: "off"`.
 - **`confined` (privilege profile)** (S18) — the **default as of 2026-W39**: emits
   a sandbox request token and, when **explicitly** selected, flips the hook
   fail-closed (the defaulted `confined` leaves it fail-open); enforcement is the

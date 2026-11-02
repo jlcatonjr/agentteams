@@ -82,14 +82,16 @@ def grok_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
         manifest: The team manifest.
 
     Returns:
-        True for the ``grok:sandbox`` token or a confined/exclusive ``privilege_profile``.
+        True for the ``grok:sandbox`` token or a confined/exclusive ``privilege_profile``, unless
+        the dedicated ``os_sandbox`` switch is off (and also for ``os_sandbox: on``); a delegate to
+        :func:`agentteams.sandbox_state.os_sandbox_requested` (P00).
 
     Raises:
-        Nothing.
+        ValueError: An invalid ``os_sandbox`` value.
     """
-    if "grok:sandbox" in (manifest.get("host_features") or []):
-        return True
-    return manifest.get("privilege_profile") in {"confined", "exclusive"}
+    from agentteams.sandbox_state import os_sandbox_requested
+
+    return os_sandbox_requested(manifest, token="grok:sandbox")
 
 
 def _read_template(rel: str) -> str:
@@ -219,3 +221,65 @@ def grok_sandbox_output_files(manifest: dict[str, Any], platform: str | None = N
         # The gate re-executes under this pin when the shim's python3 cannot import agentteams (untracked).
         *gate_interpreter_pin_files(GROK_HOOKS_REL),
     ]
+
+
+def verify_grok_sandbox_wiring(project_root: Path, manifest: dict[str, Any] | None = None) -> tuple[bool, list[str]]:
+    """Check that the Grok boundary files match the effective OS-sandbox state (P00 D8; read-only).
+
+    Two facts must agree with the brief (plus ``--os-sandbox``): the agentteams-managed block of
+    ``.grok/config.toml`` carries ``[permission]`` iff the OS sandbox is on, and ``.grok/sandbox.toml``
+    exists iff it is on. A disagreement is reported, never rewritten; live values are never echoed. No
+    rule protects ``.agentteams`` here (a Grok profile cannot deny a write without denying the read), so
+    a WASM control-plane claim is never made for Grok (METAPLAN R1; P13 records it as advisory).
+
+    Args:
+        project_root: The project root (holds ``.grok/``).
+        manifest: The team manifest, or None (nothing to compare against: exit-neutral).
+
+    Returns:
+        ``(ok, messages)``; ``ok`` is False on any disagreement.
+
+    Raises:
+        ValueError: An invalid ``os_sandbox`` value in ``manifest``.
+    """
+    from agentteams.grok_config_emit import GROK_CONFIG_REL, _previous_block_keys
+    from agentteams.sandbox_state import effective_sandbox_state
+
+    if manifest is None:
+        return True, ["no team manifest to compare the Grok boundary against; nothing to verify."]
+    state = effective_sandbox_state(manifest)
+    on = grok_sandbox_feature_enabled(manifest)
+    root = Path(project_root)
+    profile_present = (root / ".grok" / "sandbox.toml").is_file()
+    config = root / GROK_CONFIG_REL
+    try:
+        permission_present = "permission" in _previous_block_keys(config.read_text(encoding="utf-8"))
+    except OSError:
+        permission_present = False
+    except ValueError:
+        return False, [f"WARNING: the agentteams-managed block in {GROK_CONFIG_REL} does not parse; cannot verify."]
+    msgs: list[str] = []
+    if not on:
+        if permission_present:
+            msgs.append(f"DRIFT: the OS sandbox is off for this team ({state.os_reason}) but the agentteams-managed "
+                        f"block in {GROK_CONFIG_REL} still carries [permission]. To match, remove that table from "
+                        "the managed block by hand (or re-render).")
+        if profile_present:
+            msgs.append(f"DRIFT: the OS sandbox is off for this team ({state.os_reason}) but .grok/sandbox.toml is "
+                        "still present. To match, remove it by hand.")
+        if msgs:
+            return False, msgs
+        return True, [f"OS sandbox is off for this team by {state.os_reason}; nothing to verify."]
+    if not (sys.platform.startswith("linux") or sys.platform == "darwin"):
+        return True, [f"NOT ENFORCEABLE HERE ({sys.platform}): no Grok boundary is emitted on this platform; "
+                      "confine from outside the process."]
+    if not profile_present:
+        msgs.append("WARNING: the OS sandbox is on for this team but .grok/sandbox.toml is missing; regenerate.")
+    if not permission_present:
+        msgs.append(f"WARNING: the OS sandbox is on for this team but the agentteams-managed block in "
+                    f"{GROK_CONFIG_REL} carries no [permission] table (an operator [permission] table keeps it out; "
+                    "merge the control-plane deny rules by hand).")
+    if msgs:
+        return False, msgs
+    return True, ["OK: .grok/sandbox.toml is present and the managed .grok/config.toml block carries [permission]. "
+                  "These are DECLARED controls; the boundary is .grok/confined-run.example.sh (launcher mode)."]

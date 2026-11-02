@@ -296,7 +296,7 @@ class GooseAdapter(FrameworkAdapter):
             may_delegate = True
         # Operator MCP servers, agentteams_runner and the coordination server: one source shared with the
         # orchestrator's delegation table (goose_recipe_grants.recipe_extras).
-        extras, mcp_notes = _recipe_extras(manifest, agent_slug)
+        extras, mcp_notes = _recipe_extras(manifest, agent_slug, _declared_tools(content))
         mcp_exts = list(scoped_stdio) + extras
 
         # Gap 2: parameters / response / retry are available to ANY agent whose

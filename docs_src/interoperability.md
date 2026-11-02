@@ -108,7 +108,7 @@ enforcement-class (2) and Copilot-size (5) refusals are `--interop-from`'s.
     | Surface | Class | Notes |
     |---|---|---|
     | `claude`, `copilot-vscode`, `copilot-cli` | enforced | the `tools` front-matter key |
-    | `goose` | enforced on a direct `goose run --recipe` | grant-scoped extensions; a `delegate` gets the delegator's extensions, so each recipe carries a banner saying so |
+    | `goose` | enforced on a direct `goose run --recipe` | grant-scoped extensions; a `delegate` gets the delegator's extensions, so each recipe carries a banner saying so. This is the tool-grant class only: the WASM verdict (`wasm_enforcement`) reads goose `enforced` only when `.goose/sandbox.sb` carries the control-plane rules and `GOOSE_SANDBOX` is on in the live Goose config ([`wasm_enforcement`](api-reference/wasm-enforcement.md)) |
     | `codex` | declared | `sandbox_mode` and the tool list are self-imposed; enforced only under the `write_policy: "orchestrator-only"` role gate |
     | `agents-md` | none | no grant channel |
 
