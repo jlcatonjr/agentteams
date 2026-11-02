@@ -151,7 +151,7 @@ def test_an_untrusted_ledger_marks_nothing(world: dict, monkeypatch: pytest.Monk
 
 def test_the_recipe_requests_stage_major_for_a_marked_plan_in_the_same_run() -> None:
     text = TEMPLATE.read_text(encoding="utf-8")
-    fence = text[text.index("<!-- AGENTTEAMS:BEGIN daily_remediation v=7 -->"):
+    fence = text[text.index("<!-- AGENTTEAMS:BEGIN daily_remediation v=8 -->"):
                  text.index("<!-- AGENTTEAMS:END daily_remediation -->")]
     flat = " ".join(fence.split())
     assert ("A plan `get_fix_plans` marks `stage-fix held since <date>: nothing fixable without a major jump` is "

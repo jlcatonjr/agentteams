@@ -8,6 +8,11 @@ MAJOR upgrade ...``, says in the body that it may need code changes and that CI 
 :data:`MAJOR_LABEL`. The label is created when missing; when it still cannot be applied, the PR is opened without
 it: a missing label never fails the PR (only gh's own "label not found" error falls back, :func:`label_refused`).
 
+``stage-image`` (an end-of-life base image's ``FROM`` tag moved to a new runtime line, :mod:`.image_fix`; a grant
+must name it) is a major change of its own kind: it commits and titles ``security(image)!: MAJOR upgrade of
+end-of-life base images (<digest>)``, lists each ``image old → new (path)``, carries a ``BREAKING CHANGE`` footer,
+says in the body that CI must build the image and run the tests in it, and gets the same :data:`MAJOR_LABEL`.
+
 The operator's auto-merge job merges a green ``vulnscan/*`` PR, majors included, so every PR body says it may be
 merged automatically once every check, a test check included, passes: CI must cover the change.
 
@@ -53,6 +58,30 @@ def sanitize(text: str, limit: int = 2000) -> str:
     return "\n".join("> " + ln for ln in text.splitlines()) or "> (none)"
 
 
+#: A staged change's mode: ``stage-fix``, ``stage-major`` or ``stage-image``.
+MODES: tuple[str, ...] = ("fix", "major", "image")
+
+
+def resolve_mode(major: bool = False, mode: str = "") -> str:
+    """Return the one mode a staging call means, from the legacy ``major`` flag and/or ``mode``.
+
+    Args:
+        major: The legacy ``stage-major`` flag.
+        mode: ``"fix"``, ``"major"``, ``"image"`` or ``""`` (then ``major`` decides).
+
+    Returns:
+        The mode.
+
+    Raises:
+        ValueError: ``mode`` is unknown, or contradicts ``major`` (``major=True`` with any mode but ``"major"``).
+    """
+    if mode and mode not in MODES:
+        raise ValueError(f"unknown staging mode {mode!r}")
+    if major and mode not in ("", "major"):
+        raise ValueError(f"contradictory staging mode: major=True with mode={mode!r}")
+    return mode or ("major" if major else "fix")
+
+
 def major_changes(changes: list[Any]) -> list[Any]:
     """Return the semver-major upgrades a fix took (``fix`` rows with ``major`` set, :class:`.fix.PinChange`).
 
@@ -65,25 +94,37 @@ def major_changes(changes: list[Any]) -> list[Any]:
     return [c for c in changes if c.action == "fix" and c.major]
 
 
-def commit_args(digest: str, changes: list[Any], *, major: bool) -> list[str]:
+def commit_args(digest: str, changes: list[Any], *, major: bool = False, mode: str = "") -> list[str]:
     """Return the ``git commit`` message arguments (``-m`` pairs) for a staged fix.
 
     Args:
         digest: The change digest (the branch name's suffix).
         changes: :attr:`.fix.FixResult.changes`.
-        major: The op is ``stage-major``.
+        major: The op is ``stage-major`` (legacy flag; :func:`resolve_mode`).
+        mode: :data:`MODES` (``"image"``: the op is ``stage-image``).
 
     Returns:
         The arguments.
 
     Raises:
         TypeError: ``digest`` is not a string or ``changes`` not a list.
-        ValueError: ``digest`` is empty or not plain hex/word characters.
+        ValueError: ``digest`` is empty or not plain hex/word characters, or the mode is unknown or contradictory.
     """
     if not isinstance(digest, str) or not isinstance(changes, list):
         raise TypeError("commit_args takes a string digest and a list of changes")
     if not re.fullmatch(r"\w{1,64}", digest):
         raise ValueError(f"malformed digest {digest[:80]!r}")
+    mode = resolve_mode(major, mode)
+    major = mode == "major"
+    if mode == "image":
+        listed = "\n".join(_CONTROL.sub("?", f"- {c.name} {c.old} → {c.new} ({c.path}, {c.note})")
+                           for c in major_changes(changes))
+        return ["-m", f"security(image)!: MAJOR upgrade of end-of-life base images ({digest})",
+                "-m", listed,
+                "-m", ("Staged by the agentteams vulnscan executor (stage-image: Dockerfile FROM tags only, each moved "
+                       "to the newest supported release line of the same variant)."),
+                "-m", ("BREAKING CHANGE: the runtime in these images moves to a new release line; code and "
+                       "dependencies may need changes.")]
     if not major:
         return ["-m", f"security(deps): fix known-vulnerable dependency versions ({digest})",
                 "-m", "Staged by the agentteams vulnscan executor (deterministic fix; lockfile/pin changes only)."]
@@ -95,24 +136,32 @@ def commit_args(digest: str, changes: list[Any], *, major: bool) -> list[str]:
             "-m", "BREAKING CHANGE: major versions of the dependencies above; code changes may be needed."]
 
 
-def title(branch: str, *, major: bool) -> str:
+def title(branch: str, *, major: bool = False, mode: str = "") -> str:
     """Return the PR title for a staged ``vulnscan/<date>-<digest>`` branch.
 
     Args:
         branch: The staged branch.
-        major: The staged change is a ``stage-major`` one.
+        major: The staged change is a ``stage-major`` one (legacy flag; :func:`resolve_mode`).
+        mode: :data:`MODES`.
 
     Returns:
         The title.
+
+    Raises:
+        ValueError: The mode is unknown or contradictory.
     """
     digest = branch.rsplit("-", 1)[-1]
+    mode = resolve_mode(major, mode)
+    major = mode == "major"
+    if mode == "image":
+        return f"security(image)!: MAJOR upgrade of end-of-life base images ({digest})"
     if major:
         return f"security(deps)!: MAJOR upgrade of known-vulnerable dependencies ({digest})"
     return f"security(deps): fix known-vulnerable dependencies ({digest})"
 
 
-def body(plan: str, rationale: str, *, major: bool, left: dict[str, list[int]] | None = None,
-         kept: list[str] | None = None) -> str:
+def body(plan: str, rationale: str, *, major: bool = False, left: dict[str, list[int]] | None = None,
+         kept: list[str] | None = None, mode: str = "") -> str:
     """Return the PR body, passed through the publish scrubber (home paths, host name, private IPs).
 
     Args:
@@ -122,17 +171,31 @@ def body(plan: str, rationale: str, *, major: bool, left: dict[str, list[int]] |
         left: ``{package: [PR numbers]}`` the change left to other open PRs (D1), listed as "left to #N".
         kept: The staged result's ``kept_off_registry`` notes: lockfile entries resolved off the npm registry that
             the change kept unchanged. Each is listed, so the PR never reads as registry-only.
+        mode: :data:`MODES` (``"image"``: a ``stage-image`` change; :func:`resolve_mode`).
 
     Returns:
         The body.
+
+    Raises:
+        ValueError: The mode is unknown or contradictory.
     """
     from agentteams.vulnscan import publish   # lazy: publish imports the executor
+
+    mode = resolve_mode(major, mode)
+    major = mode == "major"
 
     head = ("**MAJOR upgrade.** This PR moves dependencies to a new semver-major version to fix known "
             "vulnerabilities. Major versions can break APIs, so the code may need changes; CI must cover the "
             "affected code paths before this is merged.\n\n") if major else ""
+    scope = f"dependency {'manifests' if major else 'pins'} and lockfiles only"
+    if mode == "image":
+        head = ("**MAJOR base image upgrade.** This PR moves end-of-life base images to the newest supported "
+                "release line of the same variant. A new runtime line (for example Python 3.9 to 3.15) can remove "
+                "modules, change behaviour and need new wheels, so the code and its dependencies may need changes; "
+                "CI must build the image and run the tests in it before this is merged.\n\n")
+        scope = "Dockerfile `FROM` tags only"
     text = (f"{head}Automated security fix staged by the agentteams **vulnscan executor** "
-            f"(deterministic; dependency {'manifests' if major else 'pins'} and lockfiles only).\n\n{plan}\n\n"
+            f"(deterministic; {scope}).\n\n{plan}\n\n"
             f"{_kept_section(kept)}{_left_section(left)}"
             f"### Agent rationale (untrusted text, quoted)\n\n{sanitize(rationale)}\n\n"
             "Tests run in CI. This PR may be merged automatically once every check, a test check included, "
@@ -157,8 +220,8 @@ def _left_section(left: dict[str, list[int]] | None) -> str:
     return ("### Left to other open PRs (not duplicated)\n\n" + "\n".join(rows) + "\n\n") if rows else ""
 
 
-def create(target_repo: str, base_branch: str, branch: str, body_file: Path, *, major: bool,
-           open_url: Callable[[], str]) -> str:
+def create(target_repo: str, base_branch: str, branch: str, body_file: Path, *, major: bool = False,
+           open_url: Callable[[], str], mode: str = "") -> str:
     """Open the PR with ``gh pr create`` (hardened gh environment, empty cwd) and return its URL.
 
     For a major change the :data:`MAJOR_LABEL` label is created first if missing (its failure is ignored: the
@@ -172,20 +235,24 @@ def create(target_repo: str, base_branch: str, branch: str, body_file: Path, *, 
         body_file: The PR body file.
         major: The staged change is a ``stage-major`` one.
         open_url: Returns the URL of an open PR for ``branch`` in ``target_repo``, or "".
+        mode: :data:`MODES` (``"image"``: its own title, labelled like a major change; :func:`resolve_mode`).
 
     Returns:
         The PR URL ("" when gh printed none).
 
     Raises:
         ExecError: ``gh pr create`` failed.
+        ValueError: The mode is unknown or contradictory.
     """
+    mode = resolve_mode(major, mode)
+
     def gh(argv: list[str]) -> subprocess.CompletedProcess:
         return subprocess.run(["gh", *argv], cwd=gh_cwd(), capture_output=True, text=True, env=gh_push_env(),
                               timeout=300, check=False)
 
     argv = ["pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
-            "--title", title(branch, major=major), "--body-file", str(body_file)]
-    if major:
+            "--title", title(branch, mode=mode), "--body-file", str(body_file)]
+    if mode in ("major", "image"):
         gh(["label", "create", MAJOR_LABEL, "--repo", target_repo, "--color", _LABEL_COLOR,
             "--description", "vulnscan: semver-major dependency upgrade (may need code changes)"])
         proc = gh([*argv, "--label", MAJOR_LABEL])

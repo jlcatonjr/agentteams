@@ -11,9 +11,11 @@ import re
 from typing import Any
 
 #: Operations whose target is an absolute repository path (the executor guards and the MCP server check it).
-REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "open-pr", "close-superseded")
-#: The ops that stage a fix (``stage-major`` is ``stage-fix`` with semver-major upgrades allowed).
-STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major")
+REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "open-pr", "close-superseded")
+#: The ops that stage a fix (``stage-major`` is ``stage-fix`` with semver-major upgrades allowed; ``stage-image``
+#: moves an end-of-life official runtime image's Dockerfile ``FROM`` tag, :mod:`.image_fix`). One staged fix per
+#: repository at a time, whichever op staged it.
+STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image")
 
 #: A PR URL the executor records for ``open-pr``: ``https://HOST/OWNER/REPO/pull/N`` (groups: host, owner, repo, n).
 PR_URL = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")
@@ -28,6 +30,22 @@ def pr_of(row: dict[str, Any]) -> str:
     except (ValueError, AttributeError):   # a detail that is not a JSON object names no PR
         return ""
     return url if isinstance(url, str) and PR_URL.match(url) else ""
+
+
+def lane_of(row: dict[str, Any]) -> str:
+    """Return the PR lane of a successful ``open-pr`` ledger row: ``"image"`` (a ``stage-image`` PR) or ``"deps"``.
+
+    Args:
+        row: A ledger row.
+
+    Returns:
+        ``"image"`` when the row's JSON detail records ``"image": true``, else ``"deps"`` (older rows included).
+    """
+    try:
+        detail = json.loads(str(row.get("detail") or "{}"))
+    except ValueError:
+        return "deps"
+    return "image" if isinstance(detail, dict) and detail.get("image") is True else "deps"
 
 
 def repo_of(url: str) -> str:

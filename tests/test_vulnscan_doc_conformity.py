@@ -56,6 +56,7 @@ _DOCUMENTED_IN: dict[str, str] = {
     "npm_major": "### `agentteams.vulnscan.fix`",          # stage-major's package.json raise (fix.npm_majors)
     "npm_groups": "### `agentteams.vulnscan.fix`",         # stage-fix's exact-peer / direct-parent selection
     "npm_ops": "### `agentteams.vulnscan.fix`",            # npm_ops.npm_moves runs those moves (fail closed)
+    "image_fix": "### Base images (`stage-image`)",         # stage-image's FROM tag planner and validate_diff check
     "infra_retry": "### `agentteams.vulnscan.daily`",
     "gateway_context": "### `agentteams.vulnscan.gateway`",
     "gateway_dialects": "### `agentteams.vulnscan.gateway`",

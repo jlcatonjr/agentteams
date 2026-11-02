@@ -216,6 +216,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/npm_major.py",        # stage-major: the package.json raise and validate_diff's check of it
     "agentteams/vulnscan/npm_groups.py",       # stage-fix: which packages npm update moves together (selection)
     "agentteams/vulnscan/npm_ops.py",          # stage-fix: npm_ops.npm_moves runs those moves (fail-closed checks)
+    "agentteams/vulnscan/image_fix.py",        # stage-image: the FROM tag planner and validate_diff's check of it
     "agentteams/vulnscan/ops.py",              # REPO_OPS: which ops get executor_guard and a repo-root grant
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval

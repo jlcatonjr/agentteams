@@ -54,7 +54,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
+from agentteams.vulnscan import _http, image_fix, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
 from agentteams.vulnscan.npm_ops import semver_line as _semver_line
@@ -68,10 +68,12 @@ CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor r
               "request `stage-fix` for these rows; report them for a person to run the command shown, then "
               "`cargo build` and the tests. \"→\" is the smallest version the advisories call fixed.")
 #: Heads every base-image section of a fix plan.
-IMAGE_NOTE = ("Plan-only: `stage-fix` never edits a Dockerfile or compose file (the executor refuses the change), so "
-              "do not request `stage-fix` for these rows; report them for a person to change `FROM <ref>` (or "
-              "`image:`) to a supported line, e.g. the tag under \"→\", then rebuild and run the tests. The image "
-              "contents are not scanned.")
+IMAGE_NOTE = ("Plan-only for `stage-fix` and `stage-major`: they never edit a Dockerfile or compose file, so do not "
+              "request them for these rows. A row whose action is `stage-image` (an end-of-life official runtime "
+              "image in a Dockerfile `FROM`) may be staged with `stage-image`, on its own, when the grant names it: "
+              "it moves the tag to the one under \"→\". Report every other row for a person to change `FROM <ref>` "
+              "(or `image:`) to a supported line, e.g. the tag under \"→\", then rebuild and run the tests. The "
+              "image contents are not scanned.")
 #: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
 #: repository content: a name that could break the command or the table gets no command).
 _CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
@@ -936,9 +938,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         elif images.is_container_manifest(path.name) and not apply:   # plan only; nothing here edits these files
             found_images, errors = images.plan(path, rel)
             res.feed_errors += errors
-            res.image_plan += [PinChange(rel, f.name, f.version, f.fix, "plan-only", note=f"{f.detail} (line "
-                                         + ", ".join(loc.rsplit(":", 1)[-1] for loc in f.locations) + ")")
-                               for f in found_images]
+            res.image_plan += image_fix.plan_rows(path, rel, found_images, errors)
         elif path.name in CRATE_LOCKS:   # plan only, with or without apply: nothing here edits a Cargo.lock
             try:
                 res.cargo_plan += plan_cargo_lock(path, label=rel, private=private)

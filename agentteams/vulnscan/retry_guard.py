@@ -14,6 +14,9 @@ summary counts held repositories (:func:`held_count`). Nothing here blocks other
 ``stage-major`` (semver-major upgrades allowed) is held the same way but on its own: the hold is keyed on the op,
 so a futile ``stage-major`` never holds ``stage-fix`` and vice versa. A ``stage-major`` that changes nothing is
 recorded as :data:`MAJOR_FUTILE_DETAIL`, never as "nothing fixable without a major jump".
+
+``stage-image`` (end-of-life base image ``FROM`` tags) is held on its own too: a ``stage-image`` that finds no base
+image it may move is recorded as :data:`IMAGE_FUTILE_DETAIL` and held until the fix plan changes.
 """
 
 from __future__ import annotations
@@ -30,7 +33,9 @@ from agentteams.vulnscan import paths
 FUTILE_DETAIL = "nothing fixable without a major jump"
 #: ``stage-major``'s futile result: even with semver-major upgrades allowed, the change fixes nothing.
 MAJOR_FUTILE_DETAIL = "nothing fixable even with a major upgrade"
-_HELD_OPS = ("stage-fix", "stage-major")
+#: ``stage-image``'s futile result: no end-of-life base image it may move (:mod:`.image_fix`).
+IMAGE_FUTILE_DETAIL = "no base image stage-image may upgrade"
+_HELD_OPS = ("stage-fix", "stage-major", "stage-image")
 #: Recorded instead of :data:`FUTILE_DETAIL` when the default branch has nothing vulnerable: the fix is already
 #: upstream and the local checkout (whose scan wrote the fix plan) is behind. Held the same way.
 UPSTREAM_DETAIL = "already fixed on the default branch"
@@ -79,7 +84,8 @@ def _last_futile(target: str, rows: list[dict[str, Any]], op: str = "stage-fix")
         if r.get("op") == op and r.get("target") == target and r.get("kind") in ("done", "failed"):
             last = r
     detail = str(last.get("detail", "")) if last is not None else ""
-    prefix = next((p for p in (FUTILE_DETAIL, MAJOR_FUTILE_DETAIL, UPSTREAM_DETAIL) if detail.startswith(p)), "")
+    prefix = next((p for p in (FUTILE_DETAIL, MAJOR_FUTILE_DETAIL, IMAGE_FUTILE_DETAIL, UPSTREAM_DETAIL)
+                   if detail.startswith(p)), "")
     if last is None or last.get("kind") != "failed" or not prefix:
         return None
     try:
@@ -89,12 +95,13 @@ def _last_futile(target: str, rows: list[dict[str, Any]], op: str = "stage-fix")
 
 
 def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
-    """Return why a ``stage-fix`` (or ``stage-major``) of ``target`` would only repeat a "nothing fixable" result, or "".
+    """Return why a staging op on ``target`` would only repeat a "nothing fixable" result, or "".
 
-    Each op is held only by its own last result: a futile ``stage-major`` never holds ``stage-fix``, nor the reverse.
+    Each op is held only by its own last result: a futile ``stage-major`` never holds ``stage-fix``, nor the reverse,
+    and ``stage-image`` likewise.
 
     Args:
-        op: The requested operation (only ``stage-fix`` and ``stage-major`` are ever held).
+        op: The requested operation (only ``stage-fix``, ``stage-major`` and ``stage-image`` are ever held).
         target: Canonical repository path.
         rows: Ledger rows.
 
@@ -114,6 +121,9 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
     if prefix == UPSTREAM_DETAIL:
         return (f"{HELD_PREFIX}{op} found the fix {UPSTREAM_DETAIL} on {day} and this repository's fix plan "
                 "has not changed since; it is not staged again until the plan changes (update the local checkout)")
+    if prefix == IMAGE_FUTILE_DETAIL:
+        return (f"{HELD_PREFIX}stage-image found {IMAGE_FUTILE_DETAIL} on {day} and this repository's fix plan has "
+                "not changed since; it is not staged again until the plan changes (the base-image rows need a person)")
     if prefix == MAJOR_FUTILE_DETAIL:
         return (f"{HELD_PREFIX}stage-major found {MAJOR_FUTILE_DETAIL} on {day} and this repository's fix plan has "
                 "not changed since; it is not staged again until the plan changes (the rest needs a person)")

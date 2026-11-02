@@ -364,7 +364,7 @@ def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
     Raises:
         ExecError: ``op`` is ``stage-fix`` and every manifest the scan reads there is a plan-only lockfile.
     """
-    if op not in ops.STAGE_OPS:   # stage-major too: it edits the same files (and package.json)
+    if op not in ops.STAGE_OPS or op == "stage-image":   # stage-major too (same files); stage-image edits Dockerfiles
         return
     from agentteams.vulnscan import manifests, project_policy   # lazy: only stage-fix walks the repository
 

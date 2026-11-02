@@ -21,27 +21,27 @@ TODAY = dt.date(2026, 10, 30)
 ECR = "123456789012.dkr.ecr.us-west-1.amazonaws.com/vk-services/base:latest"
 
 CYCLES: dict[str, list[dict]] = {
-    "python": [{"cycle": "3.14", "eol": False, "is_eol": False, "latest": "3.14.0"},
-               {"cycle": "3.12", "eol": False, "is_eol": False, "latest": "3.12.12"},
-               {"cycle": "3.11", "eol": False, "is_eol": False, "latest": "3.11.14"},
-               {"cycle": "3.9", "eol": "2025-10-31", "is_eol": True, "latest": "3.9.25"}],
-    "nodejs": [{"cycle": "24", "eol": False, "is_eol": False, "latest": "24.11.0"},
-               {"cycle": "18", "eol": "2025-04-30", "is_eol": True, "latest": "18.20.8"}],
-    "ubuntu": [{"cycle": "24.04", "eol": False, "is_eol": False, "latest": "24.04.3"},
-               {"cycle": "22.04", "eol": False, "is_eol": False, "latest": "22.04.5"},
-               {"cycle": "20.04", "eol": "2025-05-31", "is_eol": True, "latest": "20.04.6"}],
-    "debian": [{"cycle": "13", "eol": False, "is_eol": False, "latest": "13.1"},
-               {"cycle": "12", "eol": False, "is_eol": False, "latest": "12.12"},
-               {"cycle": "10", "eol": "2022-09-10", "is_eol": True, "latest": "10.13"}],
-    "alpine-linux": [{"cycle": "3.22", "eol": False, "is_eol": False, "latest": "3.22.2"},
-               {"cycle": "3.18", "eol": "2025-05-09", "is_eol": True, "latest": "3.18.12"}],
-    "eclipse-temurin": [{"cycle": "17", "eol": False, "is_eol": False, "latest": "17.0.13"}],
-    "amazon-corretto": [{"cycle": "8", "eol": False, "is_eol": False, "latest": "8.472"}],
-    "amazon-linux": [{"cycle": "2023", "eol": False, "is_eol": False, "latest": "2023.9"},
-                     {"cycle": "2", "eol": "2026-06-30", "is_eol": True, "latest": "2.0.2025"}],
-    "dotnet": [{"cycle": "8", "eol": False, "is_eol": False, "latest": "8.0.11"},
-               {"cycle": "6", "eol": "2024-11-12", "is_eol": True, "latest": "6.0.36"}],
-    "redis": [{"cycle": "7.4", "eol": False, "is_eol": False, "latest": "7.4.1"}],
+    "python": [{"cycle": "3.14", "eol": False, "is_eol": False, "latest": "3.14.0", "release": "2000-01-01"},
+               {"cycle": "3.12", "eol": False, "is_eol": False, "latest": "3.12.12", "release": "2000-01-01"},
+               {"cycle": "3.11", "eol": False, "is_eol": False, "latest": "3.11.14", "release": "2000-01-01"},
+               {"cycle": "3.9", "eol": "2025-10-31", "is_eol": True, "latest": "3.9.25", "release": "2000-01-01"}],
+    "nodejs": [{"cycle": "24", "eol": False, "is_eol": False, "latest": "24.11.0", "release": "2000-01-01"},
+               {"cycle": "18", "eol": "2025-04-30", "is_eol": True, "latest": "18.20.8", "release": "2000-01-01"}],
+    "ubuntu": [{"cycle": "24.04", "eol": False, "is_eol": False, "latest": "24.04.3", "release": "2000-01-01"},
+               {"cycle": "22.04", "eol": False, "is_eol": False, "latest": "22.04.5", "release": "2000-01-01"},
+               {"cycle": "20.04", "eol": "2025-05-31", "is_eol": True, "latest": "20.04.6", "release": "2000-01-01"}],
+    "debian": [{"cycle": "13", "eol": False, "is_eol": False, "latest": "13.1", "release": "2000-01-01"},
+               {"cycle": "12", "eol": False, "is_eol": False, "latest": "12.12", "release": "2000-01-01"},
+               {"cycle": "10", "eol": "2022-09-10", "is_eol": True, "latest": "10.13", "release": "2000-01-01"}],
+    "alpine-linux": [{"cycle": "3.22", "eol": False, "is_eol": False, "latest": "3.22.2", "release": "2000-01-01"},
+               {"cycle": "3.18", "eol": "2025-05-09", "is_eol": True, "latest": "3.18.12", "release": "2000-01-01"}],
+    "eclipse-temurin": [{"cycle": "17", "eol": False, "is_eol": False, "latest": "17.0.13", "release": "2000-01-01"}],
+    "amazon-corretto": [{"cycle": "8", "eol": False, "is_eol": False, "latest": "8.472", "release": "2000-01-01"}],
+    "amazon-linux": [{"cycle": "2023", "eol": False, "is_eol": False, "latest": "2023.9", "release": "2000-01-01"},
+                     {"cycle": "2", "eol": "2026-06-30", "is_eol": True, "latest": "2.0.2025", "release": "2000-01-01"}],
+    "dotnet": [{"cycle": "8", "eol": False, "is_eol": False, "latest": "8.0.11", "release": "2000-01-01"},
+               {"cycle": "6", "eol": "2024-11-12", "is_eol": True, "latest": "6.0.36", "release": "2000-01-01"}],
+    "redis": [{"cycle": "7.4", "eol": False, "is_eol": False, "latest": "7.4.1", "release": "2000-01-01"}],
 }
 
 
@@ -312,7 +312,8 @@ def test_fix_plan_section_is_plan_only(tmp_path: Path, eol: list[str]) -> None:
     res = fix.fix_path(tmp_path, npm=False)
     md = res.markdown()
     assert "## base images: `Dockerfile` — plan-only (no staged edit)" in md
-    assert "| python | 3.9-slim | `python:3.14-slim` | plan-only |" in md and fix.IMAGE_NOTE in md
+    # an eligible end-of-life FROM is marked for stage-image (vfail F5); the section stays plan-only for stage-fix
+    assert "| python | 3.9-slim | `python:3.14-slim` | stage-image |" in md and fix.IMAGE_NOTE in md
     assert res.exit_code() == 1 and res.changes == []
     assert fix.fix_path(tmp_path, apply=True, npm=False).image_plan == []   # apply: never touched
 

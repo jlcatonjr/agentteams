@@ -14,15 +14,17 @@ Tools:
   repository alias that ``stage-fix`` takes as its target. A plan for a repository enrolled below
   ``remediate`` is headed "scan only" instead (the executor refuses ``stage-fix``/``open-pr`` there). A plan
   whose ``stage-fix`` is held for "nothing fixable without a major jump" says ``stage-major`` is next.
-- ``request``: queue ``stage-fix`` / ``stage-major`` / ``open-pr`` / ``close-superseded`` / ``server-audit`` /
-  ``server-dryrun`` on a target, with a rationale. ``stage-major`` is ``stage-fix`` with semver-major upgrades
-  allowed (only a grant naming it covers it): for a repository whose plan shows ``major-held`` rows once
-  ``stage-fix`` found nothing fixable, staged on its own, never mixed with a non-major fix.
+- ``request``: queue ``stage-fix`` / ``stage-major`` / ``stage-image`` / ``open-pr`` / ``close-superseded`` /
+  ``server-audit`` / ``server-dryrun`` on a target, with a rationale. ``stage-major`` is ``stage-fix`` with
+  semver-major upgrades allowed (only a grant naming it covers it): for a repository whose plan shows ``major-held``
+  rows once ``stage-fix`` found nothing fixable, staged on its own, never mixed with a non-major fix.
+  ``stage-image`` (only a grant naming it covers it) moves end-of-life base images' Dockerfile ``FROM`` tags: for a
+  repository whose plan has base-image rows with action ``stage-image``, staged on its own.
 - ``request_status`` / ``list_requests``: the executor's results. A pending request gets an instruction not to
   poll (the executor serves requests on its own schedule); after :data:`MAX_PENDING_POLLS` pending answers for
   one id, further polls of it are refused, so a polling loop cannot burn the run's token cap.
 - A repository listed in ``staged-fixes.json`` (written by the host before the run) already has a staged fix with
-  no PR: ``get_fix_plans`` lists it first and ``request`` refuses a second ``stage-fix`` or a ``stage-major`` for it
+  no PR: ``get_fix_plans`` lists it first and ``request`` refuses a second ``stage-fix``, a ``stage-major`` or a ``stage-image`` for it
   (request ``open-pr``).
 - ``escalate``: report a stop condition (malicious package, compromise indicator, suspected
   injection, integrity problem). Needs no grant. The executor records it and blocks remediation for
@@ -101,7 +103,10 @@ SCHEMAS: dict[str, dict[str, Any]] = {
                                 "then check request_status once near the end of the run. stage-fix stages the "
                                 "plan's `fix` rows (never a semver-major jump); stage-major is stage-fix with "
                                 "major upgrades allowed: request it only for a repository whose plan has "
-                                "major-held rows and whose stage-fix found nothing fixable (held), on its own."),
+                                "major-held rows and whose stage-fix found nothing fixable (held), on its own. "
+                                "stage-image moves end-of-life base images' Dockerfile FROM tags to a supported "
+                                "line: request it only for a repository whose plan has base-image rows with action "
+                                "stage-image, on its own (never while another fix is staged)."),
                 "inputSchema": {"type": "object", "required": ["op", "target", "rationale"], "properties": {
                     "op": {"type": "string", "enum": list(OPS)},
                     "target": {"type": "string", "description": ("repository alias from get_fix_plans or "
@@ -195,7 +200,7 @@ class Server:
             plans = sorted(self.run_dir.glob("fixplan-*.md")) + sorted(self.run_dir.glob("fix-*.md"))
             levels = self._plan_levels()
             staged = sorted(self._staged())
-            head = ("## Already staged: request open-pr for these, not stage-fix or stage-major\n\n"
+            head = ("## Already staged: request open-pr for these, not stage-fix, stage-major or stage-image\n\n"
                     + "".join(f"- `{r}`\n" for r in staged) + "\n") if staged else ""
             if not plans:
                 return repo_alias.hide_paths(head + "no fix plans", self._aliases()) if head else "no fix plans"

@@ -1,0 +1,8 @@
+{
+  "patch_id": "f0a868b8b865e79b0dcad432d1253e18a1047811",
+  "commit": "832730974eb416af0319fcb670d15b01d36c7e8d",
+  "subject": "fix(vulnscan): stage-image review conditions (S-10 line age, Docker line split, one mode)",
+  "impact": "5 symbols added, 6 symbols changed",
+  "note": "stage-image (vfail F5): new module vulnscan.image_fix; new ops stage-image (opt-in, in no grant), ops.lane_of, executor_supersede.ledger_lanes, images.split_tag/upgrade_tag/LINE_MIN_AGE_DAYS, runtimes.newest_aged_release, executor_pr.MODES/resolve_mode, retry_guard.IMAGE_FUTILE_DETAIL; validate_diff/stage_fix/commit_args/title/body/create gain mode= (major= kept, contradictions raise); images report fix for EOL images now applies the 90-day line age (S-10). Reviewed: @security conditional pass (conditions met), @code-hygiene no blockers.",
+  "recorded_at": "2026-11-01T23:01:44Z"
+}

@@ -514,7 +514,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `scan`, `inventory`, `runtimes`: `--unscored-as critical\|high\|moderate\|low` | What an unscored advisory counts as for `--fail-on` (default `high`; `daily` uses the config's `unscored_as`) |
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
 | `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
-| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
+| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
@@ -539,8 +539,8 @@ The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious 
 `--allow-checkout-signing` and `--confirm-review-sha256` ([Signing](#signing)). `DATE` is always
 `YYYY-MM-DD`.
 
-`grant sign` takes `--op OP` (repeatable: `stage-fix`, `stage-major`, `open-pr`, `close-superseded`,
-`server-audit`, `server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
+`grant sign` takes `--op OP` (repeatable, no default: `stage-fix`, `stage-major`, `stage-image`, `open-pr`,
+`close-superseded`, `server-audit`, `server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
 `--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. `publish-grant sign` takes
 `--ops-repo DIR`, `--remote-url URL` (default: the ops repository's `remote.origin.url`), `--node-id`,
 `--owner-id`, `--governance-dir DIR`, `--days N` (default 30), `--max-uses N` (default 60) and `--key-id ID`.
@@ -798,8 +798,8 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix or stage-major*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names). The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
-| `request` | `op` (`stage-fix`, `stage-major`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix` or `stage-major` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)) |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix, stage-major or stage-image*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names). The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
+| `request` | `op` (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix`, `stage-major` or `stage-image` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)), and `stage-image` only for one whose plan has base-image rows with action `stage-image`, on its own ([Base images](#base-images-stage-image)) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
@@ -829,7 +829,7 @@ executor validates):
 |---|---|
 | `id` | 32 lowercase hex characters; equals the file name; never reused (replay is refused) |
 | `op` | an `OPS` value, or `report` / `escalate` |
-| `target` | absolute repo path (`stage-fix`, `stage-major`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
+| `target` | absolute repo path (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
 | `rationale` | string, kept in the ledger |
 | `created` | ISO timestamp |
 | `payload` | only for `report` (`{"markdown"}`) and `escalate` (`{"kind", "evidence"}`) |
@@ -854,9 +854,12 @@ for one can never verify as the other.
 | Valid at once | at most 2 (more: all refused) | at most 1 (more: all refused) |
 | Gate action (HALT) | `vulnscan-remediation` | `vulnscan-publish` |
 
-**Operations.** v1 grants may name `stage-fix`, `stage-major`, `open-pr`, `close-superseded`, `server-audit`
-and `server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
-An existing grant does not cover `close-superseded` or `stage-major` until the operator signs one that names it.
+**Operations.** v1 grants may name `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`,
+`server-audit` and `server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build`
+refuses them. An existing grant does not cover `close-superseded`, `stage-major` or `stage-image` until the operator
+signs one that names it; `grant sign --op` has no default, so no grant names an op the operator did not list.
+`stage-image` is constraint-relaxing too: it lifts the "dependency pins and lockfiles only" bound to Dockerfile
+`FROM` tags ([Base images](#base-images-stage-image)).
 `stage-major` is **constraint-relaxing** (Rule 15): it lifts `stage-fix`'s "no semver-major jump" bound, so a grant
 naming `stage-fix` never implies it; like every grant, one naming it is Ed25519-signed by the operator
 ([Major upgrades](#major-upgrades-stage-major)).
@@ -866,7 +869,7 @@ naming `stage-fix` never implies it; like every grant, one naming it is Ed25519-
 - at least one operation, and only v1 operations;
 - `days` 1–30 and `max_uses` 1–500;
 - `repo_roots` are resolved to absolute paths and may not be `/` or your home directory itself;
-  `stage-fix`, `stage-major`, `open-pr` and `close-superseded` need at least one;
+  `stage-fix`, `stage-major`, `stage-image`, `open-pr` and `close-superseded` need at least one;
 - `hosts` must be plain names, never `all`; server operations need at least one. Whether a name is
   in `hosts.conf` is checked when the operation runs;
 - `governance_dir` must contain `references/security-decisions.log.csv`.
@@ -971,6 +974,55 @@ included, passes, so CI must cover the change: the operator's auto-merge job mer
 
 The agent requests `stage-major` only for a repository whose fix plan shows `major-held` rows and whose
 `stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix.
+
+### Base images (`stage-image`)
+
+`stage-image REPO` (`executor.stage_fix(repo, cfg, mode="image")`, module `image_fix`) moves the `FROM` tag of an
+end-of-life base image in a Dockerfile to a supported release line of the **same** variant:
+`python:3.9-slim` → `python:3.14-slim`. It is a constraint-relaxing op of its own (Rule 15): only a grant that names
+it covers it, and a grant naming `stage-fix` or `stage-major` never implies it. The agent names only the
+repository; every edit is derived by the executor from the scan's own data (`images.refs`, the
+`image_fix.ELIGIBLE` table, and the endoflife.date release data `runtimes.evaluate` reads; a feed failure refuses
+the stage, nothing is guessed).
+
+- **What it may change.** Only a one-line `FROM` in a `Dockerfile*`, `*.Dockerfile` or `Containerfile` (never a
+  compose file) naming a Docker Hub official image in `image_fix.ELIGIBLE`: `python`, `ruby`, `golang`, `php`. Only
+  the tag changes, only when its release line is end-of-life, and the variant suffix is kept byte for byte.
+- **Which line (S-10).** The newest supported line whose first release is at least `images.LINE_MIN_AGE_DAYS` (90:
+  max(the 14-day cooldown, 90 days) for a runtime line jump) days old (`runtimes.newest_aged_release`; a line whose
+  release date endoflife.date does not give is never chosen). Leaving an end-of-life line does not need the newest
+  one. One function, `images.upgrade_tag`, computes it for both the report's "→" and the staged edit, so they
+  always agree: a line tag stays a line tag (`3.9-slim` → `3.14-slim`), a full-patch tag becomes that line's latest
+  release (`3.9.18-slim` → `3.14.2-slim`).
+- **Parsing as Docker does.** Lines are split on `"\n"` only (`\r\n` kept), in `images.refs` and in
+  `check_from_edit` alike. A Dockerfile with a byte-order mark, a heredoc (`<<`) or an `escape` / `syntax` parser
+  directive is held (`image_fix.hazard`), and refused by `check_from_edit`. A manifest that cannot be read gets a
+  note (the staged plan's *Refused* list), never a silent empty plan.
+- **What it holds for a person** (`image-held` rows, with the reason): `:latest` or no tag (report-only: pinning to
+  a digest needs a registry query and freezes OS security rebuilds, and the line `:latest` points at is not knowable
+  offline), a `@sha256:` digest (never changed, never added), a reference set by an `ARG` default, a tag naming an
+  OS release (`-bookworm`, `-alpine3.19`: the newer line may not be published for it), a `FROM` continued over
+  several lines, and every other image (databases change their on-disk format across majors; `node` and
+  `eclipse-temurin` because the newest supported line may be a non-LTS one; compose files; private and unlisted
+  images are never named). Every reference with an image finding that `stage-image` does not move gets such a row.
+- **`validate_diff(..., mode="image")`** accepts only Dockerfiles, and in them only `image_fix.check_from_edit`'s
+  edits, offline and byte for byte: same line count and endings, only `FROM` lines differ, same registry and
+  repository text, an eligible official image, no digest, no variable, the same letters-only suffix, the same number
+  of version parts and a higher release line. Any requirements file, lockfile or `package.json` is refused, so a
+  base-image change is never combined with a dependency fix; `stage-fix` and `stage-major` refuse any Dockerfile.
+- **Fix plans.** A base-image row `stage-image` would move has action `stage-image` and its target tag under "→";
+  every other row stays `plan-only`, with `not stage-image: <reason>` when `stage-image` holds it.
+- **Refusals.** No base image to move records `no base image stage-image may upgrade`
+  (`retry_guard.IMAGE_FUTILE_DETAIL`), held per op until the fix plan changes. `refuse_plan_only` (Cargo.lock-only
+  repositories) does not apply. A bump of an image a Dependabot or Renovate PR already updates (`Bump python from
+  ...`) is left to it (`pr-held`).
+- **Commit and PR.** The commit and the PR title are `security(image)!: MAJOR upgrade of end-of-life base images
+  (<digest>)`, the commit lists each `image old → new (path, FROM line N)` with a `BREAKING CHANGE:` footer, the PR
+  body says that a new runtime line may need code and dependency changes and that CI must build the image and run
+  the tests in it, and the PR is labelled `vulnscan-major`. The staged state and the `stage-image` and `open-pr`
+  results carry `"image": true`.
+- **Lanes.** `close-superseded` closes only older PRs in the replacement's lane (`ops.lane_of`: `image` for a
+  `stage-image` PR, `deps` for every other): a base-image PR and a dependency PR never supersede each other.
 
 ### Grants from the registry
 
@@ -2172,13 +2224,16 @@ the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming t
 `publish.rewrite_paths`); the branch stays and nothing is merged. A grant must name the op; `authorize` and
 `executor_guard` apply as for `open-pr`. Returns `{"repo", "replacement", "closed", "kept"}`.
 
-#### `validate_diff(wt, base, *, major=False)`
+#### `validate_diff(wt, base, *, major=False, mode='')`
 
 Check a staged change against `base` before `stage-fix` commits it, and before `daily` keeps an
 `apply-worktree` result. Returns a `DiffCheck(changed, kept_off_registry)` named tuple: the changed paths and the lockfile check's
 notes on unchanged off-registry entries it kept; raises `ExecError` on anything else. With `major`
 (`stage-major` only) a `package.json` may change too, within the rules in
-[Major upgrades](#major-upgrades-stage-major) (`npm_major.check_package_json_edit`):
+[Major upgrades](#major-upgrades-stage-major) (`npm_major.check_package_json_edit`). With mode `"image"`
+(`stage-image` only) Dockerfiles alone may change, only by `image_fix.check_from_edit`'s `FROM` tag moves, and every
+rule below about requirements files and lockfiles is replaced by that one
+([Base images](#base-images-stage-image)):
 
 - only requirements files and npm lockfiles may change or appear, as regular, non-executable files;
   renames, deletions, mode changes and symlinks are refused;
@@ -3165,7 +3220,9 @@ is reported on stderr and returns `None`.
 #### `close_superseded(repo, rows=None, *, view=None, close=None)`
 
 The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
-repository's successful `open-pr` PRs, oldest first; `head_problem(data)` and `touched_problem(data,
+repository's successful `open-pr` PRs, oldest first, and `ledger_lanes(repo, rows)` the same as `{url: lane}`
+(`ops.lane_of`: `image` for a `stage-image` PR, else `deps`): only older PRs in the replacement's lane are
+candidates; `head_problem(data)` and `touched_problem(data,
 identity)` say why a PR may not be closed, and `authored_problem(data, identity)` (commits only) why a PR is not
 the executor's own (the replacement; and the PR open-pr would claim, `open_pr_with_same_change`). Each candidate is looked up again right before it is closed; a
 change in the remaining moment can still be missed, which is accepted because a closed PR can be reopened

@@ -246,12 +246,13 @@ def _fetch_cycles(product: str) -> list[dict]:
                  "eol": r.get("eolFrom") if r.get("isEol") or r.get("eolFrom") else False,
                  "is_eol": bool(r.get("isEol")),
                  "eoes": r.get("eoesFrom"), "is_eoes": r.get("isEoes"),
-                 "latest": str(((r.get("latest") or {}).get("name")) or "")} for r in rels]
+                 "latest": str(((r.get("latest") or {}).get("name")) or ""),
+                 "release": str(r.get("releaseDate") or "")} for r in rels]
     except _http.FeedError:
         data = _http.fetch_json(f"https://endoflife.date/api/{product}.json")
         return [{"cycle": str(r.get("cycle")), "eol": r.get("eol"), "is_eol": None,
                  "eoes": r.get("extendedSupport"), "is_eoes": None,
-                 "latest": str(r.get("latest") or "")} for r in (data or [])]
+                 "latest": str(r.get("latest") or ""), "release": str(r.get("releaseDate") or "")} for r in (data or [])]
 
 
 def _is_eol(cycle: dict, today: _dt.date) -> bool:
@@ -323,6 +324,46 @@ def _release_line(slug: str, cycle: str, today: _dt.date) -> tuple[dict | None, 
     supported = [c for c in cycles if not _is_eol(c, today)]
     newest = max((c["latest"] for c in supported if c["latest"]), key=version_key, default="")
     return info, newest or max((c["cycle"] for c in supported), key=version_key, default="")
+
+
+def newest_aged_release(kind: str, *, min_age_days: int, today: _dt.date | None = None) -> str:
+    """Return the latest release of the newest supported release line first released ``min_age_days`` ago or more.
+
+    S-10 for a release-line jump: moving off an end-of-life line does not need the newest line, so a line younger
+    than ``min_age_days`` (or one whose release date endoflife.date does not give) is never chosen.
+
+    Args:
+        kind: A :data:`PRODUCTS` key.
+        min_age_days: Minimum age of the line's first release, in days (>= 0).
+        today: Date for the comparison (tests); defaults to today.
+
+    Returns:
+        The release (``"3.14.2"``; the line name when no latest release is listed), or "" when no line qualifies or
+        the release data is unavailable.
+
+    Raises:
+        KeyError: ``kind`` is not in :data:`PRODUCTS`.
+        ValueError: ``min_age_days`` is negative.
+    """
+    if min_age_days < 0:
+        raise ValueError("min_age_days must be >= 0")
+    product = PRODUCTS[kind]
+    today = today or _dt.date.today()
+    cutoff = today - _dt.timedelta(days=min_age_days)
+    try:
+        cycles = _eol_cycles(product.eol)
+    except _http.FeedError:
+        return ""
+
+    def aged(c: dict) -> bool:
+        try:
+            return _dt.date.fromisoformat(str(c.get("release") or "")[:10]) <= cutoff
+        except ValueError:
+            return False   # no release date: its age is unknown, so it is not old enough
+
+    ok = [c for c in cycles if not _is_eol(c, today) and aged(c)]
+    newest = max(ok, key=lambda c: version_key(c["cycle"]), default=None)
+    return (newest["latest"] or newest["cycle"]) if newest else ""
 
 
 def evaluate(kind: str, version: str, path: str = "", manager: str = "",
