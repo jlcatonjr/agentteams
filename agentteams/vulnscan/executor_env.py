@@ -7,8 +7,10 @@ them without importing the executor back. :mod:`.executor` re-exports every name
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+from typing import Any
 
 from agentteams.vulnscan import paths
 
@@ -17,6 +19,22 @@ GIT_IDENTITY = ("agentteams-vulnscan", "vulnscan@agentteams.invalid")
 
 class ExecError(RuntimeError):
     """An action was refused or failed; the message goes to the ledger and the review."""
+
+
+def read_json_object(path: Path) -> dict[str, Any]:
+    """Return a JSON file's object (the executor's staged-fix records).
+
+    Args:
+        path: The file.
+
+    Returns:
+        The object; {} when the file is absent, unreadable, not JSON or not an object.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def clean_git_env(global_config: str) -> dict[str, str]:

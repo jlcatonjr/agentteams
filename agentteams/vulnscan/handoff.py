@@ -20,7 +20,9 @@ operator tooling, outside this package.
 
 A verdict applies to a staged fix by its **content digest**, the suffix of the branch name
 ``vulnscan/<YYYYMMDD>-<digest>``: a fix re-staged on a later day is the same change under a new branch name. The
-newest row for a digest wins, so a later ``reject`` or ``defer`` withdraws an earlier approval.
+newest row for a digest wins, so a later ``reject`` or ``defer`` withdraws an earlier approval. An ``own-pr`` verdict
+lapses after seven days without an owner PR (:mod:`.handoff_lapse`, OD10); until then each record names the lapse date
+and the request the next packet carries.
 
 Delivery is ``handoff`` when the project's brief says ``vulnerability_scanning.delivery: handoff``, or for every
 repository when the operator's ``vulnscan.json`` sets ``"handoff_required": true`` (:func:`required`).
@@ -88,6 +90,10 @@ class RepoHandoff:
     launcher: str = ""               # the sandbox/confine-run.sh the handoff's goose session would run under, or ""
     launcher_state: str = ""         # agentteams.launcher_lineage state, or "unknown" (lineage unreadable)
     launcher_detail: str = ""
+    lapses: str = ""                 # own-pr: the date it lapses (handoff_lapse, OD10), or ""
+    ask: str = ""                    # own-pr: the request the next handoff packet carries (handoff_lapse.packet_ask)
+    lapsed: bool = False             # own-pr: its LAPSE_DAYS have run (open-pr opens the PR unless owner_prs)
+    owner_prs: list[int] = field(default_factory=list)   # own-pr, due: the open owner PRs that keep it deferring
 
     @property
     def launcher_warning(self) -> str:
@@ -116,7 +122,8 @@ class RepoHandoff:
         return {"repo": self.repo, "required": self.required, "state": self.state, "staged_branch": self.staged_branch,
                 "verdict": self.verdict, "verdict_handoff": self.verdict_handoff, "homes": self.homes,
                 "pending": self.pending, "problems": self.problems, "launcher": self.launcher,
-                "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail}
+                "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail,
+                "lapses": self.lapses, "lapsed": self.lapsed, "ask": self.ask, "owner_prs": self.owner_prs}
 
 
 def digest_of(branch: str) -> str:
@@ -335,11 +342,7 @@ def staged_branch(repo: Path) -> str:
     """
     from agentteams.vulnscan import executor   # lazy: executor imports this module
 
-    try:
-        data = json.loads(executor.staged_file(repo).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ""
-    branch = data.get("branch") if isinstance(data, dict) else None
+    branch = executor.read_staged(repo).get("branch")
     return branch if isinstance(branch, str) and digest_of(branch) else ""
 
 
@@ -425,8 +428,27 @@ def status(cfg: dict[str, Any] | None, repos: list[Path], *, fallback: Path | No
             found, rec.problems = latest_verdict(repo, rec.staged_branch)
             if found is not None:
                 rec.verdict, rec.verdict_handoff = found.verdict, found.handoff_id
+            if rec.staged_branch and rec.required:   # the lapse applies only where open-pr waits for a verdict
+                _lapse_fields(rec, repo)
         out.append(rec)
     return out
+
+
+def _lapse_fields(rec: RepoHandoff, repo: Path) -> None:
+    """Fill ``rec``'s own-pr lapse fields; start or stop the clock at this sight of the verdict (B1b, OD10)."""
+    from agentteams.vulnscan import handoff_lapse, ledger   # lazy: both import this module (via the executor)
+
+    try:
+        with ledger.locked():
+            clock = handoff_lapse.clock(repo, rec.staged_branch)
+    except (OSError, ValueError) as exc:   # no lock, or an untrusted ledger: show nothing rather than guess
+        rec.problems.append(f"own-pr lapse clock unreadable: {exc}")
+        return
+    rec.lapses = clock["lapses"] if clock else ""
+    rec.ask = handoff_lapse.packet_ask(repo, rec.staged_branch, clock)
+    rec.lapsed = handoff_lapse.due(clock)
+    if rec.lapsed:
+        rec.owner_prs = handoff_lapse.owner_pr(repo) or []
 
 
 def repos_with_staged_fixes() -> list[Path]:
@@ -460,6 +482,11 @@ def markdown(records: list[RepoHandoff]) -> str:
             bits.append(f"staged {r.staged_branch}")
         if r.pending:
             bits.append(f"{len(r.pending)} packet(s) awaiting a verdict")
+        if r.lapses and r.owner_prs:
+            bits.append(f"own-pr kept: owner PR {', '.join(f'#{n}' for n in r.owner_prs)} open (lapse date {r.lapses})")
+        elif r.lapses:
+            bits.append(f"own-pr {'lapsed' if r.lapsed else 'lapses'} {r.lapses}"
+                        + (" (the executor opens its PR unless an owner PR updates the packages)" if r.lapsed else ""))
         if r.launcher_state and r.launcher_state != "current":
             bits.append(f"launcher {r.launcher_state}")
         lines.append(f"- {Path(r.repo).name} ({mode}): " + "; ".join(bits))
@@ -522,6 +549,11 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
             print(f"  verdict: {rec.verdict} (handoff {rec.verdict_handoff})")
         if rec.pending:
             print(f"  packets awaiting a verdict: {', '.join(rec.pending)}")
+        if rec.lapses:
+            print(f"  own-pr lapses: {rec.lapses}")
+            if rec.owner_prs:
+                print(f"  owner PR(s) keeping it deferred: {', '.join(f'#{n}' for n in rec.owner_prs)}")
+            print(f"  ask (for the next handoff packet): {rec.ask}")
         print(f"  launcher: {rec.launcher or '—'} ({rec.launcher_state}: {rec.launcher_detail})")
         if rec.launcher_warning:
             print(f"  warning: {rec.launcher_warning}")

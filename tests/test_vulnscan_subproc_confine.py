@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from agentteams.vulnscan import daily, executor, fix, review, tools_image
+from agentteams.vulnscan import daily, executor, executor_pr, fix, review, tools_image
 from agentteams.vulnscan import subproc_confine as sc
 from agentteams.vulnscan import subproc_confine_ssh as ssh
 from tests._vulnscan_helpers import operator_env
@@ -341,7 +341,7 @@ def test_timeout_removes_the_container(world: dict) -> None:
 
 def test_gh_stays_on_the_host_but_never_runs_in_the_worktree(world: dict) -> None:
     wt = _repo(world["tmp"] / "state" / "worktrees" / "wt")
-    assert executor._open_pr_url(wt, "github.com/octo/repo", "vulnscan/x") == ""
+    assert executor_pr.open_pr_url("github.com/octo/repo", "vulnscan/x") == ""
     argv, kw = world["fake"].calls[-1]
     assert argv[:3] == ["gh", "pr", "list"] and Path(kw["cwd"]) != wt and not any(Path(kw["cwd"]).iterdir())
     assert kw["env"]["GIT_CEILING_DIRECTORIES"] == str(world["tmp"] / "state")

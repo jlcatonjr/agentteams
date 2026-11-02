@@ -21,6 +21,7 @@ Imports only :mod:`.executor_env` (a leaf) at load time; :mod:`.publish` (which 
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from collections.abc import Callable
@@ -60,6 +61,57 @@ def sanitize(text: str, limit: int = 2000) -> str:
 
 #: A staged change's mode: ``stage-fix``, ``stage-major`` or ``stage-image``.
 MODES: tuple[str, ...] = ("fix", "major", "image")
+
+
+def lane_fields(st: dict[str, Any]) -> dict[str, bool]:
+    """Return the lane marker every ``open-pr`` result of a staged state carries (``ops.lane_of`` reads it back).
+
+    A ``stage-major`` PR, claimed or newly opened, must record ``"major": true`` so ``close-superseded`` never treats
+    it as the fix PR's replacement (vfr-b.B2), and a ``stage-image`` PR ``"image": true``.
+
+    Args:
+        st: The staged state.
+
+    Returns:
+        ``{"image": True}``, ``{"major": True}`` or ``{}``.
+
+    Raises:
+        ExecError: The staged state claims both modes.
+    """
+    image, major = st.get("image") is True, st.get("major") is True
+    if image and major:
+        raise ExecError("staged state is invalid: both major and image")   # one mode, never both
+    return {"image": True} if image else {"major": True} if major else {}
+
+
+def open_pr_url(target_repo: str, branch: str) -> str:
+    """Return the URL of an open PR whose head is ``branch`` in ``target_repo`` itself, or "" (moved from executor).
+
+    ``--head`` matches a branch name in any fork, so a PR from a fork with the same branch name is
+    ignored (``isCrossRepository``): the executor always pushes to ``target_repo``.
+
+    Args:
+        target_repo: ``HOST/OWNER/REPO``.
+        branch: The head branch.
+
+    Returns:
+        The PR's ``https://`` URL, or "".
+
+    Raises:
+        ExecError: gh failed or did not answer with a JSON list.
+    """
+    proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--head", branch, "--state", "open",
+                           "--json", "url,isCrossRepository"], cwd=gh_cwd(), capture_output=True, text=True,
+                          env=gh_push_env(), timeout=120, check=False)
+    if proc.returncode:
+        raise ExecError(f"gh pr list failed: {(proc.stderr or proc.stdout).strip()[:400]}")
+    try:
+        prs = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise ExecError(f"gh pr list did not return JSON: {exc}") from exc
+    urls = [p.get("url") for p in prs if isinstance(p, dict) and p.get("isCrossRepository") is False] \
+        if isinstance(prs, list) else []
+    return next((u for u in urls if isinstance(u, str) and u.startswith("https://")), "")
 
 
 def resolve_mode(major: bool = False, mode: str = "") -> str:

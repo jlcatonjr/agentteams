@@ -9,8 +9,8 @@ that names the op (``open-pr`` never implies it):
   MAC-chained ledger, and GitHub must report it open, with a ``vulnscan/*`` head in the same repository.
 - **Only the executor's own PRs are candidates:** URLs from earlier successful ``open-pr`` rows for the same
   repository, in the same GitHub repository as the replacement (at most :data:`MAX_CANDIDATES`, newest), and in the
-  replacement's **lane** (:func:`.ops.lane_of`): a ``stage-image`` (base image) PR and a dependency PR are disjoint
-  changes, so neither ever supersedes the other.
+  replacement's **lane** (:func:`.ops.lane_of`): a ``stage-image`` (base image) PR, a ``stage-major`` PR and a
+  dependency PR are separate changes, so none ever supersedes another.
 - **Untouched by people.** A candidate is closed only when it is open, its head is a ``vulnscan/*`` branch in
   the same repository (not a fork), and it has no reviews, no comments and no commit whose author is not
   the executor's git identity. Anything else is kept and reported with the reason.

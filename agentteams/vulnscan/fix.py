@@ -13,8 +13,8 @@
   only for a positive ``cooldown_days``). It touches the lockfile only and runs no install scripts. Semver-major fixes
   are never forced (no ``--force``); with ``allow_major`` (the executor's ``stage-major``) a ``major-held`` package that
   is a direct dependency has its ``package.json`` spec raised to ``^<fixed version>`` and the lockfile re-resolved with
-  ``npm install --package-lock-only --ignore-scripts`` first (:mod:`.npm_major`; transitive-only majors and npm
-  workspaces stay held). What the audit fix leaves vulnerable inside its range is retried by moving its exact-peer
+  ``npm install --package-lock-only --ignore-scripts`` first (:mod:`.npm_major`; npm workspaces stay held, and so does a
+  transitive-only major unless it moved with a raised parent: then it is reported :data:`MOVES_WITH`). What the audit fix leaves vulnerable inside its range is retried by moving its exact-peer
   group or direct parent (``npm update --no-save``, :func:`.npm_ops.npm_moves`). It runs on a
   scratch copy with the public registry and TLS verification fixed, never reading the
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
@@ -63,6 +63,9 @@ from agentteams.vulnscan.versions import is_final, major, version_key
 PYPI = _http.PYPI_JSON
 NPM_REGISTRY = "https://registry.npmjs.org/"    # fixed: a repository .npmrc cannot redirect the unattended fix
 NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
+#: The action of a transitive row ``stage-major`` moved with its raised direct parent (vfr-b.B3): fixed by the
+#: parent's row, so it is never counted as held or open on its own.
+MOVES_WITH = npm_groups.MOVES_WITH
 #: Heads every Cargo.lock section of a fix plan (agents read it through ``get_fix_plans``).
 CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor refuses the change), so do not "
               "request `stage-fix` for these rows; report them for a person to run the command shown, then "
@@ -108,7 +111,8 @@ class PinChange:
     new: str = ""
     # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious | pr-held (an open PR that is
     # not the executor's already updates it, ``skip``); npm rows (plan_npm_lock)
-    # also workspace-held | npm-unavailable; Cargo.lock rows (plan_cargo_lock) plan-only | no-clean-release | malicious
+    # also workspace-held | npm-unavailable | moves-with (``stage-major`` moved it with its raised parent,
+    # MOVES_WITH); Cargo.lock rows (plan_cargo_lock) plan-only | no-clean-release | malicious
     action: str = "fix"
     ids: list[str] = field(default_factory=list)
     note: str = ""
@@ -503,6 +507,9 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
             "row's version or fix fewer rows. \"≥\" is the smallest version the advisories call fixed.")
     if workspaces:
         note += " This lockfile belongs to npm workspaces, which `stage-fix` refuses (fails closed)."
+    if len(held := [c for c in changes if c.action == "major-held"]) > 1:   # B3: name what a parent carries
+        direct, _, problem = npm_major.direct_majors(path, [c.name for c in held])
+        npm_groups.note_carried(path, held, {} if problem else direct)
     return changes, note + npm_groups.annotate_plan(path, changes)   # retried moves (and a new plan digest)
 
 
@@ -723,7 +730,9 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
         skip: ``{normalized name: [PR numbers]}`` another open PR already updates: never raised (``pr-held``).
 
     Returns:
-        (the major rows: taken ones as ``fix`` with ``major`` set, held ones as ``major-held``; npm's output or "").
+        (the major rows: taken ones as ``fix`` with ``major`` set; a transitive one that a raised parent installed
+        and that the re-resolved lockfile no longer holds as :data:`MOVES_WITH`, naming the parent (B3); held ones
+        as ``major-held``; npm's output or "").
 
     Raises:
         FeedError: OSV could not be read.
@@ -741,6 +750,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             c.note += ("; npm workspaces: stage-major fails closed here" if problem == npm_major.WORKSPACES
                        else f"; {problem}: stays held — fix by hand")
         return rows, ""
+    graph = npm_groups.LockGraph(npm_groups.load(lockfile))   # the base lockfile: who installs each copy
     specs: dict[str, tuple[str, str]] = {}
     for c in sorted(rows, key=lambda r: _semver_line(r.new)):   # the highest fixed version of a name wins
         if c.action != "pr-held" and c.name in direct:
@@ -766,6 +776,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
         with open(os.open(pkg, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
             fh.write(new_text)
     pkg_label = str(Path(label).parent / "package.json")
+    transitive: dict[int, str] = {}   # id(row) -> its note before the "stays held" suffix
     for c in rows:
         if c.action == "pr-held":
             continue
@@ -774,7 +785,9 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             c.path, c.action, c.major = pkg_label, "fix", True
             c.note = f"MAJOR upgrade: package.json {section}.{c.name} → {spec} (lockfile re-resolved by npm install)"
         else:
-            c.note += "; transitive only (package.json does not list it): stays held — its parent must move first"
+            transitive[id(c)] = npm_groups.CARRIED_NOTE.sub("", c.note)   # the dry run's prediction: checked below
+            c.note = (transitive[id(c)] + "; transitive only (package.json does not list it): stays held — its "
+                      "parent must move first")
     if not specs:
         return rows, ""
     out = npm_fix(lockfile.parent, cooldown_days=cooldown_days, apply=True, install=True)
@@ -783,6 +796,8 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
         why = failed or (out.strip().splitlines() or ["no output"])[-1]
         raise ExecError(f"{label}: npm install did not re-resolve the lockfile after package.json was raised "
                         f"({why[:200]}); nothing is staged")
+    npm_groups.mark_carried(graph, npm_groups.load(lockfile), [c for c in rows if id(c) in transitive],
+                            transitive, specs)   # re-plan (B3): which transitive rows moved with a raised parent
     return rows, out
 
 

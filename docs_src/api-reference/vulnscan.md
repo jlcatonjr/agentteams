@@ -801,7 +801,7 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix, stage-major or stage-image*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names). The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix, stage-major or stage-image*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names), or, for a mark with `"after": "fix-pr"`, **fix PR opened `<date>` for this plan's `fix` rows; its major-held rows remain → request `stage-major` for this repository now**. The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
 | `request` | `op` (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix`, `stage-major` or `stage-image` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)), and `stage-image` only for one whose plan has base-image rows with action `stage-image`, on its own ([Base images](#base-images-stage-image)) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
@@ -930,7 +930,12 @@ included, delivered as PRs that CI must pass; this op is how. It differs from `s
   its spec raised to `^<fixed version>` in place, every other byte kept (`npm_major.rewrite_specs`), and npm
   re-resolves the lockfile with `npm install --package-lock-only --ignore-scripts` (same scratch copy, registry,
   `--strict-ssl` and cooldown handling as the audit fix), before `npm audit fix` runs as usual. A package only
-  some other package depends on stays `major-held` ("transitive only"): its parent must move first. npm
+  some other package depends on is never raised itself: when a raised direct parent installed it and the
+  re-resolved lockfile no longer holds the vulnerable copy, its row becomes `moves-with` (`fix.MOVES_WITH`,
+  naming the parent; never counted as its own fix or as held); otherwise it stays `major-held` ("transitive
+  only"): its parent must move first. A dry-run plan already notes, on such a row, `transitive: moves with
+  <parent> when stage-major raises it` when the parent is itself a direct `major-held` row. A `stage-major` is
+  refused (before a grant use) while the repository has a staged fix with no PR yet. npm
   workspaces stay refused. A spec that is a URL, path, git or `npm:` alias is never rewritten. `npm install`
   fails closed: it is refused (the stage fails, nothing is written) unless the tools container is active
   (never on the host, never with `confine.subprocesses: false`), and unless the base `package.json` and lockfile
@@ -1025,7 +1030,9 @@ the stage, nothing is guessed).
   the tests in it, and the PR is labelled `vulnscan-major`. The staged state and the `stage-image` and `open-pr`
   results carry `"image": true`.
 - **Lanes.** `close-superseded` closes only older PRs in the replacement's lane (`ops.lane_of`: `image` for a
-  `stage-image` PR, `deps` for every other): a base-image PR and a dependency PR never supersede each other.
+  `stage-image` PR, `major` for a `stage-major` PR, `deps` for every other) (every `open-pr` result, a claimed existing PR included, carries
+  its lane: `executor_pr.lane_fields`): a base-image PR, a MAJOR PR and a
+  dependency PR never supersede each other (a MAJOR PR is staged beside the fix PR, vfr-b.B2).
 
 ### Grants from the registry
 
@@ -1810,7 +1817,9 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 with `major` set (spec raised to `^<fixed version>` by `npm_major.rewrite_specs`, the lockfile re-resolved by
 `npm_fix(..., install=True)`), those `skip` names (another open PR updates them) `pr-held`, the rest still
 `major-held` with the reason (transitive only, workspaces, or a
-`package.json` that could not be rewritten). Which names are direct is `npm_major.direct_majors(lockfile, names)`
+`package.json` that could not be rewritten), except a transitive row a raised parent carried off its vulnerable
+version (`npm_groups.LockGraph.carried_by` on the base lockfile, `npm_groups.installed` on the re-resolved one):
+that row is `moves-with`, its note naming the parent. Which names are direct is `npm_major.direct_majors(lockfile, names)`
 (`({name: section}, package.json text, problem)`; `problem` is `npm_major.WORKSPACES` when
 `npm_major.in_workspaces(lockfile)`, or why `package.json` is a symlink, unreadable or not an object), the rule
 `executor_guard.stage_major_packages` shares. Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
@@ -2367,7 +2376,7 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 | `protected_identities(cfg, extra=())` | `{origin identity: path}` of those (and `extra`); used by `grant sign --from-registry` |
 | `origin_of(path)` | `host/owner/name` of the checkout containing `path` (nearest `.git` upwards; git is not run), or `None` for a repository without a host origin |
 | `repo_identity(path)` | The git common dir of the repository containing `path`, or `None` |
-| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str, "major_next": {target: {"since": date, "packages": [name, ...]}}}`) for the MCP server; called before the agent container starts. `major_next` lists each remediate-level plan whose next step is `stage-major` (the agent never sees, in its own run, the result of a `stage-fix` it requested): `retry_guard.major_next_since` gives a date, no fix is staged for it, and `stage_major_packages` returns names; empty when the registry or the ledger cannot be read |
+| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str, "major_next": {target: {"since": date, "packages": [name, ...][, "after": "fix-pr"]}}}`) for the MCP server; called before the agent container starts. `major_next` lists each remediate-level plan whose next step is `stage-major` (the agent never sees, in its own run, the result of a `stage-fix` it requested): `retry_guard.major_next_since` gives a date, no fix is staged for it, and `stage_major_packages` returns names; or (`"after": "fix-pr"`, vfr-b.B2) a plan with `fix` rows too whose last non-major PR was opened at this plan with no `stage-major` since (`retry_guard.major_beside_since`; `stage_major_packages(..., beside=True)` skips the `fix` rows), so the majors go on a second branch beside that PR; empty when the registry or the ledger cannot be read |
 | `stage_major_packages(plan, repo)` | The `major-held` packages of a fix plan's Markdown that `stage-major` could take, in plan order: requirements pins, and npm packages `npm_major.direct_majors` places (direct, outside workspaces, `package.json` neither a symlink nor unreadable; a lockfile path outside `repo` takes nothing). `[]` when the plan has any `fix` row. Only names `mcp.package_name_ok` accepts for the row's ecosystem are returned |
 
 All raise `executor.ExecError` when they refuse.
@@ -3304,7 +3313,7 @@ is reported on stderr and returns `None`.
 
 The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
 repository's successful `open-pr` PRs, oldest first, and `ledger_lanes(repo, rows)` the same as `{url: lane}`
-(`ops.lane_of`: `image` for a `stage-image` PR, else `deps`): only older PRs in the replacement's lane are
+(`ops.lane_of`: `image` for a `stage-image` PR, `major` for a `stage-major` PR, else `deps`): only older PRs in the replacement's lane are
 candidates; `head_problem(data)` and `touched_problem(data,
 identity)` say why a PR may not be closed, and `authored_problem(data, identity)` (commits only) why a PR is not
 the executor's own (the replacement; and the PR open-pr would claim, `open_pr_with_same_change`). Each candidate is looked up again right before it is closed; a
@@ -3333,6 +3342,12 @@ directories only. Called by `executor.authorize`.
 The local date (`YYYY-MM-DD`) of `target`'s last `stage-fix` result when it failed "nothing fixable without a
 major jump" (not the upstream variant), `futile_reason` still holds it at the current plan, and no `stage-major`
 row of any kind follows it in the ledger; else `""`. Read by `executor_guard.write_plan_levels` (`major_next`).
+
+#### `major_beside_since(target, rows)`
+
+vfr-b.B2: the local date of `target`'s last `open-pr` `done` row when its result is neither `major` nor `image`,
+the current fix plan is that day's, and no `stage-major` row follows it; else `""`. Marks the plan
+`"after": "fix-pr"` in `major_next`: the `fix` rows have their PR, so `stage-major` is next beside it.
 
 #### `mark_held(target)` / `held_count()`
 
@@ -3461,6 +3476,20 @@ reading side: writing packets and issuing the directive is operator tooling outs
   `sandbox/confine-run.sh` the handoff's goose session would run under: the goose home's, else
   `<agent.team_dir>/sandbox/confine-run.sh`), `launcher_state` / `launcher_detail` (see
   [launcher_lineage](launcher-lineage.md)) and `launcher_warning()`, printed by `handoff status` unless `current`.
+- **The `own-pr` lapse** (`handoff_lapse`, operator decision OD10). `handoff_lapse.clock(repo, branch)` starts a
+  clock the first time the newest verdict for a staged fix is `own-pr`: a `handoff-clock` row (`state: start`, with
+  the fix `digest`, the fix `plan` digest and the verdict's `handoff_id`) in the MAC-chained ledger, whose own `ts` is
+  the start, so no unsigned file can move it. A different digest, plan or `handoff_id` restarts it, and any sight of
+  another verdict stops it (`state: stop`), so `own-pr` → `reject` → `own-pr` starts over. An unreadable ledger
+  starts nothing and lapses nothing. Until `LAPSE_DAYS` (7) have passed, `open-pr` stays refused and the refusal
+  names the lapse date (`pending_detail`); `RepoHandoff.lapses`, `lapsed`, `owner_prs` and `ask` (`packet_ask`: the
+  request the next handoff packet should carry, for the operator's packet tooling) show it in the summary and
+  `handoff status`, which also starts or stops the clock. After that, `handoff_lapse.gate(op, repo, cfg)` (called by
+  `authorize`) lets `open-pr` proceed under the existing grant when no open owner PR updates the staged packages
+  (`open_prs.owner_prs`: any author, not a fork, not `vulnscan/*`, title or branch naming a package), and
+  `handoff_lapse.log` writes a `handoff-lapsed` ledger row only once a grant covers the `open-pr`. The owner PRs
+  that keep it deferring are named in the summary (`own-pr kept: owner PR #N open`). Only `own-pr` lapses; a gh
+  failure or a staged record without packages keeps deferring.
 
 ### `agentteams.vulnscan.remediation_status`
 

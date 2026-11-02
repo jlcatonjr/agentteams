@@ -152,7 +152,7 @@ def staging_claims(target_repo: Callable[[], str]) -> dict[str, list[int]]:
     Staging does not wait on gh; ``open-pr`` lists the PRs again and fails closed (:func:`refuse_duplicate`).
 
     Args:
-        target_repo: Returns ``HOST/OWNER/REPO`` (``executor._origin_repo``); it may raise :class:`ExecError`.
+        target_repo: Returns ``HOST/OWNER/REPO`` (``executor.origin_repo``); it may raise :class:`ExecError`.
 
     Returns:
         ``{normalized package: [PR numbers]}``.
@@ -161,6 +161,35 @@ def staging_claims(target_repo: Callable[[], str]) -> dict[str, list[int]]:
         return claimed(list_open(target_repo()))
     except ExecError:   # not blocking: the same check runs again, fail-closed, at open-pr
         return {}
+
+
+def owner_prs(prs: list[dict[str, Any]], packages: list[str]) -> list[int]:
+    """Return the open PRs that may be the repository owner's own fix for ``packages`` (the ``own-pr`` lapse).
+
+    Unlike :func:`packages_of` any author counts (an orchestrator's PR is the operator's), because finding one only
+    keeps the executor deferring, never lets it act. A PR counts when it is not the executor's (``vulnscan/*``), not
+    from a fork, and its title or head branch names one of ``packages`` as a whole word (:func:`normalize`'s form).
+
+    Args:
+        prs: :func:`list_open`'s result.
+        packages: The package names the staged change updates.
+
+    Returns:
+        PR numbers, ascending.
+    """
+    names = {normalize(p) for p in packages if isinstance(p, str) and p}
+    out: set[int] = set()
+    for pr in prs:
+        num, branch, title = pr.get("number"), pr.get("headRefName"), pr.get("title")
+        if not isinstance(num, int) or isinstance(num, bool) or pr.get("isCrossRepository") is not False:
+            continue
+        branch = branch if isinstance(branch, str) else ""
+        if branch.startswith("vulnscan/"):
+            continue
+        text = normalize(f"{title if isinstance(title, str) else ''} {branch}")
+        if any(re.search(rf"(?<![a-z0-9@]){re.escape(n)}(?![a-z0-9])", text) for n in names):
+            out.add(num)
+    return sorted(out)
 
 
 def left_to_prs(changes: list[Any], claims: dict[str, list[int]]) -> dict[str, list[int]]:
