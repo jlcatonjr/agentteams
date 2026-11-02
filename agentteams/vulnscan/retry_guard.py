@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import paths
+from agentteams.vulnscan import ops, paths
 
 FUTILE_DETAIL = "nothing fixable without a major jump"
 #: ``stage-major``'s futile result: even with semver-major upgrades allowed, the change fixes nothing.
@@ -182,12 +182,12 @@ def major_beside_since(target: str, rows: list[dict[str, Any]]) -> str:
             last = i
     if last is None:
         return ""
-    try:
-        result = json.loads(str(rows[last].get("detail", "")))
+    try:   # a truncated or odd detail is unknown, never read as the deps lane: nothing is marked
+        readable = isinstance(json.loads(str(rows[last].get("detail", ""))), dict)
         day = datetime.fromisoformat(str(rows[last]["ts"])).astimezone().date().isoformat()
-    except (KeyError, ValueError):   # a truncated or odd detail is unknown: nothing is marked
+    except (KeyError, ValueError):
         return ""
-    if not isinstance(result, dict) or result.get("major") is True or result.get("image") is True:
+    if not readable or ops.lane_of(rows[last]) != "deps":   # a MAJOR or base-image PR is not the fix PR
         return ""
     if any(r.get("op") == "stage-major" and r.get("target") == target for r in rows[last + 1:]):
         return ""
