@@ -4,7 +4,8 @@
 # binary caches off (Dir::Cache::pkgcache= and srcpkgcache=), so it writes no cache file; `dnf -C repoquery` and
 # `dnf -C updateinfo` read the cache only (-C) but may append a line to dnf's own log (/var/log/dnf*.log). `nginx -T` (run once, when
 # nginx exists) may create the error-log file and temp directories its configuration names, as root, if they are
-# missing; its output goes to one mktemp file that an EXIT trap removes. Nothing else is written.
+# missing; its output goes to one mktemp file that an EXIT trap removes. The only other write is the web-root
+# evidence key, created once (/var/lib/agentteams-server-kit/l1-evidence.key, mode 600; see L1_KEY_FILE).
 # Ubuntu/Debian (apt) and Amazon Linux / RHEL / Fedora (dnf/yum).
 #
 #   ./remote.sh <host> L1-audit.sh                    # from your workstation (streamed, not copied)
@@ -19,6 +20,10 @@
 #   ESM        esm-infra  esm-apps                    Ubuntu only: enabled|disabled|unknown, read from
 #                                                     /var/lib/ubuntu-advantage/status.json (`pro` is never run)
 #   HOSTCHECK  severity  message                      OS patch state, reboot, exposure checks
+#   HOSTEVIDENCE digest  files  deny                 after a web-root HOSTCHECK: one sha256 over each hit file's
+#                                                     HMAC (per-host key, see L1_KEY_FILE) and each nginx `deny`
+#                                                     rule, with their counts; never a per-file value. A signed known
+#                                                     entry voids when a file or the deny rule changes
 #   IOC        message                                compromise indicator (from ioc-*.txt data)
 #   DISTROPKG  location  name  version  binary  source  pkgversion  origin
 #                                                     a package in an OS-managed Python path (/usr/lib*/python3*): the
@@ -51,9 +56,11 @@
 # Exit: 0 nothing local to flag · 1 action needed · 4 compromise indicator.
 #
 # Secret-bearing surfaces are never printed, and by default never read: no process environment (/proc/*/environ),
-# no `systemctl cat`, no journal; a running service is shown by its executable path only (never its arguments,
-# which can carry inline secrets). `env` indicator rules need process environments, so they run only with --deep
-# (an operator decision per host). The one exception to "never read" is the disabled-tree check below.
+# no `systemctl cat`, no journal, no .env or credential file contents; a running service is shown by its executable
+# path only (never its arguments, which can carry inline secrets). `env` indicator rules need process environments,
+# so they run only with --deep (an operator decision per host). Two exceptions to "never read": the disabled-tree
+# check below, and a secret-looking file under a web root, read only to HMAC it with a per-host key (only one
+# combined digest is printed).
 #
 # AGENTTEAMS_L1_ROOT (tests only) prefixes the files read for OSREL, ESM and dnf-automatic, the configuration and
 # /proc entries (and the docker socket test) the disabled-tree check reads, and the dnf metadata cache, and is stripped from a site-packages path
@@ -822,6 +829,77 @@ ioc_section(){
   [ "$any" -eq 0 ] && ok "no compromise indicators matched"
 }
 
+# Web-root evidence key (@security R1): a random per-host HMAC key, so the audit never prints a plain hash of a
+# secret-looking file (a low-entropy secret could be brute-forced offline from one). Created on first use, owned by
+# the user L1 runs as (root on a host), mode 600 in a 700 directory, read only into a shell variable: never printed,
+# never copied off the host. Deleting or rotating it changes every digest, which voids the host's known entries.
+L1_KEY_DIR="${AGENTTEAMS_L1_ROOT:-}/var/lib/agentteams-server-kit"
+L1_KEY_FILE="$L1_KEY_DIR/l1-evidence.key"
+
+_noxtrace(){   # run "$@" with xtrace off and restore it after: a `bash -x` run must not trace key-derived data
+  { local _xt=$- _rc; set +x; } 2>/dev/null
+  "$@"; _rc=$?
+  case $_xt in *x*) set -x;; esac
+  return $_rc
+}
+
+l1_evidence_key(){ _noxtrace _l1_evidence_key; }
+_l1_evidence_key(){   # prints the 64-hex key for capture into a variable; fails closed on anything unexpected
+  local k
+  # lstat-style checks before anything is created: a symlink, or a non-directory / non-regular file in the way
+  # (noclobber would still write into an existing FIFO), refuses the key.
+  [ -L "$L1_KEY_DIR" ] && return 1
+  [ -e "$L1_KEY_DIR" ] && [ ! -d "$L1_KEY_DIR" ] && return 1
+  [ -L "$L1_KEY_FILE" ] && return 1
+  [ -e "$L1_KEY_FILE" ] && [ ! -f "$L1_KEY_FILE" ] && return 1
+  if [ ! -e "$L1_KEY_FILE" ]; then
+    ( umask 077; set -C; mkdir -p "$L1_KEY_DIR" && chmod 700 "$L1_KEY_DIR" \
+        && od -An -tx1 -N32 /dev/urandom | tr -d ' \n' > "$L1_KEY_FILE" ) 2>/dev/null || return 1
+  fi
+  [ -d "$L1_KEY_DIR" ] && [ ! -L "$L1_KEY_DIR" ] && [ -O "$L1_KEY_DIR" ] || return 1
+  [ -n "$(find "$L1_KEY_DIR" -maxdepth 0 -perm 0700 2>/dev/null)" ] || return 1
+  [ -f "$L1_KEY_FILE" ] && [ ! -L "$L1_KEY_FILE" ] && [ -O "$L1_KEY_FILE" ] || return 1
+  [ -n "$(find "$L1_KEY_FILE" -maxdepth 0 -perm 0600 2>/dev/null)" ] || return 1
+  k=$(head -c 64 "$L1_KEY_FILE")
+  case "$k" in *[!0-9a-f]*|"") return 1;; esac
+  [ ${#k} -eq 64 ] || return 1
+  printf '%s' "$k"
+}
+
+_hmac_pad(){   # the 64-byte key block XOR $2, as printf \x escapes (bash builtins only: nothing on a command line)
+  local k="$1" i out=""
+  for ((i = 0; i < 128; i += 2)); do out+="\\x$(printf '%02x' $(( 0x${k:i:2} ^ $2 )))"; done
+  printf '%s' "$out"
+}
+
+hmac_sha256_file(){ _noxtrace _hmac_sha256_file "$@"; }
+_hmac_sha256_file(){   # HMAC-SHA256(key $1, contents of file $2), hex (RFC 2104 over sha256sum)
+  local k="$1$(printf '0%.0s' {1..64})" inner
+  inner=$( { printf "$(_hmac_pad "$k" 54)"; cat -- "$2"; } | sha256sum | cut -c1-64 ) || return 1
+  { printf "$(_hmac_pad "$k" 92)"; printf "$(printf '%s' "$inner" | sed 's/../\\x&/g')"; } | sha256sum | cut -c1-64
+}
+
+docroot_evidence(){ _noxtrace _docroot_evidence "$@"; }
+_docroot_evidence(){   # one HOSTEVIDENCE line for the check just printed: a combined digest, never per-file values
+  local key f h rule lines="" n=0 m=0 digest
+  key=$(l1_evidence_key) || { info "no usable evidence key at $L1_KEY_FILE: no HOSTEVIDENCE (a known entry cannot match)"; return 0; }
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] && [ -r "$f" ] || continue
+    h=$(hmac_sha256_file "$key" "$f") || continue
+    [ ${#h} -eq 64 ] || continue
+    lines+="file $h $f"$'\n'; n=$((n + 1))
+  done <<< "$1"
+  if command -v nginx >/dev/null 2>&1; then
+    while IFS= read -r rule; do
+      [ -n "$rule" ] || continue
+      lines+="deny $rule"$'\n'; m=$((m + 1))
+    done < <( { [ "$NGINX_RC" -eq 0 ] && cat -- "$NGINX_DUMP"; } | tr '\t' ' ' | awk '$1=="location"{loc=$0} $1=="deny"{print loc " => " $0}' \
+               | tr -s ' ' | sed 's/^ //; s/ $//' | LC_ALL=C sort -u | head -50)
+  fi
+  digest=$(printf '%s' "$lines" | LC_ALL=C sort | sha256sum | cut -c1-64)
+  printf 'HOSTEVIDENCE\t%s\t%s\t%s\n' "$digest" "$n" "$m"
+}
+
 docroot_section(){
   command -v nginx >/dev/null 2>&1 || command -v apache2ctl >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1 || return 0
   sec "Secret-looking files inside web document roots"
@@ -835,12 +913,14 @@ docroot_section(){
             -not -path '*/.git/*' 2>/dev/null | head -20)
     if [ -n "$hits" ]; then
       check HIGH "secret-looking files under web root $r — confirm the server denies them (request them from outside; expect 403/404)"
+      docroot_evidence "$hits"
       echo "$hits" | sed 's/^/              /'
     else ok "nothing secret-looking under $r"; fi
   done
 }
 
 NGINX_DUMP=""; NGINX_RC=1   # the one `nginx -T` dump (nginx_dump), read by tree_ref, served_labels, docroot_section
+                             # and docroot_evidence
 nginx_dump(){  # run `nginx -T` once, in the main shell, into a mktemp file the EXIT trap removes; NGINX_RC 0 = usable
   command -v nginx >/dev/null 2>&1 || return 0
   NGINX_DUMP=$(mktemp "${TMPDIR:-/tmp}/l1-nginx.XXXXXX" 2>/dev/null) || { NGINX_DUMP=""; return 0; }

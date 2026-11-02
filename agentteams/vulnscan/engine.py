@@ -18,6 +18,7 @@ Server inventory line formats (one per line; anything else is ignored):
 | ``OSREL`` | os-release ``ID``, ``VERSION_ID``, ``PRETTY_NAME`` (an ``ID`` not in ``runtimes.OS_PRODUCTS`` is unscannable) |
 | ``ESM`` | esm-infra, esm-apps: ``enabled``, ``disabled`` or ``unknown`` (Ubuntu Pro, from its status file) |
 | ``HOSTCHECK`` | severity, message |
+| ``HOSTEVIDENCE`` | digest (hex), files, deny rules: evidence for the ``HOSTCHECK`` it directly follows |
 | ``IOC`` | message |
 | ``SCOPE`` | path, label, match (``tree`` or ``exact``), evidence: a location that is not the live system |
 | ``PYSITE`` | site-packages location, interpreter line ``X.Y`` |
@@ -25,6 +26,11 @@ Server inventory line formats (one per line; anything else is ignored):
 | ``AUTOUPD`` | manager, key, value: automatic-update settings and package-list age |
 | ``UPDATEINFO`` | pass (``installed`` / ``available``), ALAS advisory, CVE, package NEVRA (dnf hosts; ``L1-audit.sh`` ``dnf_updateinfo``) |
 | ``UPDATEINFOREAD`` | pass, ``ok`` or ``failed``: whether that dnf updateinfo pass read the host's cache |
+
+A ``HOSTEVIDENCE`` line becomes that host check's :attr:`.report.Finding.evidence` (:func:`host_evidence`): the
+audit's one digest over every hit file's HMAC (a random per-host key that never leaves the host) and every nginx
+``deny`` rule, so a known entry (:mod:`.known`) keyed on it voids when a file or the deny rule changes. No per-file
+value is ever printed.
 
 A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted
 distribution archive; ``repo:<host>:<name>`` and ``repo:unknown:<name>`` come from anywhere else and are
@@ -753,6 +759,27 @@ def held_by_interpreter(target: str, pysites: list[tuple[str, str]], report: Rep
                         f"fix by requires_python: {'; '.join(held)}")))
 
 
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_COUNT = re.compile(r"^[1-9][0-9]{0,3}$")
+
+
+def host_evidence(digest: str, files: str, deny: str) -> str:
+    """Return one host check's evidence from its ``HOSTEVIDENCE`` line.
+
+    Args:
+        digest: The audit's sha256 over every hit file's per-host HMAC and every nginx ``deny`` rule (hex).
+        files: How many files it covers.
+        deny: How many deny rules it covers.
+
+    Returns:
+        ``sha256:<hex>;files=N;deny=M``, or "" when the line is malformed or covers no file or no deny rule (a known
+        entry then cannot key on it).
+    """
+    if not (_HEX64.match(digest) and _COUNT.match(files) and _COUNT.match(deny)):
+        return ""
+    return f"sha256:{digest};files={files};deny={deny}"
+
+
 def scan_inventory(text: str, target: str) -> Report:
     """Analyze the inventory lines a server-kit audit printed.
 
@@ -774,9 +801,13 @@ def scan_inventory(text: str, target: str) -> Report:
     updateinfo: list[distro_verdict.UpdateInfo] = []
     updateinfo_read: dict[str, str] = {}
     autoupd: dict[tuple[str, str], str] = {}
+    check: Finding | None = None
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
+        if tag in ("INV", "RUNTIME", "OSREL", "ESM", "IOC", "SCOPE", "PYSITE", "DISTROPKG", "UPDATEINFO",
+                   "UPDATEINFOREAD", "AUTOUPD"):
+            check = None   # HOSTEVIDENCE belongs to the HOSTCHECK it directly follows
         if tag == "INV" and len(parts) == 5:
             _, eco, name, ver, loc = parts
             deps.append((target, Dep(eco, name, ver, "runtime", loc)))
@@ -788,7 +819,11 @@ def scan_inventory(text: str, target: str) -> Report:
             esm = tuple(p if p in ESM_STATES else "unknown" for p in parts[1:3])  # type: ignore[assignment]
         elif tag == "HOSTCHECK" and len(parts) == 3:
             sev = osv.SEVERITY_RANK.get(parts[1].upper(), 2)
-            report.findings.append(Finding(kind="host", target=target, name="host", severity=sev, detail=parts[2]))
+            check = Finding(kind="host", target=target, name="host", severity=sev, detail=parts[2])
+            report.findings.append(check)
+        elif tag == "HOSTEVIDENCE" and len(parts) == 4 and check is not None:
+            check.evidence = host_evidence(parts[1], parts[2], parts[3])
+            check = None   # one evidence line per check
         elif tag == "IOC" and len(parts) == 2:
             report.findings.append(Finding(kind="ioc", target=target, name="compromise indicator",
                                            severity=4, detail=parts[1]))

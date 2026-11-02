@@ -258,6 +258,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stage-major for it, or leave the upgrade to the repository's own PR"). `OWN_PR` lives in `npm_ops` and is
   re-exported by `fix`. A directive ledger that is not UTF-8 now fails closed as unreadable instead of raising.
 
+### added (vulnscan: signed, expiring known-finding entries; `known propose` for agents, `known sign` for the operator)
+
+- **A deliberate decision to accept a finding is now recorded, and reads differently from an unfixed one**
+  (vfr-k K1/K3, under @security's K2 conditions). A *known entry* is the operator's Ed25519 signature (own purpose
+  tag `agentteams-vulnscan-known-v1`, through `grant.operator_sign`) over a finding's key: target, ecosystem,
+  package, installed version, advisory ids, and the fix state and severity at signing. A group entry signs its full
+  member list (2–40), never a path prefix. The web-root host check keys on one `HOSTEVIDENCE` digest that
+  `L1-audit.sh` now prints: a sha256 over each file's HMAC and the nginx `deny` rules. The HMAC key is random per host,
+  created on first use at `/var/lib/agentteams-server-kit/l1-evidence.key` (mode 600) and never printed; no per-file
+  value is printed. Rotating the key voids the host's entries. CRITICAL findings are refused until vulnscan reads the
+  CISA KEV catalog.
+- While an entry is valid, `daily` grades its findings `known until <date>` and leaves them out of the exit code. They
+  stay in the report, and `summary.md` lists every entry under *Known findings*: reason (fenced as data, capped),
+  expiry, key id, decision reference, renewal count. Void entries are listed too, with the reason.
+- Every load re-checks the signature, purpose and the 90-day limit, then the decision log: a HALT on `vulnscan-known`
+  voids every entry (so does `vulnscan-known:<anything>`), and a HALT on the bare entry id `vk-…` or a lineage id
+  voids that entry. The decision reference must name a cleared row (a conditional one only once
+  `conditions_verified` is `verified`), and a HALT or retraction of that row voids the entry. Entries apply to `daily`
+  only; ad-hoc `scan`/`inventory` exit codes can differ. The entry's sha256 must also be in the committed
+  `references/vulnscan-known-index.csv` (added here, empty). At most 30 entries are in force; over the cap the newest
+  is refused and the existing ones stay valid. The class is derived by `effect_classifier`. Trust-root targets,
+  `MAL-*` and malicious findings, compromise indicators, ranges, integrity findings and the other host checks are
+  refused even when signed.
+- An entry voids itself on a version change, a new advisory id, a fix it did not record, a severity rise or KEV, an
+  evidence change, expiry, a missing or mismatched index row, or a bad signature. A void entry covers nothing, and
+  the report gains a HIGH `integrity` finding naming it.
+- `known propose` writes an unsigned proposal from a run's findings and prints the signing command. It never signs
+  and never reads key material. `--from-note` migrates an operator note's text, which is how the 2026-11-01 zstd
+  note becomes an entry. `--renews` keeps the lineage. The operator runs `known sign` outside agent sessions, then
+  commits the index row. `known list` and `known remove` also exist. Code: `vulnscan/known.py` (format, refusals,
+  signing, verification), `known_report.py` (loading, voids, grading), `known_cli.py`; `vulnscan-known` joins
+  `action_ids.GATE_ACTIONS`. No entry is created by this change (K4 is not
+  cleared).
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install

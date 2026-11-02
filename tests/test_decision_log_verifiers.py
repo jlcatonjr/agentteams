@@ -332,6 +332,15 @@ def test_every_gate_call_site_is_listed():
                 dynamic.append(path.name)
             elif arg in {"relaxation_action", "relaxation_family"} and path.name == "sandbox_relaxation_gate.py":
                 sandbox_sites.append(arg)  # <kind>:<qualifier> and the bare <kind>, both checked below
+            elif arg == "action" and path.name == "known_report.py":
+                # Known-entry ids only: the site must refuse anything but ^vk-[0-9a-f]{16}$ before the gate call.
+                from agentteams.vulnscan.known import ENTRY_ID_RE
+
+                assert ENTRY_ID_RE.pattern == r"^vk-[0-9a-f]{16}$"
+                call_text = "_assert_no_unretracted_halt(gov, action=action)"
+                assert text.count(call_text) == 1 and text.count("if not ENTRY_ID_RE.fullmatch(action):") == 1
+                guard = text.index("if not ENTRY_ID_RE.fullmatch(action):")
+                assert guard < text.index(call_text) < guard + 400
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
     assert "branch-cleanup" in GATE_ACTIONS and dynamic

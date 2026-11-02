@@ -1,0 +1,8 @@
+{
+  "patch_id": "216c0b66db47973861f23d19fbec69c315a79d75",
+  "commit": "76180fcdce159f7ebe40c3ca4a8646d183fa9839",
+  "subject": "feat(vulnscan): signed, expiring known-finding entries; known propose/sign (vfr-k K1, K3)",
+  "impact": "3 modules added, 32 symbols added, 14 cli added, 1 structural added",
+  "note": "vfr-k K1/K3: new vulnscan known/known_report/known_cli modules, documented in docs_src/api-reference/vulnscan.md (vulnscan modules share that page, so the per-module no-page notice is expected); Finding gains evidence/kev/known/known_until, Report gains known_entries; CLI known propose|sign|list|remove; GATE_ACTIONS gains vulnscan-known",
+  "recorded_at": "2026-11-02T21:23:20Z"
+}

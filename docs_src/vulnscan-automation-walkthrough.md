@@ -808,6 +808,69 @@ python -m agentteams.vulnscan say --list
   `debrief refused: agent.debrief_budget_usd must be …` (or the key at fault) before starting
   anything.
 
+### Accepting a finding for a while (known entries)
+
+A note never suppresses anything. When you decide to live with a finding (an nginx deny in front of files you
+keep, a dependency with no fixed release yet), record a **known entry**: a signed, expiring decision. While it
+is valid the finding is graded `known until <date>` and leaves the exit code. It stays in the report, and the
+summary's *Known findings* section lists every entry with its reason, expiry, key id, decision reference and
+renewal count.
+
+1. **Record the decision.** A `@security` row in your governance dir's decision log clears this entry
+   (its `plan_slug` and `step` are the entry's decision reference).
+2. **Propose it** (an agent may do this; it never signs and never reads a key). Name each finding by its
+   key, as the run's `summary.json` gives it; several keys make one group entry that signs every member:
+
+   ```bash
+   python -m agentteams.vulnscan known propose --run 2026-11-02 \
+     --finding 'webapp|package|npm|xlsx|0.18.5|GHSA-…' \
+     --reason "no fixed release on npm; input is first-party only" \
+     --decision-plan vfr-k-known --decision-step "K4 xlsx" \
+     --days 60 --key-id <your key id> --governance-dir ~/team
+   ```
+
+   It writes an unsigned proposal and prints the command for the next step. `--from-note <note id>` takes the
+   reason from an operator note; `--renews <entry id>` proposes a renewal (a new id that names the old one).
+3. **Sign it yourself, outside any agent session.** This shows every member, asks for the review digest and
+   reads your key once. It installs the entry and appends its row to `references/vulnscan-known-index.csv`:
+
+   ```bash
+   python -m agentteams.vulnscan known sign ~/.local/state/agentteams/vulnscan/known-proposals/vk-….json
+   git -C ~/team commit -m "known: vk-…" references/vulnscan-known-index.csv
+   ```
+
+   The entry is in force only once that row is committed. `known list` shows every entry and its status;
+   `known remove <entry id>` withdraws one.
+
+Limits: at most 90 days per entry, at most 30 entries in force (a new one over the cap is refused; the
+existing ones stay). Never known, even when signed: malicious packages and `MAL-*` advisories, compromise
+indicators, requirement ranges, integrity findings, trust-root targets (keys, rosters, secrets, the
+integrity manifest, the constitution, grants and ledger, the known index, the decisions log, the vulnscan
+install), CRITICAL findings (vulnscan reads no CISA KEV catalog yet, so whether one is exploited is unknown),
+and host checks other than the web-root exposure check and the OS release check.
+
+A web-root entry keys on one digest that `L1-audit.sh` prints as a `HOSTEVIDENCE` line: a sha256 over each
+file's HMAC and the nginx `deny` rules. The HMAC key is random per host, created on the first audit at
+`/var/lib/agentteams-server-kit/l1-evidence.key` (owned by root, mode 600, in a mode-700 directory). It is
+never printed and never leaves the host, so the audit output never holds a plain hash of a secret-looking file.
+Deleting or rotating that key changes the digest, which voids that host's entries: re-propose and re-sign them.
+
+The decision row must be cleared. A `CLEARED-WITH-CONDITIONS` or `CONDITIONAL` row counts only once its
+`conditions_verified` column reads `verified`; until then it blocks the entry, as a HALT would.
+
+An entry voids itself when the installed version changes, a new advisory id appears, a fixed release appears
+that it did not record, the severity rises or the finding reaches CISA KEV, the evidence changes, it expires,
+its decision row is HALTed or retracted, or its index row is missing or does not match. HALTs:
+
+- a HALT on the bare entry id (`vk-…`), or on the id of an entry it renews, voids that entry;
+- a HALT on `vulnscan-known`, or on `vulnscan-known:<anything>` (it matches the same action), voids **every**
+  entry.
+
+A void entry hides nothing: the finding is graded normally and the report gains a HIGH integrity finding saying why.
+
+Entries apply to the `daily` run only. An ad-hoc `scan` or `inventory` ignores them, so its exit code can be 1
+where the daily run's is 0 for the same findings.
+
 ### Reports, and publishing them (optional)
 
 The agent submits a report at the end of each run; the executor stores it, fenced, under
