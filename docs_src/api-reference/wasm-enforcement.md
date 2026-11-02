@@ -29,12 +29,22 @@ sandbox on **and** the METAPLAN R1 control-plane rules merged; otherwise the cel
 | Framework | Narrowed sub-agents | Precondition check |
 |---|---|---|
 | claude | `enforced` (Bash removed from subagent `tools`) | `_sandbox_drift.verify_control_plane_merged` (including the shell `denyWrite` on `.claude`, or at least `.claude/agents`) and `wasm_mcp.control_plane_advisory` on the live settings |
-| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory`, with each narrowed agent that keeps its shell as a delegate in `delegates_native` | `wasm_mcp.control_plane_advisory` (`.goose/sandbox.sb`) |
+| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory`, with each narrowed agent that keeps its shell as a delegate in `delegates_native` | `wasm_mcp.control_plane_advisory`: `.goose/sandbox.sb` denies the writes **and** `_sandbox_drift.live_goose_sandbox_enabled()` is True (`GOOSE_SANDBOX` on in `~/.config/goose/config.yaml`, or the file `AGENTTEAMS_GOOSE_CONFIG` names). Otherwise `advisory`, reason `Seatbelt profile not wired: GOOSE_SANDBOX is not enabled in the live Goose config ...`; a `sandbox-exec` launch is not verifiable at render and never counts |
 | goose (legacy) | `advisory` (whole `developer` extension) | — |
 | codex | `conditional` under the confined launcher's role gate (WASM mode, or the write-policy gate), else `declared` | the launcher's `--protect` + self-probe at each launch |
 | grok | `declared` under `deny`; `advisory` under `replace` (no `run_wasm`) | — |
 | copilot-vscode / copilot-cli | `advisory`, also under `deny` (no `run_wasm`; no verified control-plane protection) | — |
 | agents-md | `advisory` | — |
+
+**Scope.** The term covers native-exec removal only (Bash or the shell removed from the narrowed sub-agents, the
+session OS sandbox on, and R1 merged). It is not a claim that `run_wasm` is nested in an OS sandbox. Nesting is
+measured per call and returned as `os_confinement`: `nested` (`os_reason` `nested:seatbelt` or `nested:bwrap`),
+`inherited` (the P08 launcher only) or `none` (`unavailable:<platform>`); the MCP server calls with
+`os_confine="auto"` (`wasm_exec._nesting`). METAPLAN R5: only `nested` counts as OS-enforced. At render,
+`cli.wasm_sandbox_switch.report_wasm_enforcement` probes `_sandbox_profiles.available()`; when it returns `None`
+(WASM on, any framework but `wasm`) it prints `NOTE (WASM): run_wasm will run without OS nesting on this host
+(...)` to stderr and appends a `wasm-run-unnested` advisory (D6). The probe runs in the render's process, so a
+render inside a sandboxed session reads `None` even where the server, launched outside it, nests.
 
 **Live agent files.** The verdict also reads what is on disk (`live_problems`): a narrowed agent whose live file
 still grants a shell makes the cell `advisory` with `reason` `live agent <slug> holds a shell`, both after a render

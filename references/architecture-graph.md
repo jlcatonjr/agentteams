@@ -5,7 +5,7 @@
 
 - Modules mapped: **398**
 - Packages: **14**
-- Internal import edges: **1408**
+- Internal import edges: **1409**
 - Distinct external dependencies: **11**
 
 ---
@@ -59,7 +59,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams._fleet_twin_acks` | `agentteams.atomicio`, `agentteams.fence_twins`, `agentteams.fleet`, `agentteams.git_exec` | `agentteams.fleet` |
 | `agentteams._interop_grok` | `agentteams.capability_map`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.grok`, `agentteams.interop`, `agentteams.interop_helpers` | `agentteams.interop` |
 | `agentteams._makefile_screen` | — | `agentteams.vscode_tasks` |
-| `agentteams._sandbox_profiles` | — | `agentteams.cli.os_sandbox_switch`, `agentteams.confinement`, `agentteams.frameworks._wasm_team_docs`, `agentteams.runner_wasm`, `agentteams.sandbox_state`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.team`, `agentteams.wasm_config` |
+| `agentteams._sandbox_profiles` | — | `agentteams.cli.os_sandbox_switch`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.confinement`, `agentteams.frameworks._wasm_team_docs`, `agentteams.runner_wasm`, `agentteams.sandbox_state`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.team`, `agentteams.wasm_config` |
 | `agentteams._utils` | — | `agentteams.analyze`, `agentteams.analyze_tools`, `agentteams.branch_cleanup`, `agentteams.ingest` |
 | `agentteams._wasm_archive` | `agentteams.wasm_pins` | `agentteams._wasm_pin_update`, `agentteams.wasm_runtime` |
 | `agentteams._wasm_pin_update` | `agentteams._wasm_archive`, `agentteams.cli.security_gate`, `agentteams.git_exec`, `agentteams.wasm_pins`, `agentteams.wasm_runtime` | `agentteams.wasm_runtime` |
@@ -143,7 +143,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.sync_switch` | `agentteams.multi_sync` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.wasm_agent_commands` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.sandbox_effects`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.sandbox_state`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.team`, `agentteams.wasm_agent.transcript`, `agentteams.wasm_exec`, `agentteams.wasm_runtime` | `agentteams.cli.app` |
 | `agentteams.cli.wasm_commands` | `agentteams.wasm_runtime` | `agentteams.cli.app` |
-| `agentteams.cli.wasm_sandbox_switch` | `agentteams.frameworks._wasm_wiring`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_enforcement`, `agentteams.wasm_exec` | `agentteams.cli.artifacts` |
+| `agentteams.cli.wasm_sandbox_switch` | `agentteams._sandbox_profiles`, `agentteams.frameworks._wasm_wiring`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_enforcement`, `agentteams.wasm_exec` | `agentteams.cli.artifacts` |
 | `agentteams.cli.write_policy_warning` | `agentteams.audit`, `agentteams.audit_agent_contract`, `agentteams.audit_types` | `agentteams.cli.generate` |
 | `agentteams.cli.write_root_policy` | `agentteams.cli.sandbox_effects`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots`, `agentteams.sandbox_state` | `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.multi_sync` |
 | `agentteams.code_index` | — | `agentteams.cli.code_index_artifacts`, `agentteams.code_sources`, `agentteams.mcp_servers.recall` |
@@ -1860,6 +1860,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/cli/wasm_sandbox_switch.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams._sandbox_profiles",
         "agentteams.frameworks._wasm_wiring",
         "agentteams.sandbox_projection",
         "agentteams.sandbox_state",
@@ -7401,6 +7402,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.wasm_commands",
       "target": "agentteams.wasm_runtime"
+    },
+    {
+      "source": "agentteams.cli.wasm_sandbox_switch",
+      "target": "agentteams._sandbox_profiles"
     },
     {
       "source": "agentteams.cli.wasm_sandbox_switch",

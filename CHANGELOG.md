@@ -66,6 +66,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Teams that use none of the new switches render byte-identically (verified per plan across every example brief and
   framework).
 
+### fixed (sandbox switches and WASM)
+
+- **Goose `enforced` needs `GOOSE_SANDBOX` live.** The verdict no longer counts the emitted `.goose/sandbox.sb` as
+  wired once its deny rules parse: Goose sub-agents read `enforced` only when `GOOSE_SANDBOX` is also on in the live,
+  user-global Goose config (`~/.config/goose/config.yaml`, or the file `AGENTTEAMS_GOOSE_CONFIG` names). Otherwise
+  the cell is `advisory`, "Seatbelt profile not wired". A `sandbox-exec` launch cannot be verified at render, so it
+  never counts.
+- **A governed off → off re-render continues under its exception.** After an Ed25519-cleared `--os-sandbox off
+  --wasm-sandbox off`, an identical render no longer refuses with "no unconsumed decision" because the earlier on
+  render's launcher and server are still on disk: a valid build-log record is the previous state, and leftover
+  evidence is excused only by the operator's authorization of that off state (an active, bound `sandbox-os-off`
+  exception; for WASM, the newest `sandbox-wasm-off` decision spent and still re-verifying). That spent wasm-off
+  excuse refuses a `CONDITIONAL PASS` whose conditions are not verified, and an unretracted HALT on the family or the
+  exact action. A forged "was off" record alone does not get past the gate.
+- **A `:` in the project path is a clean refusal.** wasmtime splits `--dir HOST::GUEST` on `:`, so such a path cannot
+  be mounted; the render now stops with an `Error:` line naming the path (exit 1, before anything is emitted) instead
+  of a traceback.
+- **A widened grant that has no effect is noticed.** A `wasm_sandbox.agents` grant on an agent the framework never
+  wires (not WASM-eligible on Claude or Goose; AGENTS.md and Grok wire none) prints `NOTE (WASM): the
+  wasm_sandbox.agents grant for <slug> has no effect on <framework>: ...` and records a `wasm-grant-no-effect`
+  advisory. The shipped example brief now widens an agent Claude wires.
+- **The exception-cap refusal names `references/exception-registry.json` once** (it printed
+  `references/references/...`).
+- **A host where `run_wasm` cannot nest is noticed.** When no Seatbelt or bwrap profile can start
+  (`_sandbox_profiles.available()` is None), the render prints `NOTE (WASM): run_wasm will run without OS nesting on
+  this host (...)` and records a `wasm-run-unnested` advisory (D6: WASM runs alone, with a notice). The
+  `wasm_enforcement` term is unchanged: it covers native-exec removal only, and `run_wasm` nesting is reported per
+  call as `os_confinement`, where only `nested` counts as OS-enforced. The docs now say so, state the Goose
+  `GOOSE_SANDBOX` precondition, and note that the `DESCRIPTION-FORMAT.md` `wasm_sandbox` example needs two standing
+  exceptions, over the registry's default cap of one.
+
 ### security (research hardening, follow-up to the briefing PR)
 
 - **`fetch_text` / `fetch_text_and_date` close the DNS-rebinding window.** The host is resolved once, every

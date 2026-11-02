@@ -206,7 +206,7 @@
     }
   },
   "policy": "S-10: a release is adopted only when it is >=14 days old and the newest stable release on its major line that has cleared the cooldown, unless a recorded @security remediation decision names the GHSA ids it fixes.",
-  "rule5": "Archive size and sha256 are the GitHub release API 'size' and 'digest' fields (read 2026-10-31). Extracted-file and tree hashes stay TODO-PIN until `agentteams --wasm-pin-update` fills them from a verified download; a component holding any TODO-PIN is refused by install and resolve (fail closed).",
+  "rule5": "Archive size and sha256 are the GitHub release API 'size' and 'digest' fields (read 2026-10-31). Extracted-file and tree hashes were filled by `agentteams --wasm-pin-update` from a verified download (operator run 2026-11-01; provenance download-verified), so no TODO-PIN remains. A future component or platform added with a TODO-PIN marker is refused by install and resolve until a verified pin update fills it (fail closed).",
   "schema": "agentteams-wasm-runtime-pins/v1",
   "updated": "2026-11-01"
 }

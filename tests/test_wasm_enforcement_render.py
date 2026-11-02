@@ -165,3 +165,40 @@ def test_wasm_off_renders_are_byte_identical_to_the_unhooked_pipeline(framework,
     plain = _render(framework, _manifest(framework, wasm=wasm, **extra))
     assert hooked == plain
     assert we.KEY not in _manifest(framework, wasm=wasm)
+
+
+# --- D6: run_wasm without OS nesting is noticed at render, never silent ---------------------------------------------
+
+def _report_with_probe(monkeypatch, capsys, probe: str | None, framework: str = "claude") -> tuple[dict, str]:
+    from agentteams import _sandbox_profiles
+    from agentteams.cli.wasm_sandbox_switch import report_wasm_enforcement
+
+    monkeypatch.setattr(_sandbox_profiles, "available", lambda: probe)
+    monkeypatch.setattr(we, "report", lambda *a, **k: None)   # the verdict itself is not under test here
+    manifest = _manifest(framework)
+    report_wasm_enforcement(manifest, Path("/nonexistent-project"))
+    return manifest, capsys.readouterr().err
+
+
+def test_no_usable_os_sandbox_prints_the_unnested_run_wasm_note(monkeypatch, capsys):
+    manifest, err = _report_with_probe(monkeypatch, capsys, None)
+    assert "NOTE (WASM): run_wasm will run without OS nesting on this host (" in err
+    assert "os_confinement none" in err
+    assert [a["code"] for a in manifest.get("advisories", [])].count("wasm-run-unnested") == 1
+
+
+@pytest.mark.parametrize("probe", ["seatbelt", "bwrap"])
+def test_a_usable_os_sandbox_prints_no_unnested_note(monkeypatch, capsys, probe):
+    manifest, err = _report_with_probe(monkeypatch, capsys, probe)
+    assert "without OS nesting" not in err
+    assert "wasm-run-unnested" not in [a["code"] for a in manifest.get("advisories", [])]
+
+
+def test_the_unnested_note_is_absent_while_wasm_is_off(monkeypatch, capsys):
+    from agentteams import _sandbox_profiles
+    from agentteams.cli.wasm_sandbox_switch import report_wasm_enforcement
+
+    monkeypatch.setattr(_sandbox_profiles, "available", lambda: None)
+    manifest = _manifest("claude", wasm="off")
+    report_wasm_enforcement(manifest, Path("/nonexistent-project"))
+    assert "without OS nesting" not in capsys.readouterr().err

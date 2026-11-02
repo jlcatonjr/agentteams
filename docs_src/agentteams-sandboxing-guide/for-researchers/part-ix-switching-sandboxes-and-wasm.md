@@ -74,11 +74,17 @@ in the *live* configuration (checked on disk, not assumed from the render):
 | Provider | Strongest verdict | What it rests on |
 |---|---|---|
 | Claude Code | `enforced` (sub-agents) | Claude Code enforces subagent `tools`; Bash removed; live settings carry the control-plane denies (including `.claude` / `.claude/agents`) |
-| Goose | `enforced` for a direct recipe run; delegates `advisory` | the recipe's tool list is enforced at dispatch; `.goose/sandbox.sb` carries the rules |
+| Goose | `enforced` for a direct recipe run; delegates `advisory` | the recipe's tool list is enforced at dispatch; `.goose/sandbox.sb` carries the rules and `GOOSE_SANDBOX` is on in the live Goose config (otherwise `advisory`: the profile is emitted but not wired) |
 | Codex | `conditional` | a role gate the confined launcher protects and self-probes at each launch; not verifiable at render (Codex ignores role tool limits, so without the launcher only `declared`) |
 | Grok | `declared` | Bash absent from tools; no live negative probe |
 | Copilot (VS Code, CLI), AGENTS.md | `advisory` | no verified per-agent `run_wasm`, or no tool channel |
 | Any top-level session | `advisory` | the operator's own session is never narrowed |
+
+The label is about native exec only (the shell removed from narrowed sub-agents, with the OS sandbox on and the
+control-plane rules merged). Whether `run_wasm` itself is nested in an OS sandbox is a separate, per-call
+measurement, reported as `os_confinement` (`nested`, `inherited` or `none`). Only `nested` counts as
+OS-enforced. A host with no usable OS sandbox gets a render-time `NOTE (WASM): run_wasm will run without OS
+nesting on this host (...)`, so that case is never silent (D2, D6).
 
 The top-level session being `advisory` everywhere matters: a narrowed sub-agent can ask the orchestrator
 (which keeps exec) to run something natively. That laundering path is stated in every notice, not closed.

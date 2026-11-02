@@ -37,7 +37,11 @@ default grant is **compute only**: stdio, no preopened directory, an empty envir
 fuel / memory / timeout limits (defaults 10^10 fuel, 64 MiB, 120 s; bounds in `wasm_exec.LIMIT_BOUNDS`).
 Per-agent widening in `wasm_sandbox.agents.<slug>` is read-only project paths (`read_paths`, mounted at
 `/project/<path>`) and/or one private writable scratch dir (`scratch: true`, always
-`.agentteams/wasm/scratch/<agent>/`). There is no network key. The full key reference is in
+`.agentteams/wasm/scratch/<agent>/`). A grant reaches an agent only through its `agentteams_wasm` copy: on
+Claude and Goose only a WASM-eligible agent (one holding an execute-class tool) gets one, and AGENTS.md and
+Grok wire none. A grant on any other agent has no effect, and the render prints `NOTE (WASM): the
+wasm_sandbox.agents grant for <slug> has no effect on <framework>: ...` and records a `wasm-grant-no-effect`
+advisory (`_wasm_wiring.inert_grants`, D2). There is no network key. The full key reference is in
 [`DESCRIPTION-FORMAT.md`](../../DESCRIPTION-FORMAT.md#wasm_sandbox).
 
 **What each confines.**
@@ -157,10 +161,21 @@ is claimed. Terms, strongest first: `enforced`, `conditional`, `declared`, `advi
 `conditional` require the OS sandbox on **and** the R1 control-plane rules merged in the live
 configuration; otherwise the cell is `advisory` with the reason.
 
+**What `enforced` covers.** The term is about the native-exec policy only: Bash (or the shell) removed from
+the narrowed sub-agents, the session OS sandbox on, and the control-plane rules merged. It says nothing about
+whether `run_wasm` itself runs inside an OS sandbox. That is measured on every call and returned as the
+result's `os_confinement`: `nested` (Seatbelt or bwrap), `inherited` (the P08 launcher only) or `none`. The MCP
+server calls with `os_confine="auto"`, which falls back to `none` when no profile can start
+(`wasm_exec._nesting`). Only `nested` counts as OS-enforced. When the render's probe
+(`_sandbox_profiles.available()`) finds no usable profile, it prints `NOTE (WASM): run_wasm will run without
+OS nesting on this host (...)` and records a `wasm-run-unnested` advisory (D6: WASM runs alone, with a
+notice). A render inside an already-sandboxed session also probes `None`, while the server, which the vendor
+CLI launches outside that sandbox, may still nest, so the per-call field is the authority.
+
 | Framework | Narrowed sub-agents | Precondition |
 |---|---|---|
 | claude | `enforced` (Bash removed from subagent `tools`; Claude Code enforces subagent tools) | the live settings carry the `.agentteams` denyWrite, the `Edit(/.agentteams/**)` and `Edit(/.claude/agents/**)` denies, the shell-side deny on `.claude` (or at least `.claude/agents`) and every launching config (`_sandbox_drift.verify_control_plane_merged`, `wasm_mcp.control_plane_advisory`), and no narrowed agent's live file still grants a shell. A fresh render, before the operator merges the settings, reads `advisory: control-plane rules not merged`. |
-| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory` | `.goose/sandbox.sb` carries the rules (`control_plane_advisory`) |
+| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory` | `.goose/sandbox.sb` carries the rules **and** `GOOSE_SANDBOX` is on in the live, user-global Goose config (`~/.config/goose/config.yaml`, or `$AGENTTEAMS_GOOSE_CONFIG`; `control_plane_advisory`). Otherwise `advisory`, reason `Seatbelt profile not wired`: the emitted profile is inert until wired, and a `sandbox-exec -f .goose/sandbox.sb` launch is not verifiable at render, so it never counts. |
 | goose (legacy) | `advisory` | — |
 | codex | `conditional` when the confined launcher emits the role gate in WASM mode (or the write-policy gate); `declared` without it | the launcher's `--protect` + self-probe at each launch; not verifiable at render |
 | grok | `declared` under `deny` (Bash absent; no live negative probe); `advisory` under `replace` (no `run_wasm`) | — |

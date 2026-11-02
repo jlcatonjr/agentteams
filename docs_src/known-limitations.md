@@ -328,7 +328,8 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
   agent that keeps exec (the orchestrator) to run something natively.
 - **Who:** teams that read WASM on as a boundary on those hosts.
 - **Workaround:** read `wasm_enforcement` / `[WASM-ENFORCEMENT]`, and run `--check-wiring` after merging settings.
-  Use Claude or Goose (direct recipe runs) with the OS sandbox on where enforcement matters.
+  Use Claude or Goose (direct recipe runs) with the OS sandbox on where enforcement matters; on Goose that also
+  needs `GOOSE_SANDBOX` on in the live Goose config, or the verdict reads `advisory` ("Seatbelt profile not wired").
 - **Tracking:** WASM sandbox plan P13 (Rule 12 carve-outs 1 and 6).
 
 ### Windows has WASM but no OS sandbox, and no read-only mounts

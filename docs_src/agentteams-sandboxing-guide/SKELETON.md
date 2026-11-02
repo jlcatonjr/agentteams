@@ -825,7 +825,7 @@ flowchart TD
      launching config) and no narrowed agent's live file still grants a shell. A fresh render, before
      the operator merges the settings, reads `advisory`.
    - **goose** — `enforced` for a direct `goose run --recipe` when `.goose/sandbox.sb` carries the
-     rules; delegates are always `advisory`; legacy scoping is `advisory`.
+     rules and `GOOSE_SANDBOX` is on in the live Goose config (else `advisory`, "Seatbelt profile not wired"); delegates are always `advisory`; legacy scoping is `advisory`.
    - **codex** — `conditional` under the confined launcher's role gate (protect + self-probe at each
      launch, not verifiable at render); `declared` without it.
    - **grok** — `declared` under `deny` (Bash absent; no live probe); `advisory` under `replace`
