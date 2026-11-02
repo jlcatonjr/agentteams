@@ -21,8 +21,10 @@ Server inventory line formats (one per line; anything else is ignored):
 | ``IOC`` | message |
 | ``SCOPE`` | path, label, match (``tree`` or ``exact``), evidence: a location that is not the live system |
 | ``PYSITE`` | site-packages location, interpreter line ``X.Y`` |
-| ``DISTROPKG`` | location, name, version, owning package, source package, its version, origin (read by nothing yet) |
-| ``AUTOUPD`` | manager, key, value: automatic-update settings and package-list age (read by nothing yet) |
+| ``DISTROPKG`` | location, name, version, owning package, source package, its version, origin |
+| ``AUTOUPD`` | manager, key, value: automatic-update settings and package-list age |
+| ``UPDATEINFO`` | pass (``installed`` / ``available``), ALAS advisory, CVE, package NEVRA (dnf hosts; ``L1-audit.sh`` ``dnf_updateinfo``) |
+| ``UPDATEINFOREAD`` | pass, ``ok`` or ``failed``: whether that dnf updateinfo pass read the host's cache |
 
 A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted
 distribution archive; ``repo:<host>:<name>`` and ``repo:unknown:<name>`` come from anywhere else and are
@@ -38,6 +40,9 @@ A ``SCOPE`` line labels finding locations (:attr:`Finding.location_labels`): ``d
 references any more, ``on-disk-not-served`` for an npm location nginx refuses. A label changes no row and no grade
 (Rule 12). A ``PYSITE`` line whose interpreter line is end-of-life, with packages there whose fix release's
 ``requires_python`` excludes that line, gives a HIGH ``runtime`` finding (:func:`held_by_interpreter`).
+
+``DISTROPKG`` lines give each OS-managed PyPI finding a distro verdict beside its upstream grade
+(:mod:`.distro_verdict`, plan vfr-a A2): Ubuntu from OSV by source package, Amazon Linux 2023 from ``UPDATEINFO``.
 """
 
 from __future__ import annotations
@@ -53,7 +58,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, osv, private_sources, project_policy, runtimes, specifiers
+from agentteams.vulnscan import (_http, distro_verdict, images, osv, private_sources, project_policy, runtimes,
+                                  specifiers)
 from agentteams.vulnscan.manifests import REQ_SCAN_NAME, Dep, Manifest, discover, parse
 from agentteams.vulnscan.report import OS_RELEASE, PARTIAL_RANGE_CAP, Finding, Report
 from agentteams.vulnscan.versions import version_key
@@ -670,6 +676,10 @@ def scan_inventory(text: str, target: str) -> Report:
     esm: tuple[str, str] | None = None
     scopes: list[tuple[str, str, str, str]] = []
     pysites: list[tuple[str, str]] = []
+    distro_pkgs: list[distro_verdict.DistroPkg] = []
+    updateinfo: list[distro_verdict.UpdateInfo] = []
+    updateinfo_read: dict[str, str] = {}
+    autoupd: dict[tuple[str, str], str] = {}
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
@@ -692,10 +702,20 @@ def scan_inventory(text: str, target: str) -> Report:
             scopes.append((parts[1], parts[2], parts[3] if parts[3] in SCOPE_MATCH else "exact", parts[4]))
         elif tag == "PYSITE" and len(parts) == 3:
             pysites.append((parts[1], parts[2]))
+        elif tag == "DISTROPKG" and (rec := distro_verdict.parse_distropkg(parts)) is not None:
+            distro_pkgs.append(rec)
+        elif tag == "UPDATEINFO" and (up := distro_verdict.parse_updateinfo(parts)) is not None:
+            updateinfo.append(up)
+        elif tag == "UPDATEINFOREAD" and len(parts) == 3 and parts[1] in distro_verdict.UPDATEINFO_PASSES:
+            # one failed line for a pass wins over an ok one: a doubtful read gives no verdict, never "no advisory"
+            updateinfo_read[parts[1]] = parts[2] if updateinfo_read.get(parts[1], "ok") == "ok" else "failed"
+        elif tag == "AUTOUPD" and len(parts) == 4:
+            autoupd.setdefault((parts[1], parts[2]), parts[3])
     analyze(deps, report, distro_check=True)
     _runtime_findings(target, rts, report)
     _os_findings(target, osrel, esm, [m for _k, _v, _p, m in rts], report)
     held_by_interpreter(target, pysites, report)
+    distro_verdict.apply(target, osrel, esm, distro_pkgs, updateinfo, updateinfo_read, autoupd, report)
     apply_scopes(scopes, report)
     return report
 

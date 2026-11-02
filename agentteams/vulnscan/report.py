@@ -28,6 +28,11 @@ PARTIAL_RANGE_CAP = SEVERITY_RANK["MODERATE"]
 #: How the summary names a finding kind where it differs from the kind (``range``: an unpinned requirement
 #: range, :mod:`.specifiers`; ``image``: a container base image, :mod:`.images`).
 KIND_LABEL = {"range": "requirement range", "image": "base image"}
+#: Distro verdicts of an OS-managed package finding (:mod:`.distro_verdict`), best first.
+DISTRO_VERDICTS = ("fixed-in-installed", "fix-available-not-installed", "esm-only", "no-distro-fix")
+#: ``Finding.name`` of the LOW host check for an AL2023 updateinfo pass that was not read (:mod:`.distro_verdict`);
+#: the summary's distro-verdict section names it too.
+UPDATEINFO_CHECK = "distro-updateinfo"
 #: Heads the summary's list of lower-bound raises for range findings (never staged: ``stage-fix`` edits only
 #: ``==`` pins).
 RANGE_PLAN_NOTE = ("`stage-fix` never edits a requirement range (it changes only `==` pins), so these rows are for a "
@@ -63,6 +68,10 @@ class Finding:
     # location -> {"label", "path", "evidence"}: a location that is not the live system (a ``SCOPE`` line: a disabled
     # tree, or node_modules nginx refuses). Information only: the finding keeps its row and grade (Rule 12).
     location_labels: dict[str, dict[str, str]] = field(default_factory=dict)
+    # OS-managed package (vfr-a A2, :mod:`.distro_verdict`): what the distribution says, beside the upstream grade
+    # (Rule 12): one of DISTRO_VERDICTS, or "" with distro_note saying why there is none.
+    distro_verdict: str = ""
+    distro_note: str = ""
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -259,6 +268,47 @@ class Report:
             out.append(f"- {_code(target)}: {len(items)} finding(s) also at a live location (not grouped): {names}")
         return out + [""]
 
+    def distro_verdict_counts(self) -> dict[str, dict[str, int]]:
+        """Return, per host, how many OS-managed package findings have each distro verdict (vfr-a A2).
+
+        Only hosts with at least one judged or noted finding appear. ``none`` counts findings with a note but no
+        verdict (unowned, a non-allowlisted origin, a feed error, no feed for the release).
+
+        Returns:
+            ``{host: {verdict: n, ..., "none": n}}``, every verdict present (0 when none), sorted by host.
+        """
+        out: dict[str, dict[str, int]] = {}
+        for f in self.findings:
+            if f.kind != "package" or not (f.distro_verdict or f.distro_note):
+                continue
+            row = out.setdefault(f.target, {**{v: 0 for v in DISTRO_VERDICTS}, "none": 0})
+            row[f.distro_verdict if f.distro_verdict in DISTRO_VERDICTS else "none"] += 1
+        return dict(sorted(out.items()))
+
+    def _distro_markdown(self) -> list[str]:
+        """The summary's distro-verdict section: per host, the count of each verdict and the esm-only count (OD1).
+
+        Returns:
+            Markdown lines (none when no finding has a distro verdict or note).
+        """
+        counts = self.distro_verdict_counts()
+        unread = [f for f in self.findings if f.kind == "host" and f.name == UPDATEINFO_CHECK]
+        if not counts and not unread:
+            return []
+        out = ["## Distro verdicts (OS-managed Python packages; upstream grade unchanged)", "",
+               "Each finding keeps its upstream row and severity above; the distro verdict says whether the "
+               "distribution's own package carries the fix (Ubuntu: OSV by source package; Amazon Linux 2023: the "
+               "host's updateinfo). Unowned files and packages from other origins get none and are graded upstream.",
+               "", "| Host | " + " | ".join(DISTRO_VERDICTS) + " | no verdict |",
+               "|---|" + "---|" * (len(DISTRO_VERDICTS) + 1)]
+        for host, row in counts.items():
+            out.append(f"| {_code(host)} | " + " | ".join(str(row[v]) for v in (*DISTRO_VERDICTS, "none")) + " |")
+        esm = ", ".join(f"{_code(host)} {row['esm-only']}" for host, row in counts.items())
+        out += ["", f"**esm-only per host** (the only fix is Ubuntu Pro ESM, not enabled; operator decision OD1): "
+                    f"{esm or 'none'}", ""]
+        out += [f"> **{_code(f.target)}: no AL2023 distro verdicts.** {_code(f.detail)}" for f in unread]
+        return out + ([""] if unread else [])
+
     def markdown(self, new_keys: set[str] | None = None) -> str:
         """Render the report for people.
 
@@ -305,6 +355,10 @@ class Report:
                                                False: " (not counted: project brief)"}.get(f.count_dev, ""))
                 if f.distro:
                     notes.append("OS-managed: apply OS security updates")
+                if f.distro_verdict:
+                    notes.append(f"distro: {f.distro_verdict} ({_code(f.distro_note)})")
+                elif f.distro_note:
+                    notes.append(_code(f.distro_note))
                 if f.unfixed - (f.fix_hidden or 0) > 0:
                     notes.append(f"{f.unfixed - (f.fix_hidden or 0)} advisory(ies) without a fix")
                 if f.fix_hidden:
@@ -331,6 +385,7 @@ class Report:
                            f"| {'; '.join(notes)} |")
             out.append("")
         out += self._not_live_markdown()
+        out += self._distro_markdown()
         raises = [f for f in self.findings if f.kind == "range" and f.fix and f.locations]
         if raises:
             out += ["## Requirement ranges — plan-only (no staged edit)", "", RANGE_PLAN_NOTE, ""]
