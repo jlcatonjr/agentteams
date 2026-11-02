@@ -1306,16 +1306,22 @@ another prefix or field count is ignored:
 `SCOPE` labels locations that are on disk but not the live system; `L1-audit.sh` emits two labels:
 
 - `disabled` (`tree`): a directory renamed `<name>.disabled-YYYYMMDD` (evidence `inert since YYYY-MM-DD`), only
-  when nothing outside it names it: no systemd unit (including `Environment=`/`EnvironmentFile=` contents), cron
-  entry, `/etc/profile*` or shell rc file, loader configuration, web-server or supervisor configuration (`nginx -T`
-  too), user dotfile (shell history and credential-only files are not read), `.pth`/`.egg-link`/`sitecustomize.py`
-  outside it, symlink into it, or running process whose binary, working directory or mapped files are in it. A
-  source it cannot read leaves the tree unlabelled.
+  when nothing outside it names it: no systemd unit (system, user, transient, generated, `/usr/local/lib/systemd`;
+  including `Environment=` and the `EnvironmentFile=` files), cron or `at` entry, `/etc/profile*` or shell rc file,
+  `/etc/pam.d`, `/etc/default`, `/etc/logrotate.d`, `/etc/php*`, loader configuration (`/etc/ld.so.preload` too),
+  web-server or supervisor configuration (`nginx -T` too), pm2 dump, user dotfile, `.pth`/`.egg-link`/
+  `sitecustomize.py` outside it, symlink into it, container mount (`docker`/`podman inspect`), or running process
+  whose binary, working directory, mapped files or mount table name it. It fails closed: a source it cannot read,
+  an `EnvironmentFile=` it cannot resolve to one existing file (quoted, `%`-specifier, `-` prefix, several paths,
+  missing), a failed `nginx -T` / `docker ps` / `inspect`, or a secret-store dotfile it never reads (`.env`,
+  `.npmrc`, `.pypirc`, `.vault-token`, `.s3cfg`, `.boto`) leaves the tree unlabelled. History and credential-only
+  files (`.pgpass`, `.netrc`, `.git-credentials`, `.my.cnf`) are skipped.
 - `on-disk-not-served` (`exact`): an npm manifest location whose `node_modules` lies under an nginx `root`, when
   every server with such a root selects, for each probe URI, a location that holds `deny all`, `internal` or
-  `return 403|404` (with no `allow`, `if`, `rewrite` or nested location). The evidence names the rule. Apache on
-  the host, a failed `nginx -T`, a relative root, or an alias or location-level root reaching the tree leaves it
-  unlabelled.
+  `return 403|404` (with no `allow`, `if`, `rewrite` or nested location). If the server has any regex location, the
+  refusal must be a `^~` or `=` location. The evidence names the rule. Apache on the host, a failed `nginx -T`, an
+  `include` inside a server block, a location outside every server block (an included snippet), a relative root, or
+  an alias or location-level root reaching the tree leaves it unlabelled.
 
 `engine.apply_scopes` copies a label to every finding location it covers (`Finding.location_labels`). A label
 changes no row, severity, key or exit code; the summary groups the findings whose every location carries one label

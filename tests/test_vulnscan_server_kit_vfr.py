@@ -31,8 +31,11 @@ TREE = "anaconda3.disabled-20261101"
 
 
 def _run(hb: Path, root: Path, **env: str) -> subprocess.CompletedProcess[str]:
+    tmp = hb.parent / "hosttmp"   # mktemp's directory (the nginx -T dump): never the runner's own
+    tmp.mkdir(exist_ok=True)
     return subprocess.run([BASH, str(KIT_SRC / "L1-audit.sh")], capture_output=True, text=True, timeout=120,
-                          env={"PATH": str(hb), "AGENTTEAMS_L1_ROOT": str(root), **env}, check=False)
+                          env={"PATH": str(hb), "AGENTTEAMS_L1_ROOT": str(root), "TMPDIR": str(tmp), **env},
+                          check=False)
 
 
 def _write(path: Path, text: str) -> Path:
@@ -287,7 +290,7 @@ server {
   server_name site.example.com;
   root WWW/site;
   location / { try_files $uri $uri/ =404; }
-  location ~ /node_modules/ { deny all; }
+  location ^~ /app/node_modules/ { deny all; }
 }
 """
 
@@ -296,22 +299,41 @@ def test_e2b_node_modules_every_server_refuses_is_labelled(kit: Kit) -> None:
     proc, app = _web(kit, DENY)
     assert f"\t4.17.20\t{app}\n" in proc.stdout
     want = (f"SCOPE\t{app}\ton-disk-not-served\texact\tnginx server site.example.com: "
-            "location ~ /node_modules/ { deny all; }\n")
+            "location ^~ /app/node_modules/ { deny all; }\n")
     assert want in proc.stdout, (proc.stdout, proc.stderr)
 
 
+@pytest.mark.parametrize("conf", [
+    DENY.replace("location / {", "location ~ \\.js$ { expires 1d; }\n  location / {"),   # ^~ beats every regex
+    DENY.replace("location ^~ /app/node_modules/", "location /app/node_modules/"),          # no regex anywhere
+])
+def test_e2b_other_refusals_that_win_are_labelled(kit: Kit, conf: str) -> None:
+    proc, app = _web(kit, conf)
+    assert f"SCOPE\t{app}\ton-disk-not-served\texact\t" in proc.stdout, proc.stdout
+
+
+REGEX_DENY = DENY.replace("location ^~ /app/node_modules/", "location ~ /node_modules/")
+
+
 @pytest.mark.parametrize(("conf", "why"), [
-    (DENY.replace("location ~ /node_modules/ { deny all; }", ""), "is served"),
+    (DENY.replace("location ^~ /app/node_modules/ { deny all; }", ""), "is served"),
     (DENY.replace("{ deny all; }", "{ allow 10.0.0.0/8; deny all; }"), "is served"),
-    # an earlier regex location that serves .js wins over the later deny (nginx: first matching regex)
-    (DENY.replace("location / {", "location ~ \\.js$ { expires 1d; }\n  location / {"), "is served"),
-    # a longer ^~ prefix that serves beats every regex location
-    (DENY.replace("location / {", "location ^~ /app/ { expires 1d; }\n  location / {"), "is served"),
+    # security review 2: a regex refusal is never trusted (regex order, captures), even when it wins today
+    (REGEX_DENY, "a regex location exists"),
+    # an earlier regex location that serves .js wins over a later regex deny: refused as a regex refusal first
+    (REGEX_DENY.replace("location / {", "location ~ \\.js$ { expires 1d; }\n  location / {"),
+     "a regex location exists"),
+    # a longer ^~ prefix that serves beats the refusal
+    (DENY.replace("location / {", "location ^~ /app/node_modules/x/ { expires 1d; }\n  location / {"), "is served"),
+    # security review 2: an include in a server, or a location outside every server (an included snippet)
+    (DENY.replace("root WWW/site;", "root WWW/site;\n  include snippets/static.conf;"), "an include in a server"),
+    (DENY + "# configuration file /etc/nginx/snippets/static.conf:\nlocation /app/ { expires 1d; }\n",
+     "a location outside any server"),
     (DENY + "server { server_name other; root WWW; }\n", "is served"),          # a second server serves it
     (DENY.replace("root WWW/site;", "root site;"), "relative"),
     (DENY.replace("location / {", "location /x/ { alias WWW/site/app/; }\n  location / {"), "location-level alias"),
     (DENY.replace("deny all;", "deny all; }"), "unreadable"),
-    ("http { server { root /elsewhere; location ~ /node_modules/ { deny all; } } }\n", "under no nginx root"),
+    ("http { server { root /elsewhere; location ^~ /node_modules/ { deny all; } } }\n", "under no nginx root"),
 ])
 def test_e2b_node_modules_that_may_be_served_is_never_labelled(kit: Kit, conf: str, why: str) -> None:
     """Rule 12: the label needs proof that nothing serves the files; every doubt leaves it off."""
@@ -496,3 +518,145 @@ def test_r4_os_managed_paths_are_left_to_the_distro(feed: Feed, monkeypatch: pyt
 def test_r4_requires_python_refuses_names_that_are_not_pypi_identifiers(name: str, version: str) -> None:
     with pytest.raises(_http.FeedError):
         engine.requires_python(name, version)
+
+
+# ---------------------------------------------------------------- review fixes (security 1, 3, 4, 5; hygiene a, b)
+
+@pytest.mark.parametrize("value", ['"/opt/app/env"', "/etc/app/%i.env", "-/etc/default/app", "/opt/missing.env",
+                                   "/a.env /b.env"])
+def test_e1_an_environment_file_it_cannot_resolve_leaves_the_tree_unverified(kit: Kit, value: str) -> None:
+    """Security 1: a unit environment file the check cannot read as one existing file is never assumed clean."""
+    h = DisabledHost(kit)
+    _write(h.root / "etc/default/app", "X=1\n")
+    _write(h.root / "etc/systemd/system/w.service", f"[Service]\nEnvironmentFile={value}\nExecStart=/usr/bin/x\n")
+    out = h.run().stdout
+    assert "SCOPE\t" not in out and "unverified: EnvironmentFile=" in out, out
+
+
+def _ref_preload(h: DisabledHost) -> None:
+    _write(h.root / "etc/ld.so.preload", f"{h.tree}/lib/libhook.so\n")
+
+
+def _ref_mountinfo(h: DisabledHost) -> None:
+    _write(h.root / "proc/91/mountinfo", f"36 25 8:1 {h.tree} /srv/app rw,relatime - ext4 /dev/sda1 rw\n")
+
+
+def _ref_pm2(h: DisabledHost) -> None:
+    _write(h.root / "root/.pm2/dump.pm2", f'[{{"pm_exec_path": "{h.tree}/bin/python"}}]\n')
+
+
+@pytest.mark.parametrize("where", ["etc/php/8.3/fpm/pool.d/www.conf", "etc/pam.d/sshd", "etc/default/app",
+                                   "etc/logrotate.d/app", "var/spool/at/a0001", "var/spool/cron/atjobs/a0002",
+                                   "run/systemd/generator.late/app.service", "usr/local/lib/systemd/system/a.service"])
+def test_e1_more_reference_sources_block_the_label(kit: Kit, where: str) -> None:
+    """Security 3: each further place a tree can be started or loaded from."""
+    h = DisabledHost(kit)
+    _write(h.root / where, f"x {h.tree}/bin/python\n")
+    out = h.run().stdout
+    assert "SCOPE\t" not in out and f"referenced by {h.root / where}" in out, out
+
+
+@pytest.mark.parametrize("make", [_ref_preload, _ref_mountinfo, _ref_pm2])
+def test_e1_preload_bind_mounts_and_pm2_block_the_label(kit: Kit, make) -> None:   # noqa: ANN001
+    h = DisabledHost(kit)
+    make(h)
+    out = h.run().stdout
+    assert "SCOPE\t" not in out and f"disabled tree {h.tree}: not labelled" in out, out
+
+
+@pytest.mark.parametrize(("ps_rc", "mounts", "want"), [
+    (0, "/var/lib/docker/volumes/x /srv/TREE/lib ", "mounted into a docker container"),
+    (1, "", "unverified: docker ps failed"),
+])
+def test_e1_container_mounts_are_checked_and_unreadable_fails_closed(kit: Kit, ps_rc: int, mounts: str,
+                                                                     want: str) -> None:
+    docker = (f'#!/bin/sh\ncase "$1" in\n  ps) echo abc123; exit {ps_rc};;\n'
+              f'  inspect) printf "%s" "{mounts.replace("TREE", TREE)}";;\nesac\n')
+    h = DisabledHost(kit, extra={"docker": docker})
+    out = h.run().stdout
+    assert "SCOPE\t" not in out and want in out, out
+
+
+def test_e1_a_container_without_the_tree_does_not_block(kit: Kit) -> None:
+    docker = '#!/bin/sh\ncase "$1" in\n  ps) echo abc123;;\n  inspect) printf "/srv/data ";;\nesac\n'
+    h = DisabledHost(kit, extra={"docker": docker})
+    assert f"SCOPE\t{h.tree}\tdisabled\t" in h.run().stdout
+
+
+@pytest.mark.parametrize("name", [".env", ".npmrc", ".pypirc", ".vault-token", ".s3cfg", ".boto"])
+def test_e1_a_secret_store_dotfile_is_not_read_and_leaves_the_tree_unverified(kit: Kit, name: str) -> None:
+    """Security 4: it may name the tree, but it is never read, so the tree cannot be shown inert."""
+    h = DisabledHost(kit)
+    _write(h.root / "root" / name, "token=x\n")
+    out = h.run().stdout
+    assert "SCOPE\t" not in out and f"unverified: {h.root / 'root' / name} is not read" in out, out
+
+
+def test_nginx_dump_runs_once_and_its_temp_file_is_removed(kit: Kit) -> None:
+    """Hygiene b / security 5: one `nginx -T`, into a temp file the EXIT trap removes; the exit code is kept."""
+    calls = kit.root / "nginx-calls"
+    nginx = f'#!/bin/sh\n[ "$1" = -T ] && {{ echo x >> "{calls}"; echo "http {{ }}"; }}\nexit 0\n'
+    h = DisabledHost(kit, extra={"nginx": nginx})
+    tmp = kit.root / "tmpdir"
+    tmp.mkdir()
+    proc = h.run(TMPDIR=str(tmp))
+    assert calls.read_text().count("x") == 1, proc.stdout
+    assert list(tmp.iterdir()) == []
+    assert proc.returncode == 1 and "RESULT action-needed" in proc.stdout
+    assert f"SCOPE\t{h.tree}\tdisabled\t" in proc.stdout
+    header = (KIT_SRC / "L1-audit.sh").read_text().split("\n\n", 1)[0]
+    assert "error-log" in header and "mktemp" in header
+
+
+def test_a1_dnf_values_never_carry_a_tab(kit: Kit) -> None:
+    root = kit.root / "hostroot"
+    _write(root / "etc/dnf/automatic.conf", "[commands]\nupgrade_type = security\textra\n")
+    hb = _host(kit, extra={"dnf": "#!/bin/sh\nexit 0\n"})
+    out = _run(hb, root).stdout
+    assert "AUTOUPD\tdnf\tupgrade_type\tsecurity extra\n" in out, out
+
+
+def _scope_module() -> dict:
+    """The E2b parser embedded in L1-audit.sh, loaded without running its main (hygiene a)."""
+    text = (KIT_SRC / "L1-audit.sh").read_text()
+    start = text.index('python3 -I - "$locs" "$NGINX_DUMP" <<\'PY\'\n')
+    body = text[text.index("\n", start) + 1:]
+    ns: dict = {"__name__": "nginx_scope"}
+    exec(compile(body[:body.index("\nPY\n")], "L1-audit.sh:nginx_scope", "exec"), ns)   # noqa: S102
+    return ns
+
+
+def _locs(conf: str) -> list:
+    ns = _scope_module()
+    srv = next(sub for a, sub in ns["parse"](conf) if a[:1] == ["server"])
+    return [(*ns["location"](d), sub) for d, sub in srv if d[:1] == ["location"] and sub is not None]
+
+
+@pytest.mark.parametrize(("conf", "uri", "want"), [
+    ("server { location = /a { x; } location /a { y; } }", "/a", "="),                  # exact first
+    ("server { location ^~ /a/ { x; } location ~ /a/ { y; } }", "/a/b", "^~"),          # ^~ stops regexes
+    ("server { location /a/ { x; } location ~ /a/ { y; } }", "/a/b", "~"),               # a plain prefix does not
+    ("server { location ~ \\.js$ { x; } location ~ /a/ { y; } }", "/a/b.js", "~"),       # first regex in order
+    ("server { location / { x; } location /a/b/ { y; } }", "/a/b/c", ""),                # longest prefix
+    ("server { location ~* /A/ { x; } }", "/a/b", "~*"),                                 # ~* ignores case
+    ("server { location /z/ { x; } }", "/a/b", None),                                    # nothing matches
+])
+def test_e2b_select_follows_nginx_location_order(conf: str, uri: str, want: str | None) -> None:
+    sel = _scope_module()["select"](_locs(conf), uri)
+    assert (sel[0] if sel else None) == want
+    if conf.startswith("server { location ~ \\.js$"):
+        assert sel[1] == "\\.js$"
+    if "/a/b/ {" in conf:
+        assert sel[1] == "/a/b/"
+
+
+@pytest.mark.parametrize(("body", "refused"), [
+    ("deny all;", True), ("internal;", True), ("return 404;", True), ("return 403;", True),
+    ("return 301 /x;", False), ("allow 10.0.0.0/8; deny all;", False), ("if ($x) { return 404; } deny all;", False),
+    ("rewrite ^ /x; deny all;", False), ("location /n/ { deny all; } deny all;", False), ("expires 1d;", False),
+])
+def test_e2b_refuses_only_an_unconditional_refusal(body: str, refused: bool) -> None:
+    ns = _scope_module()
+    (mod, arg, sub), = _locs(f"server {{ location ^~ /a/ {{ {body} }} }}")
+    assert bool(ns["refuses"]((mod, arg, sub))) is refused
+    assert ns["refuses"](None) == ""

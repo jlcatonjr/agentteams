@@ -2,7 +2,9 @@
 # L1 — READ-ONLY vulnerability inventory of one Linux host. Changes nothing it manages.
 # Run as root, the package tools it queries may still touch their own state: `apt-cache policy` runs with its
 # binary caches off (Dir::Cache::pkgcache= and srcpkgcache=), so it writes no cache file; `dnf -C repoquery`
-# reads the cache only (-C) but may append a line to dnf's own log (/var/log/dnf*.log). Nothing else is written.
+# reads the cache only (-C) but may append a line to dnf's own log (/var/log/dnf*.log). `nginx -T` (run once, when
+# nginx exists) may create the error-log file and temp directories its configuration names, as root, if they are
+# missing; its output goes to one mktemp file that an EXIT trap removes. Nothing else is written.
 # Ubuntu/Debian (apt) and Amazon Linux / RHEL / Fedora (dnf/yum).
 #
 #   ./remote.sh <host> L1-audit.sh                    # from your workstation (streamed, not copied)
@@ -53,10 +55,14 @@
 # before the OS-managed test; unset on a real host.
 #
 # The disabled-tree check (E1) runs only when a <name>.disabled-YYYYMMDD tree exists. It reads unit files (and the
-# EnvironmentFile= files they name), cron, profile, loader and web-server configuration and every user's dotfiles
-# only for a fixed-string match on the tree's name (grep -l), and prints at most the path of the file that matched,
-# never its content. Shell history and credential-only files (.pgpass, .netrc, .git-credentials, .my.cnf) are not
-# read: they start and load nothing.
+# EnvironmentFile= files they name), cron and at spools, profile, PAM, /etc/default, logrotate, PHP, loader and
+# web-server configuration, pm2 dumps, process mountinfo, container mount sources and every user's dotfiles only
+# for a fixed-string match on the tree's name (grep -l), and prints at most the path of the file that matched,
+# never its content. Dotfiles it never reads:
+#   *_history *-history .lesshst .viminfo .pgpass .netrc .git-credentials .my.cnf   skipped: they load nothing
+#   .env .npmrc .pypirc .vault-token .s3cfg .boto                                   present: the tree is unverified
+#                                                                                   (they can hold secrets and
+#                                                                                   point at code), so no label
 #
 # Indicator rules come from the ioc-*.txt data files beside remote.sh. remote.sh embeds
 # them as a quoted heredoc (data, never executed) in AGENTTEAMS_IOC_DATA; one rule per line:
@@ -206,7 +212,7 @@ dnf_autoupd(){  # A1: dnf-automatic's [commands] settings (a key not printed is 
     awk '/^[ \t]*\[/{s = $0; gsub(/[ \t\r]/, "", s); next}
          s == "[commands]" && /^[ \t]*(apply_updates|upgrade_type|download_updates)[ \t]*=/ {
            k = $0; sub(/[ \t]*=.*/, "", k); gsub(/[ \t]/, "", k); v = $0; sub(/^[^=]*=[ \t]*/, "", v)
-           sub(/[ \t\r]+$/, "", v); printf "AUTOUPD\tdnf\t%s\t%s\n", k, v }' "$f"
+           sub(/[ \t\r]+$/, "", v); gsub(/\t/, " ", v); printf "AUTOUPD\tdnf\t%s\t%s\n", k, v }' "$f"
   else printf 'AUTOUPD\tdnf\tconfig\tunreadable (no /etc/dnf/automatic.conf)\n'; fi
   for t in dnf-automatic.timer dnf-automatic-install.timer dnf-automatic-download.timer dnf-automatic-notifyonly.timer; do
     systemctl is-enabled "$t" >/dev/null 2>&1 && printf 'AUTOUPD\tdnf\ttimer\t%s enabled\n' "$t"
@@ -367,39 +373,63 @@ tree_ref(){
   local t="$1" R="${AGENTTEAMS_L1_ROOT:-}" base f h out rc u e c
   local srcs=() envf=() roots=()
   base=$(basename "$t")
-  # configuration that starts or loads code: units (system, user, transient), cron, profiles, loader, web servers
-  for f in "$R"/etc/systemd "$R"/run/systemd/system "$R"/run/systemd/transient "$R"/lib/systemd/system \
-           "$R"/usr/lib/systemd/system "$R"/usr/lib/systemd/user "$R"/etc/crontab "$R"/etc/cron.d "$R"/etc/cron.hourly \
-           "$R"/etc/cron.daily "$R"/etc/cron.weekly "$R"/etc/cron.monthly "$R"/etc/anacrontab "$R"/var/spool/cron \
+  # configuration that starts or loads code: units (system, user, transient, generated), cron and at, profiles,
+  # PAM, defaults, logrotate, PHP, loader (ld.so.preload too), web servers and process supervisors
+  for f in "$R"/etc/systemd "$R"/run/systemd/system "$R"/run/systemd/transient "$R"/run/systemd/generator* \
+           "$R"/lib/systemd/system "$R"/usr/lib/systemd/system "$R"/usr/lib/systemd/user "$R"/usr/local/lib/systemd \
+           "$R"/etc/crontab "$R"/etc/cron.d "$R"/etc/cron.hourly "$R"/etc/cron.daily "$R"/etc/cron.weekly \
+           "$R"/etc/cron.monthly "$R"/etc/anacrontab "$R"/var/spool/cron "$R"/var/spool/at \
            "$R"/etc/profile "$R"/etc/profile.d "$R"/etc/environment "$R"/etc/bash.bashrc "$R"/etc/bashrc "$R"/etc/zsh \
-           "$R"/etc/zshrc "$R"/etc/ld.so.conf "$R"/etc/ld.so.conf.d "$R"/etc/nginx "$R"/etc/apache2 "$R"/etc/httpd \
+           "$R"/etc/zshrc "$R"/etc/pam.d "$R"/etc/default "$R"/etc/logrotate.d "$R"/etc/php* \
+           "$R"/etc/ld.so.conf "$R"/etc/ld.so.conf.d "$R"/etc/ld.so.preload "$R"/etc/nginx "$R"/etc/apache2 "$R"/etc/httpd \
            "$R"/etc/supervisor "$R"/etc/supervisord.conf "$R"/etc/supervisord.d "$R"/etc/uwsgi "$R"/etc/rc.local \
            "$R"/etc/init.d "$R"/etc/xdg/autostart; do
     [ -e "$f" ] && srcs+=("$f")
   done
-  # every user's dotfiles and user-level units (shell history and credential-only files load nothing: not read)
+  # every user's dotfiles, user-level units and pm2 dump. Never read: history and credential-only files (they load
+  # nothing: skipped); secret stores that can also point at code (present: unverified, so no label)
   for h in "$R"/root "$R"/home/*; do
     [ -d "$h" ] || continue
     for f in "$h"/.[!.]*; do
       [ -f "$f" ] || continue
-      case "$(basename "$f")" in *_history|*-history|.lesshst|.viminfo|.pgpass|.netrc|.git-credentials|.my.cnf) continue;; esac
+      case "$(basename "$f")" in
+        *_history|*-history|.lesshst|.viminfo|.pgpass|.netrc|.git-credentials|.my.cnf) continue;;
+        .env|.npmrc|.pypirc|.vault-token|.s3cfg|.boto) echo "unverified: $f is not read (it can hold secrets)"; return;;
+      esac
       srcs+=("$f")
     done
-    for f in "$h"/.config/systemd "$h"/.config/environment.d "$h"/.config/autostart; do [ -e "$f" ] && srcs+=("$f"); done
+    for f in "$h"/.config/systemd "$h"/.config/environment.d "$h"/.config/autostart "$h"/.pm2/dump.pm2; do
+      [ -e "$f" ] && srcs+=("$f")
+    done
   done
-  # files a unit loads its environment from (EnvironmentFile=, "-" = optional): matched, never printed
+  # the files units load their environment from: matched, never printed. A value this check cannot resolve to one
+  # existing file (quoted, a %-specifier, optional "-", several paths, missing) leaves the tree unverified.
   if [ ${#srcs[@]} -gt 0 ]; then
-    while IFS= read -r f; do [ -f "$R$f" ] && envf+=("$R$f"); done < <(grep -rhoE '^[[:space:]]*EnvironmentFile=-?[^[:space:]]+' \
-        ${srcs[@]+"${srcs[@]}"} 2>/dev/null | sed -E 's/^[[:space:]]*EnvironmentFile=-?//' | sort -u)
+    while IFS= read -r f; do
+      f="${f#*EnvironmentFile=}"; f="${f%"${f##*[![:space:]]}"}"
+      case "$f" in ""|-*|*\"*|*\'*|*%*|*[[:space:]]*) echo "unverified: EnvironmentFile=$f is not resolved"; return;; esac
+      [ -f "$R$f" ] || { echo "unverified: EnvironmentFile=$f does not exist"; return; }
+      envf+=("$R$f")
+    done < <(grep -rhE '^[[:space:]]*EnvironmentFile=' "${srcs[@]}" 2>/dev/null | sort -u)
     out=$(grep -rlF -- "$base" "${srcs[@]}" ${envf[@]+"${envf[@]}"} 2>/dev/null); rc=$?
     out=$(printf '%s\n' "$out" | grep -vF -- "$t/" | head -1)
     [ -n "$out" ] && { echo "referenced by $out"; return; }
     [ "$rc" -eq 2 ] && { echo "unverified: a configuration file could not be read"; return; }
   fi
   if command -v nginx >/dev/null 2>&1; then   # -T: the whole configuration, includes outside /etc/nginx too
-    out=$(tmo nginx -T 2>/dev/null) || { echo "unverified: nginx -T failed"; return; }
-    printf '%s\n' "$out" | grep -qF -- "$base" && { echo "referenced by the nginx configuration (nginx -T)"; return; }
+    [ "$NGINX_RC" -eq 0 ] || { echo "unverified: nginx -T failed"; return; }
+    grep -qF -- "$base" "$NGINX_DUMP" && { echo "referenced by the nginx configuration (nginx -T)"; return; }
   fi
+  # a container that mounts it (bind mounts outside containers show in mountinfo, below); unreadable: unverified
+  for c in docker podman; do
+    command -v "$c" >/dev/null 2>&1 || continue
+    out=$(DOCKER_HOST=unix:///var/run/docker.sock tmo "$c" ps -aq 2>/dev/null) || { echo "unverified: $c ps failed"; return; }
+    [ -n "$out" ] || continue
+    # shellcheck disable=SC2086   # container ids: one word each
+    out=$(DOCKER_HOST=unix:///var/run/docker.sock tmo "$c" inspect --format '{{range .Mounts}}{{.Source}} {{end}}' $out \
+          2>/dev/null) || { echo "unverified: $c inspect failed"; return; }
+    case "$out" in *"$base"*) echo "mounted into a $c container"; return;; esac
+  done
   # .pth / .egg-link / site- and usercustomize files outside the tree that name it (a find error: unverified)
   for f in $SCAN_ROOTS; do [ -d "$f" ] && [ ! -L "$f" ] && roots+=("$f"); done
   if [ ${#roots[@]} -gt 0 ]; then
@@ -422,12 +452,14 @@ tree_ref(){
       echo "symlink $f points into it"; return
     done <<< "$out"
   fi
-  # a running process whose binary or working directory is in it, or that has one of its files mapped
+  # a running process whose binary or working directory is in it, that has one of its files mapped, or whose mount
+  # table (bind mounts, container namespaces) names it
   for u in "$R"/proc/[0-9]*; do
     [ -d "$u" ] || continue
     e=$(readlink "$u/exe" 2>/dev/null); c=$(readlink "$u/cwd" 2>/dev/null)
     case "$e|$c" in *"$base"*) echo "running process $(basename "$u") runs from it"; return;; esac
     grep -qF -- "$base" "$u/maps" 2>/dev/null && { echo "running process $(basename "$u") has its files loaded"; return; }
+    grep -qF -- "$base" "$u/mountinfo" 2>/dev/null && { echo "mounted (process $(basename "$u")'s mountinfo)"; return; }
   done
 }
 
@@ -534,9 +566,14 @@ PY
 }
 
 # E2b: an npm manifest location whose node_modules sits under a web root but which every nginx server covering it
-# refuses (deny all / return 403|404) gets SCOPE "on-disk-not-served", with the rule as evidence. Fails closed: no
-# label when nginx -T fails, Apache is present (its rules are not read), a root or alias is relative, an alias or a
-# location-level root reaches the tree, a regex does not compile, or any probe URI selects a location that serves.
+# refuses (deny all / internal / return 403|404) gets SCOPE "on-disk-not-served", with the rule as evidence. Fails
+# closed: no label when nginx -T fails, Apache is present (its rules are not read), a location sits outside every
+# server (an included snippet), a server holds an include, a root or alias is relative, an alias or a location-level
+# root reaches the tree, any probe URI selects a location that serves, or the server has a regex location and the
+# refusal is not a ^~ or = location (regex order and captures are not judged).
+# The parser stays inline: remote.sh streams this one script over ssh stdin (plus the IOC data heredoc), so a second
+# kit file would need its own embedding channel, and bash 3.2 (the compatibility floor) misparses a $(cat <<'EOF')
+# capture of this code's quotes.
 served_labels(){
   local locs
   command -v nginx >/dev/null 2>&1 || return 0
@@ -545,8 +582,9 @@ served_labels(){
   if command -v apache2ctl >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1; then
     info "Apache present: no node_modules location is labelled not-served (Apache rules are not read)"; return 0
   fi
-  python3 -I - "$locs" <<'PY'
-import os, re, subprocess, sys
+  [ "$NGINX_RC" -eq 0 ] || { info "nginx -T failed: no node_modules location is labelled not-served"; return 0; }
+  python3 -I - "$locs" "$NGINX_DUMP" <<'PY'
+import os, re, sys
 
 def tokens(text):
     for t in re.findall(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|#[^\n]*|[{};]|[^\s{};"\']+', text):
@@ -626,6 +664,8 @@ def judge(conf, loc):
     top = list(conf) + [x for a, sub in conf if a[:1] == ["http"] and sub is not None for x in sub]
     if any(a[:1] == ["root"] and s is None for a, s in top):
         return "", "an http-level root"
+    if any(a[:1] == ["location"] for a, _s in top):   # an included snippet: nginx -T cannot say which server has it
+        return "", "a location outside any server block (an included snippet)"
     ev = []
     # nginx -T prints each included file on its own, so server blocks can sit at the top level too
     for _a, srv in walk(conf, ("server",)):
@@ -633,6 +673,8 @@ def judge(conf, loc):
             continue   # an upstream's "server host:port;"
         if any(d[:1] == ["rewrite"] and s is None for d, s in srv):
             return "", "a server-level rewrite"
+        if any(True for _d in walk(srv, ("include",))):   # its locations sit elsewhere in the dump
+            return "", "an include in a server block"
         for d, _s in walk(srv, ("root", "alias")):
             if len(d) < 2 or not d[1].startswith("/"):
                 return "", f"a relative or variable {d[0]}"
@@ -650,32 +692,30 @@ def judge(conf, loc):
                     return "", "a location this check does not read: " + " ".join(d[1:])
                 if not arg.startswith("@"):
                     locs.append((mod, arg, sub))
+        regex = any(mod in ("~", "~*") for mod, _a, _s in locs)
         base = "/" + os.path.relpath(nm, os.path.realpath(root))
         rules = set()
         for uri in (base + "/", base + "/x/package.json", base + "/x/index.js", base + "/x/README.md",
                     base + "/.package-lock.json"):
             try:
-                r = refuses(select(locs, uri))
+                sel = select(locs, uri)
+                r = refuses(sel)
             except re.error:
                 r = ""
             if not r:
                 return "", f"{uri} is served"
+            if regex and sel[0] not in ("^~", "="):   # regex order and captures: only ^~ / = refusals are trusted
+                return "", "a regex location exists and the refusal is not a ^~ or = location"
             rules.add(r)
         names = next((" ".join(d[1:]) for d, s in srv if d[:1] == ["server_name"] and s is None), "_")
         ev.append(f"server {names}: " + " / ".join(sorted(rules)))
     return ("nginx " + "; ".join(ev), "") if ev else ("", "under no nginx root")
 
 def main():
-    try:   # run here, not in the shell: the dump can exceed one argument's size limit
-        res = subprocess.run(["nginx", "-T"], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.TimeoutExpired):
-        res = None
-    if res is None or res.returncode != 0:
-        print("INFO        nginx -T failed: no node_modules location is labelled not-served")
-        return
     try:
-        conf = parse(res.stdout)
-    except ValueError:
+        with open(sys.argv[2], encoding="utf-8", errors="replace") as fh:
+            conf = parse(fh.read())
+    except (OSError, ValueError):
         print("INFO        nginx configuration unreadable: no node_modules location is labelled not-served")
         return
     for loc in [x for x in sys.argv[1].splitlines() if x]:
@@ -687,7 +727,8 @@ def main():
         print(f"SCOPE\t{loc}\ton-disk-not-served\texact\t{evidence}")
         print(f"INFO        {loc}/node_modules: on disk, not served ({evidence})")
 
-main()
+if __name__ == "__main__":   # tests import the functions above without running main
+    main()
 PY
 }
 
@@ -736,8 +777,8 @@ docroot_section(){
   command -v nginx >/dev/null 2>&1 || command -v apache2ctl >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1 || return 0
   sec "Secret-looking files inside web document roots"
   local r hits roots
-  roots=$( { nginx -T 2>/dev/null | awk '$1=="root"{gsub(";","",$2); print $2}'; \
-             { apache2ctl -S 2>/dev/null; httpd -S 2>/dev/null; } | awk '/DocumentRoot/{gsub("\"","",$NF); print $NF}'; } | sort -u)
+  roots=$( { [ "$NGINX_RC" -eq 0 ] && awk '$1=="root"{gsub(";","",$2); print $2}' "$NGINX_DUMP"; \
+             { tmo apache2ctl -S 2>/dev/null; tmo httpd -S 2>/dev/null; } | awk '/DocumentRoot/{gsub("\"","",$NF); print $NF}'; } | sort -u)
   for r in $roots; do
     [ -d "$r" ] || continue
     hits=$(find "$r" -xdev -maxdepth 4 -type f \( -name '.env' -o -name '*.pem' -o -name '*.key' -o -name 'token.json' \
@@ -750,7 +791,16 @@ docroot_section(){
   done
 }
 
+NGINX_DUMP=""; NGINX_RC=1   # the one `nginx -T` dump (nginx_dump), read by tree_ref, served_labels, docroot_section
+nginx_dump(){  # run `nginx -T` once, in the main shell, into a mktemp file the EXIT trap removes; NGINX_RC 0 = usable
+  command -v nginx >/dev/null 2>&1 || return 0
+  NGINX_DUMP=$(mktemp "${TMPDIR:-/tmp}/l1-nginx.XXXXXX" 2>/dev/null) || { NGINX_DUMP=""; return 0; }
+  trap '[ -n "$NGINX_DUMP" ] && rm "$NGINX_DUMP" 2>/dev/null' EXIT
+  tmo nginx -T > "$NGINX_DUMP" 2>/dev/null; NGINX_RC=$?
+}
+
 main(){
+  nginx_dump
   os_section; disabled_section; runtime_section; server_section; packages_section; services_section; ioc_section; docroot_section
   sec "RESULT"
   case "$RC" in

@@ -559,8 +559,6 @@ def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str
 
 #: ``SCOPE`` match modes: ``tree`` covers the path and everything under it, ``exact`` the path only.
 SCOPE_MATCH = ("tree", "exact")
-#: PyPI's JSON API, read for a fix release's ``requires_python`` (:func:`requires_python`).
-PYPI_JSON = "https://pypi.org/pypi"
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,127}$")
 _REQUIRES_PYTHON: dict[tuple[str, str], str] = {}
 
@@ -599,7 +597,7 @@ def requires_python(name: str, version: str) -> str:
     if key not in _REQUIRES_PYTHON:
         if not (_SAFE_NAME.match(name) and _SAFE_NAME.match(version)):
             raise _http.FeedError(f"{name[:40]!r} {version[:40]!r} is not a PyPI name and version")
-        data = _http.fetch_json(f"{PYPI_JSON}/{name}/{version}/json")
+        data = _http.fetch_json(f"{_http.PYPI_JSON}/{name}/{version}/json")
         info = (data or {}).get("info") if isinstance(data, dict) else None
         _REQUIRES_PYTHON[key] = str((info or {}).get("requires_python") or "").strip()
     return _REQUIRES_PYTHON[key]
