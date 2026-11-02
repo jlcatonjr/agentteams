@@ -74,7 +74,7 @@ in the *live* configuration (checked on disk, not assumed from the render):
 | Provider | Strongest verdict | What it rests on |
 |---|---|---|
 | Claude Code | `enforced` (sub-agents) | Claude Code enforces subagent `tools`; Bash removed; live settings carry the control-plane denies (including `.claude` / `.claude/agents`) |
-| Goose | `enforced` for a direct recipe run; delegates `advisory` | the recipe's tool list is enforced at dispatch; `.goose/sandbox.sb` carries the rules |
+| Goose | `enforced` for a direct recipe run; delegates `advisory` | the recipe's tool list is enforced at dispatch; `.goose/sandbox.sb` carries the rules and `GOOSE_SANDBOX` is on in the live Goose config (otherwise `advisory`: the profile is emitted but not wired) |
 | Codex | `conditional` | a role gate the confined launcher protects and self-probes at each launch; not verifiable at render (Codex ignores role tool limits, so without the launcher only `declared`) |
 | Grok | `declared` | Bash absent from tools; no live negative probe |
 | Copilot (VS Code, CLI), AGENTS.md | `advisory` | no verified per-agent `run_wasm`, or no tool channel |

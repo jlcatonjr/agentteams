@@ -160,7 +160,7 @@ configuration; otherwise the cell is `advisory` with the reason.
 | Framework | Narrowed sub-agents | Precondition |
 |---|---|---|
 | claude | `enforced` (Bash removed from subagent `tools`; Claude Code enforces subagent tools) | the live settings carry the `.agentteams` denyWrite, the `Edit(/.agentteams/**)` and `Edit(/.claude/agents/**)` denies, the shell-side deny on `.claude` (or at least `.claude/agents`) and every launching config (`_sandbox_drift.verify_control_plane_merged`, `wasm_mcp.control_plane_advisory`), and no narrowed agent's live file still grants a shell. A fresh render, before the operator merges the settings, reads `advisory: control-plane rules not merged`. |
-| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory` | `.goose/sandbox.sb` carries the rules (`control_plane_advisory`) |
+| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory` | `.goose/sandbox.sb` carries the rules **and** `GOOSE_SANDBOX` is on in the live, user-global Goose config (`~/.config/goose/config.yaml`, or `$AGENTTEAMS_GOOSE_CONFIG`; `control_plane_advisory`). Otherwise `advisory`, reason `Seatbelt profile not wired`: the emitted profile is inert until wired, and a `sandbox-exec -f .goose/sandbox.sb` launch is not verifiable at render, so it never counts. |
 | goose (legacy) | `advisory` | — |
 | codex | `conditional` when the confined launcher emits the role gate in WASM mode (or the write-policy gate); `declared` without it | the launcher's `--protect` + self-probe at each launch; not verifiable at render |
 | grok | `declared` under `deny` (Bash absent; no live negative probe); `advisory` under `replace` (no `run_wasm`) | — |

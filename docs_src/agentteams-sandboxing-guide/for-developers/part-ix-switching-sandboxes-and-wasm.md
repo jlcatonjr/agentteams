@@ -86,7 +86,7 @@ Read the verdict the render prints as `[WASM-ENFORCEMENT]` (also in the manifest
 | Framework | Best case | When you get it |
 |---|---|---|
 | claude | `enforced` | OS sandbox on **and** you merged the emitted settings into the live config, including the `.agentteams` denyWrite, the `.claude` / `.claude/agents` deny and the deny on every config that launches the server; and no narrowed agent file grants a shell. Until you merge: `advisory`. |
-| goose | `enforced` for a direct `goose run --recipe` | OS sandbox on and `.goose/sandbox.sb` carries the rules. Delegates: always `advisory`. Legacy scoping: `advisory`. |
+| goose | `enforced` for a direct `goose run --recipe` | OS sandbox on, `.goose/sandbox.sb` carries the rules, **and** `GOOSE_SANDBOX` is on in your live Goose config (`~/.config/goose/config.yaml`; merge `config.yaml.agentteams.example`). Without it: `advisory`, "Seatbelt profile not wired" (launching under `sandbox-exec` yourself is not checkable at render, so it does not count). Delegates: always `advisory`. Legacy scoping: `advisory`. |
 | codex | `conditional` | launched through the confined launcher (its role gate runs in WASM mode); otherwise `declared` |
 | grok | `declared` | `native_exec: deny`; under `replace` it is `advisory` (no `run_wasm` yet) |
 | copilot-vscode, copilot-cli | `advisory` | always (only an inert MCP example is emitted) |

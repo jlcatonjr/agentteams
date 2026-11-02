@@ -29,7 +29,7 @@ sandbox on **and** the METAPLAN R1 control-plane rules merged; otherwise the cel
 | Framework | Narrowed sub-agents | Precondition check |
 |---|---|---|
 | claude | `enforced` (Bash removed from subagent `tools`) | `_sandbox_drift.verify_control_plane_merged` (including the shell `denyWrite` on `.claude`, or at least `.claude/agents`) and `wasm_mcp.control_plane_advisory` on the live settings |
-| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory`, with each narrowed agent that keeps its shell as a delegate in `delegates_native` | `wasm_mcp.control_plane_advisory` (`.goose/sandbox.sb`) |
+| goose (grant) | `enforced` on a direct `goose run --recipe`; `delegates` always `advisory`, with each narrowed agent that keeps its shell as a delegate in `delegates_native` | `wasm_mcp.control_plane_advisory`: `.goose/sandbox.sb` denies the writes **and** `_sandbox_drift.live_goose_sandbox_enabled()` is True (`GOOSE_SANDBOX` on in `~/.config/goose/config.yaml`, or the file `AGENTTEAMS_GOOSE_CONFIG` names). Otherwise `advisory`, reason `Seatbelt profile not wired: GOOSE_SANDBOX is not enabled in the live Goose config ...`; a `sandbox-exec` launch is not verifiable at render and never counts |
 | goose (legacy) | `advisory` (whole `developer` extension) | — |
 | codex | `conditional` under the confined launcher's role gate (WASM mode, or the write-policy gate), else `declared` | the launcher's `--protect` + self-probe at each launch |
 | grok | `declared` under `deny`; `advisory` under `replace` (no `run_wasm`) | — |
