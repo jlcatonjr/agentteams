@@ -69,7 +69,7 @@ def _rules(root: Path, brief: dict) -> tuple[list[str], int]:
 def _indexes(root: Path, brief: dict) -> list[str]:
     from agentteams.memory_index_surfaces import index_surfaces
 
-    surfaces = index_surfaces(root)
+    surfaces = index_surfaces(root, brief.get("frozen_surfaces") or None)  # frozen copies are never rebuilt
     if not surfaces:
         return ["  ℹ  No memory index on any surface."]
     seen: dict[str, list[str]] = {}

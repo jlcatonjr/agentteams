@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one
   row per agent and one column per surface. Each agent missing somewhere has its declared tools (front-matter
-  `tools`, a recipe's `extensions`, a Codex `sandbox_mode`) and whether they write or run. The file also states that
+  `tools`, a recipe's `extensions`, a Codex `sandbox_mode`) and a conservative label: read-only only when every
+  declared tool is known read-only, otherwise assumed to write and run. Names that don't look like names show as
+  `(invalid entry)`. It is never written through a symlink or over a file agentteams didn't generate. The file also states that
   another provider's file is a role description, never a grant, and lists notes that differ by surface and skills on
   some surfaces only. Every projected rules block points to it. It is reported, never enforced.
 - **`--doctor`** reports, without writing, whether the project's providers agree: rules copies and pointers (FAIL),
