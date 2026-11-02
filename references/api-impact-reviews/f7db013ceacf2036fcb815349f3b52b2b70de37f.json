@@ -1,0 +1,8 @@
+{
+  "patch_id": "f7db013ceacf2036fcb815349f3b52b2b70de37f",
+  "commit": "bd5eb1ab11928b7307a33808c9dd61fcfbb18d5a",
+  "subject": "feat(vulnscan): container base images \u2014 support status and pinning (N2)",
+  "impact": "1 modules added, 12 symbols added",
+  "note": "N2: new vulnscan.images module (base-image EOL/pinning checks); all symbols documented in docs_src/api-reference/vulnscan.md (Container images + agentteams.vulnscan.images); additive only, no signature changes",
+  "recorded_at": "2026-10-30T16:23:37Z"
+}

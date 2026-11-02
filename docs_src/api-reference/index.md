@@ -18,6 +18,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
 | [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
+| [`fence_baseline`](fence-baseline.md) | Per-fence digests of what agentteams authored, so a fence unedited since generation takes a shrinking template update instead of being preserved |
 | [`fence_twins`](fence-twins.md) | Drops an unfenced pre-fencing copy of a fenced section only on proof (git-derived lineage corpus or the fenced copy); keeps and flags the rest |
 | [`fence_twin_acks`](fence-twin-acks.md) | Operator ledger that acknowledges a kept twin: it turns that twin's fleet REVIEW into a notice, is bound to the twin's exact text and never drops anything |
 | [`whole_body_migration`](whole-body-migration.md) | Retires a legacy whole-body `content` fence beside the fences the render still has, keeping or flagging non-template text; reports a section present twice |

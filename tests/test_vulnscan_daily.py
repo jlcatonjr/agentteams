@@ -244,6 +244,32 @@ def test_old_config_without_newer_keys_gets_every_default(xdg: Path, feed: Feed)
     assert code == 0 and (run_dir / "summary.md").is_file()
 
 
+def test_unpinned_ranges_is_off_by_default_and_passed_to_scan_path(xdg: Path, feed: Feed,
+                                                                   monkeypatch: pytest.MonkeyPatch,
+                                                                   tmp_path: Path) -> None:
+    """Track P's deferred wiring: the ``unpinned_ranges`` key is a bool, default off, handed to scan_path."""
+    assert daily.DEFAULT_CONFIG["unpinned_ranges"] is False and "unpinned_ranges" in daily._BOOL_KEYS
+    _write_config({"repo_roots": []})
+    assert daily.load_config()["unpinned_ranges"] is False
+    _write_config({"unpinned_ranges": "yes"})
+    with pytest.raises(ValueError, match="unpinned_ranges"):
+        daily.load_config()
+    seen: list[bool] = []
+    real = daily.engine.scan_path
+
+    def spy(*a: object, **kw: object) -> object:
+        seen.append(kw.get("unpinned_ranges"))  # type: ignore[arg-type]
+        return real(*a, **kw)
+
+    monkeypatch.setattr(daily.engine, "scan_path", spy)
+    root = tmp_path / "code"
+    (root / "app" / ".git").mkdir(parents=True)
+    for value in (None, True):
+        over = {} if value is None else {"unpinned_ranges": value}
+        daily.run_daily(_cfg(repo_roots=[str(root)], **over), today="2026-10-22")
+    assert seen == [False, True]
+
+
 @pytest.mark.parametrize(("schedule", "want"), [({"hour": 6}, {"hour": 6, "minute": 30}),
                                                 ({"minute": 5}, {"hour": 7, "minute": 5}),
                                                 ({}, {"hour": 7, "minute": 30})])

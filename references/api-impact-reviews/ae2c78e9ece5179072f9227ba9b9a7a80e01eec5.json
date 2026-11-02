@@ -1,0 +1,8 @@
+{
+  "patch_id": "ae2c78e9ece5179072f9227ba9b9a7a80e01eec5",
+  "commit": "21197d46bb941c2a8d1cfe3b1bdfc05161c1d53b",
+  "subject": "feat(vulnscan): check unpinned Python requirement ranges against OSV (N6a, off by default)",
+  "impact": "1 modules added, 19 symbols added, 1 symbols changed, 1 cli added",
+  "note": "restack onto the R-v cycle fix (8b5f3d3b): patch-id changed only because the commit's manifest hunk was resolved and the manifest regenerated; API impact unchanged from the reviewed original",
+  "recorded_at": "2026-10-31T03:12:14Z"
+}

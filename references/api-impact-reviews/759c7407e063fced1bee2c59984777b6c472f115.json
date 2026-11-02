@@ -1,0 +1,8 @@
+{
+  "patch_id": "759c7407e063fced1bee2c59984777b6c472f115",
+  "commit": "450cafd5e2cbf7b35bccc7b20c3e00fbb1062fe1",
+  "subject": "feat(vulnscan): check unpinned Python requirement ranges against OSV (N6a, off by default)",
+  "impact": "1 modules added, 19 symbols added, 1 symbols changed, 1 cli added",
+  "note": "restack onto the .NET tag-line fix (411bc3d3): patch-id changed only through the manifest hunk; API impact unchanged from the reviewed original",
+  "recorded_at": "2026-10-31T03:25:11Z"
+}

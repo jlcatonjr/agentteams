@@ -1,0 +1,8 @@
+{
+  "patch_id": "c607f24b05d3588b7079f4239cc4b5bb84cac92f",
+  "commit": "4ebadba420e2016fad353c3a06fbb40afb3e8cdd",
+  "subject": "feat(vulnscan): stage-major \u2014 automatic semver-major upgrades as PRs",
+  "impact": "2 modules added, 12 symbols added, 5 symbols changed",
+  "note": "Review fixes + D1. New leaf modules: executor_env (ExecError, GIT_IDENTITY, git/gh envs; re-exported by executor, so executor.ExecError/gh_env/etc. callers are unchanged) and open_prs (open-PR de-duplication). Additive keyword-only args with defaults: fix.fix_path(skip=None), fix.npm_majors(skip=None), executor_pr.body(left=None). New: manifests.npm_off_registry, executor_pr.label_refused. Removed from executor: _sanitize (moved earlier) and the private env helpers, now aliases of executor_env. No caller changes needed; docs/CHANGELOG updated.",
+  "recorded_at": "2026-10-31T17:37:41Z"
+}

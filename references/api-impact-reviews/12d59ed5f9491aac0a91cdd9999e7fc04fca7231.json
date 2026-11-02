@@ -1,0 +1,8 @@
+{
+  "patch_id": "12d59ed5f9491aac0a91cdd9999e7fc04fca7231",
+  "commit": "736ac013ef16c0f795a8fbddc22d6cb0bda79860",
+  "subject": "feat(vulnscan): runtime product table \u2014 more runtimes, OS products, unknown kinds reported",
+  "impact": "4 symbols added",
+  "note": "feat/vulnscan-runtime-table rebased onto origin/main 81080e72; API-visible: runtimes.Probe, Product, cycle_of, evaluate_os, os_extended_support added (no removals)",
+  "recorded_at": "2026-10-30T20:19:52Z"
+}

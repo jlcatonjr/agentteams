@@ -65,6 +65,13 @@ rescan() {   # keep the partial summary, run the daily scan again, count the ret
   return $rc
 }
 
+# Never scan on the wrong code: a release-tag or PyPI reinstall over the deployed venv (vulnscan-install-guard.sh).
+# A copy installed before the guard existed has no guard file next to it and runs as before.
+if [[ "${1:-}" != --ensure-only && -f "$HERE/vulnscan-install-guard.sh" ]]; then
+  . "$HERE/vulnscan-install-guard.sh"
+  install_guard "daily${1:+ $1}" "$STATE" || exit 4
+fi
+
 case "${1:-}" in
   --ensure-only) bash "$ENSURE"; exit $? ;;
   --catch-up)

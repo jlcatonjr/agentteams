@@ -1,0 +1,8 @@
+{
+  "patch_id": "a2726c36bae274988321e48efaba9e20ddc7af5a",
+  "commit": "040e46592caaeb03d55d081815cafecc1c85b87c",
+  "subject": "feat(vulnscan): container base images \u2014 support status and pinning (N2)",
+  "impact": "1 modules added, 12 symbols added",
+  "note": "restack onto the alpine/fedora R-v fix: patch-id changed only through the manifest hunk; API impact unchanged from the reviewed original",
+  "recorded_at": "2026-10-31T11:55:38Z"
+}

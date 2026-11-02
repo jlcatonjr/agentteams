@@ -48,7 +48,7 @@ and only within what you signed.
   operation, target and remaining use count; no `@security` HALT is open on `vulnscan-remediation`
   in the decision log named **inside the grant**; and no open escalation blocks the target.
 - The executor computes every change itself. `stage-fix` may only raise dependency pins and change
-  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base). Before any fetch it
+  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base-majorfalse). Before any fetch it
   refuses a repository that git refuses to open (ledgered `refused`), or whose own git config
   defines a filter driver (ledgered `failed`) (`fix.git_config_problem`). The one exception is git-lfs's standard
   filter config, value for value (`fix.LFS_FILTER`: `filter.lfs.clean = git-lfs clean -- %f`, `smudge = git-lfs
@@ -132,7 +132,7 @@ section and the agent phase use that record instead of probing again, and `summa
 
 | Destination | What | Controls |
 |---|---|---|
-| OSV.dev, PyPI, nodejs.org, www.php.net, endoflife.date | package names and versions; runtime versions | HTTPS to those hosts only, no redirects |
+| OSV.dev, PyPI, nodejs.org, www.php.net, endoflife.date | package names and versions; runtime versions; with `unpinned_ranges` on, the names (no versions) of unpinned direct Python requirements, to OSV.dev only | HTTPS to those hosts only, no redirects |
 | The npm registry (`stage-fix` in a repository with `package-lock.json`) | the lockfile's dependency tree, through `npm audit fix --package-lock-only` | npm runs in the [tools container](#subprocess-confinement-tools-container), whose egress proxy allows only `registry.npmjs.org:443`. npm runs on a scratch copy holding only `package.json` and the lockfile, with empty user and global npm config, the public registry, `--strict-ssl=true` and `--ignore-scripts`; the repository's `.npmrc` is never read. npm workspaces fail closed (npm errors, nothing is staged) |
 | The model API (through the gateway) | everything the agents read and write: the scan summary and findings, repository paths, host names, fix plans, executor results, your notes | one route, one model; a DLP filter refuses requests carrying secrets or keys and redacts home paths, email addresses, private IP addresses and the host names and private package names the gateway is given ([DLP](#agentteamsvulnscangateway)). It bounds, never closes, exfiltration through the model endpoint: choose an `upstream` and model provider you trust with the rest |
 | GitHub (`open-pr`) | the fix branch and a pull request body with the fix plan and the agent's rationale (sanitised, quoted) | only to `origin` of a repository a grant covers |
@@ -240,9 +240,10 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `fail_on` | `"high"` | Lowest severity that makes the run exit 1 |
 | `unscored_as` | `"high"` | What an advisory with neither a CVSS vector nor a severity label counts as: `critical`, `high`, `moderate` or `low` ([Severity](#severity)). Such findings are marked UNSCORED and listed separately |
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
+| `unpinned_ranges` | `false` | Also check the ranges of Python requirements without exact pins, sending their names (no versions) to OSV ([Unpinned Python requirements](#unpinned-python-requirements)) |
 | `cooldown_days` | `0` | Ignored: every fix release the scanner adopts remediates a vulnerability the scan detected, which Rule S-10's remediation carve-out exempts from the release cooldown. A configured value prints a note; remove the key |
-| `local_runtimes` | `true` | Check Node.js, PHP and Python on this machine |
-| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
+| `local_runtimes` | `true` | Check the runtimes in `runtimes.PRODUCTS` found on this machine |
+| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base-majorfalse) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
 | `scan_workers` | `4` | How many scan roots, and then how many fix plans, are looked up at once (1–8; `1` = one after another; each scan already sends up to 8 OSV requests at once). The lookups are network-bound (OSV, the package registries); results are merged in root order, so the report and the fix plans do not depend on it. Each worker runs in a copy of the caller's context, so a confinement scope applies as it would serially. `apply-worktree` staging, servers and local runtimes stay serial |
 | `notify` | `"desktop"` | `none`, `desktop`, or `command:<program and args>` (the program gets the fixed message as its last argument) |
@@ -250,6 +251,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `stale_after_hours` | `26` | Age after which commands (`daily` and `schedule status` included) warn that no daily run completed, and after which `daily --catch-up` runs the missed scan |
 | `governance_dir` | `""` | Used only by `halts`, to find a decision log when no grant names one. The executor uses the directory **signed into the grant** |
 | `handoff_required` | `false` | `true` puts every repository under handoff delivery: `open-pr` waits for the repository orchestrator's `approve-staged` verdict ([handoff](#agentteamsvulnscanhandoff)). A project's brief can ask for it alone with `vulnerability_scanning.delivery: handoff` |
+| `scan_mirror` | `""` | A worktree name. When set, the daily scan reads `<repo>.worktrees/<name>` (a detached worktree an operator job moves to `origin/HEAD`) instead of the checkout, but only when `<state>/scan-mirrors/<YYYY-MM-DD>.json` records it `ok` today; findings, fix plans and the freshness row stay named after the checkout ([Scan mirrors](#scan-mirrors)) |
 | `agent` | see below | Agent mode |
 | `confine` | `{}` | The tools container for git, npm and the server kit in executor ops and `apply-worktree` staging ([Subprocess confinement](#subprocess-confinement-tools-container)); `{}` takes the defaults below |
 | `catch_up` | `{"max_retries_per_day": 2}` | `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (an `infra.*` code in `summary.json["infra_codes"]` or `remediation.docker`) and Docker is ready now, at most `max_retries_per_day` times per date (0–10; counted in the run directory's `infra-retry.count`) ([`catch_up_due`](#dailycatch_up_duecfg-dailycatch_upcfg)) |
@@ -326,7 +328,21 @@ The `docker` block (`docker_readiness.settings`; any other key, or a wrong type,
 | PyPI | `poetry.lock`, `uv.lock`, `Pipfile.lock` | |
 | PyPI | `pyproject.toml` next to requirements files (no lockfile) | PEP 621 `[project].dependencies` and `optional-dependencies` `==` pins (groups named like dev/test/lint/doc/type are dev). A pin a requirements file alongside already lists (PEP 503 name and version) is not counted twice; loose entries no requirements file pins make it unscannable for that part |
 | PyPI | `pyproject.toml` alone (no lockfile, no requirements) | unscannable: "pyproject.toml without a lockfile" |
-| npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile is unscannable (not listed next to a `pnpm-lock.yaml`) |
+| npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile is unscannable (not listed next to a `pnpm-lock.yaml` or `bun.lock`) |
+| npm | `pnpm-lock.yaml` (lockfile v6 and v9) | a restricted line reader of `packages:` (no YAML library); peer suffixes `(..)` dropped; non-registry entries (file, link, git, tarball) skipped. Scope: v6 `dev: true`; v9 `dev` only when reachable solely from `importers.*.devDependencies` through `snapshots:`, else (or when that cannot be told) `runtime`. Another lockfile version is unscannable. Fixes are plan-only (`pnpm update <name>@<ver>`) |
+| npm | `bun.lock` (text, JSONC) | `packages[k][0]` = `"name@version"`; workspace/git/file entries skipped; every package `runtime`. `bun.lockb` (binary) stays unsupported and does not cover a `package.json`. Fixes are plan-only (`bun update <name>@<ver>`) |
+| Go | `go.mod` | `require` lines (single-line and block, `// indirect` too), `replace` applied (a module replace substitutes name and version; a local-path replace drops the module and is named in a note); versions go to OSV without the `v`, pseudo-versions as they are. Every Go manifest is reported partial with "Go standard library / toolchain vulnerabilities not judged", plus "go < 1.17: indirect modules may be missing" (a `go` directive below 1.17, or none) and "go.work present: workspace replaces/uses not applied". `go.sum` is not read: beside a `go.mod` it is not listed; alone it is unsupported (`Go (go.sum without go.mod)`). Fixes are plan-only (`go get <mod>@v<ver>`) |
+| RubyGems | `Gemfile.lock` | four-space `name (version[-platform])` entries under `GEM` / `specs:` whose remote is rubygems.org (a known platform suffix dropped); `GIT` / `PATH` skipped; gems of other sources counted in a note, never looked up. Every gem `runtime`. Fixes are plan-only (`bundle update --conservative <name>`) |
+| Maven | `gradle.lockfile` | **Opt-in** (`scan --gradle-lockfiles`, `scan_path(gradle_lockfiles=True)`, `fix_path(gradle_lockfiles=True)`): otherwise unscannable, "gradle.lockfile not read (opt-in: …)", since no signal tells a private Maven repository from Maven Central. `group:artifact:version=configurations`, named `group:artifact`; `dev` when every configuration is a test one. Fixes are plan-only (the build script, then `./gradlew dependencies --write-locks`) |
+| NuGet | `packages.lock.json` | `dependencies[tfm][name].resolved` over every target framework; `type: Project` skipped; every package `runtime`. Fixes are plan-only (`dotnet add package <name> --version <ver>`) |
+
+Private sources a repository's own tooling declares are withheld like a brief's `private_packages`
+(`withheld`, never sent to OSV, also by `fix`'s lockfile plans; `private_sources.PrivateSources`): Go modules
+matching `GOPRIVATE`, `GONOPROXY` or `GONOSUMDB` (the environment, then `go env` run from `/` with
+`GOTOOLCHAIN=local` and an empty `GOFLAGS`; Go's prefix-glob rule, `go_private_match`); every NuGet package of
+a repository whose `nuget.config` (in it, or a parent within the scan root) names a package source other than
+nuget.org, or cannot be read; and `pnpm-lock.yaml` / `bun.lock` names in an `.npmrc` scope (same places) whose
+`@scope:registry=` is not registry.npmjs.org (a non-npmjs `registry=` withholds them all).
 | Packagist | `composer.lock` | |
 | crates.io | `Cargo.lock` (v1–v4; `CRATE_LOCKS`) | only `[[package]]` entries whose `source` is the crates.io index (an entry with a name or version outside
 `CRATE_NAME` / `CRATE_VERSION` makes the whole lock unscannable: "a crates.io entry with an unusual name or version:
@@ -337,18 +353,121 @@ and reported unscannable with the reason `unsupported ecosystem: <name>`:
 
 | Ecosystem | Files |
 |---|---|
-| Go | `go.sum` (`go.mod` when there is no `go.sum`) |
+| Go | `go.sum` when there is no `go.mod` (`Go (go.sum without go.mod)`) |
 | Maven | `pom.xml` |
-| Gradle | `gradle.lockfile` (`build.gradle` / `build.gradle.kts` when there is no lockfile) |
-| RubyGems | `Gemfile.lock` |
-| NuGet | `packages.lock.json` (`*.csproj` when there is no lockfile) |
-| pnpm (npm packages) | `pnpm-lock.yaml` (run `pnpm audit` there) |
+| Gradle | `build.gradle` / `build.gradle.kts` when there is no `gradle.lockfile` |
+| NuGet | `*.csproj` when there is no `packages.lock.json` |
 | conda, Lean | `environment.yml` / `environment.yaml`, `lake-manifest.json` |
+| SwiftPM, CocoaPods, Pub, Hex | `Package.resolved`, `Podfile.lock`, `pubspec.lock`, `mix.lock` |
+| Bun, Deno (npm packages) | `bun.lockb` (binary), `deno.lock` |
+| CRAN, Hackage | `renv.lock`, `stack.yaml.lock` / `cabal.project.freeze` |
+| Julia | `Manifest.toml`, only next to a `Project.toml` (the name alone is too generic) |
+| RubyGems | `Gemfile` when there is no `Gemfile.lock` |
+| Conan, vcpkg (C/C++) | `conan.lock` (`conanfile.txt` / `conanfile.py` when there is no `conan.lock`), `vcpkg.json` |
 | container images | `Dockerfile`, `Dockerfile.*`, `Dockerfile-*`, `*.Dockerfile`, `Containerfile`, `compose.yml` / `compose.yaml`, `docker-compose*.yml` / `.yaml` |
+
+None of them is in `LOCKFILES`, so none hides a `package.json` or `pyproject.toml` beside it.
+`composer.json` and `Cargo.toml` without their lockfile are listed and unscannable ("composer.json without a
+lockfile — run `composer update --lock`", "Cargo.toml without a lockfile — run `cargo generate-lockfile`"), like
+`package.json`; a `Cargo.toml` with a `Cargo.lock` in a directory above it (a workspace member) is not listed.
 
 A workspace whose only manifests are these is in the coverage state `unsupported ecosystem` (a coverage
 gap: nothing in it is checked), never `nothing to scan`. A workspace that also has supported manifests
 keeps its state, and the coverage section lists its unsupported files.
+
+### Container images
+
+**The image contents are not scanned**: the OS packages and libraries inside an image's layers are not
+read or looked up. What `scan_path` checks is the support status and pinning of each **base image** a
+container manifest names (`agentteams.vulnscan.images`). Each container manifest therefore stays listed
+unscannable, with the reason `unsupported ecosystem: container images (layer contents not scanned; base
+image support status checked)`, and coverage, which keys on file names, still puts an images-only
+workspace in `unsupported ecosystem`.
+
+References read: a Dockerfile's `FROM [--platform=..] <ref> [AS <name>]` (a `FROM` naming an earlier stage
+and `scratch` are skipped; `${NAME}` takes the default of an `ARG NAME=default` written before the first
+`FROM`, and the finding says "ARG default; `--build-arg` may override"), and a compose file's
+`services.<name>.image` (a service with `build:` is skipped: its Dockerfile is scanned on its own). A
+reference with an unresolved variable is listed as not judged, never guessed.
+
+| Image | Judged as |
+|---|---|
+| `python`, `pypy` | `python` |
+| `node`, `php`, `ruby`, `nginx`, `mysql`, `mariadb`, `redis` | the kind of the same name |
+| `golang` | `go` |
+| `postgres` | `postgresql` |
+| `eclipse-temurin`; `openjdk` (also LOW: "deprecated image; use eclipse-temurin") | `java` |
+| `amazoncorretto` | `java-corretto` |
+| `mcr.microsoft.com/dotnet/{runtime,aspnet,sdk}` | `dotnet` |
+| `ubuntu`, `debian`, `alpine`, `amazonlinux` | the OS release (`runtimes.evaluate_os`) |
+
+An official image is the bare name, `library/<name>` or `docker.io/library/<name>`. The tag decides:
+
+| Tag | Result |
+|---|---|
+| a release line (`3.12-slim`, `18-alpine`, `8.0`) | HIGH when the line is end-of-life; otherwise fine (a rebuild takes the line's newest patch) |
+| a full patch (`3.11.4`) | also MODERATE "pinned patch tag behind <latest>" (HIGH when a newer release on the line is a security release) |
+| fewer parts than the line (`python:3`, `redis:7`), or a keyword (`lts`, `stable`, `current`) | not judged: "floating … release line not determinable" (never fine) |
+| `latest`, or none | LOW: "unpinned tag: rebuilds change silently" |
+| a `@sha256:` digest | counted in the manifest's reason: "contents frozen at the pinned digest" (not a finding) |
+
+The OS in a tag (`-bookworm`, `-jammy`, `-alpine3.18`, `-al2023`) is judged too, as `base OS: …`, for any
+public image: `mcr.microsoft.com/playwright/python:v1.57.0-jammy` gets Ubuntu 22.04 judged while the
+playwright line itself is listed as not judged. An image on a private registry (any registry not in
+`images.PUBLIC_REGISTRIES`) or a bare name vulnscan does not know (a local build) is not judged and is
+shown only as `(private registry image)` or `(local or unlisted image)`; a `latest` tag there is still LOW.
+Only endoflife.date product slugs leave the machine, never an image name. Findings have `kind` `image`
+(shown as "base image") and are never fixed automatically: the fix plan lists them under
+`## base images: <file> — plan-only (no staged edit)`, and `executor.validate_diff` refuses a Dockerfile or
+compose change.
+
+### Unpinned Python requirements
+
+A `requirements*` file with only range specifiers, or a `pyproject.toml` with no lock, has no exact versions
+and is unscannable. With `unpinned_ranges` on, `engine.scan_path` also checks each of its **direct**
+requirements' ranges against every advisory OSV holds for the name (`engine.analyze_ranges`,
+[`specifiers`](#agentteamsvulnscanspecifiers)). It never guesses one version and never asks PyPI.
+
+- **Switch.** `unpinned_ranges` (boolean, default `false`): `engine.scan_path(..., unpinned_ranges=True)` or
+  `scan PATH --unpinned-ranges`, and for the daily run the `vulnscan.json` key `unpinned_ranges`. Turn it on
+  after reviewing one run.
+- **Egress.** When on, it sends unpinned direct requirement names to OSV (`/v1/querybatch`, the package name
+  with no `version` key), the same host and the same names pinned scanning already sends; nothing goes to
+  pypi.org. Withheld, as for pinned packages: names matching `private_packages`, and a whole file that names
+  a package index (`withheld`, `"<repo>: <path in repo> (private index)"`): a requirements file with an
+  `--index-url` / `-i` / `--extra-index-url` line, itself or in a file it includes with `-r` / `-c` (an
+  include that leaves the repository counts as one), and a `pyproject.toml` with `[[tool.poetry.source]]`,
+  `[[tool.uv.index]]`, `[tool.uv.sources]` with an `index`, or `[[tool.pdm.source]]`. When any one
+  requirements file or `pyproject.toml` of a repository names an index (or cannot be read or parsed), every
+  unpinned-range file of that repository is withheld too, with `engine.REPO_INDEX_NOTE` in its reason
+  (`specifiers.names_index`). Files over 64 MiB (`specifiers.MAX_BYTES`) are not read. `level: off` behaves
+  as for pinned packages (scanned, listed under `brief_off`).
+- **Judgement.** Each advisory's affected ranges (`osv.affected_intervals`) are intersected with the
+  specifier set. Findings have kind `range` (shown as "requirement range"), an empty `version` and the
+  specifier in `spec`:
+
+  | Overlap | Severity | Detail |
+  |---|---|---|
+  | every allowed version is affected | the advisory's | "every version `<spec>` allows is affected" |
+  | part of the range (`partial`) | the advisory's, capped at MODERATE after `unscored_as` | "`<spec>` allows vulnerable versions `<range>`; the installed version is unknown"; `fix` is the lower bound that clears it, when every overlapping range ends in a `fixed` event |
+  | a `MAL-*` advisory | CRITICAL, `malicious` false (no install is confirmed, so no exit 4 or isolate banner) | "range admits known-malicious versions; check what is installed" |
+  | none | no finding | |
+
+  An environment marker is ignored (the requirement is judged for every environment; the detail says so).
+  URL, VCS, `-e` and `===` requirements are counted as not checked. Files named like `dev` or `test`, and
+  pyproject optional groups named like dev/test/lint/doc/type, give `dev` findings.
+- **Exit code.** Range findings count toward `--fail-on` like package findings: a whole-range HIGH finding
+  exits 1 (`fail_on: high`); a partial one is at most MODERATE and stays below the default.
+- **Remediation.** Range findings are never routed to a fix (`daily`, `review` and `stage-fix` take
+  `package` findings, and `stage-fix` edits only `==` pins). `summary.md` lists each known lower-bound raise
+  under "Requirement ranges — plan-only (no staged edit)". The *Remediation effectiveness* fixed and new
+  counts leave range findings out; they have a line of their own.
+- **Coverage stays honest.** The manifest stays unscannable, with the reason "ranges checked against
+  advisories: N direct requirement(s); the installed versions and transitive dependencies are not known, so
+  pin with a lock for full coverage", followed by any notes: requirements not checked, advisories not judged
+  (an unknown range event, `GIT`-only or malformed ranges), and `partial:` when a cap was reached
+  (`engine.UNPINNED_QUERY_LIMIT` = 500 names, `engine.UNPINNED_DETAIL_LIMIT` = 2,000 advisory records per
+  `scan_path`). An OSV failure goes to `feed_errors` (exit 3), never clean.
 
 ### Severity
 
@@ -384,9 +503,9 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 
 | Command | Purpose |
 |---|---|
-| `scan PATH [--include-worktrees]` | Scan manifests under a repo or a folder of repos |
+| `scan PATH [--include-worktrees] [--gradle-lockfiles] [--unpinned-ranges]` | Scan manifests under a repo or a folder of repos (`--gradle-lockfiles`: also read `gradle.lockfile`, off by default). `--unpinned-ranges` also checks the ranges of Python requirements without exact pins and sends their names to OSV ([Unpinned Python requirements](#unpinned-python-requirements)) |
 | `inventory LOG [--host H]` | Analyse a server-kit audit log (the host label defaults to the log file's name without its extension) |
-| `runtimes` | Node.js, PHP and Python on this machine |
+| `runtimes` | The runtimes in `runtimes.PRODUCTS` found on this machine |
 | `fix PATH [--apply] [--allow-major] [--allow-dirty] [--include-worktrees] [--no-npm]` | Plan, or make, dependency fixes in a working tree you control (`--cooldown-days` is ignored, since its fixes fall under Rule S-10's remediation carve-out; it prints a note). git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver or a conditional include (`includeIf`), or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
 | `scan`, `inventory`, `runtimes`: `--format md\|json`, `--out FILE`, `--fail-on critical\|high\|moderate\|low\|any\|none`, `--include-dev` | Report format (default `md`) and file (default stdout); the lowest severity that exits 1 (default `high`); dev-only dependencies count toward it |
 | `init [--repo-root DIR]… [--server NAME]…` | Write a starter config (never overwrites) |
@@ -395,7 +514,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `scan`, `inventory`, `runtimes`: `--unscored-as critical\|high\|moderate\|low` | What an unscored advisory counts as for `--fail-on` (default `high`; `daily` uses the config's `unscored_as`) |
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
 | `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
-| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
+| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
@@ -420,8 +539,8 @@ The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious 
 `--allow-checkout-signing` and `--confirm-review-sha256` ([Signing](#signing)). `DATE` is always
 `YYYY-MM-DD`.
 
-`grant sign` takes `--op OP` (repeatable: `stage-fix`, `open-pr`, `close-superseded`, `server-audit`,
-`server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
+`grant sign` takes `--op OP` (repeatable, no default: `stage-fix`, `stage-major`, `stage-image`, `open-pr`,
+`close-superseded`, `server-audit`, `server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
 `--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. `publish-grant sign` takes
 `--ops-repo DIR`, `--remote-url URL` (default: the ops repository's `remote.origin.url`), `--node-id`,
 `--owner-id`, `--governance-dir DIR`, `--days N` (default 30), `--max-uses N` (default 60) and `--key-id ID`.
@@ -452,7 +571,24 @@ package finding is labelled `fixed_upstream` when the checkout is behind and eve
 exists at `origin/HEAD` but no longer pins that `name==version` (a file removed upstream proves nothing); its Notes
 cell ends with `fixed upstream (checkout behind)`. Repositories nested in another inside the scan root, and
 third-party clones (`daily.foreign_clone`), are skipped; a git query that fails leaves the repository unlabelled.
-What is scanned, the fix plans, grants and handoffs are unchanged: the working tree is still what is scanned.
+What is scanned, the fix plans, grants and handoffs are unchanged: the working tree is still what is scanned, unless
+`scan_mirror` points the scan at a fresh default-branch worktree ([Scan mirrors](#scan-mirrors)).
+
+### Scan mirrors
+
+A checkout kept on a feature branch is scanned as it is, which can be far behind the default branch. With
+`scan_mirror` set, the daily run scans the repository's default branch instead, from a detached worktree at
+`<repo>.worktrees/<scan_mirror>`. vulnscan never fetches: an operator job creates the worktree, fetches and moves it
+to `origin/HEAD` before the scan, and writes `<state>/scan-mirrors/<YYYY-MM-DD>.json` (`{"<checkout>": "ok <sha>"}`
+or `"failed <reason>"`). The scan uses a mirror only when that record says `ok` for today and the directory is real
+(not a symlink); otherwise it scans the checkout as before. Everything stays named after the checkout, so handoff
+verdicts, retry holds and the executor are unchanged, and the operator's `exclude` paths and opted-out checkouts hold
+in the mirror too. The freshness table's *Scanned* column says which one was read, and the run's per-root
+`repos-<name>.json` keeps `target` = the checkout and adds `scanned_from` = the mirror path when one was used.
+
+Two consequences of reading the default branch: a project brief's opt-outs are read from the mirror's copy of the
+brief, so an opt-out you have not committed and pushed does not apply; and `fix_mode: apply-worktree` still stages
+its fixes from `origin/HEAD` against the checkout, so use `scan_mirror` with the default `plan` mode.
 
 ### Exit codes
 
@@ -517,7 +653,7 @@ A Finding (`report.Finding`):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `kind` | string | `package`, `runtime`, `host` or `ioc` |
+| `kind` | string | `package`, `range` ([an unpinned requirement](#unpinned-python-requirements)), `runtime`, `image` (a base image; see [Container images](#container-images)), `host` or `ioc` |
 | `target` | string | repository (relative to the scan root), host name, or `this-machine` for local runtimes (`engine.LOCAL_TARGET`) |
 | `name` | string | package or runtime name; `host` / `compromise indicator` for host checks |
 | `version` | string | installed version (`""` when not applicable) |
@@ -537,6 +673,8 @@ A Finding (`report.Finding`):
 | `distro` | boolean | a Python package in an OS-managed location (ignored by `--fail-on`) |
 | `count_dev` | boolean or null | dev scope only: the project's `include_dev`, which overrides the run's `--include-dev` for this finding; null follows the run |
 | `detail` | string | host-check or runtime message, or the malicious-package note |
+| `spec` | string | `range` only: the requirement's specifier set (`""`: any version); `version` is then `""` |
+| `partial` | boolean | `range` only: part of the allowed range is affected (severity capped at MODERATE) |
 
 ---
 
@@ -660,8 +798,8 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix* |
-| `request` | `op` (`stage-fix`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix` for a repository in `staged-fixes.json` is refused (request `open-pr`) |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix, stage-major or stage-image*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names). The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
+| `request` | `op` (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix`, `stage-major` or `stage-image` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)), and `stage-image` only for one whose plan has base-image rows with action `stage-image`, on its own ([Base images](#base-images-stage-image)) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
@@ -691,7 +829,7 @@ executor validates):
 |---|---|
 | `id` | 32 lowercase hex characters; equals the file name; never reused (replay is refused) |
 | `op` | an `OPS` value, or `report` / `escalate` |
-| `target` | absolute repo path (`stage-fix`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
+| `target` | absolute repo path (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
 | `rationale` | string, kept in the ledger |
 | `created` | ISO timestamp |
 | `payload` | only for `report` (`{"markdown"}`) and `escalate` (`{"kind", "evidence"}`) |
@@ -716,16 +854,22 @@ for one can never verify as the other.
 | Valid at once | at most 2 (more: all refused) | at most 1 (more: all refused) |
 | Gate action (HALT) | `vulnscan-remediation` | `vulnscan-publish` |
 
-**Operations.** v1 grants may name `stage-fix`, `open-pr`, `close-superseded`, `server-audit` and
-`server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
-An existing grant does not cover `close-superseded` until the operator signs one that names it.
+**Operations.** v1 grants may name `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`,
+`server-audit` and `server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build`
+refuses them. An existing grant does not cover `close-superseded`, `stage-major` or `stage-image` until the operator
+signs one that names it; `grant sign --op` has no default, so no grant names an op the operator did not list.
+`stage-image` is constraint-relaxing too: it lifts the "dependency pins and lockfiles only" bound to Dockerfile
+`FROM` tags ([Base images](#base-images-stage-image)).
+`stage-major` is **constraint-relaxing** (Rule 15): it lifts `stage-fix`'s "no semver-major jump" bound, so a grant
+naming `stage-fix` never implies it; like every grant, one naming it is Ed25519-signed by the operator
+([Major upgrades](#major-upgrades-stage-major)).
 
 **Bounds `grant.build` enforces:**
 
 - at least one operation, and only v1 operations;
 - `days` 1–30 and `max_uses` 1–500;
 - `repo_roots` are resolved to absolute paths and may not be `/` or your home directory itself;
-  `stage-fix`, `open-pr` and `close-superseded` need at least one;
+  `stage-fix`, `stage-major`, `stage-image`, `open-pr` and `close-superseded` need at least one;
 - `hosts` must be plain names, never `all`; server operations need at least one. Whether a name is
   in `hosts.conf` is checked when the operation runs;
 - `governance_dir` must contain `references/security-decisions.log.csv`.
@@ -770,6 +914,115 @@ A repository check that does not answer within 30 s refuses the request, and so 
 **PR bodies** pass the same scrubber as published reports (`publish.rewrite_paths`): home paths become
 `~`, this machine's host name `<this-host>`, RFC 1918 addresses `<private-ip>`. The fix plan and the
 agent's quoted rationale are both inside the body.
+
+### Major upgrades (`stage-major`)
+
+`stage-major REPO` is `stage-fix` with semver-major upgrades allowed (`executor.stage_fix(repo, cfg, major=True)`,
+`fix.fix_path(..., allow_major=True)`). The operator decided on 2026-10-31 that remediation is automatic, majors
+included, delivered as PRs that CI must pass; this op is how. It differs from `stage-fix` in these ways only:
+
+- **Grant.** Only a grant that names `stage-major` covers it (constraint-relaxing, Rule 15).
+- **pip.** A `==` pin may move to the smallest clean release on a new major line (`PinChange.major` is set).
+- **npm.** A `major-held` package that `package.json` lists **directly** (`dependencies` or `devDependencies`) has
+  its spec raised to `^<fixed version>` in place, every other byte kept (`npm_major.rewrite_specs`), and npm
+  re-resolves the lockfile with `npm install --package-lock-only --ignore-scripts` (same scratch copy, registry,
+  `--strict-ssl` and cooldown handling as the audit fix), before `npm audit fix` runs as usual. A package only
+  some other package depends on stays `major-held` ("transitive only"): its parent must move first. npm
+  workspaces stay refused. A spec that is a URL, path, git or `npm:` alias is never rewritten. `npm install`
+  fails closed: it is refused (the stage fails, nothing is written) unless the tools container is active
+  (never on the host, never with `confine.subprocesses: false`), and unless the base `package.json` and lockfile
+  name only registry sources: no git, URL, `file:`, `link:` or `npm:` spec, and every lockfile entry resolved
+  over `https://` to the registry allowlist (`manifests.npm_off_registry`). If npm then reports an error or leaves
+  the lockfile unchanged, the whole stage is refused, so a raised spec is never committed beside a stale
+  lockfile. A `package.json` that cannot be read leaves every row `major-held`, saying so.
+- **`validate_diff(..., major=True)`** also accepts a `package.json` change, but only raises of existing
+  `dependencies` / `devDependencies` specs to `^X.Y.Z` above the old one, with every other member unchanged
+  (`npm_major.check_package_json_edit`); the lockfile's root `dependencies` / `devDependencies` may then change
+  only to exactly that manifest's (`manifests.check_lock_edit(..., manifest=...)`). `stage-fix` refuses any
+  `package.json` change, as before.
+- **Refusals.** A change that takes no major upgrade is refused ("stage-major staged no major upgrade: request
+  stage-fix"), so a non-major fix is never labelled MAJOR. A change that fixes nothing records
+  `nothing fixable even with a major upgrade` (`retry_guard.MAJOR_FUTILE_DETAIL`), never "nothing fixable without
+  a major jump". The futile-retry hold is per op: a held `stage-major` never holds `stage-fix`, nor the reverse.
+- **Commit and PR.** The branch is still `vulnscan/<YYYYMMDD>-<digest>`. The commit is
+  `security(deps)!: major upgrade of known-vulnerable dependencies (<digest>)`, with a body listing each package
+  `old → new` and a `BREAKING CHANGE:` footer; the staged state and the result carry `"major": true`. `open-pr`
+  titles the PR `security(deps)!: MAJOR upgrade of known-vulnerable dependencies (<digest>)`, opens its body
+  saying that it is a major upgrade that may need code changes and that CI must cover it, and labels it
+  `vulnscan-major` (`executor_pr`). The label is created when missing; if gh still reports it missing
+  (`could not add label` / `label ... not found`, `executor_pr.label_refused`) an open PR for the branch is
+  claimed (gh may have opened it before the label failed), else the PR is opened without the label: a missing
+  label never fails the PR. Any other `gh pr create` failure stands.
+
+**No duplicate PRs** (`open_prs`, both `stage-fix` and `stage-major`). Before staging, the executor lists the
+repository's open PRs (read-only: `gh pr list --state open --json number,title,headRefName,author,isCrossRepository
+--limit 100`, the executor's gh environment). A PR opened by Dependabot or Renovate (`open_prs.TRUSTED_AUTHORS`) on
+the repository itself (not a fork), whose head branch does not start with `vulnscan/`, and that names a package, by its title (`Bump <name> from <a> to <b>`, `chore(deps): bump <name> ...`,
+`Update dependency <name> to v<b>`) or its head branch (`dependabot/<eco>/<path>/<name>-<ver>`,
+`renovate/<name>-<ver>`), keeps that package: the fix leaves it (`pr-held`, "left to #227"; names compare
+case-insensitively with `_` / `-` / `.` alike). Requirements pins and npm majors are filtered; `npm audit fix`
+picks its own versions and is not. A person's PR or a fork's never holds a package back: a title alone could
+otherwise suppress a critical fix indefinitely, so such a PR may get a duplicate instead. When nothing remains the stage is refused with `an open PR already updates
+<names> (#227, #228); not duplicated`, which is not a futile result (no retry hold: each run checks again, so it
+lifts once those PRs close). Staging does not wait on gh (a failed listing stages as before); `open-pr` lists them
+again and fails closed: a gh failure opens nothing, and a package another PR now updates retires the staged change
+with the same detail. The staged state records `packages` and `left_to_prs`, and the PR body lists the packages
+left to other PRs.
+
+Every executor PR body (majors and not) says it may be merged automatically once every check, a test check
+included, passes, so CI must cover the change: the operator's auto-merge job merges green `vulnscan/*` PRs.
+
+The agent requests `stage-major` only for a repository whose fix plan shows `major-held` rows and whose
+`stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix.
+
+### Base images (`stage-image`)
+
+`stage-image REPO` (`executor.stage_fix(repo, cfg, mode="image")`, module `image_fix`) moves the `FROM` tag of an
+end-of-life base image in a Dockerfile to a supported release line of the **same** variant:
+`python:3.9-slim` → `python:3.14-slim`. It is a constraint-relaxing op of its own (Rule 15): only a grant that names
+it covers it, and a grant naming `stage-fix` or `stage-major` never implies it. The agent names only the
+repository; every edit is derived by the executor from the scan's own data (`images.refs`, the
+`image_fix.ELIGIBLE` table, and the endoflife.date release data `runtimes.evaluate` reads; a feed failure refuses
+the stage, nothing is guessed).
+
+- **What it may change.** Only a one-line `FROM` in a `Dockerfile*`, `*.Dockerfile` or `Containerfile` (never a
+  compose file) naming a Docker Hub official image in `image_fix.ELIGIBLE`: `python`, `ruby`, `golang`, `php`. Only
+  the tag changes, only when its release line is end-of-life, and the variant suffix is kept byte for byte.
+- **Which line (S-10).** The newest supported line whose first release is at least `images.LINE_MIN_AGE_DAYS` (90:
+  max(the 14-day cooldown, 90 days) for a runtime line jump) days old (`runtimes.newest_aged_release`; a line whose
+  release date endoflife.date does not give is never chosen). Leaving an end-of-life line does not need the newest
+  one. One function, `images.upgrade_tag`, computes it for both the report's "→" and the staged edit, so they
+  always agree: a line tag stays a line tag (`3.9-slim` → `3.14-slim`), a full-patch tag becomes that line's latest
+  release (`3.9.18-slim` → `3.14.2-slim`).
+- **Parsing as Docker does.** Lines are split on `"\n"` only (`\r\n` kept), in `images.refs` and in
+  `check_from_edit` alike. A Dockerfile with a byte-order mark, a heredoc (`<<`) or an `escape` / `syntax` parser
+  directive is held (`image_fix.hazard`), and refused by `check_from_edit`. A manifest that cannot be read gets a
+  note (the staged plan's *Refused* list), never a silent empty plan.
+- **What it holds for a person** (`image-held` rows, with the reason): `:latest` or no tag (report-only: pinning to
+  a digest needs a registry query and freezes OS security rebuilds, and the line `:latest` points at is not knowable
+  offline), a `@sha256:` digest (never changed, never added), a reference set by an `ARG` default, a tag naming an
+  OS release (`-bookworm`, `-alpine3.19`: the newer line may not be published for it), a `FROM` continued over
+  several lines, and every other image (databases change their on-disk format across majors; `node` and
+  `eclipse-temurin` because the newest supported line may be a non-LTS one; compose files; private and unlisted
+  images are never named). Every reference with an image finding that `stage-image` does not move gets such a row.
+- **`validate_diff(..., mode="image")`** accepts only Dockerfiles, and in them only `image_fix.check_from_edit`'s
+  edits, offline and byte for byte: same line count and endings, only `FROM` lines differ, same registry and
+  repository text, an eligible official image, no digest, no variable, the same letters-only suffix, the same number
+  of version parts and a higher release line. Any requirements file, lockfile or `package.json` is refused, so a
+  base-image change is never combined with a dependency fix; `stage-fix` and `stage-major` refuse any Dockerfile.
+- **Fix plans.** A base-image row `stage-image` would move has action `stage-image` and its target tag under "→";
+  every other row stays `plan-only`, with `not stage-image: <reason>` when `stage-image` holds it.
+- **Refusals.** No base image to move records `no base image stage-image may upgrade`
+  (`retry_guard.IMAGE_FUTILE_DETAIL`), held per op until the fix plan changes. `refuse_plan_only` (Cargo.lock-only
+  repositories) does not apply. A bump of an image a Dependabot or Renovate PR already updates (`Bump python from
+  ...`) is left to it (`pr-held`).
+- **Commit and PR.** The commit and the PR title are `security(image)!: MAJOR upgrade of end-of-life base images
+  (<digest>)`, the commit lists each `image old → new (path, FROM line N)` with a `BREAKING CHANGE:` footer, the PR
+  body says that a new runtime line may need code and dependency changes and that CI must build the image and run
+  the tests in it, and the PR is labelled `vulnscan-major`. The staged state and the `stage-image` and `open-pr`
+  results carry `"image": true`.
+- **Lanes.** `close-superseded` closes only older PRs in the replacement's lane (`ops.lane_of`: `image` for a
+  `stage-image` PR, `deps` for every other): a base-image PR and a dependency PR never supersede each other.
 
 ### Grants from the registry
 
@@ -1006,7 +1259,7 @@ vulnscan or to test an integration.
 
 ### `agentteams.vulnscan.engine`
 
-#### `engine.scan_path(root, *, include_worktrees, exclude=(), opted_out=())`
+#### `engine.scan_path(root, *, include_worktrees, exclude=(), opted_out=(), gradle_lockfiles=False, unpinned_ranges=False)`
 
 Scan every manifest under `root` (a repository or a folder of repositories). Returns a
 [`Report`](#json-output) whose targets are repositories relative to `root`. A feed failure lands
@@ -1016,7 +1269,14 @@ skipped (`opted_out`). Each repository's brief then narrows what is sent, never 
 ([`project_policy`](#agentteamsvulnscanproject_policy)): `level: off` does **not** skip it (it is
 scanned and listed in `brief_off`), manifests under `exclude_paths` are skipped (`excluded`), packages
 matching `private_packages` are never sent to OSV (`withheld`), and `include_dev` sets `count_dev` on
-its dev-only findings.
+its dev-only findings. `unpinned_ranges=True` also checks the ranges of Python manifests without exact pins
+([Unpinned Python requirements](#unpinned-python-requirements)).
+
+#### `engine.analyze_ranges(items, report, *, dev_policy=None, query_limit=UNPINNED_QUERY_LIMIT, detail_limit=UNPINNED_DETAIL_LIMIT)`
+
+Check `engine.RangeItem(target, location, req)` requirements against OSV by name and append `range`
+findings to `report`. Returns `{location: [coverage notes]}` (caps reached, advisories not judged, a failed
+query). A failed query goes to `report.feed_errors`.
 
 #### `engine.analyze(deps, report, *, distro_check, dev_policy=None)`
 
@@ -1026,28 +1286,155 @@ Look up `(target, Dep)` pairs in OSV and append findings to `report` in place. F
 
 #### `engine.scan_inventory(text, target)`
 
-Analyse a server-kit audit log (`INV`, `RUNTIME`, `HOSTCHECK`, `IOC` lines; anything else is
-ignored). Returns a `Report` for host `target`.
+Analyse a server-kit audit log. Returns a `Report` for host `target`. Lines are tab-separated; a line with
+another prefix or field count is ignored:
+
+| Prefix | Fields |
+|---|---|
+| `INV` | ecosystem, name, version, location |
+| `RUNTIME` | kind (a `runtimes.PRODUCTS` key), version, path, manager |
+| `OSREL` | os-release `ID`, `VERSION_ID`, `PRETTY_NAME` (`L1-audit.sh` parses the file, never sources it) |
+| `ESM` | esm-infra, esm-apps: `enabled`, `disabled` or `unknown` (Ubuntu only, read from `/var/lib/ubuntu-advantage/status.json`; the kit never runs `pro`) |
+| `HOSTCHECK` | severity, message |
+| `IOC` | message |
+
+A `RUNTIME` manager says where a package-manager install came from. `pkg:<package>` (or
+`pkg:<package>:universe` for Ubuntu universe/multiverse) means the installed version comes from an
+allowlisted distribution archive: `*archive.ubuntu.com`, `security.ubuntu.com`, `esm.ubuntu.com`,
+`*ports.ubuntu.com`, `deb.debian.org`, `security.debian.org`, the Amazon Linux repositories
+(`amazonlinux*.amazonaws.com`, `al2023-repos-*.amazonaws.com`, `cdn.amazonlinux.com`), `cdn.redhat.com`,
+`*.rockylinux.org` and `*.almalinux.org`. Any other origin is `repo:<host>:<package>`, and an unreadable one
+(including an installed version only `/var/lib/dpkg/status` knows, such as a local `.deb`) is
+`repo:unknown:<package>`. On apt hosts the origin is the `***` block of `apt-cache policy`; on dnf hosts it is
+`dnf -C repoquery --installed --qf '%{from_repo}'` (or `yumdb`), resolved to a host through
+`/etc/yum.repos.d`. Only `pkg:` is left to distro updates; `repo:` is judged upstream.
+
+`OSREL` is judged by `runtimes.evaluate_os`. The finding is `kind="host"`, `name="os-release"` (`OS_RELEASE`),
+`fix` the newest supported release:
+
+| OS release | Severity | Detail |
+|---|---|---|
+| supported | none (counted in `checked`) | |
+| end-of-life | HIGH | `eol: OS release <pretty> is end-of-life: distro security updates have stopped` |
+| Ubuntu past standard support (its ESM has not ended), esm-infra not `enabled` or no `ESM` line | HIGH | `standard-support-ended: … standard support ended; ESM/Pro required for security updates (esm-infra <state>)` |
+| as above, esm-infra `enabled` | LOW | `… on ESM (main only); universe packages need esm-apps` (`on ESM (esm-infra and esm-apps enabled)` when both are) |
+| as above, esm-infra `enabled`, a `pkg:<name>:universe` runtime present, esm-apps not `enabled` | MODERATE | the LOW detail plus the universe packages |
+| Ubuntu past standard support, whether its ESM still runs unknown (no extended-support data), any `ESM` line | HIGH | `standard-support-ended: … standard support ended; ESM state unknown (extended-support data unavailable)` |
+| `ID` not in `runtimes.OS_PRODUCTS` | unscannable | `OS <ID> not judged by this vulnscan version` |
+| no `VERSION_ID`, or a release line endoflife.date does not list | unscannable | |
+| feed failure | feed error | |
+
+An audit without an `OSREL` line (a kit staged before it) has no OS release result.
 
 #### `engine.local_runtimes(target=LOCAL_TARGET)`
 
-A `Report` for the Node.js (`node`), PHP (`php`) and Python (`python3`) found on this machine's `PATH`, labelled
-`target`: runtime findings, and a runtime whose version cannot be read as unscannable. The `runtimes`
-command and `daily` (with `local_runtimes: true`) call it.
+A `Report` for every `runtimes.PRODUCTS` probe whose binary is on this machine's `PATH`, labelled `target`.
+Each probe runs once per product and binary, for at most `PROBE_TIMEOUT` (20) seconds, and reads its version
+from stdout, stderr or both. A binary that is not found is skipped; one whose version cannot be read, or that
+is not the product (LibreSSL's `openssl`: "not OpenSSL (…): not judged by this vulnscan version"), is
+unscannable. `mysqld` is judged as MariaDB when its output says so and as MySQL otherwise; `dotnet
+--list-runtimes` gives one item per runtime version; `docker` reads the server version only and never starts a
+daemon. The `runtimes` command and `daily` (with `local_runtimes: true`) call it.
+
+In `scan_inventory` and `local_runtimes`, a `RUNTIME` kind that is not a `runtimes.PRODUCTS` key is reported
+under `unscannable` as "runtime kind <kind> not judged by this vulnscan version", never dropped.
 
 ### `agentteams.vulnscan.runtimes`
 
-Judges an installed Node.js, PHP or Python against live release data (endoflife.date, nodejs.org,
-www.php.net).
+Judges installed runtimes and OS releases against live release data (endoflife.date, nodejs.org,
+www.php.net). `PRODUCTS` maps each runtime kind to a frozen `Product(eol, cycle, security_feed, probes, label,
+cycle_fn, norm)`: the endoflife.date slug, the version parts that name a release line (or a `cycle_fn`
+override), the security-release feed, and the local `Probe(argv, stream, regex, each, require, only_if,
+reject)` list.
+
+| Kind | endoflife.date slug | Release line | Security feed | Probe |
+|---|---|---|---|---|
+| `node` | `nodejs` | major (`24`) | nodejs.org | `node -v` |
+| `php` | `php` | two parts (`8.3`) | www.php.net | `php -v` |
+| `python` | `python` | two parts | — | `python3 --version` |
+| `ruby` | `ruby` | two parts | — | `ruby -v` |
+| `go` | `go` | two parts (`1.22`) | — | `go version` |
+| `java` | `eclipse-temurin` | major; `1.8.0_x` is `8` | — | `java -version` (stderr) |
+| `java-corretto` | `amazon-corretto` | as `java` | — | none (chosen by image name) |
+| `dotnet` | `dotnet` | two parts (`8.0`) | — | `dotnet --list-runtimes` |
+| `nginx` | `nginx` | two parts | — | `nginx -v` (stderr) |
+| `openssl` | `openssl` | two parts (`3.0`); before 3, three (`1.1.1`) | — | `openssl version` |
+| `postgresql` | `postgresql` | major from 10 (`16`); `9.6` before | — | `postgres --version`, `psql --version` |
+| `mysql` | `mysql` | two parts | — | `mysqld --version` (not MariaDB) |
+| `mariadb` | `mariadb` | two parts (`10.11`) | — | `mariadbd --version`, `mysqld --version` (MariaDB) |
+| `redis` | `redis` | two parts | — | `redis-server --version` |
+| `docker` | `docker-engine` | two parts | — | `docker version --format '{{.Server.Version}}'` |
+
+Java on a host is judged on Eclipse Temurin's support dates and its findings say so. `EOL_PRODUCT` is the
+derived `{kind: slug}` dict. `OS_PRODUCTS` maps an os-release `ID` or image name to its slug (`ubuntu`,
+`debian`, `alpine`, `amzn` and `amazonlinux` → `amazon-linux`, `rhel`, `rocky` → `rocky-linux`, `almalinux`,
+`fedora`, `centos`), and `OS_CODENAMES` maps Debian and Ubuntu codenames (`bookworm` → `12`, `jammy` →
+`22.04`, …) to versions.
+
+#### `runtimes.cycle_of(kind, version)`
+
+The endoflife.date release-line name of `version` for a `PRODUCTS` or `OS_PRODUCTS` key (`KeyError` for
+neither): `"24"`, `"8.3"`, `"8"` for `1.8.0_412`, `"1.1.1"`, `"22.04"`.
+
+#### `runtimes.evaluate_os(os_id, version_id, today=None)`
+
+A `RuntimeFinding` for an OS release, judged on its release line alone (`behind-patch` does not apply):
+`eol` (HIGH: "<OS> <line> is end-of-life — distro security updates have stopped", `upgrade_to` the newest
+supported release), `ok`, or `unchecked` (an OS not in `OS_PRODUCTS`, a release line endoflife.date does not
+list, or a feed failure). `version_id` may be a codename in `OS_CODENAMES`.
+
+#### `runtimes.os_extended_support(os_id, version_id, today=None)`
+
+Whether an OS release's extended support (Ubuntu ESM: endoflife.date `eoesFrom`, or `extendedSupport` in its v0
+API) is still running: `True`, `False` once it has ended or the release has none, `None` when the OS, release line
+or data is unknown or the feed fails. `scan_inventory` uses it to tell an Ubuntu release past standard support
+from one whose ESM has ended too.
 
 #### `runtimes.evaluate(kind, version, path="", manager="", today=None)`
 
 A frozen `RuntimeFinding(kind, version, path, manager, severity, verdict, detail, upgrade_to="")`. `verdict` is
 `eol` (the release line gets no more security fixes; HIGH), `security-release-missing` (a newer release on the
 same line is a security release; HIGH), `behind-patch` (newer, non-security patches; MODERATE), `ok`,
-`distro` (`manager` is `pkg:<name>`: an OS-packaged runtime is left to OS security updates, since
-distributions backport fixes without changing the version) or `unchecked` (a feed could not be reached;
-never reported as fine). `EOL_PRODUCT` maps each kind to its endoflife.date product.
+`distro` (`manager` is `pkg:<name>`: a runtime packaged by the distribution's own archive is left to OS
+security updates, since distributions backport fixes without changing the version; a `repo:<origin>:<name>`
+package from a third-party or unknown origin is judged like an upstream install) or `unchecked` (a feed could not be reached, the
+release line is unknown to endoflife.date, or `kind` is not in `PRODUCTS`; never reported as fine). Only a
+product with a security feed can be `security-release-missing`, and only such a product's `behind-patch` is
+raised to HIGH when its security data is unavailable. The others are judged on end of life and latest patch
+only, and their detail says "no upstream security-release feed; judged on end-of-life and latest patch
+only".
+
+### `agentteams.vulnscan.images`
+
+Base-image support checks for container manifests ([Container images](#container-images)). `ImageRef(registry,
+repository, tag, digest, line, source, arg_default)` is one reference; `public`, `official` and `display()` decide
+whether it is judged and how a report names it. `IMAGE_PRODUCTS`, `MCR_PRODUCTS` and `OS_IMAGES` map images to
+`runtimes.PRODUCTS` / `OS_PRODUCTS` keys; `MAX_BYTES` (1 MiB) and `MAX_REFS` (256) bound one manifest.
+
+#### `images.refs(path)`
+
+`(references, notes)` for one Dockerfile, Containerfile or compose file; each note says what was not judged
+and why (an unresolved variable, an unusual reference, a file too large, binary or not UTF-8). Never raises.
+
+#### `images.parse_ref(text, line, source, arg_default=False)` / `images.tag_os(tag)` / `images.is_container_manifest(name)`
+
+Split a reference (None outside the reference syntax); the OS a tag names (`("debian", "bookworm")`,
+`("alpine", "3.19")`, or None); whether a file name is a container manifest.
+
+#### `images.judge(ref, rel, target, today=None)`
+
+A `Judgement(findings, notes, feed_errors, checked)` for one reference, by the rules above. An unreachable
+endoflife.date is a feed error (the run is partial); a release line it does not list is a note.
+
+#### `images.scan_manifest(path, rel, target, report, today=None)`
+
+Judge every reference of one manifest into `report`: the manifest's reason (`CONTAINER_REASON`, with the digest
+count), a note per reference not judged, findings (a reference repeated on several lines is judged once and
+located at each) and feed errors. `engine.scan_path` calls it for every container manifest.
+
+#### `images.plan(path, rel, today=None)`
+
+`(findings, feed errors)` for the fix plan; `fix.fix_path` turns each finding into a plan-only `PinChange`.
 
 ### `agentteams.vulnscan.project_policy`
 
@@ -1079,11 +1466,30 @@ exclude or withhold everything.
 `open-pr`, `delivery: handoff` makes `open-pr` wait for the project orchestrator's `approve-staged` verdict
 ([handoff](#agentteamsvulnscanhandoff)), and `base_branch` is the PR base (it must exist on origin).
 
+### `agentteams.vulnscan.scan_mirror`
+
+#### `scan_mirror.stamp_path(day)`
+
+The refresh job's record for `day` (`YYYY-MM-DD`): `<state>/scan-mirrors/<day>.json`.
+
+#### `scan_mirror.valid_name(name)`
+
+Whether a `scan_mirror` value is usable: `""` (off) or one path component (no `/` or `\`, not `.` or `..`).
+
+#### `scan_mirror.mirror_for(cfg, root, day)`
+
+The mirror to scan for the checkout `root` on `day`, or `None` to scan the checkout: `<root>.worktrees/<scan_mirror>`
+when the key names a worktree (no `/`), the directory is real, and the day's record says `ok` for `root`.
+
+#### `scan_mirror.also_under(skips, root, mirror)`
+
+`skips` (resolved exclude paths or opted-out checkouts) plus, for each inside `root`, the same path inside `mirror`.
+
 ### `agentteams.vulnscan.manifests`
 
 Finds dependency manifests and reads exact versions from them; the formats are listed under
 [Supported manifests](#supported-manifests). It also holds the two edit checks the executor's
-[`validate_diff`](#validate_diffwt-base) applies to a staged fix.
+[`validate_diff`](#validate_diffwt-base-majorfalse) applies to a staged fix.
 
 #### `Dep` / `Manifest`
 
@@ -1100,7 +1506,9 @@ Sorted manifest paths under `root`. Vendored and generated trees (`SKIP_DIRS`: `
 `include_worktrees` is set. `package.json` and `pyproject.toml` are listed only when their directory has no
 lockfile (a `pyproject.toml` next to requirements files is listed too, for its PEP 621 pins). Manifests of
 ecosystems the scanner does not read are listed so they can be reported as unscannable; `go.mod`,
-`build.gradle*` and `*.csproj` only when their directory has no lockfile of the same ecosystem.
+`go.sum`, `build.gradle*`, `Gemfile`, `conanfile.*` and `*.csproj` only when their directory has no lockfile (or
+`go.mod`) of the same ecosystem, `Manifest.toml` only next to a `Project.toml`. `composer.json` and `Cargo.toml` are listed only
+without their lockfile (for `Cargo.toml`, none in its directory or above it under `root`).
 
 #### `manifests.parse(path)`
 
@@ -1124,13 +1532,20 @@ ending), and each new version is a final release above the old one (`versions` o
 `--hash` options is never edited. Only `requirements*.txt` (`REQ_NAME`) is ever edited; the `.lock` and `.in`
 variants (`REQ_SCAN_NAME`) are read only.
 
-#### `check_lock_edit(rel, old, new)` / `lock_entries(rel, text)`
+#### `check_lock_edit(rel, old, new, *, manifest=None)` / `lock_entries(rel, text)`
 
 `check_lock_edit` raises `ValueError` when an npm lockfile edit changes the root package's `dependencies`,
 `devDependencies`, `optionalDependencies`, `peerDependencies`, `scripts` or `workspaces`, or when any entry
 would fetch from outside `REGISTRY_HOSTS` (`registry.npmjs.org`, `registry.yarnpkg.com`) over `https://`.
-An entry with no `resolved` URL passes only with a plain registry version. The one exception is a workspace
-link or `file:` entry kept unchanged from the base and inside the repository. `lock_entries` parses the
+An entry with no `resolved` URL passes only with a plain registry version. Two exceptions, both only for an
+entry kept unchanged from the base: a workspace link or `file:` entry inside the repository, and an off-registry
+entry resolved over `https://` with a `sha512-` integrity that is identical in every field (`resolved`,
+`integrity`, `version`, its dependency maps, `bin`, …) in the same section under the same path key (for
+example SheetJS's CDN-only `xlsx`); a new, moved or changed off-registry entry is still refused, and so is an
+edited lockfile that repeats a JSON key anywhere. It returns one note per kept off-registry entry
+(`"<rel>: unchanged off-registry entry kept: <key> <url> (sha512-<16 characters>…)"`), else `[]`. With `manifest` (`stage-major`: the
+`package.json` the same change edits) the root `dependencies` / `devDependencies` may change, only to exactly the
+manifest's. `lock_entries` parses the
 lockfile type-safely and returns `(root entry, [(name, entry), …])` from `packages` and, recursively,
 `dependencies`; it raises `ValueError` for malformed JSON or a level that is not an object.
 
@@ -1180,6 +1595,20 @@ The `Finding.key()` values present in `current` but not in `previous` (every key
 `querybatch`. Raises `FeedError` (`agentteams.vulnscan._http`) on a malformed or incomplete reply
 or endless pagination: nothing is concluded about the items.
 
+#### `osv.package_ids(items)`
+
+`{(ecosystem, name): [advisory ids]}` for every package OSV holds advisories for, whatever the version: the
+`querybatch` query names the package and **omits** the `version` key. Raises `FeedError` as
+`vulnerable_ids` does.
+
+#### `osv.affected_intervals(record, ecosystem, name)`
+
+The versions an advisory affects for one package, as `specifiers.Interval` values: `introduced` opens an
+interval (`"0"`: unbounded), `fixed` closes it before that version (marked `fixed`), `last_affected` closes it
+at that version, `limit` before it, an unclosed `introduced` is open-ended, and each `versions[]` entry is a
+single version. `None` (not judged) for a malformed record, an unknown event or range type, an entry with only
+`GIT` ranges, or no interval for the package; a `GIT` range beside a release range is skipped.
+
 #### `osv.details(vuln_id)`
 
 The full OSV record (cached per process). Raises `FeedError`.
@@ -1206,6 +1635,19 @@ unusual format, for that package version in this process; `(0, 0)` for advisorie
 `engine` calls it for each package finding and passes the two counts to `Finding` as `malformed=` and
 `fix_hidden=` (R8).
 
+### `agentteams.vulnscan.specifiers`
+
+Minimal PEP 440 specifier sets as version intervals, on `versions.version_key`, for
+[unpinned requirements](#unpinned-python-requirements). No network.
+
+| Name | Behaviour |
+|---|---|
+| `parse_specifier(text)` | A `SpecifierSet` (`text`, allowed `intervals`, `prereleases`; `contains(version)`) from `>=`, `<=`, `<`, `>`, `!=`, `~=`, `==`, `==x.*` / `!=x.*`, comma-combined, optionally parenthesised. Pre-releases are excluded unless a clause names one. Raises `ValueError` for anything else, `===` included |
+| `parse_requirement(line, scope="runtime")` | A `Requirement` (`name`, `spec`, `scope`, `marker`), `"unchecked"` (URL, VCS, `-e`, `name @ url`, `===`), `"unreadable"`, or `None` (blank or an option line) |
+| `judge(spec, affected)` | A `Judgement`: `verdict` `whole` / `partial` / `none`, the affected `overlap`, and for `partial` the `raise_to` lower bound (the highest `fixed` version among the overlapping ranges, when every one ends in a fix) |
+| `read_requirements(path, repo)` / `read_pyproject(path, skip=())` | A `RangeFile` (`reqs`, `unchecked`, `unreadable`, `private_index`); `private_index` files keep `reqs` empty |
+| `Interval`, `intersect(a, b)`, `merge(intervals)` | Version intervals (`None` bounds are unbounded; `fixed` marks an advisory's fix as the upper end) |
+
 ### `agentteams.vulnscan.cvss`
 
 `score(vector) -> float | None` (v3.0, v3.1 or v4.0; None for another version or a malformed vector),
@@ -1215,13 +1657,14 @@ of the FIRST reference calculator (BSD-2-Clause).
 
 ### `agentteams.vulnscan.fix`
 
-#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests)`
+#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests, gradle_lockfiles=False, skip=None)`
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
 `allow_major=False`, `cooldown_days=0` (no release-age gate, under Rule S-10's remediation carve-out; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
-`manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists
+`manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists each
+container manifest's base-image findings (`images.plan`) in `image_plan`, plan-only; `apply` skips them. A dry run lists
 each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
-never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
+never does (there npm alone decides). `skip` (`{normalized name: [PR numbers]}`, from `open_prs.claimed`) leaves those requirements pins and npm majors to the open PRs that already update them (`pr-held`). Returns a `FixResult`. Symlinked manifests are refused, never followed.
 Each repository's brief applies here as in `scan_path`. A manifest in an `off` repository or under
 `exclude_paths` is recorded in `refused` and never read. Private packages are never looked up
 (`plan_requirements` and `plan_npm_lock` take `private=`). An npm lockfile that holds a private package is
@@ -1237,6 +1680,17 @@ hand"), `no-clean-release`, or `malicious`. Private crates (`project_policy.is_p
 never sent to OSV. `markdown()` renders them under `## crates.io: <lock> — plan-only (no staged edit)`; the agent is
 told never to request `stage-fix` for them, and `executor.validate_diff` refuses a `Cargo.lock` change anyway.
 
+#### `fix.plan_lockfile(path, *, label="", private=(), hidden=None)` / `fix.lockfile_note(name)`
+
+Plan-only rows for one `lockfiles.FORMATS` file (`go.mod`, `pnpm-lock.yaml`, `bun.lock`, `Gemfile.lock`,
+`gradle.lockfile`, `packages.lock.json`), from OSV, as `plan_cargo_lock` makes them: `plan-only` with `new` the
+minimal fixed version and the format's command in the note, `no-clean-release`, or `malicious`. A command is written
+only when the name, the installed and the fixed version all match the format's patterns, else "fix by hand".
+Private packages are never sent to OSV. `markdown()` renders them under
+`## <label>: <lock> — plan-only (no staged edit)` (labels `Go`, `npm (pnpm)`, `npm (Bun)`, `RubyGems`,
+`Maven (Gradle)`, `NuGet`), headed by `lockfile_note(name)`; `executor.validate_diff` refuses a change to any of
+these files, and `executor_guard.refuse_plan_only` refuses a `stage-fix` where they are all a repository has.
+
 #### `fix.plan_npm_lock(path, *, cooldown_days, label, private=())`
 
 `(rows, note)` for one `package-lock.json` / `npm-shrinkwrap.json`, from OSV; npm is not run. One
@@ -1245,8 +1699,8 @@ told never to request `stage-fix` for them, and `executor.validate_diff` refuses
 floor, not a promise (the plan shows it as `≥`). npm runs without `--before` (`executor.REMEDIATION_COOLDOWN_DAYS` is 0):
 the fix releases, and the dependencies they pull in, fall under Rule S-10's remediation carve-out. Actions follow `plan_requirements`, with npm's limits:
 `malicious`; `no-clean-release` (no advisory names a fix); `major-held` when the fix leaves the
-installed version's caret range (`1.x` → `2.x`, `0.3.x` → `0.4.x`), whatever `allow_major` says,
-because npm without `--force` never takes it; `workspace-held` when the lockfile's root package or
+installed version's caret range (`1.x` → `2.x`, `0.3.x` → `0.4.x`), because npm without `--force` never takes it
+(with `allow_major`, `fix_path` takes a direct one through `npm_majors` instead); `workspace-held` when the lockfile's root package or
 the `package.json` beside it declares `workspaces` (`stage-fix` fails closed there);
 `npm-unavailable` when npm is not on `PATH`. Dev-only packages are planned like the rest (npm fixes
 them too) and say `dev only` in the note. Raises `FeedError`.
@@ -1254,7 +1708,10 @@ them too) and say `dev only` in the note. Raises `FeedError`.
 #### `FixResult`
 
 Dataclass: `changes` (`PinChange` list), `npm_plan` (`PinChange` list from `plan_npm_lock`), `cargo_plan`
-(`PinChange` list from `plan_cargo_lock`, counted by `exit_code()` like held rows),
+(`PinChange` list from `plan_cargo_lock`, counted by `exit_code()` like held rows), `lock_plan` (likewise, from
+`plan_lockfile`), `image_plan` (`PinChange`
+list of base-image findings, dry run only, rendered under `## base images: <file> — plan-only (no staged edit)`
+and counted like `cargo_plan`),
 `npm_notes` (lockfile → note), `npm` (`(directory, summary)` tuples), `composer`, `refused`
 (`(path, reason)` tuples), `feed_errors`, `applied`, `target` (the repository a daily plan is for)
 `target_problem` (why `stage-fix` cannot take it) and `resolved` (how many advisory occurrences the
@@ -1264,11 +1721,77 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 ``Repository (the `stage-fix` target): `<path>` ``, or, when `target_problem` is set, by
 ``Directory `<path>`: `stage-fix` cannot take it (<problem>).``
 
+#### `fix.npm_majors(lockfile, *, label, cooldown_days=0, private=(), skip=None)`
+
+`stage-major`'s npm step, called by `fix_path` with `apply` and `allow_major` before the audit fix. Returns
+`(rows, npm output)`: the lockfile's `major-held` rows, those `package.json` lists directly turned into `fix` rows
+with `major` set (spec raised to `^<fixed version>` by `npm_major.rewrite_specs`, the lockfile re-resolved by
+`npm_fix(..., install=True)`), those `skip` names (another open PR updates them) `pr-held`, the rest still
+`major-held` with the reason (transitive only, workspaces, or a
+`package.json` that could not be rewritten). Which names are direct is `npm_major.direct_majors(lockfile, names)`
+(`({name: section}, package.json text, problem)`; `problem` is `npm_major.WORKSPACES` when
+`npm_major.in_workspaces(lockfile)`, or why `package.json` is a symlink, unreadable or not an object), the rule
+`executor_guard.stage_major_packages` shares. Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
+with it, it runs `npm install --no-audit --package-lock-only --ignore-scripts` with the audit fix's isolation.
+
+#### `npm_ops.npm_moves(lockfile, *, run, counts, base_lock=None, cooldown_days=0, private=())`
+
+The step after the audit fix, called by `fix_path` with `apply` (`stage-fix` and `stage-major`), which passes
+`run=npm_fix`, `counts=advisory_counts` and `base_lock` (the lockfile before the audit fix); `npm_ops` never imports
+`fix`. `npm audit fix` without `--force` stops short when a package is bound to others by **exact peer specs**
+(`@vitest/coverage-v8` and `vitest` each pin the other's exact version, so neither moves alone) or when a **direct
+parent pins it** (`express 4.22.1` requires `qs ~6.14.0`; the fixed `qs` needs a newer `express` inside
+`package.json`'s `^4.19.2`). For each package still vulnerable whose fixed version is inside its caret range (never
+`major-held` or `malicious`), the selection side, `npm_groups.LockGraph(npm_groups.load(lockfile)).moves(name,
+version)`, reads the lockfile's own `dependencies` (node resolution, over `manifests.npm_packages` /
+`manifests.npm_entry_name`) and `peerDependencies` (an exact version binds; no package list is built in) and names the
+sets to update together: the package's exact-peer group, or each direct parent with that parent's group. Each set (at
+most `npm_ops.MAX_NPM_MOVES`, names matching `npm_groups.NPM_NAME` only, groups of at most `npm_groups.MAX_GROUP`)
+runs as `npm update --no-save <names> --package-lock-only --ignore-scripts` (`npm_fix(..., update=names)`, the audit
+fix's isolation, registry and cooldown; `npm_fix` raises `ValueError` given both `install` and `update`), so the
+declared ranges are never changed (that is `stage-major`'s). **Fail closed** like `stage-major`'s `npm install`
+(`npm update <parent>` re-resolves that parent's `package.json` spec): no move runs unless the tools container is
+active (`subproc_confine.active`) and `manifests.npm_off_registry` finds nothing in `package.json` with the current
+and the base lockfile; a refusal is one `npm update moves not run: ...` line and the lockfile stays as the audit fix
+left it. A move is kept only when `counts` shows an advisory occurrence fewer and none new; otherwise, or on an npm
+error, the lockfile is restored byte for byte. `executor.validate_diff` still judges the result
+(`manifests.check_lock_edit`). Returns one summary per move, npm's output indented. Raises `FeedError`.
+`npm_ops.semver_line` is the caret-line check `fix` shares; the workspaces check is `npm_major.in_workspaces`. In a dry
+run, `plan_npm_lock` names each such move in the row's note (`npm_groups.annotate_plan`; the section note gains
+`npm_groups.PLAN_NOTE`), so a repository held by `retry_guard` for "nothing fixable" gets a new fix-plan digest, and
+one retry, once the moves appear.
+
 #### `PinChange`
 
 Dataclass for one requirements edit or npm plan row: `path`, `name`, `old`, `new`, `action` (`fix`,
 `major-held`, `no-clean-release`, `cooldown-held`, `hash-held`, `malicious`; npm rows also
-`workspace-held`, `npm-unavailable`; Cargo rows `plan-only`), `ids`, `note`.
+`workspace-held`, `npm-unavailable`; Cargo, `plan_lockfile` and base-image rows `plan-only`), `ids`, `note`,
+`major` (a semver-major upgrade taken under `allow_major`).
+
+### `agentteams.vulnscan.lockfiles`
+
+The stdlib readers `manifests.parse` calls for those six formats: `read_go_mod`, `read_pnpm_lock`,
+`read_bun_lock`, `read_gemfile_lock`, `read_gradle_lockfile`, `read_nuget_lock`, each `(path) -> LockRead`
+(`deps`: `(ecosystem, name, version, scope)` rows; `notes`: what a partial read leaves out). A reader raises only
+`Unreadable` (a `ValueError`), whose message `parse` reports as the unscannable reason: a file over `MAX_BYTES`
+(64 MiB), not UTF-8, malformed, of another lockfile version, or holding a name or version outside the format's
+pattern (C-4: the text never reaches a fix-plan command). `FORMATS` maps each file name to its `Format`
+(ecosystem, plan label, name/version patterns, reader, command, follow-up). `GO_STDLIB_NOTE`, `GO_OLD_NOTE`,
+`GO_WORK_NOTE`, `GO_FULL_LIST` hold the Go notes and threshold. `manifests.PLAN_ONLY_LOCKS` is `CRATE_LOCKS` plus
+these; `manifests.NPM_SIDE_LOCKS` (`pnpm-lock.yaml`, `bun.lock`) cover a `package.json` beside them.
+
+### `agentteams.vulnscan.private_sources`
+
+What a repository's own tooling marks private, so `engine.scan_path` and `fix.fix_path` withhold it
+(`withheld`) without a brief. `PrivateSources(root, go_patterns=None)` decides per dependency
+(`is_private(repo, manifest, ecosystem, name)`), reading each repository's configuration once:
+`go_private_patterns(environ=None)` (the environment's `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`, then `go env` from `/`
+with `GOTOOLCHAIN=local`, an empty `GOFLAGS`, `GO_ENV_TIMEOUT` seconds; read on the first Go module only) and
+`go_private_match(globs, module)` (Go's prefix-glob rule; a malformed pattern matches); `repo_sources(repo, root)`
+over the repository and its parents within `root`: `nuget_names_private_source(path)` (a `nuget.config` source
+outside `NUGET_PUBLIC`, or a file unreadable, over `MAX_BYTES`, malformed or with a DTD) and `npmrc_private(path)`
+(a non-`NPM_PUBLIC` `registry=` or `@scope:registry=`; applied to `NPMRC_LOCKS`). `GRADLE_OPT_IN` is the
+unscannable/refused reason of a `gradle.lockfile` read without the opt-in.
 
 ### `agentteams.vulnscan.ledger`
 
@@ -1666,10 +2189,19 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
   byte for byte; one that `close-superseded` closed does not count. The staged state is retired and the result
   says `closed_unmerged: <its URL>` (`pr` is empty, `detail: "not re-opened"`). Best effort: if gh or git fails,
   the pull request is opened as before (`executor_supersede.closed_pr_for_change`).
+- Before anything is pushed, the repository's open PRs are listed again (`open_prs.refuse_duplicate`, fail closed:
+  a gh failure opens nothing). If a PR that is not the executor's now updates a package the staged change updates,
+  the staged state is retired and the result is `failed` with `an open PR already updates <names> (#N); not
+  duplicated`. `stage_fix` checks the same list before staging and leaves such packages out (`fix_path(...,
+  skip=open_prs.staging_claims(...))`); see [Major upgrades](#major-upgrades-stage-major) for the matching rules.
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
-  written: home paths, this host's name and private IPv4 addresses are scrubbed.
+  written: home paths, this host's name and private IPv4 addresses are scrubbed. `ExecError`, the executor's git
+  identity and its hardened git / gh environments (`gh_env`, `gh_push_env`, `gh_cwd`) live in the leaf module
+  `executor_env` and are re-exported here. The title, body and
+  `gh pr create` call live in `executor_pr`; a staged `stage-major` change gets the MAJOR title, body and
+  `vulnscan-major` label ([Major upgrades](#major-upgrades-stage-major)), and the result carries `major: true`.
 
 Re-staging the same change on the same day releases the earlier local branch only when the executor
 created it and every worktree holding it is executor-owned; otherwise `stage-fix` refuses. When
@@ -1693,10 +2225,16 @@ the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming t
 `publish.rewrite_paths`); the branch stays and nothing is merged. A grant must name the op; `authorize` and
 `executor_guard` apply as for `open-pr`. Returns `{"repo", "replacement", "closed", "kept"}`.
 
-#### `validate_diff(wt, base)`
+#### `validate_diff(wt, base, *, major=False, mode='')`
 
 Check a staged change against `base` before `stage-fix` commits it, and before `daily` keeps an
-`apply-worktree` result. Returns the changed paths; raises `ExecError` on anything else:
+`apply-worktree` result. Returns a `DiffCheck(changed, kept_off_registry)` named tuple: the changed paths and the lockfile check's
+notes on unchanged off-registry entries it kept; raises `ExecError` on anything else. With `major`
+(`stage-major` only) a `package.json` may change too, within the rules in
+[Major upgrades](#major-upgrades-stage-major) (`npm_major.check_package_json_edit`). With mode `"image"`
+(`stage-image` only) Dockerfiles alone may change, only by `image_fix.check_from_edit`'s `FROM` tag moves, and every
+rule below about requirements files and lockfiles is replaced by that one
+([Base images](#base-images-stage-image)):
 
 - only requirements files and npm lockfiles may change or appear, as regular, non-executable files;
   renames, deletions, mode changes and symlinks are refused;
@@ -1706,7 +2244,10 @@ Check a staged change against `base` before `stage-fix` commits it, and before `
 - every lockfile entry must resolve over `https://` to the registry allowlist, or have no
   `resolved` and a plain version: an entry with a URL or path in `version` and no `resolved` (a v1
   lockfile form) is refused. A workspace `link` or `file:` entry passes only when it is inside the repository and
-  unchanged from `base`. A change to the root package's dependencies, `scripts` or `workspaces` is
+  unchanged from `base`, and an off-registry `https://` entry with a `sha512-` integrity only when identical to
+  `base` at the same path key (its note goes to
+  `kept_off_registry`; `stage-fix` records those in its result and ledger row, and `open-pr` lists each in the PR
+  body under *Off-registry sources kept unchanged*). A change to the root package's dependencies, `scripts` or `workspaces` is
   refused (`manifests.check_lock_edit`).
 
 #### `canonical_target(target)`
@@ -1736,7 +2277,7 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 | `target_origins(target)` | The target's origin identities: the config text's `origin` URL and the push URL git itself would use (hardened `remote get-url --push origin`); refuses an unreadable identity |
 | `refuse_scan_only(target)` | Refuses a target whose registry entry (by identity, or by a registered checkout containing it) is not at `remediate`, whose origin changed since enrolment, or that is an unregistered repository nested in a registered checkout; an unreadable registry or identity refuses |
 | `refuse_by_brief(op, target)` | Refuses when the brief's level is set and is not `remediate`, and `open-pr` when `delivery` is `plan` |
-| `refuse_plan_only(op, target, editable)` | Refuses `stage-fix` on a repository whose every scanned manifest (brief `exclude_paths` applied) is plan-only — today a crates.io `Cargo.lock` — and none matches `editable` (`executor.ALLOWED_CHANGED`): stage-fix could only fail there, so it is refused before a grant use is spent |
+| `refuse_plan_only(op, target, editable)` | Refuses `stage-fix` on a repository whose every scanned manifest (brief `exclude_paths` applied) is plan-only — a `manifests.PLAN_ONLY_LOCKS` file: `Cargo.lock`, `go.mod`, `pnpm-lock.yaml`, `bun.lock`, `Gemfile.lock`, `gradle.lockfile`, `packages.lock.json` — and none matches `editable` (`executor.ALLOWED_CHANGED`): stage-fix could only fail there, so it is refused before a grant use is spent |
 | `refuse_repo_op(op, target, editable)` | What `authorize` calls for a repository op: `refuse_scan_only`, `refuse_by_brief`, `refuse_plan_only`, in that order |
 | `brief_base_ref(repo)` | `origin/<base_branch>` when the brief sets one (refuses when origin lacks it), else `None` |
 | `require_remote_branch(wt, branch)` | Refuses `open-pr` unless origin has `branch` now (`ls-remote`) |
@@ -1744,7 +2285,8 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 | `protected_identities(cfg, extra=())` | `{origin identity: path}` of those (and `extra`); used by `grant sign --from-registry` |
 | `origin_of(path)` | `host/owner/name` of the checkout containing `path` (nearest `.git` upwards; git is not run), or `None` for a repository without a host origin |
 | `repo_identity(path)` | The git common dir of the repository containing `path`, or `None` |
-| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str}`) for the MCP server; called before the agent container starts |
+| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str, "major_next": {target: {"since": date, "packages": [name, ...]}}}`) for the MCP server; called before the agent container starts. `major_next` lists each remediate-level plan whose next step is `stage-major` (the agent never sees, in its own run, the result of a `stage-fix` it requested): `retry_guard.major_next_since` gives a date, no fix is staged for it, and `stage_major_packages` returns names; empty when the registry or the ledger cannot be read |
+| `stage_major_packages(plan, repo)` | The `major-held` packages of a fix plan's Markdown that `stage-major` could take, in plan order: requirements pins, and npm packages `npm_major.direct_majors` places (direct, outside workspaces, `package.json` neither a symlink nor unreadable; a lockfile path outside `repo` takes nothing). `[]` when the plan has any `fix` row. Only names `mcp.package_name_ok` accepts for the row's ecosystem are returned |
 
 All raise `executor.ExecError` when they refuse.
 
@@ -2679,7 +3221,9 @@ is reported on stderr and returns `None`.
 #### `close_superseded(repo, rows=None, *, view=None, close=None)`
 
 The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
-repository's successful `open-pr` PRs, oldest first; `head_problem(data)` and `touched_problem(data,
+repository's successful `open-pr` PRs, oldest first, and `ledger_lanes(repo, rows)` the same as `{url: lane}`
+(`ops.lane_of`: `image` for a `stage-image` PR, else `deps`): only older PRs in the replacement's lane are
+candidates; `head_problem(data)` and `touched_problem(data,
 identity)` say why a PR may not be closed, and `authored_problem(data, identity)` (commits only) why a PR is not
 the executor's own (the replacement; and the PR open-pr would claim, `open_pr_with_same_change`). Each candidate is looked up again right before it is closed; a
 change in the remaining moment can still be missed, which is accepted because a closed PR can be reopened
@@ -2701,6 +3245,12 @@ or `""`. Held
 while the repository's newest `fixplan-<slug>.md` equals the plan of the day that result was recorded;
 a changed plan, a later successful `stage-fix`, or a missing plan lifts it. Reads the ledger and run
 directories only. Called by `executor.authorize`.
+
+#### `major_next_since(target, rows)`
+
+The local date (`YYYY-MM-DD`) of `target`'s last `stage-fix` result when it failed "nothing fixable without a
+major jump" (not the upstream variant), `futile_reason` still holds it at the current plan, and no `stage-major`
+row of any kind follows it in the ledger; else `""`. Read by `executor_guard.write_plan_levels` (`major_next`).
 
 #### `mark_held(target)` / `held_count()`
 
@@ -2783,12 +3333,15 @@ findings, and the summary lists them by file name. A plan
 sorts each finding to the kit level that fixes it:
 
 - compromise indicators first (the kit refuses to patch such a host in place);
+- the OS release, when it is end-of-life or past standard support (the `os-release` finding), on its own line:
+  "plan an OS release upgrade; no kit lever applies";
 - the `run-host.sh` dry-run and `--apply` commands, with `--allow-fresh` and a note saying why when the scan found
   the host's Node.js missing a security release (a `security-release-missing` runtime finding, or `behind-patch` at
   HIGH): Rule S-10's remediation carve-out, so the kit's 14-day release cooldown does not hold the L3 fix (L3 then
   takes the newest release of the line for every Node install on the host, checked by SHA-256, not by OSV);
 - **L2** OS security updates for OS-managed packages;
-- **L3** runtimes;
+- **L3** runtimes: Node.js (L3 updates it), and every other runtime or server software (nginx, OpenSSL,
+  PostgreSQL, …) marked "upgrade through the package manager or the vendor (no kit lever)";
 - **L4** per `apps.conf` entry whose app directory holds the packages, with the entry's current pins and candidate
   `--pin` values;
 - Python packages that no `apps.conf` entry covers (`run-host.sh` never updates them);

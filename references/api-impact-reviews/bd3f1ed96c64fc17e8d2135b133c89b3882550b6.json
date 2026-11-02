@@ -1,0 +1,8 @@
+{
+  "patch_id": "bd3f1ed96c64fc17e8d2135b133c89b3882550b6",
+  "commit": "862eb27d85b64f5f2b8a3144b57512a20f61bd0f",
+  "subject": "feat(vulnscan): container base images \u2014 support status and pinning (N2)",
+  "impact": "1 modules added, 12 symbols added",
+  "note": "restack onto the R-v cycle fix (8b5f3d3b): patch-id changed only because the commit's manifest hunk was resolved and the manifest regenerated; API impact unchanged from the reviewed original",
+  "recorded_at": "2026-10-31T03:12:07Z"
+}

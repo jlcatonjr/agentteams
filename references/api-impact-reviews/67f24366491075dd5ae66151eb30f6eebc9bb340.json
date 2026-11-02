@@ -1,0 +1,8 @@
+{
+  "patch_id": "67f24366491075dd5ae66151eb30f6eebc9bb340",
+  "commit": "6f08a8d3af4068e183fbdaee9d0433be467e434b",
+  "subject": "feat(vulnscan): check unpinned Python requirement ranges against OSV (N6a, off by default)",
+  "impact": "1 modules added, 19 symbols added, 1 symbols changed, 1 cli added",
+  "note": "restack onto the L1 ESM set -u fix (2767eeac): patch-id changed only through the manifest hunk; API impact unchanged from the reviewed original",
+  "recorded_at": "2026-10-31T12:43:36Z"
+}

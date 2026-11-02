@@ -1,0 +1,8 @@
+{
+  "patch_id": "c3b5ce1b56c117275348478eaa48d4379a42debe",
+  "commit": "c9c71b7a003d708e48e9c54ff5702b09cc1f42df",
+  "subject": "fix(vulnscan): npm moves fail closed and live in npm_ops (security + hygiene review)",
+  "impact": "1 modules added, 5 symbols added, 3 symbols removed",
+  "note": "vulnscan stage-fix npm moves: new npm_groups (LockGraph selection, annotate_plan) and npm_ops (npm_moves fail-closed runner, semver_line, has_workspaces); fix.npm_fix gains update= (ValueError with install); manifests.npm_packages/npm_entry_name added; fix._semver_line/_npm_workspaces now re-exported from npm_ops. Docs and CHANGELOG updated; internal callers only.",
+  "recorded_at": "2026-11-01T22:28:41Z"
+}

@@ -1,0 +1,8 @@
+{
+  "patch_id": "82c6a33730041bb41e403f83374d2698f530d4d0",
+  "commit": "66288cd2876a2b71389d41c713b36a924988e9aa",
+  "subject": "feat(vulnscan): stage-major \u2014 automatic semver-major upgrades as PRs",
+  "impact": "2 modules added, 12 symbols added, 5 symbols changed",
+  "note": "vauto B (operator decision 2026-10-31): stage-major op; rebased onto feat/vulnscan-scan-mirror fb1861db \u2014 patch-id changed only through the CHANGELOG / architecture-graph conflict resolution; API impact as reviewed in e125064f",
+  "recorded_at": "2026-10-31T16:44:08Z"
+}

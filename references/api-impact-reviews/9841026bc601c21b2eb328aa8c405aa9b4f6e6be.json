@@ -1,0 +1,8 @@
+{
+  "patch_id": "9841026bc601c21b2eb328aa8c405aa9b4f6e6be",
+  "commit": "06183fa281a98d44cd77b0b85862a7fba2027999",
+  "subject": "feat(vulnscan): runtime product table \u2014 more runtimes, OS products, unknown kinds reported",
+  "impact": "4 symbols added",
+  "note": "N4: added runtimes.Probe, Product, cycle_of, evaluate_os (plus PRODUCTS, OS_PRODUCTS, OS_CODENAMES tables, engine.PROBE_TIMEOUT); EOL_PRODUCT kept as derived dict. Docs updated: docs_src/api-reference/vulnscan.md (runtimes section with product table, cycle_of and evaluate_os headings, local_runtimes, config and command tables), CHANGELOG Unreleased, module docstrings.",
+  "recorded_at": "2026-10-30T14:10:21Z"
+}

@@ -210,12 +210,21 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/coverage.py",         # effective scan roots and coverage states
     "agentteams/vulnscan/project_cli.py",      # enroll / roots / status commands
     "agentteams/vulnscan/project_policy.py",   # per-project level, exclusions, private packages
+    "agentteams/vulnscan/private_sources.py",  # GOPRIVATE, nuget.config and .npmrc sources: names kept local
     "agentteams/vulnscan/executor_guard.py",   # grants-first; protected repos by origin; scan-only refusal
     "agentteams/vulnscan/repo_alias.py",       # the agent's repository aliases (mapped back by mcp.py)
     "agentteams/vulnscan/executor_serve.py",   # spool request schema checks, batch preflight (split from executor.py)
     "agentteams/vulnscan/retry_guard.py",      # holds a futile stage-fix (refusal decided inside authorize)
     "agentteams/vulnscan/effectiveness.py",    # what the published summary says about remediation (counts only)
     "agentteams/vulnscan/executor_supersede.py",   # close-superseded: the executor's only PR-closing code
+    "agentteams/vulnscan/scan_mirror.py",      # which tree the daily scan reads (mirror or checkout) and its naming
+    "agentteams/vulnscan/executor_env.py",     # ExecError, the executor's git identity and hardened git/gh envs
+    "agentteams/vulnscan/executor_pr.py",
+    "agentteams/vulnscan/open_prs.py",         # D1: packages another open PR updates are left to it      # stage-*'s commit and open-pr's PR text, label and gh pr create
+    "agentteams/vulnscan/npm_major.py",        # stage-major: the package.json raise and validate_diff's check of it
+    "agentteams/vulnscan/npm_groups.py",       # stage-fix: which packages npm update moves together (selection)
+    "agentteams/vulnscan/npm_ops.py",          # stage-fix: npm_ops.npm_moves runs those moves (fail-closed checks)
+    "agentteams/vulnscan/image_fix.py",        # stage-image: the FROM tag planner and validate_diff's check of it
     "agentteams/vulnscan/ops.py",              # REPO_OPS: which ops get executor_guard and a repo-root grant
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
@@ -251,6 +260,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # what validate_diff lets stage-fix change.
     "agentteams/vulnscan/__main__.py",
     "agentteams/vulnscan/manifests.py",
+    "agentteams/vulnscan/lockfiles.py",       # the Go/pnpm/Bun/RubyGems/Gradle/NuGet lockfile readers
     # 2026-10-22 (vulnscan-test-campaign M1): the rest of the package. Every module runs in the unsandboxed daily
     # job: _http.py holds the feed allowlist, osv.py/engine.py/versions.py/runtimes.py decide what counts as
     # vulnerable (a silent edit could fail open), fix.py computes the change stage-fix commits, schedule.py writes
@@ -260,7 +270,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/osv.py",
     "agentteams/vulnscan/engine.py",
     "agentteams/vulnscan/versions.py",
+    "agentteams/vulnscan/specifiers.py",   # 2026-10-30 (N6a): judges unpinned requirement ranges
     "agentteams/vulnscan/runtimes.py",
+    "agentteams/vulnscan/images.py",          # 2026-10-30 (N2): which base images count as end-of-life
     "agentteams/vulnscan/fix.py",
     "agentteams/vulnscan/schedule.py",
     "agentteams/vulnscan/report.py",
@@ -476,6 +488,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # the on-disk value equals this module's baseline, and its handoff guard decides which handoffs a write
     # may drop. An unpinned edit could make a project's value look agentteams-authored again.
     "agentteams/front_matter_baseline.py",
+    # Fence baseline (2026-11-01, vfail F1-D). fences.py (pinned) releases a shrink-preserved fence when its
+    # on-disk block hashes to this module's recorded render; an unpinned edit could make a person's edit look
+    # unedited and let a template update overwrite it.
+    "agentteams/fence_baseline.py",
     # Acknowledgement review (2026-10-11). _fleet_twin_acks decides which acknowledged twins fleet still
     # reports as REVIEW (one not shown to the operator by an earlier run); an unpinned edit could drop that flag.
     "agentteams/_fleet_twin_acks.py",

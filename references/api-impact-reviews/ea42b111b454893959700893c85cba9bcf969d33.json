@@ -1,0 +1,8 @@
+{
+  "patch_id": "ea42b111b454893959700893c85cba9bcf969d33",
+  "commit": "cba775c07553c28c51f13c19614853a6462a42d5",
+  "subject": "fix(vulnscan): stage-fix moves exact-peer groups and direct parents the audit fix leaves behind",
+  "impact": "1 modules added, 10 symbols added, 1 symbols changed",
+  "note": "Re-recorded after stacking fix/vfail-f1d-unedited-fence, fix/vfail-f2-offregistry-base, fix/vfail-f3-peer-groups and fix/vfail-f1c-same-run-major onto main a9cecfbc: CHANGELOG conflicts changed the patch-ids; code as reviewed on each branch (@security PASS after conditions, @code-hygiene no blocking findings), plus one consolidation (npm_ops.has_workspaces removed in favour of the identical npm_major.in_workspaces).",
+  "recorded_at": "2026-11-01T22:40:05Z"
+}

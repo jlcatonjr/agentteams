@@ -1,0 +1,8 @@
+{
+  "patch_id": "2ef67c3fabe361f621528370b6f21cd4598a0f27",
+  "commit": "94d9330e3688e3091f88118e2aae1d1ec6608369",
+  "subject": "feat(vulnscan): scan Go, pnpm, Bun, RubyGems, Gradle and NuGet lockfiles (vlc N7)",
+  "impact": "1 modules added, 11 symbols added",
+  "note": "vlc N7: new agentteams.vulnscan.lockfiles (Go/pnpm/Bun/RubyGems/Gradle/NuGet readers, FORMATS, Unreadable, LockRead) and fix.plan_lockfile/lockfile_note; all documented in docs_src/api-reference/vulnscan.md (lockfiles section, fix.plan_lockfile), README and CHANGELOG; additive only, no removal or re-signature",
+  "recorded_at": "2026-10-30T16:56:26Z"
+}

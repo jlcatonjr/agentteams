@@ -110,7 +110,7 @@ User Request → Orchestrator
 > preview), and the fleet flag-exclusivity guard (`--overwrite` / `--prune` /
 > `--migrate` / `--bridge-refresh` / `--shrink-policy=allow` / single-target flags
 > are refused with `--fleet`). A pre-write `.agentteams-backups` snapshot (or, on
-> git workspaces, a pre-update snapshot commit) provides recovery. Satisfying
+> git workspaces, a pre-update snapshot under `refs/agentteams/fleet-snapshots/`) provides recovery. Satisfying
 > Gates 1–3 is the operator's responsibility; the CLI does not verify them.
 
 ### Gate 1: @repo-liaison Impact Assessment (REQUIRED)

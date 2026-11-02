@@ -1,0 +1,8 @@
+{
+  "patch_id": "5385bffb88239a04404c87efa73b52b96b8bc450",
+  "commit": "c1633b397650b5aebba56061d57acc1cb664e993",
+  "subject": "fix(fleet): a dirty workspace with no snapshot is skipped, never updated",
+  "impact": "1 symbols added",
+  "note": "Reviewed (vfu M5): new private module agentteams/_fleet_snapshot.py (agent_paths, agent_paths_dirty, worktree_tree, git_snapshot, credential_files, git_diff), split out of fleet.py for CH-07 and re-exported there under the old private names; no public API removed; --fleet-allow-no-verify kept as an accepted no-op; docs, man page and CHANGELOG updated. @security CLEAR with conditions (applied), @code-hygiene PASS with fixes (applied).",
+  "recorded_at": "2026-10-31T18:06:02Z"
+}

@@ -16,7 +16,8 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("cryptography")
-from agentteams.vulnscan import _http, executor, executor_guard, executor_serve, fix, grant, ledger, osv, review  # noqa: E402
+from agentteams.vulnscan import _http, executor, executor_guard, executor_serve, fix, grant, ledger, open_prs, osv  # noqa: E402
+from agentteams.vulnscan import review  # noqa: E402
 from tests._vulnscan_helpers import operator_home, sign_grant  # noqa: E402
 
 GIT = shutil.which("git")
@@ -35,6 +36,8 @@ class _FrozenDatetime(datetime):
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     world = operator_home(tmp_path, monkeypatch)
     monkeypatch.setattr(executor, "datetime", _FrozenDatetime)
+    # D1: no open PR elsewhere unless a test says so (and never a real gh call); test_vulnscan_stage_major covers it
+    monkeypatch.setattr(open_prs, "list_open", lambda target_repo: [])
     return {**world, "cfg": {"governance_dir": str(world["gov"]), "cooldown_days": 14}}
 
 def _install(env: dict, **kw: object) -> dict:

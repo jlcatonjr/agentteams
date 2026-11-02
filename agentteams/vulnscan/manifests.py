@@ -8,6 +8,11 @@ Supported formats:
 | npm | ``package-lock.json`` and ``npm-shrinkwrap.json`` (v1–v3), ``yarn.lock`` (classic and berry) |
 | Packagist | ``composer.lock`` |
 | crates.io | ``Cargo.lock`` (v1–v4; crates from the crates.io index only, every one ``runtime``) |
+| Go | ``go.mod`` (``require``, with ``replace`` applied; :mod:`~agentteams.vulnscan.lockfiles`) |
+| npm | ``pnpm-lock.yaml`` (v6, v9), ``bun.lock`` (text) |
+| RubyGems | ``Gemfile.lock`` (rubygems.org gems) |
+| Maven | ``gradle.lockfile`` (``group:artifact``) |
+| NuGet | ``packages.lock.json`` |
 
 A manifest that yields no exact versions is reported as *unscannable*, not skipped
 silently. Examples are an unpinned ``requirements.txt`` and a ``pyproject.toml`` with no
@@ -18,14 +23,21 @@ one with nothing to scan:
 
 | Ecosystem | Files |
 |---|---|
-| Go | ``go.sum`` (``go.mod`` when there is no ``go.sum``) |
+| Go | ``go.sum`` when there is no ``go.mod`` |
 | Maven | ``pom.xml`` |
-| Gradle | ``gradle.lockfile`` (``build.gradle`` / ``build.gradle.kts`` when there is no lockfile) |
-| RubyGems | ``Gemfile.lock`` |
-| NuGet | ``packages.lock.json`` (``*.csproj`` when there is no lockfile) |
-| pnpm (npm) | ``pnpm-lock.yaml`` |
+| Gradle | ``build.gradle`` / ``build.gradle.kts`` when there is no ``gradle.lockfile`` |
+| NuGet | ``*.csproj`` when there is no ``packages.lock.json`` |
 | conda, Lean | ``environment.yml`` / ``.yaml``, ``lake-manifest.json`` |
+| SwiftPM, CocoaPods, Pub, Hex | ``Package.resolved``, ``Podfile.lock``, ``pubspec.lock``, ``mix.lock`` |
+| Bun, Deno (npm packages) | ``bun.lock``, ``bun.lockb`` (binary), ``deno.lock`` |
+| CRAN, Hackage | ``renv.lock``, ``stack.yaml.lock`` / ``cabal.project.freeze`` |
+| Julia | ``Manifest.toml`` (only next to a ``Project.toml``) |
+| RubyGems | ``Gemfile`` when there is no ``Gemfile.lock`` |
+| Conan, vcpkg (C/C++) | ``conan.lock`` (``conanfile.txt`` / ``conanfile.py`` when there is no ``conan.lock``), ``vcpkg.json`` |
 | container images | ``Dockerfile``, ``Dockerfile.*``, ``*.Dockerfile``, ``Containerfile``, ``compose.y(a)ml``, ``docker-compose*.y(a)ml`` |
+
+``package.json``, ``composer.json`` and ``Cargo.toml`` without their lockfile are listed and reported unscannable
+("without a lockfile", with the command that writes one), not as an unsupported ecosystem.
 
 Only ``requirements*.txt`` (:data:`REQ_NAME`) is ever edited by a staged fix; the ``.lock``
 and ``.in`` variants are read, never edited (:data:`REQ_SCAN_NAME`).
@@ -48,6 +60,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams.vulnscan import lockfiles
+from agentteams.vulnscan.npm_major import DEP_SECTIONS   # npm_major imports nothing from this package
 from agentteams.vulnscan.versions import is_final, version_key
 
 SKIP_DIRS: frozenset[str] = frozenset({
@@ -75,6 +89,12 @@ LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.
 #: Lockfiles discovered apart from :data:`LOCKFILES`: they do not hide a sibling ``package.json`` or
 #: ``pyproject.toml`` (a wasm-pack or maturin directory holds both, and its npm/PyPI packages stay reported).
 CRATE_LOCKS = ("Cargo.lock",)
+#: Lockfiles whose fixes are plan-only (``stage-fix`` never edits them): ``Cargo.lock`` and every
+#: :data:`lockfiles.FORMATS` file. Like :data:`CRATE_LOCKS` they are not in :data:`LOCKFILES`.
+PLAN_ONLY_LOCKS: tuple[str, ...] = (*CRATE_LOCKS, *lockfiles.FORMATS)
+#: Lockfiles beside a ``package.json`` that pin its packages (besides :data:`LOCKFILES`); ``bun.lockb`` is binary and
+#: never read, so it does not count.
+NPM_SIDE_LOCKS = ("pnpm-lock.yaml", "bun.lock")
 #: ``source`` prefixes of crates.io packages in a ``Cargo.lock`` (git index, sparse index).
 CRATES_IO_SOURCES = ("registry+https://github.com/rust-lang/crates.io-index", "sparse+https://index.crates.io/")
 #: What a crates.io crate name and a Cargo.lock version may be (crates.io allows ASCII letters, digits, ``-`` and
@@ -86,21 +106,43 @@ UNSUPPORTED: dict[str, str] = {
     "environment.yml": "conda",
     "environment.yaml": "conda",
     "lake-manifest.json": "Lean",
-    "go.sum": "Go",
     "pom.xml": "Maven",
-    "gradle.lockfile": "Gradle",
-    "Gemfile.lock": "RubyGems",
-    "packages.lock.json": "NuGet",
-    "pnpm-lock.yaml": "pnpm (npm packages; run `pnpm audit` here)",
     "Containerfile": "container images",
     "compose.yml": "container images",
     "compose.yaml": "container images",
+    "Package.resolved": "SwiftPM",
+    "Podfile.lock": "CocoaPods",
+    "pubspec.lock": "Pub",
+    "mix.lock": "Hex",
+    "bun.lockb": "Bun binary lockfile (npm packages)",
+    "deno.lock": "Deno (npm/JSR)",
+    "renv.lock": "CRAN",
+    "stack.yaml.lock": "Hackage",
+    "cabal.project.freeze": "Hackage",
+    "conan.lock": "Conan (C/C++)",
+    "vcpkg.json": "vcpkg (C/C++)",
 }
 #: Listed only when the directory has no lockfile of the same ecosystem (it would report the same packages).
 _UNSUPPORTED_FALLBACK: dict[str, tuple[str, str]] = {
-    "go.mod": ("Go", "go.sum"),
+    "go.sum": ("Go (go.sum without go.mod)", "go.mod"),
     "build.gradle": ("Gradle", "gradle.lockfile"),
     "build.gradle.kts": ("Gradle", "gradle.lockfile"),
+    "Gemfile": ("RubyGems", "Gemfile.lock"),
+    "conanfile.txt": ("Conan (C/C++)", "conan.lock"),
+    "conanfile.py": ("Conan (C/C++)", "conan.lock"),
+}
+#: Listed only when the directory **has** the sibling named (the file name alone is too generic to claim):
+#: Julia's ``Manifest.toml`` next to its ``Project.toml``. :func:`unsupported_ecosystem` is name-only, so it labels
+#: the name; :func:`discover` alone applies the sibling test.
+_UNSUPPORTED_WITH_SIBLING: dict[str, tuple[str, str]] = {
+    "Manifest.toml": ("Julia", "Project.toml"),
+}
+#: Manifests of scanned ecosystems that hold no exact versions themselves: listed (and reported unscannable with the
+#: hint shown) only when no lockfile of theirs is beside them, or for ``Cargo.toml`` in a directory above them (a
+#: Cargo workspace keeps one ``Cargo.lock`` at its root).
+_NEEDS_LOCK: dict[str, tuple[str, str]] = {
+    "composer.json": ("composer.lock", "composer.json without a lockfile — run `composer update --lock`"),
+    "Cargo.toml": ("Cargo.lock", "Cargo.toml without a lockfile — run `cargo generate-lockfile`"),
 }
 _DOCKERFILE = re.compile(r"^(Dockerfile([.-][\w.-]+)?|[\w.-]+\.Dockerfile|docker-compose[\w.-]*\.ya?ml)$")
 _CSPROJ = re.compile(r"^[\w.-]+\.csproj$")
@@ -116,7 +158,7 @@ _LOCK_ROOT_KEYS = ("dependencies", "devDependencies", "optionalDependencies", "p
 class Dep:
     """One exact dependency version found in a manifest or on a host."""
 
-    ecosystem: str          # "PyPI" | "npm" | "Packagist" | "crates.io"
+    ecosystem: str          # "PyPI" | "npm" | "Packagist" | "crates.io" | "Go" | "RubyGems" | "Maven" | "NuGet"
     name: str
     version: str
     scope: str = "runtime"  # "runtime" | "dev"
@@ -166,6 +208,8 @@ def unsupported_ecosystem(name: str) -> str:
         return UNSUPPORTED[name]
     if name in _UNSUPPORTED_FALLBACK:
         return _UNSUPPORTED_FALLBACK[name][0]
+    if name in _UNSUPPORTED_WITH_SIBLING:
+        return _UNSUPPORTED_WITH_SIBLING[name][0]
     if _CSPROJ.match(name):
         return "NuGet"
     if _DOCKERFILE.match(name):
@@ -182,12 +226,17 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
 
     Returns:
         Sorted manifest paths. ``package.json`` and ``pyproject.toml`` are listed only when
-        their directory has no npm, Composer or PyPI lockfile (a ``Cargo.lock`` does not count; a
+        their directory has no npm, Composer or PyPI lockfile (``pnpm-lock.yaml`` and ``bun.lock`` count for
+        ``package.json`` only; a ``Cargo.lock`` does not count; a
         ``pyproject.toml`` next to requirements files is listed too: :func:`parse` reads its PEP 621 pins). Manifests of unsupported ecosystems
-        (:func:`unsupported_ecosystem`) are listed so they can be reported as unscannable; ``go.mod``,
-        ``build.gradle*`` and ``*.csproj`` only when their directory has no lockfile of the same ecosystem.
+        (:func:`unsupported_ecosystem`) are listed so they can be reported as unscannable;
+        ``go.sum`` (without a ``go.mod``), ``build.gradle*``, ``Gemfile``, ``conanfile.*`` and ``*.csproj`` only when their directory has no lockfile
+        of the same ecosystem, ``Manifest.toml`` only next to a ``Project.toml`` (Julia). ``composer.json`` and
+        ``Cargo.toml`` (:data:`_NEEDS_LOCK`) are listed only without their lockfile (for ``Cargo.toml``, none in
+        its directory or one above it under ``root``).
     """
     found: list[Path] = []
+    cargo_dirs: set[Path] = set()   # directories holding a Cargo.lock (os.walk is top-down: ancestors come first)
     for dirpath, dirnames, filenames in os.walk(root):
         here = Path(dirpath)
         keep = []
@@ -200,17 +249,27 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
         dirnames[:] = sorted(keep)
         names = set(filenames)
         for name in sorted(names):
-            if name in LOCKFILES or name in CRATE_LOCKS or name in UNSUPPORTED or REQ_SCAN_NAME.match(name) \
+            if name in LOCKFILES or name in PLAN_ONLY_LOCKS or name in UNSUPPORTED or REQ_SCAN_NAME.match(name) \
                     or _DOCKERFILE.match(name):
                 found.append(here / name)
             elif name in _UNSUPPORTED_FALLBACK and _UNSUPPORTED_FALLBACK[name][1] not in names:
                 found.append(here / name)
+            elif name in _UNSUPPORTED_WITH_SIBLING and _UNSUPPORTED_WITH_SIBLING[name][1] in names:
+                found.append(here / name)
             elif _CSPROJ.match(name) and "packages.lock.json" not in names:
                 found.append(here / name)
+        if "Cargo.lock" in names:
+            cargo_dirs.add(here)
+        for name, (lock, _hint) in _NEEDS_LOCK.items():
+            if name not in names or lock in names:
+                continue
+            if name == "Cargo.toml" and any(d in cargo_dirs for d in here.parents):
+                continue   # a workspace member: the workspace root's Cargo.lock pins it
+            found.append(here / name)
         has_lock = bool(names & set(LOCKFILES))
         if "pyproject.toml" in names and not has_lock:
             found.append(here / "pyproject.toml")
-        if "package.json" in names and not has_lock and "pnpm-lock.yaml" not in names:
+        if "package.json" in names and not has_lock and not names & set(NPM_SIDE_LOCKS):
             found.append(here / "package.json")
     return sorted(set(found))
 
@@ -242,12 +301,21 @@ def parse(path: Path) -> Manifest:
             _pipfile_lock(path, m)
         elif name in CRATE_LOCKS:
             _cargo_lock(path, m)
+        elif name in lockfiles.FORMATS:
+            got = lockfiles.FORMATS[name].reader(path)
+            m.deps += [Dep(eco, n, v, scope, str(path)) for eco, n, v, scope in got.deps]
+            m.unscannable = "; ".join(got.notes)   # a partial read: the deps are scanned, the notes reported
         elif name == "pyproject.toml":
             _pyproject(path, m)
         elif name == "package.json":
             m.unscannable = "package.json without a lockfile — run `npm install --package-lock-only`"
+        elif name in _NEEDS_LOCK:
+            m.unscannable = _NEEDS_LOCK[name][1]
         elif eco := unsupported_ecosystem(name):
             m.unscannable = f"{UNSUPPORTED_REASON}{eco}"
+    except lockfiles.Unreadable as exc:
+        m.deps.clear()
+        m.unscannable = str(exc)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, tomllib.TOMLDecodeError,
             KeyError, TypeError, AttributeError) as exc:
         m.deps.clear()
@@ -312,14 +380,41 @@ def _pyproject(path: Path, m: Manifest) -> None:
         m.covered = True   # empty, or every dependency is pinned by the requirements files alongside
 
 
+def npm_packages(data: Any) -> dict[str, Any] | None:
+    """Return a parsed npm lockfile's ``packages`` map (lockfileVersion 2/3), or None (v1, or not an object).
+
+    Args:
+        data: The lockfile's parsed JSON.
+
+    Returns:
+        ``{key: entry}`` as the file holds it (``""`` is the root package), or None.
+    """
+    packages = data.get("packages") if isinstance(data, dict) else None
+    return packages if isinstance(packages, dict) else None
+
+
+def npm_entry_name(key: str, info: dict[str, Any]) -> str:
+    """Return the package name of one ``packages`` entry: its ``name`` field, else the last ``node_modules/`` part.
+
+    Args:
+        key: The entry's key (``node_modules/a/node_modules/@s/b``).
+        info: The entry.
+
+    Returns:
+        The name (``@s/b``).
+    """
+    name = info.get("name")
+    return name if isinstance(name, str) and name else key.rsplit("node_modules/", 1)[-1]
+
+
 def _npm_lock(path: Path, m: Manifest) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
-    packages = data.get("packages")
-    if isinstance(packages, dict):  # lockfileVersion 2/3
+    packages = npm_packages(data)
+    if packages is not None:  # lockfileVersion 2/3
         for key, info in packages.items():
             if not key or "version" not in info or info.get("link"):
                 continue
-            name = info.get("name") or key.rsplit("node_modules/", 1)[-1]
+            name = npm_entry_name(key, info)
             scope = "dev" if info.get("dev") or info.get("devOptional") else "runtime"
             m.deps.append(Dep("npm", name, info["version"], scope, str(path)))
         return
@@ -461,13 +556,31 @@ def lock_entries(rel: str, text: str) -> tuple[dict[str, Any], list[tuple[str, d
     Raises:
         ValueError: Not JSON, or a level that must be an object is not one.
     """
+    root, entries = _walk_lock(rel, text)
+    return root, [(name, info) for _section, name, info in entries]
+
+
+def _walk_lock(rel: str, text: str, *, unique: bool = False) -> tuple[dict[str, Any], list[tuple[str, str, dict[str, Any]]]]:
+    """Do :func:`lock_entries`' work, keeping each entry's section (``packages`` or ``dependencies``).
+
+    With ``unique`` a JSON object anywhere in ``text`` that repeats a key is refused: ``json.loads`` keeps the
+    last copy silently, so a reader that kept the first would see another lockfile than the one judged here.
+    """
+    def no_dupes(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        seen: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in seen:
+                raise ValueError(f"{rel}: malformed lockfile: duplicate key {key[:120]!r}")
+            seen[key] = value
+        return seen
+
     try:
-        lock = json.loads(text)
+        lock = json.loads(text, object_pairs_hook=no_dupes if unique else None)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{rel}: not valid JSON: {exc}") from exc
     if not isinstance(lock, dict):
         raise ValueError(f"{rel}: malformed lockfile: the top level is not an object")
-    entries: list[tuple[str, dict[str, Any]]] = []
+    entries: list[tuple[str, str, dict[str, Any]]] = []
     todo: list[tuple[str, str, Any]] = [("packages", "", lock.get("packages")),
                                         ("dependencies", "", lock.get("dependencies"))]
     while todo:
@@ -479,10 +592,10 @@ def lock_entries(rel: str, text: str) -> tuple[dict[str, Any], list[tuple[str, d
         for name, info in sec.items():
             if not isinstance(info, dict):
                 raise ValueError(f"{rel}: malformed lockfile: {section} entry {prefix}{name!r} is not an object")
-            entries.append((f"{prefix}{name}", info))
+            entries.append((section, f"{prefix}{name}", info))
             if section == "dependencies":
                 todo.append((section, f"{prefix}{name} > ", info.get("dependencies")))
-    root = next((info for name, info in entries if name == ""), {})
+    root = next((info for _section, name, info in entries if name == ""), {})
     return root, entries
 
 
@@ -512,28 +625,71 @@ def _kept_local(name: str, info: dict[str, Any], before: set[str]) -> bool:
     return _local_path(path) and _entry_key(name, info) in before
 
 
-def check_lock_edit(rel: str, old: str, new: str) -> None:
+def _strict_key(section: str, name: str, info: dict[str, Any]) -> str:
+    """Return a comparable form of one lockfile entry that keeps its section and every field.
+
+    Unlike :func:`_entry_key`, a ``packages`` entry's ``dependencies`` map is kept (there it is the package's own
+    dependency ranges); only a v1 ``dependencies`` entry drops its nested ``dependencies``, which are entries of
+    their own and are judged one by one.
+    """
+    kept = {k: v for k, v in info.items() if not (section == "dependencies" and k == "dependencies")}
+    return "\0".join((section, name, json.dumps(kept, sort_keys=True)))
+
+
+def _kept_off_registry(section: str, name: str, info: dict[str, Any], before: set[str]) -> bool:
+    """Off-registry policy: a URL-resolved entry passes only byte-for-byte identical to the base, at the same path key.
+
+    "Identical" is the whole entry (:func:`_strict_key`): ``resolved``, ``integrity``, ``version``, its
+    dependency maps, ``bin``, ``hasInstallScript`` and every other field, in the same section under the same key.
+    It must resolve over ``https://`` and carry a ``sha512-`` integrity, so npm can leave it as it is in the base
+    (``--package-lock-only`` fetches nothing for it) and any later install verifies the very same tarball. A new,
+    moved or changed off-registry entry is still refused.
+
+    Note for @security: ``stage-major`` still refuses such a base outright (:func:`npm_off_registry`, S1), because
+    ``npm install`` re-resolves every ``package.json`` spec; this exception covers only the edit check.
+    """
+    url, version, integrity = info.get("resolved"), info.get("version"), info.get("integrity")
+    return (bool(name) and isinstance(url, str) and url.startswith("https://") and isinstance(version, str)
+            and bool(version) and isinstance(integrity, str) and integrity.startswith("sha512-")
+            and _strict_key(section, name, info) in before)
+
+
+def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | None = None) -> list[str]:
     """Refuse root-package edits and any entry that would fetch from off the registry allowlist (B1, A4, X4).
 
     Every entry must resolve to ``https://`` on :data:`REGISTRY_HOSTS`, or have no ``resolved`` and a
-    plain version (a URL or git spec in ``version`` with no ``resolved`` is refused). The one exception
-    is a workspace link or ``file:`` entry kept unchanged from the base lockfile, inside the repository.
+    plain version (a URL or git spec in ``version`` with no ``resolved`` is refused). Two exceptions, both only
+    for an entry kept unchanged from the base lockfile: a workspace link or ``file:`` entry inside the repository
+    (:func:`_kept_local`), and an ``https://`` off-registry entry with a ``sha512-`` integrity that is identical in
+    every field at the same path key (:func:`_kept_off_registry`; e.g. SheetJS's CDN-only ``xlsx``). The edited
+    lockfile may not repeat a JSON key anywhere.
 
     Args:
         rel: Path for messages.
         old: Lockfile text at the base commit (``"{}"`` for a new file).
         new: Lockfile text now.
+        manifest: ``stage-major`` only: the ``package.json`` the same change edits (already checked by
+            :func:`.npm_major.check_package_json_edit`). The root package's ``dependencies`` and ``devDependencies``
+            may then change, but only to exactly that manifest's.
+
+    Returns:
+        One note per tolerated off-registry entry ("<rel>: unchanged off-registry entry kept: <key> <url>
+        (sha512-<first 16 characters>…)"), else [].
 
     Raises:
         ValueError: Any of these is found, or a lockfile is malformed.
     """
-    root_before, before = lock_entries(rel, old)
-    root_after, entries = lock_entries(rel, new)
+    root_before, before = _walk_lock(rel, old)
+    root_after, entries = _walk_lock(rel, new, unique=True)
     for key in _LOCK_ROOT_KEYS:
-        if root_before.get(key) != root_after.get(key):
+        mirrored = manifest is not None and key in DEP_SECTIONS and \
+            root_after.get(key) == manifest.get(key)
+        if root_before.get(key) != root_after.get(key) and not mirrored:
             raise ValueError(f"{rel}: root package {key} changed")
-    kept = {_entry_key(name, info) for name, info in before}
-    for name, info in entries:
+    kept = {_entry_key(name, info) for _section, name, info in before}
+    kept_strict = {_strict_key(section, name, info) for section, name, info in before}
+    notes: list[str] = []
+    for section, name, info in entries:
         if _kept_local(name, info, kept):
             continue
         url, version = info.get("resolved"), info.get("version")
@@ -544,4 +700,57 @@ def check_lock_edit(rel: str, old: str, new: str) -> None:
             continue
         host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if isinstance(url, str) else ""
         if not isinstance(url, str) or not url.startswith("https://") or host not in REGISTRY_HOSTS:
+            if _kept_off_registry(section, name, info, kept_strict):
+                integrity = str(info.get("integrity"))
+                notes.append(f"{rel}: unchanged off-registry entry kept: {name[:120]} {url[:200]} "
+                             f"({integrity[:23]}…)")
+                continue
             raise ValueError(f"{rel}: {name or '(root)'} resolves outside the registry allowlist: {str(url)[:120]}")
+    return notes
+
+
+#: A package.json spec that fetches from somewhere other than the registry (git, URL, path, link, alias, workspace).
+_OFF_REGISTRY_SPEC = re.compile(r"[:/]|^(file|link|git|npm|workspace|github|portal)\b", re.I)
+
+
+def npm_off_registry(rel: str, manifest_text: str, lock_text: str) -> str:
+    """Return why a base ``package.json`` / lockfile pair names a non-registry source, or "" (``stage-major``).
+
+    ``stage-major`` runs ``npm install`` (not only ``npm audit fix``), which resolves every spec in
+    ``package.json``; so before it runs, every dependency spec there must be a registry range (no git, URL,
+    ``file:``, ``link:``, ``npm:`` alias or path) and every lockfile entry must resolve over ``https://`` to
+    :data:`REGISTRY_HOSTS`, with no ``link`` entry and no ``file:`` / ``link:`` / ``npm:`` / URL version.
+
+    Args:
+        rel: The lockfile's path, for messages.
+        manifest_text: The base ``package.json`` text.
+        lock_text: The base lockfile text.
+
+    Returns:
+        The problem, or "".
+    """
+    try:
+        manifest = json.loads(manifest_text)
+        _root, entries = lock_entries(rel, lock_text)
+    except ValueError as exc:
+        return f"{rel}: package.json or the lockfile cannot be read ({str(exc)[:120]})"
+    if not isinstance(manifest, dict):
+        return f"{rel}: package.json is not an object"
+    for section in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+        deps = manifest.get(section) or {}
+        if not isinstance(deps, dict):
+            return f"{rel}: package.json {section} is not an object"
+        for name, spec in deps.items():
+            if not isinstance(spec, str) or _OFF_REGISTRY_SPEC.search(spec.strip()):
+                return f"{rel}: package.json {section}.{str(name)[:60]} is not a registry spec ({str(spec)[:60]})"
+    for name, info in entries:
+        if not name:
+            continue   # the root package itself
+        url, version = info.get("resolved"), info.get("version")
+        if info.get("link") is True or (isinstance(version, str) and _OFF_REGISTRY_SPEC.search(version)):
+            return f"{rel}: {name[:80]} is not a registry package ({str(version or url)[:80]})"
+        host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if isinstance(url, str) else ""
+        if url not in (None, "") and (not isinstance(url, str) or not url.startswith("https://")
+                                      or host not in REGISTRY_HOSTS):
+            return f"{rel}: {name[:80]} resolves outside the registry allowlist ({str(url)[:80]})"
+    return ""

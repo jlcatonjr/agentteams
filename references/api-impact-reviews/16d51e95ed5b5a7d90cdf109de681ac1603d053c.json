@@ -1,0 +1,8 @@
+{
+  "patch_id": "16d51e95ed5b5a7d90cdf109de681ac1603d053c",
+  "commit": "3f27946b5f47d1ed0758c8012727c226730beea8",
+  "subject": "fix(vulnscan): stage-fix moves exact-peer groups and direct parents the audit fix leaves behind",
+  "impact": "1 modules added, 10 symbols added, 1 symbols changed",
+  "note": "vulnscan stage-fix npm moves: new npm_groups (LockGraph selection, annotate_plan) and npm_ops (npm_moves fail-closed runner, semver_line, has_workspaces); fix.npm_fix gains update= (ValueError with install); manifests.npm_packages/npm_entry_name added; fix._semver_line/_npm_workspaces now re-exported from npm_ops. Docs and CHANGELOG updated; internal callers only.",
+  "recorded_at": "2026-11-01T22:28:41Z"
+}

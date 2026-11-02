@@ -1,0 +1,8 @@
+{
+  "patch_id": "9709d10e7acae13eab1aa0dc0f90348f26d7e6da",
+  "commit": "be47897bb049f3632226db2dba9c8c1282d4b19c",
+  "subject": "fix(vulnscan): keep Go, NuGet and npm-scope private names local; gradle.lockfile opt-in (security review M)",
+  "impact": "1 modules added, 9 symbols added, 3 symbols changed, 1 cli added",
+  "note": "feat/vulnscan-coverage-manifests rebased onto feat/vulnscan-runtime-table; API-visible: new lockfiles and private_sources modules, scan_path(gradle_lockfiles=), fix_path(gradle_lockfiles=), plan_lockfile(hidden=), scan --gradle-lockfiles (all additive, defaults keep prior behaviour except gradle.lockfile now opt-in)",
+  "recorded_at": "2026-10-30T19:01:57Z"
+}

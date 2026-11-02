@@ -6,10 +6,11 @@ Design (see references/plans/fleet-update-integration-2026-06-08.plan.md):
 - **Discovery**: walk the parent dir, find workspaces that contain ``.github/agents/``
   and/or ``.claude/`` infrastructure (pruning ``node_modules``, ``.git``,
   ``.worktrees``, ``archive``).
-- **Snapshot via git commit**: before writing, commit the workspace's current
-  agent-infra state (``chore(fleet): pre-update snapshot``) so the whole update
-  is one recoverable point. The snapshot ref is the rollback target and the
-  diff base.
+- **Snapshot to a ref**: before writing, record the workspace's current
+  agent-infra state as a commit (``chore(fleet): pre-update snapshot``) kept under
+  ``refs/agentteams/fleet-snapshots/`` — never on the checked-out branch, whose
+  HEAD, index and working tree stay untouched. The snapshot is the rollback
+  target and the diff base.
 - **In-process update**: re-enter ``build_team.main([...])`` per target with
   ``--update --merge`` (copilot direct / claude direct) or ``--bridge-merge``
   (claude bridge consumer). No subprocess ⇒ no exit-code/jsonschema ambiguity;
@@ -48,6 +49,10 @@ from agentteams.signing_switch import review_lines as _switch_review_lines, revi
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams.git_exec import run_git
+from agentteams._fleet_snapshot import (  # noqa: F401  (re-exported: tests and callers use fleet.*)
+    SNAPSHOT_REF_PREFIX, agent_paths as _agent_paths, agent_paths_dirty as _agent_paths_dirty, git_diff as _git_diff,
+    git_snapshot as _git_snapshot, worktree_tree as _worktree_tree,
+)
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 from agentteams.vulnscan import project_policy as _vpolicy
 
@@ -156,7 +161,7 @@ class WorkspaceResult:
 # ---------------------------------------------------------------------------
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    # Not hardened: the fleet snapshot commits, and commit hooks are part of that contract.
+    # Not hardened: fleet works in the operator's own checkouts with their own git config (snapshot refs, diffs).
     return run_git(repo, *args)
 
 
@@ -174,9 +179,9 @@ def _is_linked_worktree(path: Path) -> bool:
     standalone main working tree.
 
     Excluded from fleet discovery (2026-09-08 @security HALT, finding 4): a
-    snapshot commit inside a linked worktree lands on whatever feature branch
-    that worktree has checked out and writes into the MAIN repo's shared object
-    store — branch contamination with no clean per-worktree rollback. A linked
+    linked worktree shares the main repository's object store and refs, so a run
+    there writes into the MAIN repository and updates the files of whatever branch
+    that worktree has checked out, with no clean per-worktree rollback. A linked
     worktree's agent infrastructure is already reachable through its main
     working tree (the same .github/agents, .claude, etc.), so skipping it loses
     no coverage.
@@ -202,82 +207,6 @@ def _is_linked_worktree(path: Path) -> bool:
         except OSError:
             return False
     return False
-
-
-def _agent_paths(ws: Path) -> list[str]:
-    """Relative paths of agent infrastructure to snapshot/diff within a workspace."""
-    rels = []
-    for rel in (
-        ".github/agents",
-        ".github/copilot-instructions.md",
-        ".claude",
-        "CLAUDE.md",
-        ".goose/recipes",
-        ".goosehints",
-        ".codex/agents", ".grok/agents",
-        "AGENTS.md",
-    ):
-        if (ws / rel).exists():
-            rels.append(rel)
-    return rels
-
-
-def _git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None, bool]:
-    """Commit the current agent-infra state as a recoverable snapshot.
-
-    Returns (snapshot_ref, committed). If the agent paths are already clean, the
-    current HEAD is the snapshot (committed=False). If dirty, a snapshot commit
-    is created over just the agent-infra paths (committed=True).
-
-    By default hooks run normally. Pass allow_no_verify=True (exposed via the
-    --fleet-allow-no-verify CLI flag) to bypass hooks with --no-verify and
-    core.hooksPath=/dev/null — use only when workspace hooks are known-safe to
-    skip (e.g., a signing hook that would reject an ephemeral internal commit).
-    """
-    paths = _agent_paths(ws)
-    if not paths:
-        head = _git(ws, "rev-parse", "HEAD")
-        return (head.stdout.strip() or None, False)
-    # Are any agent paths dirty (modified/untracked)?
-    status = _git(ws, "status", "--porcelain", "--", *paths)
-    if not status.stdout.strip():
-        head = _git(ws, "rev-parse", "HEAD")
-        return (head.stdout.strip() or None, False)
-    # Stage only the agent-infra paths and commit a snapshot (does not touch
-    # unrelated working-tree changes elsewhere in the repo).
-    _git(ws, "add", "--", *paths)
-    if allow_no_verify:
-        commit = _git(
-            ws, "-c", "core.hooksPath=/dev/null", "commit", "--no-verify",
-            "-m", "chore(fleet): pre-update snapshot",
-        )
-    else:
-        commit = _git(ws, "commit", "-m", "chore(fleet): pre-update snapshot")
-    if commit.returncode != 0:
-        # Determine why the commit failed: if the staged files are still staged,
-        # a hook blocked the write; if nothing is staged, there was nothing to
-        # commit (race or empty diff).  This is more reliable than inspecting
-        # stderr text, which varies by locale and git version.
-        still_staged = _git(ws, "diff", "--cached", "--name-only", "--", *paths).stdout.strip()
-        if not allow_no_verify and still_staged:
-            print(
-                f"    [WARN] snapshot: pre-commit hook blocked the snapshot commit in {ws}; "
-                "falling back to HEAD (dirty state not captured). "
-                "Pass --fleet-allow-no-verify to bypass hooks for this run.",
-                file=sys.stderr,
-            )
-        _git(ws, "restore", "--staged", "--", *paths)
-        head = _git(ws, "rev-parse", "HEAD")
-        return (head.stdout.strip() or None, False)
-
-    head = _git(ws, "rev-parse", "HEAD")
-    return (head.stdout.strip() or None, True)
-
-
-def _git_diff(ws: Path, ref: str, paths: list[str]) -> str:
-    if not paths:
-        return ""
-    return _git(ws, "diff", ref, "--", *paths).stdout
 
 
 # ---------------------------------------------------------------------------
@@ -410,8 +339,8 @@ def discover_workspaces(
         except (PermissionError, OSError):
             continue  # unreadable dir (e.g. mode 000) — skip, never fatal
         # Never treat a git LINKED worktree (or submodule) as its own workspace:
-        # its agent infra is already covered via the main working tree, and a
-        # snapshot commit here would contaminate the worktree's feature branch
+        # its agent infra is already covered via the main working tree, and an
+        # update here would rewrite files on the worktree's feature branch
         # (2026-09-08 @security HALT, finding 4). The parent itself is exempt —
         # the operator pointed the run at it deliberately.
         if dirpath != parent and _is_linked_worktree(dirpath):
@@ -485,7 +414,7 @@ def _fence_and_useredit_lines(text: str) -> tuple[set[int], set[int]]:
     return fenced, useredit
 
 
-def _user_editable_deletions(ws: Path, ref: str, rel_file: str) -> list[str]:
+def _user_editable_deletions(ws: Path, ref: str, rel_file: str, new: str | None = None) -> list[str]:
     """Deleted lines (vs snapshot) that fall inside a USER-EDITABLE region — the
     only category that represents real hand-authored content loss."""
     head = _git(ws, "show", f"{ref}:{rel_file}").stdout
@@ -494,7 +423,7 @@ def _user_editable_deletions(ws: Path, ref: str, rel_file: str) -> list[str]:
     _, useredit = _fence_and_useredit_lines(head)
     if not useredit:
         return []
-    diff = _git(ws, "diff", "-U0", ref, "--", rel_file).stdout
+    diff = _git(ws, "diff", "-U0", ref, *((new,) if new else ()), "--", rel_file).stdout
     out: list[str] = []
     old_ln = None
     for ln in diff.splitlines():
@@ -551,7 +480,7 @@ def _fence_imbalances(ws: Path, files: list[str]) -> list[str]:
     return out
 
 
-def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
+def _classify(ws: Path, ref: str, diff_text: str, update_output: str, new: str | None = None) -> dict:
     """Derive status from content signals, not exit code."""
     added = removed = 0
     files: list[str] = []
@@ -587,7 +516,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
                 volatile_tracked.append(f)
             continue
         if f.endswith(".md"):
-            ue.extend(_user_editable_deletions(ws, ref, f))
+            ue.extend(_user_editable_deletions(ws, ref, f, new))
     return {
         "added": added,
         "removed": removed,
@@ -790,8 +719,8 @@ def run_fleet(args, parser) -> int:
         wr.targets.append(TargetResult(
             workspace=str(wt), target="(linked-worktree)", status="SKIP",
             detail="git linked worktree — excluded from fleet update; its agent infra is "
-                   "covered via the main working tree, and a snapshot commit here would "
-                   "contaminate the worktree's checked-out branch",
+                   "covered via the main working tree, and an update here would rewrite "
+                   "files on the worktree's checked-out branch",
         ))
         results.append(wr)
         rel = wt.relative_to(parent) if wt != parent else Path(".")
@@ -817,8 +746,16 @@ def run_fleet(args, parser) -> int:
         if apply and is_git:
             snap_ref, committed = _git_snapshot(ws, allow_no_verify=allow_no_verify)
             wr.snapshot_ref, wr.snapshot_committed = snap_ref, committed
+            if not committed and _agent_paths_dirty(ws):
+                # Uncommitted agent edits with no snapshot would have no rollback point: never update over them.
+                detail = "dirty agent paths but no snapshot was recorded (see the warning above) — not updated"
+                wr.targets += [TargetResult(workspace=str(ws), target=tg, status="SKIP", detail=detail)
+                               for tg in targets]
+                print(f"    SKIP: {detail}")
+                results.append(wr)
+                continue
             print(f"    snapshot: {snap_ref[:10] if snap_ref else '—'}"
-                  f"{' (commit created)' if committed else ' (HEAD; clean)'}")
+                  f"{' (ref under ' + SNAPSHOT_REF_PREFIX + ')' if committed else ' (HEAD; clean)'}")
 
         for target in targets:
             if target == "claude-ambiguous":
@@ -881,8 +818,13 @@ def run_fleet(args, parser) -> int:
 
             # Apply path: classify against the snapshot via git diff.
             if is_git and snap_ref:
-                diff_text = _git_diff(ws, snap_ref, _agent_paths(ws))
-                cls = _classify(ws, snap_ref, diff_text, out)
+                # Tree to tree: the snapshot holds files untracked before it; diffing it against the index-based
+                # working tree would show them as deleted and miss files the update created.
+                paths_now = _agent_paths(ws)
+                new_tree = _worktree_tree(ws, paths_now)
+                tree_note = "" if new_tree else "post-update tree unavailable: diffed against the working tree"
+                diff_text = _git_diff(ws, snap_ref, paths_now, new_tree)
+                cls = _classify(ws, snap_ref, diff_text, out, new_tree)
                 tr.files_changed = len(cls["files"])
                 tr.added_lines, tr.removed_lines = cls["added"], cls["removed"]
                 tr.shrink_notices = cls["shrink_notices"]
@@ -926,6 +868,9 @@ def run_fleet(args, parser) -> int:
                                  + ", ".join(cls["volatile_tracked"]))
                 else:
                     tr.status = "OK"
+                if tree_note:   # the fallback diff can miss files the update created: never a silent OK
+                    tr.status = "REVIEW" if tr.status == "OK" else tr.status
+                    tr.detail = "; ".join(filter(None, (tr.detail, tree_note)))
                 switch_reason = _switch_reason(cls["signing_switch"])  # also on FAIL / fence imbalance
                 if switch_reason and switch_reason not in tr.detail:
                     tr.detail = "; ".join(filter(None, (tr.detail, switch_reason)))

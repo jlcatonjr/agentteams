@@ -1,0 +1,8 @@
+{
+  "patch_id": "5d9b12340ad72880f692a8a4951bda244be100a5",
+  "commit": "fbc878c909fbc5b87b338e415fbe1b0578bdf87f",
+  "subject": "fix(vulnscan): scan_mirror review fixes (code-hygiene)",
+  "impact": "1 symbols added",
+  "note": "vauto A3 review fixes: adds scan_mirror.valid_name (public, additive); behaviour otherwise unchanged",
+  "recorded_at": "2026-10-31T15:56:00Z"
+}

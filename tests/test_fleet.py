@@ -108,7 +108,7 @@ def test_discover_prunes_own_fleet_output_tree(tmp_path):
 
 def test_discover_skips_linked_worktrees(tmp_path):
     # 2026-09-08 @security HALT finding 4: a git LINKED worktree must not be
-    # discovered as its own workspace — a snapshot commit there lands on the
+    # discovered as its own workspace — an update there rewrites files on the
     # worktree's checked-out feature branch and writes the main repo's shared
     # object store. Its agent infra is already covered via the main working tree.
     main = tmp_path / "repo"
@@ -266,91 +266,154 @@ def test_snapshot_clean_repo_uses_head_no_commit(tmp_path):
     assert ref == head_before and committed is False
 
 
-def test_snapshot_dirty_agent_paths_creates_commit(tmp_path):
+def _branch_state(repo):
+    return (_git(repo, "rev-parse", "HEAD").stdout, _git(repo, "symbolic-ref", "HEAD").stdout,
+            _git(repo, "status", "--porcelain").stdout, _git(repo, "diff", "--cached").stdout)
+
+
+def _snapshot_refs(repo):
+    out = _git(repo, "for-each-ref", "--format=%(refname)", fleet.SNAPSHOT_REF_PREFIX).stdout
+    return out.split()
+
+
+def test_snapshot_dirty_agent_paths_goes_to_a_ref_never_the_branch(tmp_path):
     repo = tmp_path / "r"
     _mk_agent(repo / ".github" / "agents", "x.agent.md")
     _init_repo(repo)
-    # dirty an agent file
     (repo / ".github" / "agents" / "x.agent.md").write_text("changed\n", encoding="utf-8")
-    head_before = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    (repo / ".github" / "agents" / "new.agent.md").write_text("untracked\n", encoding="utf-8")
+    before = _branch_state(repo)
     ref, committed = fleet._git_snapshot(repo)
-    assert committed is True and ref != head_before
-    # working tree is now clean for agent paths
-    assert _git(repo, "status", "--porcelain", "--", ".github/agents").stdout.strip() == ""
+    assert committed is True and ref != before[0].strip()
+    # the branch, HEAD, index and working tree are exactly as they were
+    assert _branch_state(repo) == before
+    refs = _snapshot_refs(repo)
+    assert len(refs) == 1 and _git(repo, "rev-parse", refs[0]).stdout.strip() == ref
+    assert _git(repo, "rev-parse", f"{ref}^").stdout.strip() == before[0].strip()
+    # the snapshot holds the modified and the untracked file as they were on disk
+    assert _git(repo, "show", f"{ref}:.github/agents/x.agent.md").stdout == "changed\n"
+    assert _git(repo, "show", f"{ref}:.github/agents/new.agent.md").stdout == "untracked\n"
 
 
-def test_snapshot_hook_blocks_falls_back_to_head(tmp_path):
-    """When a hook rejects the commit and allow_no_verify=False, snapshot falls
-    back to HEAD and unstages the staged files."""
+def test_snapshot_ignores_a_blocking_hook_and_adds_no_commit(tmp_path):
+    """No git commit runs, so a hook can neither block the snapshot nor see it."""
     repo = tmp_path / "r"
     _mk_agent(repo / ".github" / "agents", "x.agent.md")
     _init_repo(repo)
-
-    # Install a blocking pre-commit hook.
-    hooks_dir = repo / ".git" / "hooks"
-    hooks_dir.mkdir(exist_ok=True)
-    hook = hooks_dir / "pre-commit"
-    hook.write_text("#!/bin/sh\necho 'hook: blocked'\nexit 1\n", encoding="utf-8")
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(exist_ok=True)
+    hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     hook.chmod(0o755)
-
-    # Dirty the agent file so a snapshot commit would be attempted.
     (repo / ".github" / "agents" / "x.agent.md").write_text("changed\n", encoding="utf-8")
-    head_before = _git(repo, "rev-parse", "HEAD").stdout.strip()
-
-    ref, committed = fleet._git_snapshot(repo, allow_no_verify=False)
-
-    assert committed is False, "Hook-blocked commit should not be marked committed"
-    assert ref == head_before, "Ref should fall back to HEAD"
-    # Staged changes must be unstaged (working tree left intact, but index clean).
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.strip()
-    assert staged == "", "Staged files should be unstaged after hook failure"
+    for allow in (False, True):
+        before = _branch_state(repo)
+        ref, committed = fleet._git_snapshot(repo, allow_no_verify=allow)
+        assert committed is True and _branch_state(repo) == before
+    assert len(_snapshot_refs(repo)) == 2   # two snapshots, two refs; nothing overwritten
 
 
-def test_snapshot_allow_no_verify_bypasses_hook(tmp_path):
-    """With allow_no_verify=True, a blocking hook is skipped and a commit is made."""
+def test_snapshot_keeps_unrelated_staged_changes(tmp_path):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    (repo / "app.py").write_text("a = 1\n", encoding="utf-8")
+    _init_repo(repo)
+    (repo / "app.py").write_text("a = 2\n", encoding="utf-8")
+    _git(repo, "add", "app.py")
+    (repo / ".github" / "agents" / "x.agent.md").write_text("changed\n", encoding="utf-8")
+    ref, committed = fleet._git_snapshot(repo)
+    assert committed is True
+    assert _git(repo, "diff", "--cached", "--name-only").stdout.split() == ["app.py"]
+    # the snapshot carries only agent paths over HEAD: app.py is HEAD's version
+    assert _git(repo, "show", f"{ref}:app.py").stdout == "a = 1\n"
+
+
+def test_snapshot_in_a_repo_with_no_commit_yet(tmp_path):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@t.test")
+    _git(repo, "config", "user.name", "t")
+    ref, committed = fleet._git_snapshot(repo)
+    assert committed is True and ref
+    assert _git(repo, "rev-parse", "-q", "--verify", "HEAD").returncode != 0   # still no commit on the branch
+    assert _git(repo, "show", f"{ref}:.github/agents/x.agent.md").stdout == "agent\n"
+
+
+def test_diff_against_the_snapshot_is_tree_to_tree(tmp_path):
+    """A file untracked before the snapshot is not a deletion, and a file the update creates is an addition."""
     repo = tmp_path / "r"
     _mk_agent(repo / ".github" / "agents", "x.agent.md")
     _init_repo(repo)
-
-    hooks_dir = repo / ".git" / "hooks"
-    hooks_dir.mkdir(exist_ok=True)
-    hook = hooks_dir / "pre-commit"
-    hook.write_text("#!/bin/sh\necho 'hook: blocked'\nexit 1\n", encoding="utf-8")
-    hook.chmod(0o755)
-
-    (repo / ".github" / "agents" / "x.agent.md").write_text("changed\n", encoding="utf-8")
-    head_before = _git(repo, "rev-parse", "HEAD").stdout.strip()
-
-    ref, committed = fleet._git_snapshot(repo, allow_no_verify=True)
-
-    assert committed is True, "Snapshot commit should succeed when hook bypass is explicit"
-    assert ref != head_before
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.strip()
-    assert staged == ""
+    (repo / ".github" / "agents" / "kept.agent.md").write_text("untracked, unchanged\n", encoding="utf-8")
+    ref, _ = fleet._git_snapshot(repo)
+    (repo / ".github" / "agents" / "added.agent.md").write_text("from the update\n", encoding="utf-8")
+    paths = fleet._agent_paths(repo)
+    diff = fleet._git_diff(repo, ref, paths, fleet._worktree_tree(repo, paths))
+    assert "kept.agent.md" not in diff
+    assert "+++ b/.github/agents/added.agent.md" in diff and "+from the update" in diff
 
 
-def test_run_fleet_passes_allow_no_verify_to_snapshot(tmp_path, monkeypatch):
-    """The --fleet-allow-no-verify flag is forwarded from args to _git_snapshot."""
+def test_two_workspaces_in_one_repository_get_two_refs(tmp_path):
+    repo = tmp_path / "r"
+    for sub in ("a", "b"):
+        _mk_agent(repo / sub / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    for sub in ("a", "b"):
+        (repo / sub / ".github" / "agents" / "x.agent.md").write_text("changed\n", encoding="utf-8")
+        assert fleet._git_snapshot(repo / sub)[1] is True
+    assert len(_snapshot_refs(repo)) == 2
+
+
+def test_a_scan_mirror_worktree_is_never_a_fleet_workspace(tmp_path):
+    """vulnscan's <repo>.worktrees/vulnscan-mirror is pruned before discovery: no target and no SKIP row."""
+    repo = tmp_path / "portal"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    mirror = tmp_path / "portal.worktrees" / "vulnscan-mirror"
+    _git(repo, "worktree", "add", "-q", "--detach", str(mirror))
+    assert (mirror / ".github" / "agents" / "x.agent.md").is_file()
+    skipped: list = []
+    found = fleet.discover_workspaces(tmp_path, skipped_worktrees=skipped)
+    assert found == [repo.resolve()] and skipped == []
+
+
+def test_a_dirty_workspace_with_no_snapshot_is_skipped_not_updated(tmp_path, monkeypatch, capsys):
+    """Without a snapshot its uncommitted agent edits would have no rollback point (@security, 2026-10-31)."""
     ws = tmp_path / "ws"
     _mk_agent(ws / ".github" / "agents", "_build-description.json", "{}")
     _mk_agent(ws / ".github" / "agents", "a.agent.md", "x\n")
     _init_repo(ws)
-    # Dirty the workspace so snapshot tries to commit.
+    (ws / ".github" / "agents" / "a.agent.md").write_text("AKIA" + "ABCDEFGHIJKLMNOP\n", encoding="utf-8")
+    ran = []
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: ran.append(argv) or (0, "ok"))
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True), parser=None)
+    assert ran == [] and "not updated" in capsys.readouterr().out
+
+
+def test_allow_no_verify_is_accepted_and_changes_nothing(tmp_path, monkeypatch):
+    """--fleet-allow-no-verify still parses into a run; the snapshot is a ref either way."""
+    ws = tmp_path / "ws"
+    _mk_agent(ws / ".github" / "agents", "_build-description.json", "{}")
+    _mk_agent(ws / ".github" / "agents", "a.agent.md", "x\n")
+    _init_repo(ws)
     (ws / ".github" / "agents" / "a.agent.md").write_text("changed\n", encoding="utf-8")
-
-    captured = {}
-
-    def fake_snapshot(path, *, allow_no_verify=False):
-        captured["allow_no_verify"] = allow_no_verify
-        # Behave as if the commit succeeded.
-        head = _git(path, "rev-parse", "HEAD").stdout.strip()
-        return head, False
-
-    monkeypatch.setattr(fleet, "_git_snapshot", fake_snapshot)
+    head = _git(ws, "rev-parse", "HEAD").stdout
     monkeypatch.setattr(fleet, "_run_main", lambda argv: (0, "ok"))
-
     fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True, fleet_allow_no_verify=True), parser=None)
-    assert captured.get("allow_no_verify") is True
+    assert _git(ws, "rev-parse", "HEAD").stdout == head and len(_snapshot_refs(ws)) == 1
+
+
+def test_a_credential_in_an_agent_file_is_never_kept_in_a_snapshot_ref(tmp_path, capsys):
+    """No pre-commit secret scanner sees a ref, so the fleet checks the changed files itself."""
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    key = "AKIA" + "ABCDEFGHIJKLMNOP"
+    (repo / ".github" / "agents" / "x.agent.md").write_text(f"aws_access_key_id = {key}\n", encoding="utf-8")
+    ref, committed = fleet._git_snapshot(repo)
+    assert committed is False and ref == _git(repo, "rev-parse", "HEAD").stdout.strip()
+    assert _snapshot_refs(repo) == []
+    assert "credential-like content in .github/agents/x.agent.md" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

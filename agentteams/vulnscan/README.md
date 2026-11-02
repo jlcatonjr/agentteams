@@ -39,13 +39,22 @@ tools container also need Docker; `open-pr` needs the GitHub CLI (`gh`); server 
   | npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` (classic and berry) |
   | Packagist | `composer.lock` |
   | crates.io | `Cargo.lock` (v1–v4; crates from the crates.io index only, every one counted as runtime; fixes are plan-only) |
+  | Go | `go.mod` (`require` with `replace` applied; the Go standard library is not judged; fixes are plan-only) |
+  | npm | `pnpm-lock.yaml` (v6, v9) and text `bun.lock` too (fixes are plan-only) |
+  | RubyGems, Maven, NuGet | `Gemfile.lock` (rubygems.org gems), `gradle.lockfile`, `packages.lock.json` (fixes are plan-only) |
 
   Vendored and generated trees (`node_modules`, virtualenvs, build output, Lean's `.lake` package cache) and
   linked git worktrees are skipped. Nothing is passed silently: a manifest with no exact versions, such as an unpinned
   `requirements.txt` or a `package.json` with no lockfile, is reported as *unscannable*. So are the
-  manifests of ecosystems vulnscan finds but does not read (Go, Maven, Gradle, RubyGems, NuGet, pnpm,
-  conda, Lean, container images), so a project holding only those shows up as a coverage gap rather than
-  as clean.
+  manifests of ecosystems vulnscan finds but does not read (a `go.sum` without `go.mod`, Maven `pom.xml`, Gradle
+  and NuGet project files without their lockfile, `Gemfile` without `Gemfile.lock`, SwiftPM, CocoaPods, Pub, Hex,
+  `bun.lockb`, Deno, CRAN, Hackage, Julia, Conan, vcpkg, conda, Lean, container images), so a project holding only
+  those shows up as a coverage gap rather than
+  as clean. For container manifests (Dockerfiles, compose files) the base images are judged: an end-of-life
+  release line or OS (`python:3.9-slim`, `-buster`), a pinned patch tag behind its line, and an unpinned
+  `latest` are findings. The image contents are not scanned.
+  With `scan --unpinned-ranges` (off by default), the ranges of unpinned Python requirements are also
+  checked against every advisory for each name; such a file stays unscannable, with a coverage note.
 - **This machine's runtimes.** `runtimes` checks the installed Node.js, PHP and Python against security
   releases and end-of-life dates.
 - **Servers.** The packaged server kit audits Linux hosts over ssh, read-only: installed packages,
@@ -105,7 +114,7 @@ container on an internal-only network:
 - **Runtimes.** goose (default), Claude Code, the GitHub Copilot CLI or Codex, each through its own
   driver, image build and isolation self-test (`agent-image build`, `agent-selftest`).
 - **The agents' tools.** An MCP server inside the container lets the agents read the summary, findings
-  and fix plans, and queue requests: `stage-fix`, `open-pr`, `close-superseded`, `server-audit`,
+  and fix plans, and queue requests: `stage-fix`, `stage-major` (majors), `stage-image` (end-of-life base images), `open-pr`, `close-superseded`, `server-audit`,
   `server-dryrun`, an escalation, or the run report. Everything they read from advisories or
   repositories is labelled as data.
 - **Egress gateway.** The only route out of the container. It holds the model API key (the agent

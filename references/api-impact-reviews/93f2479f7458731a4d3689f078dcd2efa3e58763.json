@@ -1,0 +1,8 @@
+{
+  "patch_id": "93f2479f7458731a4d3689f078dcd2efa3e58763",
+  "commit": "22f045c285d6f0f5c27baf8af928b317b073d991",
+  "subject": "feat(vulnscan): check unpinned Python requirement ranges against OSV (N6a, off by default)",
+  "impact": "1 modules added, 19 symbols added, 1 symbols changed, 1 cli added",
+  "note": "restack onto the alpine/fedora R-v fix: patch-id changed only through the manifest hunk; API impact unchanged from the reviewed original",
+  "recorded_at": "2026-10-31T11:55:50Z"
+}

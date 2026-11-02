@@ -6,7 +6,13 @@ for advisory ranges and upgrade targets:
 - numeric release segments are compared, padded with zeros;
 - pre-releases sort before the final release, ordered ``dev < a/alpha < b/beta < rc/c/pre``;
 - ``.postN`` sorts after the final release;
-- local and build metadata after ``+`` is ignored.
+- local and build metadata after ``+`` is ignored;
+- Go pseudo-versions (``0.0.0-20240101000000-abcdef123456``, ``1.2.4-0.<timestamp>-<hash>``,
+  ``1.2.3-pre.0.<timestamp>-<hash>``) sort by timestamp, before every other pre-release of their base;
+- RubyGems ``.pre`` and Maven qualifiers: ``alpha < beta < milestone (M) < rc < SNAPSHOT < final``, where Maven's
+  ``RELEASE``, ``FINAL`` and ``GA`` are the final release and ``SP`` sorts after it; another qualifier (Guava's
+  ``-jre``) sorts as a pre-release;
+- NuGet four-part versions compare their four numbers.
 
 Every token is typed as ``(kind, value)``, so a number is never compared with a word and
 comparison cannot raise.
@@ -18,7 +24,12 @@ import re
 
 _SPLIT = re.compile(r"^(\d+(?:\.\d+)*)(.*)$", re.ASCII)   # ASCII digits only: int() of "²" raises
 _FINAL = re.compile(r"^v?\d+(\.\d+)*$", re.ASCII)
-_PRE_RANK = {"dev": 0, "a": 1, "alpha": 1, "b": 2, "beta": 2, "c": 3, "rc": 3, "pre": 3, "preview": 3}
+_PRE_RANK = {"dev": 0, "a": 1, "alpha": 1, "b": 2, "beta": 2, "m": 3, "milestone": 3, "c": 4, "rc": 4, "cr": 4,
+             "pre": 4, "preview": 4, "snapshot": 5}
+#: Maven qualifiers that mean the final release itself (``5.3.18.RELEASE`` is ``5.3.18``).
+_FINAL_WORDS = ("release", "final", "ga")
+#: The tail of a Go pseudo-version: ``[0.]<yyyymmddhhmmss>-<12 hex>``.
+_GO_PSEUDO = re.compile(r"(?:^|[.-])(?:0\.)?(\d{14})-[0-9a-f]{12}$", re.ASCII)
 
 
 def _num(digits: str) -> int:
@@ -58,10 +69,15 @@ def version_key(version: str) -> tuple:
     nums = tuple(_num(p) for p in m.group(1).split("."))
     nums = nums + (0,) * (6 - len(nums)) if len(nums) < 6 else nums
     rest = m.group(2).lstrip(".-_")
+    if rest in _FINAL_WORDS:
+        rest = ""
     if not rest:
         return (epoch, nums, 1, ())
-    if rest.startswith("post"):
+    if rest.startswith("post") or re.fullmatch(r"sp[.-]?\d*", rest, re.ASCII):
         return (epoch, nums, 2, _tokens(rest))
+    pseudo = _GO_PSEUDO.search(rest)
+    if pseudo:   # below every other pre-release token of its base, then by timestamp
+        return (epoch, nums, 0, _tokens(rest[:pseudo.start()]) + ((0, -1, ""), (2, _num(pseudo.group(1)), "")))
     return (epoch, nums, 0, _tokens(rest))
 
 

@@ -101,6 +101,342 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GOOSE_SANDBOX` precondition, and note that the `DESCRIPTION-FORMAT.md` `wasm_sandbox` example needs two standing
   exceptions, over the registry's default cap of one.
 
+### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
+
+- **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install
+  --force` of v1.0.4 (which has no `agentteams.vulnscan`) replaced the deployed main in the venv the launchd jobs
+  run, and the next scheduled runs failed with `No module named agentteams.vulnscan`.
+- `vulnscan-deploy.sh` now records the deployed commit in `<state>/deployed.json`. The new sourced
+  `scripts/vulnscan-remediation/vulnscan-install-guard.sh` runs first in `vulnscan-daily-wrapped.sh` (daily and
+  catch-up; not `--ensure-only`) and in `vulnscan-remediate-auto.sh`. It requires that the venv imports
+  `agentteams.vulnscan` and, when a deploy was recorded, was installed from that commit's archive. Otherwise the job
+  exits 4 with a desktop notification and `<state>/install-guard.json`. `--install` copies the guard; an installed
+  copy from before it has no guard file and runs as before.
+
+### added (vulnscan: `stage-image`, end-of-life base images)
+
+- **`stage-image REPO`**: a new executor op that moves the Dockerfile `FROM` tag of an end-of-life official runtime
+  image (`python`, `ruby`, `golang`, `php`) to a supported release line of the same variant, for example
+  `python:3.9-slim` to `python:3.14-slim`: the newest supported line first released at least 90 days ago (S-10,
+  `images.LINE_MIN_AGE_DAYS`, `runtimes.newest_aged_release`). `images.upgrade_tag` computes it for the report's "→"
+  and the edit alike (the report's "→" for an end-of-life image now applies the same age rule). A full-patch tag
+  becomes that line's latest release. New module
+  `agentteams.vulnscan.image_fix`. It is constraint-relaxing (Rule 15), so **no existing grant covers it**: the
+  operator signs a grant that names it (`grant sign --op stage-image`; `--op` has no default).
+- It never touches `:latest` or untagged references (report-only), digest-pinned references, `ARG` defaults,
+  OS-tagged variants, compose files, databases, `node`, `eclipse-temurin`, or private and unlisted images, nor any
+  Dockerfile with a byte-order mark, a heredoc or an `escape` / `syntax` directive. Each such reference with a
+  finding gets an `image-held` row with its reason; an unreadable manifest gets a note. `images.refs` now splits
+  Dockerfile lines on `"\n"` only, as Docker does.
+- The staging calls take one `mode` (`"fix"`, `"major"`, `"image"`; `executor_pr.resolve_mode`): `major=True` with
+  any other mode raises `ValueError`.
+- `validate_diff(..., mode="image")` accepts only those `FROM` tag moves (`image_fix.check_from_edit`, offline). It
+  accepts no dependency file, and `stage-fix` / `stage-major` refuse any Dockerfile, so a base-image change is
+  never combined with a dependency fix.
+- Commit and PR: `security(image)!: MAJOR upgrade of end-of-life base images (<digest>)`, labelled `vulnscan-major`.
+  The body says CI must build the image and run the tests. The results and the staged state carry `"image": true`.
+- `close-superseded` closes only older PRs in the replacement's lane (`ops.lane_of`), so a base-image PR and a
+  dependency PR never supersede each other.
+- Futile retries are held per op (`retry_guard.IMAGE_FUTILE_DETAIL`). A Dependabot or Renovate docker PR holds its
+  image back (D1).
+- Fix plans mark a row `stage-image` where the op would move it. Agent guidance updated: template `invariant_core`
+  v5 and `daily_remediation` v8, the run task, and the MCP `request` description.
+
+### fixed (merge: a fence unedited since generation is never shrink-preserved)
+
+- **`--update --merge` no longer keeps a stale template body just because the new one "shrinks" it.** ops-team's
+  `vuln-remediation` `daily_remediation` fence was byte-identical to the 2026-10-23 render, yet every later update
+  preserved it (`lost concrete refs: failed, refused`: the old body backticked them, the v=6 body discusses them in
+  prose), so the agent ran a nine-day-old workflow until an operator passed `--shrink-allow`.
+- `build-log.json` now records **`fence_baseline`**: per file and fence, the SHA-256 of the fenced block agentteams
+  *authored* (the written block when it equals this run's render, else the previous record; never a preserved
+  hand edit). New module `agentteams.fence_baseline`. A shrinking fence whose on-disk block matches its record is
+  replaced, its old body still goes to the `.lost` sidecar, and the notice reads `replaced: unedited since
+  generation` (the dry-run plan reads `replaced`; `MergeResult.shrink_unedited`).
+- **Unchanged, by design (Rule 12):** an edited fence, a fence with no record (every build log before this
+  release, so the first update after upgrading still preserves), an interop projection marker, and any run with
+  no backup dir (`--no-backup`: no sidecar) keep today's preserve behaviour.
+
+### fixed (vulnscan: an unchanged off-registry lockfile entry no longer blocks `stage-fix`)
+
+- **`manifests.check_lock_edit`** refused every lockfile entry resolved off the registry allowlist, even one the
+  base already held unchanged, so after portal moved `xlsx` to 0.20.3 from `cdn.sheetjs.com` (the only fixed
+  release, published only there) every `stage-fix` for portal was refused. An `https://` off-registry entry with
+  a `sha512-` integrity now passes when it is identical to the base in every field (`resolved`, `integrity`,
+  `version`, dependency maps, `bin`, `hasInstallScript`, …), in the same section and under the same path key. A
+  new, moved, copied or changed off-registry entry, one without a `sha512-` integrity, and a plain-`http` or git
+  one stay refused, and the edited lockfile may no longer repeat a JSON key anywhere (`json.loads` keeps the
+  last copy; another reader might keep the first). npm `--package-lock-only` leaves such an entry alone without
+  fetching it (checked with npm 11.19 against a local mock registry, the CDN unreachable).
+- `check_lock_edit` now returns one note per kept entry (`"<rel>: unchanged off-registry entry kept: <key>
+  <url> (sha512-…)"`). `executor.validate_diff` now returns `DiffCheck(changed, kept_off_registry)` (was the
+  changed paths); `stage-fix` records the notes as `kept_off_registry` in its result and ledger row, and the
+  `open-pr` body lists each under *Off-registry sources kept unchanged*, so such a PR never reads as
+  registry-only.
+- **`stage-major` is unchanged:** it still refuses an off-registry base outright (S1, `npm_off_registry`), since
+  `npm install` re-resolves every `package.json` spec; tracked as `agentteams-remediation-log: stage-major-offregistry-base`
+  (any relaxation needs its own `@security` review).
+
+### fixed (vulnscan: `stage-fix` moves exact-peer groups and direct parents the audit fix leaves behind)
+
+- On 2026-11-01 `stage-fix` found "nothing fixable without a major jump" for data-quality-monitor and
+  traffic-file-enrichment-app although every fix was inside the declared ranges: `@vitest/coverage-v8` and `vitest`
+  pin each other's exact version as peers (so `vitest` and `@vitest/mocker` could not move alone), and `express
+  4.22.1` requires `qs ~6.14.0` (the fixed `qs` needs `express 4.22.3`, inside `^4.19.2`). `npm audit fix` without
+  `--force` takes neither.
+- **`npm_ops.npm_moves`** (new module `agentteams.vulnscan.npm_ops`; run by `fix_path` with `apply` after the audit
+  fix, with `fix.npm_fix` / `fix.advisory_counts` passed in): for each package still vulnerable whose fix is inside its caret range, the new `agentteams.vulnscan.npm_groups` (`LockGraph`, read from the
+  lockfile's own `dependencies` and exact `peerDependencies`, no built-in package list) names the packages to move
+  together: the exact-peer group, or each direct parent with its group. Each runs as `npm update --no-save <names>
+  --package-lock-only --ignore-scripts` (`npm_fix(..., update=)`, the audit fix's isolation, registry and cooldown;
+  names must be plain package names; `install` with `update` raises `ValueError`), so `package.json` and its ranges
+  never change. **Fail closed (security review):** no move runs outside the tools container, or when
+  `manifests.npm_off_registry` finds a non-registry source in `package.json` or the base or current lockfile
+  (`npm update <parent>` re-resolves that parent's spec). A move is kept
+  only when it removes an advisory occurrence and adds none, else the lockfile is restored byte for byte;
+  `manifests.check_lock_edit` still judges the result. Out-of-range fixes stay `major-held`.
+- **Retry guard:** the dry-run fix plan names each such move in the row's note (and the section note says the step
+  runs), so the plan digest `retry_guard` keys its hold on changes and the held repositories are retried once.
+  `npm_groups.py` and `npm_ops.py` join the enforcement integrity set; `semver_line` moves to `npm_ops` (the workspaces
+  check is `npm_major.in_workspaces`), and `manifests.npm_packages` / `npm_entry_name` are the one `packages` walk both readers use.
+
+### fixed (vulnscan: `stage-major` is requested in the run that can use it)
+
+- **`get_fix_plans` marks a plan whose next step is `stage-major`.** The executor serves requests after the agent's
+  run, so the agent never saw, in its own run, the held `stage-fix` ("nothing fixable without a major jump") that
+  makes `stage-major` applicable; it wrote "stage-major next run", and the next run requested `stage-fix` again
+  (held), every day. `executor_guard.write_plan_levels` now also records `major_next` in `plan-levels.json`: a
+  remediate-level repository whose last `stage-fix` failed that way and is still held at the current fix plan
+  (`retry_guard.major_next_since`; no `stage-major` row since), with no staged fix, no `fix` row, and `major-held`
+  rows `stage-major` can take (`executor_guard.stage_major_packages`: requirements pins, and npm packages
+  `package.json` lists directly outside npm workspaces; transitive-only rows never mark). The MCP server heads
+  such a plan with `stage-fix held since <date>: nothing fixable without a major jump → request stage-major`.
+  The `daily_remediation` fence (v=7) has the agent request `stage-major` for it in the same run, with every
+  existing guard kept. The executor still enforces every `stage-major` precondition itself.
+
+### added (vulnscan: scan mirrors)
+
+- **`scan_mirror`** (`vulnscan.json`, default `""`): the daily scan can read each repository's default branch from a
+  detached worktree `<repo>.worktrees/<name>` that an operator job refreshes, instead of a checkout that may sit on
+  an old feature branch. It is used only when `<state>/scan-mirrors/<date>.json` records it fresh today; findings,
+  fix plans and the checkout-freshness row stay named after the checkout (new *Scanned* column). New module
+  `agentteams.vulnscan.scan_mirror`.
+
+### added (vulnscan: `stage-major`, automatic semver-major upgrades delivered as PRs)
+
+- **`stage-major REPO`** (new executor op, `grant.OPS_V1`, `ops.REPO_OPS`): `stage-fix` with semver-major upgrades
+  allowed (operator decision 2026-10-31: remediation is automatic, majors included, as PRs CI must pass). It is
+  **constraint-relaxing** (Rule 15): only a grant that names it covers it; existing grants, and any grant naming
+  only `stage-fix`, do not. `executor.stage_fix(repo, cfg, *, major=False)` serves both ops.
+- **pip:** a vulnerable `==` pin may move to the smallest clean release on a new major (`fix_path(...,
+  allow_major=True)`, `PinChange.major`). **npm:** a `major-held` package `package.json` lists directly has its
+  `dependencies` / `devDependencies` spec raised to `^<fixed version>` in place (`agentteams.vulnscan.npm_major`,
+  formatting kept) and the lockfile re-resolved by `npm install --package-lock-only --ignore-scripts`
+  (`fix.npm_majors`, `npm_fix(..., install=True)`; same isolation and cooldown handling as the audit fix).
+  Transitive-only majors stay held with a note; npm workspaces stay refused.
+- **`validate_diff(..., major=True)`** accepts a `package.json` change only as raises of existing direct specs to
+  `^X.Y.Z` (`npm_major.check_package_json_edit`), and the lockfile root's dependencies only mirroring it
+  (`manifests.check_lock_edit(..., manifest=)`); `stage-fix` still refuses any `package.json` change. A
+  `stage-major` change with no major upgrade in it is refused (request `stage-fix`).
+- **Commit and PR:** `security(deps)!: major upgrade of known-vulnerable dependencies (<digest>)` with each
+  package `old → new` and a `BREAKING CHANGE:` footer; the staged state records `"major": true`. `open-pr` titles
+  it `security(deps)!: MAJOR upgrade ...`, says the upgrade may need code changes and that CI must cover it, and
+  labels it `vulnscan-major` (created when missing; a label that still cannot be applied never fails the PR). The
+  PR text and `gh pr create` moved to the new `agentteams.vulnscan.executor_pr`. Branches stay
+  `vulnscan/<YYYYMMDD>-<digest>`.
+- **Fail closed (security review):** `npm install` under `stage-major` is refused unless the tools container is
+  active and the base `package.json` / lockfile name only registry sources (`manifests.npm_off_registry`); an npm
+  error or unchanged lockfile after the `package.json` raise refuses the whole stage. Every executor PR body now
+  says it may be merged automatically once every check, a test check included, passes (the operator's auto-merge
+  job), so CI must cover it. `ExecError`, the git identity and the gh environments moved to the leaf module
+  `agentteams.vulnscan.executor_env` (re-exported by `executor`), ending the `executor` ↔ `executor_pr` import
+  cycle.
+- **No duplicate PRs (D1):** before `stage-fix` / `stage-major` stage a change, and again at `open-pr`, the
+  executor lists the repository's open PRs (`agentteams.vulnscan.open_prs`, read-only `gh pr list --state open`).
+  A package that a non-`vulnscan/*` PR (Dependabot, Renovate, a person) already updates, by its title or
+  `dependabot/` / `renovate/` branch, is left to it (`pr-held`, "left to #227"; `fix_path(..., skip=)`). When
+  nothing remains: `an open PR already updates <names> (#227, #228); not duplicated` (never held as futile).
+  Staging ignores a gh failure; `open-pr` fails closed. The staged state records `packages` and `left_to_prs`;
+  the PR body lists them.
+- **`retry_guard`:** the futile-retry hold is keyed on the op, so a held `stage-major` never holds `stage-fix` and
+  vice versa; `stage-major` records `nothing fixable even with a major upgrade` (`MAJOR_FUTILE_DETAIL`), never
+  "nothing fixable without a major jump". The `stage-fix` hold now points at `stage-major`.
+- **Agent guidance** (`vuln-remediation.template.md` `invariant_core` v4, `daily_remediation` v6; the run task;
+  the MCP `request` description): request `stage-major` only for a repository whose fix plan shows `major-held`
+  rows and whose `stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix. The
+  MCP server refuses a `stage-major` for a repository with a staged fix, as for `stage-fix`.
+
+### fixed (fleet: the pre-update snapshot goes to a ref, never onto the checked-out branch)
+
+- **`fleet._git_snapshot`** no longer runs `git commit` on the workspace's current branch. Run weekly against
+  live checkouts, that left local-only `chore(fleet): pre-update snapshot` commits on default branches
+  (data-quality-monitor 10, traffic-file-enrichment-app 17, colorado-collectors 4, …) while the real updates
+  arrived upstream as merged PRs, so the branches diverged and could no longer fast-forward. The snapshot is now
+  a commit built in a temporary index and kept under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace
+  hash>`: the branch, `HEAD`, the index and the working tree are untouched, no commit hook runs, a repository with no
+  commit yet is handled, and two workspaces in one repository get two refs. Since no pre-commit secret scanner
+  sees a ref, a workspace whose changed agent files hold a high-severity credential finding (`agentteams.scan`)
+  gets no snapshot, and a dirty workspace left without one is SKIPped, never updated. A post-update tree that cannot be built marks the target REVIEW. Snapshot commits already on
+  branches are not rewritten; each repository cleans those up on its own.
+- **Diff analysis is tree to tree** (`fleet._worktree_tree`; `_git_diff`, `_user_editable_deletions` and
+  `_classify` take the post-update tree): a file untracked before the update no longer counts as deleted, and a
+  file the update creates is now seen.
+- **`--fleet-allow-no-verify`** has no effect (accepted so invocations keep working); its help, the man page and
+  the CLI reference say so. The fleet API reference's rollback no longer suggests `reset --hard`.
+
+### added (vulnscan: unpinned Python requirements are checked by range, off by default)
+
+- **`agentteams.vulnscan.specifiers`** (new, stdlib): a minimal PEP 440 specifier set as version intervals
+  (`>=`, `<=`, `<`, `>`, `!=`, `~=`, `==`, `==x.*`; pre-releases excluded unless named) and `judge`, which
+  intersects it with an advisory's affected ranges: the whole allowed range, part of it, or none.
+- **`engine.scan_path(..., unpinned_ranges=False)`** and **`scan --unpinned-ranges`**: a `requirements*` file
+  with only ranges, or a `pyproject.toml` with no lock, has each direct requirement checked against every
+  advisory OSV holds for its name (`osv.package_ids`: a name-only `querybatch` query that omits the `version`
+  key; `osv.affected_intervals`: a new walker for `introduced` / `fixed` / `last_affected` / `limit`,
+  open-ended ranges and `versions[]`; an unknown event or a `GIT`-only range is "not judged", never clean).
+  Findings are a new kind, `range` (`Finding.spec`, `Finding.partial`; `version` stays empty and the
+  summary's Installed column blank). A whole-range finding has the advisory's severity; a partial one is
+  capped at MODERATE, after `unscored_as` (`Report.apply_unscored` now covers `range` findings); a range
+  overlapping a `MAL-*` record is CRITICAL but not malicious (no install is confirmed). The manifest stays
+  unscannable ("ranges checked against advisories: N direct requirement(s); …"); caps of 500 names and 2,000
+  advisory records per scan become `partial:` coverage notes; an OSV failure is a feed error.
+- **Egress:** it sends unpinned direct requirement names to OSV when `unpinned_ranges` is on; never to PyPI.
+  `private_packages` names, and whole files that name a package index (`--index-url` / `-i` /
+  `--extra-index-url`, also through `-r` / `-c` includes; poetry, uv and pdm sources in `pyproject.toml`), are
+  withheld (`"<repo>: <file> (private index)"`). When any requirements file or `pyproject.toml` of a repository
+  names an index (or cannot be read or parsed), every unpinned-range file of that repository is withheld too
+  (security review P-s1). Requirements files and `pyproject.toml` over 64 MiB are not read.
+- **Exit code:** range findings count toward `--fail-on`. With the feature on, a whole-range HIGH finding makes
+  `scan` (and the daily run) exit 1 where it exited 0 before; partial-range findings stay at most
+  MODERATE, below the default `high`.
+- Range findings are never routed to a fix (`stage-fix` edits only `==` pins); `summary.md` lists the
+  lower-bound raises under "Requirement ranges — plan-only (no staged edit)". The *Remediation effectiveness*
+  fixed/new counts leave them out and count them on their own line.
+- **`vulnscan.json` key `unpinned_ranges`** (boolean, default `false`): the daily run passes it to `scan_path`.
+
+### vulnscan (container base images: support status and pinning)
+
+- **New `agentteams.vulnscan.images`.** `scan_path` now reads each Dockerfile's `FROM` lines (multi-stage,
+  `--platform`, `ARG` defaults before the first `FROM`, labelled "ARG default; `--build-arg` may override") and each
+  compose service's `image:` (build services skipped), and judges the base image: official `python`, `node`, `php`,
+  `ruby`, `golang`, `eclipse-temurin`, `openjdk` (deprecated, LOW), `amazoncorretto` (`java-corretto`), .NET on
+  `mcr.microsoft.com`, `nginx`, `postgres`, `mysql`, `mariadb`, `redis`, and `ubuntu` / `debian` / `alpine` /
+  `amazonlinux`. An end-of-life release line is HIGH; a full-patch tag missing a security release of its line is
+  HIGH (a full-patch tag is never rebuilt, so the image keeps the vulnerable version); a full-patch tag otherwise
+  behind its line is MODERATE; `latest` or no tag is LOW; floating tags (`python:3`, `lts`) are listed as not judged, never fine. The OS in a tag (`-bookworm`,
+  `-jammy`, `-alpine3.18`) is judged for any public image, so `mcr.microsoft.com/playwright/python:v1.57.0-jammy`
+  gets Ubuntu 22.04 judged. Private-registry and local images are not judged and never named; only endoflife.date
+  slugs leave the machine.
+- **Image contents are still not scanned.** Each container manifest stays unscannable with the reason
+  `unsupported ecosystem: container images (layer contents not scanned; base image support status checked)`;
+  coverage states are unchanged.
+- **Findings of kind `image`** show as "base image" in `summary.md`. The fix plan lists them under
+  `## base images: <file> — plan-only (no staged edit)` (`FixResult.image_plan`, dry run only); nothing edits a
+  Dockerfile or compose file, and `executor.validate_diff` refuses such a change.
+- **Fleet-wide effect:** the next `daily` run adds base-image findings for every enrolled repository with a
+  Dockerfile or compose file (for example `python:3.9-slim` is HIGH), and an unreachable endoflife.date now also
+  makes those repositories' scans partial (exit 3).
+- **An endoflife.date outage is paid once per slug.** A slug whose v1 and v0 reads both fail is remembered as
+  failed for the rest of the run (`runtimes._eol_cycles`), so later image references and runtimes on it are
+  reported unchecked at once instead of each waiting out both timeouts (security review I-s1).
+
+### added (vulnscan: Go, pnpm, Bun, RubyGems, Gradle and NuGet lockfiles are scanned)
+
+- New `agentteams.vulnscan.lockfiles` (stdlib only): `go.mod` (`require` with `replace` applied; Go stdlib not
+  judged, go < 1.17 and `go.work` noted), `pnpm-lock.yaml` v6/v9 (a restricted line reader, no YAML library;
+  conservative dev scope), text `bun.lock` (JSONC), `Gemfile.lock` (rubygems.org gems), `gradle.lockfile` (Maven
+  `group:artifact`) and NuGet `packages.lock.json`. A hostile or malformed file (an unusual name or version, an
+  unknown lockfile version, over 64 MiB) is unscannable and never raises.
+- Fixes for them are plan-only: `fix.plan_lockfile` writes each tool's command under
+  `## <label>: <lock> — plan-only (no staged edit)`; `executor.validate_diff` refuses a change to any of them and
+  `executor_guard.refuse_plan_only` refuses a `stage-fix` where they are all a repository has.
+- Discovery: `go.mod` is scanned and `go.sum` beside it is no longer listed (alone it stays unsupported, `Go (go.sum
+  without go.mod)`); `bun.lock` now covers a `package.json` like `pnpm-lock.yaml`; `bun.lockb` stays unsupported.
+- `versions.version_key` orders Go pseudo-versions, RubyGems `.pre`, Maven qualifiers (`M`, `SNAPSHOT`, `RELEASE`,
+  `FINAL`, `GA`, `SP`) and NuGet four-part versions. `project_policy.is_private` stays case-insensitive for them.
+- Private names stay local without a brief (new `agentteams.vulnscan.private_sources`, security review): Go modules
+  matching `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB` (environment, then `go env` from `/` with `GOTOOLCHAIN=local`; Go's
+  prefix-glob rule), every NuGet package of a repository whose `nuget.config` (in it or a parent within the scan
+  root) names a non-nuget.org source, and pnpm/Bun names in an `.npmrc` scope with a non-npmjs registry are
+  `withheld` by `scan_path` and `fix_path` and never sent to OSV.
+- **`gradle.lockfile` is opt-in** (`scan --gradle-lockfiles`, `scan_path(gradle_lockfiles=True)`,
+  `fix_path(gradle_lockfiles=True)`): nothing tells a private Maven repository from Maven Central, so by default it
+  is unscannable, "gradle.lockfile not read (opt-in: …)". The daily run has no config key for it yet, so it never
+  reads one.
+
+### added (vulnscan: every common lockfile is detected)
+
+- `manifests.discover` now lists `Package.resolved` (SwiftPM), `Podfile.lock` (CocoaPods), `pubspec.lock` (Pub),
+  `mix.lock` (Hex), `bun.lock` / `bun.lockb` (Bun), `deno.lock` (Deno), `renv.lock` (CRAN), `stack.yaml.lock` /
+  `cabal.project.freeze` (Hackage), `conan.lock` and `vcpkg.json` (C/C++), a Julia `Manifest.toml` next to its
+  `Project.toml`, and `Gemfile` / `conanfile.*` without their lockfile. Each is reported `unsupported ecosystem:
+  <name>`, so a repository holding only these is in the coverage state *unsupported ecosystem* (Rule S-VM reports
+  it), never *nothing to scan*. None of them hides a `package.json` or `pyproject.toml` beside it.
+- `composer.json` and `Cargo.toml` without their lockfile are reported unscannable ("without a lockfile", with the
+  command that writes one), as `package.json` already was; a Cargo workspace member is covered by the root's
+  `Cargo.lock`.
+
+### vulnscan (a runtime product table: more runtimes, OS releases, unknown kinds reported)
+
+- **`runtimes.PRODUCTS`** replaces the hard-coded Node.js/PHP/Python list. Each row is a frozen `Product`: the
+  endoflife.date slug, the release-line rule (a part count, or a `cycle_fn` override), the security-release feed
+  and the local `Probe`s. New kinds: `ruby`, `go`, `java` (judged on Eclipse Temurin's support dates and labelled
+  so; `1.8.0_x` is line `8`), `java-corretto` (`amazon-corretto`, chosen by image name), `dotnet` (one item per
+  installed runtime), `nginx`, `openssl` (`1.1.1` is its own line), `postgresql`, `mysql`, `mariadb`, `redis` and
+  `docker` (`docker-engine`, server version only). Products without a security feed get `eol` and MODERATE
+  `behind-patch` only, and their detail says "no upstream security-release feed; judged on end-of-life and latest
+  patch only". `EOL_PRODUCT` stays as a derived dict; new public `cycle_of(kind, version)`.
+- **`runtimes.OS_PRODUCTS`, `OS_CODENAMES` and `evaluate_os(os_id, version_id, today=None)`** judge an OS release
+  (os-release `ID` or image name; Debian and Ubuntu codenames) on its release line alone.
+- **`engine.local_runtimes`** runs every `PRODUCTS` probe found on `PATH` (stdout, stderr or both; 20 s timeout,
+  `engine.PROBE_TIMEOUT`). `_version_of` is unchanged for its callers. A binary that is not the product
+  (LibreSSL's `openssl`) or whose version cannot be read is unscannable; `mysqld` is judged as MariaDB or MySQL
+  from its output.
+- **An unknown `RUNTIME` kind is reported** under `unscannable` ("runtime kind <kind> not judged by this vulnscan
+  version") instead of being dropped silently. An unknown release line or slug stays `unchecked`, never `ok`.
+- **Fleet-wide effect:** the next `daily` and `runtimes` run judge every new product found on this machine, so new
+  runtime findings can appear. A slug or release-line format endoflife.date does not use leaves that product
+  `unchecked` (a feed error, exit 3) until the table row is corrected; the operator's verification script checks
+  every slug before merge.
+- Docs: `api-reference/vulnscan.md` (`runtimes` section with the product table, `local_runtimes`, the config and
+  command tables).
+
+### vulnscan (server kit: more runtime and server-software probes, package origin, OS release and ESM check)
+
+- **`L1-audit.sh`** emits `RUNTIME` lines for `nginx`, `openssl` (LibreSSL is emitted as `libressl` and reported
+  as not judged), `postgresql` (the server binary; `psql` only when none is found), `mysql`/`mariadb` (from
+  `mysqld`/`mariadbd` output), `redis`, `ruby`, `go` (`GOTOOLCHAIN=local`), `java`/`java-corretto`, `dotnet` (one
+  line per runtime version) and `docker` (server version over the local socket only; no socket access is a plain
+  `INFO` line, never a `HOSTCHECK`). Each probe only prints a version, runs under `timeout 10` where `timeout`
+  exists, and reads `/dev/null` as stdin; a binary is run by its found path and reported by its resolved one.
+- **Package origin.** A dpkg- or rpm-owned binary's manager is `pkg:<package>` only when the installed version
+  comes from an allowlisted distro archive host (`apt-cache policy`'s `***` block; `dnf -C repoquery --installed
+  --qf '%{from_repo}'` or `yumdb`, resolved through `/etc/yum.repos.d`). Anything else, including a status-only
+  version such as a local `.deb`, is `repo:<host>:<package>` or `repo:unknown:<package>` and is judged against
+  upstream versions. Ubuntu universe/multiverse packages are `pkg:<package>:universe`. This also applies to the
+  existing php/node/python lines.
+- **`OSREL`** (`ID`, `VERSION_ID`, `PRETTY_NAME`; `/etc/os-release` is now parsed, never sourced) and, on Ubuntu,
+  **`ESM`** (esm-infra, esm-apps from `/var/lib/ubuntu-advantage/status.json`; `pro status` is never run).
+  `engine.scan_inventory` judges them: an end-of-life release is a HIGH `host` finding named `os-release`; an
+  Ubuntu release past standard support is HIGH without esm-infra, LOW with it, and MODERATE with it when a
+  universe runtime is present without esm-apps; an unknown `ID` is unscannable. An audit from an older kit has no
+  `OSREL` line and no OS result. New `runtimes.os_extended_support()`; endoflife.date's extended-support dates are
+  now read with each release line.
+- **`server_fixplan`**: an `os-release` finding gets its own section before the commands, "plan an OS release
+  upgrade; no kit lever applies"; non-Node runtimes in the L3 section say "upgrade through the package manager or
+  the vendor (no kit lever)". The kit's `--apply` paths are unchanged.
+- **Fleet-wide effect:** after the kit is re-staged, the next audit of each host can add OS release findings and
+  judge third-party-repository installs (nginx.org, PGDG, NodeSource, docker-ce, PPAs) that were `distro` before.
+- Workstation version probes run from `/` with `GOTOOLCHAIN=local`, an empty `GOFLAGS`, `DOCKER_HOST` pinned to the
+  local socket and `DOCKER_CONTEXT` dropped, as `L1-audit.sh` does on a host (security review R-s1).
+- `L1-audit.sh` runs `apt-cache policy` with its binary caches off, and its header states the one write a root run
+  may still make: `dnf -C repoquery` may append to dnf's own log (security review R-s2).
+- An Ubuntu release past standard support whose extended-support (ESM) data is unknown is HIGH, "ESM state
+  unknown", whatever its `ESM` line says: unknown never grades as covered (code-hygiene R3).
+- Tests: fake-binary L1 harness for the new probes, origins, `OSREL`/`ESM`; a read-only grep over `L1-audit.sh`
+  (no service, install, `/etc` write, `pro` or network verb). Docs: `api-reference/vulnscan.md`, the remediation
+  guide's kit table. The integrity manifest is re-recorded; the kit's own sha256s are computed at staging time.
+
 ### security (research hardening, follow-up to the briefing PR)
 
 - **`fetch_text` / `fetch_text_and_date` close the DNS-rebinding window.** The host is resolved once, every
@@ -253,9 +589,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `record --note` writes those files (a self-attestation, visible in the PR). `status` also prints an audit
   checklist of the files that mention each changed name.
 - **The `pre-commit` hook** gains an API-impact step (all teams; `git_hooks._render_hook_block`): it prints the
-  staged impact and never fails the commit. It needs Python 3.11+ and runs with `-P`. In the agentteams
-  repository, `git config agentteams.regenerateMan true` also makes it regenerate and stage `agentteams.1`
-  when the parser changes.
+  staged impact and fails the commit only in opt-in strict mode (below). It needs Python 3.11+ and runs with
+  `-P`. In the agentteams repository, `git config agentteams.regenerateMan true` also makes it regenerate and
+  stage `agentteams.1` when the parser changes.
+- **API documentation mapping** (`doc_pages`, `doc_status`, `DocStatus`): each impactful Python module is
+  matched by name to its tracked `*.md` pages (stem, case-insensitive, `-` read as `_`; symlinks,
+  dot-directories, the scratch, test, work-summary, reference and agent directories, `*/expected/` and
+  index/readme/changelog pages left out). Each module is `updated`, `not-updated` or `no-page`, with the added
+  names its pages do not mention (`undocumented`) and the removed names or modules a page still mentions
+  (`stale`). CLI options are not mapped. The hook prints an `API docs` line per module that needs attention
+  (at most 10).
+- **`status` API docs:** each unreviewed impactful commit gets an `API docs:` block, with a page counted as
+  updated when that commit or a later one in the range changed it (`CommitStatus.docs`; `--json` lists every
+  module). Exit codes are unchanged.
+- **Opt-in strict mode:** with `git config agentteams.apiDocsStrict true`, a commit that leaves a module's
+  page not updated, or adds a public module with new public names and no page, fails (`--pre-commit` exits 3;
+  new `pre_commit_check(repo, *, strict_capable)` returns `(message, blocked)`). The hook passes
+  `--strict-capable` and fails only on exit 3; a hook installed earlier cannot block and prints a re-install
+  notice instead. Bypass with `git commit --no-verify` or `git config agentteams.apiDocsStrict false`.
+  `references/api-impact.reference.md` `api_impact` fence v2.
 - **Orchestrator:** a new **API Impact Review** sub-protocol (scope → review and update the API → audit the
   related infrastructure → revise → record) and Workflow 11 gate **6b**, which runs before the push and keeps
   the session open as *API review pending* until the branch's impactful commits are reviewed

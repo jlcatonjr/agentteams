@@ -1,0 +1,8 @@
+{
+  "patch_id": "5323cdd2a97e48a6339bd3942b6a6ba71a20a990",
+  "commit": "7dd1eecd39ada05a1752c50aa9e1597d6c42b420",
+  "subject": "feat(vulnscan): scan_mirror \u2014 scan a fresh default-branch worktree, report under the checkout",
+  "impact": "1 modules added, 3 symbols added",
+  "note": "vauto A3 (operator decision 2026-10-31, scan mirrors): new module agentteams.vulnscan.scan_mirror (stamp_path, mirror_for, also_under), additive; new optional config key scan_mirror default off; no existing signature changed (daily._write_fix_plans is private)",
+  "recorded_at": "2026-10-31T15:52:48Z"
+}

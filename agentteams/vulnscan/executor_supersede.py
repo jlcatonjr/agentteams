@@ -8,7 +8,9 @@ that names the op (``open-pr`` never implies it):
 - **The replacement must exist.** It is the PR of the repository's newest successful ``open-pr`` in the
   MAC-chained ledger, and GitHub must report it open, with a ``vulnscan/*`` head in the same repository.
 - **Only the executor's own PRs are candidates:** URLs from earlier successful ``open-pr`` rows for the same
-  repository, in the same GitHub repository as the replacement (at most :data:`MAX_CANDIDATES`, newest).
+  repository, in the same GitHub repository as the replacement (at most :data:`MAX_CANDIDATES`, newest), and in the
+  replacement's **lane** (:func:`.ops.lane_of`): a ``stage-image`` (base image) PR and a dependency PR are disjoint
+  changes, so neither ever supersedes the other.
 - **Untouched by people.** A candidate is closed only when it is open, its head is a ``vulnscan/*`` branch in
   the same repository (not a fork), and it has no reviews, no comments and no commit whose author is not
   the executor's git identity. Anything else is kept and reported with the reason.
@@ -44,13 +46,26 @@ _VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits"
 
 def ledger_prs(repo: str, rows: list[dict[str, Any]]) -> list[str]:
     """Return the distinct PR URLs of ``repo``'s successful ``open-pr`` rows, oldest first (by latest mention)."""
-    out: dict[str, None] = {}
+    return list(ledger_lanes(repo, rows))
+
+
+def ledger_lanes(repo: str, rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Return ``{PR URL: lane}`` for ``repo``'s successful ``open-pr`` rows, oldest first (by latest mention).
+
+    Args:
+        repo: Canonical repository path.
+        rows: Ledger rows.
+
+    Returns:
+        The map; each lane (:func:`.ops.lane_of`) is the one of the URL's newest row.
+    """
+    out: dict[str, str] = {}
     for r in rows:
         url = ops.pr_of(r) if r.get("target") == repo else ""
         if url:
             out.pop(url, None)
-            out[url] = None   # re-insert: a re-claimed PR counts at its newest position
-    return list(out)
+            out[url] = ops.lane_of(r)   # re-insert: a re-claimed PR counts at its newest position
+    return out
 
 
 def head_problem(data: dict[str, Any]) -> str:
@@ -107,10 +122,11 @@ def close_superseded(repo: Path, rows: list[dict[str, Any]] | None = None, *,
     from agentteams.vulnscan import publish   # lazy: publish imports the executor
 
     look, shut = view or _view, close or _close
-    prs = ledger_prs(str(repo), ledger.read() if rows is None else rows)
-    if not prs:
+    lanes = ledger_lanes(str(repo), ledger.read() if rows is None else rows)
+    if not lanes:
         raise ex.ExecError("no remediation PR of this repository is recorded; nothing supersedes anything")
-    replacement = prs[-1]
+    replacement = list(lanes)[-1]
+    prs = [u for u, lane in lanes.items() if lane == lanes[replacement]]   # a base-image PR never supersedes a deps PR
     current = look(replacement)
     why = head_problem(current) or authored_problem(current, ex.GIT_IDENTITY)   # the executor's own PR
     if why:

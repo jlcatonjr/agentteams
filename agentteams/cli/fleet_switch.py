@@ -50,10 +50,8 @@ def add_fleet_arguments(parser: argparse.ArgumentParser) -> None:
         default=False,
         dest="fleet_allow_no_verify",
         help=(
-            "Allow snapshot commits to bypass pre-commit hooks (--no-verify / "
-            "core.hooksPath=/dev/null). Off by default — hooks run normally and a "
-            "warning is printed if a hook blocks the snapshot. Use this flag only "
-            "when workspace hooks are known-safe to skip (e.g., a commit-signing "
-            "hook that would reject the ephemeral internal snapshot commit)."
+            "No effect (kept so existing invocations work): fleet snapshots are "
+            "written to refs/agentteams/fleet-snapshots/ without git commit, so no "
+            "commit hook runs and nothing lands on the checked-out branch."
         ),
     )

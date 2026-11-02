@@ -1,0 +1,8 @@
+{
+  "patch_id": "55dfdfff6e7f4ae89d2c126e13824e1467d462bf",
+  "commit": "107a76a81b48ffe21e6c4c8c352f37b23e243b65",
+  "subject": "fix(vulnscan): keep an off-registry lockfile entry identical to the base (portal's CDN xlsx)",
+  "impact": "2 symbols changed",
+  "note": "validate_diff now returns DiffCheck(changed, kept_off_registry) instead of the changed-path list (callers: stage_fix unpacks it; worktree_fixes ignores the return; tests updated). check_lock_edit returns a list of notes (one per unchanged off-registry entry kept) instead of None; executor_pr.body gains kept=None. Docs (api-reference/vulnscan.md) and CHANGELOG updated.",
+  "recorded_at": "2026-11-01T22:21:05Z"
+}
