@@ -142,6 +142,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix plans mark a row `stage-image` where the op would move it. Agent guidance updated: template `invariant_core`
   v5 and `daily_remediation` v8, the run task, and the MCP `request` description.
 
+### fixed (merge: `--shrink-allow` applies under `--shrink-policy=halt`)
+
+- **A digest-matched `--shrink-allow` override now takes effect under `--shrink-policy=halt`.** The override
+  released its section ("template update applied"), but that section's own notice still counted as a shrink, so
+  halt refused the whole file and the override never applied. This repo's self-update hit it on
+  `references/api-impact.reference.md`, whose only "lost" ref was the hook command v2 extends with `--strict-capable`.
+- Halt now counts only notices for sections an override did not release, on both the real run and the dry-run
+  preflight. **Unchanged (Rule 12):** a file with any other shrinking section is still refused whole, the released
+  body still goes to its `.lost` sidecar, and overrides are still refused without a backup dir.
+
 ### fixed (merge: a fence unedited since generation is never shrink-preserved)
 
 - **`--update --merge` no longer keeps a stale template body just because the new one "shrinks" it.** ops-team's
