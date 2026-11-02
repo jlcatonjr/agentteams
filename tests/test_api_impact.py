@@ -114,6 +114,14 @@ def test_tests_docs_work_records_and_snapshots_are_not_impact(repo: Path):
     assert not ai.detect(repo).impactful
 
 
+def test_a_symbol_named_like_cli_is_a_symbol_not_a_flag(repo: Path):
+    # Only `cli:<flag>` keys are CLI options; `client` / `cli_main` used to raise IndexError in detect().
+    _write(repo, "pkg/core.py", "def run(a, b=1):\n    return a\n\ndef client():\n    pass\n\n"
+           "def cli_main():\n    pass\n\nclass Tool:\n    def go(self):\n        pass\n")
+    _git(repo, "add", "-A")
+    imp = ai.detect(repo)
+    assert imp.symbols_added == ["pkg/core.py::cli_main", "pkg/core.py::client"] and imp.cli_added == []
+
 def test_detect_on_a_commit_and_on_the_root_commit(repo: Path):
     _write(repo, "pkg/core.py", "def run(a):\n    return a\n")
     sha = _commit(repo, "narrow run")
