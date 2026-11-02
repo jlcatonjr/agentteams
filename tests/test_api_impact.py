@@ -262,3 +262,101 @@ def test_a_root_file_moved_into_docs_still_counts_as_a_structural_change(repo: P
     (repo / "docs").mkdir()
     _git(repo, "mv", "NOTES.txt", "docs/NOTES.txt")
     assert ("NOTES.txt", "docs/NOTES.txt") in ai.detect(repo).structural_renamed
+
+
+# --- status: API docs (plan api-doc-map, I1-2) -------------------------------------
+
+def _docs_repo(repo: Path) -> None:
+    _git(repo, "switch", "-q", "main")
+    _write(repo, "docs_src/core.md", "Call `run` to start.\n")
+    _commit(repo, "core page")
+    _git(repo, "switch", "-q", "feat/x")
+    _git(repo, "rebase", "-q", "main")
+
+
+def _status_output(repo: Path, capsys) -> tuple[int, str]:
+    capsys.readouterr()
+    rc = ai.main(["--repo", str(repo), "status"])
+    return rc, capsys.readouterr().out
+
+
+def test_status_reports_an_undocumented_added_symbol(repo: Path, capsys):
+    _docs_repo(repo)
+    _write(repo, "pkg/core.py", (repo / "pkg/core.py").read_text() + "\ndef new_api():\n    pass\n")
+    _commit(repo, "add new_api")
+    _, commits = ai.status(repo)
+    [ds] = [d for d in commits[0].docs if d.module == "pkg/core.py"]
+    assert ds.pages == ["docs_src/core.md"] and ds.state == "not-updated"
+    assert ds.undocumented == ["new_api"]
+    rc, out = _status_output(repo, capsys)
+    assert rc == 1
+    assert "\n  API docs:\n" in out
+    assert "    pkg/core.py: not-updated — docs_src/core.md; undocumented: new_api\n" in out
+
+
+def test_a_later_page_edit_in_the_range_counts_as_updated(repo: Path, capsys):
+    _docs_repo(repo)
+    _write(repo, "pkg/core.py", (repo / "pkg/core.py").read_text() + "\ndef new_api():\n    pass\n")
+    sha = _commit(repo, "add new_api")
+    _write(repo, "docs_src/core.md", "Call `run` or `new_api`.\n")
+    _commit(repo, "document new_api")
+    _, commits = ai.status(repo)
+    assert [c.commit for c in commits] == [sha]
+    [ds] = [d for d in commits[0].docs if d.module == "pkg/core.py"]
+    assert ds.state == "updated" and ds.undocumented == []
+    rc, out = _status_output(repo, capsys)
+    assert rc == 1
+    assert "API docs:" not in out
+
+
+def test_an_earlier_page_edit_does_not_count_for_a_later_commit(repo: Path):
+    _docs_repo(repo)
+    _write(repo, "docs_src/core.md", "Call `run` to begin.\n")
+    _commit(repo, "reword page")
+    _write(repo, "pkg/core.py", (repo / "pkg/core.py").read_text() + "\ndef new_api():\n    pass\n")
+    _commit(repo, "add new_api")
+    _, commits = ai.status(repo)
+    [ds] = [d for d in commits[-1].docs if d.module == "pkg/core.py"]
+    assert ds.state == "not-updated"
+
+
+def test_status_prints_no_page_for_a_new_module(repo: Path, capsys):
+    _write(repo, "pkg/fresh.py", "def fn():\n    pass\n")
+    _commit(repo, "add fresh")
+    _, commits = ai.status(repo)
+    [ds] = [d for d in commits[0].docs if d.module == "pkg/fresh.py"]
+    assert ds.state == "no-page" and ds.added_module and ds.pages == []
+    rc, out = _status_output(repo, capsys)
+    assert rc == 1
+    assert "  API docs:\n" in out
+    assert "\n    pkg/fresh.py: no-page" in out
+    assert "pkg/fresh.py: no-page —" not in out
+
+
+def test_reviewed_commits_carry_no_docs(repo: Path, capsys):
+    _write(repo, "pkg/fresh.py", "def fn():\n    pass\n")
+    _commit(repo, "add fresh")
+    assert ai.status(repo)[1][0].docs
+    ai.record(repo, "reviewed")
+    _commit(repo, "record review")
+    _, commits = ai.status(repo)
+    assert commits[0].reviewed and commits[0].docs == []
+    rc, out = _status_output(repo, capsys)
+    assert rc == 0
+    assert "API docs:" not in out
+
+
+def test_status_json_carries_every_docstatus(repo: Path, capsys):
+    _docs_repo(repo)
+    _write(repo, "pkg/core.py", "def run(a):\n    return a\n\nclass Tool:\n    def go(self):\n        pass\n")
+    _commit(repo, "narrow run")
+    _write(repo, "docs_src/core.md", "Call `run(a)` to start.\n")
+    _commit(repo, "update page")
+    capsys.readouterr()
+    rc = ai.main(["--repo", str(repo), "status", "--json"])
+    assert rc == 1
+    data = json.loads(capsys.readouterr().out)
+    docs = data["commits"][0]["docs"]
+    assert docs == [{"module": "pkg/core.py", "pages": ["docs_src/core.md"], "state": "updated",
+                     "added_module": False, "undocumented": [], "stale": [],
+                     "public_api": False}]

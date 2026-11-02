@@ -17,7 +17,7 @@ Two maps are refreshed, each under its own guard, plus an optional cache warm-up
 - agent files staged → `<agent-dir>/references/pipeline-graph.md` (agent topology, kept *with the team* — same location `--update`/emit writes — via [`graph`](graph.md))
 - `*.py` files staged → `references/architecture-graph.md` (repo-level module architecture, via [`architecture`](architecture.md))
 - (opt-in via `--code-index-hook`) script/dependency files staged → warm the [code & API index cache](code-index.md) (`references/code-index/`, gitignored — never staged) via `refresh_code_index()`
-- anything staged (deletions included) → `python3 -P -m agentteams.api_impact --pre-commit` ([`api-impact`](api-impact.md)): a one-line summary of the staged API impact, and in the agentteams repository with `git config agentteams.regenerateMan true` a regenerated, staged `agentteams.1`. Needs Python 3.11+; otherwise it prints `api-impact unavailable`. Never fails the commit.
+- anything staged (deletions included) → `python3 -P -m agentteams.api_impact --pre-commit --strict-capable` ([`api-impact`](api-impact.md)): a one-line summary of the staged API impact, a line for each module whose API page needs attention, and in the agentteams repository with `git config agentteams.regenerateMan true` a regenerated, staged `agentteams.1`. Needs Python 3.11+; otherwise it prints `api-impact unavailable`. The hook captures the step's exit code (`|| _at_api=$?`, safe under `set -e`). Exit 3 fails the commit, which happens only when the operator has opted in with `git config agentteams.apiDocsStrict true` ([strict mode](api-impact.md#strict-mode)); any other non-zero exit is ignored.
 
 > *Source: `agentteams/git_hooks.py`*
 
@@ -63,7 +63,8 @@ demand. Best-effort and non-raising.
 
 Write (or sentinel-merge) the refresh block into the repo's `pre-commit` hook,
 preserving any pre-existing hook body. Idempotent. The block is non-blocking
-(`|| true`) so a refresh failure never aborts a commit, and each guard fires only
+(`|| true`) so a refresh failure never aborts a commit; the one exception is the
+API-impact step's exit 3 in opt-in strict mode. Each guard fires only
 when relevant files are staged. Resolves the hooks directory via
 `git rev-parse --git-path hooks` (honours `core.hooksPath`, worktrees, submodules).
 `code_index_hook` (default `False`) additionally installs the opt-in code-index
@@ -104,7 +105,7 @@ The installed hook calls `python -m agentteams.git_hooks --refresh` /
 ## Env-file guard (blocking)
 
 The same install also writes an `AGENTTEAMS:env-file-guard` block **before** the refresh block, which stays last
-and non-blocking. The guard refuses a commit that adds, copies, modifies or renames an env file: a basename
+and non-blocking (apart from API-docs strict mode). The guard refuses a commit that adds, copies, modifies or renames an env file: a basename
 `.env`, `.env.<suffix>` or `<name>.env`. Placeholders (`.example` / `.sample` / `.template`) are exempt, and so are
 deletions, so a `git rm --cached` untracking commit passes. It saves `$?` on entry and restores it on exit, so a
 failing earlier hook body still fails the hook. The guard can be skipped with `git commit --no-verify`, and a clone

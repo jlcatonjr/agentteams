@@ -482,9 +482,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `record --note` writes those files (a self-attestation, visible in the PR). `status` also prints an audit
   checklist of the files that mention each changed name.
 - **The `pre-commit` hook** gains an API-impact step (all teams; `git_hooks._render_hook_block`): it prints the
-  staged impact and never fails the commit. It needs Python 3.11+ and runs with `-P`. In the agentteams
-  repository, `git config agentteams.regenerateMan true` also makes it regenerate and stage `agentteams.1`
-  when the parser changes.
+  staged impact and fails the commit only in opt-in strict mode (below). It needs Python 3.11+ and runs with
+  `-P`. In the agentteams repository, `git config agentteams.regenerateMan true` also makes it regenerate and
+  stage `agentteams.1` when the parser changes.
+- **API documentation mapping** (`doc_pages`, `doc_status`, `DocStatus`): each impactful Python module is
+  matched by name to its tracked `*.md` pages (stem, case-insensitive, `-` read as `_`; symlinks,
+  dot-directories, `tmp/`, `tests/`, `test/`, `workSummaries/`, `references/`, `agents/`, `*/expected/` and
+  index/readme/changelog pages left out). Each module is `updated`, `not-updated` or `no-page`, with the added
+  names its pages do not mention (`undocumented`) and the removed names or modules a page still mentions
+  (`stale`). CLI options are not mapped. The hook prints an `API docs` line per module that needs attention
+  (at most 10).
+- **`status` API docs:** each unreviewed impactful commit gets an `API docs:` block, with a page counted as
+  updated when that commit or a later one in the range changed it (`CommitStatus.docs`; `--json` lists every
+  module). Exit codes are unchanged.
+- **Opt-in strict mode:** with `git config agentteams.apiDocsStrict true`, a commit that leaves a module's
+  page not updated, or adds a public module with new public names and no page, fails (`--pre-commit` exits 3;
+  new `pre_commit_check(repo, *, strict_capable)` returns `(message, blocked)`). The hook passes
+  `--strict-capable` and fails only on exit 3; a hook installed earlier cannot block and prints a re-install
+  notice instead. Bypass with `git commit --no-verify` or `git config agentteams.apiDocsStrict false`.
+  `references/api-impact.reference.md` `api_impact` fence v2.
 - **Orchestrator:** a new **API Impact Review** sub-protocol (scope → review and update the API → audit the
   related infrastructure → revise → record) and Workflow 11 gate **6b**, which runs before the push and keeps
   the session open as *API review pending* until the branch's impactful commits are reviewed
