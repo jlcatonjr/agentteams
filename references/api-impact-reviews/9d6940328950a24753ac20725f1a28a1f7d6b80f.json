@@ -1,0 +1,8 @@
+{
+  "patch_id": "9d6940328950a24753ac20725f1a28a1f7d6b80f",
+  "commit": "680d49e6b384fa1488f9f0aae0e5dedf52da4bb8",
+  "subject": "docs(rules): Phases 3-4 conflict-audit follow-ups; frozen targets reported",
+  "impact": "1 symbols added, 1 symbols changed, 2 schemas changed",
+  "note": "Cross-surface Phases 1-4 (PRs #356-#359). Reviewed every added/changed public symbol, CLI flag (--sync-project-rules, --doctor) and schema key (memory_index_extra_files, project_rules_source, frozen_surfaces in the team manifest) against docs_src/api-reference, cli-reference, the man page and CHANGELOG; @conflict-auditor ran per phase. Open flags resolved in the final tree: cli/post_build.py is a cli module (no api page by the parity rule); can_write_run was replaced by the documented capability().",
+  "recorded_at": "2026-11-02T21:24:04Z"
+}
