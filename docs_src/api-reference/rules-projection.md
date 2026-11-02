@@ -21,6 +21,7 @@ source region in every other enabled provider's entry file. It runs after every 
 | `rules_body(text)` | The operator's own rules: the Rules region without its heading, the USER-EDITABLE note and any projected block. |
 | `find_source(root, configured)` | The source file and its rules. `configured` must be one of `SOURCE_CANDIDATES`; without it, the source the copies record, else the only candidate with rules of its own. Raises `ValueError` rather than let the source move, or choose between two files with rules. |
 | `targets(root, source, frozen)` | The entry files to project into; frozen surfaces and the source itself left out. |
+| `frozen_targets(root, source, frozen)` | The targets left out because a frozen surface owns them; reported as `skipped`, never written. |
 | `table_of_contents(body)` | The rules' titles (headings, else bold list leads, else list items). |
 | `projection_content(source, body, mode)` | The block's text: the rules (`copy`) or a binding reference (`reference`). |
 | `project(root, *, configured, frozen, write)` | Project into every target. Returns a `Report` with one `Outcome` per target (`current`, `updated`, `added`, `refused`, `skipped`); `Report.drift` is what `--check` fails on. |
