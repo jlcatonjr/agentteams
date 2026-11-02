@@ -28,7 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unowned or third-party files in OS paths are judged upstream.** A finding with any location `unowned` or
   `repo:…` gets no verdict and loses `distro`, so it now counts toward `--fail-on` (it was excluded as OS-managed).
   A PyPI version that is not the owning package's upstream version gets no verdict either.
-- A failed Ubuntu query or an unreadable Ubuntu record is a feed error (exit 3), never a verdict.
+- A failed Ubuntu query, an unreadable Ubuntu record, or an advisory record the CVE join cannot read (either
+  distro) is a feed error (exit 3), never a verdict. Package names in feed-error text are capped code spans.
 
 ### added (vulnscan server kit: distro sources, not-live labels, held interpreters; plans vfr-a A1, vfr-e E1/E2b, vfr-r R4)
 

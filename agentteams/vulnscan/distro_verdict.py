@@ -5,7 +5,7 @@ and Amazon Linux backport fixes without changing the upstream version. This modu
 the distribution says about each of the finding's advisories. The upstream row, severity, key and exit code stay as
 they were (Rule 12); a verdict is :attr:`Finding.distro_verdict` and :attr:`Finding.distro_note`.
 
-Verdicts (:data:`VERDICTS`), per advisory and then the worst across a finding's advisories:
+Verdicts (:data:`report.DISTRO_VERDICTS`), per advisory and then the worst across a finding's advisories:
 
 | Verdict | Meaning |
 |---|---|
@@ -35,8 +35,8 @@ distribution's status for that CVE and the owning package from the ``DISTROPKG``
 No verdict (and a note saying why) when the owning package's origin is not an allowlisted distro archive
 (``unowned``, ``repo:<host>:…``: the vlc-n5 Revision 3 rule), when the PyPI version is not the package's own
 upstream version (the file is not the package's), when no ``DISTROPKG`` line covers a location, for a release
-neither feed covers, or when a feed could not be read. An OSV failure (Ubuntu) is a feed error (``Report.feed_errors``, exit
-3), never "not affected". A finding with any location ``unowned`` or ``repo:`` is not (only) OS-managed: it loses
+neither feed covers, or when a feed could not be read. An OSV failure (an Ubuntu query or record, or an advisory
+record the CVE join needs, on either distro) is a feed error (``Report.feed_errors``, exit 3), never "not affected". A finding with any location ``unowned`` or ``repo:`` is not (only) OS-managed: it loses
 ``distro`` and is judged upstream like any other install, the stricter direction.
 """
 
@@ -47,12 +47,11 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from agentteams.vulnscan import _http, osv
-from agentteams.vulnscan.report import DISTRO_VERDICTS, UPDATEINFO_CHECK, Finding, Report
+from agentteams.vulnscan.report import DISTRO_VERDICTS, UPDATEINFO_CHECK, Finding, Report, _code
 from agentteams.vulnscan.versions import version_key
 
-#: Verdicts, best first: a finding takes the worst of its advisories' verdicts.
-VERDICTS = DISTRO_VERDICTS
-_RANK = {v: i for i, v in enumerate(VERDICTS)}
+#: Rank of each verdict (report.DISTRO_VERDICTS, best first): a finding takes the worst of its advisories'.
+_RANK = {v: i for i, v in enumerate(DISTRO_VERDICTS)}
 #: ``UPDATEINFO`` passes: ``dnf -C updateinfo list --security --installed`` and ``--available``.
 UPDATEINFO_PASSES = ("installed", "available")
 _CVE = re.compile(r"^CVE-\d{4}-\d{4,}$")
@@ -220,6 +219,11 @@ def _entry_fixes(record: object, ecosystem: str, source: str) -> list[tuple[str,
     return out
 
 
+def _name(f: Finding) -> str:
+    """A finding's package name for feed-error text, which the summary renders as is: capped, as a safe code span."""
+    return _code(f.name[:80])
+
+
 def _versions(vals: list[str]) -> str:
     """Up to two fix versions as text (record order; dpkg/rpm versions are not ordered here, OSV ordered them)."""
     uniq = list(dict.fromkeys(vals))
@@ -320,7 +324,7 @@ def _ubuntu(target: str, version_id: str, esm: tuple[str, str] | None, cands: li
         try:
             verdict, notes = _judge(c, one, "Ubuntu")
         except _http.FeedError as exc:
-            report.feed_errors.append(f"{target}: Ubuntu record for {c.finding.name}: {exc}")
+            report.feed_errors.append(f"{target}: Ubuntu record for {_name(c.finding)}: {exc}")
             c.finding.distro_note = "no distro verdict: an advisory record could not be read (feed error)"
             continue
         c.finding.distro_verdict = verdict
@@ -360,7 +364,12 @@ def _al2023(target: str, ups: list[UpdateInfo], reads: dict[str, str], age: str,
         return None
 
     for c in cands:
-        verdict, notes = _judge(c, one, "ALAS")
+        try:
+            verdict, notes = _judge(c, one, "ALAS")   # an advisory's CVE ids may need its OSV record
+        except _http.FeedError as exc:
+            report.feed_errors.append(f"{target}: advisory record for {_name(c.finding)} (AL2023): {exc}")
+            c.finding.distro_note = "no distro verdict: an advisory record could not be read (feed error)"
+            continue
         c.finding.distro_verdict = verdict
         c.finding.distro_note = f"AL2023 updateinfo (cache {age} h old): {notes}"
 

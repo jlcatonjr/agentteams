@@ -12,6 +12,8 @@ import pytest
 from agentteams.vulnscan import _http, distro_verdict, engine, osv
 from agentteams.vulnscan.report import Report
 from tests.test_vulnscan_core import Feed, _adv
+from tests.test_vulnscan_server_kit import Kit, _host, kit  # noqa: F401  (kit: fixture)
+from tests.test_vulnscan_server_kit_vfr import _run
 
 DP = "/usr/lib/python3/dist-packages"
 STD, PRO = "Ubuntu:22.04:LTS", "Ubuntu:Pro:22.04:LTS"
@@ -235,7 +237,7 @@ def test_an_unreadable_ubuntu_record_is_a_feed_error(dfeed: DistroFeed, monkeypa
     rep = engine.scan_inventory(VK_API, "vk-api")
     c = _by(rep)["certifi"]
     assert c.distro_verdict == "" and "feed error" in c.distro_note
-    assert any("Ubuntu record for certifi" in e for e in rep.feed_errors)
+    assert any("Ubuntu record for `certifi`" in e for e in rep.feed_errors)
     assert _by(rep)["PyJWT"].distro_verdict == "fixed-in-installed"       # the others are still judged
 
 
@@ -376,6 +378,57 @@ def test_al2023_unread_updateinfo_without_package_findings_adds_nothing(dfeed: D
     assert rep.findings == [] and rep.feed_errors == []   # nothing to judge: no verdict lost, no check needed
 
 
+def test_al2023_an_unreadable_advisory_record_is_a_feed_error_not_a_crash(
+        dfeed: DistroFeed, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The CVE join may read an advisory's OSV record again (after analyze); that read failing is a feed error."""
+    _bastion(dfeed)
+    real_details, real_analyze = osv.details, engine.analyze
+    joined = {"on": False}
+
+    def details(vid: str) -> dict:
+        if joined["on"] and vid == "GHSA-r":
+            raise _http.FeedError("HTTP 503")
+        return real_details(vid)
+
+    def analyze(*a: object, **kw: object) -> None:   # the upstream grading reads the feed while it is healthy
+        real_analyze(*a, **kw)
+        osv._DETAILS.pop("GHSA-r", None)
+        joined["on"] = True
+    monkeypatch.setattr(osv, "details", details)
+    monkeypatch.setattr(engine, "analyze", analyze)
+    rep = engine.scan_inventory(BASTION, "vk-bastion")
+    by = _by(rep)
+    assert by["requests"].distro_verdict == "" and "feed error" in by["requests"].distro_note
+    assert by["requests"].severity == 2                                   # the upstream grade stands
+    assert any("advisory record for `requests` (AL2023): HTTP 503" in e for e in rep.feed_errors), rep.feed_errors
+    assert by["urllib3"].distro_verdict == "fixed-in-installed"          # the others are still judged
+    assert rep.exit_code("high") == 3
+
+
+def test_a_hostile_package_name_is_inert_in_feed_error_text(
+        dfeed: DistroFeed, monkeypatch: pytest.MonkeyPatch) -> None:
+    _vk_api(dfeed)
+    evil = "certifi`](https://evil.example/x)|<img src=x>" + "A" * 200
+    inv = VK_API.replace("\tcertifi\t", f"\t{evil}\t")
+    dfeed.vulns[("PyPI", evil, "2020.6.20")] = dfeed.vulns.pop(("PyPI", "certifi", "2020.6.20"))
+    dfeed.records["PYSEC-cert"]["affected"][0]["package"]["name"] = evil
+    real = osv.details
+
+    def details(vid: str) -> dict:
+        if vid == "UBUNTU-CVE-2023-37920":
+            raise _http.FeedError("HTTP 503")
+        return real(vid)
+    monkeypatch.setattr(osv, "details", details)
+    rep = engine.scan_inventory(inv, "vk-api")
+    err = next(e for e in rep.feed_errors if "Ubuntu record for" in e)
+    span = err.split("Ubuntu record for ", 1)[1].rsplit(": HTTP 503", 1)[0]
+    assert span.startswith("`") and span.endswith("`") and span.count("`") == 2, span
+    assert "|" not in span and len(span) <= 82
+    md = rep.markdown()
+    line = next(ln for ln in md.splitlines() if "Ubuntu record for" in ln)
+    assert line.count("`") == 2 and "|" not in line.split("Ubuntu record for", 1)[1]
+
+
 # ---------------------------------------------------------------- helpers
 
 @pytest.mark.parametrize(("vid", "want"), [
@@ -405,8 +458,6 @@ def test_rpm_name_and_malformed_lines() -> None:
 
 # ---------------------------------------------------------------- L1-audit.sh: the AL2023 updateinfo emitter
 
-from tests.test_vulnscan_server_kit import Kit, _host, kit  # noqa: E402, F401  (kit: fixture)
-from tests.test_vulnscan_server_kit_vfr import _dist, _run  # noqa: E402
 
 
 def _fake_dnf(installed: str, available: str, *, fail: str = "", log: str = "/dev/null") -> str:

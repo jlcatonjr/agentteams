@@ -707,7 +707,7 @@ def scan_inventory(text: str, target: str) -> Report:
         elif tag == "UPDATEINFO" and (up := distro_verdict.parse_updateinfo(parts)) is not None:
             updateinfo.append(up)
         elif tag == "UPDATEINFOREAD" and len(parts) == 3 and parts[1] in distro_verdict.UPDATEINFO_PASSES:
-            # one failed line for a pass wins over an ok one: a doubtful read is a feed error, never "no advisory"
+            # one failed line for a pass wins over an ok one: a doubtful read gives no verdict, never "no advisory"
             updateinfo_read[parts[1]] = parts[2] if updateinfo_read.get(parts[1], "ok") == "ok" else "failed"
         elif tag == "AUTOUPD" and len(parts) == 4:
             autoupd.setdefault((parts[1], parts[2]), parts[3])

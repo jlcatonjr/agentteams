@@ -28,13 +28,13 @@ PARTIAL_RANGE_CAP = SEVERITY_RANK["MODERATE"]
 #: How the summary names a finding kind where it differs from the kind (``range``: an unpinned requirement
 #: range, :mod:`.specifiers`; ``image``: a container base image, :mod:`.images`).
 KIND_LABEL = {"range": "requirement range", "image": "base image"}
-#: Heads the summary's list of lower-bound raises for range findings (never staged: ``stage-fix`` edits only
-#: ``==`` pins).
 #: Distro verdicts of an OS-managed package finding (:mod:`.distro_verdict`), best first.
 DISTRO_VERDICTS = ("fixed-in-installed", "fix-available-not-installed", "esm-only", "no-distro-fix")
 #: ``Finding.name`` of the LOW host check for an AL2023 updateinfo pass that was not read (:mod:`.distro_verdict`);
 #: the summary's distro-verdict section names it too.
 UPDATEINFO_CHECK = "distro-updateinfo"
+#: Heads the summary's list of lower-bound raises for range findings (never staged: ``stage-fix`` edits only
+#: ``==`` pins).
 RANGE_PLAN_NOTE = ("`stage-fix` never edits a requirement range (it changes only `==` pins), so these rows are for a "
                    "person: raise the lower bound, or better, pin with a lock. The installed version is unknown.")
 

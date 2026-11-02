@@ -1482,7 +1482,7 @@ located at each) and feed errors. `engine.scan_path` calls it for every containe
 Distro verdicts for Python packages in OS-managed paths (plan vfr-a A2), called by `engine.scan_inventory` after
 the package findings exist. Each finding with `DISTROPKG` lines for all its locations gets `Finding.distro_verdict`
 and `Finding.distro_note`; its row, severity, key and exit-code treatment do not change (Rule 12). Verdicts
-(`VERDICTS`, best first) are judged per advisory, joined on its CVE ids (the id, or its OSV record's `aliases` and
+(`report.DISTRO_VERDICTS`, best first) are judged per advisory, joined on its CVE ids (the id, or its OSV record's `aliases` and
 `upstream`): the best among one advisory's CVE ids, the worst across its owning packages and across advisories.
 
 - **Ubuntu**: OSV's `Ubuntu:<release>[:LTS]` and `Ubuntu:Pro:<release>[:LTS]` ecosystems (`ubuntu_ecosystems`), by
