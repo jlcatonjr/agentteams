@@ -44,7 +44,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, osv, private_sources, project_policy, runtimes, specifiers
+from agentteams.vulnscan import (_http, images, offnpm_sources, osv, private_sources, project_policy, runtimes,
+                                 specifiers)
 from agentteams.vulnscan.manifests import REQ_SCAN_NAME, Dep, Manifest, discover, parse
 from agentteams.vulnscan.report import OS_RELEASE, PARTIAL_RANGE_CAP, Finding, Report
 from agentteams.vulnscan.versions import version_key
@@ -144,6 +145,90 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
                 malformed=malformed, fix_hidden=hidden,
                 count_dev=dev_policy.get(target) if scope == "dev" else None,
                 detail="MALICIOUS package version (OSV MAL-*)" if malicious else ""))
+
+
+#: An npm dependency resolved from an allowlisted non-npm source: (target label, dependency, the source row).
+SourceItem = tuple[str, Dep, offnpm_sources.Source]
+
+
+def analyze_sources(items: list[SourceItem], report: Report, *,
+                    dev_policy: dict[str, bool] | None = None) -> None:
+    """Grade npm dependencies installed from allowlisted non-npm sources on their advisories' ranges (vfr-e.E3).
+
+    Each distinct name goes to OSV without a version (:func:`osv.package_ids`), and every advisory is judged
+    against the installed version (:func:`offnpm_sources.judge`). The entry is then ``fixed``, ``vulnerable``
+    or ``unknown`` (:data:`offnpm_sources.GRADES`):
+
+    - ``vulnerable`` or ``unknown``: a ``package`` finding at the advisories' severity, as :func:`analyze` makes
+      one, its detail naming the source, the grade and each unknown advisory's reason; an unknown advisory counts
+      as one without a fix;
+    - ``fixed`` (or no advisory at all): no finding.
+
+    Every entry, whatever its grade, is listed in ``report.sources`` ("<target>: <name> <version> from <host>:
+    <grade> ..."), so none is silently clean. A feed failure goes to ``report.feed_errors`` (never clean).
+
+    Args:
+        items: The dependencies, each with its matching :class:`offnpm_sources.Source`.
+        report: Report to extend; ``checked`` counts the distinct (name, version, source) entries.
+        dev_policy: Per target, the project's ``include_dev``.
+    """
+    dev_policy = dev_policy or {}
+    by_key: dict[tuple[str, str, str], list[SourceItem]] = defaultdict(list)
+    for it in items:
+        by_key[(it[1].name, it[1].version, it[2].host)].append(it)
+    report.checked += len(by_key)
+    try:
+        hits = osv.package_ids(sorted({("npm", name) for name, _v, _h in by_key}))
+    except _http.FeedError as exc:
+        report.feed_errors.append(f"OSV query for {report.target} (allowlisted non-npm sources): {exc}")
+        for (name, ver, host), group in sorted(by_key.items()):
+            for target in sorted({t for t, _d, _s in group}):
+                report.sources.append(f"{target}: {name} {ver} from {host}: unknown (the OSV query failed)")
+        return
+    fetched = _fetch_details(sorted({i for ids in hits.values() for i in ids}), report)
+    for (name, ver, host), group in sorted(by_key.items()):
+        src = group[0][2]
+        ids = hits.get(("npm", name), [])
+        affected: list[tuple[str, str]] = []   # (id, fix or "")
+        unknown: list[tuple[str, str]] = []    # (id, why)
+        for vid in ids:
+            rec = fetched.get(vid)
+            verdict, info = (offnpm_sources.judge(rec, name, ver) if rec is not None
+                             else ("unknown", "advisory record unavailable"))
+            if verdict == "affected":
+                affected.append((vid, info))
+            elif verdict == "unknown":
+                unknown.append((vid, info))
+        grade = "vulnerable" if affected else "unknown" if unknown else "fixed"
+        counted = (f"{len(affected)} affected, {len(unknown)} unknown, of {len(ids)} advisory(ies) judged on "
+                   "their ranges" if ids else "no advisory names the package")
+        per_target: dict[str, list[Dep]] = defaultdict(list)
+        for target, d, _s in group:
+            per_target[target].append(d)
+        for target in sorted(per_target):
+            report.sources.append(f"{target}: {name} {ver} from {host}: {grade} ({counted})")
+        if grade == "fixed":
+            continue
+        flagged = [v for v, _i in affected] + [v for v, _i in unknown]
+        records = [fetched[v] for v in flagged if fetched.get(v) is not None]
+        ranks = [osv.severity(r) for r in records]
+        rated = max(ranks, default=0)
+        unscored = ranks.count(0) + len(flagged) - len(records)
+        malicious = any(osv.is_malicious(v) for v, _i in affected)
+        fixes = [f for _v, f in affected if f]
+        why = "; ".join(f"{v}: {i}" for v, i in unknown[:3]) + ("; …" if len(unknown) > 3 else "")
+        detail = (f"resolved from {host} (allowlisted non-npm source, {src.publisher}); graded on the npm "
+                  f"advisories' ranges: {grade}" + (f" — unknown: {why}" if unknown else ""))
+        for target, ds in sorted(per_target.items()):
+            scope = "runtime" if any(d.scope == "runtime" for d in ds) else "dev"
+            report.findings.append(Finding(
+                kind="package", target=target, name=name, version=ver, ecosystem="npm", scope=scope,
+                severity=4 if malicious else max(rated, UNSCORED_DEFAULT if unscored else 0),
+                fix=max(fixes, key=version_key) if fixes else "",
+                unfixed=len(flagged) - len(fixes), ids=sorted(flagged), locations=sorted({d.source for d in ds}),
+                malicious=malicious, rated=rated, unscored=unscored,
+                count_dev=dev_policy.get(target) if scope == "dev" else None,
+                detail="MALICIOUS package version (OSV MAL-*); " + detail if malicious else detail))
 
 
 @dataclass
@@ -324,6 +409,10 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     sent to OSV (``withheld``, ``"<repo>: <name> (<ecosystem>)"``); ``include_dev`` decides whether the
     repository's dev-only findings count.
 
+    An npm lockfile entry whose ``resolved`` URL is on an allowlisted non-npm source (:mod:`.offnpm_sources`, e.g.
+    SheetJS's CDN ``xlsx``) is graded on its advisories' ranges instead (:func:`analyze_sources`) and listed in
+    ``sources``; any other entry is queried by exact version.
+
     The repository's own tooling withholds names too (:mod:`.private_sources`): Go modules matching
     ``GOPRIVATE`` / ``GONOPROXY`` / ``GONOSUMDB``, every NuGet package of a repository whose ``nuget.config`` names
     a non-nuget.org source, and pnpm/Bun names in an ``.npmrc`` scope with a non-npmjs registry. A
@@ -349,6 +438,7 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     root = root.resolve()
     report = Report(target=str(root))
     deps: list[tuple[str, Dep]] = []
+    source_items: list[SourceItem] = []   # npm entries resolved from an allowlisted non-npm source (E3)
     policies = project_policy.PolicyCache()
     dev_policy: dict[str, bool] = {}
     ranges: list[RangeItem] = []
@@ -396,9 +486,13 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
                 label = f"{target}: {d.name} ({d.ecosystem})"
                 if label not in report.withheld:
                     report.withheld.append(label)
+            elif d.ecosystem == "npm" and d.resolved and (src := offnpm_sources.match(d.name, d.version, d.resolved)):
+                source_items.append((target, Dep(d.ecosystem, d.name, d.version, d.scope, rel, d.resolved), src))
             else:
                 deps.append((target, Dep(d.ecosystem, d.name, d.version, d.scope, rel)))
     analyze(deps, report, dev_policy=dev_policy)
+    if source_items:
+        analyze_sources(source_items, report, dev_policy=dev_policy)
     ranges = _withhold_index_repos(root, index_files, ranges, range_files, report)
     if ranges:
         notes = analyze_ranges(ranges, report, dev_policy=dev_policy)

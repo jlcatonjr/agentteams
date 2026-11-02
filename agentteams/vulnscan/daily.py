@@ -726,10 +726,10 @@ def _under(root_s: str, target: str) -> str:
 
 
 def _prefix_policy_labels(rep: Report, root_s: str) -> None:
-    """Name the repositories in ``opted_out``, ``brief_off``, ``excluded`` and ``withheld`` under the root, as findings are."""
+    """Name the repositories in ``opted_out``, ``brief_off``, ``excluded``, ``withheld`` and ``sources`` under the root."""
     rep.opted_out = [_under(root_s, t) for t in rep.opted_out]
     rep.brief_off = [_under(root_s, t) for t in rep.brief_off]
-    for name in ("excluded", "withheld"):
+    for name in ("excluded", "withheld", "sources"):
         setattr(rep, name, [f"{_under(root_s, t)}: {rest}" for t, _s, rest in
                             (label.partition(": ") for label in getattr(rep, name))])
 
@@ -737,7 +737,8 @@ def _prefix_policy_labels(rep: Report, root_s: str) -> None:
 def _drop_excluded(cfg: dict, root: Path, rep: Report) -> None:
     """Drop whatever of a scanned ``root`` lies inside an ``exclude`` path (defence in depth: ``scan_path`` skips them).
 
-    Findings, unscannable files and the brief lists (``opted_out``, ``brief_off``, ``excluded``, ``withheld``).
+    Findings, unscannable files, the brief lists (``opted_out``, ``brief_off``, ``excluded``, ``withheld``) and
+    ``sources``.
     """
     inner = coverage.excluded_inside(cfg, root)
     if not inner:
@@ -753,6 +754,7 @@ def _drop_excluded(cfg: dict, root: Path, rep: Report) -> None:
     rep.brief_off = [t for t in rep.brief_off if kept(t)]
     rep.excluded = [x for x in rep.excluded if kept(x.partition(": ")[0]) and kept("/".join(x.split(": ", 1)))]
     rep.withheld = [x for x in rep.withheld if kept(x.partition(": ")[0])]
+    rep.sources = [x for x in rep.sources if kept(x.partition(": ")[0])]
 
 
 def plan_slug(repo: Path) -> str:

@@ -642,11 +642,12 @@ config's `governance_dir`) and exits 0 or 1 as above; with an unusable one it ex
 | `opted_out` | array of strings | repositories the operator enrolled at `off` (not scanned) |
 | `brief_off` | array of strings | repositories whose brief says `vulnerability_scanning.level: off` but that the operator enrolled or listed in `repo_roots`: scanned anyway, reported as a mismatch |
 | `excluded` | array of strings | `"repo: path in repo"`: manifests skipped by a brief's `exclude_paths` |
+| `sources` | array of strings | `"repo: name version from host: grade (...)"`: npm entries installed from an [allowlisted non-npm source](#agentteamsvulnscanoffnpm_sources), each graded `fixed`, `vulnerable` or `unknown` on its advisories' ranges; listed whatever the grade |
 | `withheld` | array of strings | `"repo: name (ecosystem)"`: private packages (a brief's `private_packages`), not checked and never sent. The daily `summary.json` (which the agent's MCP server reads) writes `"repo: (private)"` instead, one per package; only the machine-local `repos-*.json` keeps the names |
 | `generated_at` | string | UTC ISO-8601 time, whole seconds |
 | `unscored_as` | string | what an unscored advisory counted as in this report: `critical`, `high`, `moderate` or `low` (default `high`) |
 
-In the daily aggregate the `opted_out`, `brief_off`, `excluded` and `withheld` lists name each repository under
+In the daily aggregate the `opted_out`, `brief_off`, `excluded`, `withheld` and `sources` lists name each repository under
 its root, as findings do (`<root>/<repo>`). A path inside the operator's `exclude` never appears in them.
 
 A Finding (`report.Finding`):
@@ -1270,7 +1271,17 @@ skipped (`opted_out`). Each repository's brief then narrows what is sent, never 
 scanned and listed in `brief_off`), manifests under `exclude_paths` are skipped (`excluded`), packages
 matching `private_packages` are never sent to OSV (`withheld`), and `include_dev` sets `count_dev` on
 its dev-only findings. `unpinned_ranges=True` also checks the ranges of Python manifests without exact pins
-([Unpinned Python requirements](#unpinned-python-requirements)).
+([Unpinned Python requirements](#unpinned-python-requirements)). An npm lockfile entry whose `resolved` URL is on
+an [allowlisted non-npm source](#agentteamsvulnscanoffnpm_sources) is graded by `analyze_sources` instead.
+
+#### `engine.analyze_sources(items, report, *, dev_policy=None)`
+
+Grade `(target, Dep, offnpm_sources.Source)` items (npm entries resolved from an allowlisted non-npm source)
+against every OSV advisory for their names, queried by name (`osv.package_ids`) and judged locally with
+`offnpm_sources.judge`. A `vulnerable` or `unknown` entry is a `package` finding at its advisories' severity, the
+detail naming the source, the grade and each unknown advisory's reason (an unknown advisory counts in `unfixed`); a
+`fixed` entry has no finding. Every entry is listed in `report.sources`. A failed query goes to
+`report.feed_errors`, and its entries are listed `unknown`.
 
 #### `engine.analyze_ranges(items, report, *, dev_policy=None, query_limit=UNPINNED_QUERY_LIMIT, detail_limit=UNPINNED_DETAIL_LIMIT)`
 
@@ -1494,7 +1505,8 @@ Finds dependency manifests and reads exact versions from them; the formats are l
 #### `Dep` / `Manifest`
 
 `Dep` is frozen: `ecosystem` (the OSV name, e.g. `PyPI`, `npm`, `Packagist`), `name`, `version`, `scope`
-(`"runtime"` or `"dev"`), `source` (the manifest path or install location). `Manifest` is the parse result
+(`"runtime"` or `"dev"`), `source` (the manifest path or install location), `resolved` (an npm lockfile entry's
+`resolved` URL; `""` otherwise). `Manifest` is the parse result
 for one file: `path`, `deps`, `unscannable` (the reason, when no exact version could be read), `unpinned`
 (requirement lines without an `==` pin) and `covered` (a `pyproject.toml` whose pins the requirements
 files beside it already carry, so it has nothing of its own to report).
@@ -1566,7 +1578,7 @@ Composer versions for advisory ranges and upgrade targets.
 
 Dataclass: `target`, `findings`, `unscannable` (`(path, reason)` tuples), `feed_errors`, `checked`,
 `opted_out`, `excluded` (`"<repo>: <path>"`), `withheld` (`"<repo>: <name> (<ecosystem>)"`), `brief_off`,
-`unscored_as`, `generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code;
+`sources` (allowlisted non-npm sources and their grades), `unscored_as`, `generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code;
 `apply_unscored(level)` counts every unscored advisory as `level` (raises `ValueError` for another
 value); `unscored_findings()` lists the findings whose severity comes from it; `policy_counts()` gives
 `{repo: (excluded manifests, withheld packages)}`; `to_dict(*, private_names=True)` / `from_dict(data)` convert
@@ -1647,6 +1659,21 @@ Minimal PEP 440 specifier sets as version intervals, on `versions.version_key`, 
 | `judge(spec, affected)` | A `Judgement`: `verdict` `whole` / `partial` / `none`, the affected `overlap`, and for `partial` the `raise_to` lower bound (the highest `fixed` version among the overlapping ranges, when every one ends in a fix) |
 | `read_requirements(path, repo)` / `read_pyproject(path, skip=())` | A `RangeFile` (`reqs`, `unchecked`, `unreadable`, `private_index`); `private_index` files keep `reqs` empty |
 | `Interval`, `intersect(a, b)`, `merge(intervals)` | Version intervals (`None` bounds are unbounded; `fixed` marks an advisory's fix as the upper end) |
+
+### `agentteams.vulnscan.offnpm_sources`
+
+Allowlisted non-npm sources (vfr-e.E3): a publisher's own host for npm packages it does not publish to the
+registry. SheetJS's `cdn.sheetjs.com` (`xlsx` after 0.18.5) is the one row. The GHSA records for npm `xlsx` name no
+fixed npm version, so an exact-version query marks every CDN release affected; an entry from an allowlisted source
+is graded on the advisories' affected ranges instead. There is no general CDN trust: an entry that matches no row
+exactly is judged as an npm package, as before. No network.
+
+| Name | Behaviour |
+|---|---|
+| `Source`, `SOURCES` | The allowlist, one row per host: `host`, `packages` (npm names), `path` (tarball pattern with `name` and `version` groups), `publisher`, `evidence` |
+| `match(name, version, resolved, sources=SOURCES)` | The row an entry resolves from, or None: `https://` on the row's host exactly (no user info, port, query or fragment), the path matching in full, and its name and version equal to the entry's |
+| `judge(record, name, version)` | One advisory: `("affected", fix or "")` when a closed range holds the version, or an open-ended one does with nothing bounding it; `("unknown", why)` when an open-ended range holds it but the entry's `database_specific.last_known_affected_version_range` (`< X` / `<= X`) ends below it, or the record cannot be judged; `("not affected", "")` otherwise |
+| `GRADES` | `fixed` (no advisory affects it), `vulnerable` (one does), `unknown` (never clean: the finding keeps its severity until a known entry settles it) |
 
 ### `agentteams.vulnscan.cvss`
 
