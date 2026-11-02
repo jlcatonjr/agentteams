@@ -96,9 +96,11 @@ def test_codex_gets_the_override_and_a_reference_past_its_budget(root: Path):
 
 def test_frozen_surfaces_are_left_alone(root: Path):
     report = R.project(root, frozen=["codex", "goose"])
-    assert {o.path for o in report.outcomes} == {".github/copilot-instructions.md"}
+    assert {o.path for o in report.outcomes if o.status != "skipped"} == {".github/copilot-instructions.md"}
+    assert {o.path for o in report.outcomes if o.status == "skipped"} == {"AGENTS.md", ".goosehints"}
     (root / "AGENTS.override.md").write_text("# O\n", encoding="utf-8")
-    assert "AGENTS.override.md" not in {o.path for o in R.project(root, frozen=["codex"]).outcomes}
+    assert "AGENTS.override.md" not in {o.path for o in R.project(root, frozen=["codex"]).outcomes
+                                        if o.status != "skipped"}
 
 
 def test_the_projected_region_still_carries_across_overwrite(root: Path):

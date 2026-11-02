@@ -534,7 +534,7 @@ See [templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) 
 Generated agent teams stay current through three automatic mechanisms:
 
 ### 1. Drift detection (`--check` / `--update --merge`)
-Run `--check` at any time to detect template content drift or taxonomy structural changes. Use `--update --merge` to apply them while preserving manually-filled values and user-authored content outside fenced regions.
+Run `--check` at any time to detect template content drift or taxonomy structural changes. Use `--update --merge` to apply them while preserving manually-filled values and user-authored content outside fenced regions (the generated Project-Specific Rules copies are the exception: see `--sync-project-rules`).
 
 ### 2. Drift-as-trigger in `@agent-updater`
 The `@agent-updater` governance agent includes a **Drift detected by `--check`** trigger: whenever drift is detected, agents must re-render and re-verify before the next workflow executes.

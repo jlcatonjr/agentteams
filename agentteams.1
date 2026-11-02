@@ -49,7 +49,7 @@ Disable project directory scanning
 OFF by default. When set, emit references/model\-routing.json — a framework\-neutral per\-agent model\-tier contract (governance agents \-> 'cheap', producers/experts \-> 'primary'). Generated agent files are unchanged either way; this only adds the opt\-in contract artifact.
 .TP
 .B \-\-update
-Re\-render drifted files and emit new agents added to the taxonomy. Default behavior merges only template\-fenced regions, preserving all user\-authored content outside fence markers (same as \-\-update \-\-merge). Use \-\-update \-\-overwrite to fully re\-render existing files, replacing user\-authored content (requires security clearance). Preserves manually\-filled \\(lCMANUAL:*\\(rC values from existing files. Removed agents are reported but not deleted (use \-\-prune to remove them).
+Re\-render drifted files and emit new agents added to the taxonomy. Default behavior merges only template\-fenced regions, preserving all user\-authored content outside fence markers (same as \-\-update \-\-merge), except the generated PROJECTED\-RULES / PROJECT\-RULES\-POINTER blocks (see \-\-sync\-project\-rules). Use \-\-update \-\-overwrite to fully re\-render existing files, replacing user\-authored content (requires security clearance). Preserves manually\-filled \\(lCMANUAL:*\\(rC values from existing files. Removed agents are reported but not deleted (use \-\-prune to remove them).
 .TP
 .B \-\-prune
 Used with \-\-update: also delete agent files that are no longer part of the team.
@@ -67,7 +67,7 @@ Adopt exactly the named orphan agents and nothing else: no render. Each slug mus
 Upgrade the target team's references/security\-decisions.log.csv header to the signing schema, then exit (no render). Existing columns stay in place; the missing columns of decision_log.SIGNED_DECISION_COLUMNS are appended, except prev_digest (chaining stays opt\-in); text_digest, which binds a signed row's conditions and evidence, is added empty and filled by \-\-sign\-decision on new rows. The header line is rewritten; each data line keeps its bytes as a prefix, and a row narrower than the new header gets empty cells appended (signed payloads unchanged; a torn row is refused). Backed up first, written atomically, idempotent; a malformed or unknown header is refused, as is a row with a value past the old header. Adding the signature column activates signing, so every live unsigned PASS, CONDITIONAL PASS or HALT\-RETRACTED row stops clearing: \-\-dry\-run lists them by line and action, and a real run prints them and requires \-\-yes. Works with \-\-self or \-\-description, \-\-framework, \-\-output, \-\-dry\-run and \-\-json.
 .TP
 .B \-\-check
-Check for template drift and structural changes without writing any files (exit code 1 if drift or structural changes are detected, or when a Copilot agent's Project\-Specific Notes start past the 30,000\-character body limit)
+Check for template drift and structural changes without writing any files (exit code 1 if drift or structural changes are detected, when a Copilot agent's Project\-Specific Notes start past the 30,000\-character body limit, or when a projected Project\-Specific Rules copy is out of date or refused). Operator text in a Project\-Specific Notes/Rules region is not drift.
 .TP
 .B \-\-strict\-prompt\-roots
 With \-\-check: also exit 1 when a prompt root (copilot\-instructions.md, AGENTS.md, .github/prompts/**, a team agent file, ...) changed since the last build. Without it the PROMPT\-ROOT CHANGED warning is advisory
@@ -76,7 +76,7 @@ With \-\-check: also exit 1 when a prompt root (copilot\-instructions.md, AGENTS
 Report whether the project's providers agree, and write nothing: Project\-Specific Rules copies and notes pointers, memory\-index copies, Copilot body limits, agents missing on some provider, notes that differ by provider, and a frozen AGENTS.md with an older constitutional core. Exit code 1 on a failure. Uses \-\-project (else the working directory).
 .TP
 .B \-\-sync\-project\-rules
-Copy the project's Project\-Specific Rules (from the brief's project_rules_source, else the one instruction file that has rules) into every other provider's entry file, and a pointer into the security and orchestrator notes; frozen surfaces skipped, hand\-edited copies refused. Runs after every \-\-update too. Runs in the working directory only; with \-\-dry\-run it writes nothing.
+Copy the project's Project\-Specific Rules (from the brief's project_rules_source, else the source the copies record, else the one instruction file that has rules) into every other provider's entry file, and a pointer into the security and orchestrator notes; frozen surfaces skipped, hand\-edited copies refused. Runs after every generate and \-\-update too. Runs in the working directory only; with \-\-dry\-run it writes nothing.
 .TP
 .B \-\-refresh\-index
 Rebuild every surface's references/memory\-index.json from the same sources (frozen surfaces skipped; no template emit/update). Useful after editing work summaries or docs.
