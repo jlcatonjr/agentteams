@@ -23,6 +23,7 @@ from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
+from agentteams.wasm_config import WASM_SUBSTRATE_CLI_KEY  # P20 --wasm-substrate (transient; validated in finalize)
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
     _emit_host_mcp_artifacts_if_enabled,
@@ -184,11 +185,7 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
 
-    from agentteams.cli.artifacts import (
-        PrivilegeConfinementError,
-        finalize_privilege_wiring as _finalize_privilege,
-    )
-    from agentteams.cli.write_root_policy import WriteRootPolicyError
+    from agentteams.cli.artifacts import PRIVILEGE_WIRING_ERRORS, finalize_privilege_wiring as _finalize_privilege
 
     # CC-2: --allow-fallback-fail-open keeps the constitutional-gate hook fail-OPEN even for a
     # confined/exclusive profile (whose default is now fail-CLOSED — a gate crash must not be a
@@ -196,6 +193,7 @@ def _run_generate_inner(
     # when set, so a cooperative team (or the default) stays byte-identical.
     if getattr(args, "allow_fallback_fail_open", False):
         manifest["fallback_fail_open"] = True
+    manifest.update({WASM_SUBSTRATE_CLI_KEY: args.wasm_substrate} if getattr(args, "wasm_substrate", None) else {})
 
     try:
         _finalize_privilege(
@@ -206,8 +204,11 @@ def _run_generate_inner(
             allow_unenforced=bool(getattr(args, "allow_unenforced_confinement", False)),
             team_dir=output_dir,
             accepted_write_roots=list(getattr(args, "accept_write_root", None) or []),
+            dry_run=bool(getattr(args, "dry_run", False)), os_sandbox_cli=getattr(args, "os_sandbox", None),
+            brief_confined_programs=description.get("confined_programs"),
+            wasm_sandbox_cli=getattr(args, "wasm_sandbox", None),
         )
-    except (PrivilegeConfinementError, WriteRootPolicyError) as exc:
+    except PRIVILEGE_WIRING_ERRORS as exc:
         # P1-2: confined/exclusive requested on a host with no OS sandbox to enforce it,
         # and the operator did not pass --allow-unenforced-confinement. Fail closed.
         print(f"Error: {exc}", file=sys.stderr)

@@ -75,17 +75,17 @@ def _sandbox_confinement_requested(manifest: dict[str, Any]) -> bool:
     """Return True iff workspace write-confinement is REQUESTED on this manifest.
 
     Framework-neutral request test (mirrors the goose/claude enablement checks but keys off no
-    single framework's token): a ``confined``/``exclusive`` ``privilege_profile`` OR any
-    ``*:sandbox`` host-feature token (``claude:sandbox``, ``goose:sandbox``, …) counts as a
-    request. This is the REQUEST gate only — platform enforceability is the separate ``linux``
-    guard in :func:`linux_sandbox_output_files`.
+    single framework's token): the effective OS-sandbox state
+    (:func:`agentteams.sandbox_state.os_sandbox_requested` with ``token=None``, P00) — with no
+    switch set, a ``confined``/``exclusive`` ``privilege_profile`` OR any ``*:sandbox``
+    host-feature token, as before; ``os_sandbox: off`` turns it off, ``on`` turns it on. This is
+    the REQUEST gate only — platform enforceability is the separate ``linux`` guard in
+    :func:`linux_sandbox_output_files`. The control-plane stubs do NOT use it
+    (``sandbox_state.legacy_os_requested``).
     """
-    if manifest.get("privilege_profile") in {"confined", "exclusive"}:
-        return True
-    return any(
-        isinstance(t, str) and t.endswith(":sandbox")
-        for t in (manifest.get("host_features") or [])
-    )
+    from agentteams.sandbox_state import os_sandbox_requested
+
+    return os_sandbox_requested(manifest)
 
 
 def _read_sandbox_asset(asset_rel: str) -> str:

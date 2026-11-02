@@ -435,3 +435,135 @@ Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because
   - the goose Seatbelt profile and the launcher's `TEAM_DIRS_REL`, `CONTROL_PLANE_REL` (`.grok/config.toml`, `.grok/sandbox.toml` and `.grok/confined-run.example.sh` are protect-if-present) and `CONTROL_PLANE_DIRS_REL` (the whole `.grok` dir, Phase 2)
   - `signing_switch` and `projection_marker`
 - **Version pin:** `FORMAT_SPECS["grok"].pinned_version`, a new `FormatSpec` field. It is the only place the version appears.
+
+## `frameworks._wasm_wiring` — WASM MCP wiring (P11)
+
+Where each framework launches the `agentteams_wasm` MCP server (WASM sandbox plan P11, decision D8). The server and
+its entry builders are [`wasm_mcp`](wasm-mcp.md) (P10); this module decides, in one place, **who** gets a copy and
+**where** it is written, so the renderers, the control-plane write protection (METAPLAN R1) and `--check-wiring`
+can't drift apart. It never claims enforcement: whether a wired server is enforced is P13's `wasm_enforcement`.
+
+> Source: `agentteams/frameworks/_wasm_wiring.py` (integrity-pinned). It imports only the P01/P00 state modules and
+> `wasm_mcp`, never a P13 or P14 module.
+
+### Who gets a copy
+
+Only while WASM is on (`--wasm-sandbox on` or the brief's `wasm_sandbox.enabled`), and only for agents that
+`wasm_config.wasm_eligible` accepts: the agent holds an execute-class tool (D12). A read-only auditor without a shell
+never gets `run_wasm`. With WASM off nothing is recorded or emitted, so renders are byte-identical.
+
+### Per framework
+
+| Framework | Status | What is emitted |
+|---|---|---|
+| claude | `wired-per-agent` | Each eligible subagent's front matter gains its own `agentteams_wasm` entry in `mcpServers:` (after `agentteams_runner` when both are present) and `mcp__agentteams_wasm__run_wasm` in `tools:`. The top-level session is not wired: `.claude/mcp.agentteams-wasm.example.json` is an inert example the operator merges into `.mcp.json`. |
+| goose | `wired-per-agent` with `goose_tool_scoping: grant`; `not-wired` under legacy scoping | The recipe's `extensions:` gains the exact `agentteams_wasm` stdio extension (`available_tools: [run_wasm]`). Honoured on a direct `goose run --recipe`; a `delegate` cannot add it. Legacy scoping has no per-recipe allowlist to rely on. |
+| codex | `wired-shared` | One compute-only `--agent _session` table in `.codex/config.toml`, configured with `default_tools_approval_mode = "prompt"` (a default the host applies; agentteams does not verify it is enforced), through `codex_mcp_emit`'s `first_party_tables` hook. No `codex:mcp` token is needed (turning WASM on is the opt-in); without it, an existing config's other `[mcp_servers.*]` tables refuse the write instead of being dropped. |
+| copilot-vscode | `example-only` | Inert `.vscode/mcp.agentteams-wasm.example.json` (`servers` / `stdio`). `run_wasm` is not added to agent `tools:`; the custom-agent MCP tool spelling is unverified. |
+| copilot-cli | `example-only` | Inert `.github/mcp.agentteams-wasm.example.json` (`mcpServers` / `local`). Per-agent `mcp-servers` in CLI agent profiles is unverified. |
+| grok | `unverified-format` | Nothing. Whether a custom agent with `mcpInheritance: none` sees project MCP servers, or launches front-matter `mcpServers`, is unverified on the pinned Grok Build. |
+| agents-md | `instructions-only` | Nothing (no MCP channel). |
+
+**Where the server runs.** Operator spike B (2026-11-01, dev wasmtime 36.0.16) showed that Claude Code (with its
+session sandbox on or off) and Goose both launch stdio MCP servers *outside* their own session sandbox; the server
+then applied its own nested Seatbelt profile around wasmtime (`os_confinement: "nested"`). So on these hosts the
+session sandbox does not confine the server: its own nesting, and the shell-side `denyWrite` of every config file that
+carries its launch flags, are what protect it. Codex, Grok and Copilot were not measured; nothing here claims nesting
+for them beyond what the server reports at run time.
+
+Hosts with one shared copy (codex, copilot-vscode, copilot-cli) refuse a widened `wasm_sandbox.agents` grant at
+render time instead of downgrading it (I3). agentteams never writes a live `.mcp.json`, `.vscode/mcp.json` or
+`.github/mcp.json`.
+
+Where the server is installed (claude, codex, copilot, goose when wired), the text bundle is emitted with the team and
+the binary deny probe is written after the emit by `install_binary` (the emit phase writes text only).
+
+### The manifest record
+
+```json
+"wasm_wiring": {
+  "protected_config_paths": [".claude/mcp.agentteams-wasm.example.json", ".claude/agents/navigator.md"],
+  "frameworks": {
+    "claude": {"status": "wired-per-agent", "agents": ["navigator"], "grant_scope": "per-agent",
+               "reason": "...", "verified": true, "config_paths": ["..."]}
+  }
+}
+```
+
+`protected_config_paths` lists every emitted file that launches the server. `_control_plane_protect` adds each one to
+the session sandbox `denyWrite` (so a sandboxed shell cannot rewrite the launch flags) and an `Edit(/<path>)` deny.
+`verified` is false wherever the host format or behaviour is unverified, and such a row never says "wired". The
+generator prints one `[WASM-WIRING]` line per render; unverified and not-wired rows also become `advisories`.
+
+### The R1 check
+
+`scan_launching_configs(root)` scans the known MCP config locations on disk (Goose recipes recursively, `*.yaml`,
+`*.yml` and `*.json`, within a depth and file-count bound) for files that launch the server. JSON (JSONC comments
+allowed) and TOML are parsed and matched by the strings under their `command` / `cmd` / `args` keys; YAML and agent
+front matter are searched with their `\x` / `\u` / `\U` escapes and escaped line breaks decoded, so no escape hides
+the server's path. Nothing is skipped: a symlinked file or directory, a non-regular, unparseable or oversized file
+and a tree past the bounds are returned as `unsafe` and always reported as not protected.
+
+The scan runs whatever the WASM switch. With WASM off (or on a framework that wires nothing), every launching config
+is reported as not protected, since no deny was emitted for it (`unprotected_config_problems`). With WASM on,
+`wasm_mcp.control_plane_advisory` and `claude.verify_sandbox_wiring` (`--check-wiring`) union the launching files with
+the manifest's list, so a file the manifest does not name (a hand-merged `.mcp.json`, a manifest-less check) still has
+to be in the live `denyWrite` (itself or a denied ancestor directory) and, on Claude, behind an `Edit` deny; on Goose
+the Seatbelt profile's `file-write*` rules are parsed (last match wins; comments and allow rules never count as a
+deny). Otherwise the control plane is reported as agent-writable.
+
+With WASM on, a render whose agents dir is not the framework's canonical one (`.claude/agents`, `.goose/recipes`,
+`.codex/agents`, `.github/agents`) is refused (`agents_dir_problem`): the protected paths would miss the real files.
+
+### Functions
+
+| Function | Purpose |
+|---|---|
+| `wasm_on(manifest)` | The WASM switch, without building grants. |
+| `wiring_row(manifest, framework)` | The framework's record row, created on first use; None when WASM is off. |
+| `wasm_agent_entry(manifest, framework, slug, tools)` | Launch args for an eligible agent's own copy (claude, goose), recording it as wired and protected. |
+| `output_files(manifest, framework)` | The server, text bundle and inert example for `extra_output_files`. |
+| `codex_first_party_tables(manifest)` | The Codex `first_party_tables` argument. |
+| `install_root(framework, path)` | The root the emit installed the server under (the grandparent of a canonical agents dir passed as `--output`). |
+| `agents_dir_problem(manifest, framework, team_dir)` | Why a non-canonical agents dir cannot carry the WASM wiring, or None. |
+| `install_binary(manifest, project_root)` | Writes the bundle's binary deny probe beside the server installed at `project_root`; refuses when it is not there (never searches a parent). |
+| `unhonoured_grants(manifest, framework, state)` | Widened grants a shared-copy host cannot honour. |
+| `report_line` / `print_report` | The `[WASM-WIRING]` line; `print_report` also refuses unhonoured grants. |
+| `scan_launching_configs(root)` | The disk scan: a `ConfigScan` of launching and unsafe (uncheckable) paths. |
+| `launching_config_paths(root)` | Every launching or uncheckable config on disk (the R1 truth source; fail closed). |
+| `unprotected_config_problems(root, off_reason, scan)` | Uncheckable configs, and (with `off_reason`) every launching one, as not-protected messages. |
+| `covered(path, entries)` | Whether a path or an ancestor is in a deny list. |
+| `check_wiring_problems(root, framework, manifest)` | `wasm_mcp.wiring_problems` where this framework installs the server (or WASM is off); elsewhere, every launching config as not protected. |
+
+## `WasmAdapter`
+
+> *Source: `agentteams/frameworks/wasm.py`* (helpers: `_wasm_tool_scoping.py`, `_wasm_team_docs.py`; format and loader in `agentteams/wasm_agent/team.py`; all integrity-pinned)
+
+Adapter for agentteams' own WASM agent runtime (plan P08). Not a vendor CLI: the rendered team is run by
+`agentteams --run-wasm-agent`. **Beta.** User guide: [WASM agent runtime](../wasm-agent-runtime.md).
+
+- **framework_id:** `'wasm'`
+- **Output format:**
+  - Agent files: `.agentteams-wasm/agents/<slug>.md` with exactly `name`, `description` (JSON-quoted), `tools`
+    (runtime vocabulary), `model` (a tier from `model_routing.agent_tier`, never a model id) and `delegates` (team
+    members the agent may delegate to), then the body with handoffs removed.
+  - Instructions: `.agentteams-wasm/TEAM.md` (neutralised like `AGENTS.md`).
+  - `extra_output_files`: the neutral baseline plus `../grants.json` (from `sandbox_state.wasm_grant_for` only),
+    `../runtime.json` (`wasm_agent.team.runtime_record`) and `../README.md`.
+  - Post-emit: `lock_wasm_team(manifest, output_dir)` (called from `cli/generate_helpers._emit_privilege_artifacts`
+    on every write path; a no-op for other frameworks) runs `write_team_lock(agents_dir)`, which hashes the team into
+    `.agentteams/wasm-team.lock.json`. A lock that cannot be written fails the render (`Error:` line, exit 1).
+- **Handoffs:** `manifest`. **Agents dir:** `<project>/.agentteams-wasm/agents/` (`normalize_output_path` appends it).
+- **`required_front_matter_keys()`:** `(name, description, tools, model, delegates)`; `FORMAT_SPECS["wasm"]` has
+  `upstream=False` (the docs-watch exemption: `framework_research` watches only `UPSTREAM_SPECS`).
+- **`wasm_team_state(manifest)`:** the effective `SandboxState` with WASM forced on (reason `framework`); raises
+  `ValueError` when WASM is explicitly off.
+- **Tools** (`_wasm_tool_scoping.translate_wasm_tools(scopes, *, has_read_mount, has_scratch, has_delegates, agent)
+  -> (tools, notices)`): `read`/`search`/`edit`/`execute`/`agent` map to the runtime tools and are narrowed by the
+  grant; `todo`/`retrieval` are dropped; anything else raises `WasmToolScopeError`; no `tools:` block is an empty
+  toolset. `grant_supports(tool, ...)` is the shared rule the loader re-applies. Notices print as `[WASM-SCOPE]` and
+  collect in `manifest["_wasm_tool_notices"]`.
+- **Not in v1:** convert/bridge/interop/absorb (refused in `cli/parser_validate.py`), a builder, a session team key
+  (`TEAM_KEY_BY_FRAMEWORK`), control-plane stubs. `.agentteams-wasm` is in `confinement.PROTECTED_REL` and the frozen
+  surface `wasm`.
+

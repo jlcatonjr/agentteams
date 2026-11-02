@@ -118,12 +118,25 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`host_features`](host-features.md) | Parse / validate `<ns>:<feature>` opt-in subselector tokens for emission gating |
+| [`sandbox_state`](sandbox-state.md) | Effective OS/WASM sandbox state (`os_sandbox` switch precedence), its build-log record, the previous state |
+| [`sandbox_tokens`](sandbox-tokens.md) | The WASM grant-token spelling and read-path grammar (stdlib-only leaf; re-exported by `cli/sandbox_effects`) |
 | [Workspace Privilege Scoping](workspace-privilege-scoping.md) | Opt-in `privilege_profile` / `claude:sandbox` — emit Claude Code's OS-level write-confinement sandbox (feature page) |
 | [`rank_conformance`](rank-conformance.md) | AP-2 rank-conformance validator — an agent's declared `tools:` must not exceed what its taxonomy rank (orchestrator / governance / domain / expert) permits (C-3) |
 | [`baseline`](baseline.md) | Deterministic SHA-256 emission baselines (capture / diff) used by regression tests |
 | [`bridge_subagents`](bridge-subagents.md) | Per-agent Claude subagent stub emitter (bridge:copilot-vscode-to-claude:subagents) |
 | [`proposals`](proposals.md) | Orchestrator-only-writes pilot (P1): apply typed change proposals and run typed command requests under per-agent policy; hash-chained ledger |
 | [`confinement`](confinement.md) | Orchestrator-only-writes pilot (P4b): run the runner's commands and gates in a Seatbelt/bwrap sandbox built from `confined_programs` |
+| [`wasm_runtime`](wasm-runtime.md) | WASM sandbox: pinned download, safe extraction and verify-on-use for wasmtime and the guest interpreters (`--wasm-install`) |
+| [`wasm_exec`](wasm-exec.md) | The wasmtime executor: pinned compute-only grant, exact-shape argv check, OS nesting, capability probe (WASM P02) |
+| [`wasm_pins`](wasm-pins.md) | Pure re-hash of an installed WASM runtime against its pins; `TODO-PIN` fails closed |
+| [`wasm_guests`](wasm-guests.md) | Python / JavaScript / core-module guests on the pinned grant, with per-language deny probes (WASM P04) |
+| [`sandbox_projection`](sandbox-projection.md) | The model-substrate WASM switch projected to `.agentteams/sandbox-state.json` for consumers that run model code (WASM P20) |
+| [`wasm_config`](wasm-config.md) | The brief's `wasm_sandbox` block, `--wasm-sandbox`, per-agent grants as `Grant(mounts, limits)`, and `wasm_eligible` (WASM P01) |
+| [`wasm_agent`](wasm-agent.md) | The WASM agent host: step-mode protocol, Stage 0/1 split, budgets, DLP, key custody, hash-chained transcript (WASM P05) |
+| [`model_providers`](model-providers.md) | One stdlib-only client for the model APIs the WASM agent host calls: Anthropic, OpenAI-compatible, Gemini and an offline stub; key custody and egress rules (WASM P06) |
+| [`wasm_mcp`](wasm-mcp.md) | The `agentteams_wasm` MCP server: `run_wasm` for vendor-CLI agents, its hash-checked bundle and the per-agent launch flags that carry each grant (WASM P10) |
+| [`wasm_enforcement`](wasm-enforcement.md) | Per-provider native-exec denial for WASM-eligible agents (`native_exec`), the Codex WASM-mode gate, and the honest `wasm_enforcement` verdict (WASM P13) |
+| [`wasm_policy`](wasm-policy.md) | Render-time WASM sandbox text for generated agents: `run_wasm` usage, grants, native-exec status, `@security` and routing rows (WASM P14) |
 | [`proposal_policy`](proposal-policy.md) | Orchestrator-only-writes pilot: the registered policy (brief validation and lint), re-exported by `proposals` |
 | [`mcp_direct_grants`](mcp-direct-grants.md) | Operator-signed direct-write grants: the only way an agent's MCP writes skip the orchestrator's approval (R5) |
 | [`interop_write_policy`](interop-write-policy.md) | `--interop-from --description`: an import carries the brief's `write_policy` and `mcp_grants`, so adopted bespoke agents get the runner (M6) |
@@ -132,6 +145,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`proposal_staging`](proposal-staging.md) | Staged and direct agent writes through the runner, and the orchestrator's approvals (R3) |
 | [`proposal_run`](proposal-run.md) | The command-request half of `proposals`: validates, runs and checks one allowlisted, agent-requested command (carved out at R2) |
 | [`proposal_runner`](proposal-runner.md) | Orchestrator-only-writes pilot (P4a): the out-of-session runner that alone holds the ledger key and serves the orchestrator's queue |
+| [`runner_wasm`](runner-wasm.md) | The runner's `sandbox: wasm` jails: `wasm:<lang> <path>` commands run as the pinned wasmtime in a fresh OS wrap, and the `wasm-to-os-switch` gate (WASM P12) |
 | [`sealed_result`](sealed-result.md) | Seals the orchestrator's runner results (in the session-readable `.agentteams-status/` tree) to the process that queued each request |
 | [`git_exec`](git-exec.md) | The one git core: argv, run, and the read-only hardening against repo-planted config |
 | [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty), recorded in build-log.json and printed by `--version` |

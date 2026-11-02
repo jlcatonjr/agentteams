@@ -1,0 +1,8 @@
+{
+  "patch_id": "c1466103f00e10fce41a3255aaa923062c5f5a26",
+  "commit": "9c4e54c07b7288db5dd3339a0a25f7ef6edc4abb",
+  "subject": "refactor(confinement): extract the Seatbelt/bwrap builders into _sandbox_profiles.py",
+  "impact": "1 modules added, 6 symbols added, 3 symbols removed",
+  "note": "WASM sandbox program (feat/wasm-sandbox): adds sandbox_state, sandbox_tokens, sandbox_projection, runner_wasm, wasm_{config,enforcement,exec,guests,mcp,pins,policy,runtime}, the model_providers package (split from a module; public API kept via __init__), wasm_agent/ (13 modules), frameworks.wasm (--framework wasm) plus private _wasm_*/_sandbox_*/_control_plane_protect helpers, and cli sandbox/wasm handlers. New CLI flags: --os-sandbox, --wasm-sandbox, --wasm-install, --wasm-status, --wasm-pin-update (--pins-out, --tofu), --wasm-substrate, --run-wasm-agent/--revoke-wasm-run/--verify-wasm-run (--tree, --revoke-reason, --wasm-task[-file], --wasm-provider, --wasm-base-url), --remediation. Changed signatures: confinement.load_confined, host_features.merge_profile_features/privilege_profile_advisory, codex_mcp_emit.emit_codex_mcp_config, claude.verify_sandbox_wiring, wasm_runtime.Resolver/pin_update, exception_registry aggregate cap. Builders moved to _sandbox_profiles and re-exported. api_impact treats only cli: keys as CLI options. API Conformity Tracker 2026-11-01: no new gaps; docs_src/api-reference and agentteams.1 in parity.",
+  "recorded_at": "2026-11-02T01:59:50Z"
+}

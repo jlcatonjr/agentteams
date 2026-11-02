@@ -49,9 +49,13 @@ def stubs_enabled(framework: str, manifest: dict[str, Any]) -> bool:
         out of scope).
     """
     if framework in ("claude", "goose", "copilot-vscode", "copilot-cli", "codex", "grok"):
-        from agentteams.frameworks._linux_sandbox_emit import _sandbox_confinement_requested
+        # METAPLAN R9 (P00 row 18): a profile-only check OR'd with the effective state, so an
+        # ``os_sandbox: off`` render never emits fewer stubs than before the switch existed (a
+        # sibling confined team's launcher needs them), while ``os_sandbox: on`` adds them.
+        from agentteams.sandbox_state import legacy_os_requested, os_sandbox_requested
 
-        return "enforce_decision_signing" in manifest or _sandbox_confinement_requested(manifest)
+        return ("enforce_decision_signing" in manifest or legacy_os_requested(manifest)
+                or os_sandbox_requested(manifest))
     return False
 
 

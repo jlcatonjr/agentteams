@@ -86,6 +86,11 @@ def grok_mcp_enabled(features: list[str]) -> bool:
 def grok_sandbox_enabled(features: list[str]) -> bool:
     """Return True iff the ``grok:sandbox`` host-feature token is active (confined/exclusive profile).
 
+    Token-only by design (P00 row 5): it stays correct under the dedicated ``os_sandbox`` switch
+    because ``host_features.merge_profile_features(..., os_sandbox="off")`` removes the token, so
+    an off render leaves an existing managed ``[permission]`` block in place with the "left in
+    place" notice instead of writing it; ``os_sandbox: on`` adds the token.
+
     Args:
         features: Active host-feature tokens.
 

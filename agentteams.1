@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--discard-user-regions] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--materialize-native] [--adopt-orphans] [--adopt-only SLUG[,SLUG...]] [--migrate-decision-log] [--check] [--strict-prompt-roots] [--sync-project-rules] [--refresh-index] [--agent-check] [--window-hours H] [--force] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--check-rank] [--check-rank-strict] [--check-wiring] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--interop-skills-only] [--interop-allow-cooperative SLUG[,SLUG...]] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-allow FILE:FENCE] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--allow-unenforced-confinement] [--accept-write-root PATH] [--allow-fallback-fail-open] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--apply-proposal FILE.json] [--run-request FILE.json] [--issue-dispatch] [--serve-requests] [--once] [--wait-result ID] [--wait-timeout SECONDS] [--agent SLUG] [--list-staged] [--show-staged SID] [--apply-staged SID] [--reject-staged SID] [--sign-mcp-direct-grant AGENT] [--list-mcp-direct-grants] [--revoke-mcp-direct-grant AGENT] [--key-id ID] [--grant-days N] [--max-writes N] [--reject-reason TEXT] [--verify-proposal-ledger] [--confined-path] [--install-confined FILE] [--mcp-need-report] [--serve-mcp NAME] [--mcp-need-register PATH] [--set-vulnscan LEVEL] [--set-vulnscan-confirm-sha256 SHA256] [--verify-grants] [--issue-grant SPEC.json] [--sign-grant SPEC.json] [--verify-directives] [--issue-directive] [--manager-team ID] [--managed-team ID] [--task-scope SCOPE] [--expires-at ISO8601] [--max-uses N] [--approver PRINCIPAL] [--audit-exceptions] [--list-exceptions] [--confirm-review-sha256 HEX] [--allow-checkout-signing] [--sign-decision SPEC.json] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--redteam-freshness-check] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--framework-freshness] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--sync-init] [--pin FRAMEWORK] [--sync] [--sync-since COMMIT] [--frameworks FW1,FW2,...] [--sync-agent-docs] [--apply] [--include-claude] [--restore-removed] [--branch-inventory] [--branch-cleanup PLAN.json] [--branch-post-merge BRANCH] [--branch-report DIR] [--push-remote NAME] [--default-branch NAME] [--stale-days N] [--operator-email EMAIL] [--no-api] [--team-dir DIR] [--team-id ID] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--discard-user-regions] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--materialize-native] [--adopt-orphans] [--adopt-only SLUG[,SLUG...]] [--migrate-decision-log] [--check] [--strict-prompt-roots] [--sync-project-rules] [--refresh-index] [--agent-check] [--window-hours H] [--force] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--check-rank] [--check-rank-strict] [--check-wiring] [--wasm-install COMPONENTS] [--wasm-status COMPONENTS] [--wasm-pin-update ('COMPONENT', 'VERSION')] [--remediation GHSA-IDS] [--tofu] [--pins-out PATH] [--run-wasm-agent SLUG] [--wasm-task TEXT] [--wasm-task-file PATH] [--wasm-provider NAME] [--wasm-base-url URL] [--revoke-wasm-run RUN_ID] [--verify-wasm-run RUN_ID] [--tree] [--revoke-reason TEXT] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--interop-skills-only] [--interop-allow-cooperative SLUG[,SLUG...]] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-allow FILE:FENCE] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--os-sandbox OS_SANDBOX] [--wasm-sandbox WASM_SANDBOX] [--wasm-substrate WASM_SUBSTRATE] [--allow-unenforced-confinement] [--accept-write-root PATH] [--allow-fallback-fail-open] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--apply-proposal FILE.json] [--run-request FILE.json] [--issue-dispatch] [--serve-requests] [--once] [--wait-result ID] [--wait-timeout SECONDS] [--agent SLUG] [--list-staged] [--show-staged SID] [--apply-staged SID] [--reject-staged SID] [--sign-mcp-direct-grant AGENT] [--list-mcp-direct-grants] [--revoke-mcp-direct-grant AGENT] [--key-id ID] [--grant-days N] [--max-writes N] [--reject-reason TEXT] [--verify-proposal-ledger] [--confined-path] [--install-confined FILE] [--mcp-need-report] [--serve-mcp NAME] [--mcp-need-register PATH] [--set-vulnscan LEVEL] [--set-vulnscan-confirm-sha256 SHA256] [--verify-grants] [--issue-grant SPEC.json] [--sign-grant SPEC.json] [--verify-directives] [--issue-directive] [--manager-team ID] [--managed-team ID] [--task-scope SCOPE] [--expires-at ISO8601] [--max-uses N] [--approver PRINCIPAL] [--audit-exceptions] [--list-exceptions] [--confirm-review-sha256 HEX] [--allow-checkout-signing] [--sign-decision SPEC.json] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--redteam-freshness-check] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--framework-freshness] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--sync-init] [--pin FRAMEWORK] [--sync] [--sync-since COMMIT] [--frameworks FW1,FW2,...] [--sync-agent-docs] [--apply] [--include-claude] [--restore-removed] [--branch-inventory] [--branch-cleanup PLAN.json] [--branch-post-merge BRANCH] [--branch-report DIR] [--push-remote NAME] [--default-branch NAME] [--stale-days N] [--operator-email EMAIL] [--no-api] [--team-dir DIR] [--team-id ID] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -19,7 +19,7 @@ Project description file (.json or .md). Required unless \-\-self is used. With 
 Project directory to scan and use as base (overrides existing_project_path in description)
 .TP
 .B \-\-framework, \-f NAME
-Target framework: copilot\-vscode, copilot\-cli, claude, goose, agents\-md, codex, grok (default: copilot\-vscode). 'canonical' is the durable on\-disk canonical format (interop\-only, pair with \-\-interop\-from; not a rendering target). 'generic' emits only framework\-agnostic bridge artifacts (bridge\-only, pair with \-\-bridge\-from; no native consumer entry files).
+Target framework: copilot\-vscode, copilot\-cli, claude, goose, agents\-md, codex, grok, wasm (default: copilot\-vscode). 'canonical' is the durable on\-disk canonical format (interop\-only, pair with \-\-interop\-from; not a rendering target). 'generic' emits only framework\-agnostic bridge artifacts (bridge\-only, pair with \-\-bridge\-from; no native consumer entry files).
 .TP
 .B \-\-output, \-o DIR
 Output directory for agent files. Default: <project>/.github/agents/ (copilot\-vscode, copilot\-cli), <project>/.claude/agents/ (claude), <project>/.goose/recipes/ (goose), <project>/.agents/ (agents\-md; team brief also written to repo\-root AGENTS.md). <project>/.codex/agents/ (codex custom\-agent TOML; repo\-root AGENTS.md only when absent or Codex\-generated). With \-\-package\-team: the destination .zip FILE path, not a directory (default: ./team\-package.zip).
@@ -150,8 +150,53 @@ AP\-2 blocking variant of \-\-check\-rank: exits non\-zero on any rank over\-gra
 .B \-\-check\-wiring
 P1\-3: verify an emitted workspace\-confinement sandbox block was actually merged into the live .claude/settings.json (it is inert until merged). Read\-only, output\-only; exits non\-zero when a confinement was emitted but is not live. Also checks that the constitutional gate's interpreter pin (<hooks>/agentteams\-python) or plain python3 can import agentteams, and fails with the fix when neither can.
 .TP
+.B \-\-wasm\-install COMPONENTS
+Operator command (D4): download the pinned WASM runtime and guest interpreters into <project>/.agentteams/wasm/. COMPONENTS is a comma list of wasmtime, python, javascript, or 'all' (default: wasmtime). Each artifact is checked against its pinned size and sha256 before extraction; a component whose pin still reads TODO\-PIN is refused. Prints the plan and asks to confirm unless \-\-yes; a non\-tty without \-\-yes refuses. \-\-dry\-run prints the plan only. Never runs during rendering. Exit 0 ok, 1 verification failure, 2 usage, 3 network.
+.TP
+.B \-\-wasm\-status COMPONENTS
+Read\-only, network\-free: re\-verify the installed WASM components under <project>/.agentteams/wasm/ against the packaged pins (ok, absent, MISMATCH, pin incomplete). Exits 0 only when every requested component (default: all) is ok.
+.TP
+.B \-\-wasm\-pin\-update ('COMPONENT', 'VERSION')
+Operator tool (network): re\-pin COMPONENT at VERSION from GitHub release metadata and a verified download (S\-10 cooldown applies unless \-\-remediation). Writes the pins file (\-\-pins\-out; defaults to the packaged file only in a git work tree) and prints the diff; never commits. The diff needs @security review before it is committed.
+.TP
+.B \-\-remediation GHSA\-IDS
+With \-\-wasm\-pin\-update: comma\-separated GHSA ids that justify adopting a fix release inside the S\-10 cooldown; each must appear in the release notes and be named by a recorded wasm\-pin\-remediation PASS decision in <\-\-project>/references/security\-decisions.log.csv (consumed on write).
+.TP
+.B \-\-tofu
+With \-\-wasm\-pin\-update: accept a release asset that has no sha256 digest in its metadata (trust on first use, recorded as provenance 'tofu'); needs a recorded @security decision.
+.TP
+.B \-\-pins\-out PATH
+With \-\-wasm\-pin\-update: the pins file to rewrite. Required unless the packaged agentteams/data/wasm_runtime_pins.json sits in a git work tree.
+.TP
+.B \-\-run\-wasm\-agent SLUG
+Run one agent of the \-\-framework wasm team in \-\-project (the WASM agent runtime: every step is a fresh WASM guest; the host calls the model provider). The team must match its control\-plane lock. Needs \-\-wasm\-task or \-\-wasm\-task\-file and the pinned runtime (\-\-wasm\-install). Provider keys come only from the environment (ANTHROPIC_API_KEY, OPENAI_API_KEY, ...; the stub needs none). Exit 0 ok, 1 the run failed or was refused, 2 usage.
+.TP
+.B \-\-wasm\-task TEXT
+With \-\-run\-wasm\-agent: the task (operator input; DLP\-scanned before any model call).
+.TP
+.B \-\-wasm\-task\-file PATH
+With \-\-run\-wasm\-agent: read the task from a regular file (no symlink, at most 256 KiB).
+.TP
+.B \-\-wasm\-provider NAME
+With \-\-run\-wasm\-agent: override the team's provider preset (a preset name only: no key, no URL).
+.TP
+.B \-\-wasm\-base\-url URL
+With \-\-run\-wasm\-agent: the provider base URL for this run (operator input; overrides AGENTTEAMS_WASM_BASE_URL). https, or http to a loopback host; no userinfo, query or fragment. The provider key is sent to it, so it is never read from the brief for a keyed preset.
+.TP
+.B \-\-revoke\-wasm\-run RUN_ID
+Revoke a WASM agent run in \-\-project: writes its REVOKED sentinel; the run stops at its next checkpoint. \-\-revoke\-reason is recorded.
+.TP
+.B \-\-verify\-wasm\-run RUN_ID
+Verify a WASM agent run's hash\-chained transcript in \-\-project (read\-only). Exit 0 when it verifies.
+.TP
+.B \-\-tree
+With \-\-verify\-wasm\-run: verify the whole delegation tree under that root run (every sub\-agent's transcript and each parent/child binding; orphaned or forged child runs fail it).
+.TP
+.B \-\-revoke\-reason TEXT
+With \-\-revoke\-wasm\-run: the reason recorded in the sentinel (at most 200 characters).
+.TP
 .B \-\-self
-Operate on the module's own agent team using .github/agents/_build\-description.json. Without \-\-output it writes to the \-\-framework's own agents directory (copilot\-vscode: .github/agents; copilot\-cli: .github/agents; claude: .claude/agents; goose: .goose/recipes; agents\-md: .agents; codex: .codex/agents; grok: .grok/agents); the description is always read from .github/agents. Refused (fail closed, \-\-dry\-run too) when that directory's references/agent\-privilege.json signing switch is weaker than .github/agents' (ON there, OFF or missing in the target).
+Operate on the module's own agent team using .github/agents/_build\-description.json. Without \-\-output it writes to the \-\-framework's own agents directory (copilot\-vscode: .github/agents; copilot\-cli: .github/agents; claude: .claude/agents; goose: .goose/recipes; agents\-md: .agents; codex: .codex/agents; grok: .grok/agents; wasm: .agentteams\-wasm/agents); the description is always read from .github/agents. Refused (fail closed, \-\-dry\-run too) when that directory's references/agent\-privilege.json signing switch is weaker than .github/agents' (ON there, OFF or missing in the target).
 .TP
 .B \-\-allow\-foreign\-output
 Permit a relative \-\-output that resolves onto a non\-empty, git\-tracked directory with no sign of being an agentteams\-generated tree. Without this the run refuses: a relative path resolves against the current working directory, which is how a scratch render once overwrote a real agent tree.
@@ -192,7 +237,7 @@ Convert an existing agent team from DIR to the target \-\-framework. Reads each 
 .B \-\-interop\-from DIR
 Run cross\-framework interop pipeline from an existing team directory. Uses Canonical Agent Interface (CAI) normalization before writing target output.
 .TP
-.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex,grok,canonical}
+.B \-\-interop\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex,grok,wasm,canonical}
 Optional source framework override for \-\-interop\-from (auto\-detected when omitted). 'canonical' reads an exploded canonical directory (team.cai.json + agents/ + skills/).
 .TP
 .B \-\-interop\-mode {direct,bundle}
@@ -222,7 +267,7 @@ With \-\-reconcile\-front\-matter, take the template's value for each diverging 
 .B \-\-absorb\-from DIR
 Absorb native framework edits back into the canonical baseline. Reads the native deployment, compares against canonical and the last sync baseline using a three\-way classifier, and prints a report. Default behavior writes nothing to canonical; pass \-\-absorb\-apply to write clean native\-moved changes. Capability\-bearing fields are NEVER auto\-applied (§6.1).
 .TP
-.B \-\-absorb\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex,grok}
+.B \-\-absorb\-source\-framework {copilot\-vscode,copilot\-cli,claude,goose,agents\-md,codex,grok,wasm}
 Source framework for \-\-absorb\-from (auto\-detected when omitted). Any registered framework is accepted.
 .TP
 .B \-\-absorb\-apply
@@ -276,14 +321,23 @@ With \-\-add\-fence\-markers: rewrite the target file directly instead of produc
 .B \-\-target\-host\-features TOKENS
 Comma\-separated host\-feature subselectors gating opt\-in emission. Tokens are <ns>:<feature>; ns is one of claude, copilot\-vscode, copilot\-cli, bridge:copilot\-vscode\-to\-claude, etc. Examples: 'bridge:copilot\-vscode\-to\-claude:subagents,bridge:copilot\-vscode\-to\-claude:hooks'. Default emission is unchanged when omitted.
 .TP
+.B \-\-os\-sandbox {on,off}
+Override the brief's os_sandbox for this run (on|off). "off" suppresses every OS boundary agentteams emits for the selected framework; it is refused with write_policy orchestrator\-only and, in a governed workspace, needs an operator Ed25519\-signed decision sandbox\-os\-off:<framework> (Rule 15). Does not change live settings, the launcher, or the runner's confined_programs sandbox. Conflicts with an explicit \-\-target\-host\-features <fw>:sandbox.
+.TP
+.B \-\-wasm\-sandbox {on,off}
+Override the brief's wasm_sandbox.enabled for this run (on|off). "on" uses the brief's languages, limits and per\-agent grants (compute\-only defaults when the block is absent) and write\-protects the .agentteams control plane. "off" after WASM was on is constraint\-relaxing: in a governed workspace it needs an operator Ed25519\-signed decision sandbox\-wasm\-off:<framework> (Rule 15). Grants, native\-exec exceptions and network are never set from argv.
+.TP
+.B \-\-wasm\-substrate {on,off}
+Override the brief's wasm_sandbox.model_substrate for this run (on|off): the model\-substrate WASM switch agentteams projects to consumers that run model code (for example baseAgent's battery) in .agentteams/sandbox\-state.json. "on": the consumer must run model code WASM\-confined under an enforcing runner and refuse rather than fall back. Independent of \-\-wasm\-sandbox (agent code). "off" after on is constraint\-relaxing: in a governed workspace it needs an operator Ed25519\-signed decision sandbox\-wasm\-off:model\-substrate (Rule 15). agentteams never runs or confines model code.
+.TP
 .B \-\-allow\-unenforced\-confinement
-Permit generation to proceed when a confined/exclusive privilege_profile is requested on a target that has no OS\-level sandbox to enforce it (e.g. Goose, Codex, Copilot, native Windows). Without this flag, generate FAILS CLOSED (non\-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
+Permit generation to proceed when the OS sandbox (a confined/exclusive privilege_profile, or os_sandbox on) is requested on a target that has no OS\-level sandbox to enforce it (native Windows and other hosts with no emittable boundary; Linux and macOS have the neutral launcher). Without this flag, generate FAILS CLOSED (non\-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
 .TP
 .B \-\-accept\-write\-root PATH
 Accept one NEW sandbox write root outside the project (absolute, ~/..., or ../...) named by the brief, coordination roots or a grant. Repeatable; matched exactly after normalization. Roots already in the live .claude/settings.json allowWrite need no acceptance. Operator argv only: never read from a brief, env var or file.
 .TP
 .B \-\-allow\-fallback\-fail\-open
-CC\-2: keep the emitted constitutional\-gate hook fail\-OPEN (a gate crash is a harness allow) even for a confined/exclusive privilege_profile, whose default is now fail\-CLOSED (a crash emits a deny, so it cannot become a silent allow in a workspace that opted into a boundary). Use only if a buggy gate bricking the session is a worse risk than a missed block for this workspace.
+CC\-2: keep the emitted constitutional\-gate hook fail\-OPEN (a gate crash is a harness allow) even when the OS sandbox is on and was explicitly requested (an explicit confined/exclusive privilege_profile, or os_sandbox on), whose default is fail\-CLOSED (a crash emits a deny, so it cannot become a silent allow in a workspace that opted into a boundary). With the OS sandbox off the hook stays fail\-open anyway. Use only if a buggy gate bricking the session is a worse risk than a missed block for this workspace.
 .TP
 .B \-\-capture\-baseline PATH
 Capture a deterministic SHA\-256 manifest of the output tree and write it to PATH (e.g., tests/baselines/<target>.json). Used by regression tests to detect emission drift across phases. Skips the normal generation pipeline.

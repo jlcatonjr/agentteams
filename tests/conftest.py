@@ -292,6 +292,18 @@ def signing_preapproved(monkeypatch):
     monkeypatch.setattr(signer_location, "verify_install_location", lambda *a, **k: [])
 
 
+@pytest.fixture
+def stub_ed25519(monkeypatch):
+    """Stub Ed25519 decision verification with a payload hash (``tests._sandbox_gate_helpers._stub_sig``), so the
+    sandbox-relaxation gate's own logic runs without the ``signing`` extra. Shared here, not imported from a test
+    module (wave-3 @code-hygiene H8)."""
+    from agentteams.cli import decision_log as dl
+    from tests._sandbox_gate_helpers import _stub_sig
+
+    monkeypatch.setattr(dl, "verify_by_scheme",
+                        lambda scheme, values, signature, public_pem=None: signature == _stub_sig(values))
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _goose_switch_machinery_under_test():
     """Keep the Goose write-policy machinery under test while the switch is refused on Goose.
@@ -311,3 +323,22 @@ def _goose_switch_machinery_under_test():
         os.environ.pop(write_policy.GOOSE_OVERRIDE_ENV, None)
     else:
         os.environ[write_policy.GOOSE_OVERRIDE_ENV] = previous
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _wasm_test_guests_allowed():
+    """Let the suite run Stage 0 with test guest programs (``launch.TEST_GUEST_ENV``; @security P07 C1).
+
+    Outside tests ``stage0`` runs only the pinned guest. ``tests/test_wasm_agent_launch.py`` clears this to check
+    the shipped default refuses. Set here as a string constant so the session does not import the WASM agent.
+    """
+    import os
+
+    name = "AGENTTEAMS_WASM_TEST_GUEST"
+    previous = os.environ.get(name)
+    os.environ[name] = "1"
+    yield
+    if previous is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = previous

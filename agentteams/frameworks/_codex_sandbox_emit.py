@@ -61,16 +61,21 @@ def codex_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     ``privilege_profile`` expansion) and the ``privilege_profile`` field itself, so a confined
     manifest also emits on the ``convert``/``render`` paths that do not run the
     profile-to-host_features union. The neutral launcher this runner wraps is gated the same way.
+    A one-line delegate to :func:`agentteams.sandbox_state.os_sandbox_requested` (P00), so the
+    dedicated ``os_sandbox`` switch turns it off (or on) independently of the profile.
 
     Args:
         manifest: The team manifest.
 
     Returns:
         Whether confinement is requested.
+
+    Raises:
+        ValueError: An invalid ``os_sandbox`` value.
     """
-    if "codex:sandbox" in (manifest.get("host_features") or []):
-        return True
-    return manifest.get("privilege_profile") in {"confined", "exclusive"}
+    from agentteams.sandbox_state import os_sandbox_requested
+
+    return os_sandbox_requested(manifest, token="codex:sandbox")
 
 
 #: Runs INSIDE the launcher as ``bash -c "$SELF_PROBE" codex-confined <codex args>`` and then becomes Codex
@@ -100,15 +105,26 @@ _RUNNER_SELF_PROBE = (
 )
 
 
-def _runner_label(gate: bool) -> str:
+def _runner_label(gate: bool, wasm_gate: bool = False) -> str:
     """Return the runner header's honest label, which depends on whether the role gate is emitted.
 
     Args:
         gate: Whether :func:`codex_role_gate_enabled` holds for this team.
+        wasm_gate: Whether the gate runs in WASM mode (``_codex_wasm_gate.codex_wasm_gate_enabled``; P13).
 
     Returns:
         Comment lines.
     """
+    if wasm_gate:
+        return (
+            "# WASM NATIVE-EXEC GATE (WASM plan P13): .codex/hooks.json runs .agentteams/bin/codex-role-gate.py\n"
+            "# before every tool call in WASM mode: a spawned agent (any call Codex tags with agent_type) outside\n"
+            "# AGENTTEAMS_CODEX_NATIVE_KEEP is denied the shell (the probed Bash name, plus unprobed spellings) and\n"
+            "# must run code through agentteams_wasm's run_wasm. HARNESS-LEVEL: it holds only while Codex runs the\n"
+            "# hook (--dangerously-bypass-hook-trust; the hook files are pinned and read-only in the launcher).\n"
+            "# Residuals: an unknown shell tool name passes; Codex lets a call through when a hook TIMES OUT.\n"
+            "# Other per-role limits stay INSTRUCTION-LEVEL. agentteams cannot verify that Codex is launched here.\n"
+        )
     if gate:
         return (
             "# PER-ROLE LIMITS (write_policy \"orchestrator-only\"): Codex ignores a custom agent's sandbox_mode,\n"
@@ -129,12 +145,15 @@ def _runner_label(gate: bool) -> str:
     )
 
 
-def _runner_gate_block() -> str:
+def _runner_gate_block(readfs: bool = True) -> str:
     """Return the runner lines that enforce the role gate's preconditions before launch.
 
     Checks the gate, the read-only server and ``.codex/hooks.json`` against their pins (refusing a missing,
     symlinked or changed copy), then puts the read-only server's entry in ``CODEX_HOME/config.toml``:
     written when the file is empty, required verbatim when the operator has their own config.
+
+    Args:
+        readfs: False for the WASM-mode gate (P13): no read-only server is pinned or configured.
 
     Returns:
         Bash lines.
@@ -142,13 +161,14 @@ def _runner_gate_block() -> str:
     from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH, READFS_SHA256
 
     hooks_sha = hashlib.sha256(codex_hooks_json().encode("utf-8")).hexdigest()
+    policy = "write_policy orchestrator-only" if readfs else "the WASM native-exec gate"
     return (
-        "# write_policy orchestrator-only: the role gate's files must be exactly what agentteams shipped.\n"
+        f"# {policy}: the role gate's files must be exactly what agentteams shipped.\n"
         'sha(){ { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d" " -f1; }\n'
         'pin(){ if [ ! -f "$1" ] || [ -L "$1" ] || [ "$(sha "$1")" != "$2" ]; then\n'
         '  echo "REFUSING: $1 is missing, a symlink, or not the pinned copy; regenerate the team with agentteams." >&2; exit 2; fi; }\n'
         f'pin "$ROOT/{CODEX_ROLE_GATE_PROJECT_PATH}" {CODEX_ROLE_GATE_SHA256}\n'
-        f'pin "$ROOT/{READFS_PROTECTED_PATH}" {READFS_SHA256}\n'
+        + (f'pin "$ROOT/{READFS_PROTECTED_PATH}" {READFS_SHA256}\n' if readfs else '') +
         f'pin "$ROOT/{CODEX_HOOKS_PROJECT_PATH}" {hooks_sha}\n'
         'case "$ROOT" in *[\\"\\\\]*|*[[:cntrl:]]*)\n'
         '  echo "REFUSING: the project path has a quote, backslash or control character; config.toml cannot name it safely." >&2; exit 2 ;; esac\n'
@@ -162,8 +182,9 @@ def _runner_gate_block() -> str:
         'PY="$(cd "$(dirname "$PY")" && pwd -P)/$(basename "$PY")"\n'
         'case "$PY/" in "$ROOT"/*|"$CODEX_HOME"/*|*[\\"\\\\]*|*[[:cntrl:]]*)\n'
         '  echo "REFUSING: python3 at $PY is inside a path agents can write (or unquotable); set AGENTTEAMS_CODEX_PYTHON to an interpreter outside the project." >&2; exit 2 ;; esac\n'
-        'if grep -qs agentteams_readfs "$ROOT/.codex/config.toml"; then   # any form: table, dotted key, inline\n'
-        '  echo "REFUSING: $ROOT/.codex/config.toml mentions agentteams_readfs; only the runner may define that server." >&2; exit 2; fi\n'
+        + ('if grep -qs agentteams_readfs "$ROOT/.codex/config.toml"; then   # any form: table, dotted key, inline\n'
+           '  echo "REFUSING: $ROOT/.codex/config.toml mentions agentteams_readfs; only the runner may define that server." >&2; exit 2; fi\n'
+           if readfs else '') +
         '# Nested Codex config or hooks (subdir/.codex/) would apply to a session started below the root; refuse them.\n'
         '# (|| true: an unreadable dir or head closing the pipe must not kill the runner under pipefail.)\n'
         '# Case-insensitive (APFS resolves .CODEX to .codex); files or symlinks, and a symlinked .codex dir itself.\n'
@@ -171,11 +192,18 @@ def _runner_gate_block() -> str:
         '  \\( \\( -type f -o -type l \\) \\( -ipath "*/.codex/hooks.json" -o -ipath "*/.codex/config.toml" \\) \\) -print -o \\\n'
         '  \\( -type l -iname .codex \\) -print 2>/dev/null || true; } | head -n 5)"\n'
         'if [ -n "$NESTED" ]; then\n'
-        '  echo "REFUSING: nested Codex config or hooks found; under write_policy orchestrator-only only $ROOT/.codex/ may hold them:" >&2\n'
+        f'  echo "REFUSING: nested Codex config or hooks found; under {policy} only $ROOT/.codex/ may hold them:" >&2\n'
         '  printf \'%s\\n\' "$NESTED" >&2; exit 2; fi\n'
+        + (_readfs_config_block(READFS_PROTECTED_PATH) if readfs else "")
+    )
+
+
+def _readfs_config_block(readfs_path: str) -> str:
+    """The runner lines that put the read-only server's entry in ``CODEX_HOME/config.toml`` (write policy only)."""
+    return (
         'READFS_TOML="[mcp_servers.agentteams_readfs]\n'
         'command = \\"$PY\\"\n'
-        f'args = [\\"-I\\", \\"-S\\", \\"$ROOT/{READFS_PROTECTED_PATH}\\", \\"--root\\", \\"$ROOT\\"]"\n'
+        f'args = [\\"-I\\", \\"-S\\", \\"$ROOT/{readfs_path}\\", \\"--root\\", \\"$ROOT\\"]"\n'
         'if [ ! -s "$CODEX_HOME/config.toml" ]; then printf \'%s\\n\' "$READFS_TOML" > "$CODEX_HOME/config.toml"\n'
         'elif [ "$(grep -xF -A2 -- "[mcp_servers.agentteams_readfs]" "$CODEX_HOME/config.toml")" != "$READFS_TOML" ]; then\n'
         '  echo "REFUSING: $CODEX_HOME/config.toml lacks the read-only server agents need under write_policy" >&2\n'
@@ -250,9 +278,20 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
     writable_flags = " ".join(f"--writable {_runner_root_expr(r)}" for r in roots)
     exclude_flags, skipped_note = runner_exclude_flags(manifest)
     gate = codex_role_gate_enabled(manifest)
-    gate_block = _runner_gate_block() if gate else ""
-    bypass = " --dangerously-bypass-hook-trust" if gate else ""
-    py_setenv = ' --setenv AGENTTEAMS_PYTHON="$PY"' if gate else ""
+    from agentteams.frameworks._codex_wasm_gate import codex_wasm_gate_enabled, runner_env_flags
+
+    wasm_gate = codex_wasm_gate_enabled(manifest)   # P13: never together with gate (needs no write_policy)
+    hook = gate or wasm_gate
+    gate_block = _runner_gate_block() if gate else (_runner_gate_block(readfs=False) if wasm_gate else "")
+    # METAPLAN R1 (P00 D11): .agentteams is protected unconditionally below; when WASM is on, also each MCP config
+    # path that launches agentteams_wasm (validated plain relative paths, so safe unquoted in the loop).
+    from agentteams.frameworks._control_plane_protect import control_plane_for
+
+    extra = control_plane_for(manifest) or ()
+    extra_block = (f'for p in {" ".join(extra)}; do [ -e "$ROOT/$p" ] && PROTECT+=( --protect "$ROOT/$p" ); done\n'
+                   if extra else "")
+    bypass = " --dangerously-bypass-hook-trust" if hook else ""
+    py_setenv = (' --setenv AGENTTEAMS_PYTHON="$PY"' if hook else "") + (runner_env_flags(manifest) if wasm_gate else "")
     return (
         "#!/usr/bin/env bash\n"
         "# .codex/confined-run.example.sh - EXAMPLE: run Codex inside agentteams' launcher (Linux + macOS).\n"
@@ -267,7 +306,7 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         "# credential dirs (including ~/.config/agentteams/keys) are masked. Run Codex this way or not at\n"
         "# all: outside the launcher, danger-full-access confines nothing.\n"
         "#\n"
-        + _runner_label(gate) +
+        + _runner_label(gate, wasm_gate) +
         "#\n"
         "# CODEX_HOME: Codex must write its home (sessions, logs, auth), so it is writable for every agent\n"
         "# command. Default: $HOME/.config/agentteams/codex-home/<project>-<hash>; override with\n"
@@ -309,6 +348,7 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         'PROTECT=()\n'
         'if [ -e "$ROOT/.agentteams" ]; then PROTECT+=( --protect "$ROOT/.agentteams" ); fi\n'
         'if [ -e "$ROOT/.agentteams-status" ]; then PROTECT+=( --protect "$ROOT/.agentteams-status" ); fi\n'
+        + extra_block +
         'for f in config.toml hooks.json AGENTS.md AGENTS.override.md rules prompts skills plugins; do\n'
         '  PROTECT+=( --protect "$CODEX_HOME/$f" ); done\n'
         'EGRESS="${CODEX_CONFINE_EGRESS:-host}"\n'
@@ -322,7 +362,7 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         f'exec "$LAUNCHER" --scratch "$SCRATCH" {writable_flags} --writable "$CODEX_HOME" \\\n'
         f'  ${{PROTECT[@]+"${{PROTECT[@]}}"}} --protect-prompt-roots{exclude_flags} --egress "$EGRESS" \\\n'
         f'  --setenv CODEX_HOME="$CODEX_HOME" --setenv AGENTTEAMS_ROOT="$ROOT" --setenv AGENTTEAMS_CODEX_CONFINED=1 \\\n'
-        f'  --setenv AGENTTEAMS_PROBE_KEYS="$PK" --setenv AGENTTEAMS_PROBE_AT="$PA" --setenv AGENTTEAMS_PROBE_GATE={int(gate)} \\\n'
+        f'  --setenv AGENTTEAMS_PROBE_KEYS="$PK" --setenv AGENTTEAMS_PROBE_AT="$PA" --setenv AGENTTEAMS_PROBE_GATE={int(hook)} \\\n'
         f'  --setenv AGENTTEAMS_PROBE_PEM="$PEM" --setenv AGENTTEAMS_PROBE_CODEX="$PC"{py_setenv} --env-allow PATH --env-allow HOME \\\n'
         f'  -- bash -c "$SELF_PROBE" codex-confined --sandbox danger-full-access{bypass} "$@"\n'
     )
@@ -363,4 +403,9 @@ def codex_sandbox_output_files(
     files = [(CODEX_RUNNER_REL, _build_codex_runner(manifest))]
     if codex_role_gate_enabled(manifest):
         files += role_gate_output_files()
+    else:
+        from agentteams.frameworks._codex_wasm_gate import codex_wasm_gate_enabled, wasm_gate_output_files
+
+        if codex_wasm_gate_enabled(manifest):   # P13: the same pinned gate, run in WASM mode by the runner
+            files += wasm_gate_output_files()
     return files

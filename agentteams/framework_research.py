@@ -27,7 +27,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from agentteams.frameworks.format_spec import FORMAT_SPECS as _FORMAT_SPECS
+# Only upstream specs: agentteams' own runtime format (wasm) has no published docs to watch (METAPLAN §2.5).
+from agentteams.frameworks.format_spec import UPSTREAM_SPECS as _FORMAT_SPECS
 from agentteams.frameworks import format_spec as _format_spec
 
 #: Canonical Claude Code sub-agents doc URL. Single-sourced from
