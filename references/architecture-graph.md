@@ -5,7 +5,7 @@
 
 - Modules mapped: **398**
 - Packages: **14**
-- Internal import edges: **1407**
+- Internal import edges: **1408**
 - Distinct external dependencies: **11**
 
 ---
@@ -199,7 +199,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks._grok_tool_scoping` | — | `agentteams.capability_map`, `agentteams.frameworks.grok`, `agentteams.interop_helpers` |
 | `agentteams.frameworks._linux_sandbox_emit` | `agentteams.sandbox_state` | `agentteams.cli.generate_helpers`, `agentteams.frameworks.base`, `agentteams.frameworks.codex`, `agentteams.launcher_lineage` |
 | `agentteams.frameworks._prompt_root_protect` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude` |
-| `agentteams.frameworks._sandbox_drift` | `agentteams.sandbox_state` | `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.wasm_enforcement` |
+| `agentteams.frameworks._sandbox_drift` | `agentteams.sandbox_state` | `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp` |
 | `agentteams.frameworks._sandbox_emit` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots`, `agentteams.sandbox_state` | `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.standalone_modes`, `agentteams.confinement`, `agentteams.control_plane_io`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.grok_config_emit`, `agentteams.mcp_direct_grants`, `agentteams.multi_sync`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.signing_switch` |
 | `agentteams.frameworks._wasm_team_docs` | `agentteams._sandbox_profiles`, `agentteams.frameworks._write_roots`, `agentteams.model_providers`, `agentteams.sandbox_state`, `agentteams.wasm_agent.team` | `agentteams.frameworks.wasm` |
 | `agentteams.frameworks._wasm_tool_scoping` | — | `agentteams.frameworks.wasm`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.team` |
@@ -442,7 +442,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.wasm_enforcement` | `agentteams.cli.render_pipeline`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_mcp`, `agentteams.write_policy` | `agentteams.cli.os_sandbox_switch`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.convert`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop` |
 | `agentteams.wasm_exec` | — | `agentteams.cli.wasm_agent_commands`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.runner_wasm`, `agentteams.sandbox_state`, `agentteams.wasm_agent.child_runs`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.stage1`, `agentteams.wasm_agent.team`, `agentteams.wasm_config`, `agentteams.wasm_mcp` |
 | `agentteams.wasm_guests` | — | `agentteams.runner_wasm`, `agentteams.wasm_agent.launch`, `agentteams.wasm_config` |
-| `agentteams.wasm_mcp` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._wasm_wiring`, `agentteams.runner_mcp`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_exec`, `agentteams.wasm_runtime` | `agentteams.codex_mcp_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_enforcement`, `agentteams.wasm_policy` |
+| `agentteams.wasm_mcp` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._wasm_wiring`, `agentteams.runner_mcp`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_exec`, `agentteams.wasm_runtime` | `agentteams.codex_mcp_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_enforcement`, `agentteams.wasm_policy` |
 | `agentteams.wasm_pins` | — | `agentteams._wasm_archive`, `agentteams._wasm_pin_update`, `agentteams.wasm_runtime` |
 | `agentteams.wasm_policy` | `agentteams.cli.sandbox_effects`, `agentteams.frameworks._wasm_wiring`, `agentteams.wasm_config`, `agentteams.wasm_mcp` | `agentteams.analyze`, `agentteams.cli.render_pipeline` |
 | `agentteams.wasm_runtime` | `agentteams._wasm_archive`, `agentteams._wasm_pin_update`, `agentteams.git_exec`, `agentteams.wasm_pins` | `agentteams._wasm_pin_update`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.wasm_commands`, `agentteams.runner_wasm`, `agentteams.wasm_agent.launch`, `agentteams.wasm_mcp` |
@@ -5443,6 +5443,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.frameworks._control_plane_protect",
+        "agentteams.frameworks._sandbox_drift",
         "agentteams.frameworks._wasm_wiring",
         "agentteams.runner_mcp",
         "agentteams.sandbox_state",
@@ -11196,6 +11197,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.wasm_mcp",
       "target": "agentteams.frameworks._control_plane_protect"
+    },
+    {
+      "source": "agentteams.wasm_mcp",
+      "target": "agentteams.frameworks._sandbox_drift"
     },
     {
       "source": "agentteams.wasm_mcp",

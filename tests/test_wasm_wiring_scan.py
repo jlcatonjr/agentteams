@@ -184,9 +184,18 @@ def _goose_profile(root: Path, body: str) -> None:
            '(allow file-write* (subpath (param "WORKSPACE_ROOT")))\n' + body)
 
 
-def test_goose_profile_check_parses_the_deny_rules(tmp_path):
+def _goose_live(root: Path, monkeypatch: pytest.MonkeyPatch, text: str | None) -> None:
+    """Point the live Goose config at a file beside ``root`` holding ``text`` (None: absent)."""
+    live = root.parent / f"{root.name}-goose-config.yaml"
+    if text is not None:
+        live.write_text(text)
+    monkeypatch.setenv("AGENTTEAMS_GOOSE_CONFIG", str(live))
+
+
+def test_goose_profile_check_parses_the_deny_rules(tmp_path, monkeypatch):
     from agentteams.frameworks import _control_plane_protect as cpp
 
+    _goose_live(tmp_path, monkeypatch, "GOOSE_SANDBOX: 1\n")
     manifest = _manifest("goose", privilege_profile="confined")
     denies = cpp.seatbelt_denies(False, cpp.control_plane_for(manifest))
     exprs = "\n".join(f'    (subpath (string-append (param "WORKSPACE_ROOT") "/{p}"))' for p in denies)
@@ -300,3 +309,18 @@ def test_front_matter_ends_only_at_an_exact_fence_line():
     assert ww._launches(".claude/agents/x.md", front.replace("\n", "\r\n"))
     closed = f"---\nname: x\n---\t\nmcpServers: [{marker}]\n"
     assert not ww._launches(".claude/agents/x.md", closed)   # the body after an exact fence is prose
+
+
+@pytest.mark.parametrize("live", [None, "", "GOOSE_SANDBOX: 0\n", "# GOOSE_SANDBOX: 1\n"])
+def test_goose_profile_alone_is_not_protection_until_goose_sandbox_is_live(tmp_path, monkeypatch, live):
+    """P17: the emitted profile is inert until wired in; only GOOSE_SANDBOX in the live config counts (D2)."""
+    from agentteams.frameworks import _control_plane_protect as cpp
+
+    manifest = _manifest("goose", privilege_profile="confined")
+    denies = cpp.seatbelt_denies(False, cpp.control_plane_for(manifest))
+    exprs = "\n".join(f'    (subpath (string-append (param "WORKSPACE_ROOT") "/{p}"))' for p in denies)
+    _goose_profile(tmp_path, f"(deny file-write*\n{exprs})\n")
+    _goose_live(tmp_path, monkeypatch, live)
+    assert "Seatbelt profile not wired" in (wasm_mcp.control_plane_advisory(tmp_path, "goose", manifest) or "")
+    _goose_live(tmp_path, monkeypatch, "GOOSE_SANDBOX: true\n")
+    assert wasm_mcp.control_plane_advisory(tmp_path, "goose", manifest) is None

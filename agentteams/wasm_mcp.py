@@ -486,7 +486,8 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
     """Why grant integrity is only advisory here (R1, S2), or None when the control plane is session-protected.
 
     Protected means: the OS sandbox is on, R1's rules are emitted (``protect_control_plane``), and they are merged
-    into the live host config (Claude ``settings.json``; the deny rules of the Goose Seatbelt profile, parsed). Every
+    into the live host config (Claude ``settings.json``; the deny rules of the Goose Seatbelt profile, parsed, and
+    GOOSE_SANDBOX on in the live Goose config, ``_sandbox_drift.live_goose_sandbox_enabled``). Every
     config file on disk that launches the server (``frameworks._wasm_wiring.scan_launching_configs``) must be in the
     live denyWrite (itself or a denied ancestor) and, on Claude, behind an ``Edit`` deny, whether or not the manifest
     lists it (P11). The disk scan runs whatever the WASM switch: a config it cannot check (symlinked, unparseable),
@@ -568,7 +569,17 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
         missing = [p for p in (*cpp.seatbelt_denies(protect_ledger, control), *launching)
                    if not _seatbelt_write_denied(p, rules)]
         missing = list(dict.fromkeys(missing))
-        return advisory(".goose/sandbox.sb does not deny writes to " + ", ".join(missing)) if missing else None
+        if missing:
+            return advisory(".goose/sandbox.sb does not deny writes to " + ", ".join(missing))
+        # The emitted profile is INERT until wired in: only the live, user-global GOOSE_SANDBOX (P00's drift
+        # evidence) is checkable at render; a sandbox-exec launch is not, so it never counts (D2).
+        from agentteams.frameworks._sandbox_drift import live_goose_sandbox_enabled
+
+        if live_goose_sandbox_enabled() is not True:
+            return advisory("Seatbelt profile not wired: GOOSE_SANDBOX is not enabled in the live Goose config "
+                            "(~/.config/goose/config.yaml, user-global); merge config.yaml.agentteams.example, or "
+                            "launch goose under sandbox-exec -f .goose/sandbox.sb (not verifiable at render)")
+        return None
     if framework == "grok":
         return advisory("grok's sandbox profile cannot deny a write without denying the read")
     return advisory(f"no verified control-plane write protection for {framework}")

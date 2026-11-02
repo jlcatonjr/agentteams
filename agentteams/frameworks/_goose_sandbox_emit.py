@@ -37,7 +37,6 @@ source of truth shared with the Claude path.
 
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 import sys
@@ -50,6 +49,8 @@ from agentteams.frameworks._control_plane_protect import substrate_protect_paths
 from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
 from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
+from agentteams.frameworks._sandbox_drift import live_goose_config_path
+from agentteams.frameworks._sandbox_drift import live_goose_sandbox_enabled_at as _live_goose_sandbox_enabled
 from agentteams.sandbox_state import effective_sandbox_state
 from agentteams.frameworks._sandbox_emit import (
     _DEFAULT_PROTECTED_READ_PATHS,
@@ -767,31 +768,6 @@ def goose_linux_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str
     return [(GOOSE_LINUX_RUNNER_REL, _build_linux_goose_runner(manifest))]
 
 
-#: Truthy YAML/env values for GOOSE_SANDBOX in a live Goose config.
-_GOOSE_SANDBOX_TRUTHY = frozenset({"1", "true", "yes", "on"})
-#: Matches ``GOOSE_SANDBOX: 1`` / ``GOOSE_SANDBOX = true`` / ``export GOOSE_SANDBOX=on``.
-_GOOSE_SANDBOX_LINE = re.compile(
-    r"(?im)^\s*(?:export\s+)?GOOSE_SANDBOX\s*[:=]\s*[\"']?([A-Za-z0-9]+)[\"']?\s*$"
-)
-
-
-def _live_goose_sandbox_enabled(config_path: Path) -> bool | None:
-    """Return whether GOOSE_SANDBOX is enabled in the operator's LIVE Goose config.
-
-    Output-only, secret-safe: reads the live config but NEVER echoes its content (it may
-    hold API keys) — the caller reports a boolean, mirroring the Claude verifier's
-    discipline. Returns None when the file is absent or unreadable (cannot confirm).
-    """
-    try:
-        text = config_path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    match = _GOOSE_SANDBOX_LINE.search(text)
-    if match is None:
-        return False
-    return match.group(1).strip().lower() in _GOOSE_SANDBOX_TRUTHY
-
-
 def verify_goose_sandbox_wiring(
     project_root: Path,
     manifest: dict[str, Any] | None = None,
@@ -822,7 +798,7 @@ def verify_goose_sandbox_wiring(
     * **no confinement requested** — ``ok=True`` (nothing to verify). **Switched off / WASM on** (P00): ``_sandbox_drift``.
     """
     state = effective_sandbox_state(manifest) if manifest is not None else None
-    cfg = live_config_path or (Path.home() / ".config" / "goose" / "config.yaml")
+    cfg = live_config_path or live_goose_config_path()
     recorded = previous_boundary_recorded(project_root / ".goose" / "recipes")  # S2: a profile off after a boundary
     if switched_off(state, previous_boundary=recorded):  # DRIFT while the live, user-global GOOSE_SANDBOX is on
         return goose_off_drift(state, _live_goose_sandbox_enabled(cfg))
