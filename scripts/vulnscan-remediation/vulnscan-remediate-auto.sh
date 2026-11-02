@@ -110,7 +110,7 @@ esac
 # Never remediate on the wrong code (vulnscan-install-guard.sh; an install from before the guard has no guard file)
 if [[ -f "$SRC/vulnscan-install-guard.sh" ]]; then
   . "$SRC/vulnscan-install-guard.sh"
-  install_guard remediation || exit 4
+  install_guard remediation "$STATE_DIR" || exit 4
 fi
 LOCK="$STATE_DIR/remediate.flock"
 LEGACY_LOCK="$STATE_DIR/remediate.lock"   # the mkdir lock of earlier versions (a directory holding a pid file)

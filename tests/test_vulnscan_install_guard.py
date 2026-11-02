@@ -37,8 +37,8 @@ def _guard(tmp_path: Path, *, import_rc: int = 0, url: str = "", deployed: objec
         (state / "deployed.json").write_text(deployed if isinstance(deployed, str) else json.dumps(deployed),
                                              encoding="utf-8")
     proc = subprocess.run(
-        ["/bin/bash", "-c", f'. "{_GUARD}"; install_guard daily'],
-        env={"PATH": "/usr/bin:/bin", "PY": str(py), "STATE": str(state), "FAKE_IMPORT_RC": str(import_rc),
+        ["/bin/bash", "-c", f'. "{_GUARD}"; install_guard daily "$GUARD_STATE"'],
+        env={"PATH": "/usr/bin:/bin", "PY": str(py), "GUARD_STATE": str(state), "STATE": "/nonexistent-inherited", "FAKE_IMPORT_RC": str(import_rc),
              "FAKE_URL": url, "HOME": str(tmp_path)},
         capture_output=True, text=True, timeout=60)
     return proc.returncode, proc.stderr, state
@@ -85,7 +85,7 @@ def test_both_scheduled_jobs_source_the_guard_and_the_installer_copies_it() -> N
     daily = (_DIR / "vulnscan-daily-wrapped.sh").read_text(encoding="utf-8")
     auto = (_DIR / "vulnscan-remediate-auto.sh").read_text(encoding="utf-8")
     deploy = (_DIR / "vulnscan-deploy.sh").read_text(encoding="utf-8")
-    assert 'install_guard "daily${1:+ $1}" || exit 4' in daily
-    assert "install_guard remediation || exit 4" in auto
+    assert 'install_guard "daily${1:+ $1}" "$STATE" || exit 4' in daily
+    assert 'install_guard remediation "$STATE_DIR" || exit 4' in auto
     assert "vulnscan-install-guard.sh)" in auto.split("FILES=(", 1)[1].split("\n", 2)[1]
     assert '"$SHA" "$STATE/deployed.json"' in deploy

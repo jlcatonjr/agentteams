@@ -69,7 +69,7 @@ rescan() {   # keep the partial summary, run the daily scan again, count the ret
 # A copy installed before the guard existed has no guard file next to it and runs as before.
 if [[ "${1:-}" != --ensure-only && -f "$HERE/vulnscan-install-guard.sh" ]]; then
   . "$HERE/vulnscan-install-guard.sh"
-  install_guard "daily${1:+ $1}" || exit 4
+  install_guard "daily${1:+ $1}" "$STATE" || exit 4
 fi
 
 case "${1:-}" in

@@ -5,7 +5,7 @@
 # installed. On 2026-11-01 a "latest release" reinstall put v1.0.4, which has no agentteams.vulnscan, over a
 # deployed main, and the scheduled runs failed with "No module named agentteams.vulnscan" (vfail-1101).
 #
-#   install_guard <job name>     # 0 = the installed package is the deployed one; 1 = refused (logged, notified)
+#   install_guard <job name> <state dir>   # 0 = the installed package is the deployed one; 1 = refused (logged, notified)
 #
 # Checks, in order:
 #   1. "$PY" imports agentteams.vulnscan;
@@ -13,11 +13,12 @@
 #      distribution came from that commit's archive (its direct_url.json names .../agentteams-<first 8 of sha>).
 #      No record (a deploy before this check existed) checks 1 only.
 # A refusal is written to <state>/install-guard.json, logged on stderr and shown as a desktop notification; the
-# fix is to re-run vulnscan-deploy.sh. Needs PY and a state dir (STATE or STATE_DIR) from the caller. Reads JSON
+# fix is to re-run vulnscan-deploy.sh. Needs PY from the caller; the state dir is passed explicitly, so a STATE
+# inherited from the environment cannot redirect the check. Reads JSON
 # with the system python (/usr/bin/python3 -I), since the venv itself is what may be broken.
 
 install_guard() {
-  local who="${1:-vulnscan}" state="${STATE:-${STATE_DIR:-}}" problem="" want="" got=""
+  local who="${1:-vulnscan}" state="${2:-}" problem="" want="" got=""
   [[ -n "$state" ]] || { echo "install-guard: no state dir" >&2; return 1; }
   if ! "$PY" -P -c 'import agentteams.vulnscan' >/dev/null 2>&1; then
     problem="the installed agentteams ($PY) has no agentteams.vulnscan"
