@@ -555,10 +555,10 @@ def test_origin_repo_forms_and_refusal(env: dict, tmp_path: Path) -> None:
                       ("https://github.com/o/svc", "github.com/o/svc")):
         subprocess.run(["git", "-C", str(repo), "remote", "remove", "origin"], capture_output=True)
         subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", url], check=True)
-        assert executor._origin_repo(repo) == want, url
+        assert executor.origin_repo(repo) == want, url
     subprocess.run(["git", "-C", str(repo), "remote", "set-url", "origin", str(tmp_path / "bare.git")], check=True)
     with pytest.raises(executor.ExecError, match="not a GitHub repository URL"):
-        executor._origin_repo(repo)
+        executor.origin_repo(repo)
 
 
 @pytest.mark.skipif(not GIT, reason="git not available")

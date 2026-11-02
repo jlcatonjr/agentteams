@@ -1027,7 +1027,8 @@ the stage, nothing is guessed).
   the tests in it, and the PR is labelled `vulnscan-major`. The staged state and the `stage-image` and `open-pr`
   results carry `"image": true`.
 - **Lanes.** `close-superseded` closes only older PRs in the replacement's lane (`ops.lane_of`: `image` for a
-  `stage-image` PR, `major` for a `stage-major` PR, `deps` for every other): a base-image PR, a MAJOR PR and a
+  `stage-image` PR, `major` for a `stage-major` PR, `deps` for every other) (every `open-pr` result, a claimed existing PR included, carries
+  its lane: `executor_pr.lane_fields`): a base-image PR, a MAJOR PR and a
   dependency PR never supersede each other (a MAJOR PR is staged beside the fix PR, vfr-b.B2).
 
 ### Grants from the registry
@@ -3392,15 +3393,20 @@ reading side: writing packets and issuing the directive is operator tooling outs
   `sandbox/confine-run.sh` the handoff's goose session would run under: the goose home's, else
   `<agent.team_dir>/sandbox/confine-run.sh`), `launcher_state` / `launcher_detail` (see
   [launcher_lineage](launcher-lineage.md)) and `launcher_warning()`, printed by `handoff status` unless `current`.
-- **The `own-pr` lapse** (`handoff_lapse`, operator decision OD10). `handoff_lapse.clock(repo, branch)` starts,
-  the first time the newest verdict for a staged fix's digest is `own-pr`, a clock recorded in
-  `<state>/handoff-lapse.json`; a different digest or a changed fix plan restarts it. Until `LAPSE_DAYS` (7) have
-  passed, `open-pr` stays refused and the refusal names the lapse date (`pending_detail`); `RepoHandoff.lapses`
-  and `RepoHandoff.ask` (`packet_ask`: the request the next handoff packet should carry, for the operator's packet
-  tooling) show it in the summary and `handoff status`. After that, `lapsed(repo, branch)` lets `open-pr` proceed
-  under the existing grant when no open owner PR updates the staged packages (`open_prs.owner_prs`: any author,
-  not a fork, not `vulnscan/*`, title or branch naming a package); `authorize` logs a `handoff-lapsed` ledger row.
-  Only `own-pr` lapses; a gh failure or a staged record without packages keeps deferring.
+- **The `own-pr` lapse** (`handoff_lapse`, operator decision OD10). `handoff_lapse.clock(repo, branch)` starts a
+  clock the first time the newest verdict for a staged fix is `own-pr`: a `handoff-clock` row (`state: start`, with
+  the fix `digest`, the fix `plan` digest and the verdict's `handoff_id`) in the MAC-chained ledger, whose own `ts` is
+  the start, so no unsigned file can move it. A different digest, plan or `handoff_id` restarts it, and any sight of
+  another verdict stops it (`state: stop`), so `own-pr` → `reject` → `own-pr` starts over. An unreadable ledger
+  starts nothing and lapses nothing. Until `LAPSE_DAYS` (7) have passed, `open-pr` stays refused and the refusal
+  names the lapse date (`pending_detail`); `RepoHandoff.lapses`, `lapsed`, `owner_prs` and `ask` (`packet_ask`: the
+  request the next handoff packet should carry, for the operator's packet tooling) show it in the summary and
+  `handoff status`, which also starts or stops the clock. After that, `handoff_lapse.gate(op, repo, cfg)` (called by
+  `authorize`) lets `open-pr` proceed under the existing grant when no open owner PR updates the staged packages
+  (`open_prs.owner_prs`: any author, not a fork, not `vulnscan/*`, title or branch naming a package), and
+  `handoff_lapse.log` writes a `handoff-lapsed` ledger row only once a grant covers the `open-pr`. The owner PRs
+  that keep it deferring are named in the summary (`own-pr kept: owner PR #N open`). Only `own-pr` lapses; a gh
+  failure or a staged record without packages keeps deferring.
 
 ### `agentteams.vulnscan.remediation_status`
 

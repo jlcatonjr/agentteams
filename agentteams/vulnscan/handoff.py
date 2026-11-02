@@ -40,7 +40,6 @@ import stat
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -93,6 +92,8 @@ class RepoHandoff:
     launcher_detail: str = ""
     lapses: str = ""                 # own-pr: the date it lapses (handoff_lapse, OD10), or ""
     ask: str = ""                    # own-pr: the request the next handoff packet carries (handoff_lapse.packet_ask)
+    lapsed: bool = False             # own-pr: its LAPSE_DAYS have run (open-pr opens the PR unless owner_prs)
+    owner_prs: list[int] = field(default_factory=list)   # own-pr, due: the open owner PRs that keep it deferring
 
     @property
     def launcher_warning(self) -> str:
@@ -122,7 +123,7 @@ class RepoHandoff:
                 "verdict": self.verdict, "verdict_handoff": self.verdict_handoff, "homes": self.homes,
                 "pending": self.pending, "problems": self.problems, "launcher": self.launcher,
                 "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail,
-                "lapses": self.lapses, "ask": self.ask}
+                "lapses": self.lapses, "lapsed": self.lapsed, "ask": self.ask, "owner_prs": self.owner_prs}
 
 
 def digest_of(branch: str) -> str:
@@ -341,11 +342,7 @@ def staged_branch(repo: Path) -> str:
     """
     from agentteams.vulnscan import executor   # lazy: executor imports this module
 
-    try:
-        data = json.loads(executor.staged_file(repo).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ""
-    branch = data.get("branch") if isinstance(data, dict) else None
+    branch = executor.read_staged(repo).get("branch")
     return branch if isinstance(branch, str) and digest_of(branch) else ""
 
 
@@ -431,14 +428,27 @@ def status(cfg: dict[str, Any] | None, repos: list[Path], *, fallback: Path | No
             found, rec.problems = latest_verdict(repo, rec.staged_branch)
             if found is not None:
                 rec.verdict, rec.verdict_handoff = found.verdict, found.handoff_id
-            if rec.verdict == "own-pr":   # B1b: the clock starts at the first sight of the verdict (OD10)
-                from agentteams.vulnscan import handoff_lapse   # lazy: it imports this module
-
-                clock = handoff_lapse.clock(repo, rec.staged_branch)
-                rec.lapses = clock["lapses"] if clock else ""
-                rec.ask = handoff_lapse.packet_ask(repo, rec.staged_branch)
+            if rec.staged_branch and rec.required:   # the lapse applies only where open-pr waits for a verdict
+                _lapse_fields(rec, repo)
         out.append(rec)
     return out
+
+
+def _lapse_fields(rec: RepoHandoff, repo: Path) -> None:
+    """Fill ``rec``'s own-pr lapse fields; start or stop the clock at this sight of the verdict (B1b, OD10)."""
+    from agentteams.vulnscan import handoff_lapse, ledger   # lazy: both import this module (via the executor)
+
+    try:
+        with ledger.locked():
+            clock = handoff_lapse.clock(repo, rec.staged_branch)
+    except (OSError, ValueError) as exc:   # no lock, or an untrusted ledger: show nothing rather than guess
+        rec.problems.append(f"own-pr lapse clock unreadable: {exc}")
+        return
+    rec.lapses = clock["lapses"] if clock else ""
+    rec.ask = handoff_lapse.packet_ask(repo, rec.staged_branch, clock)
+    rec.lapsed = handoff_lapse.due(clock)
+    if rec.lapsed:
+        rec.owner_prs = handoff_lapse.owner_pr(repo) or []
 
 
 def repos_with_staged_fixes() -> list[Path]:
@@ -472,10 +482,11 @@ def markdown(records: list[RepoHandoff]) -> str:
             bits.append(f"staged {r.staged_branch}")
         if r.pending:
             bits.append(f"{len(r.pending)} packet(s) awaiting a verdict")
-        if r.lapses:
-            due = r.lapses <= date.today().isoformat()
-            bits.append(f"own-pr {'lapsed' if due else 'lapses'} {r.lapses}"
-                        + (" (the executor opens its PR unless an owner PR updates the packages)" if due else ""))
+        if r.lapses and r.owner_prs:
+            bits.append(f"own-pr kept: owner PR {', '.join(f'#{n}' for n in r.owner_prs)} open (lapse date {r.lapses})")
+        elif r.lapses:
+            bits.append(f"own-pr {'lapsed' if r.lapsed else 'lapses'} {r.lapses}"
+                        + (" (the executor opens its PR unless an owner PR updates the packages)" if r.lapsed else ""))
         if r.launcher_state and r.launcher_state != "current":
             bits.append(f"launcher {r.launcher_state}")
         lines.append(f"- {Path(r.repo).name} ({mode}): " + "; ".join(bits))
@@ -540,6 +551,8 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
             print(f"  packets awaiting a verdict: {', '.join(rec.pending)}")
         if rec.lapses:
             print(f"  own-pr lapses: {rec.lapses}")
+            if rec.owner_prs:
+                print(f"  owner PR(s) keeping it deferred: {', '.join(f'#{n}' for n in rec.owner_prs)}")
             print(f"  ask (for the next handoff packet): {rec.ask}")
         print(f"  launcher: {rec.launcher or '—'} ({rec.launcher_state}: {rec.launcher_detail})")
         if rec.launcher_warning:

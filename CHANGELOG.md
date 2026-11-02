@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `"after": "fix-pr"` once its last non-major PR was opened at the current plan and no `stage-major` followed
   (`retry_guard.major_beside_since`), and `get_fix_plans` tells the agent to request `stage-major` now, as a
   second branch. A `stage-major` PR now has its own `close-superseded` lane (`ops.lane_of`: `major`), so the MAJOR
-  PR never closes the fix PR beside it, nor the reverse. `authorize` refuses
+  PR never closes the fix PR beside it, nor the reverse; every `open-pr` result, a claimed existing PR included,
+  carries its lane (`executor_pr.lane_fields`). `authorize` refuses
   `stage-major` (before a grant use) while a fix is staged with no PR, which it would otherwise replace. The task
   text, the `request` tool description and the recipe's `daily_remediation` fence (v=9) allow it.
 - **vfr-b.B3: transitive rows that move with their parent are reported so.** After `stage-major` raises a direct
@@ -24,10 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plans' digests once, so a `held:` mark lifts once). New `npm_groups.LockGraph.carried_by` and
   `npm_groups.installed`.
 - **vfr-b.B1b: an `own-pr` verdict lapses after seven days (OD10).** New `agentteams.vulnscan.handoff_lapse`: the
-  clock starts at the first sight of `own-pr` for a staged fix's digest (a new digest or fix plan restarts it).
+  clock starts at the first sight of `own-pr` for a staged fix, as a `handoff-clock` row in the MAC-chained ledger
+  (a new digest, fix plan or verdict id restarts it; any other verdict stops it).
   Until it runs out `open-pr` stays refused, naming the lapse date, and `handoff status` / the summary show the date
   and the `ask` text the handoff packet should carry. After it, with no open owner PR updating the staged packages
-  (`open_prs.owner_prs`), `open-pr` proceeds under the existing grant and a `handoff-lapsed` ledger row is logged.
+  (`open_prs.owner_prs`; the summary names any that keep it deferring), `open-pr` proceeds under the existing grant
+  and a `handoff-lapsed` ledger row is logged once a grant covers it.
   No new op or capability.
 
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)

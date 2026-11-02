@@ -778,3 +778,42 @@ def test_carried_by_and_installed() -> None:
     assert graph.carried_by("tinypool", "1.1.1", ["vite"]) == []
     assert graph.carried_by("vitest", "3.2.4", ["vitest"]) == []   # a direct dependency is never "carried"
     assert npm_groups.installed(packages, "tinypool", "1.1.1") and not npm_groups.installed(packages, "tinypool", "2")
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_a_claimed_major_pr_records_major_and_never_closes_the_fix_pr(env: dict,
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    """vfr-b.B2 (@security): every claim-existing open-pr result carries the lane, or close-superseded would read a
+    claimed MAJOR PR as the deps lane and close the fix PR beside it."""
+    from agentteams.vulnscan import executor_supersede
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-major", "open-pr"], hosts=[], max_uses=20)
+    monkeypatch.setattr(fix, "fix_path", _pip_major)
+    executor.act("stage-major", str(repo), env["cfg"])
+    bindir = _gh(env, monkeypatch)
+    (bindir / "gh").write_text(_GH_LABEL_AFTER_CREATE)
+    (bindir / "fail502").write_text("")
+    assert executor.act("open-pr", str(repo), env["cfg"])["status"] == "failed"   # the PR exists, the run failed
+    (bindir / "fail502").unlink()
+    claimed = executor.act("open-pr", str(repo), env["cfg"])   # the pushed branch's open PR is claimed
+    assert claimed["status"] == "done" and claimed["existing"] is True and claimed["major"] is True, claimed
+    fix_pr = claimed["pr"].rsplit("/", 1)[0] + "/29"   # the same GitHub repository: only the lane keeps it open
+    rows = [{"op": "open-pr", "kind": "done", "target": str(repo), "detail": json.dumps({"pr": fix_pr})},
+            {"op": "open-pr", "kind": "done", "target": str(repo), "detail": json.dumps(
+                {k: v for k, v in claimed.items() if k != "status"})}]
+    me = {"name": executor.GIT_IDENTITY[0], "email": executor.GIT_IDENTITY[1]}
+    view = {"state": "OPEN", "headRefName": "vulnscan/20261031-abc", "isCrossRepository": False, "reviews": [],
+            "comments": [], "commits": [{"authors": [me]}]}
+    closed: list[str] = []
+    out = executor_supersede.close_superseded(repo, rows, view=lambda url: view, close=lambda url, c: closed.append(url))
+    assert out["replacement"] == claimed["pr"] and closed == []   # the fix PR stays open
+    rows[1]["detail"] = json.dumps({"pr": claimed["pr"], "existing": True})   # control: a claim without the lane
+    executor_supersede.close_superseded(repo, rows, view=lambda url: view, close=lambda url, c: closed.append(url))
+    assert closed == [fix_pr]
+
+
+def test_lane_fields_mark_every_mode_and_refuse_both() -> None:
+    assert executor_pr.lane_fields({"major": True}) == {"major": True}
+    assert executor_pr.lane_fields({"image": True}) == {"image": True} and executor_pr.lane_fields({}) == {}
+    with pytest.raises(executor.ExecError, match="both major and image"):
+        executor_pr.lane_fields({"major": True, "image": True})

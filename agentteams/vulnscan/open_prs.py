@@ -152,7 +152,7 @@ def staging_claims(target_repo: Callable[[], str]) -> dict[str, list[int]]:
     Staging does not wait on gh; ``open-pr`` lists the PRs again and fails closed (:func:`refuse_duplicate`).
 
     Args:
-        target_repo: Returns ``HOST/OWNER/REPO`` (``executor._origin_repo``); it may raise :class:`ExecError`.
+        target_repo: Returns ``HOST/OWNER/REPO`` (``executor.origin_repo``); it may raise :class:`ExecError`.
 
     Returns:
         ``{normalized package: [PR numbers]}``.
