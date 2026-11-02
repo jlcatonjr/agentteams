@@ -107,6 +107,8 @@ class Report:
     excluded: list[str] = field(default_factory=list)    # "repo: path": manifests matching a brief's exclude_paths
     withheld: list[str] = field(default_factory=list)    # "repo: name (ecosystem)": private, not checked
     brief_off: list[str] = field(default_factory=list)   # repos whose brief says off, scanned by operator enrolment
+    sources: list[str] = field(default_factory=list)     # "repo: name version from host: grade (...)": allowlisted
+    #                                                       non-npm sources graded on advisory ranges (engine, E3)
     unscored_as: str = "high"                            # what an advisory without any severity counts as
     generated_at: str = field(default_factory=lambda: _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat())
 
@@ -124,6 +126,7 @@ class Report:
         self.excluded += other.excluded
         self.withheld += other.withheld
         self.brief_off += other.brief_off
+        self.sources += other.sources
 
     def apply_unscored(self, level: str) -> None:
         """Count every unscored advisory as ``level`` (the config's ``unscored_as``), never as harmless.
@@ -228,6 +231,7 @@ class Report:
         rep.unscannable = [(u["path"], u["reason"]) for u in data.get("unscannable", [])]
         rep.opted_out, rep.excluded, rep.withheld, rep.brief_off = (
             [str(i) for i in data.get(k, [])] for k in ("opted_out", "excluded", "withheld", "brief_off"))
+        rep.sources = [str(i) for i in data.get("sources", [])]
         known = Finding.__dataclass_fields__
         rep.findings = [Finding(**{"malformed": 0, "fix_hidden": 0, **{k: v for k, v in f.items() if k in known}})
                         for f in data.get("findings", [])]   # an older report counted neither (R8)
@@ -396,6 +400,11 @@ class Report:
                     f"Counted as {self.unscored_as.upper()} toward the exit threshold (`unscored_as`); "
                     "read the advisory to rate it.", ""]
             out += [f"- `{f.target}`: {f.name} {f.version} — {', '.join(f.ids[:5])}" for f in unscored] + [""]
+        if self.sources:
+            out += ["## Allowlisted non-npm sources (graded on advisory ranges)", "",
+                    "Installed from a publisher's own host, not the npm registry: each is graded fixed, vulnerable or "
+                    "unknown against the npm advisories' affected ranges; unknown is never clean.", ""]
+            out += [f"- {_code(s)}" for s in self.sources] + [""]
         if self.unscannable:
             out += ["## Not scannable (no exact versions)", ""]
             out += [f"- `{p}` — {r}" for p, r in self.unscannable] + [""]

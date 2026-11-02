@@ -188,6 +188,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a `handoff-lapsed` ledger row is logged once a grant covers it.
   No new op or capability.
 
+### added (vulnscan: allowlisted non-npm sources are graded on advisory ranges, vfr-e.E3)
+
+- **An npm package installed from its publisher's own host is graded, not mis-read.** SheetJS publishes `xlsx`
+  after 0.18.5 only on `cdn.sheetjs.com`, and the GHSA records for npm `xlsx` name no fixed npm version, so the
+  exact-version OSV query marked every CDN release affected with no fix, the fixed ones included.
+- New `agentteams/vulnscan/offnpm_sources.py`: a data table of allowlisted sources (one row: SheetJS's CDN, tarball
+  path, publisher, evidence) and `judge()`, which grades one advisory on its affected ranges. `scan_path` sends an
+  npm lockfile entry (v1–v3) whose `resolved` URL matches a row exactly to the new `engine.analyze_sources`: the
+  name is queried without a version and each advisory is judged locally. The grade is `fixed` (no range holds
+  the version: no finding), `vulnerable` (a closed range holds it, or an open-ended one with nothing bounding it)
+  or `unknown` (an open-ended range whose `last_known_affected_version_range` ends below the version, a range with
+  a bound that is not a version or a start above its end, or a record that cannot be judged). `unknown` is never clean: the finding keeps the advisory's severity. Every graded entry
+  is listed in the new `Report.sources` (JSON `sources`, and a `summary.md` section), whatever its grade.
+- No general CDN trust: any other off-registry URL (another host, a port, user info, a query, another path, or a
+  name or version that differs from the lockfile's) is queried by exact version, as before. `Dep` gains
+  `resolved`. With records shaped as GitHub publishes them (an open `introduced: 0` range and a last known affected
+  range below 0.20.3), portal's `xlsx` 0.20.3 reads `unknown`, not "2 advisories without a fix". The signed known entry that settles it (vfr-k) is a separate change.
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install

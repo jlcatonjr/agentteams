@@ -163,6 +163,7 @@ class Dep:
     version: str
     scope: str = "runtime"  # "runtime" | "dev"
     source: str = ""        # manifest path or install location
+    resolved: str = ""      # npm lockfile entry's ``resolved`` URL ("" = none or not an npm lockfile)
 
 
 @dataclass
@@ -416,13 +417,16 @@ def _npm_lock(path: Path, m: Manifest) -> None:
                 continue
             name = npm_entry_name(key, info)
             scope = "dev" if info.get("dev") or info.get("devOptional") else "runtime"
-            m.deps.append(Dep("npm", name, info["version"], scope, str(path)))
+            url = info.get("resolved")
+            m.deps.append(Dep("npm", name, info["version"], scope, str(path), url if isinstance(url, str) else ""))
         return
 
     def walk(deps: dict) -> None:  # lockfileVersion 1
         for name, info in (deps or {}).items():
             if "version" in info and not str(info["version"]).startswith(("file:", "link:", "git")):
-                m.deps.append(Dep("npm", name, info["version"], "dev" if info.get("dev") else "runtime", str(path)))
+                url = info.get("resolved")
+                m.deps.append(Dep("npm", name, info["version"], "dev" if info.get("dev") else "runtime", str(path),
+                                  url if isinstance(url, str) else ""))
             walk(info.get("dependencies") or {})
 
     walk(data.get("dependencies") or {})
