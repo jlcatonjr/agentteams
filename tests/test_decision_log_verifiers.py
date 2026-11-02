@@ -334,8 +334,10 @@ def test_every_gate_call_site_is_listed():
                 from agentteams.vulnscan.known import ENTRY_ID_RE
 
                 assert ENTRY_ID_RE.pattern == r"^vk-[0-9a-f]{16}$"
+                call_text = "_assert_no_unretracted_halt(gov, action=action)"
+                assert text.count(call_text) == 1 and text.count("if not ENTRY_ID_RE.fullmatch(action):") == 1
                 guard = text.index("if not ENTRY_ID_RE.fullmatch(action):")
-                assert guard < text.index("_assert_no_unretracted_halt(gov, action=action)") < guard + 400
+                assert guard < text.index(call_text) < guard + 400
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
     assert "branch-cleanup" in GATE_ACTIONS and dynamic

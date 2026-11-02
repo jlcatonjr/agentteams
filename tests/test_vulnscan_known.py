@@ -84,7 +84,8 @@ class Audit:
         self.funcs = text[text.index("L1_KEY_DIR="): text.index("docroot_section(){")]
         self.key_file = self.root / "var/lib/agentteams-server-kit/l1-evidence.key"
 
-    def run(self, files: dict[str, bytes] = EMAIL_FILES, rules: list[str] | None = DENY) -> subprocess.CompletedProcess:
+    def run(self, files: dict[str, bytes] = EMAIL_FILES, rules: list[str] | None = DENY, *,
+            xtrace: bool = False) -> subprocess.CompletedProcess:
         for old in self.www.iterdir():
             old.unlink()
         for name, body in files.items():
@@ -96,7 +97,7 @@ class Audit:
             nginx.write_text(f"#!/bin/sh\ncat <<'EOF'\n{conf}EOF\n")
             nginx.chmod(0o755)
         hits = "\n".join(str(self.www / n) for n in sorted(files))
-        probe = f"set -uo pipefail\ninfo(){{ printf 'INFO        %s\\n' \"$*\"; }}\n{self.funcs}\ndocroot_evidence \"$1\"\n"
+        probe = f"set -uo pipefail{' -x' if xtrace else ''}\ninfo(){{ printf 'INFO        %s\\n' \"$*\"; }}\n{self.funcs}\ndocroot_evidence \"$1\"\n"
         env = {"PATH": f"{self.bin}:/usr/bin:/bin:/usr/sbin:/sbin", "AGENTTEAMS_L1_ROOT": str(self.root)}
         return subprocess.run([BASH, "-c", probe, "x", hits], capture_output=True, text=True, env=env, check=False)
 
@@ -424,12 +425,23 @@ def test_host_evidence_voids_on_a_file_a_deny_rule_or_a_rotated_key(audit: Audit
     assert audit.evidence() not in ("", ev)
 
 
-@pytest.mark.parametrize("spoil", ["mode", "symlink", "garbage"])
+@pytest.mark.parametrize("spoil", ["mode", "symlink", "garbage", "fifo", "dir-mode", "dir-symlink"])
 def test_an_unsafe_evidence_key_gives_no_evidence(audit: Audit, spoil: str) -> None:
+    import os
+
     audit.run()
     key = audit.key_file
     if spoil == "mode":
         key.chmod(0o644)
+    elif spoil == "fifo":   # noclobber would still write into an existing FIFO
+        key.unlink()
+        os.mkfifo(key, 0o600)
+    elif spoil == "dir-mode":
+        key.parent.chmod(0o755)
+    elif spoil == "dir-symlink":
+        real = audit.tmp / "elsewhere-dir"
+        key.parent.rename(real)
+        key.parent.symlink_to(real)
     elif spoil == "symlink":
         real = audit.tmp / "elsewhere.key"
         real.write_text(key.read_text())
@@ -441,6 +453,20 @@ def test_an_unsafe_evidence_key_gives_no_evidence(audit: Audit, spoil: str) -> N
     proc = audit.run()
     assert not any(ln.startswith("HOSTEVIDENCE") for ln in proc.stdout.splitlines())
     assert "no usable evidence key" in proc.stdout
+
+
+def test_xtrace_does_not_reveal_the_key(audit: Audit) -> None:
+    """A `bash -x` run (streamed back by remote.sh) must not trace the key or anything derived from it."""
+    import hmac
+
+    proc = audit.run(xtrace=True)
+    assert "+ " in proc.stderr   # tracing was on around the evidence functions
+    assert any(ln.startswith("HOSTEVIDENCE") for ln in proc.stdout.splitlines())
+    key = audit.key_file.read_text()
+    secrets_ = [key] + [hmac.new(bytes.fromhex(key), b, hashlib.sha256).hexdigest() for b in EMAIL_FILES.values()]
+    secrets_.append("\\x" + format(int(key[:2], 16) ^ 0x36, "02x"))   # the first byte of the inner pad
+    for value in secrets_:
+        assert value not in proc.stderr and value not in proc.stdout
 
 
 def test_host_evidence_line_parsing() -> None:

@@ -400,13 +400,28 @@ ioc_section(){
 L1_KEY_DIR="${AGENTTEAMS_L1_ROOT:-}/var/lib/agentteams-server-kit"
 L1_KEY_FILE="$L1_KEY_DIR/l1-evidence.key"
 
-l1_evidence_key(){   # prints the 64-hex key for capture into a variable; fails closed on anything unexpected
+_noxtrace(){   # run "$@" with xtrace off and restore it after: a `bash -x` run must not trace key-derived data
+  { local _xt=$- _rc; set +x; } 2>/dev/null
+  "$@"; _rc=$?
+  case $_xt in *x*) set -x;; esac
+  return $_rc
+}
+
+l1_evidence_key(){ _noxtrace _l1_evidence_key; }
+_l1_evidence_key(){   # prints the 64-hex key for capture into a variable; fails closed on anything unexpected
   local k
-  if [ ! -e "$L1_KEY_FILE" ] && [ ! -L "$L1_KEY_FILE" ]; then
+  # lstat-style checks before anything is created: a symlink, or a non-directory / non-regular file in the way
+  # (noclobber would still write into an existing FIFO), refuses the key.
+  [ -L "$L1_KEY_DIR" ] && return 1
+  [ -e "$L1_KEY_DIR" ] && [ ! -d "$L1_KEY_DIR" ] && return 1
+  [ -L "$L1_KEY_FILE" ] && return 1
+  [ -e "$L1_KEY_FILE" ] && [ ! -f "$L1_KEY_FILE" ] && return 1
+  if [ ! -e "$L1_KEY_FILE" ]; then
     ( umask 077; set -C; mkdir -p "$L1_KEY_DIR" && chmod 700 "$L1_KEY_DIR" \
         && od -An -tx1 -N32 /dev/urandom | tr -d ' \n' > "$L1_KEY_FILE" ) 2>/dev/null || return 1
   fi
   [ -d "$L1_KEY_DIR" ] && [ ! -L "$L1_KEY_DIR" ] && [ -O "$L1_KEY_DIR" ] || return 1
+  [ -n "$(find "$L1_KEY_DIR" -maxdepth 0 -perm 0700 2>/dev/null)" ] || return 1
   [ -f "$L1_KEY_FILE" ] && [ ! -L "$L1_KEY_FILE" ] && [ -O "$L1_KEY_FILE" ] || return 1
   [ -n "$(find "$L1_KEY_FILE" -maxdepth 0 -perm 0600 2>/dev/null)" ] || return 1
   k=$(head -c 64 "$L1_KEY_FILE")
@@ -421,13 +436,15 @@ _hmac_pad(){   # the 64-byte key block XOR $2, as printf \x escapes (bash builti
   printf '%s' "$out"
 }
 
-hmac_sha256_file(){   # HMAC-SHA256(key $1, contents of file $2), hex (RFC 2104 over sha256sum)
+hmac_sha256_file(){ _noxtrace _hmac_sha256_file "$@"; }
+_hmac_sha256_file(){   # HMAC-SHA256(key $1, contents of file $2), hex (RFC 2104 over sha256sum)
   local k="$1$(printf '0%.0s' {1..64})" inner
   inner=$( { printf "$(_hmac_pad "$k" 54)"; cat -- "$2"; } | sha256sum | cut -c1-64 ) || return 1
   { printf "$(_hmac_pad "$k" 92)"; printf "$(printf '%s' "$inner" | sed 's/../\\x&/g')"; } | sha256sum | cut -c1-64
 }
 
-docroot_evidence(){   # one HOSTEVIDENCE line for the check just printed: a combined digest, never per-file values
+docroot_evidence(){ _noxtrace _docroot_evidence "$@"; }
+_docroot_evidence(){   # one HOSTEVIDENCE line for the check just printed: a combined digest, never per-file values
   local key f h rule lines="" n=0 m=0 digest
   key=$(l1_evidence_key) || { info "no usable evidence key at $L1_KEY_FILE: no HOSTEVIDENCE (a known entry cannot match)"; return 0; }
   while IFS= read -r f; do
