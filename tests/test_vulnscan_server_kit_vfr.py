@@ -450,7 +450,7 @@ def test_a1_dnf_automatic_settings_timers_and_metadata_age(kit: Kit) -> None:
     assert "s3cr3t" not in out and "emit_via" not in out
 
 
-def test_a1_distro_records_are_ignored_by_the_engine_for_now() -> None:
+def test_a1_distro_records_without_findings_add_nothing() -> None:   # A2: test_vulnscan_distro_verdict.py
     rep = engine.scan_inventory("DISTROPKG\t/usr/lib/python3/dist-packages\tPyJWT\t2.7.0\tpython3-jwt\tpyjwt\t2.7.0-1"
                                 "\tpkg:python3-jwt\nAUTOUPD\tapt\tlists-age-hours\t3\n", "h")
     assert rep.findings == [] and rep.feed_errors == [] and rep.checked == 0

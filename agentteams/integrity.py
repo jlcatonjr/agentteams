@@ -265,6 +265,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/specifiers.py",   # 2026-10-30 (N6a): judges unpinned requirement ranges
     "agentteams/vulnscan/runtimes.py",
     "agentteams/vulnscan/images.py",          # 2026-10-30 (N2): which base images count as end-of-life
+    "agentteams/vulnscan/distro_verdict.py",  # 2026-11-02 (vfr-a A2): whether a distro package carries the fix
     "agentteams/vulnscan/fix.py",
     "agentteams/vulnscan/schedule.py",
     "agentteams/vulnscan/report.py",

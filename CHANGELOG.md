@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (vulnscan: distro verdicts for OS-packaged Python; plan vfr-a A2)
+
+- **OS-managed Python findings get a distro verdict beside the upstream grade.** For a package in
+  `/usr/lib*/python3*/{dist,site}-packages` whose `DISTROPKG` line names an allowlisted-archive owner, each upstream
+  advisory is joined on its CVE ids to the distribution: `fixed-in-installed`, `fix-available-not-installed`,
+  `esm-only` or `no-distro-fix` (the worst across advisories). The row, severity, key and exit code are unchanged.
+  - Ubuntu: OSV's `Ubuntu:<release>[:LTS]` and `Ubuntu:Pro:…` records by **source** package and the installed
+    version (OSV decides whether that version is affected). An ESM-only fix counts as available when the `ESM` line
+    shows the needed service enabled (plan step A5).
+  - Amazon Linux 2023: the host's `dnf updateinfo` through new `UPDATEINFO` / `UPDATEINFOREAD` lines. **No kit
+    prints them yet**, so AL2023 findings carry "no distro verdict" until `L1-audit.sh` does; no network source is
+    used for ALAS.
+- `summary.md` gains *Distro verdicts*: per host, the count of each verdict and **the `esm-only` count** (operator
+  decision OD1). `Finding.distro_verdict` / `distro_note` are in `summary.json`; an older report loads with `""`.
+- **Unowned or third-party files in OS paths are judged upstream.** A finding with any location `unowned` or
+  `repo:…` gets no verdict and loses `distro`, so it now counts toward `--fail-on` (it was excluded as OS-managed).
+  A PyPI version that is not the owning package's upstream version gets no verdict either.
+- A failed Ubuntu query, an unreadable Ubuntu record or a failed updateinfo pass is a feed error (exit 3), never a
+  verdict.
+
 ### added (vulnscan server kit: distro sources, not-live labels, held interpreters; plans vfr-a A1, vfr-e E1/E2b, vfr-r R4)
 
 - **`L1-audit.sh` reports where OS-packaged Python comes from (A1).** For each package in an OS-managed path

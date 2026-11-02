@@ -676,6 +676,8 @@ A Finding (`report.Finding`):
 | `spec` | string | `range` only: the requirement's specifier set (`""`: any version); `version` is then `""` |
 | `partial` | boolean | `range` only: part of the allowed range is affected (severity capped at MODERATE) |
 | `location_labels` | object | location → `{label, path, evidence}` for a location a `SCOPE` line covers (a disabled tree, or node_modules nginx refuses); information only, the finding keeps its row and grade. `{}` in a report written before it |
+| `distro_verdict` | string | OS-managed package: `fixed-in-installed`, `fix-available-not-installed`, `esm-only` or `no-distro-fix` (`engine` via `distro_verdict`); `""` for none. Beside the upstream grade, never instead of it |
+| `distro_note` | string | the verdict's source and per-advisory reasons, or why there is no verdict (unowned, another origin, a feed error); `""` in a report written before it |
 
 ---
 
@@ -1300,8 +1302,10 @@ another prefix or field count is ignored:
 | `IOC` | message |
 | `SCOPE` | path, label, match (`tree`: the path and everything under it; `exact`: the path only), evidence |
 | `PYSITE` | site-packages location, interpreter line `X.Y` |
-| `DISTROPKG` | location, name, version, owning dpkg/rpm package, source package, that package's version, origin (`unowned` when no package owns it). Read by nothing yet (distro verdicts, plan vfr-a A2) |
-| `AUTOUPD` | manager (`apt` or `dnf`), key, value: unattended-upgrades' allowed origins and `APT::Periodic` values, or dnf-automatic's `[commands]` values and enabled timers, and `lists-age-hours` / `metadata-age-hours`. Read by nothing yet |
+| `DISTROPKG` | location, name, version, owning dpkg/rpm package, source package, that package's version, origin (`unowned` when no package owns it): the distro verdict's join ([`distro_verdict`](#agentteamsvulnscandistro_verdict)) |
+| `AUTOUPD` | manager (`apt` or `dnf`), key, value: unattended-upgrades' allowed origins and `APT::Periodic` values, or dnf-automatic's `[commands]` values and enabled timers, and `lists-age-hours` / `metadata-age-hours` (the dnf age is shown with AL2023 verdicts) |
+| `UPDATEINFO` | pass (`installed` or `available`), ALAS advisory (or `-`), CVE, package NEVRA: Amazon Linux 2023's updateinfo. No kit prints it yet |
+| `UPDATEINFOREAD` | pass, `ok` or `failed`: whether that `dnf -C updateinfo` pass read the host's cache |
 
 `SCOPE` labels locations that are on disk but not the live system; `L1-audit.sh` emits two labels:
 
@@ -1473,6 +1477,43 @@ located at each) and feed errors. `engine.scan_path` calls it for every containe
 
 `(findings, feed errors)` for the fix plan; `fix.fix_path` turns each finding into a plan-only `PinChange`.
 
+### `agentteams.vulnscan.distro_verdict`
+
+Distro verdicts for Python packages in OS-managed paths (plan vfr-a A2), called by `engine.scan_inventory` after
+the package findings exist. Each finding with `DISTROPKG` lines for all its locations gets `Finding.distro_verdict`
+and `Finding.distro_note`; its row, severity, key and exit-code treatment do not change (Rule 12). Verdicts
+(`VERDICTS`, best first) are judged per advisory, joined on its CVE ids (the id, or its OSV record's `aliases` and
+`upstream`): the best among one advisory's CVE ids, the worst across its owning packages and across advisories.
+
+- **Ubuntu**: OSV's `Ubuntu:<release>[:LTS]` and `Ubuntu:Pro:<release>[:LTS]` ecosystems (`ubuntu_ecosystems`), by
+  the **source** package and the installed package version. A `UBUNTU-<CVE>` record that lists the package
+  (`osv.package_ids`) but does not affect the installed version (`osv.vulnerable_ids`, OSV's own ordering) is
+  `fixed-in-installed`. An affected one is `fix-available-not-installed` when the release entry has a fix,
+  `esm-only` when only a Pro entry or an `esm` version has one (`fix-available-not-installed` when the `ESM` line
+  shows esm-apps enabled for a universe package, or esm-infra for another), else `no-distro-fix`. No record for
+  the CVE, or an advisory with no CVE id, is `no-distro-fix`.
+- **Amazon Linux 2023**: the host's `UPDATEINFO` lines, joined on the owning rpm's name: `available` is
+  `fix-available-not-installed`, `installed` is `fixed-in-installed`, neither is `no-distro-fix`. Without any
+  `UPDATEINFOREAD` line there is no verdict; a pass that is not `ok` is a feed error.
+
+No verdict, with a note, when the origin is `unowned` or `repo:…` (the finding then loses `distro` when any
+location is such, and is judged upstream), when the PyPI version is not the package's upstream version
+(`upstream_matches`), for another release, or on a feed error (`Report.feed_errors`: the run is partial, never
+"not affected").
+
+#### `distro_verdict.apply(target, osrel, esm, records, updateinfo, updateinfo_read, autoupd, report)`
+
+Judge `target`'s findings in `report` in place. Does nothing without `records`.
+
+#### `distro_verdict.parse_distropkg(parts)` / `distro_verdict.parse_updateinfo(parts)`
+
+A `DistroPkg` / `UpdateInfo` from one tab-split line, or None for a malformed one.
+
+#### `distro_verdict.ubuntu_ecosystems(version_id)` / `distro_verdict.upstream_matches(pypi_version, pkgversion)` / `distro_verdict.rpm_name(binary, pkgversion)`
+
+OSV's two Ubuntu ecosystems for a release (None unless `YY.MM`); whether a dpkg/rpm version is a build of a PyPI
+version (epoch, revision, `+…` suffix and `~` dropped); the name part of an rpm NEVRA.
+
 ### `agentteams.vulnscan.project_policy`
 
 A project's own scanning intent: the brief's `vulnerability_scanning` block
@@ -1608,7 +1649,9 @@ Dataclass: `target`, `findings`, `unscannable` (`(path, reason)` tuples), `feed_
 value); `unscored_findings()` lists the findings whose severity comes from it; `policy_counts()` gives
 `{repo: (excluded manifests, withheld packages)}`; `to_dict(*, private_names=True)` / `from_dict(data)` convert
 to and from the [JSON shape](#json-output) (`private_names=False` shows each withheld name as `(private)`); `markdown(new_keys)` renders
-`summary.md`; `merge(other)` folds another report in.
+`summary.md` (with a *Distro verdicts* section: per host, the count of each verdict and the `esm-only` count for
+operator decision OD1); `distro_verdict_counts()` gives `{host: {verdict: n, "none": n}}`; `merge(other)` folds
+another report in.
 
 #### `Finding`
 
