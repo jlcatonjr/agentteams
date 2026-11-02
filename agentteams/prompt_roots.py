@@ -1,7 +1,7 @@
 """Prompt-root change detection (follow-up #8 phase 1, 2026-10-01).
 
 A *prompt root* is a file another harness reads as instructions: ``.github/copilot-instructions.md``,
-``.github/instructions/**``, ``.github/prompts/**``, root ``AGENTS.md``, ``.goosehints``,
+``.github/instructions/**``, ``.github/prompts/**``, root ``AGENTS.md``, ``AGENTS.override.md``, ``.goosehints``,
 ``CLAUDE.md`` / ``.claude/CLAUDE.md``, and each present team's agent files (``.github/agents/*.agent.md``,
 ``.codex/agents/*.toml``, ``.goose/recipes/*.yaml``, ``.claude/agents/*.md``). Most of them are
 writable from a Claude sandbox, so a confined agent could rewrite what an unconfined Copilot, Codex

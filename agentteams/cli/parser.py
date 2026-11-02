@@ -228,7 +228,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="Check for template drift and structural changes without writing any files "
-             "(exit code 1 if drift or structural changes are detected)",
+             "(exit code 1 if drift or structural changes are detected, or when a Copilot "
+             "agent's Project-Specific Notes start past the 30,000-character body limit)",
     )
     parser.add_argument(
         "--strict-prompt-roots",

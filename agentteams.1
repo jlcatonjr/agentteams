@@ -67,7 +67,7 @@ Adopt exactly the named orphan agents and nothing else: no render. Each slug mus
 Upgrade the target team's references/security\-decisions.log.csv header to the signing schema, then exit (no render). Existing columns stay in place; the missing columns of decision_log.SIGNED_DECISION_COLUMNS are appended, except prev_digest (chaining stays opt\-in); text_digest, which binds a signed row's conditions and evidence, is added empty and filled by \-\-sign\-decision on new rows. The header line is rewritten; each data line keeps its bytes as a prefix, and a row narrower than the new header gets empty cells appended (signed payloads unchanged; a torn row is refused). Backed up first, written atomically, idempotent; a malformed or unknown header is refused, as is a row with a value past the old header. Adding the signature column activates signing, so every live unsigned PASS, CONDITIONAL PASS or HALT\-RETRACTED row stops clearing: \-\-dry\-run lists them by line and action, and a real run prints them and requires \-\-yes. Works with \-\-self or \-\-description, \-\-framework, \-\-output, \-\-dry\-run and \-\-json.
 .TP
 .B \-\-check
-Check for template drift and structural changes without writing any files (exit code 1 if drift or structural changes are detected)
+Check for template drift and structural changes without writing any files (exit code 1 if drift or structural changes are detected, or when a Copilot agent's Project\-Specific Notes start past the 30,000\-character body limit)
 .TP
 .B \-\-strict\-prompt\-roots
 With \-\-check: also exit 1 when a prompt root (copilot\-instructions.md, AGENTS.md, .github/prompts/**, a team agent file, ...) changed since the last build. Without it the PROMPT\-ROOT CHANGED warning is advisory

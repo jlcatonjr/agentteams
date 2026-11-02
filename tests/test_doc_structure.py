@@ -73,14 +73,28 @@ def test_every_agent_has_project_specific_notes(emitted_dir: Path) -> None:
 
 
 def test_project_notes_is_outside_every_fence(emitted_dir: Path) -> None:
-    """§3.3 — the USER-EDITABLE section must follow the last fence END."""
+    """§3.1 — the USER-EDITABLE section sits outside every fence.
+
+    On copilot-vscode (this corpus) it comes before the body's first named-section fence, inside GitHub's
+    30,000-character body limit (baseAgent P4); after a whole-body ``content`` wrapper, and on other frameworks,
+    it follows the last fence END.
+    """
+    from agentteams.user_regions import _inside_fence
+
     for p in _agent_files(emitted_dir):
         text = p.read_text(encoding="utf-8")
         notes_pos = text.index(_NOTES)
-        last_end = text.rfind(_FENCE_END)
-        assert notes_pos > last_end, (
+        assert text.count(_NOTES) == 1 and not _inside_fence(text, notes_pos), (
             f"{p.name}: '{_NOTES}' must sit outside every fence to be USER-EDITABLE"
         )
+        first_begin = text.find("<!-- AGENTTEAMS:BEGIN ")
+        if text.startswith("<!-- AGENTTEAMS:BEGIN content ", first_begin):
+            # A whole-body wrapper holds the title too, so the notes stay last.
+            assert notes_pos > text.rfind("<!-- AGENTTEAMS:END "), f"{p.name}: notes must follow the wrapper"
+        else:
+            assert notes_pos < first_begin, (
+                f"{p.name}: Copilot notes must come before the first fence (30,000-character body limit)"
+            )
 
 
 def test_reference_files_have_no_project_notes(emitted_dir: Path) -> None:

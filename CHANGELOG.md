@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (cross-surface Phase 1: user regions, prompt roots, bridge refresh, Copilot notes; baseAgent 2026-11-02)
+
+- **`--update --merge` adds a missing `## Project-Specific Rules` region.** An instruction file rendered before its
+  template declared the region (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`) now gets it empty, at the
+  template's position, with its SECTION MANIFEST row (`user_regions.insert_missing_regions`). A heading already there in
+  any spelling is left alone. Before, `--merge` never took unfenced text from the template.
+- **A region that mentions the learned-block marker in prose is carried across `--overwrite`.** Only an actual
+  `<!-- AGENTTEAMS-LEARNED…` line refuses the carry now; a substring match refused baseAgent's rules region.
+- **`AGENTS.override.md` is a prompt root**, hashed whole-file: Codex loads it in place of `AGENTS.md`, so edits to it
+  are now reported like edits to any other instruction file.
+- **`--bridge-refresh` keeps project text in `.goosehints`.** Its render is only the `goose-bridge-hints` fence, so a
+  refresh now replaces that fence and keeps the text around it, with a notice. If the bridge markers don't pair up the
+  file is written whole as before. Other target files keep the documented whole-file refresh
+  (`references/bridge-refresh-safety.md`).
+- **Copilot agent notes move inside the 30,000-character body limit.** A fresh `.agent.md` render places
+  `## Project-Specific Notes` before the body's first fence when it is a named section (an agent wrapped whole in the
+  legacy `content` fence keeps them last), and `--check` exits 1 when operator notes on disk start
+  past the limit (`copilot_body_limit.py`). A body over the limit without such notes is an advisory: the generated
+  orchestrator and security bodies exceed it from the templates alone. Golden snapshots regenerated.
+- **`--update` against a bridge target refuses before rendering.** The refusal printed after "Rendering templates…",
+  so a claude or goose dry run over a bridge looked like a render crash.
+- New test: `--update --merge --dry-run` leaves the whole project tree byte-identical (copilot-vscode, claude, goose).
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install

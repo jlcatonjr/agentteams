@@ -424,13 +424,15 @@ The gate also fires when `--output` names the framework's agents directory itsel
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
 
+On a copilot-vscode or copilot-cli team it also measures each agent body on disk against GitHub's 30,000-character limit. It exits `1` when an agent's `## Project-Specific Notes` hold operator text and start past the limit, where a truncation removes them first; move the region to just before the body's first fence. A body over the limit with no operator notes past it is reported as an advisory only, because the generated orchestrator and security bodies exceed the limit from the templates alone.
+
 When the structural diff reports a manifest-promotion event (manifest fingerprint changed, fingerprint unavailable, or `fingerprint_algo_version` bumped), `--check` runs the full render pipeline in memory and reconciles each promoted file against its on-disk content; fingerprint-only promotions whose rendered output matches disk byte-for-byte are demoted back to unchanged. `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs.
 
 ### `--strict-prompt-roots`
 
 With `--check`, also exit `1` when a prompt root changed since the last build. Prompt roots are the
 files other harnesses read as instructions: `.github/copilot-instructions.md`,
-`.github/instructions/**`, `.github/prompts/**`, root `AGENTS.md`, `.goosehints`, `CLAUDE.md` /
+`.github/instructions/**`, `.github/prompts/**`, root `AGENTS.md`, `AGENTS.override.md` (which Codex loads in place of `AGENTS.md`), `.goosehints`, `CLAUDE.md` /
 `.claude/CLAUDE.md`, and each present team's agent files. Every generate, `--update` and `--check`
 compares them with the `prompt_root_hashes` recorded in every present team's build-log and prints a
 `PROMPT-ROOT CHANGED since last build` warning. Emitted files are compared per `AGENTTEAMS` fenced
