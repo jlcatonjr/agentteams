@@ -11,7 +11,9 @@
 #   --with-scripts  also re-run vulnscan-remediate-auto.sh --install from the same commit
 #
 # Steps: extract REF with git archive OUTSIDE any git work tree; 1/4 pipx install --force, holding the remediation
-# lock (remediate.flock) and then the daily lock (daily.lock), so neither job starts on a venv being replaced;
+# lock (remediate.flock) and then the daily lock (daily.lock), so neither job starts on a venv being replaced, and
+# records the commit in <state>/deployed.json under the same locks (the scheduled jobs refuse any other install:
+# vulnscan-install-guard.sh);
 # 2/4 tools image + tools-selftest; 3/4 the agent image + agent-selftest when agent mode is on; 4/4 readiness: the
 # image tags the installed version needs and whether each exists (the tags follow the package version, so a version
 # bump orphans the old images), `vulnscan ready --json` when the installed version has it (else
@@ -71,10 +73,18 @@ for lock, what in zip(locks, ("a remediation attempt", "a daily scan")):
     else:
         sys.exit(f"{what} still holds {lock}; not reinstalling under it")
     held.append(f)
-sys.exit(subprocess.call(argv))' "$wait" "$STATE/remediate.flock" "$STATE/daily.lock" pipx install --force "$SRC"
+rc = subprocess.call(argv[2:])
+if rc == 0:   # still under both locks: no job can start between the install and its record
+    import datetime, json, os
+    tmp = argv[1] + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump({"commit": argv[0], "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}, fh)
+    os.replace(tmp, argv[1])
+sys.exit(rc)' "$wait" "$STATE/remediate.flock" "$STATE/daily.lock" "$SHA" "$STATE/deployed.json" pipx install --force "$SRC"
 PY="$HOME/.local/pipx/venvs/agentteams/bin/python"
 VS=("$PY" -P -m agentteams.vulnscan)
 "$PY" -P -c 'import importlib.metadata as m; print("agentteams", m.version("agentteams"))'
+echo "  recorded the deployed commit in $STATE/deployed.json (the scheduled jobs refuse any other install)"
 agent_on="$("$PY" -P -c 'from agentteams.vulnscan import daily, agent_run as ar
 import sys
 try: a = ar.agent_cfg(daily.load_config())

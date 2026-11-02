@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
+
+- **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install
+  --force` of v1.0.4 (which has no `agentteams.vulnscan`) replaced the deployed main in the venv the launchd jobs
+  run, and the next scheduled runs failed with `No module named agentteams.vulnscan`.
+- `vulnscan-deploy.sh` now records the deployed commit in `<state>/deployed.json`. The new sourced
+  `scripts/vulnscan-remediation/vulnscan-install-guard.sh` runs first in `vulnscan-daily-wrapped.sh` (daily and
+  catch-up; not `--ensure-only`) and in `vulnscan-remediate-auto.sh`. It requires that the venv imports
+  `agentteams.vulnscan` and, when a deploy was recorded, was installed from that commit's archive. Otherwise the job
+  exits 4 with a desktop notification and `<state>/install-guard.json`. `--install` copies the guard; an installed
+  copy from before it has no guard file and runs as before.
+
 ### added (vulnscan: `stage-image`, end-of-life base images)
 
 - **`stage-image REPO`**: a new executor op that moves the Dockerfile `FROM` tag of an end-of-life official runtime

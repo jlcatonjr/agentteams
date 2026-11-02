@@ -872,6 +872,7 @@ mode, and it is recorded in `operator-clearances.log`.
 | `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
 | `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster. Both are operator-only: in auto mode it only reports what is missing, because a roster is a trust root and the brief is drafted from README text |
 | `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
+| `vulnscan-install-guard.sh` | Sourced first by the daily wrapper and the remediation runner: refuses a venv without `agentteams.vulnscan` or not installed from the commit `vulnscan-deploy.sh` recorded (exit 4, a notification at most every 6 hours) |
 | `vulnscan-deploy.sh` | Reinstalls the package from a commit; see [Deploying a new version](#deploying-a-new-version) |
 
 The handoff steps themselves come from a site-local `vulnscan-operator-actions.sh` in the install folder
@@ -931,6 +932,14 @@ sign, merge or push.
 
 `--with-scripts` also re-runs `vulnscan-remediate-auto.sh --install` from the same commit, so the
 installed scripts match the package. Deploy outside the daily job's window.
+
+**The deployed commit is the only one the jobs run.** The deploy records its commit in
+`<state>/deployed.json`. Before each run, the daily job and the remediation runner check that the venv
+imports `agentteams.vulnscan` and was installed from that commit's archive
+(`vulnscan-install-guard.sh`). Anything else is refused with exit 4, a desktop notification and
+`<state>/install-guard.json`: a `pipx install --force` of a release tag or of PyPI, or of another checkout.
+The venv is shared, so never update agentteams on this machine that way; re-run
+`vulnscan-deploy.sh` instead. The guard reaches the installed jobs with `--with-scripts`.
 
 ### Your routine
 
