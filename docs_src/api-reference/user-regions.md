@@ -36,4 +36,6 @@ too:
 | `carry_regions(old, new) -> (content, carried, problems)` | Carry each region of `old` into `new`. |
 | `find_region(text, heading)` | Locate one region: `(start, end, indent)`. |
 | `ensure_recipe_notes(recipe, notes_section)` | Add the notes region to a Goose recipe's `instructions` block. Idempotent. |
+| `reindent(region, old_indent, new_indent)` | Move a region between indents (YAML block scalars); `None` when a line is under-indented. `_reindent` is the older name. |
+| `skip_banner(lines, start=0)` | Index of the first line after a region's generated USER-EDITABLE note, so callers see only the operator's text. |
 | `insert_missing_regions(rel_path, fresh, merged) -> (content, notices)` | On `--update --merge`, give an instruction file the empty `## Project-Specific Rules` region its template declares but the file predates, with its SECTION MANIFEST row. A heading already present in any spelling is left alone. |
