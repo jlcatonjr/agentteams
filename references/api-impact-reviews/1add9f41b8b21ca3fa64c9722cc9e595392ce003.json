@@ -1,0 +1,8 @@
+{
+  "patch_id": "1add9f41b8b21ca3fa64c9722cc9e595392ce003",
+  "commit": "0e2f3609788591c7155b9a2692da540862f2906b",
+  "subject": "fix(vulnscan): vfr-v review fixes (scan_root to scan_mirror, no new swallow handlers, doc sync)",
+  "impact": "1 symbols added, 1 symbols removed",
+  "note": "vfr-v V1+V2: new module agentteams.vulnscan.verify (run_verify, audited_hosts, refresh_problem, remediation_lock_path, comparison_markdown, register/dispatch) and CLI commands verify + effectiveness; effectiveness gains compare/detect_moves/scanned_targets/assessed/load_run/outcome_rows/Comparison/FindingOutcome/OUTCOMES (additive); effectiveness.section gains optional keyword scanned (default None keeps old output); new scan_mirror.scan_root (extracted from daily._collect's closure; daily._finish gains private kw started). No existing public signature changed incompatibly.",
+  "recorded_at": "2026-11-02T21:57:16Z"
+}

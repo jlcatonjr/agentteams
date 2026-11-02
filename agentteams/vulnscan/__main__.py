@@ -23,6 +23,8 @@
 | ``handoff status`` | Staged fixes, the repository orchestrators' verdicts and pending packets (:mod:`.handoff`) |
 | ``remediation-report LEDGER SINCE`` | One unattended remediation attempt's outcome (JSON) and ``remediation.md`` (:mod:`.remediation_report`) |
 | ``ready [--ensure] [--json]`` | Docker, the images and their self-tests, layer by layer with reason codes (:mod:`.docker_readiness`) |
+| ``verify [--mirror-refresh SCRIPT]`` | Same-day verification: re-scan what changed since the morning run, write ``verify.json`` (:mod:`.verify`) |
+| ``effectiveness BASE LATER`` | Per finding: was each finding of one run remediated by a later one (:mod:`.verify`) |
 
 Exit codes for ``scan``, ``inventory``, ``runtimes``, ``fix`` and ``daily``: 0 clean, 1 findings at
 or above ``--fail-on`` (``fix``: something held back or refused), 3 partially unscanned (a feed or host
@@ -59,6 +61,7 @@ from agentteams.vulnscan import (
     review,
     schedule,
     tools_image,
+    verify,
 )
 from agentteams.vulnscan.report import Report
 
@@ -221,6 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.register(sub)
     remediation_report.register(sub)
     docker_readiness.register(sub)
+    verify.register(sub)
     return p
 
 
@@ -417,6 +421,8 @@ def main(argv: list[str] | None = None) -> int:
         return remediation_report.dispatch(args)
     if args.cmd in docker_readiness.COMMANDS:
         return docker_readiness.dispatch(args, daily.load_config)
+    if args.cmd in verify.COMMANDS:
+        return verify.dispatch(args, daily.load_config)
     if args.cmd == "server-kit":
         dest = args.dest or paths.server_kit_dir()
         names = export_server_kit(dest)

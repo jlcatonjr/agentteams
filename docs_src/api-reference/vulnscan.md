@@ -499,7 +499,8 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 `__main__` defines most commands. The rest come from modules that add their own (`register(sub)`) and run
 them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `publish-grant`, `publish`,
 `agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`),
-`handoff` (`handoff status`), `remediation_report` (`remediation-report`) and `docker_readiness` (`ready`).
+`handoff` (`handoff status`), `remediation_report` (`remediation-report`), `docker_readiness` (`ready`) and
+`verify` (`verify`, `effectiveness`).
 
 | Command | Purpose |
 |---|---|
@@ -529,6 +530,8 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)) |
 | `remediation-report LEDGER SINCE [--log FILE] [--run NAME] [--attempt N] [--out FILE] [--agent-since TS] [--agent-until TS]` | One unattended remediation attempt's outcome from the executor's ledger rows at or after `SINCE` (ISO, UTC or with an offset): one JSON object (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) on stdout, and `remediation.md` written to `--out`. `--agent-since`/`--agent-until` (the agent run's `started`/`finished`) add its executor rows, never past `SINCE`, in their own section; a bad or out-of-range time is a Needs-you note, never a usage error (listed under Needs you, never counted as infra). Run by `scripts/vulnscan-remediation/vulnscan-remediate-auto.sh` ([remediation_report](#agentteamsvulnscanremediation_report)) |
 | `ready [--ensure] [--json]` | Docker readiness, layer by layer (`cli`, `daemon`, `tools_image`, `agent_image`, `tools_selftest`, `agent_selftest`), each with its state and, when it fails, a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). Read-only without `--ensure`; `--ensure` makes the repairs the `docker` config allows (start Docker, re-run a stale self-test) under the daily run lock, and only checks while a daily run holds it. `--json` prints `{layer: {state, code, message}}`. Never builds an image ([`docker_readiness`](#agentteamsvulnscandocker_readiness)) |
+| `verify [--mirror-refresh SCRIPT] [--force] [--date DATE]` | Same-day verification, run by the afternoon job (`vulnscan-daily-wrapped.sh --verify`, installed by `vulnscan-remediate-auto.sh --install`): refresh the scan mirrors with `--mirror-refresh` (`bash SCRIPT refresh`), re-scan each root whose mirror moved since the morning run, re-audit the hosts an executor `server-*` op ran against today, and write `<run>/verify.json` with each assessed morning finding's outcome. Takes `remediate.flock` and `daily.lock` without waiting; stages nothing and opens no PR. `--force` verifies again although today's `verify.json` is complete; `--date` names the run (default today). Prints one JSON line ([verify](#agentteamsvulnscanverify)) |
+| `effectiveness BASE LATER [--alias OLD=NEW]… [--path-alias OLD=NEW]… [--csv FILE] [--out FILE]` | Per finding: was each finding of the run directory `BASE` remediated by the run `LATER` (`effectiveness.compare`: version lines paired, renamed trees reported as moved). `--alias` names a target renamed between the runs, `--path-alias` a location prefix renamed on disk. Markdown to stdout or `--out`; `--csv` writes one row per baseline finding. Machine-local: it names targets and packages |
 | `resolve ID --evidence TEXT [--key-id ID]` | Resolve an escalation ([Escalations](#escalations)) |
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
 | `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports. `sign` checks `--node-id` and `--owner-id` first (exit 2): `refused: --node-id is empty — run the gh lookup first; it must be the ops repository's node id (gh repo view <owner/repo> --json id)`, `refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`, `is required` in place of `is empty` when the flag is omitted, and `refused: --owner-id must be your numeric GitHub user id (got '…')` |
@@ -616,6 +619,8 @@ its fixes from `origin/HEAD` against the checkout, so use `scan_mirror` with the
 | `handoff status` | printed | — | an unusable config | — | — |
 | `remediation-report` | reported (an unreadable ledger is reported, as `error`) | — | a bad `SINCE`, or `--out` not writable | — | — |
 | `ready` | ready (no layer failed) | — | an unusable config | degraded (a layer failed; the first line names its reason code) | — |
+| `verify` | verified (or already verified today) | — | no config, or a bad `--date` | partial (a refresh, re-scan or audit failed), a lock held, or no morning run today | — |
+| `effectiveness` | written | — | an unreadable run, a bad `--alias` / `--path-alias`, or an unwritable `--csv` / `--out` | — | — |
 | `agent-chat` | the session's exit code | | refused | | 75: run lock held · 124: time cap · 143: SIGTERM (both containers removed) |
 
 "No config" includes a config that cannot be used (invalid JSON, not an object, a key with a wrong
@@ -1582,6 +1587,12 @@ when the key names a worktree (no `/`), the directory is real, and the day's rec
 #### `scan_mirror.also_under(skips, root, mirror)`
 
 `skips` (resolved exclude paths or opted-out checkouts) plus, for each inside `root`, the same path inside `mirror`.
+
+#### `scan_mirror.scan_root(cfg, root, mirror, exclude, opted_out)`
+
+Scan one effective root as the daily run does: `mirror` when given, else the checkout, with the operator's
+exclusions and opted-out checkouts holding inside the mirror too (`also_under`). Findings keep the targets
+`engine.scan_path` gives them; the caller files them under the checkout. The daily scan and `verify` both call it.
 
 ### `agentteams.vulnscan.manifests`
 
@@ -3277,9 +3288,18 @@ Publish a run when a publish grant is active; `None` otherwise.
 Write a starter config (the defaults, with the given `repo_roots` and `servers`) at `path` (default
 `paths.config_file()`) unless one exists; never overwrites. Returns the path. The `init` command calls it.
 
-#### `daily.run_lock_path()`
+#### `daily.run_lock_path()` / `daily.remediation_lock_path()`
 
-`<state>/daily.lock`, held for a whole daily run.
+`<state>/daily.lock`, held for a whole daily run; `<state>/remediate.flock`, held by the remediation runner, a
+deploy and `verify`.
+
+#### `daily.scan_server(host, kit, out_dir)` / `daily.write_atomic(path, text)` / `daily.ITEM_ERRORS`
+
+`scan_server` runs the packaged server kit's read-only L1 audit on one host (its log `server-<host>.log` in
+`out_dir`) and returns the host's report; `write_atomic` writes through a temporary file and a rename;
+`ITEM_ERRORS` is what stops one scan root or fix plan without stopping the run. `verify` uses all three.
+`coverage.under_root(root_s, target)` names a target under its root's label and `coverage.drop_excluded(cfg, root,
+rep)` drops what lies inside an `exclude` path; both moved from `daily`.
 
 #### Split modules
 
@@ -3295,10 +3315,51 @@ range, every `agent.*` key included ([`validate_agent`](#validate_agenta)).
 
 ### `agentteams.vulnscan.effectiveness`
 
-#### `section(total, previous, *, stats=None)`
+#### `section(total, previous, *, stats=None, scanned=None)`
 
 The summary's **Remediation effectiveness** section and the PR counts behind it (`PrStats`). Counts
-only, and passed through `publish.rewrite_paths`: no repository, PR, host or path is named.
+only, and passed through `publish.rewrite_paths`: no repository, PR, host or path is named. With `scanned` (the
+daily run passes `scanned_targets(run_dir)`) and a previous run, it adds one row per outcome of `compare`: the
+previous run's findings remediated, partly remediated, open, moved (not remediated), present elsewhere (not
+remediated) and not assessed. Without it
+those rows are left out, so an unscanned target never reads as remediated.
+
+#### `compare(baseline, later, *, scanned=None, aliases=None, path_aliases=None)`
+
+Per finding (vfr-v V2): for each finding of `baseline`, whether `later` shows it remediated. A finding is keyed by
+target, kind, ecosystem and package name (runtime and host findings also by their detail). Each later finding is
+paired with **one** baseline finding of its key at the same place (a shared location, or either has none): the one
+whose version is the highest at or below the later one, else the lowest. Two version lines of one package
+therefore never match each other. Statuses (`OUTCOMES`): `remediated`; `partly remediated` (some advisories gone,
+or now at a higher version that is still vulnerable); `open`; `moved (not remediated)` (still there, but only
+under a tree `detect_moves` found renamed); `present elsewhere (not remediated)` (nothing at its place, but the
+later run has its key at a place no baseline finding of that key had, e.g. `/root/anaconda3` → `/opt/anaconda3` or
+another lockfile); `not assessed` (the target is not in `scanned`). Requirement-range
+findings are left out (no installed version). `aliases` maps a later target name to the baseline's (a renamed
+host, e.g. `{"jlc-prod": "vk-prod"}`); `path_aliases` maps a renamed location prefix the same way and reads as
+`open`. Returns a `Comparison` (`outcomes`, `new`: the later findings paired with no baseline finding, a new key or a known one at a new place, `moves`, `counts()`).
+`outcome_rows(cmp)` gives one plain row per outcome.
+
+#### `detect_moves(baseline, later, *, aliases=None, path_aliases=None)`
+
+Trees renamed on disk between the runs, per target: `{new prefix: old prefix}`. A baseline location the later run
+lacks and a later location the baseline lacked are a candidate when exactly one path component was renamed in
+place, keeping its name and adding (or dropping) a suffix after `.`, `-`, `_`, `~` or `+`
+(`/root/anaconda3` → `/root/anaconda3.disabled-20261101`; `python3.10` → `python3.12` is not one). The move is
+accepted when the renamed tree carries at least one of the old tree's findings unchanged (kind, ecosystem, package,
+version). That is weaker than "the same package set" on purpose (Rule 12): a rename combined with one upgrade must
+still read as a move, never as a remediation of everything else in the tree.
+
+#### `scanned_targets(run_dir, *, since=None)` / `assessed(targets, scanned)` / `load_run(run_dir)`
+
+`scanned_targets` is what a run directory has a complete record for: each `repos-*.json`'s root (a
+`<repo>.worktrees/<name>` mirror filed under its checkout; a root under the home directory also as `~/...`), each
+host whose `server-<host>.log` holds the audit's `RESULT` line, and `this-machine`; with `since` (epoch seconds;
+the daily run passes its own start) a record written before it is ignored, so a file an earlier run of the day left
+behind is never read as this run's scan. `assessed` keeps the targets
+equal to one of them or inside a scanned root. `load_run` reads a run's `summary.json` (`OSError`, or `ValueError`
+for one that is not a report).
+
 
 #### `pr_urls(rows)` / `pr_stats(urls, *, now=None, view=None)`
 
@@ -3555,6 +3616,63 @@ and named under *Needs you*, not classified. An unreadable ledger sets `error`
 - `needs_line(row)` is one *Needs you* line, with control characters replaced and the detail cut to
   `DETAIL_CHARS` (200). `render_markdown(outcome, run_name=, attempt=, log_text=)` and `report(...)` build
   `remediation.md`: PR links and the last per-repository line from the attempt's log, then *Needs you*.
+
+### `agentteams.vulnscan.verify`
+
+Same-day verification (`verify`) and the per-finding comparison of two runs (`effectiveness`). The morning scan
+cannot see a fix merged or a host changed after it ran; the verification job measures those the same day. It is
+read-only toward everything but its own files: it stages nothing, writes no fix plan, opens no PR, starts no agent
+and sends no notification.
+
+#### `run_verify(cfg, *, today=None, mirror_refresh=None, force=False)`
+
+Re-scan what changed since this morning's run and write `<run>/verify.json`. In order:
+
+1. Read the morning's `summary.json` (none: exit 3, `state: no-run`, nothing written). A `verify.json` already
+   `complete` today is returned as `already-verified` (exit 0) unless `force`.
+2. Take `<state>/remediate.flock` (`daily.remediation_lock_path()`) and then `<state>/daily.lock`, the order
+   `vulnscan-deploy.sh` takes them, each without waiting. While a remediation attempt, a deploy or a daily run holds
+   either one, nothing is written and the exit code is 3 (`state: busy`).
+3. Keep the morning's scan-mirror record as `<run>/verify/mirrors-morning.json` (once a day: a second verification
+   compares with the morning's commits, not with the first verification's), then run `bash SCRIPT refresh` for
+   `mirror_refresh` (the operator's refresh job, `vauto-a-mirrors.sh`) through `open_refresh(script)`: see below.
+4. Re-scan, from its refreshed mirror (`scan_mirror.scan_root`), each effective root whose record went from one
+   `ok <sha>` to another since the morning: a repository whose default branch moved today. A root without `ok` before
+   and after is listed in `not_rescanned` (its morning scan read the checkout, or the refresh failed); with
+   `scan_mirror` off no repository is re-scanned.
+5. Run the read-only L1 audit (`daily.scan_server`, the audit of the daily scan and of the executor's
+   `server-audit` op) on each configured `servers` host that an executor `server-*` op ran against today
+   (`audited_hosts(rows, day)`: `done` or `failed` ledger rows of that local date). Its logs go to `<run>/verify/`;
+   a host that is not a configured server is listed in `hosts_skipped` (no morning baseline).
+6. Compare the morning's findings of the targets re-scanned without an error with the new scan
+   (`effectiveness.compare`) and write `verify.json`: `day`, `started`, `finished`, `complete` (no feed error),
+   `mirror_refresh`, `rescanned` (`root`, `before`, `after` commits), `not_rescanned`, `hosts`, `hosts_skipped`,
+   `assessed`, `feed_errors`, `counts` (per status), `moves`, `findings` (one row per assessed morning finding:
+   `status`, `severity`, `target`, `kind`, `ecosystem`, `name`, `version`, `fix`, `fixed_upstream`, `note`) and
+   `new` (findings of keys the morning lacked). It names repositories, hosts and packages: machine-local, never
+   published. `summary.*`, the heartbeat and the morning's `repos-*.json` and `server-*.log` are left as they were.
+
+Returns `(record, exit code)`: 0 complete, 3 partial (a refresh, re-scan or audit failed), busy or no morning run.
+
+#### `open_refresh(script)` / `refresh_problem(script)`
+
+`open_refresh` opens the mirror refresh script for running and returns the descriptor, or raises `RefreshRefused`
+(a `ValueError`) naming the check that failed. It refuses a relative path, and opens with `O_NOFOLLOW`, so a
+symlink is refused. On the open descriptor (`fstat`) the file must be regular, owned by the user and not group- or
+world-writable. No directory of its parent path below the home directory (below `/` outside it) may be a
+symlink. Every directory above it up to the home directory (or `/` outside it) must be owned by the user or
+root and not group- or world-writable, and the path must still name the opened file (same device and inode). The
+script then runs as `bash /dev/fd/N refresh` with that descriptor passed (`pass_fds`), never by path, so a file
+swapped in after the checks is not what runs. `refresh_problem` returns the refusal text, or "".
+
+#### `comparison_markdown(cmp, *, baseline, later, aliases, path_aliases)`
+
+The `effectiveness` command's report: counts per status, the trees renamed between the runs, counts per target, and
+the CRITICAL and HIGH findings not remediated. Machine-local (it names targets and packages).
+
+#### `register(sub)` / `dispatch(args, load_cfg)`
+
+The `verify` and `effectiveness` commands ([Command reference](#command-reference)).
 
 ### `agentteams.vulnscan.notify`
 

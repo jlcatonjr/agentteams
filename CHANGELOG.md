@@ -206,6 +206,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `resolved`. With records shaped as GitHub publishes them (an open `introduced: 0` range and a last known affected
   range below 0.20.3), portal's `xlsx` 0.20.3 reads `unknown`, not "2 advisories without a fix". The signed known entry that settles it (vfr-k) is a separate change.
 
+### added (vulnscan: same-day verification and per-finding effectiveness, vfr-v V1 + V2)
+
+- **Per finding, not only counts (V2).** `effectiveness.compare` says, for each finding of a baseline run, whether
+  a later run shows it remediated: `remediated`, `partly remediated`, `open`, `moved (not remediated)`, `present
+  elsewhere (not remediated)` (its package found at another place, e.g. `/opt/anaconda3`) or `not assessed`. Each later finding pairs with one baseline finding of its key at the same place, so two version lines
+  of one package never match each other. `effectiveness.detect_moves` finds a tree renamed on disk
+  (`/root/anaconda3` → `/root/anaconda3.disabled-20261101`) without being told: a finding still in the renamed tree
+  is "moved", never "remediated". On the 2026-10-31 → 2026-11-02 runs the comparison matches the 9f audit script
+  (`vfu-m7-audit.py` r2) row for row, and the detector turns the 56 rows the rename made look remediated into
+  `moved (not remediated)`. The daily summary's effectiveness section adds the previous run's findings per outcome
+  (counts only). Only targets the run has a scan record for are assessed. New command `effectiveness BASE LATER
+  [--alias] [--path-alias] [--csv] [--out]`, which replaces the audit script.
+- **Same-day verification (V1).** New command `verify` (module `agentteams.vulnscan.verify`) and job
+  `io.agentteams.vulnscan-verify`, which `vulnscan-remediate-auto.sh --install` loads (17:15 and 18:45,
+  `VULNSCAN_VERIFY_TIMES`). Its entry point is `vulnscan-daily-wrapped.sh --verify`: the install guard, the wrapper
+  lock, Docker. It takes `remediate.flock` and `daily.lock` without waiting and runs the operator's scan-mirror
+  refresh (`VULNSCAN_MIRROR_REFRESH`). It then re-scans each root whose mirror moved since the morning, re-audits
+  each configured server an executor `server-*` op ran against today, and writes `<run>/verify.json`. It stages
+  nothing, opens no PR and sends no notification. The refresh script is opened with `O_NOFOLLOW`, checked on its
+  descriptor (and its folders up to `$HOME`), and run as `bash /dev/fd/N`, so a file swapped in after the check
+  is never run. `scan_mirror.scan_root` is split out of the daily scan, so both scan a root the same way;
+  `daily.scan_server`, `write_atomic`, `ITEM_ERRORS` and `remediation_lock_path` are public, and
+  `under_root` / `drop_excluded` moved to `coverage`.
+  Deploy with `vulnscan-deploy.sh --with-scripts` to install the job.
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install
