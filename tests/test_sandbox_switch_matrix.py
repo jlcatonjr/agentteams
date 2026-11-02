@@ -131,6 +131,7 @@ def _render(base: Path, cell: str, os_: str, wasm: str) -> Render:
     out, err = io.StringIO(), io.StringIO()
     with pytest.MonkeyPatch.context() as mp, contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         mp.setattr(we, "report", spy)
+        mp.setenv("AGENTTEAMS_GOOSE_CONFIG", str(root.parent / f"{root.name}.no-live-goose-config.yaml"))
         try:
             rec.rc = build_team.main(["--description", str(path), "--framework", fw, "--project", str(root), "--yes",
                                       "--no-scan", "--os-sandbox", os_, "--wasm-sandbox", wasm, *extra])
@@ -147,17 +148,9 @@ def matrix(tmp_path_factory: pytest.TempPathFactory) -> dict[tuple[str, str, str
 
 
 _ALL = [pytest.param(c, o, w, id=f"{c}-os{o}-wasm{w}") for c in CELLS for o, w in SWITCHES]
-#: BUG (P13/R1, routed to the orchestrator): a fresh Goose grant-mode render with the OS sandbox on claims
-#: ``subagents ENFORCED``. ``wasm_mcp.control_plane_advisory`` counts the emitted ``.goose/sandbox.sb`` as merged, yet
-#: that profile says it is "INERT until you wire it in" (operator merge of ``config.yaml.agentteams.example`` /
-#: a ``sandbox-exec`` wrapper, neither checked), so a narrowed agent's recipe is not proven write-protected. Claude
-#: needs the live ``settings.json``; Codex says ``conditional`` ("not verifiable at render").
-_GOOSE_ENFORCED_UNMERGED = pytest.mark.xfail(sys.platform == "darwin", strict=True, reason=(
-    "P13/R1: fresh goose grant render claims subagents ENFORCED while .goose/sandbox.sb is inert (not wired into "
-    "the live Goose config); control_plane_advisory treats the emitted profile as merged"))
-_WASM_ON = [pytest.param(c, o, id=f"{c}-os{o}",
-                         marks=[_GOOSE_ENFORCED_UNMERGED] if (c, o) == ("goose-grant", "on") else [])
-            for c in CELLS if c != "wasm" for o in ("on", "off")]
+#: P17 found a fresh Goose grant render claiming ``subagents ENFORCED`` from the emitted ``.goose/sandbox.sb`` alone;
+#: it is inert until GOOSE_SANDBOX is on in the live Goose config, which every render here points at an absent file.
+_WASM_ON = [pytest.param(c, o, id=f"{c}-os{o}") for c in CELLS if c != "wasm" for o in ("on", "off")]
 
 
 def _ok(r: Render) -> None:

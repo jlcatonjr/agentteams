@@ -115,7 +115,7 @@
       "javascript"
     ],
     "agents": {
-      "primary-producer": {
+      "format-converter": {
         "read_paths": [
           "docs",
           "src"

@@ -439,6 +439,43 @@ def unhonoured_grants(manifest: dict[str, Any], framework: str, state: SandboxSt
     return _widened(state)
 
 
+def inert_grants(manifest: dict[str, Any], framework: str, state: SandboxState) -> list[tuple[str, str]]:
+    """Widened WASM grants that reach no ``agentteams_wasm`` copy on this framework, each with why (D2: never silent).
+
+    Call after the agents are rendered: on a per-agent host the wiring record's ``agents`` is the ground truth (only
+    :func:`wasm_agent_entry` adds to it). Shared-copy hosts refuse a widening outright (:func:`unhonoured_grants`),
+    so they never reach here; ``--framework wasm`` honours grants in its own runtime and is skipped.
+
+    Args:
+        manifest: The team manifest (its wiring record, filled in while the agents were rendered).
+        framework: The framework id.
+        state: The effective ``SandboxState``.
+
+    Returns:
+        ``(slug, reason)`` per widened agent the framework did not wire, sorted by slug.
+
+    Raises:
+        ValueError: As :func:`wasm_on`.
+    """
+    if framework == "wasm":
+        return []
+    row = wiring_row(manifest, framework)
+    if row is None or row["grant_scope"] == "session-compute-only":
+        return []
+    wired = set(row["agents"]) if row["status"] == WIRED_PER_AGENT else set()
+    out: list[tuple[str, str]] = []
+    for slug in _widened(state):
+        if slug in wired:
+            continue
+        if row["status"] == WIRED_PER_AGENT:
+            why = (f"{slug} is not WASM-eligible here (only an agent holding an execute tool gets an "
+                   "agentteams_wasm copy, R9), so it was not wired")
+        else:
+            why = f"{framework} does not wire agentteams_wasm per agent ({row['status']}: {row['reason']})"
+        out.append((slug, why))
+    return out
+
+
 def report_line(manifest: dict[str, Any], framework: str) -> str | None:
     """The ``[WASM-WIRING]`` line for this framework (never an enforcement claim), or None when WASM is off.
 
@@ -785,6 +822,7 @@ __all__ = [
     "codex_first_party_tables",
     "covered",
     "install_binary",
+    "inert_grants",
     "install_root",
     "launching_config_paths",
     "output_files",

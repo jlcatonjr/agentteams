@@ -35,7 +35,7 @@ from __future__ import annotations
 import hashlib
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -299,6 +299,69 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
                       "predate governance); re-sign a decision or turn the sandbox back on", lapsed)
 
 
+def excuse_stale_evidence(team_dir: Path, old: SandboxState | None, stale: frozenset[str], *,
+                          framework_id: str) -> SandboxState | None:
+    """Return the previous state the gate plans against, turning back on each stale key the operator never excused.
+
+    ``sandbox_state.recorded_sandbox_state`` makes the build-log record the previous state and reports the keys
+    whose leftover boundary files still say "on" (P17: an off render leaves ``sandbox/confine-run.sh`` and the
+    installed ``agentteams_wasm`` server). Ungoverned, the record stands (nothing is gated; no repeated notice). In
+    a governed workspace a stale key is excused only by the operator's authorization of that very off state, so a
+    rewritten record alone steps around nothing (Rule 12): ``os`` by an active, bound ``sandbox-os-off:<fw>``
+    exception (:func:`standing_authorization`), ``wasm`` by the newest ``sandbox-wasm-off:<fw>`` decision row being
+    spent and still re-verifying (approved author, the operator's Ed25519 signature, lineage, intact chain).
+    Anything else, or any read failure, keeps the evidence: "was on" (fail closed).
+
+    Args:
+        team_dir: The team directory (decisions log, exception registry).
+        old: The record-authoritative previous state, or None.
+        stale: The keys whose evidence disagrees with the record (a subset of ``{"os", "wasm"}``).
+        framework_id: The framework being rendered.
+
+    Returns:
+        ``old`` with every unexcused stale key on (``old`` itself when nothing is stale or ungoverned).
+
+    Raises:
+        Nothing: an unreadable log or registry leaves the key on.
+    """
+    if old is None or not stale or not _enforce_decision_signing(team_dir):
+        return old
+    os_on = "os" in stale and not _covered_by_exception(team_dir, framework_id)
+    wasm_on = "wasm" in stale and not _spent_off_decision(team_dir, action_id(SANDBOX_WASM_OFF, framework_id))
+    return replace(old, os=old.os or os_on, wasm=old.wasm or wasm_on)
+
+
+def _covered_by_exception(team_dir: Path, framework_id: str) -> bool:
+    """Whether an active, bound ``sandbox-os-off:<fw>`` exception covers the off state (never raises)."""
+    try:
+        standing_authorization(team_dir, SANDBOX_OS_OFF, framework_id)
+    except SandboxRelaxationError:
+        return False
+    return True
+
+
+def _spent_off_decision(team_dir: Path, action: str) -> bool:
+    """Whether the newest decision row scoped exactly to ``action`` is consumed and still re-verifies (never raises)."""
+    try:
+        read = _read_decision_rows(team_dir)
+        if read is None:
+            return False
+        rows, fieldnames = read
+        _assert_decision_chain_intact(rows, fieldnames)
+        mine = [row for row in rows if (row.get("scope") or "").strip().lower() == action]
+        if not mine:
+            return False
+        row = mine[-1]
+        verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
+        if (row.get("consumed") or "").strip().lower() not in {"yes", "true", "1"} or verdict not in _AUTHORIZING:
+            return False
+        _assert_authorizing_row_is_authentic(row, output_dir=team_dir, signing_active=_decision_signing_active(
+            fieldnames), action=action)
+    except (RuntimeError, OSError, ValueError):
+        return False
+    return True
+
+
 def standing_authorization(team_dir: Path, kind: str, qualifier: str, grants: tuple[str, ...] = (), *,
                            now: datetime | None = None) -> dict[str, str]:
     """Re-check, read-only, that a standing relaxation is still covered by an active exception (launch time).
@@ -491,6 +554,7 @@ __all__ = [
     "Relaxation",
     "SandboxRelaxationError",
     "authorize",
+    "excuse_stale_evidence",
     "plan_relaxations",
     "retire_on_tighten",
     "standing_authorization",

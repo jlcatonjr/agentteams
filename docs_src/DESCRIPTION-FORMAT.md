@@ -208,7 +208,7 @@ fuel / memory / timeout limits. When an OS sandbox is available the host process
   "enabled": true,
   "languages": ["module", "python"],
   "limits": {"fuel": 10000000000, "memory_mib": 64, "timeout_s": 120},
-  "agents": {"primary-producer": {"read_paths": ["docs", "src"], "scratch": true}},
+  "agents": {"format-converter": {"read_paths": ["docs", "src"], "scratch": true}},
   "native_exec": "replace",
   "native_exec_keep": ["git-operations", "navigator"]
 }
@@ -219,7 +219,9 @@ fuel / memory / timeout limits. When an OS sandbox is available the host process
 - `limits`: `fuel` 1..10^15, `memory_mib` 1..4096, `timeout_s` 1..3600. Out-of-range values are refused, never clamped.
 - `agents`: per-agent widening beyond compute-only. `read_paths` are project-relative and mounted read-only at
   `/project/<path>`; `scratch: true` gives one private writable `/scratch` at `.agentteams/wasm/scratch/<agent>/`
-  (agentteams picks the location). Read paths may not be absolute or `~`, contain `..`, name the whole project, reach
+  (agentteams picks the location). A grant reaches an agent only through its `agentteams_wasm` copy: on Claude and
+  Goose only a WASM-eligible agent (one holding an execute-class tool) gets one, and AGENTS.md / Grok wire none, so a
+  grant there has no effect and the render prints a `NOTE (WASM): ... has no effect on <framework>` line. Read paths may not be absolute or `~`, contain `..`, name the whole project, reach
   the control plane (`.git`, `.agentteams`, `.claude`, `.goose`, `.codex`, `.grok`, `.github/agents`,
   `.github/hooks`, `sandbox`, or an ancestor of one), credential material (`.env*`, `*.pem`, `*.key`, `id_*`, ...), a
   governance / trust root, or anything that resolves through a symlink. A read directory that holds credential-named

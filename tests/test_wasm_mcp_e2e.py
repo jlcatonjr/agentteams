@@ -219,11 +219,28 @@ def test_live_compute_only_agent_sees_no_project_and_no_scratch(rendered: Path, 
 
 # --- a grant on an agent the framework never wires -------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason=(
-    "P01/P11/D12: the shipped examples/software-project/wasm-sandbox.brief.json widens primary-producer's grant "
-    "(SANDBOX RELAXATION printed; a signature when governed), but on claude primary-producer holds no execute tool, "
-    "so it is not WASM-eligible and gets no agentteams_wasm; nothing says the grant is inert (D2: never silent)"))
 def test_a_grant_on_an_ineligible_agent_is_noticed(tmp_path: Path) -> None:
+    root = Path(str(tmp_path)).resolve() / "proj"
+    for d in ("docs", "src"):
+        (root / d).mkdir(parents=True)
+    brief = json.loads((REPO / "examples" / "software-project" / "wasm-sandbox.brief.json").read_text("utf-8"))
+    # P17 found the shipped example widening primary-producer (no execute tool on claude, so never wired); the
+    # example now widens an eligible agent, so the ineligible widening is stated here.
+    block = {**brief["wasm_sandbox"], "agents": {"primary-producer": {"read_paths": ["docs", "src"], "scratch": True}}}
+    path = tmp_path / "brief.json"
+    path.write_text(json.dumps({**brief, "wasm_sandbox": block, "enforce_decision_signing": False}), encoding="utf-8")
+    out, err = io.StringIO(), io.StringIO()
+    extra = seed_offline_intel(root / ".claude" / "agents", "claude")
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        assert build_team.main(["--description", str(path), "--framework", "claude", "--project", str(root),
+                                "--yes", "--no-scan", *extra]) == 0
+    assert "agentteams_wasm" not in _front(root, "primary-producer")      # the precondition of the finding
+    notice = re.compile(r"not (wasm[- ])?eligible|not wired|no run_wasm|inert|unhonou?red|never used", re.I)
+    assert any("primary-producer" in ln and notice.search(ln) for ln in (out.getvalue() + err.getvalue()).splitlines())
+
+
+def test_the_shipped_example_widens_only_agents_claude_wires(tmp_path: Path) -> None:
+    """The example brief's widened grants all reach an ``agentteams_wasm`` copy on claude, and no no-effect note."""
     root = Path(str(tmp_path)).resolve() / "proj"
     for d in ("docs", "src"):
         (root / d).mkdir(parents=True)
@@ -235,6 +252,6 @@ def test_a_grant_on_an_ineligible_agent_is_noticed(tmp_path: Path) -> None:
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         assert build_team.main(["--description", str(path), "--framework", "claude", "--project", str(root),
                                 "--yes", "--no-scan", *extra]) == 0
-    assert "agentteams_wasm" not in _front(root, "primary-producer")      # the precondition of the finding
-    notice = re.compile(r"not (wasm[- ])?eligible|not wired|no run_wasm|inert|unhonou?red|never used", re.I)
-    assert any("primary-producer" in ln and notice.search(ln) for ln in (out.getvalue() + err.getvalue()).splitlines())
+    widened = sorted(brief["wasm_sandbox"]["agents"])
+    assert widened and all("agentteams_wasm" in _front(root, slug) for slug in widened)
+    assert "has no effect" not in out.getvalue() + err.getvalue()

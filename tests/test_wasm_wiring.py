@@ -148,9 +148,12 @@ def test_control_plane_advisory_reports_any_launching_file_missing_from_deny_wri
     assert wasm_mcp.control_plane_advisory(tmp_path, "claude", manifest) is None
 
 
-def test_goose_advisory_counts_launching_recipes(tmp_path):
+def test_goose_advisory_counts_launching_recipes(tmp_path, monkeypatch):
     from agentteams.frameworks import _control_plane_protect as cpp
 
+    live = tmp_path.parent / f"{tmp_path.name}-goose-config.yaml"   # the profile wired in (GOOSE_SANDBOX live)
+    live.write_text("GOOSE_SANDBOX: 1\n")
+    monkeypatch.setenv("AGENTTEAMS_GOOSE_CONFIG", str(live))
     manifest = _manifest("goose", privilege_profile="confined")
     recipes = tmp_path / ".goose" / "recipes"
     recipes.mkdir(parents=True)

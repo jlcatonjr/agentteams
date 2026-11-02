@@ -151,19 +151,6 @@ def test_governed_on_to_off_refuses_unsigned_and_hmac_then_proceeds_with_the_ope
     assert [e["action"] for e in er.list_exceptions(team.dir)] == [f"sandbox-os-off:{framework}"]
 
 
-#: BUG (P00 evidence x P15 standing exception, routed to the orchestrator): the OFF render leaves the ON render's
-#: ``sandbox/confine-run.sh`` (every framework) and, where WASM was wired, ``.agentteams/bin/agentteams-wasm-mcp.py``
-#: on disk. ``sandbox_state.previous_sandbox_state`` ORs them in as "was on" evidence, so the next identical render
-#: plans a FRESH ``sandbox-os-off`` / ``sandbox-wasm-off`` instead of the continuing one, never consults the
-#: registered 90-day exception, and refuses ("no unconsumed decision"): every re-render needs a new signature, and
-#: the refusal does not name the stale files.
-_STALE_EVIDENCE = pytest.mark.xfail(strict=True, reason=(
-    "P00/P15: stale on-render boundary files (sandbox/confine-run.sh, the installed agentteams_wasm server) are read "
-    "as 'was on' evidence after a signed off render, so the standing sandbox-os-off exception is never used and the "
-    "identical re-render is refused"))
-
-
-@_STALE_EVIDENCE
 @pytest.mark.parametrize("framework", ["claude", "agents-md"])
 def test_governed_rerender_after_a_signed_off_continues_under_the_standing_exception(
         base: Path, framework: str, stub_ed25519: None) -> None:
@@ -174,6 +161,47 @@ def test_governed_rerender_after_a_signed_off_continues_under_the_standing_excep
     records = _ok(team.render("--os-sandbox", "off", "--wasm-sandbox", "off"))   # same flags, nothing new signed
     assert [(r["action"], r["authorization"]) for r in records] == [(f"sandbox-os-off:{framework}",
                                                                      "active-exception")]
+
+
+def _forge_off_record(team: Team) -> None:
+    """What a session that can write the build-log might do: record "was off" without any operator decision."""
+    log = team.dir / "references" / "build-log.json"
+    data = json.loads(log.read_text(encoding="utf-8"))
+    data["sandbox_state"] = {**data["sandbox_state"], "os": "off", "wasm": "off", "wasm_languages": [],
+                             "wasm_grants": {}}
+    log.write_text(json.dumps(data), encoding="utf-8")
+
+
+@pytest.mark.parametrize("framework", ["claude", "agents-md"])
+@pytest.mark.parametrize("tamper", ["no-record", "forged-off-record"])
+def test_stale_evidence_still_gates_without_the_operator_authorization(
+        base: Path, framework: str, tamper: str, stub_ed25519: None) -> None:
+    """Rule 12 on the P17 fix: the record outranks leftover files only where the operator excused the off state."""
+    team = Team(base, framework, governed=True)
+    _ok(team.render("--os-sandbox", "on"))
+    assert (team.root / "sandbox" / "confine-run.sh").exists()   # the evidence the off render would leave
+    if tamper == "no-record":
+        (team.dir / "references" / "build-log.json").unlink()
+    else:
+        _forge_off_record(team)
+    rc, err, _ = team.render("--os-sandbox", "off", "--wasm-sandbox", "off")
+    assert rc == 1 and f"sandbox-os-off:{framework}" in err, err[-800:]
+    assert "no unconsumed decision" in err, err[-800:]
+    assert er.list_exceptions(team.dir) == []
+
+
+def test_a_forged_off_record_after_a_signed_off_and_back_on_needs_a_new_os_signature(
+        base: Path, stub_ed25519: None) -> None:
+    """The standing exception excuses the OS evidence; going back on retires it, so a forged record gains nothing."""
+    team = Team(base, "claude", governed=True)
+    _ok(team.render("--os-sandbox", "on"))
+    team.sign(_row("sandbox-os-off:claude"), _row("sandbox-wasm-off:claude"))
+    _ok(team.render("--os-sandbox", "off", "--wasm-sandbox", "off"))
+    _ok(team.render("--os-sandbox", "on"))   # tightening retires the OS-off exception
+    assert [e for e in er.list_exceptions(team.dir) if (e.get("status") or "") == "active"] == []
+    _forge_off_record(team)
+    rc, err, _ = team.render("--os-sandbox", "off")
+    assert rc == 1 and "sandbox-os-off:claude" in err, err[-800:]
 
 
 def test_governed_wasm_framework_os_off_needs_the_signature_and_wasm_cannot_be_turned_off(
@@ -239,9 +267,6 @@ def test_confined_os_off_with_orchestrator_only_is_refused(base: Path, framework
             err[-800:]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "exception_registry.assert_within_aggregate_cap names 'references/references/exception-registry.json' "
-    "(EXCEPTION_REGISTRY_REL already starts with references/); found by the wasm-framework cap refusal above"))
 def test_the_cap_refusal_names_the_registry_path_it_reads(base: Path) -> None:
     team = base / "team"
     (team / "references").mkdir(parents=True)

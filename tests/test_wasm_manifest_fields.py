@@ -101,7 +101,7 @@ def test_example_brief_validates_and_carries_the_normalised_block():
     brief = json.loads(WASM_BRIEF.read_text(encoding="utf-8"))
     jsonschema.validate(brief, _schema("project-description.schema.json"))
     m = analyze.build_manifest(brief, framework="claude")
-    assert m["wasm_sandbox"]["agents"] == {"primary-producer": {"read_paths": ["docs", "src"], "scratch": True}}
+    assert m["wasm_sandbox"]["agents"] == {"format-converter": {"read_paths": ["docs", "src"], "scratch": True}}
     assert (m["wasm_sandbox"]["native_exec"], m["wasm_sandbox"]["native_exec_keep"]) == ("replace", [])
 
 
@@ -150,7 +150,7 @@ def test_claude_settings_carry_the_r1_rules_under_brief_and_cli_on(tmp_path):
 def test_example_brief_renders_with_grants_when_the_root_is_known(tmp_path):
     m = analyze.build_manifest(json.loads(WASM_BRIEF.read_text(encoding="utf-8")), framework="claude")
     m[PROJECT_ROOT_KEY] = tmp_path.resolve()
-    assert effective_sandbox_state(m).wasm_grants["primary-producer"].mounts[-1].guest == "/scratch"
+    assert effective_sandbox_state(m).wasm_grants["format-converter"].mounts[-1].guest == "/scratch"
     assert "../settings.hooks.example.json" in _extras(m, "claude")
 
 

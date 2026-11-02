@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -191,7 +192,7 @@ def goose_off_drift(state: SandboxState | None, live_enabled: bool | None) -> tu
 
     Args:
         state: The (off) sandbox state.
-        live_enabled: ``_live_goose_sandbox_enabled`` of the live config (None when unreadable).
+        live_enabled: ``live_goose_sandbox_enabled_at`` of the live config (None when unreadable).
 
     Returns:
         ``(ok, messages)``: ``ok`` False with a ``DRIFT`` line (and the user-global note) when it is still on.
@@ -231,11 +232,75 @@ def goose_control_plane_ok(state: SandboxState | None, profile_text: str, path_e
     return not missing
 
 
+#: Truthy YAML/env values for GOOSE_SANDBOX in a live Goose config.
+_GOOSE_SANDBOX_TRUTHY = frozenset({"1", "true", "yes", "on"})
+#: Matches ``GOOSE_SANDBOX: 1`` / ``GOOSE_SANDBOX = true`` / ``export GOOSE_SANDBOX=on``.
+_GOOSE_SANDBOX_LINE = re.compile(
+    r"(?im)^\s*(?:export\s+)?GOOSE_SANDBOX\s*[:=]\s*[\"']?([A-Za-z0-9]+)[\"']?\s*$"
+)
+#: Override for the live Goose config path (the variable ``goose_config.resolve_goose_config_path`` honours too).
+GOOSE_CONFIG_ENV = "AGENTTEAMS_GOOSE_CONFIG"
+
+
+def live_goose_config_path() -> Path:
+    """Return the live, user-global Goose config the GOOSE_SANDBOX checks read.
+
+    Returns:
+        ``$AGENTTEAMS_GOOSE_CONFIG`` when set, else ``~/.config/goose/config.yaml``.
+
+    Raises:
+        Nothing.
+    """
+    override = os.environ.get(GOOSE_CONFIG_ENV)
+    return Path(override).expanduser() if override else Path.home() / ".config" / "goose" / "config.yaml"
+
+
+def live_goose_sandbox_enabled_at(config_path: Path) -> bool | None:
+    """Return whether GOOSE_SANDBOX is enabled in the operator's LIVE Goose config at ``config_path``.
+
+    Output-only, secret-safe: reads the live config but NEVER echoes its content (it may hold API keys); the caller
+    reports a boolean, mirroring the Claude verifier's discipline.
+
+    Args:
+        config_path: The live config file.
+
+    Returns:
+        True / False, or None when the file is absent or unreadable (cannot confirm).
+
+    Raises:
+        Nothing.
+    """
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = _GOOSE_SANDBOX_LINE.search(text)
+    if match is None:
+        return False
+    return match.group(1).strip().lower() in _GOOSE_SANDBOX_TRUTHY
+
+
+def live_goose_sandbox_enabled() -> bool | None:
+    """Whether GOOSE_SANDBOX is on in :func:`live_goose_config_path` (the render-time R1 evidence; P17 bug 1).
+
+    Returns:
+        True, False, or None (absent or unreadable: cannot confirm).
+
+    Raises:
+        Nothing.
+    """
+    return live_goose_sandbox_enabled_at(live_goose_config_path())
+
+
 __all__ = [
+    "GOOSE_CONFIG_ENV",
     "GOOSE_USER_GLOBAL_NOTE",
     "claude_off_drift",
     "goose_control_plane_ok",
     "goose_off_drift",
+    "live_goose_config_path",
+    "live_goose_sandbox_enabled",
+    "live_goose_sandbox_enabled_at",
     "off_message",
     "previous_boundary_recorded",
     "switched_off",

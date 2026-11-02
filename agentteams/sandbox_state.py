@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Iterable, Mapping
@@ -427,6 +427,9 @@ def previous_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
        Grants come from the record only.
     3. No record and no evidence: None (a new team, or one never confined).
 
+    The relaxation gate reads :func:`recorded_sandbox_state` instead, so that an off render's leftover boundary files
+    do not re-plan a fresh relaxation once a signed exception covers the off state (P17).
+
     Args:
         team_dir: The team directory (holds ``references/build-log.json``).
         project_root: The project root (evidence files).
@@ -434,6 +437,34 @@ def previous_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
 
     Returns:
         The previous state, or None.
+
+    Raises:
+        ImportError: The record carries grants and :mod:`agentteams.wasm_exec` is not importable (fail closed).
+    """
+    state, stale = recorded_sandbox_state(team_dir, project_root, framework_id)
+    if state is None or not stale:
+        return state
+    return replace(state, os=state.os or "os" in stale, wasm=state.wasm or "wasm" in stale)
+
+
+def recorded_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
+                           ) -> tuple[SandboxState | None, frozenset[str]]:
+    """Return the previous state with the build-log record authoritative, and the evidence it overrides.
+
+    As :func:`previous_sandbox_state`, except that once a valid record exists its ``os`` / ``wasm`` are the previous
+    state, and the keys whose on-disk evidence still says "on" while the record says off come back as ``stale``
+    (an off render leaves the on render's ``sandbox/confine-run.sh`` and installed server behind). The gate decides
+    whether a stale key is excused (``sandbox_relaxation_gate.excuse_stale_evidence``: only by the operator's
+    authorization of that off state, so a forged record alone steps around nothing; Rule 12). With no record, or a
+    malformed one (conservative: already on), evidence ORs in as before and nothing is stale.
+
+    Args:
+        team_dir: The team directory (holds ``references/build-log.json``).
+        project_root: The project root (evidence files).
+        framework_id: The framework being rendered (selects its OS evidence).
+
+    Returns:
+        ``(state, stale)``: the state (None for a new team) and a subset of ``{"os", "wasm"}``.
 
     Raises:
         ImportError: The record carries grants and :mod:`agentteams.wasm_exec` is not importable (fail closed).
@@ -451,16 +482,15 @@ def previous_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
     wasm_evidence = any(os.path.lexists(root / p) for p in _WASM_EVIDENCE)
     substrate_evidence = _substrate_evidence(root)
     if record is None and not (os_evidence or wasm_evidence or substrate_evidence):
-        return None
+        return None, frozenset()
+    stale: frozenset[str] = frozenset()
     if record is None:
-        record = SandboxState(os=False, os_reason="unknown", wasm=False, wasm_reason="unknown", wasm_languages=(),
-                              wasm_grants={}, model_substrate=None)
-    return SandboxState(
-        os=record.os or os_evidence, os_reason=record.os_reason,
-        wasm=record.wasm or wasm_evidence, wasm_reason=record.wasm_reason,
-        wasm_languages=record.wasm_languages, wasm_grants=record.wasm_grants,
-        model_substrate="on" if substrate_evidence else record.model_substrate,
-    )
+        record = SandboxState(os=os_evidence, os_reason="unknown", wasm=wasm_evidence, wasm_reason="unknown",
+                              wasm_languages=(), wasm_grants={}, model_substrate=None)
+    else:
+        stale = frozenset(k for k, on, rec in (("os", os_evidence, record.os), ("wasm", wasm_evidence, record.wasm))
+                          if on and not rec)
+    return replace(record, model_substrate="on" if substrate_evidence else record.model_substrate), stale
 
 
 #: The two values of the dedicated OS-sandbox switch (brief ``os_sandbox``, argv ``--os-sandbox``; P00).
@@ -807,6 +837,7 @@ __all__ = [
     "os_switch_state",
     "previous_sandbox_exceptions",
     "previous_sandbox_state",
+    "recorded_sandbox_state",
     "recorded_model_substrate",
     "state_tokens",
     "validate_os_sandbox",
