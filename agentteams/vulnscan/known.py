@@ -19,9 +19,11 @@ operator signs the proposal.
 - its lifetime is at most :data:`MAX_DAYS` days;
 - its class is **derived** from its effect by :func:`agentteams.cli.effect_classifier.classify_row`, and an
   effect the classifier finds non-eligible is refused;
-- a ``@security`` HALT on :data:`ACTION_ID` in the decision log voids **every** entry; a HALT naming an
-  entry's id, or any id in its renewal lineage, voids that entry;
-- its decision reference must name a cleared row of the decision log, and a HALT, retraction or revocation
+- a ``@security`` HALT on :data:`ACTION_ID` (or on ``vulnscan-known:<anything>``, which matches it) voids **every**
+  entry; a HALT on the bare entry id ``vk-…``, or on any id in its renewal lineage, voids that entry;
+- a member may not be CRITICAL: vulnscan reads no CISA KEV catalog yet, so whether it is exploited is unknown;
+- its decision reference must name a cleared row of the decision log (a ``CLEARED-WITH-CONDITIONS`` or
+  ``CONDITIONAL`` row only once its ``conditions_verified`` is ``verified``), and a HALT, retraction or revocation
   recorded for that reference voids it;
 - the body's sha256 must sit in the **git-tracked** index :data:`INDEX_REL` of its governance dir, read
   from the committed ``HEAD`` (an uncommitted edit counts for nothing);
@@ -35,8 +37,9 @@ check other than the web-root exposure check (which carries content evidence) or
 **Key.** A ``package`` entry keys on (target, kind, ecosystem, name, installed version, advisory ids). A
 ``group`` entry signs its **full member list**, each member keyed the same way; it is never a location
 prefix, so a package that appears later under the same path is graded normally. A ``host`` entry for the
-web-root exposure check keys on its detail and on :attr:`.report.Finding.evidence`: the sha256 of the
-files' contents and of the nginx ``deny`` rules (``HOSTEVIDENCE`` lines of ``L1-audit.sh``).
+web-root exposure check keys on its detail and on :attr:`.report.Finding.evidence`: the audit's one digest over
+each file's HMAC (a random per-host key kept on the host; rotating it voids the host's entries) and the nginx
+``deny`` rules (the ``HOSTEVIDENCE`` line of ``L1-audit.sh``). No plain hash of a secret-looking file is printed.
 
 **Void** (the finding is graded normally and the report gains a HIGH ``integrity`` finding saying why):
 the installed version changed; an advisory id appeared that the entry did not sign; a fixed release is
@@ -72,6 +75,8 @@ PURPOSE_TAG = "agentteams-vulnscan-known-v1"
 #: The decision-log action every entry is checked under: a HALT on it voids all entries (C-2).
 ACTION_ID = "vulnscan-known"
 MAX_DAYS = 90
+#: Severity rank (CRITICAL) a member may not have: without the CISA KEV catalog, exploitation is unknown (@security R2).
+CRITICAL_RANK = 4
 #: Aggregate cap (Rule 15(d)): entries in force at once; a group counts as one.
 MAX_ACTIVE = 30
 #: Members of one group entry (a group signs its full list, so it is bounded).
@@ -91,6 +96,8 @@ ENTRY_KINDS = ("package", "group", "host")
 MEMBER_KINDS = ("package", "runtime", "image", "host")
 #: Decision-log verdicts that clear a decision reference.
 CLEARED_DECISIONS = ("CLEAR", "CLEARED", "CLEARED-WITH-CONDITIONS", "PASS", "CONDITIONAL PASS", "APPROVED")
+#: A cleared verdict containing this word counts only when the row's ``conditions_verified`` is ``verified``.
+CONDITIONAL_WORD = "CONDITION"
 #: A decision row for the reference whose verdict contains one of these voids the entry.
 RETRACTING_WORDS = ("HALT", "RETRACT", "REVOK", "WITHDRAW", "REJECT", "DENIED")
 FIELDS = ("entry_id", "kind", "target", "members", "reason", "decision_ref", "issued", "expires", "key_id",
@@ -109,11 +116,11 @@ TRUST_ROOT_MARKERS: tuple[str, ...] = (
 #: The package names of this tool itself: a finding on the install that judges findings is never known.
 SELF_PACKAGES = frozenset({"agentteams"})
 
-_ID_RE = re.compile(r"^vk-[0-9a-f]{16}$")
+ENTRY_ID_RE = re.compile(r"^vk-[0-9a-f]{16}$")
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _EVIDENCE_RE = re.compile(r"^sha256:[0-9a-f]{64};files=([1-9][0-9]{0,3});deny=([1-9][0-9]{0,3})$")
-_CTRL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+CTRL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 
 class KnownError(ValueError):
@@ -129,14 +136,19 @@ def store_dir() -> Path:
     return paths.config_dir() / "vulnscan-known"
 
 
-def _now() -> datetime:
+def utc_now() -> datetime:
+    """Return the current time in UTC (the clock every entry check reads).
+
+    Returns:
+        A timezone-aware datetime.
+    """
     return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------- shape
 
 def _text(value: Any, what: str, *, limit: int = TEXT_MAX_CHARS, empty: bool = False) -> str:
-    if not isinstance(value, str) or _CTRL_RE.search(value) or len(value) > limit or (not empty and not value.strip()):
+    if not isinstance(value, str) or CTRL_RE.search(value) or len(value) > limit or (not empty and not value.strip()):
         raise KnownError(f"{what} must be one line of at most {limit} characters")
     return value
 
@@ -160,6 +172,9 @@ def _check_member(m: Any) -> dict[str, Any]:
         raise KnownError("severity must be a rank 0..4")
     if not isinstance(m["kev"], bool):
         raise KnownError("kev must be true or false")
+    if m["severity"] >= CRITICAL_RANK:
+        raise KnownError("a CRITICAL finding cannot be known: vulnscan does not read the CISA KEV catalog yet, so "
+                         "whether it is exploited is unknown")
     if not isinstance(m["evidence"], str):
         raise KnownError("evidence must be a string")
     if m["kind"] == "host":
@@ -168,8 +183,8 @@ def _check_member(m: Any) -> dict[str, Any]:
                 raise KnownError("an os-release entry keys on its version (no evidence, no advisory ids)")
         elif m["name"] == "host" and m["detail"].startswith(DOCROOT_DETAIL_PREFIX):
             if not _EVIDENCE_RE.match(m["evidence"]) or m["version"] or m["ids"]:
-                raise KnownError("a web-root host entry keys on its evidence: the sha256 of the files' contents "
-                                 "and of the nginx deny rule (at least one of each); the audit must emit HOSTEVIDENCE")
+                raise KnownError("a web-root host entry keys on its evidence: the audit's digest over the files' "
+                                 "HMACs and the nginx deny rule (at least one of each); the audit must emit HOSTEVIDENCE")
         else:
             raise KnownError("only the web-root exposure check (with evidence) and the os-release check of a host "
                              "can be known")
@@ -207,9 +222,9 @@ def finding_identity(f: Finding) -> tuple[str, ...]:
 
 
 def _check_shape(record: dict[str, Any]) -> None:
-    if not isinstance(record, dict) or set(record) != {*FIELDS, "signature"} and set(record) != set(FIELDS):
+    if not isinstance(record, dict) or (set(record) != {*FIELDS, "signature"} and set(record) != set(FIELDS)):
         raise KnownError("unexpected or missing fields (an entry has no prefix, scope or effect_class field)")
-    if not _ID_RE.match(str(record["entry_id"])):
+    if not ENTRY_ID_RE.match(str(record["entry_id"])):
         raise KnownError("malformed entry_id")
     if record["kind"] not in ENTRY_KINDS:
         raise KnownError(f"kind must be one of {', '.join(ENTRY_KINDS)}")
@@ -245,7 +260,8 @@ def _check_shape(record: dict[str, Any]) -> None:
     if not Path(record["governance_dir"]).is_absolute():
         raise KnownError("governance_dir must be absolute")
     lineage, count, renews = record["lineage"], record["renewal_count"], record["renews"]
-    if not isinstance(lineage, list) or len(lineage) > MAX_LINEAGE or any(not _ID_RE.match(str(i)) for i in lineage):
+    if not isinstance(lineage, list) or len(lineage) > MAX_LINEAGE \
+            or any(not ENTRY_ID_RE.match(str(i)) for i in lineage):
         raise KnownError(f"lineage must list at most {MAX_LINEAGE} entry ids")
     if record["entry_id"] in lineage or len(set(lineage)) != len(lineage):
         raise KnownError("lineage repeats an id")
@@ -266,11 +282,25 @@ def _check_shape(record: dict[str, Any]) -> None:
 
 # ---------------------------------------------------------------- refusals (Rule 15(c)) and the derived class
 
-def _is_trust_root(text: str) -> bool:
+def is_trust_root(text: str) -> bool:
+    """Return whether ``text`` names a trust root, as written or, for a path, after resolving symlinks.
+
+    Args:
+        text: A target, package name, detail or location.
+
+    Returns:
+        True when the shared governance vocabulary or :data:`TRUST_ROOT_MARKERS` matches either form.
+    """
     from agentteams.cli.governance_targets import canon_path, target_is_governance_root
 
-    canon = canon_path(text)
-    return bool(canon) and (target_is_governance_root(text) or any(m in canon for m in TRUST_ROOT_MARKERS))
+    forms = [text]
+    if "/" in text or text.startswith("~"):   # path-like: a symlink must not hide where it points
+        forms.append(os.path.realpath(os.path.expanduser(text)))
+    for form in forms:
+        canon = canon_path(form)
+        if canon and (target_is_governance_root(form) or any(m in canon for m in TRUST_ROOT_MARKERS)):
+            return True
+    return False
 
 
 def refusal_reason(record: dict[str, Any]) -> str | None:
@@ -289,7 +319,7 @@ def refusal_reason(record: dict[str, Any]) -> str | None:
         if m["name"].lower() in SELF_PACKAGES:
             return f"{m['name']}: a finding on the agentteams/vulnscan install itself is never known"
         texts += [m["name"], m["detail"]]
-    hit = next((t for t in texts if t and _is_trust_root(t)), None)
+    hit = next((t for t in texts if t and is_trust_root(t)), None)
     if hit is not None:
         return f"{hit!r} names a trust root (signing store, roster, secrets, integrity manifest, constitution, " \
                "grants/ledger, the known index or store, the decisions log, the vulnscan install)"
@@ -387,7 +417,7 @@ def build(findings: list[Finding], *, reason: str, decision_ref: dict[str, str],
     Raises:
         KnownError: Anything is out of bounds or refused.
     """
-    now = (now or _now()).replace(microsecond=0)
+    now = (now or utc_now()).replace(microsecond=0)
     if not findings:
         raise KnownError("no findings to accept")
     targets = {f.target for f in findings}
@@ -480,7 +510,7 @@ def remint(record: dict[str, Any], *, now: datetime | None = None) -> dict[str, 
     Returns:
         A new record.
     """
-    now = (now or _now()).replace(microsecond=0)
+    now = (now or utc_now()).replace(microsecond=0)
     life = datetime.fromisoformat(record["expires"]) - datetime.fromisoformat(record["issued"])
     return {**record, "issued": now.isoformat(), "expires": (now + life).isoformat()}
 
@@ -526,7 +556,7 @@ def verify(record: dict[str, Any], *, now: datetime | None = None) -> str:
     from agentteams.cli.signed_ledger import ed25519_verify
     from agentteams.vulnscan import grant
 
-    now = now or _now()
+    now = now or utc_now()
     if not isinstance(record, dict) or "signature" not in record:
         raise KnownError("unsigned entry")
     cls = check_unsigned(record)
@@ -561,7 +591,7 @@ def install(record: dict[str, Any]) -> Path:
         KnownError: Unsigned or malformed record.
         FileExistsError: An entry with this id exists.
     """
-    if not _ID_RE.match(str(record.get("entry_id", ""))) or not record.get("signature"):
+    if not ENTRY_ID_RE.match(str(record.get("entry_id", ""))) or not record.get("signature"):
         raise KnownError("refusing to install an unsigned or malformed entry")
     d = store_dir()
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -581,7 +611,7 @@ def remove(entry_id: str) -> bool:
     Returns:
         Whether a file was removed.
     """
-    if not _ID_RE.match(entry_id):
+    if not ENTRY_ID_RE.match(entry_id):
         return False
     path = store_dir() / f"{entry_id}.json"
     if path.is_file() and not path.is_symlink():
@@ -601,7 +631,7 @@ def index_row(record: dict[str, Any], *, today: str | None = None) -> dict[str, 
         ``{column: value}`` for :data:`INDEX_HEADER`.
     """
     return {"entry_id": record["entry_id"], "body_sha256": body_sha256(record), "renews": record["renews"],
-            "renewal_count": str(record["renewal_count"]), "added": today or _now().date().isoformat()}
+            "renewal_count": str(record["renewal_count"]), "added": today or utc_now().date().isoformat()}
 
 
 def append_index_row(record: dict[str, Any]) -> Path:
@@ -646,7 +676,7 @@ def read_entry(path: Path) -> dict[str, Any]:
         OSError: The file cannot be opened (a symlink included).
         ValueError: Not JSON.
     """
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)   # a FIFO opens at once and is refused below
     with os.fdopen(fd, "rb") as fh:
         st = os.fstat(fh.fileno())
         if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:

@@ -680,7 +680,7 @@ A Finding (`report.Finding`):
 | `detail` | string | host-check or runtime message, or the malicious-package note |
 | `spec` | string | `range` only: the requirement's specifier set (`""`: any version); `version` is then `""` |
 | `partial` | boolean | `range` only: part of the allowed range is affected (severity capped at MODERATE) |
-| `evidence` | string | `host` web-root check only: `sha256:<hex>;files=N;deny=M` over the audit's `HOSTEVIDENCE` lines (`engine.host_evidence`); `""` otherwise |
+| `evidence` | string | `host` web-root check only: `sha256:<hex>;files=N;deny=M` from the audit's `HOSTEVIDENCE` line, a digest over per-host-key HMACs of the files and the nginx `deny` rules (`engine.host_evidence`); `""` otherwise |
 | `kev` | boolean | on CISA KEV, when a feed sets it (none does in this release); a known entry voids when it turns true |
 | `known`, `known_until` | string | daily runs: the [known entry](#agentteamsvulnscanknown) that covers this finding and its expiry date (`""` = none). A covered finding stays in the list and does not count toward `fail_on` |
 
@@ -2526,6 +2526,8 @@ id, `OSError` when it exists but cannot be removed (`say --remove`). `notes_dir(
 
 ### `agentteams.vulnscan.known`
 
+Entries apply to `daily` only: ad-hoc `scan` and `inventory` ignore them, so their exit codes can differ.
+
 Known-finding entries (vfr-k K1): the operator's Ed25519-signed (purpose `agentteams-vulnscan-known-v1`),
 expiring (at most 90 days) decision to accept a finding. A covered finding is graded `known until <date>` and
 leaves the exit code; it never leaves the report, and `summary.md` lists every entry under *Known findings*
@@ -2535,13 +2537,18 @@ and `known propose --from-note` migrates one into a proposal. The commands are i
 
 - **Key**: `package`: target, kind, ecosystem, name, installed version, advisory ids. `group`: the full
   member list (2–40 members, each keyed the same way; never a path prefix). `host`: the web-root check's
-  detail and `evidence` (file content hashes and nginx `deny` rules), or the os-release check's version.
+  detail and `evidence` (one digest over the files' HMACs under a random per-host key kept at
+  `/var/lib/agentteams-server-kit/l1-evidence.key` on the host, and the nginx `deny` rules; rotating the key
+  voids the host's entries), or the os-release check's version.
 - **Never known**, even signed: trust-root targets (signing store, verify keys, rosters, secrets, integrity
   manifest, constitution, grants, ledger, the known index and store, the decisions log, the agentteams
-  install), `MAL-*` advisories and malicious packages, `ioc`, `range` and `integrity` findings, other host checks.
+  install), `MAL-*` advisories and malicious packages, CRITICAL members (no KEV catalog is read yet), `ioc`,
+  `range` and `integrity` findings, other host checks.
 - **Governance**: the class is derived by `effect_classifier.classify_row` (a non-eligible effect is
-  refused); a HALT on `vulnscan-known` voids every entry, a HALT on an entry's id or lineage voids it; the
-  decision reference (`plan_slug`, `step`) must name a cleared decision-log row; the body's sha256 must be in
+  refused); a HALT on `vulnscan-known` (or `vulnscan-known:<anything>`) voids every entry, a HALT on the bare
+  entry id `vk-…` or a lineage id voids that entry; the decision reference (`plan_slug`, `step`) must name a
+  cleared decision-log row (`CLEARED-WITH-CONDITIONS` / `CONDITIONAL` only with `conditions_verified` =
+  `verified`); the body's sha256 must be in
   the committed (`HEAD`) `references/vulnscan-known-index.csv`; at most 30 entries are in force and the newest
   over the cap are void.
 - **Void** on a version change, a new advisory id, a new fix the entry did not record, a severity rise, KEV,

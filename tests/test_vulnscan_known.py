@@ -63,21 +63,52 @@ def host(evidence: str) -> Finding:
     return Finding(kind="host", target="jlc-prod", name="host", severity=3, detail=DOCROOT, evidence=evidence)
 
 
-def _audit(files: dict[str, bytes], rules: list[str]) -> str:
-    """Audit-log text as L1-audit.sh prints it for one web-root hit."""
-    lines = [f"HOSTCHECK\tHIGH\t{DOCROOT}", f"ACTION      {DOCROOT}"]
-    lines += [f"HOSTEVIDENCE\tfile\t{hashlib.sha256(b).hexdigest()}\t{p}" for p, b in files.items()]
-    lines += [f"HOSTEVIDENCE\tdeny\t{hashlib.sha256(r.encode()).hexdigest()}\t{r}" for r in rules]
-    return "\n".join(lines) + "\n"
+EMAIL_FILES = {"token.json": b"{\"t\": 1}", "client_secret_x.json": b"{}"}
+DENY = ["deny all;"]
+KIT_L1 = Path(known.__file__).parents[1] / "data" / "server_kit" / "L1-audit.sh"
+BASH = "/bin/bash" if Path("/bin/bash").is_file() else "bash"
 
 
-EMAIL_FILES = {"/var/www/email_api/token.json": b"{\"t\": 1}", "/var/www/email_api/client_secret_x.json": b"{}"}
-DENY = ["location ~ ^/email_api/ { => deny all;"]
+class Audit:
+    """Runs L1-audit.sh's real evidence functions (key, HMAC, docroot_evidence) on files in ``tmp_path``.
+
+    ``AGENTTEAMS_L1_ROOT`` points the key at ``<tmp>/root/var/lib/agentteams-server-kit``; a fake ``nginx -T``
+    prints one ``location`` block holding the given deny rules.
+    """
+
+    def __init__(self, tmp: Path) -> None:
+        self.tmp, self.root, self.www, self.bin = tmp, tmp / "root", tmp / "www", tmp / "bin"
+        for d in (self.root, self.www, self.bin):
+            d.mkdir(parents=True, exist_ok=True)
+        text = KIT_L1.read_text()
+        self.funcs = text[text.index("L1_KEY_DIR="): text.index("docroot_section(){")]
+        self.key_file = self.root / "var/lib/agentteams-server-kit/l1-evidence.key"
+
+    def run(self, files: dict[str, bytes] = EMAIL_FILES, rules: list[str] | None = DENY) -> subprocess.CompletedProcess:
+        for old in self.www.iterdir():
+            old.unlink()
+        for name, body in files.items():
+            (self.www / name).write_bytes(body)
+        nginx = self.bin / "nginx"
+        nginx.unlink(missing_ok=True)
+        if rules is not None:
+            conf = "server {\n  location ~ ^/email_api/ {\n" + "".join(f"    {r}\n" for r in rules) + "  }\n}\n"
+            nginx.write_text(f"#!/bin/sh\ncat <<'EOF'\n{conf}EOF\n")
+            nginx.chmod(0o755)
+        hits = "\n".join(str(self.www / n) for n in sorted(files))
+        probe = f"set -uo pipefail\ninfo(){{ printf 'INFO        %s\\n' \"$*\"; }}\n{self.funcs}\ndocroot_evidence \"$1\"\n"
+        env = {"PATH": f"{self.bin}:/usr/bin:/bin:/usr/sbin:/sbin", "AGENTTEAMS_L1_ROOT": str(self.root)}
+        return subprocess.run([BASH, "-c", probe, "x", hits], capture_output=True, text=True, env=env, check=False)
+
+    def evidence(self, files: dict[str, bytes] = EMAIL_FILES, rules: list[str] | None = DENY) -> str:
+        out = self.run(files, rules).stdout
+        audit = f"HOSTCHECK\tHIGH\t{DOCROOT}\nACTION      {DOCROOT}\n" + out
+        return next(f for f in engine.scan_inventory(audit, "jlc-prod").findings if f.kind == "host").evidence
 
 
-def _evidence(files: dict[str, bytes] = EMAIL_FILES, rules: list[str] = DENY) -> str:
-    rep = engine.scan_inventory(_audit(files, rules), "jlc-prod")
-    return next(f for f in rep.findings if f.kind == "host").evidence
+@pytest.fixture
+def audit(tmp_path: Path) -> Audit:
+    return Audit(tmp_path / "audit")
 
 
 def make(env: dict[str, Any], findings: list[Finding], *, now: datetime = NOW, days: int = 30, index: bool = True,
@@ -360,33 +391,79 @@ def test_group_size_is_bounded(env: dict[str, Any]) -> None:
                     governance_dir=str(env["gov"]), now=NOW)
 
 
-# ---------------------------------------------------------------- email_api: file content sha256 + nginx deny rule
+# ---------------------------------------------------------------- email_api: file HMACs + nginx deny rule (@security R1)
 
-def test_host_evidence_from_the_audit() -> None:
-    ev = _evidence()
-    assert ev.startswith("sha256:") and ev.endswith(";files=2;deny=1")
-    assert _evidence() == ev
-    assert _evidence({**EMAIL_FILES, "/var/www/email_api/token.json": b"changed"}) != ev
-    assert _evidence(rules=["location ~ ^/email_api/ { => allow all;", *DENY]) != ev
-    assert _evidence(rules=[]) == "" and _evidence(files={}) == ""
-    forged = _audit(EMAIL_FILES, []) + f"HOSTEVIDENCE\tdeny\t{'0' * 64}\tdeny all;\n"   # hash is not of the text
-    assert next(f for f in engine.scan_inventory(forged, "h").findings if f.kind == "host").evidence == ""
+def test_audit_prints_one_hmac_digest_and_never_a_per_file_value(audit: Audit) -> None:
+    import hmac
+
+    proc = audit.run()
+    lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("HOSTEVIDENCE")]
+    assert proc.returncode == 0 and len(lines) == 1, (proc.stdout, proc.stderr)
+    _tag, digest, files, deny = lines[0].split("\t")
+    assert (files, deny) == ("2", "1")
+    key = audit.key_file.read_text()
+    assert len(key) == 64 and (audit.key_file.stat().st_mode & 0o777) == 0o600
+    assert (audit.key_file.parent.stat().st_mode & 0o777) == 0o700
+    want = []
+    for name in sorted(EMAIL_FILES):
+        h = hmac.new(bytes.fromhex(key), EMAIL_FILES[name], hashlib.sha256).hexdigest()   # RFC 2104, as the shell
+        want.append(f"file {h} {audit.www / name}\n")
+        assert h not in proc.stdout and hashlib.sha256(EMAIL_FILES[name]).hexdigest() not in proc.stdout
+    want.append("deny location ~ ^/email_api/ { => deny all;\n")
+    assert digest == hashlib.sha256("".join(sorted(want)).encode()).hexdigest()
+    assert key not in proc.stdout and key not in proc.stderr
 
 
-def test_email_api_entry_voids_when_a_file_or_the_deny_rule_changes(env: dict[str, Any]) -> None:
-    make(env, [host(_evidence())], days=90)
-    rep, rows = applied([host(_evidence())])
+def test_host_evidence_voids_on_a_file_a_deny_rule_or_a_rotated_key(audit: Audit) -> None:
+    ev = audit.evidence()
+    assert ev.startswith("sha256:") and ev.endswith(";files=2;deny=1") and audit.evidence() == ev
+    assert audit.evidence({**EMAIL_FILES, "token.json": b"changed"}) != ev
+    assert audit.evidence(rules=["deny 10.0.0.0/8;", *DENY]) != ev and audit.evidence(rules=["deny 10.0.0.1;"]) != ev
+    assert audit.evidence(rules=None) == "" and audit.evidence(rules=[]) == ""   # no deny rule: nothing to key on
+    audit.key_file.unlink()   # rotating the key changes every digest (documented: it voids host entries)
+    assert audit.evidence() not in ("", ev)
+
+
+@pytest.mark.parametrize("spoil", ["mode", "symlink", "garbage"])
+def test_an_unsafe_evidence_key_gives_no_evidence(audit: Audit, spoil: str) -> None:
+    audit.run()
+    key = audit.key_file
+    if spoil == "mode":
+        key.chmod(0o644)
+    elif spoil == "symlink":
+        real = audit.tmp / "elsewhere.key"
+        real.write_text(key.read_text())
+        real.chmod(0o600)
+        key.unlink()
+        key.symlink_to(real)
+    else:
+        key.write_text("not hex")
+    proc = audit.run()
+    assert not any(ln.startswith("HOSTEVIDENCE") for ln in proc.stdout.splitlines())
+    assert "no usable evidence key" in proc.stdout
+
+
+def test_host_evidence_line_parsing() -> None:
+    d = "a" * 64
+    assert engine.host_evidence(d, "2", "1") == f"sha256:{d};files=2;deny=1"
+    for bad in (("A" * 64, "2", "1"), (d, "0", "1"), (d, "2", "0"), (d[:-1], "2", "1"), (d, "x", "1")):
+        assert engine.host_evidence(*bad) == ""
+
+
+def test_email_api_entry_voids_when_a_file_or_the_deny_rule_changes(env: dict[str, Any], audit: Audit) -> None:
+    make(env, [host(audit.evidence())], days=90)
+    rep, rows = applied([host(audit.evidence())])
     assert rep.findings[0].known and rows[0]["status"] == "known"
-    for changed in (_evidence({**EMAIL_FILES, "/var/www/email_api/new.env": b"X=1"}),
-                    _evidence(rules=["location /other { => deny all;"])):
+    for changed in (audit.evidence({**EMAIL_FILES, "new.env": b"X=1"}), audit.evidence(rules=["deny 10.0.0.1;"])):
         rep, rows = applied([host(changed)])
         assert not rep.findings[0].known
         _void(rows, "evidence changed")
 
 
 def test_audit_script_emits_host_evidence() -> None:
-    script = (Path(known.__file__).parents[1] / "data" / "server_kit" / "L1-audit.sh").read_text()
-    assert 'docroot_evidence "$hits"' in script and "HOSTEVIDENCE\\tfile" in script and "HOSTEVIDENCE\\tdeny" in script
+    script = KIT_L1.read_text()
+    assert 'docroot_evidence "$hits"' in script and "HOSTEVIDENCE\\t%s\\t%s\\t%s" in script
+    assert "sha256sum -- " not in script   # no plain hash of a secret-looking file
 
 
 # ---------------------------------------------------------------- renewal and the cap
@@ -490,8 +567,86 @@ def test_propose_from_a_note_migrates_its_text(env: dict[str, Any]) -> None:
     from agentteams.vulnscan import notes
 
     note = notes.add("zstd 0.13.3 stays: no fixed crate for the fallback", target="baseAgent", days=90)
-    _summary_run(env, [pkg()])
+    zstd = pkg(target="baseAgent", ecosystem="crates.io", name="zstd", version="0.13.3", ids=["RUSTSEC-x"])
+    _summary_run(env, [zstd, pkg()])
     out = env["tmp"] / "p.json"
-    assert known_cli.dispatch(_args(finding=[pkg().key()], governance_dir=str(env["gov"]), out=out,
+    assert known_cli.dispatch(_args(finding=[zstd.key()], governance_dir=str(env["gov"]), out=out,
                                     from_note=note["id"], reason="")) == 0
     assert json.loads(out.read_text())["reason"].startswith(f"(from operator note {note['id']}) zstd 0.13.3")
+
+
+def test_propose_from_a_note_refuses_another_target(env: dict[str, Any], capsys: pytest.CaptureFixture[str]) -> None:
+    """A note's target must match the findings' target (@code-hygiene 1)."""
+    from agentteams.vulnscan import notes
+
+    note = notes.add("zstd stays", target="baseAgent", days=90)
+    untargeted = notes.add("applies everywhere", days=90)
+    _summary_run(env, [pkg()])
+    for n in (note, untargeted):
+        out = env["tmp"] / f"{n['id']}.json"
+        assert known_cli.dispatch(_args(finding=[pkg().key()], governance_dir=str(env["gov"]), out=out,
+                                        from_note=n["id"], reason="")) == 2
+        assert not out.exists()
+    assert "not the findings' target 'webapp'" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- review round 1 (@security R2, R3; recommended)
+
+def test_a_critical_member_is_refused_until_kev_is_read(env: dict[str, Any]) -> None:
+    """R2: vulnscan reads no KEV feed, so a CRITICAL finding cannot be accepted (whether it is exploited is unknown)."""
+    with pytest.raises(known.KnownError, match="CRITICAL finding cannot be known"):
+        known.build([pkg(severity=4)], reason="r", decision_ref={"plan_slug": PLAN, "step": STEP}, days=5,
+                    key_id="op", governance_dir=str(env["gov"]), now=NOW)
+    rec = known.build([pkg()], reason="r", decision_ref={"plan_slug": PLAN, "step": STEP}, days=5, key_id="op",
+                      governance_dir=str(env["gov"]), now=NOW)
+    rec["members"][0]["severity"] = 4
+    signed = {**rec, "signature": ed25519_sign(env["pem"], known.signed_values(rec))}
+    with pytest.raises(known.KnownError, match="CRITICAL"):
+        known.verify(signed, now=NOW)
+
+
+@pytest.mark.parametrize("decision, verified, ok", [
+    ("CLEARED-WITH-CONDITIONS", "pending", False), ("CONDITIONAL PASS", "", False),
+    ("CLEARED-WITH-CONDITIONS", "verified", True), ("CONDITIONAL PASS", "Verified", True),
+])
+def test_a_conditional_decision_counts_only_once_verified(env: dict[str, Any], decision: str, verified: str,
+                                                         ok: bool) -> None:
+    """R3: CLEARED-WITH-CONDITIONS / CONDITIONAL count only with conditions_verified=verified; pending blocks."""
+    step = "K4 conditional"
+    with (env["gov"] / known.DECISIONS_REL).open("a", encoding="utf-8") as fh:
+        fh.write(f"2026-11-02,{PLAN},{step},{decision},open,c1,{verified},review,security\n")
+    rec = known.build([pkg()], reason="r", decision_ref={"plan_slug": PLAN, "step": step}, days=5, key_id="op",
+                      governance_dir=str(env["gov"]), now=NOW)
+    signed = {**rec, "signature": ed25519_sign(env["pem"], known.signed_values(rec))}
+    known.install(signed)
+    known.append_index_row(signed)
+    _git(env["gov"], "commit", "-q", "-am", "x")
+    rep, rows = applied([pkg()])
+    if ok:
+        assert rep.findings[0].known and rows[0]["status"] == "known"
+    else:
+        assert not rep.findings[0].known
+        _void(rows, "conditions are not verified")
+
+
+def test_a_symlinked_target_is_judged_by_where_it_points(env: dict[str, Any]) -> None:
+    keys = env["tmp"] / "x" / ".config" / "agentteams" / "keys"
+    keys.mkdir(parents=True)
+    innocent = env["tmp"] / "webapp-link"
+    innocent.symlink_to(keys)
+    with pytest.raises(known.KnownError, match="trust root"):
+        known.build([pkg(target=str(innocent))], reason="r", decision_ref={"plan_slug": PLAN, "step": STEP}, days=5,
+                    key_id="op", governance_dir=str(env["gov"]), now=NOW)
+    make(env, [pkg()])
+    _rep, rows = applied([pkg(locations=[str(innocent)])])   # a location is resolved too
+    _void(rows, "trust root")
+
+
+def test_a_fifo_in_the_store_does_not_hang_load(env: dict[str, Any]) -> None:
+    import os
+
+    make(env, [pkg()])
+    os.mkfifo(known.store_dir() / "vk-0000000000000000.json", 0o600)
+    loaded = known_report.load(now=NOW + timedelta(hours=1))   # would block forever without O_NONBLOCK
+    assert any(name == "vk-0000000000000000.json" and "regular file" in why for _r, name, why in loaded.void)
+    assert len(loaded.valid) == 1

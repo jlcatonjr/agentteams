@@ -846,15 +846,30 @@ Limits: at most 90 days per entry, at most 30 entries in force (a new one over t
 existing ones stay). Never known, even when signed: malicious packages and `MAL-*` advisories, compromise
 indicators, requirement ranges, integrity findings, trust-root targets (keys, rosters, secrets, the
 integrity manifest, the constitution, grants and ledger, the known index, the decisions log, the vulnscan
-install), and host checks other than the web-root exposure check and the OS release check. A web-root entry
-keys on the sha256 of each file's content and of the nginx `deny` rule, which `L1-audit.sh` prints as
-`HOSTEVIDENCE` lines.
+install), CRITICAL findings (vulnscan reads no CISA KEV catalog yet, so whether one is exploited is unknown),
+and host checks other than the web-root exposure check and the OS release check.
+
+A web-root entry keys on one digest that `L1-audit.sh` prints as a `HOSTEVIDENCE` line: a sha256 over each
+file's HMAC and the nginx `deny` rules. The HMAC key is random per host, created on the first audit at
+`/var/lib/agentteams-server-kit/l1-evidence.key` (owned by root, mode 600, in a mode-700 directory). It is
+never printed and never leaves the host, so the audit output never holds a plain hash of a secret-looking file.
+Deleting or rotating that key changes the digest, which voids that host's entries: re-propose and re-sign them.
+
+The decision row must be cleared. A `CLEARED-WITH-CONDITIONS` or `CONDITIONAL` row counts only once its
+`conditions_verified` column reads `verified`; until then it blocks the entry, as a HALT would.
 
 An entry voids itself when the installed version changes, a new advisory id appears, a fixed release appears
 that it did not record, the severity rises or the finding reaches CISA KEV, the evidence changes, it expires,
-its decision row is HALTed or retracted, a HALT is recorded on `vulnscan-known` (this voids every entry), or
-its index row is missing or does not match. A void entry hides nothing: the finding is graded normally and
-the report gains a HIGH integrity finding saying why.
+its decision row is HALTed or retracted, or its index row is missing or does not match. HALTs:
+
+- a HALT on the bare entry id (`vk-…`), or on the id of an entry it renews, voids that entry;
+- a HALT on `vulnscan-known`, or on `vulnscan-known:<anything>` (it matches the same action), voids **every**
+  entry.
+
+A void entry hides nothing: the finding is graded normally and the report gains a HIGH integrity finding saying why.
+
+Entries apply to the `daily` run only. An ad-hoc `scan` or `inventory` ignores them, so its exit code can be 1
+where the daily run's is 0 for the same findings.
 
 ### Reports, and publishing them (optional)
 

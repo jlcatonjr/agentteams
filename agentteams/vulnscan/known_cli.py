@@ -60,7 +60,8 @@ def _load_run(day: str | None) -> Report | None:
     return Report.from_dict(json.loads((run_dir / "summary.json").read_text(encoding="utf-8")))
 
 
-def _reason(args: argparse.Namespace) -> str:
+def _reason(args: argparse.Namespace, target: str) -> str:
+    """Return the proposal's reason: ``--reason``, or the ``--from-note`` note's text (its target must match)."""
     if not args.from_note:
         return args.reason
     from agentteams.vulnscan import notes
@@ -69,6 +70,9 @@ def _reason(args: argparse.Namespace) -> str:
     note = next((n for n in active if n["id"] == args.from_note), None)
     if note is None:
         raise known.KnownError(f"no active note {args.from_note}")
+    if note.get("target") != target:
+        raise known.KnownError(f"note {note['id']} is about {note.get('target') or '(all)'!r}, not the findings' "
+                               f"target {target!r}")
     text = f"(from operator note {note['id']}) {args.reason or note['text']}".strip()
     return text[:known.REASON_MAX_CHARS]
 
@@ -112,7 +116,7 @@ def cmd_propose(args: argparse.Namespace) -> int:
         if renews is None and known_report.active_count() >= known.MAX_ACTIVE:
             raise known.KnownError(f"{known.MAX_ACTIVE} entries are in force (the cap): a new entry is refused; "
                                    "renew or remove one")
-        rec = known.build([by_key[k] for k in args.finding], reason=_reason(args),
+        rec = known.build([by_key[k] for k in args.finding], reason=_reason(args, by_key[args.finding[0]].target),
                           decision_ref={"plan_slug": args.decision_plan, "step": args.decision_step},
                           days=args.days, key_id=args.key_id, governance_dir=args.governance_dir, renews=renews)
     except known.KnownError as exc:
@@ -173,9 +177,7 @@ def cmd_list() -> int:
     Returns:
         0.
     """
-    from agentteams.vulnscan.report import Report as _R
-
-    rep = _R(target="known")
+    rep = Report(target="known")
     rows = known_report.apply(rep)
     for r in rows:
         print(json.dumps(r, ensure_ascii=True))

@@ -12,14 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (vfr-k K1/K3, under @security's K2 conditions). A *known entry* is the operator's Ed25519 signature (own purpose
   tag `agentteams-vulnscan-known-v1`, through `grant.operator_sign`) over a finding's key: target, ecosystem,
   package, installed version, advisory ids, and the fix state and severity at signing. A group entry signs its full
-  member list (2–40), never a path prefix. The web-root host check keys on the sha256 of each file's content and of
-  the nginx `deny` rules, which `L1-audit.sh` now prints as `HOSTEVIDENCE` lines.
+  member list (2–40), never a path prefix. The web-root host check keys on one `HOSTEVIDENCE` digest that
+  `L1-audit.sh` now prints: a sha256 over each file's HMAC and the nginx `deny` rules. The HMAC key is random per host,
+  created on first use at `/var/lib/agentteams-server-kit/l1-evidence.key` (mode 600) and never printed; no per-file
+  value is printed. Rotating the key voids the host's entries. CRITICAL findings are refused until vulnscan reads the
+  CISA KEV catalog.
 - While an entry is valid, `daily` grades its findings `known until <date>` and leaves them out of the exit code. They
   stay in the report, and `summary.md` lists every entry under *Known findings*: reason (fenced as data, capped),
   expiry, key id, decision reference, renewal count. Void entries are listed too, with the reason.
 - Every load re-checks the signature, purpose and the 90-day limit, then the decision log: a HALT on `vulnscan-known`
-  voids every entry, and a HALT on an entry's id or lineage voids that entry. The decision reference must name a
-  cleared row, and a HALT or retraction of that row voids the entry. The entry's sha256 must also be in the committed
+  voids every entry (so does `vulnscan-known:<anything>`), and a HALT on the bare entry id `vk-…` or a lineage id
+  voids that entry. The decision reference must name a cleared row (a conditional one only once
+  `conditions_verified` is `verified`), and a HALT or retraction of that row voids the entry. Entries apply to `daily`
+  only; ad-hoc `scan`/`inventory` exit codes can differ. The entry's sha256 must also be in the committed
   `references/vulnscan-known-index.csv` (added here, empty). At most 30 entries are in force; over the cap the newest
   is refused and the existing ones stay valid. The class is derived by `effect_classifier`. Trust-root targets,
   `MAL-*` and malicious findings, compromise indicators, ranges, integrity findings and the other host checks are

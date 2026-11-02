@@ -18,12 +18,13 @@ Server inventory line formats (one per line; anything else is ignored):
 | ``OSREL`` | os-release ``ID``, ``VERSION_ID``, ``PRETTY_NAME`` (an ``ID`` not in ``runtimes.OS_PRODUCTS`` is unscannable) |
 | ``ESM`` | esm-infra, esm-apps: ``enabled``, ``disabled`` or ``unknown`` (Ubuntu Pro, from its status file) |
 | ``HOSTCHECK`` | severity, message |
-| ``HOSTEVIDENCE`` | ``file`` or ``deny``, sha256 (hex), path or rule text: evidence for the preceding ``HOSTCHECK`` |
+| ``HOSTEVIDENCE`` | digest (hex), files, deny rules: evidence for the ``HOSTCHECK`` it directly follows |
 | ``IOC`` | message |
 
-``HOSTEVIDENCE`` lines become that host check's :attr:`.report.Finding.evidence` (:func:`host_evidence`): one
-digest of every file's content hash and every nginx ``deny`` rule, so a known entry (:mod:`.known`) keyed on it
-voids when a file or the deny rule changes. A ``deny`` line whose hash is not the hash of its rule text is dropped.
+A ``HOSTEVIDENCE`` line becomes that host check's :attr:`.report.Finding.evidence` (:func:`host_evidence`): the
+audit's one digest over every hit file's HMAC (a random per-host key that never leaves the host) and every nginx
+``deny`` rule, so a known entry (:mod:`.known`) keyed on it voids when a file or the deny rule changes. No per-file
+value is ever printed.
 
 A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted
 distribution archive; ``repo:<host>:<name>`` and ``repo:unknown:<name>`` come from anywhere else and are
@@ -39,8 +40,6 @@ unknown (no extended-support data), it is HIGH, "ESM state unknown", whatever th
 from __future__ import annotations
 
 import concurrent.futures as _cf
-import hashlib
-import json
 import os
 import re
 import shutil
@@ -556,27 +555,24 @@ def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str
 
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_COUNT = re.compile(r"^[1-9][0-9]{0,3}$")
 
 
-def host_evidence(lines: list[tuple[str, str, str]]) -> str:
-    """Return one host check's evidence digest from its ``HOSTEVIDENCE`` lines.
+def host_evidence(digest: str, files: str, deny: str) -> str:
+    """Return one host check's evidence from its ``HOSTEVIDENCE`` line.
 
     Args:
-        lines: ``(kind, sha256, label)`` per line: ``file`` with the file's content hash and path, ``deny`` with
-            the hash of the nginx rule text and that text.
+        digest: The audit's sha256 over every hit file's per-host HMAC and every nginx ``deny`` rule (hex).
+        files: How many files it covers.
+        deny: How many deny rules it covers.
 
     Returns:
-        ``sha256:<hex>;files=N;deny=M`` over the sorted file (path, hash) pairs and deny rules, or "" when
-        there are none of either kind (a known entry then cannot key on it).
+        ``sha256:<hex>;files=N;deny=M``, or "" when the line is malformed or covers no file or no deny rule (a known
+        entry then cannot key on it).
     """
-    files = sorted({(label, sha) for kind, sha, label in lines if kind == "file" and _HEX64.match(sha)})
-    deny = sorted({label for kind, sha, label in lines if kind == "deny" and _HEX64.match(sha)
-                   and hashlib.sha256(label.encode("utf-8")).hexdigest() == sha})
-    if not files or not deny:
+    if not (_HEX64.match(digest) and _COUNT.match(files) and _COUNT.match(deny)):
         return ""
-    digest = hashlib.sha256(json.dumps({"files": files, "deny": deny}, separators=(",", ":"),
-                                       ensure_ascii=True).encode("utf-8")).hexdigest()
-    return f"sha256:{digest};files={len(files)};deny={len(deny)}"
+    return f"sha256:{digest};files={files};deny={deny}"
 
 
 def scan_inventory(text: str, target: str) -> Report:
@@ -595,7 +591,6 @@ def scan_inventory(text: str, target: str) -> Report:
     osrel: tuple[str, str, str] | None = None
     esm: tuple[str, str] | None = None
     check: Finding | None = None
-    evidence: dict[int, tuple[Finding, list[tuple[str, str, str]]]] = {}
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
@@ -614,14 +609,12 @@ def scan_inventory(text: str, target: str) -> Report:
             sev = osv.SEVERITY_RANK.get(parts[1].upper(), 2)
             check = Finding(kind="host", target=target, name="host", severity=sev, detail=parts[2])
             report.findings.append(check)
-            evidence[id(check)] = (check, [])
         elif tag == "HOSTEVIDENCE" and len(parts) == 4 and check is not None:
-            evidence[id(check)][1].append((parts[1], parts[2], parts[3]))
+            check.evidence = host_evidence(parts[1], parts[2], parts[3])
+            check = None   # one evidence line per check
         elif tag == "IOC" and len(parts) == 2:
             report.findings.append(Finding(kind="ioc", target=target, name="compromise indicator",
                                            severity=4, detail=parts[1]))
-    for finding, lines in evidence.values():
-        finding.evidence = host_evidence(lines)
     analyze(deps, report, distro_check=True)
     _runtime_findings(target, rts, report)
     _os_findings(target, osrel, esm, [m for _k, _v, _p, m in rts], report)

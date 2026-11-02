@@ -16,6 +16,7 @@ import io
 import json
 import os
 import re
+import stat
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -32,19 +33,21 @@ from agentteams.vulnscan.known import (
     REASON_MAX_CHARS,
     RETRACTING_WORDS,
     SHOWN_REASON_CHARS,
-    _is_trust_root,
-    _now,
+    CONDITIONAL_WORD,
+    CTRL_RE,
+    ENTRY_ID_RE,
     body_sha256,
     finding_identity,
+    is_trust_root,
     member_identity,
     read_entry,
     store_dir,
+    utc_now,
     verify,
 )
 from agentteams.vulnscan.osv import SEVERITY_NAME
 from agentteams.vulnscan.report import Finding, Report
 
-_CTRL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 _TEMPLATE_RE = re.compile(r"\{(?=[{%#])")
 
 
@@ -116,10 +119,20 @@ def _decision_problems(gov: Path, record: dict[str, Any]) -> str:
     bad = next((v for v in verdicts if any(w in v for w in RETRACTING_WORDS)), None)
     if bad:
         return f"decision ref {ref['plan_slug']}/{ref['step']} is {bad.strip()[:80]}"
-    if not any((r.get("decision") or r.get("verdict") or "").strip().upper() in CLEARED_DECISIONS for r in matching):
+    cleared = [r for r in matching
+               if (r.get("decision") or r.get("verdict") or "").strip().upper() in CLEARED_DECISIONS]
+    if not cleared:
         return f"decision ref {ref['plan_slug']}/{ref['step']} names no cleared decision-log row"
+    # @security R3: a conditional clearance counts only once its conditions are verified; pending blocks like a HALT.
+    pending = [r for r in cleared if CONDITIONAL_WORD in (r.get("decision") or r.get("verdict") or "").upper()
+               and (r.get("conditions_verified") or "").strip().lower() != "verified"]
+    if pending:
+        return (f"decision ref {ref['plan_slug']}/{ref['step']} is a conditional clearance whose conditions are not "
+                f"verified (conditions_verified={(pending[0].get('conditions_verified') or '').strip()[:20] or '-'})")
     # Dynamic gate site (like branch-cleanup:<sha>): a HALT naming this entry or any ancestor in its lineage.
     for action in [record["entry_id"], *record["lineage"]]:
+        if not ENTRY_ID_RE.fullmatch(action):   # only vk-<16 hex> ids reach the gate (the verifier test checks this)
+            return f"malformed lineage id {action[:40]!r}"
         try:
             decision_log._assert_no_unretracted_halt(gov, action=action)
         except RuntimeError as exc:
@@ -128,10 +141,21 @@ def _decision_problems(gov: Path, record: dict[str, Any]) -> str:
 
 
 def _shown_record(path: Path) -> dict[str, Any] | None:
-    """Return a rejected entry file's content for display only (its target and id in the void row), or None."""
+    """Return a rejected entry file's content for display only (its target and id in the void row), or None.
+
+    Only a regular file is read, non-blocking and without following a symlink: a FIFO or device never hangs ``load``.
+    """
     try:
-        rec = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError):   # unreadable: the void row names the file instead
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:   # a symlink or unreadable file: the void row names the file instead
+        return None
+    with os.fdopen(fd, "rb") as fh:
+        if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
+            return None
+        raw = fh.read(1 << 20)
+    try:
+        rec = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):   # not JSON: the void row names the file instead
         return None
     return rec if isinstance(rec, dict) else None
 
@@ -152,7 +176,7 @@ def load(*, now: datetime | None = None) -> Loaded:
     from agentteams.cli import decision_log
     from agentteams.vulnscan import grant
 
-    now = now or _now()
+    now = now or utc_now()
     out = Loaded()
     d = store_dir()
     if not os.path.lexists(d):
@@ -250,7 +274,7 @@ def _member_void(m: dict[str, Any], f: Finding) -> str:
         return f"{f.name}: now on CISA KEV (known exploited)"
     if (f.evidence or "") != m["evidence"]:
         return f"{f.name}: evidence changed (file contents or the nginx deny rule)"
-    hit = next((loc for loc in f.locations if _is_trust_root(loc)), None)
+    hit = next((loc for loc in f.locations if is_trust_root(loc)), None)
     if hit:
         return f"{f.name}: location {hit!r} is a trust root; never known"
     return ""
@@ -278,7 +302,7 @@ def _match(rec: dict[str, Any], findings: list[Finding]) -> tuple[list[Finding],
 
 def _fence(text: str, limit: int) -> str:
     """Return ``text`` as one inline code span of at most ``limit`` characters: data, never markup or template."""
-    flat = _TEMPLATE_RE.sub("{ ", _CTRL_RE.sub(" ", str(text)))
+    flat = _TEMPLATE_RE.sub("{ ", CTRL_RE.sub(" ", str(text)))
     if len(flat) > limit:
         flat = flat[:limit] + "…"
     return "`" + flat.replace("`", "'").replace("|", "/") + "`"
