@@ -556,7 +556,7 @@ class DocStatus:
 _GENERIC_PAGE_STEMS = frozenset({"index", "readme", "changelog"})
 
 #: Path prefixes whose Markdown files are never API pages (agent files and references among them).
-_PAGE_EXCLUDES: tuple[str, ...] = ("tmp/", "tests/", "test/", "workSummaries/", "references/", "agents/")
+_PAGE_SKIP_PREFIXES: tuple[str, ...] = ("tmp/", "tests/", "test/", "workSummaries/", "references/", "agents/")
 
 
 def _module_key(path: str) -> str | None:
@@ -585,7 +585,7 @@ def _tracked_pages(repo: Path, ref: str) -> list[str]:
     for path in pages:
         p = PurePosixPath(path)
         if (not path or p.suffix.lower() != ".md" or any(part.startswith(".") for part in p.parts)
-                or path.startswith(_PAGE_EXCLUDES) or "/expected/" in f"/{path}"
+                or path.startswith(_PAGE_SKIP_PREFIXES) or "/expected/" in f"/{path}"
                 or p.stem.lower() in _GENERIC_PAGE_STEMS):
             continue
         out.add(path)
@@ -602,9 +602,9 @@ def doc_pages(repo: Path, module: str, *, ref: str = "HEAD") -> list[str]:
     """Return the tracked Markdown pages that document one module.
 
     A page matches when its stem, with ``-`` read as ``_`` and case ignored, equals the module's key: the file
-    stem, or the package name for ``__init__.py``. Pages under dot-directories, ``tmp/``, ``tests/``, ``test/``,
-    ``workSummaries/``, ``references/``, ``agents/`` or an ``expected/`` tree, and ``index``/``readme``/
-    ``changelog`` pages, never match. Test files and ``__main__.py`` have no pages.
+    stem, or the package name for ``__init__.py``. Pages under dot-directories, a :data:`_PAGE_SKIP_PREFIXES`
+    prefix or an ``expected/`` tree, symlinks, and ``index``/``readme``/``changelog`` pages never match. Test
+    files and ``__main__.py`` have no pages.
 
     Args:
         repo: Repository root.

@@ -487,7 +487,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stage `agentteams.1` when the parser changes.
 - **API documentation mapping** (`doc_pages`, `doc_status`, `DocStatus`): each impactful Python module is
   matched by name to its tracked `*.md` pages (stem, case-insensitive, `-` read as `_`; symlinks,
-  dot-directories, `tmp/`, `tests/`, `test/`, `workSummaries/`, `references/`, `agents/`, `*/expected/` and
+  dot-directories, the scratch, test, work-summary, reference and agent directories, `*/expected/` and
   index/readme/changelog pages left out). Each module is `updated`, `not-updated` or `no-page`, with the added
   names its pages do not mention (`undocumented`) and the removed names or modules a page still mentions
   (`stale`). CLI options are not mapped. The hook prints an `API docs` line per module that needs attention
