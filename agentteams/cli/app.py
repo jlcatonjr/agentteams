@@ -73,23 +73,26 @@ def _deprecated_build_team_entry(argv: list[str] | None = None) -> int:
 
 
 def _resolve_retrieval_brief(args: argparse.Namespace) -> None:
-    """Find the brief for a retrieval command when none is given or the one given is missing.
+    """Fill in ``args.description`` (mutating *args*) for a retrieval command that needs a brief (baseAgent P6).
 
-    Applies to ``--query-index``, ``--refresh-index`` and ``--query-code``.
-
-    The recall skill runs the bare command, and the agents' fenced retrieval text names
-    ``.agentteams/brief.json``, which many instances don't have. Looks under ``--project`` (else the working
-    directory) in :data:`agentteams.memory_index_surfaces.BRIEF_CANDIDATES` order.
+    Applies to ``--query-index``, ``--refresh-index`` and ``--query-code``. The recall skills run the bare
+    command, and the agents' fenced retrieval text names ``.agentteams/brief.json``, which many instances
+    don't have. With no ``--description``, the project's brief under ``--project`` (else the working directory)
+    is used (:func:`agentteams.memory_index_surfaces.resolve_brief`). A ``--description`` that doesn't exist is
+    replaced only for the read-only ``--query-index`` / ``--query-code``: ``--refresh-index`` writes tracked
+    files, so a mistyped brief fails there as before.
     """
-    from agentteams.memory_index_surfaces import BRIEF_CANDIDATES, resolve_brief
+    from agentteams.memory_index_surfaces import resolve_brief
 
     if args.description and Path(args.description).is_file():
         return
-    found = resolve_brief(Path(getattr(args, "project", None) or ".").resolve())
+    if args.description and getattr(args, "refresh_index", False):
+        return  # a write: never swap in a brief nobody named
+    root = Path(getattr(args, "project", None) or ".").resolve()
+    found = resolve_brief(root)
     if found is None:
         if not args.description:
-            print(f"  ✗  No brief found (looked for {', '.join(BRIEF_CANDIDATES)}); pass --description.",
-                  file=sys.stderr)
+            print(f"  ✗  No brief of this project found under {root}; pass --description.", file=sys.stderr)
         return
     if args.description:
         print(f"  ℹ  --description {args.description} does not exist; using {found}.", file=sys.stderr)

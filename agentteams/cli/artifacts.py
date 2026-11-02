@@ -1041,24 +1041,38 @@ def _validate_memory_index_schema(index: dict[str, object]) -> None:
     (fail-open); the cached fast path is :func:`_validate_memory_index_bytes`.
     """
     _validate_memory_index_bytes(index, b"", None)
-def _run_refresh_index(manifest: dict, output_dir: Path) -> int:
-    """Rebuild memory-index.json for this surface and every other surface of the project that has one.
+def _run_refresh_index(manifest: dict, output_dir: Path, *, explicit_output: bool = False) -> int:
+    """Rebuild memory-index.json on every surface of the project that has one (baseAgent P5).
 
-    The copies are built from the same sources, so they agree afterwards (baseAgent P5: each provider's update
-    refreshed only its own copy). Each keeps its own framework stamp.
+    The copies are built from the same sources, so they agree afterwards; each keeps its framework stamp. This
+    surface is rebuilt when it has an index, when ``--output`` named it, or when no surface has one yet, so a bare
+    refresh never creates an index for a provider the project doesn't use. Surfaces in the brief's
+    ``frozen_surfaces`` are left alone. Every result is printed; any failure exits 1.
     """
     from agentteams.memory_index_surfaces import index_surfaces, surface_framework
 
     root = _memory_index_root(manifest, output_dir)
-    targets = [output_dir] + [d for d in index_surfaces(root) if d.resolve() != output_dir.resolve()]
-    for target in targets:
-        stamped = manifest if target is output_dir else {**manifest, "framework": surface_framework(target, root)}
-        path = _write_memory_index(stamped, target, report=target is output_dir)
-        index = _read_memory_index(target)
+    frozen = manifest.get("frozen_surfaces") or None
+    others = [d for d in index_surfaces(root, frozen) if d.resolve() != output_dir.resolve()]
+    own = explicit_output or (output_dir / MEMORY_INDEX_REL_PATH).is_file() or not others
+    targets = ([output_dir] if own else []) + others
+    failed = 0
+    for n, target in enumerate(targets):
+        stamped = manifest if own and n == 0 else {**manifest, "framework": surface_framework(target, root)}
+        try:
+            path = _write_memory_index(stamped, target, report=n == 0)
+            index = _read_memory_index(target)
+        except (OSError, MemoryIndexError) as exc:
+            failed += 1
+            print(f"  ✗  Memory index NOT refreshed: {target / MEMORY_INDEX_REL_PATH} ({exc})", file=sys.stderr)
+            continue
         print(f"  ✓  Refreshed memory index: {path}")
         print(f"     Indexed {int(index.get('N', 0))} document(s) from {int(index.get('source_count', 0))} "
               "source file(s).")
-    return 0
+    if failed:
+        print(f"  ✗  {failed} of {len(targets)} memory index cop(ies) not refreshed; the copies now disagree. "
+              "Fix the cause and re-run --refresh-index.", file=sys.stderr)
+    return 1 if failed else 0
 def _run_query_index(
     manifest: dict, output_dir: Path, query: str, k: int, strategy: str = "lexical"
 ) -> int:
@@ -1224,7 +1238,7 @@ def _run_retrieval_utility_modes(args: Any, manifest: dict, output_dir: Path) ->
     """
     if getattr(args, "refresh_index", False):
         try:
-            return _run_refresh_index(manifest, output_dir)
+            return _run_refresh_index(manifest, output_dir, explicit_output=bool(getattr(args, "output", None)))
         except (OSError, MemoryIndexError) as exc:
             print(f"Memory index refresh failed: {exc}", file=sys.stderr)
             return 1
