@@ -294,7 +294,7 @@ Overwrite existing agent files without prompting. Default behavior: prompt for e
 
 ### `--merge`
 
-Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
+Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. The one exception is generated: the `PROJECTED-RULES` and `PROJECT-RULES-POINTER` blocks inside the user regions, which every generate and `--update` regenerates in every provider's files (see `--sync-project-rules`). Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
 
 ### `--yes` / `-y`
 
@@ -312,7 +312,7 @@ OFF by default. When set, emit `references/model-routing.json` — a framework-n
 
 Re-render drifted agent files and emit newly added agents without touching unchanged files. Preserves manually filled `{MANUAL:*}` values from existing files. Agents removed from the taxonomy are reported but not deleted (use `--prune` to also remove them).
 
-A backup of the output directory is created automatically before any writes. By default, `--update` uses merge mode (equivalent to `--update --merge`): only template-fenced regions are re-rendered, and user-authored content outside fence markers is preserved. To perform a full destructive re-render, pass `--update --overwrite` (this invokes the security gate and requires a clearance in `references/security-decisions.log.csv`). Use `--no-backup` to suppress the backup.
+A backup of the output directory is created automatically before any writes. By default, `--update` uses merge mode (equivalent to `--update --merge`): only template-fenced regions are re-rendered, and user-authored content outside fence markers is preserved (apart from the generated rules blocks; see `--sync-project-rules`). To perform a full destructive re-render, pass `--update --overwrite` (this invokes the security gate and requires a clearance in `references/security-decisions.log.csv`). Use `--no-backup` to suppress the backup.
 
 On a successful (non-dry-run) `--update`, AgentTeams writes a delivery receipt to `references/delivery-receipt.json` (schema: `agentteams/schemas/delivery-receipt.schema.json`) recording the project name, framework, manifest fingerprint, and fingerprint algorithm version of the delivered build. When no material drift is detected but the build-log baseline is stale (for example after a `FINGERPRINT_ALGO_VERSION` bump), the baseline is healed in place: the build-log is rewritten first, the delivery receipt is then written against the healed baseline (heal-first-attest-second), and `--update` prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` after both writes complete. Receipt write failures warn on stderr but do not fail the run.
 
@@ -423,6 +423,11 @@ The gate also fires when `--output` names the framework's agents directory itsel
 ### `--check`
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
+
+It also exits `1` when a projected Project-Specific Rules copy or notes pointer is out of date or refused (see
+`--sync-project-rules`). Operator text in a `## Project-Specific Notes` or `## Project-Specific Rules` region is
+not drift: when the manifest fingerprint moves, each file is compared with a fresh render after its user regions are
+carried in, as `--update` keeps them.
 
 On a copilot-vscode or copilot-cli team it also measures each agent body on disk against GitHub's 30,000-character limit. It exits `1` when an agent's `## Project-Specific Notes` hold operator text and start past the limit, where a truncation removes them first; move the region to just before the body's first fence. A body over the limit with no operator notes past it is reported as an advisory only, because the generated orchestrator and security bodies exceed the limit from the templates alone.
 
