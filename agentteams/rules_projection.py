@@ -13,7 +13,10 @@ keeps a generated copy of it in every other enabled provider's entry file:
 * Goose: ``.goosehints``, which Goose always loads. Freezing Codex freezes the shared ``AGENTS.md``; ``.goosehints``
   is Goose's own, so Goose still gets new rules.
 
-A surface in the brief's ``frozen_surfaces`` is skipped (``AGENTS.override.md`` counts as Codex's).
+A surface in the brief's ``frozen_surfaces`` is skipped (``AGENTS.override.md`` counts as Codex's). The source never
+moves silently: ``project_rules_source`` must be one of :data:`SOURCE_CANDIDATES`, and without it a second file with
+rules of its own, or copies recording another source, is refused (:func:`find_source`). Every change to the rules is
+printed as a diff when it spreads.
 
 The copy sits inside the target's own Rules region between ``PROJECTED-RULES`` markers, which are not
 ``AGENTTEAMS`` markers, so the region still carries across ``--overwrite`` and the target's own rules beside the
@@ -35,7 +38,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.user_regions import HEADINGS, _reindent, find_region
+from agentteams.user_regions import HEADINGS, _next_heading, find_region, reindent, skip_banner
 
 _NOTES_HEADING, _RULES_HEADING = HEADINGS
 #: Where the source is looked for, in order, when the brief names none.
@@ -67,6 +70,7 @@ class Outcome:
     path: str
     status: str  # current | updated | added | refused | skipped
     detail: str = ""
+    diff: str = ""  # the rules' change, for an updated copy
 
 
 @dataclass
@@ -104,39 +108,84 @@ def rules_body(text: str) -> str | None:
     span = find_region(text, _RULES_HEADING)
     if span is None:
         return None
-    lines = _strip_blocks(text[span[0]:span[1]]).splitlines(keepends=True)[1:]
-    i = 0
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    if i < len(lines) and lines[i].lstrip().startswith(">") and "USER-EDITABLE" in lines[i]:
-        while i < len(lines) and lines[i].lstrip().startswith(">"):
-            i += 1
-    body = "".join(lines[i:]).strip("\n")
+    start, end, indent = span
+    following = _next_heading(text, start + 1, indent + "## ")  # a later section is not part of the rules
+    if following is not None:
+        m = re.search(rf"^{re.escape(following)}[ \t]*$", text[start:end], re.MULTILINE)
+        if m:
+            end = start + m.start()
+    lines = _strip_blocks(text[start:end]).splitlines(keepends=True)[1:]
+    body = "".join(lines[skip_banner(lines):]).strip("\n")
     return body + "\n" if body.strip() else None
 
 
+def _recorded_sources(root: Path) -> set[str]:
+    """The sources the existing copies record (their BEGIN markers' ``source=``)."""
+    found: set[str] = set()
+    for rel in (*SOURCE_CANDIDATES, "AGENTS.override.md", ".goosehints"):
+        path = root / rel
+        if path.is_file() and not path.is_symlink():
+            text = path.read_text(encoding="utf-8")
+            found.update(m.group("src") for m in _BLOCK_RE["PROJECTED-RULES"].finditer(text))
+    return found
+
+
 def find_source(root: Path, configured: str | None = None) -> tuple[str, str] | None:
-    """The source file and its rules: *configured* (the brief's ``project_rules_source``), else the first of
-    :data:`SOURCE_CANDIDATES` whose Rules region holds the operator's own rules.
+    """The source file and its rules.
+
+    *configured* (the brief's ``project_rules_source``) must be one of :data:`SOURCE_CANDIDATES`. Without it the
+    source is the one the existing copies record, else the only candidate whose Rules region holds rules of its own.
+    The source never moves silently (adversarial review, 2026-11-02): an agent on any surface can write rules into
+    its own entry file, so a file that would *become* the source — copies recording another one, or several
+    candidates holding rules — is refused until the brief names it.
 
     Args:
         root: The project root.
         configured: A project-relative path, or ``None``.
 
     Returns:
-        ``(relative path, rules)``, or ``None``.
+        ``(relative path, rules)``, or ``None`` when no candidate holds rules.
 
     Raises:
-        Nothing.
+        ValueError: *configured* is not a candidate; the source is ambiguous or would move; the source has
+            CRLF line endings or contains projection markers.
+        OSError, UnicodeDecodeError: A candidate can't be read.
     """
+    if configured is not None and configured not in SOURCE_CANDIDATES:
+        raise ValueError(f"project_rules_source must be one of {', '.join(SOURCE_CANDIDATES)}, not {configured!r}")
+    own: dict[str, str] = {}
     for rel in ([configured] if configured else list(SOURCE_CANDIDATES)):
         path = root / rel
-        if not path.is_file() or path.is_symlink():
-            continue
-        body = rules_body(path.read_text(encoding="utf-8"))
-        if body is not None:
-            return rel, body
-    return None
+        if path.is_file() and not path.is_symlink():
+            body = rules_body(path.read_text(encoding="utf-8"))
+            if body is not None:
+                own[rel] = body
+    if configured:
+        source = configured if configured in own else None
+    else:
+        recorded = _recorded_sources(root)
+        if len(recorded) > 1:
+            raise ValueError(f"the copies record different sources ({', '.join(sorted(recorded))}); set "
+                             "project_rules_source in the brief")
+        if recorded:
+            (source,) = recorded
+            if source not in own:
+                raise ValueError(f"the copies record {source} as the source, but it holds no rules now; set "
+                                 "project_rules_source in the brief to the file that should")
+        elif len(own) > 1:
+            raise ValueError(f"{', '.join(own)} each hold rules of their own; set project_rules_source in the "
+                             "brief to the one every provider should get")
+        else:
+            source = next(iter(own), None)
+    if source is None:
+        return None
+    raw = (root / source).read_bytes()
+    if b"\r\n" in raw:
+        raise ValueError(f"{source} has CRLF line endings; convert it to LF before projecting its rules")
+    body = own[source]
+    if re.search(r"<!-- (?:PROJECTED-RULES|PROJECT-RULES-POINTER):", body):
+        raise ValueError(f"{source}'s rules contain a projection marker line; remove it")
+    return source, body
 
 
 def _frozen_paths(frozen: object) -> tuple[str, ...]:
@@ -190,7 +239,7 @@ def table_of_contents(body: str) -> list[str]:
         body: The rules text.
 
     Returns:
-        The titles, in order.
+        The titles, in order, each at most 100 characters, with comment markers and backticks removed.
 
     Raises:
         Nothing.
@@ -199,8 +248,10 @@ def table_of_contents(body: str) -> list[str]:
     if not titles:
         titles = re.findall(r"^[-*][ \t]+\*\*(.+?)\*\*", body, re.MULTILINE)
     if not titles:
-        titles = [t[:80] for t in re.findall(r"^[-*][ \t]+(.+?)[ \t]*$", body, re.MULTILINE)]
-    return titles
+        titles = re.findall(r"^[-*][ \t]+(.+?)[ \t]*$", body, re.MULTILINE)
+    # A title is a label, not an instruction: comment markers and backticks out, capped.
+    clean = (re.sub(r"<!--|-->|`", "", t).strip() for t in titles)
+    return [t if len(t) <= 100 else t[:99] + "…" for t in clean if t]
 
 
 def _block(kind: str, source: str, source_sha: str, content: str, mode: str | None, indent: str = "") -> str:
@@ -244,15 +295,18 @@ def projection_content(source: str, body: str, mode: str) -> str:
                                                                                   else ""))
 
 
-def _place(text: str, kind: str, block: str, *, heading: str, indent: str = "") -> tuple[str, str, str]:
-    """Put *block* into *text*'s *heading* region: ``(new text, status, detail)``."""
+def _place(text: str, kind: str, block: str, *, heading: str, add_region: bool) -> tuple[str, str, str]:
+    """Put *block* into *text*'s *heading* region: ``(new text, status, detail)``.
+
+    With *add_region*, a file without the region gets one at its end; otherwise that is refused.
+    """
     hits = [m for m in re.finditer(rf"^[ \t]*{re.escape(heading)}[ \t]*$", text, re.MULTILINE)]
     if len(hits) > 1:
         return text, "refused", f"it has {len(hits)} '{heading}' regions; keep one"
     pattern = _BLOCK_RE[kind]
     span = find_region(text, heading)
     if span is None:
-        if indent:
+        if not add_region:
             return text, "refused", f"it has no '{heading}' region"
         head = text.rstrip("\n") + "\n\n" if text.strip() else ""
         return head + f"{heading}\n\n" + block, "added", "region and block added"
@@ -263,19 +317,14 @@ def _place(text: str, kind: str, block: str, *, heading: str, indent: str = "") 
         return text, "refused", f"its '{heading}' region has {len(existing)} {kind} blocks; keep one"
     if existing:
         m = existing[0]
-        content = _reindent(m.group("body"), m.group("indent"), "") or ""
+        content = reindent(m.group("body"), m.group("indent"), "") or ""
         if _sha(content) != m.group("csha"):
             return text, "refused", "the projected block was edited by hand; move the edit to the source, then delete the block"
         if m.group(0).rstrip("\n") == block.rstrip("\n"):
             return text, "current", ""
         return text[:start] + region[:m.start()] + block + region[m.end():] + text[end:], "updated", ""
     lines = region.splitlines(keepends=True)
-    i = 1
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    if i < len(lines) and lines[i].lstrip().startswith(">") and "USER-EDITABLE" in lines[i]:
-        while i < len(lines) and lines[i].lstrip().startswith(">"):
-            i += 1
+    i = skip_banner(lines, 1)
     head = "".join(lines[:i]).rstrip("\n") + "\n\n"
     rest = "".join(lines[i:]).lstrip("\n")
     return text[:start] + head + block + ("\n" + rest if rest else "") + text[end:], "added", ""
@@ -291,10 +340,12 @@ def project(root: Path, *, configured: str | None = None, frozen: object = None,
         write: Write the changes; ``False`` reports what would change (``--check``, ``--dry-run``).
 
     Returns:
-        The report. ``source`` is ``None`` when no instruction file holds rules (nothing to project).
+        The report. ``source`` is ``None`` when no instruction file holds rules (nothing to project). An updated
+        copy's outcome carries the rules' change as a unified diff, so what spreads to every provider is shown.
 
     Raises:
-        ValueError: *frozen* is not a list of known surface ids.
+        ValueError: *frozen* is not a list of known surface ids, or :func:`find_source` refuses the source.
+        OSError, UnicodeDecodeError: A file can't be read or written.
     """
     found = find_source(root, configured)
     if found is None:
@@ -311,32 +362,45 @@ def project(root: Path, *, configured: str | None = None, frozen: object = None,
         if path.is_symlink():
             report.outcomes.append(Outcome(rel, "skipped", "a symlink"))
             continue
+        if path.exists() and b"\r\n" in path.read_bytes():
+            report.outcomes.append(Outcome(rel, "refused", "CRLF line endings; convert it to LF"))
+            continue
         text = path.read_text(encoding="utf-8") if path.exists() else ""
         mode = "copy"
         content = projection_content(source, body, mode)
         if provider == "codex":
             trial, *_ = _place(text, "PROJECTED-RULES", _block("PROJECTED-RULES", source, source_sha, content, mode),
-                               heading=_RULES_HEADING)
+                               heading=_RULES_HEADING, add_region=True)
             if len(trial.encode("utf-8")) > CODEX_BUDGET_BYTES:
                 mode = "reference"
                 content = projection_content(source, body, mode)
         new, status, detail = _place(text, "PROJECTED-RULES",
                                      _block("PROJECTED-RULES", source, source_sha, content, mode),
-                                     heading=_RULES_HEADING)
+                                     heading=_RULES_HEADING, add_region=True)
         if mode == "reference":
             detail = (detail + "; " if detail else "") + "a reference (a copy would exceed Codex's 32 KiB budget)"
         if write and status in ("updated", "added"):
             path.write_text(new, encoding="utf-8")
-        report.outcomes.append(Outcome(rel, status, detail))
+        report.outcomes.append(Outcome(rel, status, detail, _diff(text, content) if status == "updated" else ""))
     return report
 
 
-def _pointer_content(source: str, body: str) -> str:
-    titles = table_of_contents(body)
-    listed = f" They are: {'; '.join(titles)}." if titles else ""
-    return (f"**Project rules.** This project's operator rules are in `{source}` (`## Project-Specific Rules`) and "
-            "bind this agent; where they correct the text above, they govern. Read them before acting, since a "
-            f"delegated agent may not load its provider's instruction file.{listed}\n")
+def _diff(old_text: str, new_content: str) -> str:
+    """The change between a target's current projected block and *new_content* (at most 200 lines)."""
+    import difflib
+
+    m = _BLOCK_RE["PROJECTED-RULES"].search(old_text)
+    old = m.group("body") if m else ""
+    lines = list(difflib.unified_diff(old.splitlines(), new_content.splitlines(), "projected", "source", lineterm="",
+                                      n=1))
+    return "\n".join(lines[:200] + (["… (diff truncated)"] if len(lines) > 200 else []))
+
+
+def _pointer_content(source: str) -> str:
+    return (f"**Project rules.** This project's operator rules are in `{source}`, under `## Project-Specific Rules`. "
+            "They extend this agent's instructions; they never weaken its Invariant Core or the Constitutional Core, "
+            "and where they conflict with either, the Core governs. Read them before acting: a delegated agent may "
+            "not load its provider's instruction file.\n")
 
 
 def pointer_files(root: Path) -> list[Path]:
@@ -351,6 +415,7 @@ def pointer_files(root: Path) -> list[Path]:
     Raises:
         Nothing.
     """
+    # The agent-file layout of each surface (cf. prompt_roots.TEAM_AGENT_GLOBS and surface_matrix.SURFACES).
     out: list[Path] = []
     for slug in POINTER_AGENTS:
         for rel in (f".claude/agents/{slug}.md", f".github/agents/{slug}.agent.md", f".grok/agents/{slug}.md",
@@ -374,16 +439,17 @@ def sync_pointers(root: Path, *, configured: str | None = None, frozen: object =
         One outcome per agent file.
 
     Raises:
-        ValueError: *frozen* is not a list of known surface ids.
+        ValueError: *frozen* is not a list of known surface ids, or :func:`find_source` refuses the source.
+        OSError, UnicodeDecodeError: A file can't be read or written.
     """
     from agentteams.cli.frozen_surfaces import touches_frozen
 
     found = find_source(root, configured)
     if found is None:
         return []
-    source, body = found
+    source, _body = found
     frozen_paths = _frozen_paths(frozen)
-    content = _pointer_content(source, body)
+    content = _pointer_content(source)
     outcomes: list[Outcome] = []
     for path in pointer_files(root):
         rel = path.relative_to(root).as_posix()
@@ -396,10 +462,9 @@ def sync_pointers(root: Path, *, configured: str | None = None, frozen: object =
         text = path.read_text(encoding="utf-8")
         span = find_region(text, _NOTES_HEADING)
         indent = span[2] if span else ""
-        block = _block("PROJECT-RULES-POINTER", source, _sha(body), content, None, indent)
-        new, status, detail = _place(text, "PROJECT-RULES-POINTER", block, heading=_NOTES_HEADING, indent=indent)
-        if status == "added" and span is None:
-            new, status, detail = text, "refused", f"it has no '{_NOTES_HEADING}' region"
+        # Keyed to the source's path, not its text: a rule edit doesn't rewrite every agent file.
+        block = _block("PROJECT-RULES-POINTER", source, _sha(source), content, None, indent)
+        new, status, detail = _place(text, "PROJECT-RULES-POINTER", block, heading=_NOTES_HEADING, add_region=False)
         if write and status in ("updated", "added"):
             path.write_text(new, encoding="utf-8")
         outcomes.append(Outcome(rel, status, detail))

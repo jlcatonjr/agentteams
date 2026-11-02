@@ -19,7 +19,7 @@ source region in every other enabled provider's entry file. It runs after every 
 |---|---|
 | `SOURCE_CANDIDATES` | Where the source is looked for when the brief's `project_rules_source` names none. |
 | `rules_body(text)` | The operator's own rules: the Rules region without its heading, the USER-EDITABLE note and any projected block. |
-| `find_source(root, configured)` | The source file and its rules. |
+| `find_source(root, configured)` | The source file and its rules. `configured` must be one of `SOURCE_CANDIDATES`; without it, the source the copies record, else the only candidate with rules of its own. Raises `ValueError` rather than let the source move, or choose between two files with rules. |
 | `targets(root, source, frozen)` | The entry files to project into; frozen surfaces and the source itself left out. |
 | `table_of_contents(body)` | The rules' titles (headings, else bold list leads, else list items). |
 | `projection_content(source, body, mode)` | The block's text: the rules (`copy`) or a binding reference (`reference`). |
@@ -29,4 +29,9 @@ source region in every other enabled provider's entry file. It runs after every 
 **Safety.** The block markers (`<!-- PROJECTED-RULES:BEGIN source=… source-sha256=… copy-sha256=… -->`) are not
 `AGENTTEAMS` fences, so the Rules region still carries across `--overwrite` and the target's own rules beside the block
 are kept. A block whose text no longer matches its recorded `copy-sha256` was edited by hand and is refused, as is a
-file with two Rules regions, a symlinked target, and a source with two Rules regions.
+file with two Rules regions, a symlinked target, a target or source with CRLF line endings, and a source with two Rules
+regions or a projection marker in its rules. The source region ends at the next `## ` section. An updated copy's
+outcome carries the rules' diff, which every run prints, so what spreads to every provider is visible. Rule titles
+(the Codex reference's table of contents) are labels: capped at 100 characters, with comment markers and backticks
+removed. The notes pointer names the rules file only; it says the rules extend the agent's instructions and never
+weaken its Invariant Core or the Constitutional Core.

@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from agentteams.frameworks.copilot_vscode import MAX_BODY_CHARS
-from agentteams.user_regions import HEADINGS, find_region
+from agentteams.user_regions import HEADINGS, find_region, skip_banner
 from agentteams.yaml_frontmatter import parse_yaml_front_matter
 
 _NOTES_HEADING = HEADINGS[0]
@@ -36,13 +36,7 @@ def _has_operator_text(region: str) -> bool:
     operator's own blockquote, is operator text.
     """
     lines = region.splitlines()[1:]
-    i = 0
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    if i < len(lines) and "USER-EDITABLE" in lines[i] and lines[i].lstrip().startswith(">"):
-        while i < len(lines) and lines[i].lstrip().startswith(">"):
-            i += 1
-    return any(ln.strip() for ln in lines[i:])
+    return any(ln.strip() for ln in lines[skip_banner(lines):])
 
 
 def body_limit_findings(output_dir: Path) -> tuple[list[str], list[str]]:

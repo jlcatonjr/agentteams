@@ -93,37 +93,44 @@ def project_rules(manifest: dict, output_dir: Path, *, write: bool = True) -> bo
         report = rules_projection.project(root, configured=configured, frozen=frozen, write=write)
         pointers = rules_projection.sync_pointers(root, configured=configured, frozen=frozen, write=write)
     except (OSError, UnicodeDecodeError, ValueError) as exc:
-        print(f"  !  Project rules not projected: {exc}", file=sys.stderr)
+        print(f"  ✗  Project rules not projected: {exc}", file=sys.stderr)
         return True
     if report.source is None:
         if configured:
             print(f"  !  project_rules_source {configured} has no Project-Specific Rules to project.", file=sys.stderr)
         return bool(configured)
     stale = False
+    diff = next((o.diff for o in report.outcomes if o.diff), "")
+    if diff and write:  # what is about to bind every provider is shown, never applied silently
+        print(f"  ↻  Project rules changed in {report.source}; every provider's copy now says:\n{diff}")
     for outcome in report.outcomes + pointers:
-        if outcome.status == "current":
+        if outcome.status == "current" or (write and outcome.status == "skipped"):
             continue
-        verb = {"updated": "updated", "added": "added"}.get(outcome.status, outcome.status)
+        verb = outcome.status
         if not write and outcome.status in ("updated", "added"):
             verb = "out of date" if outcome.status == "updated" else "missing"
-        mark = "✗" if outcome.status == "refused" or (not write and outcome.status != "skipped") else "↻"
+        failing = outcome.status == "refused" or (not write and outcome.status in ("updated", "added"))
         detail = f" ({outcome.detail})" if outcome.detail else ""
-        stream = sys.stderr if mark == "✗" else sys.stdout
-        print(f"  {mark}  Project rules from {report.source}: {outcome.path} {verb}{detail}", file=stream)
-        stale = stale or outcome.status == "refused" or (not write and outcome.status in ("updated", "added"))
+        print(f"  {'✗' if failing else '↻'}  Project rules from {report.source}: {outcome.path} {verb}{detail}",
+              file=sys.stderr if failing else sys.stdout)
+        stale = stale or failing
     return stale
 
 
-def run_sync_project_rules(project: str | None) -> int:
+def run_sync_project_rules(project: str | None, *, dry_run: bool = False) -> int:
     """``--sync-project-rules``: project the rules for the project at *project* (else the working directory).
 
-    The brief (found as for the retrieval commands) supplies ``project_rules_source`` and ``frozen_surfaces``.
+    The brief (found as for the retrieval commands) supplies ``project_rules_source`` and ``frozen_surfaces``. It
+    writes only into the project it is run from: a ``--project`` other than the working directory is refused, since
+    a write into another repository needs that repository's own run (C-5).
 
     Args:
         project: The ``--project`` value.
+        dry_run: Report what would change; write nothing.
 
     Returns:
-        0, or 1 when a copy or pointer was refused.
+        0; 1 when a copy or pointer was refused (or, with *dry_run*, is out of date), when the source is refused or
+        has no rules though the brief names it, when the brief can't be read, or when *project* is another directory.
 
     Raises:
         Nothing.
@@ -133,18 +140,21 @@ def run_sync_project_rules(project: str | None) -> int:
     from agentteams.memory_index_surfaces import resolve_brief
 
     root = Path(project or ".").resolve()
+    if root != Path.cwd().resolve():
+        print(f"  ✗  --sync-project-rules writes only the project it runs in; run it from {root}.", file=sys.stderr)
+        return 1
     brief: dict = {}
     found = resolve_brief(root)
     if found is not None:
         try:
             loaded = json.loads(found.read_text(encoding="utf-8"))
-            brief = loaded if isinstance(loaded, dict) else {}
         except (OSError, ValueError) as exc:
-            print(f"  !  Brief {found} unreadable ({exc}); projecting without it.", file=sys.stderr)
+            print(f"  ✗  Brief {found} unreadable ({exc}).", file=sys.stderr)
+            return 1
+        brief = loaded if isinstance(loaded, dict) else {}
     manifest = {"existing_project_path": str(root), "project_rules_source": brief.get("project_rules_source") or "",
                 "frozen_surfaces": brief.get("frozen_surfaces") or []}
-    refused = project_rules(manifest, root, write=True)
-    return 1 if refused else 0
+    return 1 if project_rules(manifest, root, write=not dry_run) else 0
 
 
 __all__ = ["project_root_of", "project_rules", "run_sync_project_rules", "write_suite_and_index"]
