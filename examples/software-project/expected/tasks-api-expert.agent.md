@@ -40,6 +40,10 @@ You are the domain expert for **Tasks API** (component 2) in WebAppBackend. You 
 
 ---
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
@@ -119,7 +123,3 @@ Checklist results:
   [PASS/FAIL] <criterion>  ...
 Revision instructions (if REVISE): <specific corrections>
 ```
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

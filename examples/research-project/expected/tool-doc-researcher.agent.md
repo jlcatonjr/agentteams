@@ -35,6 +35,10 @@ You locate, verify, and structure **official documentation URLs, API surfaces, a
 
 ---
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
@@ -195,7 +199,3 @@ off to `@agent-updater` with these instructions:
 
 1. Add `docs_url`, `api_surface`, and `common_patterns` to each matching tool entry in the project brief so that future pipeline reruns auto-populate these fields.
 2. Directly update the affected tool documents — reference files in `references/` and Claude skills in `.claude/skills/` — so the current generation is complete without requiring a full rerender.
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

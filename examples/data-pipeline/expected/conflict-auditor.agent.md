@@ -44,6 +44,10 @@ You detect logical inconsistencies across deliverables, agent documentation, ref
 
 ---
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
@@ -172,7 +176,3 @@ When auditing `.steps.csv` artifacts that declare `payload_schema_in` / `payload
 
 Severity for `PAYLOAD_UNTYPED` is enforced mechanically by `PAYLOAD_UNTYPED_HARD_DATE = 2026-07-01` in `agentteams/handoff_payloads.py`. Do not soften by editorial judgment.
 <!-- AGENTTEAMS:END handoff_payload_codes -->
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

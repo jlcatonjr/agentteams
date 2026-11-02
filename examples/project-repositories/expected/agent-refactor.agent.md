@@ -15,6 +15,10 @@ handoffs:
     prompt: "Agent refactoring is complete. Review the changes."
     send: false
 ---
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Agent Refactor — ProjectRepositories
@@ -64,7 +68,3 @@ Check every agent file for:
 
 Report all violations to the orchestrator. Do not auto-fix violations that would change an agent's scope or access level.
 <!-- AGENTTEAMS:END content -->
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

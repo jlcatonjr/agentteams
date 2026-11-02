@@ -27,6 +27,10 @@ handoffs:
     prompt: "Deliverable production is complete."
     send: false
 ---
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Primary Producer — ResearchPaperProject
@@ -75,7 +79,3 @@ Every deliverable must meet these floors before leaving this agent:
 1. **Published papers by James Caton** (`sources/papers/`) — theoretical claims
 2. **Agent source files** (`.github/agents/`) — agent documentation accuracy
 <!-- AGENTTEAMS:END content -->
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

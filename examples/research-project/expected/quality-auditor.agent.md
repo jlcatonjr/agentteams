@@ -42,6 +42,10 @@ You perform read-only quality audits on deliverables in ResearchPaperProject. Yo
 
 ---
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
@@ -115,7 +119,3 @@ Findings ranked by severity — HIGH first.
 - **No aesthetic judgments.** Raise structural, logical, or pattern defects only. Style deviations route to `@style-guardian`.
 <!-- AGENTTEAMS:END boundary_rules -->
 
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
