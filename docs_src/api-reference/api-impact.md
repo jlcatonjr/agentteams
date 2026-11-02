@@ -41,23 +41,102 @@ Nothing is stored between runs. `status` walks the non-merge commits from the br
 `record` writes the ledger files. It is a self-attestation that the ledger makes visible in the pull
 request, not proof that a review happened.
 
+## API documentation
+
+Each impactful Python module is matched by name to its API documentation pages, and both the hook and
+`status` report whether those pages were updated.
+
+- **Modules checked:** those with public symbols added, removed or re-signed, and modules added, removed or
+  renamed (the new path; `added_module` is set for added modules and the new side of a rename).
+- **Module key:** the file stem; for `__init__.py`, the package directory's name. A root `__init__.py`,
+  `__main__.py`, test files and non-Python files have no key and no pages.
+- **Pages:** tracked `*.md` files whose stem, lowercased with `-` read as `_`, equals the lowercased key
+  (`api-impact.md` matches `api_impact.py`). Left out: any path with a component starting with `.`
+  (`.claude/`, `.github/`, …); paths starting with `tmp/`, `tests/`, `test/`, `workSummaries/`,
+  `references/` or `agents/`; `*/expected/` trees; pages named `index`, `readme` or `changelog` (any
+  case); and symlinks. In the hook, pages in the index and in `HEAD` both count, so a page staged for
+  deletion still maps to its module (it is touched, so the module reads `updated`, and its added names show
+  as `undocumented`).
+- **Touched paths:** in the hook, the staged paths, deletions included. In `status`, per commit: the paths
+  changed by that commit and by the range's later non-merge commits, so a page updated in a follow-up
+  commit counts.
+
+| State | Meaning |
+|---|---|
+| `updated` | a matching page is among the touched paths |
+| `not-updated` | matching pages exist and none was touched |
+| `no-page` | no page matches |
+
+- **`undocumented`:** added names that no matching page mentions (whole-word match on the last dotted
+  component). Not checked for a module with no page.
+- **`stale`:** removed names that a page still mentions; a removed module's key, when it still has pages;
+  a renamed module's old key, when its old pages differ from the new module's (the old pages are listed
+  too). A name moved to another module shows as stale on the old page.
+- Dunder names and `__all__` are never checked. CLI options and subcommands are not mapped to pages.
+
+A **new public module** is one the diff added (or renamed in) whose key has no leading `_` and that gained
+public names (`public_api`). A module is **blocking** when it is `not-updated`, or is a new public module
+with `no-page`; it blocks only in strict mode. A module is **reported** when it is blocking or has
+`undocumented` or `stale` names. Any other module with no page (an existing one, a private `_helper.py`, a
+script with no public names) is not reported.
+
+**Limitations.** A common stem (`config`, `utils`, `main`, a `cli` package) can match an unrelated page of
+the same name. Undecodable file names are not matched. While a conflicted merge is concluded, the comparison
+is against the first parent. These affect strict mode only through a false `not-updated`, which
+`git commit --no-verify` bypasses.
+
+The hook prints one line per reported module, at most 10, then `... {n} more`:
+
+```
+agentteams: API docs — agentteams/foo.py: docs_src/api-reference/foo.md not updated (undocumented: bar)
+agentteams: API docs — agentteams/baz.py: new module with no API page
+```
+
+`status` prints an `API docs:` block under each unreviewed impactful commit that has a reported module,
+one line each: `{module}: {state} — {pages}`, followed by `; undocumented: …` and `; stale: …` when present.
+Reviewed commits carry no doc entries. `--json` includes every module's entry. Exit codes are unchanged.
+
 ## Pre-commit
 
-`pre_commit()` prints one line summarizing the staged impact and never fails. In the agentteams repository,
-after the operator opts in with `git config agentteams.regenerateMan true`, it regenerates `agentteams.1`
-and stages it when `build_team.py`, `agentteams/cli/` or `agentteams/man.py` is staged and has no unstaged
-edits.
+The hook's step prints one line summarizing the staged impact, then the API docs lines above. It fails the
+commit only in strict mode. In the agentteams repository, after the operator opts in with
+`git config agentteams.regenerateMan true`, it also regenerates `agentteams.1` and stages it when
+`build_team.py`, `agentteams/cli/` or `agentteams/man.py` is staged and has no unstaged edits.
+
+## Strict mode
+
+Off by default. `git config agentteams.apiDocsStrict true` turns it on for one clone. With strict on, a
+staged change that leaves a blocking module fails the commit: `--pre-commit` exits 3, the hook fails, and
+the message ends with
+
+```
+agentteams: commit blocked (agentteams.apiDocsStrict) — stage the page(s) above, or bypass once with git commit --no-verify, or git config agentteams.apiDocsStrict false
+```
+
+- **Hook version.** Only a hook installed with strict support passes `--strict-capable`. An older hook runs
+  the current code (its import path is baked in) but ignores the exit code, so without the flag the step
+  never blocks; it prints a notice to re-install the hook (`agentteams --update`) instead.
+- **Bypasses.** `git commit --no-verify` once, or `git config agentteams.apiDocsStrict false`.
+- **Derived files.** On a block, the files the hook already staged for the same commit (the maps,
+  `agentteams.1`) stay staged. They are regenerated outputs.
+- **The switch is git config,** so files in the working tree cannot turn blocking on. When the hook's baked
+  import path is the working tree itself (an editable install of agentteams), the hook runs the tree's code,
+  as it does for every step.
+- `undocumented` and `stale` never block. A crash (any other non-zero exit) does not block; expected errors
+  exit 0 with a "commit unaffected" note.
 
 ---
 
 ## CLI
 
 ```
-python -m agentteams.api_impact --pre-commit [--repo DIR]
+python -m agentteams.api_impact --pre-commit [--strict-capable] [--repo DIR]   # 0, or 3 when blocked
 python -m agentteams.api_impact detect (--staged | --commit SHA) [--json]
 python -m agentteams.api_impact status [--range BASE..HEAD] [--json]   # 0 reviewed, 1 pending, 2 no base
 python -m agentteams.api_impact record [--range BASE..HEAD] --note TEXT
 ```
+
+`--repo` may name any directory inside the repository; every command resolves its top level first.
 
 ## Key functions
 
@@ -85,15 +164,37 @@ The commit's stable patch-id from plumbing (`diff-tree -p --no-ext-diff --no-tex
 
 ### `status(repo: Path, rev_range: str | None = None) -> tuple[str | None, list[CommitStatus]]`
 
-`(range_used, commits)` for every impactful commit in the range.
+`(range_used, commits)` for every impactful commit in the range. `CommitStatus.docs` holds the
+`doc_status` result for each unreviewed commit and stays `[]` for reviewed ones.
 
 ### `record(repo: Path, note: str, rev_range: str | None = None) -> list[Path]`
 
 Writes a ledger file per unreviewed impactful commit; raises `ValueError` on an empty note or a missing base.
 
+### `DocStatus`
+
+One module's documentation state: `module` (repo-relative path; the new path for a rename), `pages`
+(sorted), `state` (`updated`, `not-updated` or `no-page`), `added_module`, `undocumented`, `stale` and
+`public_api`.
+Properties `reportable` and `blocking` follow the rules under *API documentation*.
+
+### `doc_pages(repo: Path, module: str, *, ref: str = "HEAD") -> list[str]`
+
+The pages matching one module's key at `ref` (`ref=""` reads the index); `[]` when the module has no key.
+
+### `doc_status(repo: Path, imp: Impact, touched: Iterable[str], *, ref: str = "HEAD") -> list[DocStatus]`
+
+One `DocStatus` per module the impact touches, sorted by module. Pages are read at `ref`; an unreadable
+page counts as empty.
+
+### `pre_commit_check(repo: Path, *, strict_capable: bool = False) -> tuple[str, bool]`
+
+The hook's step: `(message, blocked)`. `blocked` is true only when strict mode is on, some module is
+blocking and `strict_capable` is set.
+
 ### `pre_commit(repo: Path) -> str`
 
-The hook's step; returns the message it prints.
+Unchanged: returns `pre_commit_check(repo)[0]`, the message the hook prints.
 
 ### `main(argv: list[str] | None = None) -> int`
 

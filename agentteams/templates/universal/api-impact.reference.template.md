@@ -5,7 +5,7 @@ SECTION MANIFEST
 | api_impact | FENCED      |
 -->
 
-<!-- AGENTTEAMS:BEGIN api_impact v=1 -->
+<!-- AGENTTEAMS:BEGIN api_impact v=2 -->
 # API Impact Review Reference — {PROJECT_NAME}
 
 How the team keeps its API and the infrastructure around it current whenever a commit makes a structural
@@ -33,21 +33,41 @@ snapshot trees and the review ledger are left out of every category, and test fi
 Symbol-level detection reads Python only. Projects in other languages get the module-free categories:
 schemas, structure and regenerated artifacts.
 
-## 2. The hook (automatic, never blocking)
+## 2. The hook (automatic; blocking only in opt-in strict mode)
 
 `agentteams --update` installs a `pre-commit` hook (opt out with `--no-git-hooks`). On every commit that
-stages anything it runs `python3 -P -m agentteams.api_impact --pre-commit`, which:
+stages anything it runs `python3 -P -m agentteams.api_impact --pre-commit --strict-capable`, which:
 
 - prints one line summarizing the staged API impact;
+- prints an `agentteams: API docs — <module>: …` line (at most 10) for each impactful Python module whose
+  API page needs attention. A module's pages are the tracked `*.md` files whose stem, lowercased with `-`
+  read as `_`, equals the module's file stem (for `__init__.py`, the package name). Pages in
+  dot-directories or `*/expected/` trees, pages whose path starts with `tmp/`, `tests/`, `test/`,
+  `workSummaries/`, `references/` or `agents/`, pages named `index`, `readme` or `changelog`, and
+  symlinks, never match. A line appears when the module has pages and none is staged (`not updated`), when
+  a new public module (no leading `_`, with new public names) has no page, or when the pages miss added
+  names (`undocumented`) or still mention removed ones (`stale`). Pages in the index and in `HEAD` both
+  count, so a page staged for deletion is reported, not dropped. CLI options are not mapped to pages, and a
+  common stem (`config`, `utils`, `main`) can match an unrelated page of the same name;
 - in the agentteams repository, when the operator has opted in with `git config agentteams.regenerateMan true`,
   regenerates the CLI man page `agentteams.1` from the parser and stages it when `build_team.py`,
   `agentteams/cli/` or `agentteams/man.py` is staged (skipped, with a note, when those paths also hold
   unstaged edits). The opt-in lives in git config, outside the working tree, so files in the tree alone
   never make the hook run the tree's own code.
 
-It reads no brief or project configuration, needs Python 3.11+ (as does the rest of the tool; `-P` keeps the
-working tree off `sys.path`), and never changes whether the commit succeeds. A commit made with `--no-verify`, or on a machine without the
-hook, is still caught: the review state below is computed from the commits themselves.
+It reads no brief or project configuration and needs Python 3.11+ (as does the rest of the tool; `-P` keeps
+the working tree off `sys.path`). By default it never changes whether the commit succeeds.
+
+**Strict mode (opt-in).** After `git config agentteams.apiDocsStrict true`, a commit that leaves a module
+`not updated`, or adds a new public module with no API page, fails: the step exits 3 and prints
+`agentteams: commit blocked (agentteams.apiDocsStrict)` with the bypasses, `git commit --no-verify` once or
+`git config agentteams.apiDocsStrict false`. `undocumented` and `stale` never block, and neither does a crash.
+The switch is git config, so files in the tree cannot turn blocking on. A hook installed before strict
+mode existed cannot block; it prints a notice to re-install it with `agentteams --update` instead. On a
+block, derived files the hook already staged stay staged.
+
+A commit made with `--no-verify`, or on a machine without the hook, is still caught: the review state below
+is computed from the commits themselves.
 
 ## 3. Review state
 
@@ -70,6 +90,12 @@ python -m agentteams.api_impact record --note "<what the review covered and chan
 - **Audit checklist.** For each removed, renamed or re-signed name, `status` lists the tracked files that
   mention it (whole-word `git grep`, the changed file and tests left out, at most 15 files plus the total).
   That list is the scope of the infrastructure audit.
+- **API docs.** Under each unreviewed impactful commit with a module to report, `status` prints an
+  `API docs:` block, one line per module: `<module>: <state> — <pages>`, plus `; undocumented: …` and
+  `; stale: …` when present. The state is `updated` when a matching page changed in that commit or a later
+  commit in the range, `not-updated` when none did, or `no-page` (reported for new public modules only). `stale`
+  also names a removed module's key while its page remains, and a renamed module's old key while its old
+  page remains. `--json` lists every module. This block does not change the exit code.
 - **`record` is a self-attestation.** It writes one ledger file per unreviewed commit with the note; it
   refuses an empty note. It proves that someone recorded a review, not that the review happened. The
   ledger is committed, so every record is visible in the pull request.
@@ -77,11 +103,13 @@ python -m agentteams.api_impact record --note "<what the review covered and chan
 ## 4. The review (orchestrator sub-protocol)
 
 1. **Scope.** Run `status`; the impactful, unreviewed commits and their checklists are the scope.
-2. **Review and update the API.** With module documentation in the team, `@module-doc-validator` runs its
-   Change Impact Analysis on the reported names and `@module-doc-author` updates the API reference, the
-   CLI reference and the changelog. Without it, `@technical-validator` reviews the reported names and the
-   owning producer updates the API documentation. Project-specific API checks (parity scripts, a project's
-   API conformity agent) run here too.
+2. **Review and update the API.** The `API docs:` lines scope the documentation update: update each
+   `not-updated` page, document each `undocumented` name, remove or redirect each `stale` mention, and
+   write a page for each new public module marked `no-page`. With module documentation in the team,
+   `@module-doc-validator` runs its Change Impact Analysis on the reported names and `@module-doc-author`
+   updates the API reference, the CLI reference and the changelog. Without it, `@technical-validator`
+   reviews the reported names and the owning producer updates the API documentation. Project-specific API
+   checks (parity scripts, a project's API conformity agent) run here too.
 3. **Audit the related infrastructure.** Every file on the checklist, plus the agent docs, references,
    templates, tests and user documentation that describe the changed area: `@conflict-auditor`
    (contradictions), `@adversarial` (assumptions the change broke), `@code-hygiene` (structure and sprawl)
