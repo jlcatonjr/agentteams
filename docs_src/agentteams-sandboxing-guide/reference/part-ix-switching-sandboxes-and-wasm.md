@@ -37,11 +37,20 @@ default grant is **compute only**: stdio, no preopened directory, an empty envir
 fuel / memory / timeout limits (defaults 10^10 fuel, 64 MiB, 120 s; bounds in `wasm_exec.LIMIT_BOUNDS`).
 Per-agent widening in `wasm_sandbox.agents.<slug>` is read-only project paths (`read_paths`, mounted at
 `/project/<path>`) and/or one private writable scratch dir (`scratch: true`, always
-`.agentteams/wasm/scratch/<agent>/`). A grant reaches an agent only through its `agentteams_wasm` copy: on
-Claude and Goose only a WASM-eligible agent (one holding an execute-class tool) gets one, and AGENTS.md and
-Grok wire none. A grant on any other agent has no effect, and the render prints `NOTE (WASM): the
-wasm_sandbox.agents grant for <slug> has no effect on <framework>: ...` and records a `wasm-grant-no-effect`
-advisory (`_wasm_wiring.inert_grants`, D2). There is no network key. The full key reference is in
+`.agentteams/wasm/scratch/<agent>/`). A grant reaches an agent only through its `agentteams_wasm` copy, and
+what happens to one that reaches none depends on the framework's wiring:
+
+- **Claude, and Goose under `goose_tool_scoping: grant`** (`wired-per-agent`): only a WASM-eligible agent (one
+  holding an execute-class tool) gets a copy. A grant on any other agent has no effect.
+- **Goose under legacy scoping, Grok and AGENTS.md** (`not-wired`, `unverified-format`, `instructions-only`):
+  no agent gets a copy, so every widened grant has no effect.
+- **Codex, Copilot VS Code and Copilot CLI** (one shared, compute-only copy for the whole project): a widened
+  grant is refused and the render stops (`_wasm_wiring.unhonoured_grants`); it is never silently dropped.
+
+In the first two cases the render prints `NOTE (WASM): the wasm_sandbox.agents grant for <slug> has no effect
+on <framework>: ...` and records a `wasm-grant-no-effect` advisory (`_wasm_wiring.inert_grants`), so a grant
+that does nothing is never silent. `--framework wasm` honours grants in its own runtime (SB28). There is no
+network key. The full key reference is in
 [`DESCRIPTION-FORMAT.md`](../../DESCRIPTION-FORMAT.md#wasm_sandbox).
 
 **What each confines.**
@@ -51,7 +60,7 @@ advisory (`_wasm_wiring.inert_grants`, D2). There is no network key. The full ke
 | OS sandbox | The agent *process* (a vendor CLI, or agentteams' WASM host) and every command it runs natively | Claude settings block, Goose Seatbelt, the runners, the neutral launcher (SB10–SB13) |
 | WASM sandbox | The *code* an agent sends to `run_wasm` (vendor CLIs, SB27), or every step of a WASM-native agent (SB28) | wasmtime with a fixed grant shape (`wasm_exec.assert_grant_shape`) |
 
-WASM never replaces the OS sandbox (D6). When an OS sandbox is available, the host process still runs
+WASM never replaces the OS sandbox. When an OS sandbox is available, the host process still runs
 inside it.
 
 **The 2×2 matrix.**
@@ -102,6 +111,17 @@ otherwise it lapses and a fresh signed decision is needed. They share the regist
 once must raise the cap in the registry (a visible, git-tracked decision). `sandbox-wasm-off` is not
 standing.
 
+**Carve-out: an OS-off state that predates governance.** A continuing `sandbox-os-off` (the previous
+render already had the OS boundary off and this one keeps it off) with no exception ever recorded for its
+action id is not refused in a governed workspace. It continues without a signature: generation prints
+`SANDBOX RELAXATION: sandbox-os-off:<framework> predates sandbox governance (no exception was ever recorded
+for it) and continues without a signature; ...` and the build-log `sandbox_state` records `pre-governance`.
+The usual way in is the ungoverned first render: a brief that sets `os_sandbox: off` from the start gets a
+notice there, and every later render then carries the off state over under this carve-out. Only
+`sandbox-os-off` has it. Any other continuing relaxation without a recorded exception is refused, and once an
+OS-off exception has been recorded for the action, a lapsed one is refused too (re-sign, or turn the sandbox
+back on). Turning the OS sandbox off *after* it was on is a new relaxation and needs a signed decision.
+
 **Ungoverned workspaces** never refuse: generation prints a `SANDBOX RELAXATION` notice and the build-log
 `sandbox_state` records `notice-only`. `os_sandbox: off` is refused outright under
 `write_policy: orchestrator-only`.
@@ -149,7 +169,8 @@ explicit list replaces the default (`[]` keeps none).
 | grok | `unverified-format` | nothing emitted (operator check pending) |
 | agents-md | `instructions-only` | no MCP channel |
 
-**Operator spike B.** Run on the operator's macOS host with the development wasmtime 36.0.16: Claude Code
+**Operator spike B.** Run on the operator's macOS host on 2026-11-01 with the development wasmtime 36.0.16
+(the Claude Code and Goose versions were not recorded): Claude Code
 (with its session sandbox on and off) and Goose launch stdio MCP servers **outside** their own sandbox. So
 the session sandbox does not confine the server. The server confines itself: it wraps wasmtime in its own
 nested OS profile (Seatbelt, or bwrap on Linux) where one can start, and reports `os_reason`
@@ -164,11 +185,11 @@ configuration; otherwise the cell is `advisory` with the reason.
 **What `enforced` covers.** The term is about the native-exec policy only: Bash (or the shell) removed from
 the narrowed sub-agents, the session OS sandbox on, and the control-plane rules merged. It says nothing about
 whether `run_wasm` itself runs inside an OS sandbox. That is measured on every call and returned as the
-result's `os_confinement`: `nested` (Seatbelt or bwrap), `inherited` (the P08 launcher only) or `none`. The MCP
+result's `os_confinement`: `nested` (Seatbelt or bwrap), `inherited` (only under the `--run-wasm-agent` launcher of WASM-native agents, SB28) or `none`. The MCP
 server calls with `os_confine="auto"`, which falls back to `none` when no profile can start
 (`wasm_exec._nesting`). Only `nested` counts as OS-enforced. When the render's probe
 (`_sandbox_profiles.available()`) finds no usable profile, it prints `NOTE (WASM): run_wasm will run without
-OS nesting on this host (...)` and records a `wasm-run-unnested` advisory (D6: WASM runs alone, with a
+OS nesting on this host (...)` and records a `wasm-run-unnested` advisory (WASM then runs alone, with a
 notice). A render inside an already-sandboxed session also probes `None`, while the server, which the vendor
 CLI launches outside that sandbox, may still nest, so the per-call field is the authority.
 

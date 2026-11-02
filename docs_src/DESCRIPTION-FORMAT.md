@@ -219,9 +219,13 @@ fuel / memory / timeout limits. When an OS sandbox is available the host process
 - `limits`: `fuel` 1..10^15, `memory_mib` 1..4096, `timeout_s` 1..3600. Out-of-range values are refused, never clamped.
 - `agents`: per-agent widening beyond compute-only. `read_paths` are project-relative and mounted read-only at
   `/project/<path>`; `scratch: true` gives one private writable `/scratch` at `.agentteams/wasm/scratch/<agent>/`
-  (agentteams picks the location). A grant reaches an agent only through its `agentteams_wasm` copy: on Claude and
-  Goose only a WASM-eligible agent (one holding an execute-class tool) gets one, and AGENTS.md / Grok wire none, so a
-  grant there has no effect and the render prints a `NOTE (WASM): ... has no effect on <framework>` line. Read paths may not be absolute or `~`, contain `..`, name the whole project, reach
+  (agentteams picks the location). A grant reaches an agent only through its `agentteams_wasm` copy. On Claude and
+  on Goose under `goose_tool_scoping: grant`, only a WASM-eligible agent (one holding an execute-class tool) gets
+  one; Goose under legacy scoping, Grok and AGENTS.md wire none. A grant that reaches no copy has no effect, and the
+  render prints a `NOTE (WASM): ... has no effect on <framework>` line and records a `wasm-grant-no-effect`
+  advisory. Codex and Copilot (VS Code, CLI) take one shared compute-only copy, so a widened grant there is refused
+  and the render stops. `--framework wasm` honours grants in its own runtime. Read paths may not be absolute or `~`,
+  contain `..`, name the whole project, reach
   the control plane (`.git`, `.agentteams`, `.claude`, `.goose`, `.codex`, `.grok`, `.github/agents`,
   `.github/hooks`, `sandbox`, or an ancestor of one), credential material (`.env*`, `*.pem`, `*.key`, `id_*`, ...), a
   governance / trust root, or anything that resolves through a symlink. A read directory that holds credential-named

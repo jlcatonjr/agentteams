@@ -31,15 +31,23 @@ environment, no network, limits 10^10 fuel / 64 MiB / 120 s. Widen one agent at 
 ```
 
 `read_paths` are mounted read-only; `scratch` is one private writable dir at
-`.agentteams/wasm/scratch/<agent>/`. Widen a WASM-eligible agent (one that holds an execute tool): any other
-agent gets no `agentteams_wasm`, so its grant has no effect, and the render says so. There is no network key. Key reference:
+`.agentteams/wasm/scratch/<agent>/`. A grant only works through the agent's own `agentteams_wasm` copy:
+
+- **Claude, Goose (`goose_tool_scoping: grant`):** widen a WASM-eligible agent (one that holds an execute
+  tool). Any other agent gets no copy, so its grant has no effect.
+- **Goose legacy scoping, Grok, AGENTS.md:** no agent gets a copy, so no grant has an effect.
+- **Codex, Copilot VS Code / CLI:** one shared compute-only copy; a widened grant is refused and the render
+  stops.
+
+Where a grant has no effect, the render prints `NOTE (WASM): ... has no effect on <framework>` and records a
+`wasm-grant-no-effect` advisory. There is no network key. Key reference:
 [`DESCRIPTION-FORMAT.md`](../../DESCRIPTION-FORMAT.md#wasm_sandbox).
 
 **The four combinations:**
 
 | | WASM off | WASM on |
 |---|---|---|
-| **OS on** | today's behaviour; code runs natively inside the wired boundary | strongest: process OS-confined, code in WASM, control plane write-denied; the only cell where a provider can read `enforced` |
+| **OS on** | today's behaviour; code runs natively inside the wired boundary | strongest: process OS-confined, code in WASM, control plane write-denied; the only cell where a provider can read `enforced` or `conditional` |
 | **OS off** | nothing confined | code in WASM, but every provider row is `advisory`; notice `wasm-without-os-sandbox` (`wasm-only-host` on native Windows) |
 
 WASM never replaces the OS sandbox: when one is available, the host process still runs inside it.
@@ -53,9 +61,9 @@ program back from `sandbox: wasm` to `os`).
 **Your workspace is probably governed.** "Governed" means strict decision signing
 (`enforce_decision_signing`) is on, and it defaults to true from the first render. The gate reads it from
 disk before rendering, so only the very first render of a new team is ungoverned. In a governed workspace
-the render refuses until you record an operator **Ed25519**-signed decision whose scope is the exact
-action id (for example `sandbox-os-off:claude`) and whose effect matches exactly; the refusal prints the
-shape it needs. Mint it outside the agent's session (the spec format is in the
+a new relaxation is refused until you record an operator **Ed25519**-signed decision whose scope is the
+exact action id (for example `sandbox-os-off:claude`) and whose effect matches exactly; the refusal prints
+the shape it needs. Mint it outside the agent's session (the spec format is in the
 [CLI reference](../../cli-reference.md#-sign-decision)):
 
 ```
@@ -68,6 +76,15 @@ a runner switch) get a 90-day sunset and count against the exception registry's 
 **one** active relaxing exception): if you need two at once, raise the cap in the registry first.
 In an ungoverned workspace you get a `SANDBOX RELAXATION` notice instead of a refusal. `os_sandbox: off` is
 always refused under `write_policy: orchestrator-only`.
+
+**Exception: OS off since before governance.** If the previous render already had the OS sandbox off and
+no exception was ever recorded for `sandbox-os-off:<framework>`, a governed render does not refuse: the off
+state continues without a signature, with a `SANDBOX RELAXATION: ... predates sandbox governance` notice and
+a `pre-governance` build-log record. The common case: `"os_sandbox": "off"` in the brief at the (ungoverned)
+first render stays off on every later render with no decision. Only OS off gets this; switching the OS
+sandbox off after it was on, any other relaxation, and a lapsed OS-off exception still need a signed
+decision. To end the carve-out, turn the OS sandbox back on: switching it off again after that is a new
+relaxation and needs a signed decision.
 
 Teams that never used the switches keep their old behaviour: moving such a team from `confined` to
 `cooperative` is not gated (it never was).
@@ -95,13 +112,14 @@ Read the verdict the render prints as `[WASM-ENFORCEMENT]` (also in the manifest
 
 `enforced` is about native exec only: the shell removed from narrowed sub-agents, the OS sandbox on and the
 control-plane rules merged. It does not say `run_wasm` runs inside an OS sandbox. Each `run_wasm` result reports
-that as `os_confinement`: `nested` (Seatbelt or bwrap), `inherited` (P08 launcher only) or `none`, and only
+that as `os_confinement`: `nested` (Seatbelt or bwrap), `inherited` (WASM-native agents under `--run-wasm-agent` only) or `none`, and only
 `nested` counts as OS-enforced. If the render finds no usable Seatbelt or bwrap profile, it prints
 `NOTE (WASM): run_wasm will run without OS nesting on this host (...)`. Rendering inside a sandboxed session can
 trigger that note even where the server (launched outside the session sandbox) does nest, so check the per-call
 field.
 
-Why the config denies matter: in the operator's spike (macOS, development wasmtime 36.0.16), Claude Code
+Why the config denies matter: in the operator's spike (macOS, 2026-11-01, development wasmtime 36.0.16;
+Claude Code and Goose versions not recorded), Claude Code
 (sandbox on and off) and Goose ran stdio MCP servers **outside** their own sandbox. The server therefore
 wraps wasmtime in its own OS profile, and what stops an agent from rewriting its launch flags is the
 write-deny on those config files.
@@ -145,7 +163,7 @@ reviews the printed diff before you commit it and run `--write-integrity-manifes
 agentteams --wasm-pin-update wasmtime <VERSION> [--remediation GHSA-...] [--pins-out PATH]
 ```
 
-## What it costs you, honestly (SB30)
+## What it costs you (SB30)
 
 - Guests run `.wasm`, Python and JavaScript only: no Bash, git or npm.
 - The vendor CLI is not confined by WASM, only the code it sends to `run_wasm`.

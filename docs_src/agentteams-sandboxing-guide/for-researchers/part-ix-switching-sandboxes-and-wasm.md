@@ -22,7 +22,7 @@ network, and fuel / memory / timeout limits. Widening is per agent and limited t
 and one private scratch dir; network is never grantable. Read paths are refused when they reach the
 control plane, credential material, a trust root or a symlink.
 
-The two compose; neither replaces the other (D6). The matrix a reviewer should keep:
+The two compose; neither replaces the other. The matrix a reviewer should keep:
 
 | | WASM off | WASM on |
 |---|---|---|
@@ -54,6 +54,15 @@ Stated carve-outs (Rule 12): the very first render of a new team is ungoverned (
 yet); ungoverned workspaces get a `SANDBOX RELAXATION` notice rather than a refusal; and a team that never
 used the switches keeps the pre-switch behaviour when it moves `confined` → `cooperative`.
 
+The first carve-out has a long tail a reviewer should note. An OS-off state that predates governance, that
+is, one the previous render already had and for which no exception was ever recorded, **continues in a
+governed workspace without a signature**, with only a notice ("predates sandbox governance") and a
+`pre-governance` build-log record. So a brief that sets `os_sandbox: off` before the first render keeps the
+OS boundary off on every later render without an Ed25519 decision. The carve-out is narrow: it covers only
+`sandbox-os-off`; any other continuing relaxation with no recorded exception is refused, a lapsed OS-off
+exception is refused, and switching the OS sandbox off after it was on is a new relaxation that needs a
+signed decision.
+
 ## Where agentteams claims enforcement, and where it only offers (SB27)
 
 Vendor CLIs cannot run inside WASM, so for them agentteams offers a tool, `run_wasm`, through its own MCP
@@ -62,7 +71,8 @@ tool) where the host both wires the tool and enforces per-agent tool lists. Fixe
 orchestrator and the team builder. Default keep list: `navigator`, `git-operations` (they need git),
 which is itself a signed `native-exec-keep` effect in a governed workspace.
 
-**A trust-boundary fact the operator measured (spike B):** Claude Code (session sandbox on and off) and
+**A trust-boundary fact the operator measured (spike B, macOS, 2026-11-01, development wasmtime 36.0.16;
+the Claude Code and Goose versions were not recorded):** Claude Code (session sandbox on and off) and
 Goose launch stdio MCP servers *outside* their session sandbox. The session sandbox therefore does not
 contain the server. The server contains itself: it wraps wasmtime in its own nested OS profile where one
 can start, and every config that launches it is session-write-denied so an agent cannot change its flags.
@@ -75,8 +85,8 @@ in the *live* configuration (checked on disk, not assumed from the render):
 |---|---|---|
 | Claude Code | `enforced` (sub-agents) | Claude Code enforces subagent `tools`; Bash removed; live settings carry the control-plane denies (including `.claude` / `.claude/agents`) |
 | Goose | `enforced` for a direct recipe run; delegates `advisory` | the recipe's tool list is enforced at dispatch; `.goose/sandbox.sb` carries the rules and `GOOSE_SANDBOX` is on in the live Goose config (otherwise `advisory`: the profile is emitted but not wired) |
-| Codex | `conditional` | a role gate the confined launcher protects and self-probes at each launch; not verifiable at render (Codex ignores role tool limits, so without the launcher only `declared`) |
-| Grok | `declared` | Bash absent from tools; no live negative probe |
+| Codex | `conditional` | a role gate the confined launcher protects and self-probes at each launch, plus the control-plane rules checked on disk like any `conditional` cell; what the render cannot check is whether Codex is actually started through that launcher (Codex ignores role tool limits, so without the launcher's gate only `declared`) |
+| Grok | `declared` under `native_exec: deny` (`advisory` under the default `replace`: no `run_wasm`) | Bash absent from tools; no live negative probe |
 | Copilot (VS Code, CLI), AGENTS.md | `advisory` | no verified per-agent `run_wasm`, or no tool channel |
 | Any top-level session | `advisory` | the operator's own session is never narrowed |
 
@@ -84,7 +94,7 @@ The label is about native exec only (the shell removed from narrowed sub-agents,
 control-plane rules merged). Whether `run_wasm` itself is nested in an OS sandbox is a separate, per-call
 measurement, reported as `os_confinement` (`nested`, `inherited` or `none`). Only `nested` counts as
 OS-enforced. A host with no usable OS sandbox gets a render-time `NOTE (WASM): run_wasm will run without OS
-nesting on this host (...)`, so that case is never silent (D2, D6).
+nesting on this host (...)`, so that case is never silent: WASM then runs alone, with a notice.
 
 The top-level session being `advisory` everywhere matters: a narrowed sub-agent can ask the orchestrator
 (which keeps exec) to run something natively. That laundering path is stated in every notice, not closed.
@@ -97,7 +107,7 @@ process (itself OS-confined when the OS switch is on and the machine allows it) 
 Provider keys stay in the host, delivered by the launcher over a pipe. Team files are hash-locked, but the
 lock holds no key; it is trustworthy only as far as the control plane is write-protected and the
 launch-time grant check passes (a widened grant needs a still-verifying signed exception in a governed
-workspace). Delegation is **attenuation only** (D11): a sub-agent's grant is a subset of its delegator's
+workspace). Delegation is **attenuation only**: a sub-agent's grant is a subset of its delegator's
 by capability class, there is no amplification exception, and the parent re-checks target, cycle, depth
 and caps itself.
 
@@ -110,7 +120,7 @@ shipped wasmtime 36.0.20 was adopted inside agentteams' 14-day release cooldown 
 symlink-rename filesystem escape. Pin updates write nothing until every platform verifies and are
 reviewed before commit.
 
-## The honest verdicts for this layer (SB30)
+## Verdicts for this layer (SB30)
 
 - **Scope:** guests run modules, Python and JavaScript; no Bash, git or npm. The vendor CLI process is not
   WASM-confined.
