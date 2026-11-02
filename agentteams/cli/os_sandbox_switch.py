@@ -175,12 +175,15 @@ def engage_relaxation_gate(
         WriteRootPolicyError: The operator ``confined_programs`` file fails its custody checks.
     """
     from agentteams.cli import sandbox_relaxation_gate as gate
-    from agentteams.sandbox_state import has_recorded_state, previous_sandbox_exceptions, previous_sandbox_state
+    from agentteams.sandbox_state import has_recorded_state, previous_sandbox_exceptions, recorded_sandbox_state
 
     team = Path(team_dir) if team_dir is not None else Path(project_root)
     exceptions = gate_exceptions(manifest, state, project_root, previous_sandbox_exceptions(team),
                                  brief_confined_programs)
-    old = previous_sandbox_state(team, project_root, framework_id)
+    # The record is the previous state; leftover on-render files count only where the operator never excused the
+    # off state (P17: otherwise every identical re-render after a signed off plans a fresh relaxation).
+    old = gate.excuse_stale_evidence(team, *recorded_sandbox_state(team, project_root, framework_id),
+                                     framework_id=framework_id)
     if not (gate_engaged(manifest, state, old, recorded=has_recorded_state(team)) or exceptions):
         return None
     relaxations = gate.plan_relaxations(
