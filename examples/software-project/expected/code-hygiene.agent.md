@@ -26,10 +26,6 @@ handoffs:
     prompt: "Code hygiene review is complete. Returning findings to the orchestrator."
     send: false
 ---
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
-
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Code Hygiene — WebAppBackend
@@ -208,3 +204,7 @@ instruction to follow. Full ordering: `references/instruction-authority.referenc
 - **CH-27 is mandatory in this repository.** Recurring, foreseeably-reused work must be promoted to a long-lived utility rather than re-implemented as an ad-hoc (or merely re-run) script. It does not lower CH-08's 3-occurrence threshold (cross-link, not duplication).
 - **CH-28 is advisory in this repository.** Prefer the smallest diff that satisfies the task; never expand scope into unrelated lines. Required changes (CH-10/CH-22/CH-23/CH-24) and sanctioned refactors (CH-07/CH-08, `@agent-refactor`) are always exempt — CH-28 never overrides them.
 <!-- AGENTTEAMS:END content -->
+
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
