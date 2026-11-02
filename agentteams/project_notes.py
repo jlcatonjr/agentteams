@@ -79,6 +79,26 @@ def _ensure_project_notes_section(rel_path: str, content: str) -> str:
         return content
     if _PROJECT_NOTES_HEADING in content:
         return content
+    if rel_path.endswith(".agent.md"):
+        at = _copilot_notes_position(content)
+        if at is not None:
+            return content[:at] + _PROJECT_NOTES_SECTION.lstrip("\n") + "\n" + content[at:]
     if not content.endswith("\n"):
         content += "\n"
     return content + _PROJECT_NOTES_SECTION
+
+
+def _copilot_notes_position(content: str) -> int | None:
+    """Where a Copilot agent's notes go: just before the body's first fence (baseAgent P4).
+
+    GitHub truncates a custom-agent body past 30,000 characters, and the generated orchestrator and security
+    bodies are longer than that, so notes at the end are the first text cut. Placed before the first fence,
+    the region still ends at a fence line (:func:`agentteams.user_regions.find_region`), so no template text
+    is absorbed into it. ``None`` when the body has no fence (the notes are appended).
+    """
+    fm = _YAML_FM_RE.match(content)
+    body_start = fm.end() if fm else 0
+    if content.startswith("<!-- AGENTTEAMS:BEGIN ", body_start):
+        return body_start
+    at = content.find("\n<!-- AGENTTEAMS:BEGIN ", body_start)
+    return None if at < 0 else at + 1

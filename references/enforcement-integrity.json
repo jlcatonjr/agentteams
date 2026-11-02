@@ -173,7 +173,7 @@
     "agentteams/vulnscan/tools_image.py": "dd0fb10e2c4680f09de5e55611098a4f05f8c9da2428ca718475a46ea84e9e89",
     "agentteams/vulnscan/versions.py": "1b210f2ec666cd749d7ac7bc3d8bfae45d99fde17d453a1d3ff9f3d5115aaef8",
     "agentteams/vulnscan/worktree_fixes.py": "ab724f52ca3fd9222bb226e5200f7b8647b80bab75a992166a8be6bef69c3766",
-    "agentteams/whole_body_migration.py": "37ba265cbacd5ca198c9989a92a3087587771bdaff90ad722d752818c405b72d",
+    "agentteams/whole_body_migration.py": "7487a2e960563de1bcf4c495ce11b52a433b7082150727a63b057b6c509eea02",
     "agentteams/write_policy.py": "422c4daf12c279366348205ca051638ca3037f118b9eacbee70668035cf1fff7"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
