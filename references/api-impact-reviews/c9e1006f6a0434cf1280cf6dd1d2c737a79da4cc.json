@@ -1,0 +1,8 @@
+{
+  "patch_id": "c9e1006f6a0434cf1280cf6dd1d2c737a79da4cc",
+  "commit": "951aa38f0d5c44dd09b7c7a567bd077dcd28415f",
+  "subject": "feat(vulnscan): distro verdicts for OS-packaged Python (vfr A2)",
+  "impact": "1 modules added, 11 symbols added",
+  "note": "vfr A2: new vulnscan.distro_verdict module (documented in docs_src/api-reference/vulnscan.md, section agentteams.vulnscan.distro_verdict); Report.distro_verdict_counts, Finding.distro_verdict/distro_note, DISTRO_VERDICTS, UPDATEINFO_CHECK; engine reads DISTROPKG/UPDATEINFO/UPDATEINFOREAD/AUTOUPD; L1-audit.sh dnf_updateinfo; an unread updateinfo pass is a LOW host check, not a feed error",
+  "recorded_at": "2026-11-02T23:00:32Z"
+}
