@@ -125,13 +125,25 @@ def _beyond_last_known(entry: dict, version: str) -> str:
     return f"{op} {bound}" if above else ""
 
 
+def _unreadable(iv: specifiers.Interval) -> bool:
+    """Return whether an interval cannot be trusted: a bound that is not version text, or a start above its end.
+
+    :func:`versions.version_key` never fails and sorts text below every release, so such an interval would read as
+    empty (clean) rather than as unknown (@security review of E3).
+    """
+    if any(b is not None and not b[:1].isdigit() for b in (iv.lo, iv.hi)):
+        return True
+    return iv.lo is not None and iv.hi is not None and version_key(iv.lo) > version_key(iv.hi)
+
+
 def judge(record: object, name: str, version: str) -> tuple[str, str]:
     """Grade one npm advisory against a version installed from an allowlisted source.
 
     Each affected entry for ``name`` is read with :func:`osv.affected_intervals`. A closed interval holding the
     version is affected (its ``fixed`` bound is the fix). An open-ended interval holding it is affected unless the
-    entry's ``last_known_affected_version_range`` ends below the version, which makes it unknown. Affected wins over
-    unknown across entries.
+    entry's ``last_known_affected_version_range`` ends below the version, which makes it unknown. A range with a
+    bound that is not version text (``fixed: "next"``) or a start above its end is unknown too, never clean
+    (:func:`_unreadable`). Affected wins over unknown across entries.
 
     Args:
         record: The OSV advisory (untrusted JSON).
@@ -147,15 +159,18 @@ def judge(record: object, name: str, version: str) -> tuple[str, str]:
     fixes: list[str] = []
     unfixed = False
     beyond: list[str] = []
+    unreadable = False
     for aff in record.get("affected", []):   # affected_intervals checked the shape
         pkg = aff.get("package") or {}
         if pkg.get("ecosystem") != "npm" or osv.normalize_name("npm", pkg.get("name", "")) != want:
             continue
         ivs = osv.affected_intervals({"affected": [aff]}, "npm", name) or []
+        unreadable = unreadable or any(_unreadable(iv) for iv in ivs)
+        ivs = [iv for iv in ivs if not _unreadable(iv)]
         holding = [iv for iv in ivs if _holds(iv, version)]
         closed = [iv for iv in holding if iv.hi is not None]
         for iv in closed:
-            if iv.fixed and iv.hi is not None and osv.FIX_VERSION.fullmatch(iv.hi):
+            if iv.fixed and osv.FIX_VERSION.fullmatch(iv.hi):
                 fixes.append(iv.hi)
             else:
                 unfixed = True
@@ -167,6 +182,8 @@ def judge(record: object, name: str, version: str) -> tuple[str, str]:
                 unfixed = True   # open-ended with nothing bounding it: every version is affected
     if fixes or unfixed:
         return "affected", "" if unfixed else max(fixes, key=version_key)
+    if unreadable:
+        return "unknown", "not judged (a range bound is not a version, or a range starts above its end)"
     if beyond:
         return "unknown", (f"names no fixed version; last known affected {', '.join(sorted(set(beyond)))}, "
                            f"and {version} is above it")

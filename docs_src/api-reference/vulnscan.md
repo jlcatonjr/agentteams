@@ -1672,7 +1672,7 @@ exactly is judged as an npm package, as before. No network.
 |---|---|
 | `Source`, `SOURCES` | The allowlist, one row per host: `host`, `packages` (npm names), `path` (tarball pattern with `name` and `version` groups), `publisher`, `evidence` |
 | `match(name, version, resolved, sources=SOURCES)` | The row an entry resolves from, or None: `https://` on the row's host exactly (no user info, port, query or fragment), the path matching in full, and its name and version equal to the entry's |
-| `judge(record, name, version)` | One advisory: `("affected", fix or "")` when a closed range holds the version, or an open-ended one does with nothing bounding it; `("unknown", why)` when an open-ended range holds it but the entry's `database_specific.last_known_affected_version_range` (`< X` / `<= X`) ends below it, or the record cannot be judged; `("not affected", "")` otherwise |
+| `judge(record, name, version)` | One advisory: `("affected", fix or "")` when a closed range holds the version, or an open-ended one does with nothing bounding it; `("unknown", why)` when an open-ended range holds it but the entry's `database_specific.last_known_affected_version_range` (`< X` / `<= X`) ends below it, a range has a bound that is not a version (`fixed: "next"`) or starts above its end, or the record cannot be judged; `("not affected", "")` otherwise |
 | `GRADES` | `fixed` (no advisory affects it), `vulnerable` (one does), `unknown` (never clean: the finding keeps its severity until a known entry settles it) |
 
 ### `agentteams.vulnscan.cvss`

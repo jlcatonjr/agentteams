@@ -199,16 +199,17 @@ def analyze_sources(items: list[SourceItem], report: Report, *,
                 affected.append((vid, info))
             elif verdict == "unknown":
                 unknown.append((vid, info))
-        grade = "vulnerable" if affected else "unknown" if unknown else "fixed"
+        fixed, vulnerable, unknown_grade = offnpm_sources.GRADES
+        grade = vulnerable if affected else unknown_grade if unknown else fixed
         counted = (f"{len(affected)} affected, {len(unknown)} unknown, of {len(ids)} advisory(ies) judged on "
                    "their ranges" if ids else "no advisory names the package")
+        for target in sorted({t for t, _d, _s in group}):
+            report.sources.append(f"{target}: {name} {ver} from {host}: {grade} ({counted})")
+        if grade == fixed:
+            continue
         per_target: dict[str, list[Dep]] = defaultdict(list)
         for target, d, _s in group:
             per_target[target].append(d)
-        for target in sorted(per_target):
-            report.sources.append(f"{target}: {name} {ver} from {host}: {grade} ({counted})")
-        if grade == "fixed":
-            continue
         flagged = [v for v, _i in affected] + [v for v, _i in unknown]
         records = [fetched[v] for v in flagged if fetched.get(v) is not None]
         ranks = [osv.severity(r) for r in records]

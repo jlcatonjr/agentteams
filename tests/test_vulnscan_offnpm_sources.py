@@ -244,3 +244,44 @@ def test_sources_survive_a_report_round_trip_and_merge() -> None:
     total = Report(target="all")
     total.merge(again)
     assert total.sources == rep.sources
+
+
+# ---------------------------------------------------------------- @security: unreadable ranges are never clean
+
+UNREADABLE = ("unknown", "not judged (a range bound is not a version, or a range starts above its end)")
+
+
+@pytest.mark.parametrize("events", [
+    [{"introduced": "0"}, {"fixed": "next"}],          # a fix bound that is not a version
+    [{"introduced": "latest"}, {"fixed": "0.21.0"}],   # a start that is not a version
+    [{"introduced": "2.0"}, {"fixed": "1.0"}],         # inverted: starts above its end
+    [{"introduced": "0.20.0"}, {"last_affected": "0.19.0"}],
+])
+def test_an_unreadable_range_is_unknown_never_not_affected(events: list[dict]) -> None:
+    assert offnpm_sources.judge(_adv("A", events), "xlsx", "0.20.3") == UNREADABLE
+
+
+def test_an_unreadable_range_beside_a_valid_one_in_the_same_advisory_is_unknown() -> None:
+    rec = _adv("A", [{"introduced": "0"}, {"fixed": "0.19.3"}])
+    rec["affected"].append({"package": {"ecosystem": "npm", "name": "xlsx"},
+                            "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "next"}]}]})
+    assert offnpm_sources.judge(rec, "xlsx", "0.20.3") == UNREADABLE
+
+
+def test_an_unreadable_range_does_not_hide_an_affected_one() -> None:
+    rec = _adv("A", [{"introduced": "0"}, {"fixed": "0.21.0"}])
+    rec["affected"].append({"package": {"ecosystem": "npm", "name": "xlsx"},
+                            "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "2.0"}, {"fixed": "1.0"}]}]})
+    assert offnpm_sources.judge(rec, "xlsx", "0.20.3") == ("affected", "0.21.0")
+
+
+def test_a_malformed_advisory_beside_a_valid_fixed_one_grades_unknown(tmp_path: Path, feed: Feed) -> None:
+    feed.add("xlsx", _adv("GHSA-test-fixd-0003", [{"introduced": "0"}, {"fixed": "0.19.3"}]))
+    feed.add("xlsx", _adv("GHSA-test-next-0005", [{"introduced": "0"}, {"fixed": "next"}]))
+    rep = engine.scan_path(_repo(tmp_path, _cdn("0.20.3")))
+    (f,) = rep.findings
+    assert f.ids == ["GHSA-test-next-0005"]
+    assert "graded on the npm advisories' ranges: unknown" in f.detail
+    assert rep.sources == [".: xlsx 0.20.3 from cdn.sheetjs.com: unknown "
+                           "(0 affected, 1 unknown, of 2 advisory(ies) judged on their ranges)"]
+    assert rep.exit_code() == EXIT_FINDINGS

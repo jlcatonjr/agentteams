@@ -16,8 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   npm lockfile entry (v1–v3) whose `resolved` URL matches a row exactly to the new `engine.analyze_sources`: the
   name is queried without a version and each advisory is judged locally. The grade is `fixed` (no range holds
   the version: no finding), `vulnerable` (a closed range holds it, or an open-ended one with nothing bounding it)
-  or `unknown` (an open-ended range whose `last_known_affected_version_range` ends below the version, or a record
-  that cannot be judged). `unknown` is never clean: the finding keeps the advisory's severity. Every graded entry
+  or `unknown` (an open-ended range whose `last_known_affected_version_range` ends below the version, a range with
+  a bound that is not a version or a start above its end, or a record that cannot be judged). `unknown` is never clean: the finding keeps the advisory's severity. Every graded entry
   is listed in the new `Report.sources` (JSON `sources`, and a `summary.md` section), whatever its grade.
 - No general CDN trust: any other off-registry URL (another host, a port, user info, a query, another path, or a
   name or version that differs from the lockfile's) is queried by exact version, as before. `Dep` gains
