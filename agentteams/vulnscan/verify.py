@@ -97,12 +97,29 @@ def _owner_mode_problem(st: os.stat_result, what: str, *, root_ok: bool) -> str:
     return ""
 
 
+def _symlinked_parent(script: Path) -> str:
+    """Name the first directory of the script's parent path that is a symlink, from ``$HOME`` down (``/`` outside it).
+
+    The ancestor walk checks resolved directories, so a symlinked directory would be checked where it points, not
+    where the link lives; it is refused instead. ``$HOME`` itself (and what is above it) is the operator's setup.
+    """
+    parent = Path(os.path.normpath(script.parent))   # lexical: with no symlink allowed below, it is the real path
+    home = Path(os.path.normpath(Path.home()))
+    d = home if parent.is_relative_to(home) else Path("/")
+    for part in parent.relative_to(d).parts:
+        d = d / part
+        if stat.S_ISLNK(os.lstat(d).st_mode):
+            return f"directory {d} is a symlink"
+    return ""
+
+
 def open_refresh(script: Path) -> int:
     """Open the mirror refresh script for running, refusing anything another user could have written.
 
     The job runs it unattended with the operator's git credentials. The file is opened with ``O_NOFOLLOW`` (a
     symlink is refused) and checked **on the open descriptor**: a regular file the operator owns that neither the
-    group nor others can write. Every directory above it, up to the home directory (or ``/`` outside it), must be
+    group nor others can write. No directory of its parent path below the home directory (below ``/`` outside it)
+    may be a symlink. Every directory above it, up to the home directory (or ``/`` outside it), must be
     owned by the operator or root and not group- or world-writable, and the path must still name the file that was
     opened. :func:`_refresh` then runs that descriptor (``bash /dev/fd/N``), never the path again, so a file swapped
     in after the checks is not what runs.
@@ -127,6 +144,7 @@ def open_refresh(script: Path) -> int:
         st = os.fstat(fd)
         why = ("" if stat.S_ISREG(st.st_mode) else f"{script} is not a regular file") or \
             _owner_mode_problem(st, str(script), root_ok=False)
+        why = why or _symlinked_parent(script)
         home = Path(os.path.realpath(Path.home()))
         d = Path(os.path.realpath(script.parent))
         while not why:

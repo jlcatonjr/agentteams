@@ -171,7 +171,7 @@
     "agentteams/vulnscan/subproc_confine_ssh.py": "58f08bdee34581682e06c2afee369808cb5639e4b643bbf7ec3a4f09339b7656",
     "agentteams/vulnscan/team_dir.py": "8c4a45a4df0f43f9fe572cf161e8caf8fb6bbba40a97e4924ba42c54875aba33",
     "agentteams/vulnscan/tools_image.py": "dd0fb10e2c4680f09de5e55611098a4f05f8c9da2428ca718475a46ea84e9e89",
-    "agentteams/vulnscan/verify.py": "b7241c607ee0ccc3b84a32d9c45bfee7aa1fd9d1b5ab80145ef4ea414aa273b5",
+    "agentteams/vulnscan/verify.py": "633dd3f4e03c1da50af4d0e232d1156a2a8c55b65813b5e1199c6524509b3a63",
     "agentteams/vulnscan/versions.py": "1b210f2ec666cd749d7ac7bc3d8bfae45d99fde17d453a1d3ff9f3d5115aaef8",
     "agentteams/vulnscan/worktree_fixes.py": "ab724f52ca3fd9222bb226e5200f7b8647b80bab75a992166a8be6bef69c3766",
     "agentteams/whole_body_migration.py": "37ba265cbacd5ca198c9989a92a3087587771bdaff90ad722d752818c405b72d",

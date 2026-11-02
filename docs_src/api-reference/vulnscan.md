@@ -3520,7 +3520,8 @@ Returns `(record, exit code)`: 0 complete, 3 partial (a refresh, re-scan or audi
 `open_refresh` opens the mirror refresh script for running and returns the descriptor, or raises `RefreshRefused`
 (a `ValueError`) naming the check that failed. It refuses a relative path, and opens with `O_NOFOLLOW`, so a
 symlink is refused. On the open descriptor (`fstat`) the file must be regular, owned by the user and not group- or
-world-writable. Every directory above it up to the home directory (or `/` outside it) must be owned by the user or
+world-writable. No directory of its parent path below the home directory (below `/` outside it) may be a
+symlink. Every directory above it up to the home directory (or `/` outside it) must be owned by the user or
 root and not group- or world-writable, and the path must still name the opened file (same device and inode). The
 script then runs as `bash /dev/fd/N refresh` with that descriptor passed (`pass_fds`), never by path, so a file
 swapped in after the checks is not what runs. `refresh_problem` returns the refusal text, or "".

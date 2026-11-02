@@ -338,6 +338,20 @@ def test_refresh_problem_refuses_what_another_user_could_have_written(home: Path
     assert "adir is not a regular file" in verify.refresh_problem(sub / "adir")
 
 
+def test_a_symlinked_directory_on_the_way_is_refused(home: Path) -> None:
+    """A symlinked directory would be checked where it points, not where the link lives: refused outright."""
+    real = home / "real"
+    (real / "bin").mkdir(parents=True, mode=0o700)
+    script = real / "bin" / "r.sh"
+    script.write_text("#!/bin/bash\n", encoding="utf-8")
+    script.chmod(0o700)
+    (home / "via").symlink_to(real)
+    assert verify.refresh_problem(script) == ""
+    assert verify.refresh_problem(home / "via" / "bin" / "r.sh") == f"directory {home / 'via'} is a symlink"
+    (real / "deep").symlink_to(real / "bin")
+    assert verify.refresh_problem(real / "deep" / "r.sh") == f"directory {real / 'deep'} is a symlink"
+
+
 def test_outside_home_every_ancestor_is_checked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path / "elsewhere"))
     script = tmp_path / "r.sh"
