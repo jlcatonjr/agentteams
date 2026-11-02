@@ -377,7 +377,8 @@ Most-used options:
   --update             Re-render drifted files AND emit new agents added to the
                        taxonomy since the last build; preserves manually-filled values
   --prune              Used with --update: also delete agents removed from the taxonomy
-  --check              Check for template drift and structural changes (exit code 1 if found)
+  --check              Check for template drift and structural changes (exit code 1 if found;
+                       also when Copilot agent notes sit past the 30,000-character body limit)
   --scan-security      Scan generated agent files for security issues
   --post-audit         Run static + optional AI-powered audit after generation
   --auto-correct       After --post-audit findings, invoke standalone copilot CLI to repair

@@ -15,7 +15,7 @@ from tests._fresh_intel import run_build
 
 BRIEF = Path(__file__).resolve().parent.parent / "examples" / "software-project" / "brief.json"
 _FM = "---\nname: O\ndescription: d\n---\n"
-_FENCE = "<!-- AGENTTEAMS:BEGIN content v=1 -->\n{body}\n<!-- AGENTTEAMS:END content -->\n"
+_FENCE = "<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->\n{body}\n<!-- AGENTTEAMS:END invariant_core -->\n"
 _NOTES = "## Project-Specific Notes\n\n> ⚙️ **USER-EDITABLE** — banner\n"
 
 
@@ -33,6 +33,13 @@ def test_fresh_copilot_render_puts_notes_before_the_first_fence():
     start, end, _ = find_region(out, "## Project-Specific Notes")
     assert end == fence_at and "intro" not in out[start:end]  # no template text absorbed
     assert _ensure_project_notes_section("orchestrator.agent.md", out) == out
+
+
+def test_a_whole_body_content_fence_keeps_the_notes_last():
+    # The legacy whole-body wrapper holds the title too: notes before it would precede the title.
+    fresh = _FM + "<!-- AGENTTEAMS:BEGIN content v=1 -->\n# O\n\nbody\n<!-- AGENTTEAMS:END content -->\n"
+    out = _ensure_project_notes_section("a.agent.md", fresh)
+    assert out.index("<!-- AGENTTEAMS:END content -->") < out.index("## Project-Specific Notes")
 
 
 def test_other_frameworks_still_append_the_notes():

@@ -65,6 +65,7 @@ from agentteams.cli.generate_helpers import (  # noqa: F401
     _verify_enforcement_integrity,
     _bridge_entry_files,
     _bridge_gate_refusal,
+    _bridge_gate_before_render,
     _update_target_is_bridge,
     _BRIDGE_FENCE_BEGIN_RE,
     _handle_check,
@@ -320,15 +321,8 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     # Step 5: Render
     # -----------------------------------------------------------------------
-    # --reconcile-front-matter is exempt: it used to return before this gate, and still reports without writing.
-    if args.update and not getattr(args, "reconcile_front_matter", False):
-        # D3 bridge gate (fail closed on a detected bridge; policy in generate_helpers). Before the render, so
-        # the refusal is not read as a render failure, and stdout is flushed first so it prints in order.
-        refusal = _bridge_gate_refusal(project_root, output_dir, framework_id)
-        if refusal and not getattr(args, "materialize_native", False):
-            sys.stdout.flush()
-            print(refusal, file=sys.stderr)
-            return 1
+    if (gate_rc := _bridge_gate_before_render(args, project_root, output_dir, framework_id)) is not None:
+        return gate_rc
 
     print("Rendering templates...")
 

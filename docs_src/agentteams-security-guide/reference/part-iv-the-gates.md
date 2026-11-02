@@ -115,7 +115,8 @@ safe one (`preserve`); `allow` writes silently and should be chosen deliberately
 ## Bridge-refresh safety  ✅ *(policy)* / ⚙ *(operator Pre-Flight)* {#S14}
 
 `--bridge-refresh` **unconditionally overwrites** target entry files — `CLAUDE.md`,
-`.claude/*`, and the goose `AGENTS.md`/`.goosehints`. Its origin is a **2026-05-27
+`.claude/*`, and the goose `AGENTS.md`/`.goosehints` (for `.goosehints` only the bridge fence: project text
+around it is kept, unless its bridge markers don't pair up). Its origin is a **2026-05-27
 incident** where a refresh silently replaced user content, recoverable only because the
 files happened to be git-tracked (`references/bridge-refresh-safety.md:5-95`). The
 destructiveness is the whole point of the safety policy around it.

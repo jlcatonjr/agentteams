@@ -91,7 +91,8 @@ writes silently and should be chosen deliberately.
 ## Bridge-refresh safety  ✅ *(policy)* / ⚙ *(operator Pre-Flight)* {#S14}
 
 `--bridge-refresh` **unconditionally overwrites** target entry files
-(`CLAUDE.md`, `.claude/*`, goose `AGENTS.md`/`.goosehints`). Its origin is a
+(`CLAUDE.md`, `.claude/*`, goose `AGENTS.md`/`.goosehints`; in `.goosehints` only the bridge
+fence, keeping project text around it). Its origin is a
 **2026-05-27 incident** where a refresh silently replaced user content,
 recoverable only because the files were git-tracked. The destructiveness is the
 reason the safety policy exists.

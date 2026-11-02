@@ -17,6 +17,7 @@ Stdlib only.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from agentteams.frameworks.copilot_vscode import MAX_BODY_CHARS
@@ -83,4 +84,29 @@ def body_limit_findings(output_dir: Path) -> tuple[list[str], list[str]]:
     return failures, advisories
 
 
-__all__ = ["COPILOT_FRAMEWORKS", "MAX_BODY_CHARS", "body_limit_findings"]
+def report_body_limit(output_dir: Path, framework: str) -> bool:
+    """``--check``'s step: print the findings for a Copilot team and say whether any is a failure.
+
+    Args:
+        output_dir: The team's agents directory.
+        framework: The manifest's framework; any other than copilot-vscode / copilot-cli is skipped.
+
+    Returns:
+        True when an agent's operator notes start past the limit (``--check`` then exits 1).
+
+    Raises:
+        Nothing.
+    """
+    if framework not in COPILOT_FRAMEWORKS:
+        return False
+    failures, advisories = body_limit_findings(output_dir)
+    for line in advisories:
+        print(f"  !  Copilot body limit (advisory): {line}")
+    if failures:
+        print(f"\nCopilot body limit FAILURES (operator notes past {MAX_BODY_CHARS:,} characters):", file=sys.stderr)
+        for line in failures:
+            print(f"  ✗ {line}", file=sys.stderr)
+    return bool(failures)
+
+
+__all__ = ["COPILOT_FRAMEWORKS", "MAX_BODY_CHARS", "body_limit_findings", "report_body_limit"]
