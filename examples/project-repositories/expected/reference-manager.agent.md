@@ -15,6 +15,10 @@ handoffs:
     prompt: "Reference database operation complete."
     send: false
 ---
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
 # Reference Manager — ProjectRepositories
@@ -85,7 +89,3 @@ Action taken: <description or "none">
 Escalation required: YES|NO — <reason if YES>
 ```
 <!-- AGENTTEAMS:END content -->
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

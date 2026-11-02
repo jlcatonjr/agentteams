@@ -137,6 +137,10 @@ You coordinate all agent operations for **SalesDataPipeline**. You route work to
 
 > ⛔ **Do not modify or omit.** The responsibility definitions, workflows, and rules below are the immutable contract for this orchestrator.
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN constitutional_core v=3 -->
 ### Constitutional Core (Tier 1 — non-overridable)
 
@@ -964,7 +968,3 @@ scanner (`python -m agentteams.vulnscan`) under its signed grant.
 4. Project agents never get remediation tools and never call the scanner's executor. Coverage and
    freshness are read-only: `python -m agentteams.vulnscan status --project .` (Rule S-VM).
 <!-- AGENTTEAMS:END available_workflows -->
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
