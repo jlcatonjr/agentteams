@@ -1,0 +1,8 @@
+{
+  "patch_id": "00a596252eaab1ba5afb4deea2118b89c94e25c8",
+  "commit": "3721b38107cc6088627af7a733ddb2673083dbef",
+  "subject": "fix(vulnscan): the scheduled jobs refuse an agentteams the deploy did not install",
+  "impact": "1 structural added",
+  "note": "vfail-1101 follow-up: new sourced script scripts/vulnscan-remediation/vulnscan-install-guard.sh (install_guard <job> <state dir>) called by the daily wrapper and the remediation runner; deploy writes <state>/deployed.json; documented in docs_src/vulnscan-automation-walkthrough.md; @security PASS.",
+  "recorded_at": "2026-11-02T00:37:51Z"
+}
