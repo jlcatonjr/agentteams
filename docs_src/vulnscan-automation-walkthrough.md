@@ -941,7 +941,8 @@ It stages nothing, writes no fix plan, opens no PR, starts no agent and sends no
 `summary.*` stays as it was. `verify.json` names your repositories and hosts, so it is never published.
 
 To compare any two runs finding by finding, run
-`python -m agentteams.vulnscan effectiveness BASE LATER [--alias OLD=NEW] [--path-alias OLD=NEW] [--csv FILE]`.
+`python -m agentteams.vulnscan effectiveness BASE LATER --csv rows.csv`, where `BASE` and `LATER` are run
+folders. Add `--alias OLD=NEW` for a renamed host and `--path-alias OLD=NEW` for a tree you renamed on purpose.
 
 ### Deploying a new version
 

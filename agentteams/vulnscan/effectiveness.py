@@ -506,26 +506,30 @@ def scanned_targets(run_dir: Path, *, since: float | None = None) -> set[str]:
 
     out = {engine.LOCAL_TARGET}
     home = str(Path.home())
+
     def fresh(p: Path) -> bool:
         try:
             return since is None or p.stat().st_mtime >= since
         except OSError:
             return False
 
+    def text(p: Path) -> str:   # "" for a record that cannot be read: it names nothing
+        try:
+            return p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+
     for p in filter(fresh, run_dir.glob("repos-*.json")):
         try:
-            root = _MIRROR_TARGET.sub("", str(json.loads(p.read_text(encoding="utf-8"))["target"]))
-        except (OSError, ValueError, KeyError, TypeError):
-            continue
-        out.add(root)
+            root = _MIRROR_TARGET.sub("", str(json.loads(text(p))["target"]))
+        except (ValueError, KeyError, TypeError):
+            root = ""
+        if root:
+            out.add(root)
         if root.startswith(home + "/"):   # a repo_roots entry written as ~/... labels its findings that way
             out.add("~" + root[len(home):])
-    for p in filter(fresh, run_dir.glob("server-*.log")):
-        try:
-            if _AUDIT_DONE.search(p.read_text(encoding="utf-8", errors="replace")):
-                out.add(p.stem.removeprefix("server-"))
-        except OSError:
-            continue
+    out |= {p.stem.removeprefix("server-") for p in filter(fresh, run_dir.glob("server-*.log"))
+            if _AUDIT_DONE.search(text(p))}
     return out
 
 

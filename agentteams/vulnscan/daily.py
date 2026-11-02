@@ -647,7 +647,7 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
 
     def scan(spec: Any) -> Report | Exception:   # network-bound: the roots are looked up at once
         try:
-            return scan_root(cfg, spec.path, mirrors[spec.path], exclude, opted_out)
+            return scan_mirror.scan_root(cfg, spec.path, mirrors[spec.path], exclude, opted_out)
         except _ITEM_ERRORS as exc:   # this root is unscanned (recorded below); the other roots are kept
             return exc
 
@@ -695,32 +695,6 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         except subproc_confine.Unavailable as exc:   # fail closed: the host is reported unscanned
             _note_infra(exc)
             total.feed_errors.append(f"{host}: not scanned: {exc}")
-
-
-def scan_root(cfg: dict, root: Path, mirror: Path | None, exclude: Sequence[Path], opted_out: set[Path]) -> Report:
-    """Scan one effective root as the daily run does: its fresh mirror when there is one, else the checkout.
-
-    The operator's exclusions and opted-out checkouts hold in the mirror too (:func:`scan_mirror.also_under`);
-    excluded paths are never read. Findings keep the targets :func:`engine.scan_path` gives them (relative to
-    what was scanned); the caller files them under the checkout.
-
-    Args:
-        cfg: Daily config (``include_worktrees``, ``unpinned_ranges``).
-        root: The checkout (an effective root's path).
-        mirror: Its scan mirror for today (:func:`scan_mirror.mirror_for`), or None.
-        exclude: The operator's resolved exclude paths (:func:`coverage.operator_skips`).
-        opted_out: The opted-out checkouts.
-
-    Returns:
-        The root's report.
-
-    Raises:
-        OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError: The scan stopped.
-    """
-    return engine.scan_path(mirror or root, include_worktrees=bool(cfg["include_worktrees"]),
-                            exclude=scan_mirror.also_under(exclude, root, mirror) if mirror else exclude,
-                            opted_out=set(scan_mirror.also_under(opted_out, root, mirror)) if mirror else opted_out,
-                            unpinned_ranges=bool(cfg.get("unpinned_ranges", False)))
 
 
 #: The run's checkout-freshness rows (:func:`_freshness`), from _collect to _finish (None outside a run).

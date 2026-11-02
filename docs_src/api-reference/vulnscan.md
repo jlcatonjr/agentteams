@@ -1490,6 +1490,12 @@ when the key names a worktree (no `/`), the directory is real, and the day's rec
 
 `skips` (resolved exclude paths or opted-out checkouts) plus, for each inside `root`, the same path inside `mirror`.
 
+#### `scan_mirror.scan_root(cfg, root, mirror, exclude, opted_out)`
+
+Scan one effective root as the daily run does: `mirror` when given, else the checkout, with the operator's
+exclusions and opted-out checkouts holding inside the mirror too (`also_under`). Findings keep the targets
+`engine.scan_path` gives them; the caller files them under the checkout. The daily scan and `verify` both call it.
+
 ### `agentteams.vulnscan.manifests`
 
 Finds dependency manifests and reads exact versions from them; the formats are listed under
@@ -3213,11 +3219,13 @@ accepted when the renamed tree carries at least one of the old tree's findings u
 version). That is weaker than "the same package set" on purpose (Rule 12): a rename combined with one upgrade must
 still read as a move, never as a remediation of everything else in the tree.
 
-#### `scanned_targets(run_dir)` / `assessed(targets, scanned)` / `load_run(run_dir)`
+#### `scanned_targets(run_dir, *, since=None)` / `assessed(targets, scanned)` / `load_run(run_dir)`
 
 `scanned_targets` is what a run directory has a complete record for: each `repos-*.json`'s root (a
 `<repo>.worktrees/<name>` mirror filed under its checkout; a root under the home directory also as `~/...`), each
-host whose `server-<host>.log` holds the audit's `RESULT` line, and `this-machine`. `assessed` keeps the targets
+host whose `server-<host>.log` holds the audit's `RESULT` line, and `this-machine`; with `since` (epoch seconds;
+the daily run passes its own start) a record written before it is ignored, so a file an earlier run of the day left
+behind is never read as this run's scan. `assessed` keeps the targets
 equal to one of them or inside a scanned root. `load_run` reads a run's `summary.json` (`OSError`, or `ValueError`
 for one that is not a report).
 
@@ -3478,7 +3486,7 @@ Re-scan what changed since this morning's run and write `<run>/verify.json`. In 
    compares with the morning's commits, not with the first verification's), then run `bash SCRIPT refresh` for
    `mirror_refresh` (the operator's refresh job, `vauto-a-mirrors.sh`). `refresh_problem(script)` refuses a path
    that is relative, not a regular file (a symlink), not owned by the user, or writable by group or others.
-4. Re-scan, from its refreshed mirror (`daily.scan_root`), each effective root whose record went from one
+4. Re-scan, from its refreshed mirror (`scan_mirror.scan_root`), each effective root whose record went from one
    `ok <sha>` to another since the morning: a repository whose default branch moved today. A root without `ok` before
    and after is listed in `not_rescanned` (its morning scan read the checkout, or the refresh failed); with
    `scan_mirror` off no repository is re-scanned.

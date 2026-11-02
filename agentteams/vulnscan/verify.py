@@ -195,7 +195,7 @@ def _rescan_repos(cfg: dict[str, Any], day: str, before: dict[str, str], later: 
             out["not_rescanned"].append({**row, "reason": "no usable mirror (scan_mirror off, or not a directory)"})
             continue
         try:
-            rep = daily.scan_root(cfg, spec.path, mirror, exclude, opted_out)
+            rep = scan_mirror.scan_root(cfg, spec.path, mirror, exclude, opted_out)
         except _ITEM_ERRORS as exc:
             later.feed_errors.append(f"re-scan of {spec.label} stopped: {type(exc).__name__}: {exc}"[:400])
             continue
@@ -261,10 +261,10 @@ def run_verify(cfg: dict[str, Any], *, today: str | None = None, mirror_refresh:
     if not force:
         try:
             old = json.loads(target.read_text(encoding="utf-8"))
-            if isinstance(old, dict) and old.get("complete"):
-                return {**old, "state": "already-verified"}, 0
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError):   # none yet, or unreadable: verify
+            old = None
+        if isinstance(old, dict) and old.get("complete"):
+            return {**old, "state": "already-verified"}, 0
     paths.state_dir().mkdir(parents=True, exist_ok=True)
     with _locks() as busy:
         if busy:

@@ -15,11 +15,12 @@ missing or symlinked directory) scans the checkout as before, and the freshness 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import paths
+from agentteams.vulnscan import engine, paths
+from agentteams.vulnscan.report import Report
 
 STAMP_DIR = "scan-mirrors"
 
@@ -96,3 +97,30 @@ def also_under(skips: Iterable[Path], root: Path, mirror: Path) -> list[Path]:
         if p.is_relative_to(base):
             out.append(mirror.resolve() / p.relative_to(base))
     return out
+
+
+def scan_root(cfg: dict[str, Any], root: Path, mirror: Path | None, exclude: Sequence[Path],
+              opted_out: set[Path]) -> Report:
+    """Scan one effective root as the daily run does: its fresh mirror when there is one, else the checkout.
+
+    The operator's exclusions and opted-out checkouts hold in the mirror too (:func:`also_under`);
+    excluded paths are never read. Findings keep the targets :func:`engine.scan_path` gives them (relative to
+    what was scanned); the caller files them under the checkout.
+
+    Args:
+        cfg: Daily config (``include_worktrees``, ``unpinned_ranges``).
+        root: The checkout (an effective root's path).
+        mirror: Its scan mirror for today (:func:`mirror_for`), or None.
+        exclude: The operator's resolved exclude paths (:func:`coverage.operator_skips`).
+        opted_out: The opted-out checkouts.
+
+    Returns:
+        The root's report.
+
+    Raises:
+        OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError: The scan stopped.
+    """
+    return engine.scan_path(mirror or root, include_worktrees=bool(cfg["include_worktrees"]),
+                            exclude=also_under(exclude, root, mirror) if mirror else exclude,
+                            opted_out=set(also_under(opted_out, root, mirror)) if mirror else opted_out,
+                            unpinned_ranges=bool(cfg.get("unpinned_ranges", False)))

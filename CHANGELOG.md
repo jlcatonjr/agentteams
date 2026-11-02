@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lock, Docker. It takes `remediate.flock` and `daily.lock` without waiting and runs the operator's scan-mirror
   refresh (`VULNSCAN_MIRROR_REFRESH`). It then re-scans each root whose mirror moved since the morning, re-audits
   each configured server an executor `server-*` op ran against today, and writes `<run>/verify.json`. It stages
-  nothing and opens no PR. `daily.scan_root` is split out of the daily scan, so both scan a root the same way.
+  nothing and opens no PR. `scan_mirror.scan_root` is split out of the daily scan, so both scan a root the same way.
   Deploy with `vulnscan-deploy.sh --with-scripts` to install the job.
 
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
