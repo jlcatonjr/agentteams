@@ -20,6 +20,7 @@
 | ``tools-image build`` / ``tools-selftest`` | Build the tools image git, npm and the server kit run in, and prove its isolation (:mod:`.tools_image`) |
 | ``enroll`` / ``roots`` / ``status --project DIR`` | Enrol projects (operator only), effective scan roots, one project's status (:mod:`.project_cli`) |
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
+| ``known propose\\|sign\\|list\\|remove`` | Known-finding entries: an unsigned proposal (anyone), signed by the operator only, outside agent sessions (:mod:`.known_cli`) |
 | ``handoff status`` | Staged fixes, the repository orchestrators' verdicts and pending packets (:mod:`.handoff`) |
 | ``remediation-report LEDGER SINCE`` | One unattended remediation attempt's outcome (JSON) and ``remediation.md`` (:mod:`.remediation_report`) |
 | ``ready [--ensure] [--json]`` | Docker, the images and their self-tests, layer by layer with reason codes (:mod:`.docker_readiness`) |
@@ -52,6 +53,7 @@ from agentteams.vulnscan import (
     fix,
     grant,
     handoff,
+    known_cli,
     operator_cli,
     paths,
     project_cli,
@@ -216,6 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("agent-selftest", help="prove the agent container's isolation")
     sub.add_parser("agent-run", help="run the agent team once on the latest scan")
     operator_cli.register(sub)
+    known_cli.register(sub)
     project_cli.register(sub)
     tools_image.register(sub)
     handoff.register(sub)
@@ -409,6 +412,8 @@ def main(argv: list[str] | None = None) -> int:
         return project_cli.dispatch(args, daily.load_config)
     if args.cmd in operator_cli.COMMANDS:
         return operator_cli.dispatch(args, daily.load_config)
+    if args.cmd in known_cli.COMMANDS:
+        return known_cli.dispatch(args)
     if args.cmd in tools_image.COMMANDS:
         return tools_image.dispatch(args, daily.load_config)
     if args.cmd in handoff.COMMANDS:

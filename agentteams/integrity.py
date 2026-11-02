@@ -240,6 +240,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/publish.py",
     "agentteams/vulnscan/operator_cli.py",
     "agentteams/vulnscan/notes.py",
+    # vfr-k K1/K3 (2026-11-02, @security K2 conditions): known.py verifies the operator-signed known-finding
+    # entries that take findings out of the exit code (Rule 15: purpose tag, 90-day cap, committed index, cap,
+    # HALT scan, voids); known_cli.py's propose never signs and its sign drives the operator flow.
+    "agentteams/vulnscan/known.py",
+    "agentteams/vulnscan/known_report.py",
+    "agentteams/vulnscan/known_cli.py",
     "agentteams/vulnscan/report_store.py",
     "agentteams/vulnscan/notify.py",
     "agentteams/vulnscan/review.py",

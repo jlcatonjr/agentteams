@@ -17,6 +17,9 @@
 #   ESM        esm-infra  esm-apps                    Ubuntu only: enabled|disabled|unknown, read from
 #                                                     /var/lib/ubuntu-advantage/status.json (`pro` is never run)
 #   HOSTCHECK  severity  message                      OS patch state, reboot, exposure checks
+#   HOSTEVIDENCE file|deny  sha256  path|rule         after a web-root HOSTCHECK: each hit file's content hash and
+#                                                     each nginx `deny` rule (hash of the rule text, then the text),
+#                                                     so a signed known entry voids when either changes
 #   IOC        message                                compromise indicator (from ioc-*.txt data)
 # RUNTIME kinds: php node python ruby go java java-corretto dotnet nginx openssl libressl postgresql mysql
 # mariadb redis docker (libressl is reported, not judged). Each probe only prints a version: no service is
@@ -31,7 +34,8 @@
 # Exit: 0 nothing local to flag · 1 action needed · 4 compromise indicator.
 #
 # Secret-bearing surfaces are never read or printed by default: no process environment (/proc/*/environ),
-# no unit file or `systemctl cat`, no journal, no .env or credential file contents; a running service is shown
+# no unit file or `systemctl cat`, no journal, no .env or credential file contents (a secret-looking file under a web
+# root is read only by sha256sum, and only its hash is printed); a running service is shown
 # by its executable path only (never its arguments, which can carry inline secrets). `env` indicator rules
 # need process environments, so they run only with --deep (an operator decision per host).
 #
@@ -387,6 +391,22 @@ ioc_section(){
   [ "$any" -eq 0 ] && ok "no compromise indicators matched"
 }
 
+docroot_evidence(){   # HOSTEVIDENCE for the check just printed: file hashes, then the nginx deny rules
+  local f h rule
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    h=$(sha256sum -- "$f" 2>/dev/null | cut -d' ' -f1)
+    [ -n "$h" ] && printf 'HOSTEVIDENCE\tfile\t%s\t%s\n' "$h" "$f"
+  done <<< "$1"
+  command -v nginx >/dev/null 2>&1 || return 0
+  while IFS= read -r rule; do
+    [ -n "$rule" ] || continue
+    h=$(printf '%s' "$rule" | sha256sum | cut -d' ' -f1)
+    printf 'HOSTEVIDENCE\tdeny\t%s\t%s\n' "$h" "$rule"
+  done < <(nginx -T 2>/dev/null | tr '\t' ' ' | awk '$1=="location"{loc=$0} $1=="deny"{print loc " => " $0}' \
+             | tr -s ' ' | sed 's/^ //; s/ $//' | sort -u | head -50)
+}
+
 docroot_section(){
   command -v nginx >/dev/null 2>&1 || command -v apache2ctl >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1 || return 0
   sec "Secret-looking files inside web document roots"
@@ -400,6 +420,7 @@ docroot_section(){
             -not -path '*/.git/*' 2>/dev/null | head -20)
     if [ -n "$hits" ]; then
       check HIGH "secret-looking files under web root $r — confirm the server denies them (request them from outside; expect 403/404)"
+      docroot_evidence "$hits"
       echo "$hits" | sed 's/^/              /'
     else ok "nothing secret-looking under $r"; fi
   done

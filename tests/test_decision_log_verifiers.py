@@ -327,7 +327,7 @@ def test_every_gate_call_site_is_listed():
                 assert arg.strip('"') in GATE_ACTIONS, (path.name, arg)
             elif arg.isupper() or arg in constants:
                 assert constants[arg] in GATE_ACTIONS, (path.name, arg)
-            elif arg == "action" and path.name in {"branch_cleanup.py", "security_gate.py"}:
+            elif arg == "action" and path.name in {"branch_cleanup.py", "security_gate.py", "known_report.py"}:
                 dynamic.append(path.name)
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")

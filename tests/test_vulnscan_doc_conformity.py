@@ -47,6 +47,7 @@ _DOCUMENTED_IN: dict[str, str] = {
     "agent_drivers_copilot": "### `agentteams.vulnscan.agent_drivers`",
     "checkout_freshness": "### `agentteams.vulnscan.daily`",   # split from daily.py, re-exported by it
     "coverage": "## Project registry",
+    "known_cli": "### `agentteams.vulnscan.known`",   # the known propose|sign|list|remove commands
     "registry": "## Project registry",
     "project_cli": "## Project registry",
     "executor_serve": "### `agentteams.vulnscan.executor`",

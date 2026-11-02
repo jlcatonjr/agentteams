@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import coverage, docker_readiness, effectiveness, engine, executor, fix, merge_digest, notify
-from agentteams.vulnscan import osv, paths, registry, remediation_status, repo_alias, scan_mirror
+from agentteams.vulnscan import known_report, osv, paths, registry, remediation_status, repo_alias, scan_mirror
 from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 # Split from this module and the names scripts and tests use are re-exported, so ``daily.<name>`` keeps working for them:
 from agentteams.vulnscan.checkout_freshness import _freshness, _freshness_section
@@ -917,8 +917,10 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     previous, notes = _previous_summary(state, today)
     new = new_finding_keys(total, previous)
     total.apply_unscored(str(cfg.get("unscored_as", "high")))
+    known_report.apply(total)   # K1: signed known entries leave the exit code, never the report (void => HIGH integrity)
     code = total.exit_code(cfg.get("fail_on", "high"), bool(cfg.get("include_dev")))
     md = total.markdown(new_keys=new)
+    md += ("\n" + known_report.markdown(total.known_entries)) if total.known_entries else ""
     md += _freshness_section(_FRESH.get() or [])   # a new section after the per-repository ones
     if notes:
         md += "\n## Notes\n\n" + "".join(f"- {n}\n" for n in notes)

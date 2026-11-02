@@ -171,6 +171,8 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Remediation grants | `~/.config/agentteams/vulnscan-grants/vg-*.json` | mode 600; each file must be a regular file you own, not group/world-writable, not a symlink. The directory must be a real directory (not a symlink) you own, not group/world-writable, or every grant is refused |
 | Publish grants | `~/.config/agentteams/vulnscan-publish-grants/vp-*.json` | as for remediation grants |
 | Operator notes | `~/.config/agentteams/vulnscan-notes/note-*.json` | directory must be yours and not group/world-writable |
+| Known entries | `~/.config/agentteams/vulnscan-known/vk-*.json` | mode 600, as for remediation grants; in force only with a committed row in `<governance dir>/references/vulnscan-known-index.csv` ([known](#agentteamsvulnscanknown)) |
+| Known-entry proposals | `<state>/known-proposals/vk-*.json` | unsigned; written by `known propose`, read by `known sign` |
 | Operator verify keys (public) | `~/.config/agentteams/verify-keys/<key-id>.pub.pem` | the directory and the file must be yours, not group/world-writable and not symlinks |
 | Operator signing key (private) | `~/.config/agentteams/keys/decision-signing-<key-id>.pem` | as written by `provision-operator-signing-key.sh`; named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` |
 | Ledger MAC key, high-water mark | `~/.config/agentteams/keys/vulnscan-ledger.key`, `vulnscan-ledger.hwm` | never mounted into a container |
@@ -499,7 +501,8 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 `__main__` defines most commands. The rest come from modules that add their own (`register(sub)`) and run
 them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `publish-grant`, `publish`,
 `agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`),
-`handoff` (`handoff status`), `remediation_report` (`remediation-report`) and `docker_readiness` (`ready`).
+`handoff` (`handoff status`), `remediation_report` (`remediation-report`), `docker_readiness` (`ready`) and
+`known_cli` (`known`; its `dispatch(args)` needs no config).
 
 | Command | Purpose |
 |---|---|
@@ -533,6 +536,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
 | `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports. `sign` checks `--node-id` and `--owner-id` first (exit 2): `refused: --node-id is empty — run the gh lookup first; it must be the ops repository's node id (gh repo view <owner/repo> --json id)`, `refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`, `is required` in place of `is empty` when the flag is omitted, and `refused: --owner-id must be your numeric GitHub user id (got '…')` |
 | `publish [--run DATE]` | Publish a run's files now |
+| `known propose\|sign\|list\|remove` | Known-finding entries ([known](#agentteamsvulnscanknown)). `propose --finding KEY… --decision-plan SLUG --decision-step STEP --key-id ID --governance-dir DIR [--reason TEXT \| --from-note NOTE_ID] [--days N] [--renews ENTRY_ID] [--run DATE] [--out FILE]` writes an unsigned proposal from a run's findings (`--days` default and maximum 90) and prints the signing command; it never signs and never reads a key. `sign PROPOSAL [--confirm-review-sha256 D] [--allow-checkout-signing]` is the operator's: it signs, installs and appends the index row (in force once committed). `list` prints every entry and its status; `remove ENTRY_ID` deletes one |
 | `agent-chat [--run DATE]` | Resume a past run's agent session interactively (goose and claude; copilot and codex are refused: `no debrief for <framework>`) |
 
 The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious kinds) also accept
@@ -609,6 +613,7 @@ its fixes from `origin/HEAD` against the checkout, so use `scan_mirror` with the
 | `say` | done | no such note | refused | — | — |
 | `publish-grant sign` | signed and installed | not signed | refused (also: `--node-id` / `--owner-id` empty, missing or not numeric) | — | — |
 | `publish` | published | no publish grant | no such run, or no config | failed or refused | — |
+| `known` | `propose`: written · `sign`: signed and installed · `list` · `remove`: removed | `sign`: not signed · `remove`: no such entry | refused (a missing run or finding key, the cap of 30, a never-known finding, bounds) | — | — |
 | `enroll` | written | nothing to enrol, or aborted | refused (CI, no terminal, an unreadable or malformed registry) | — | — |
 | `roots` | listed | — | an unreadable registry, or an unusable config | — | — |
 | `status` | printed | — | no such directory, or an unusable config | — | — |
@@ -675,6 +680,14 @@ A Finding (`report.Finding`):
 | `detail` | string | host-check or runtime message, or the malicious-package note |
 | `spec` | string | `range` only: the requirement's specifier set (`""`: any version); `version` is then `""` |
 | `partial` | boolean | `range` only: part of the allowed range is affected (severity capped at MODERATE) |
+| `evidence` | string | `host` web-root check only: `sha256:<hex>;files=N;deny=M` over the audit's `HOSTEVIDENCE` lines (`engine.host_evidence`); `""` otherwise |
+| `kev` | boolean | on CISA KEV, when a feed sets it (none does in this release); a known entry voids when it turns true |
+| `known`, `known_until` | string | daily runs: the [known entry](#agentteamsvulnscanknown) that covers this finding and its expiry date (`""` = none). A covered finding stays in the list and does not count toward `fail_on` |
+
+A daily report also carries `known_entries`: one object per known entry (`entry_id`, `status` `known` / `not
+seen` / `void` / `renewed` / `problem`, `target`, `kind`, `members`, `covered`, `reason`, `expires`, `key_id`,
+`decision_ref`, `renewal_count`, `renews`, `void_reason`). A void entry also adds a HIGH `integrity` finding
+(`name` `known-entry`).
 
 ---
 
@@ -2510,6 +2523,57 @@ Promote one `/vulnscan note` comment to a note. The author must be the authentic
 
 `remove` deletes one note: True when one was removed, False when none existed; `ValueError` for a malformed
 id, `OSError` when it exists but cannot be removed (`say --remove`). `notes_dir()` is `<config>/vulnscan-notes`.
+
+### `agentteams.vulnscan.known`
+
+Known-finding entries (vfr-k K1): the operator's Ed25519-signed (purpose `agentteams-vulnscan-known-v1`),
+expiring (at most 90 days) decision to accept a finding. A covered finding is graded `known until <date>` and
+leaves the exit code; it never leaves the report, and `summary.md` lists every entry under *Known findings*
+(reason fenced as data and capped at 200 characters, expiry, key id, decision reference, renewal count; void
+entries with why). It supersedes operator notes for this purpose: a note still never suppresses anything,
+and `known propose --from-note` migrates one into a proposal. The commands are in `known_cli`.
+
+- **Key**: `package`: target, kind, ecosystem, name, installed version, advisory ids. `group`: the full
+  member list (2–40 members, each keyed the same way; never a path prefix). `host`: the web-root check's
+  detail and `evidence` (file content hashes and nginx `deny` rules), or the os-release check's version.
+- **Never known**, even signed: trust-root targets (signing store, verify keys, rosters, secrets, integrity
+  manifest, constitution, grants, ledger, the known index and store, the decisions log, the agentteams
+  install), `MAL-*` advisories and malicious packages, `ioc`, `range` and `integrity` findings, other host checks.
+- **Governance**: the class is derived by `effect_classifier.classify_row` (a non-eligible effect is
+  refused); a HALT on `vulnscan-known` voids every entry, a HALT on an entry's id or lineage voids it; the
+  decision reference (`plan_slug`, `step`) must name a cleared decision-log row; the body's sha256 must be in
+  the committed (`HEAD`) `references/vulnscan-known-index.csv`; at most 30 entries are in force and the newest
+  over the cap are void.
+- **Void** on a version change, a new advisory id, a new fix the entry did not record, a severity rise, KEV,
+  an evidence change, expiry, a retracted or HALTed decision, a missing or mismatched index row, or a bad
+  signature. A void entry covers nothing and adds a HIGH `integrity` finding.
+
+#### `known.build(findings, *, reason, decision_ref, days, key_id, governance_dir, renews, now)`
+
+An unsigned entry for findings of one target (several make a group). Raises `KnownError` on any bound or refusal.
+
+#### `known.verify(record, *, now)`
+
+Shape, refusals, derived class, lifetime and Ed25519 signature (an HMAC signature is refused). Returns the class.
+
+#### `known.sign(record, *, confirm_sha256, allow_checkout)`
+
+Sign through `grant.operator_sign` (operator only; `known sign`).
+
+### `agentteams.vulnscan.known_report`
+
+Loads and judges the store and grades a report (split from `known`). A HALT on an entry's id or on any id in its
+lineage is a dynamic gate site, as `branch-cleanup:<sha>` is; `vulnscan-known` is in `action_ids.GATE_ACTIONS`.
+
+#### `known_report.load(*, now)`
+
+Every entry in the store, judged (`valid`, `void` with reasons, `inactive` renewed, index `problems`). Never raises.
+
+#### `known_report.apply(report, *, now, loaded)`
+
+Mark the covered findings, add the integrity findings for void entries, and set `report.known_entries`. The daily
+run calls it after `apply_unscored` and before `exit_code`. Never raises.
+
 
 ### `agentteams.vulnscan.agent_run`
 

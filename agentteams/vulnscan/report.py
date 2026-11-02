@@ -8,6 +8,9 @@ Exit codes are shared by every subcommand:
 | ``1`` | Findings at or above ``--fail-on`` |
 | ``3`` | A feed failed, so part of the target is **unscanned** (never reported as clean) |
 | ``4`` | A malicious package version or a compromise indicator is present |
+
+A finding an operator-signed known entry covers (:mod:`.known`) stays in the report, graded ``known until
+<date>``, and does not count toward ``1``; it can never cover ``3`` or ``4``.
 """
 
 from __future__ import annotations
@@ -60,6 +63,10 @@ class Finding:
     fixed_upstream: bool = False    # name==version is gone from the same file at origin/HEAD (the checkout is behind)
     spec: str = ""                  # range: the requirement's specifier set ("" = any version); version stays ""
     partial: bool = False           # range: only part of the allowed range is affected (capped at MODERATE)
+    evidence: str = ""              # host: "sha256:<hex>;files=N;deny=M" of the audit's HOSTEVIDENCE lines (.known)
+    kev: bool = False               # on CISA KEV, when a feed sets it (none does yet); voids a known entry
+    known: str = ""                 # the known entry (.known) that covers this finding ("" = none)
+    known_until: str = ""           # that entry's expiry date
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -96,6 +103,7 @@ class Report:
     withheld: list[str] = field(default_factory=list)    # "repo: name (ecosystem)": private, not checked
     brief_off: list[str] = field(default_factory=list)   # repos whose brief says off, scanned by operator enrolment
     unscored_as: str = "high"                            # what an advisory without any severity counts as
+    known_entries: list[dict] = field(default_factory=list)   # every known entry and its status (.known_report.apply)
     generated_at: str = field(default_factory=lambda: _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat())
 
     def merge(self, other: Report) -> None:
@@ -112,6 +120,7 @@ class Report:
         self.excluded += other.excluded
         self.withheld += other.withheld
         self.brief_off += other.brief_off
+        self.known_entries += other.known_entries
 
     def apply_unscored(self, level: str) -> None:
         """Count every unscored advisory as ``level`` (the config's ``unscored_as``), never as harmless.
@@ -175,7 +184,7 @@ class Report:
         floor = 0 if fail_on == "any" else SEVERITY_RANK.get(fail_on.upper(), 3)
         for f in self.findings:
             counts_dev = include_dev if f.count_dev is None else f.count_dev
-            if f.distro or (f.scope == "dev" and not counts_dev):
+            if f.known or f.distro or (f.scope == "dev" and not counts_dev):
                 continue
             if f.severity >= floor:
                 return EXIT_FINDINGS
@@ -219,6 +228,7 @@ class Report:
         known = Finding.__dataclass_fields__
         rep.findings = [Finding(**{"malformed": 0, "fix_hidden": 0, **{k: v for k, v in f.items() if k in known}})
                         for f in data.get("findings", [])]   # an older report counted neither (R8)
+        rep.known_entries = [dict(e) for e in data.get("known_entries", []) if isinstance(e, dict)]
         return rep
 
     def markdown(self, new_keys: set[str] | None = None) -> str:
@@ -258,10 +268,14 @@ class Report:
                 sev = "**MALICIOUS**" if f.malicious else (
                     f"UNSCORED (as {SEVERITY_NAME.get(f.severity, '?')})" if f.shows_unscored()
                     else SEVERITY_NAME.get(f.severity, "?"))
+                if f.known and not f.malicious:
+                    sev = f"known until {_code(f.known_until)} ({sev})"
                 item = f"{f.name} ({f.ecosystem})" if f.ecosystem else f.name
                 if f.kind == "range":
                     item = f"{f.name} `{f.spec or 'any version'}` ({f.ecosystem})"
                 notes = []
+                if f.known:
+                    notes.append(f"known entry {_code(f.known)} (see *Known findings*)")
                 if f.scope == "dev":
                     notes.append("dev-only" + {True: " (counted: project brief)",
                                                False: " (not counted: project brief)"}.get(f.count_dev, ""))
