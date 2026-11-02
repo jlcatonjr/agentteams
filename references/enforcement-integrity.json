@@ -64,7 +64,7 @@
     "agentteams/data/wasm_deny_probe.wasm": "dbcb3891225e2ce1a9145bd191d7a68afaed687b6572d88c7918baf6e7e7b365",
     "agentteams/data/wasm_probes/probe.mjs": "d5a4288997f9b950a16ec54b8535096475640f9b8bb122efdf81b34186691a58",
     "agentteams/data/wasm_probes/probe.py": "1ce444ee1a54d5ebb15db105e4b8376e833e3614199b32353e2488e835745ed1",
-    "agentteams/data/wasm_runtime_pins.json": "cfd27412c67e52ad64fcb56e0df03de51e14f4d1b568466a2eb3fc6a48773437",
+    "agentteams/data/wasm_runtime_pins.json": "330299ea58511d7c043f37ad4ee60e9fd3a01a01b19c5867214bf29e46f549ba",
     "agentteams/fence_twin_acks.py": "19c0dabc77f0ef4a0db77362818939fe47527dffdb1bd8e5810eb7f94cc9880a",
     "agentteams/fence_twins.py": "764a7c3ef0e0f57f87f43b1c7883e8f737a9490a7e6a6ffc0bfca5c9243bfde1",
     "agentteams/fences.py": "63f2c946c6f890726192f40d20cbd8140c08391d3221b61cb4ac0f6b5b37d4f3",
