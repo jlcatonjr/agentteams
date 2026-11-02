@@ -80,6 +80,12 @@ in the *live* configuration (checked on disk, not assumed from the render):
 | Copilot (VS Code, CLI), AGENTS.md | `advisory` | no verified per-agent `run_wasm`, or no tool channel |
 | Any top-level session | `advisory` | the operator's own session is never narrowed |
 
+The label is about native exec only (the shell removed from narrowed sub-agents, with the OS sandbox on and the
+control-plane rules merged). Whether `run_wasm` itself is nested in an OS sandbox is a separate, per-call
+measurement, reported as `os_confinement` (`nested`, `inherited` or `none`). Only `nested` counts as
+OS-enforced. A host with no usable OS sandbox gets a render-time `NOTE (WASM): run_wasm will run without OS
+nesting on this host (...)`, so that case is never silent (D2, D6).
+
 The top-level session being `advisory` everywhere matters: a narrowed sub-agent can ask the orchestrator
 (which keeps exec) to run something natively. That laundering path is stated in every notice, not closed.
 Format conversions and multi-sync apply no narrowing and say `ADVISORY ONLY`.

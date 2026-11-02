@@ -187,7 +187,10 @@ def report_wasm_enforcement(manifest: dict, project_root: Path) -> None:
     """Record ``manifest["wasm_enforcement"]`` and print the ``[WASM-ENFORCEMENT]`` lines (P13), after the emit.
 
     First, a ``NOTE (WASM)`` (and a ``wasm-grant-no-effect`` advisory) for every widened grant the framework did not
-    wire (``_wasm_wiring.inert_grants``): a grant that does nothing is never silent (D2).
+    wire (``_wasm_wiring.inert_grants``): a grant that does nothing is never silent (D2). Then, when this host has no
+    usable OS sandbox for ``run_wasm`` to nest in (``_sandbox_profiles.available()`` is None, the probe
+    ``wasm_exec._nesting`` uses under ``os_confine="auto"``), a ``NOTE (WASM)`` and a ``wasm-run-unnested``
+    advisory: WASM then runs alone, with a notice (D6), and each call reports ``os_confinement: none``.
 
     Runs after the files are written, so the R1 merge check reads what this render emitted. Nothing while WASM is
     off.
@@ -201,7 +204,7 @@ def report_wasm_enforcement(manifest: dict, project_root: Path) -> None:
         ImportError: WASM is on and ``agentteams.wasm_exec`` is not importable (fail closed).
     """
     from agentteams import wasm_enforcement
-    from agentteams.frameworks._wasm_wiring import inert_grants
+    from agentteams.frameworks._wasm_wiring import inert_grants, wasm_on
     from agentteams.sandbox_state import effective_sandbox_state
 
     framework = str(manifest.get("framework") or "")
@@ -211,7 +214,32 @@ def report_wasm_enforcement(manifest: dict, project_root: Path) -> None:
                        "agent the framework wires, or drop the grant")
             print(f"  NOTE (WASM): {message}", file=sys.stderr)
             manifest.setdefault("advisories", []).append({"code": "wasm-grant-no-effect", "message": message})
+        if framework != "wasm" and wasm_on(manifest):
+            _note_unnested_run_wasm(manifest)
         wasm_enforcement.report(manifest, framework, project_root=Path(project_root))
+
+
+def _note_unnested_run_wasm(manifest: dict) -> None:
+    """Print the D6 ``NOTE (WASM)`` when ``run_wasm`` cannot nest in an OS sandbox here (never a silent claim, D2).
+
+    The probe is the one ``wasm_exec._nesting`` runs per call (``_sandbox_profiles.available()``). The verdict's
+    ``enforced`` term is about native-exec removal and is unchanged; nesting is measured per call (``os_confinement``).
+
+    Args:
+        manifest: The team manifest (mutated: ``advisories``).
+
+    Raises:
+        Nothing.
+    """
+    from agentteams import _sandbox_profiles
+
+    if _sandbox_profiles.available() is not None:
+        return
+    message = (f"run_wasm will run without OS nesting on this host (no usable Seatbelt or bwrap profile on "
+               f"{sys.platform}; a render inside an already-sandboxed session also probes None): each call reports "
+               "os_confinement none, and only nested counts as OS-enforced")
+    print(f"  NOTE (WASM): {message}", file=sys.stderr)
+    manifest.setdefault("advisories", []).append({"code": "wasm-run-unnested", "message": message})
 
 
 def install_wasm_binary(manifest: dict, project_root: Path) -> None:

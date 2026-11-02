@@ -157,6 +157,17 @@ is claimed. Terms, strongest first: `enforced`, `conditional`, `declared`, `advi
 `conditional` require the OS sandbox on **and** the R1 control-plane rules merged in the live
 configuration; otherwise the cell is `advisory` with the reason.
 
+**What `enforced` covers.** The term is about the native-exec policy only: Bash (or the shell) removed from
+the narrowed sub-agents, the session OS sandbox on, and the control-plane rules merged. It says nothing about
+whether `run_wasm` itself runs inside an OS sandbox. That is measured on every call and returned as the
+result's `os_confinement`: `nested` (Seatbelt or bwrap), `inherited` (the P08 launcher only) or `none`. The MCP
+server calls with `os_confine="auto"`, which falls back to `none` when no profile can start
+(`wasm_exec._nesting`). Only `nested` counts as OS-enforced. When the render's probe
+(`_sandbox_profiles.available()`) finds no usable profile, it prints `NOTE (WASM): run_wasm will run without
+OS nesting on this host (...)` and records a `wasm-run-unnested` advisory (D6: WASM runs alone, with a
+notice). A render inside an already-sandboxed session also probes `None`, while the server, which the vendor
+CLI launches outside that sandbox, may still nest, so the per-call field is the authority.
+
 | Framework | Narrowed sub-agents | Precondition |
 |---|---|---|
 | claude | `enforced` (Bash removed from subagent `tools`; Claude Code enforces subagent tools) | the live settings carry the `.agentteams` denyWrite, the `Edit(/.agentteams/**)` and `Edit(/.claude/agents/**)` denies, the shell-side deny on `.claude` (or at least `.claude/agents`) and every launching config (`_sandbox_drift.verify_control_plane_merged`, `wasm_mcp.control_plane_advisory`), and no narrowed agent's live file still grants a shell. A fresh render, before the operator merges the settings, reads `advisory: control-plane rules not merged`. |

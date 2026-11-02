@@ -93,6 +93,14 @@ Read the verdict the render prints as `[WASM-ENFORCEMENT]` (also in the manifest
 | agents-md | `advisory` | always |
 | any top-level session | `advisory` | always |
 
+`enforced` is about native exec only: the shell removed from narrowed sub-agents, the OS sandbox on and the
+control-plane rules merged. It does not say `run_wasm` runs inside an OS sandbox. Each `run_wasm` result reports
+that as `os_confinement`: `nested` (Seatbelt or bwrap), `inherited` (P08 launcher only) or `none`, and only
+`nested` counts as OS-enforced. If the render finds no usable Seatbelt or bwrap profile, it prints
+`NOTE (WASM): run_wasm will run without OS nesting on this host (...)`. Rendering inside a sandboxed session can
+trigger that note even where the server (launched outside the session sandbox) does nest, so check the per-call
+field.
+
 Why the config denies matter: in the operator's spike (macOS, development wasmtime 36.0.16), Claude Code
 (sandbox on and off) and Goose ran stdio MCP servers **outside** their own sandbox. The server therefore
 wraps wasmtime in its own OS profile, and what stops an agent from rewriting its launch flags is the
