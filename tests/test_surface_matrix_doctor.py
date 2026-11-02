@@ -45,12 +45,13 @@ def test_matrix_finds_gaps_tools_notes_and_skills(root: Path):
     assert matrix.surfaces == ["claude", "copilot", "goose", "codex"]
     assert matrix.gaps() == {"builder": ["copilot", "goose", "codex"]}
     assert matrix.notes_differ() == ["security"]
-    assert M.can_write_run(matrix.agents["builder"]["claude"].tools) == (True, True)
-    assert M.can_write_run(matrix.agents["security"]["codex"].tools) == (False, False)
-    assert M.can_write_run(matrix.agents["security"]["goose"].tools) == (True, True)
+    assert M.capability(matrix.agents["builder"]["claude"].tools) == "may write and run commands (assume so)"
+    assert M.capability(matrix.agents["security"]["claude"].tools) == "read-only"
+    assert "may still run commands" in M.capability(matrix.agents["security"]["codex"].tools)
+    assert M.capability(matrix.agents["security"]["goose"].tools) == "may write and run commands (assume so)"
     text = M.render_matrix(matrix)
     assert M.NEVER_A_GRANT in text and "`builder` — missing on copilot, goose, codex" in text
-    assert "claude: Read, Edit, Write, Bash — writes, runs commands" in text
+    assert "claude: Read, Edit, Write, Bash — may write and run commands (assume so)" in text
     assert "On some skill surfaces only: recall, tool-x." in text
 
 
@@ -91,3 +92,44 @@ def test_doctor_cli_is_clean_on_an_agreeing_project(tmp_path: Path):
                           capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "0 failure(s)" in proc.stdout
+
+
+
+# --- adversarial review, 2026-11-02: a label must never understate what an agent can do ---------------------
+
+
+@pytest.mark.parametrize("front_matter, expected", [
+    ("name: a\n", None),                                          # nothing declared: inherits everything
+    ("tools:\n  - Read\n  - Edit\n", ["Read", "Edit"]),           # block list
+    ("tools: >\n  Read\n", None),                                 # folded scalar: not trusted
+    ("tools: Read, You may also use Bash\n", ["Read", "(invalid entry)"]),  # prose is not a name (C-4)
+])
+def test_front_matter_tools_parsing(front_matter, expected):
+    assert M._front_matter_tools(f"---\n{front_matter}---\n# A\n") == expected
+
+
+@pytest.mark.parametrize("tools", [None, [], ["apply_patch"], ["mcp__filesystem__move_file"], ["Read", "new"],
+                                   ["(invalid entry)"], ["sandbox_mode=workspace-write"]])
+def test_anything_not_proven_read_only_is_assumed_to_write_and_run(tools):
+    assert M.capability(tools) != "read-only"
+
+
+def test_goose_extension_forms_and_inheritance():
+    assert M._recipe_tools("extensions:\n- type: builtin\n  name: developer\nprompt: x\n") == ["developer"]
+    assert M._recipe_tools("extensions:\n  - name: computercontroller\n    type: builtin\n") == ["computercontroller"]
+    assert M._recipe_tools("title: t\nprompt: x\n") is None  # no block: inherits the user's extensions
+
+
+def test_write_matrix_never_clobbers_a_hand_made_file_or_follows_a_symlink(root: Path, tmp_path_factory):
+    path = root / M.MATRIX_REL
+    path.parent.mkdir(parents=True)
+    path.write_text("# my bibliography note\n", encoding="utf-8")
+    with pytest.raises(OSError, match="wasn't generated"):
+        M.write_matrix(root)
+    path.unlink()
+    path.parent.rmdir()
+    outside = tmp_path_factory.mktemp("outside")
+    (root / "references").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError, match="symlink"):
+        M.write_matrix(root)
+    assert not any(outside.iterdir())
