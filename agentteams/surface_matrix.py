@@ -197,6 +197,8 @@ def build_matrix(root: Path) -> Matrix:
             except (OSError, UnicodeDecodeError) as exc:
                 matrix.agents.setdefault(_slug(path, suffix), {})[surface] = AgentEntry(None, f"unreadable ({type(exc).__name__})")
                 continue
+            if suffix.endswith(".md") and not text.lstrip("\ufeff").startswith("---"):
+                continue  # a Markdown agent carries front matter; SETUP-REQUIRED.md and READMEs don't
             tools = (_recipe_tools(text) if suffix == ".yaml" else _toml_tools(text) if suffix == ".toml"
                      else _front_matter_tools(text))
             matrix.agents.setdefault(_slug(path, suffix), {})[surface] = AgentEntry(tools, _notes(text))

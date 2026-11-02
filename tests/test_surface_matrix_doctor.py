@@ -55,6 +55,11 @@ def test_matrix_finds_gaps_tools_notes_and_skills(root: Path):
     assert "On some skill surfaces only: recall, tool-x." in text
 
 
+def test_files_without_front_matter_are_not_agents(root: Path):
+    (root / ".claude" / "agents" / "SETUP-REQUIRED.md").write_text("# Setup\n", encoding="utf-8")
+    assert "SETUP-REQUIRED" not in M.build_matrix(root).agents
+
+
 def test_write_matrix_only_when_changed(root: Path):
     path, written = M.write_matrix(root)
     assert written and path == root / M.MATRIX_REL
