@@ -133,9 +133,17 @@ Check if any source file is newer than the index's `built_at` timestamp or no lo
 
 - `index` (`dict[str, Any]`) — Index dict from `build_memory_index()`.
 - `sources` (`Iterable[Path | str]`) — Original source paths (same list used for build, or a subset).
-- `root` (`Path | None`, keyword-only) — The project root the index was built against. **Required when the index stores relative paths:** without it each `path` resolves against the process CWD, the hash read fails, and the index reports stale on every call — triggering a full rebuild per query. Default: `None`, for indexes storing absolute paths.
+- `root` (`Path | None`, keyword-only) — The project root the index was built against. **Required when the index stores relative paths:** without it each `path` resolves against the process CWD, the hash read fails, and the index reports stale on every call (every query warns, and `--refresh-index` always rebuilds). Default: `None`, for indexes storing absolute paths.
 
-**Returns:** `bool` — `True` if any source content hash mismatches indexed `source_hash`, or if any source mtime > index `built_at` (index is stale); `False` otherwise.
+**Returns:** `bool` — `True` if any source content hash mismatches indexed `source_hash`, or if any source mtime > index `built_at` (index is stale); `False` otherwise. Equivalent to `index_staleness(...) is not None`.
+
+### `index_staleness(index, sources, *, root=None, complete_sources=False)`
+
+> *Source: `agentteams/memory_index.py`*
+
+The reason the index is stale, or `None` when it is current (baseAgent P5–P6, 2026-11-02). Same checks as `is_index_stale`, plus: with `complete_sources=True` (the caller passes the full source set the index is built from, as `--query-index` does), a file-built index whose `source_count` differs from the number of sources is stale, so a source added with an older modification time is caught.
+
+**Returns:** `str | None` — a short reason such as `"workSummaries/x.md changed or is gone"` or `"it was built from 103 source file(s); there are 110 now"`.
 
 **Safety:** Invalid/missing timestamps are treated as stale (conservative), and so is an `index_format_version` other than the current `INDEX_FORMAT_VERSION` (`json-bm25-postings-v3`): an index written in the v2 format is rebuilt once. Missing/unreadable files for hashed documents are also treated as stale, except that documents marked `"origin": "text"` are skipped: they were built from in-memory text (`build_memory_index_from_texts`) and have no file to compare.
 
@@ -362,7 +370,7 @@ Domain boundary note:
 
 - **Durable sources** (I7): Caller is responsible for passing explicit source paths; the module never globs `tmp/` or ignored directories
 - **Absence safety** (I5): Empty source list is valid; returns a skeleton index with zero documents
-- **Stale detection** (via `is_index_stale()` / `index_staleness()`, see the [stale-detection guide](../stale-detection-guide.md)) — the query CLI reports a stale index and never rebuilds it; `--refresh-index` rebuilds
+- **Stale detection** (via `is_index_stale()` / `index_staleness()`) — the query CLI reports a stale index and never rebuilds it; `--refresh-index` rebuilds
 - **Fallback protocol** — `@navigator` consults this index first, then opens referenced files for detail, then falls back to filesystem search
 - **Consumer-declared source dirs:** `brief.json` may add a `memory_index_extra_dirs` list — project-relative directories (recursive `*.md` scan) or glob patterns (literal expansion). Absolute paths are rejected; traversal is rejected via `Path.resolve` + `relative_to`; symlink escapes are rejected via a post-glob `os.path.realpath` check. Resolved paths are threaded through `analyze.build_manifest` and `build_team._memory_index_sources` and merged with the default source set. A plain path that names a file is skipped (and reported at build time).
 - **Named files:** `memory_index_extra_files` lists single project-relative `.md` files. Use it to index checked documents (for example deliverables under `Projects/`) one by one, where a folder or open glob would also index, and commit snippets of, every later file there. Every build and `--refresh-index` reports a file entry under `memory_index_extra_dirs`, an entry that matches nothing, each folder or glob entry (it sweeps in later files), and Markdown under `Projects/` or `docs/` that the index leaves out.

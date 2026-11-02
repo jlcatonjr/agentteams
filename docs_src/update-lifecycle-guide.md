@@ -293,7 +293,7 @@ Use `--dry-run` first to review what would be pruned, and ensure version-control
 | `--overwrite` | Replace entire output file (use when full regeneration is needed) |
 | `--dry-run` | Show what would change without writing |
 | `--check` | Read-only freshness check; exit 1 if any file is stale |
-| `--refresh-index` | Rebuild only `references/memory-index.json` |
+| `--refresh-index` | Rebuild every surface's `references/memory-index.json` (frozen surfaces skipped) |
 | `--query-index` | Query memory-index and print ranked matches |
 | `--query-k` | Limit result count for `--query-index` |
 | `--no-backup` | Skip backup creation |
