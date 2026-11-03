@@ -253,6 +253,7 @@ nav:
               - memory-index: api-reference/memory-index.md
               - memory-index-incremental: api-reference/memory-index-incremental.md
               - memory-index-store: api-reference/memory-index-store.md
+              - memory-index-surfaces: api-reference/memory-index-surfaces.md
               - fence-inject: api-reference/fence-inject.md
               - code-index: api-reference/code-index.md
               - code-sources: api-reference/code-sources.md

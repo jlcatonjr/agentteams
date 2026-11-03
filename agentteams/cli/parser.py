@@ -244,8 +244,9 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="refresh_index",
         help=(
-            "Rebuild references/memory-index.json only (no template emit/update). "
-            "Useful after editing work summaries or docs."
+            "Rebuild every surface's references/memory-index.json from the same sources "
+            "(frozen surfaces skipped; no template emit/update). Useful after editing "
+            "work summaries or docs."
         ),
     )
     parser.add_argument(
@@ -280,8 +281,9 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="query_index",
         default=None,
         help=(
-            "Query references/memory-index.json and print ranked hits. "
-            "Requires a pre-existing index in the output directory."
+            "Query references/memory-index.json and print ranked hits. Read-only: a "
+            "stale index is reported, not rebuilt. Uses another surface's index when "
+            "the output directory has none."
         ),
     )
     parser.add_argument(

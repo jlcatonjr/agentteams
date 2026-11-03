@@ -146,6 +146,19 @@ The durable memory index (`references/memory-index.json`) is built from a fixed 
 
 Each entry is a project-relative string. Bare directories are recursively scanned for `*.md`; entries containing `*`, `?`, or `[` are expanded as globs literally. Absolute paths, traversal that escapes the project root, and symlinked escapes are rejected at index-build time (see `build_team._memory_index_sources`).
 
+**Single files.** A bare path that names a file is skipped (the build reports it). List single documents under
+`memory_index_extra_files` instead, for example checked deliverables:
+
+```json
+{
+  "memory_index_extra_files": ["Projects/Alpha/00-scope.md", "docs/operator/runbook.md"]
+}
+```
+
+A folder or glob entry indexes, and the committed index carries snippets of, every Markdown file added there later.
+Where a later note may hold restricted content, name checked documents one by one instead. Each build and
+`--refresh-index` prints what the index leaves out under `Projects/` and `docs/`.
+
 **When to add entries.** Add a directory if it (a) contains durable, history-bearing markdown that current-state grep tooling regularly searches, and (b) is not already covered by a default source. Do *not* add code or test directories — the index is a *history layer*, not a structural index (see Invariant Rule 1 in `agentteams/templates/universal/navigator.template.md`).
 
 **Reference example.** agentteams itself declares `agentteams/templates` and `examples` in its own `_build-description.json`, so prior-art queries against template phrasing and example briefs surface in the index alongside work summaries.
