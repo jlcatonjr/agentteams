@@ -27,9 +27,11 @@ it by default: the operator signs a grant naming it.
 vfr-d.D3) relaxes the "no Cargo.lock edit" bound the same way: only a grant that lists it covers it, and no grant
 listing ``stage-fix`` implies it.
 
-``merge`` and ``server-apply`` are part of the schema for the planned full-automation stage, but
-version 1 refuses to sign or honour them. Every use also re-checks for an unretracted @security
-HALT (C-2), which no grant overrides.
+``server-apply`` (one signed level on one signed host, :mod:`.server_apply`) and ``runtime-patch`` (one signed
+Homebrew formula on this machine, :mod:`.runtime_patch`) change hosts, so only a **v2 grant** (:mod:`.grant_v2`) covers
+them: its signature also binds the host×level pairs, restart units and window, the apps.conf sha256, the exact
+quarantine paths, the runtimes and the re-issued ancestor. ``merge`` stays reserved: no grant can name it. Every use
+also re-checks for an unretracted @security HALT (C-2), which no grant overrides.
 
 Records live outside every project, in ``<config>/vulnscan-grants/<grant_id>.json``. The verify
 keys live in the operator verify-key store shared with MCP direct grants.
@@ -47,14 +49,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import paths
+from agentteams.vulnscan import grant_v2, paths
 from agentteams.vulnscan.ops import REPO_OPS
 
 PURPOSE_TAG = "agentteams-vulnscan-remediation-grant-v1"
 OPS_V1: frozenset[str] = frozenset({"stage-fix", "stage-major", "stage-image", "stage-cargo", "open-pr",
-                                    "close-superseded",
-                                    "server-audit", "server-dryrun"})
-OPS_RESERVED: frozenset[str] = frozenset({"merge", "server-apply"})   # full-automation stage; refused in v1
+                                    "close-superseded", "server-audit", "server-dryrun", "server-apply",
+                                    "runtime-patch"})
+OPS_RESERVED: frozenset[str] = frozenset({"merge"})   # full-automation stage; refused
 MAX_DAYS = 30
 MAX_USES = 500
 MAX_ACTIVE = 2
@@ -89,13 +91,19 @@ def signed_values(record: dict[str, Any]) -> list[str]:
     Raises:
         KeyError: A bound field is missing.
     """
+    if grant_v2.is_v2(record):   # v2: its own purpose tag over every v1 and v2 field
+        return grant_v2.signed_values(record, FIELDS)
     body = {name: record[name] for name in FIELDS}
     return [PURPOSE_TAG, json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)]
 
 
 def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int, max_uses: int,
-          key_id: str, governance_dir: str, now: datetime | None = None) -> dict[str, Any]:
-    """Build an unsigned grant, enforcing every v1 bound.
+          key_id: str, governance_dir: str, now: datetime | None = None, before_revoke: bool = False,
+          **v2: Any) -> dict[str, Any]:
+    """Build an unsigned grant, enforcing every v1 bound (and every v2 bound for a v2 grant).
+
+    A grant naming ``server-apply`` or ``runtime-patch``, or given any v2 field, is built as a v2 grant
+    (:func:`grant_v2.extend`).
 
     Args:
         ops: Operations to allow (subset of :data:`OPS_V1`).
@@ -107,6 +115,9 @@ def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int,
         governance_dir: Team directory whose ``references/security-decisions.log.csv`` the executor
             checks for HALTs. It is signed into the grant, so unsigned config cannot redirect the check.
         now: Clock override (tests).
+        before_revoke: ``grant sign --check-only``: the v2 ancestor is still installed and must verify there.
+        **v2: v2 fields (``server_levels``, ``restart_units``, ``restart_window``, ``apps_conf_sha256``,
+            ``major_allowed``, ``remove_paths``, ``runtimes``, ``ancestor``).
 
     Returns:
         The unsigned record.
@@ -115,6 +126,8 @@ def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int,
         GrantError: Any bound is violated.
     """
     now = now or datetime.now(UTC)
+    if set(v2) - set(grant_v2.EXTRA_FIELDS) or "version" in v2:
+        raise GrantError(f"unknown grant fields {sorted(set(v2) - set(grant_v2.EXTRA_FIELDS)) or ['version']}")
     bad = sorted(set(ops) - OPS_V1)
     if bad:
         raise GrantError(f"operations not grantable in v1: {bad}"
@@ -140,11 +153,22 @@ def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int,
         raise GrantError("hosts must be exact hosts.conf names (never 'all')")
     if any(op.startswith("server-") for op in ops) and not hs:
         raise GrantError("server operations need at least one host")
-    return {"grant_id": "vg-" + secrets.token_hex(8),
-            "issued": now.replace(microsecond=0).isoformat(),
-            "expires": (now + timedelta(days=days)).replace(microsecond=0).isoformat(),
-            "ops": sorted(ops), "repo_roots": roots, "hosts": hs, "max_uses": max_uses, "key_id": key_id,
-            "governance_dir": str(gov)}
+    rec = {"grant_id": "vg-" + secrets.token_hex(8),
+           "issued": now.replace(microsecond=0).isoformat(),
+           "expires": (now + timedelta(days=days)).replace(microsecond=0).isoformat(),
+           "ops": sorted(ops), "repo_roots": roots, "hosts": hs, "max_uses": max_uses, "key_id": key_id,
+           "governance_dir": str(gov)}
+    if not set(ops) & grant_v2.V2_OPS and not any(v2.values()):
+        return rec
+    args = {name: v2.get(name) or ([] if name in grant_v2.LIST_FIELDS else 0 if name == "max_read_uses" else "")
+            for name in grant_v2.EXTRA_FIELDS if name != "version"}
+    try:
+        return grant_v2.extend(rec, **args, grants_dir=grants_dir(), revoked_dir=revoked_dir(),
+                               ancestor_ok=ancestor_ok, before_revoke=before_revoke)
+    except GrantError:
+        raise
+    except ValueError as exc:
+        raise GrantError(str(exc)) from exc
 
 
 def operator_sign(record: dict[str, Any], *, digest_kind: str, banner: str, fields: tuple[str, ...],
@@ -239,8 +263,19 @@ def install(record: dict[str, Any]) -> Path:
     return path
 
 
+def revoked_dir() -> Path:
+    """Return where :func:`revoke` archives revoked grants (the lineage a v2 re-issue names as its ancestor).
+
+    Returns:
+        ``<config>/vulnscan-grants-revoked``. Nothing there is ever honoured: only :func:`grants_dir` is loaded.
+    """
+    return paths.config_dir() / "vulnscan-grants-revoked"
+
+
 def revoke(grant_id: str) -> bool:
-    """Delete a grant (a narrowing; no signature needed).
+    """Remove a grant from the active directory (a narrowing; no signature needed), archiving its record.
+
+    The archived copy is what a v2 re-issue's ``ancestor`` is checked against (S3: revoke first, then sign).
 
     Args:
         grant_id: Grant to remove.
@@ -251,7 +286,12 @@ def revoke(grant_id: str) -> bool:
     if not _ID_RE.match(grant_id):
         return False
     path = grants_dir() / f"{grant_id}.json"
-    if path.is_file():
+    if path.is_file() and not path.is_symlink():
+        archive = revoked_dir()
+        archive.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.replace(path, archive / path.name)   # same config dir: a rename, so it is never in both places
+        return True
+    if path.is_symlink():
         path.unlink()
         return True
     return False
@@ -338,12 +378,22 @@ def verify(record: dict[str, Any], *, now: datetime | None = None) -> None:
     from agentteams.cli.signed_ledger import ed25519_verify
 
     now = now or datetime.now(UTC)
-    if set(record) != {*FIELDS, "signature"}:
+    v2 = grant_v2.is_v2(record)
+    if set(record) != {*FIELDS, *(grant_v2.EXTRA_FIELDS if v2 else ()), "signature"}:
         raise GrantError("unexpected or missing fields")
     if not _ID_RE.match(str(record["grant_id"])):
         raise GrantError("malformed grant_id")
     if set(record["ops"]) - OPS_V1 or not record["ops"]:
         raise GrantError(f"operations not honoured in v1: {sorted(set(record['ops']) - OPS_V1)}")
+    if not v2 and set(record["ops"]) & grant_v2.V2_OPS:
+        raise GrantError(f"operations not honoured in v1: {sorted(set(record['ops']) & grant_v2.V2_OPS)} "
+                         "(they need a v2 grant)")
+    if v2:
+        try:
+            grant_v2.check_shape(record, ops=set(record["ops"]), hosts=list(record["hosts"]),
+                                 max_uses=int(record["max_uses"]))
+        except ValueError as exc:
+            raise GrantError(f"v2 bounds: {exc}") from exc
     issued = datetime.fromisoformat(record["issued"])
     expires = datetime.fromisoformat(record["expires"])
     if expires - issued > timedelta(days=MAX_DAYS, minutes=1) or not 1 <= int(record["max_uses"]) <= MAX_USES:
@@ -414,6 +464,11 @@ def _scan(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], list[st
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
             verify(rec, now=now)
+            if (revoked_dir() / f"{rec['grant_id']}.json").exists():   # Rule 12: a revoked grant moved back
+                raise GrantError(f"{rec['grant_id']} was revoked (it is in {revoked_dir()}): never honoured again")
+            if grant_v2.is_v2(rec) and rec["ancestor"] and (why := grant_v2.ancestor_problem(
+                    rec["ancestor"], grants_dir=d, revoked_dir=revoked_dir(), ancestor_ok=ancestor_ok)):
+                raise GrantError(f"its lineage no longer holds: {why}")
         except (OSError, ValueError, TypeError, KeyError) as exc:
             problems.append(f"{f.name}: {exc}")
             continue
@@ -505,6 +560,13 @@ def covers(record: dict[str, Any], op: str, target: str) -> bool:
 
     if op not in record["ops"]:
         return False
+    if op == "server-apply":   # host:level[:path] — the pair, and for remove-path the exact path, must be signed
+        host, _, rest = target.partition(":")
+        level, _, path = rest.partition(":")
+        return (grant_v2.is_v2(record) and host in record["hosts"] and f"{host}:{level}" in record["server_levels"]
+                and (f"{host}:{path}" in record["remove_paths"] if level == "remove-path" else not path))
+    if op == "runtime-patch":
+        return grant_v2.is_v2(record) and target in record["runtimes"]
     if op.startswith("server-"):
         return target in record["hosts"]
     return any(path_within(target, root) for root in record["repo_roots"])
@@ -534,7 +596,7 @@ def previous_grant() -> dict[str, Any] | None:
 
 
 def _signed_record(path: Path) -> dict[str, Any] | None:
-    """Return one grant file's record when it verifies as of its own issue time, else None."""
+    """Return one grant file's record when it verifies as of its own issue time and is named for itself, else None."""
     if file_problem(path):
         return None
     try:
@@ -542,7 +604,22 @@ def _signed_record(path: Path) -> dict[str, Any] | None:
         verify(rec, now=datetime.fromisoformat(rec["issued"]))
     except (OSError, ValueError, TypeError, KeyError):   # GrantError is a ValueError
         return None
-    return rec
+    return rec if rec.get("grant_id") == path.stem else None
+
+
+def ancestor_ok(path: Path, grant_id: str) -> bool:
+    """Return whether the archived ``path`` is grant ``grant_id``, validly signed (a v2 re-issue's ancestor check).
+
+    Args:
+        path: ``<revoked_dir>/<grant_id>.json``.
+        grant_id: The ancestor id the re-issue names.
+
+    Returns:
+        True when the file's record verifies as of its issue time and its ``grant_id`` is ``grant_id`` and the
+        file's name.
+    """
+    rec = _signed_record(path)
+    return rec is not None and rec["grant_id"] == grant_id == path.stem
 
 
 def registry_proposal(entries: list[Any], protected: dict[str, Path]) -> tuple[dict[str, str], list[str]]:

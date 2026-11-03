@@ -643,7 +643,8 @@ the newest is open (only untouched PRs it opened itself; never a merge). After e
 when you want to merge.
 
 Add `--op server-audit --op server-dryrun --host web1` to let the agents audit and dry-run servers.
-`merge` and `server-apply` are refused: no grant can cover them. At most two grants may be valid at
+`merge` is refused: no grant can cover it. `server-apply` and `runtime-patch` change hosts; only a v2 grant covers
+them, and only you run them ([Changing a host](#changing-a-host-server-apply-and-runtime-patch)). At most two grants may be valid at
 once: with three, vulnscan refuses all of them, so `grant sign` refuses to sign a third
 (`refused: 2 valid grant(s) already …`). Revoke the first one once the new grant is installed. `grant list` prints each valid
 grant as JSON; take the first grant's `grant_id` from it:
@@ -870,6 +871,149 @@ A void entry hides nothing: the finding is graded normally and the report gains 
 
 Entries apply to the `daily` run only. An ad-hoc `scan` or `inventory` ignores them, so its exit code can be 1
 where the daily run's is 0 for the same findings.
+
+### Changing a host: server-apply and runtime-patch
+
+Two operations change a machine rather than a repository. Agents never request them, and a spooled request for
+either is refused. You run each one with `vulnscan act`:
+
+- `server-apply HOST:LEVEL` applies one level to one server.
+- `runtime-patch FORMULA` upgrades one Homebrew runtime on this Mac.
+
+| Level | What it changes | Restarts |
+|---|---|---|
+| `l2-security` | Distro security updates only, each at the version the plan shows. It uses the cached package lists. It never reboots and never installs non-security updates. needrestart's apt hook is suspended. | Only the units the grant lists, and only if they still use replaced libraries. It runs only inside the restart window, because an rpm package's own scriptlets can restart a service |
+| `l4-pins` | The `apps.conf` pins for the host. A pin that crosses a major version runs only if the grant allows it for that unit. | The entry's own unit |
+| `py-venv` | An `apps.conf` entry whose flags include `--venv-base`. A new venv is built beside the old one, holding the old venv's packages with the pins applied, then switched in. The old venv is kept. | The entry's own unit |
+| `remove-path` | One exact path, which is **quarantined, never deleted**. A tarball is written first. The path is then renamed into `/var/backups/agentteams/quarantine/<name>-<time>/` with a `RESTORE.manifest`. The path must be on the same filesystem as the quarantine (no copy and delete), every ancestor up to `/` must be root-owned and not group- or world-writable, and the checks run again immediately before the move. | None |
+
+#### Re-issue the server grant (once)
+
+A v2 grant signs more than a v1 grant:
+
+- the host×level pairs;
+- the units `l2-security` may restart;
+- the restart window (UTC), outside which no level that restarts a service runs;
+- the sha256 of the `apps.conf` you reviewed;
+- the units whose pins may cross a major version;
+- the exact paths `remove-path` may quarantine.
+
+A server grant that names `server-apply` holds server operations only and lasts at most 30 days. Its
+`--max-uses` (at most 20) counts `server-apply` uses only. Its `server-audit` / `server-dryrun` uses count against a
+separate signed `--max-read-uses` (at most 500), so the daily audits never use up the apply cap. Two grants are
+already in force, so a third would make vulnscan refuse all of them. The server grant is therefore **re-issued**:
+
+1. Validate the new record with `grant sign … --check-only`. The old grant stays in force if it is refused.
+2. Revoke the old grant. `grant revoke` moves the record to `<config>/vulnscan-grants-revoked/`.
+3. Sign the new grant with `--ancestor <old id>`.
+
+`grant sign` refuses an ancestor that is still installed, and one that is not that grant, validly signed and
+archived. The lineage is checked again every time grants are loaded: moving the old file back un-revokes nothing,
+and both grants are refused.
+
+```bash
+python -m agentteams.vulnscan grant revoke --grant-id <old server grant id>
+AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
+python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 30 --max-uses 20 --max-read-uses 500 \
+    --governance-dir <the old grant's governance_dir> --ancestor <old server grant id> \
+    --op server-audit --op server-dryrun --op server-apply --host web1 \
+    --level web1:l2-security --level web1:l4-pins --level web1:remove-path \
+    --restart-unit web1:nginx.service --restart-window 08:00-11:00 --apps-conf-sha256 auto \
+    --remove-path web1:/opt/old-app.disabled-20261101
+```
+
+`--apps-conf-sha256 auto` signs the sha256 of the current `apps.conf`, so review that file first. If you change
+`apps.conf` later, `l4-pins` and `py-venv` are refused until you sign again. The per-operator script
+`tmp/by-week/2026-W45/vfr-s3-grant-reissue.sh` walks you through this re-issue, asking before each step.
+
+#### Record a remove-path clearance (C-5, once per path)
+
+`remove-path` runs only after `@security` has recorded a clearance for that exact host and path. The clearance goes
+in the decision log of the grant's governance directory, `references/security-decisions.log.csv`. The row's
+`decision` column is the action id; nothing may be added after it, because a suffixed id never clears the bare path:
+
+```text
+server-apply:remove-path:<host>:<exact path>
+```
+
+The other columns:
+
+- `status`: `PASS` or `CONDITIONAL PASS`.
+- `conditions_verified`: `verified`. This is required even for a PASS.
+- `owner`: an approved security author.
+- `signature`: the row must be signed when the log signs rows.
+
+The executor reads the row read-only and refuses on any of these:
+
+- an unretracted HALT on that id;
+- a missing row;
+- a row that is pending;
+- a row whose id is decorated (has a suffix).
+
+A path named `<name>.disabled-YYYYMMDD` is also refused unless the fresh L1 audit at the start of the op labels that
+exact path `SCOPE <path> disabled`, which confirms the tree is inert. The clearance is read, not consumed, so the
+ledger refuses any later attempt on the same host and path: after a quarantine, after a failed attempt, and after an
+attempt that never finished (a `begun` row with no `done` or `failed`). Retrying, restoring and emptying the
+quarantine are your decisions; nothing in agentteams deletes it.
+
+#### Run a level
+
+```bash
+python -m agentteams.vulnscan act server-apply web1:l2-security
+python -m agentteams.vulnscan act server-apply web1:remove-path:/opt/old-app.disabled-20261101
+```
+
+`act` runs only on a terminal (stdin and stdout). This keeps an unattended job or an agent's shell from confirming;
+it is not an identity check. It first shows the plan: the PLAN lines and their sha256. Nothing changes and no grant
+use is reserved at this stage. It then asks `Apply exactly this plan?`. `--confirm-plan-sha256 <digest>` additionally
+requires the plan to have that digest; it never replaces the question. If you confirm, the executor does the
+following:
+
+1. Writes the `begun` row.
+2. Runs a fresh L1 audit.
+3. Runs the plan again. It must still have the digest you confirmed.
+4. Records the pre-state in a ledger `note` row, with the file's sha256. The pre-state is `dpkg -l` / `rpm -qa`,
+   `pip freeze`, or the path's listing.
+5. Runs `run-host.sh HOST --level L --apply --expect-digest <digest>`. `run-host.sh` and the level script compute
+   the plan once more on the host just before they change anything, and abort with exit 5 if it differs.
+6. Runs a post-change L1 audit.
+
+The executor stops on any of these results:
+
+- **Exit 4 anywhere (compromise indicators), the preview included:** it opens an escalation that blocks every
+  operation.
+- **Once the apply has started, any failure:** it opens an escalation that stops that host. That covers:
+  - a failed step;
+  - a failed health check (exit 6: the pins or venv were restored; exit 7: they were not);
+  - a later step refused or finding its plan changed after an earlier step applied (a partial apply);
+  - an incomplete or worse post-audit;
+  - a timeout;
+  - output that is not UTF-8.
+
+  Only a refusal or a changed plan before any step applied is a plain failure with nothing changed.
+
+The executor never passes `--reboot`, `--all-updates`, `--node-major`, `--allow-fresh` or `--restart-services`, and a
+level never runs L3 or L5.
+
+The health check after a restart uses the `apps.conf` health URL. Without one, it checks that the unit stays active
+and listens on the same TCP ports again.
+
+#### runtime-patch
+
+The repository grant must carry `--op runtime-patch --runtime <formula>`. Re-issue it the same way, with
+`--ancestor`. Then:
+
+```bash
+python -m agentteams.vulnscan act runtime-patch node@22
+```
+
+The latest completed scan must have flagged that formula as a this-machine runtime. The dry run must upgrade exactly
+that formula, at the same major version, to its release line's latest patch released at least 14 days ago (S-10;
+an unknown release date refuses). The formula must come from `homebrew/core`, be installed and linked, not be pinned,
+and have a bottle for this Mac. Nothing is built from source, no tap is added and sudo is never used. `python*`,
+`git`, `gh`, `openssh` and `gnupg` are refused, as is any formula that holds the executor's own interpreter or tools,
+or that they depend on (`openssl@3`, `ca-certificates`, …). After the upgrade, the formula's linked version must be the
+planned one, poured from a bottle; otherwise the executor opens an escalation.
 
 ### Reports, and publishing them (optional)
 

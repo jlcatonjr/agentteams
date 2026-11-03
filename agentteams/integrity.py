@@ -227,6 +227,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/npm_ops.py",          # stage-fix: npm_ops.npm_moves runs those moves (fail-closed checks)
     "agentteams/vulnscan/image_fix.py",        # stage-image: the FROM tag planner and validate_diff's check of it
     "agentteams/vulnscan/ops.py",              # REPO_OPS: which ops get executor_guard and a repo-root grant
+    # vfr-s / vfr-d.D4 (2026-11-02, @security Phase 2 design row): the host-changing ops and the v2 grant that bounds them
+    "agentteams/vulnscan/grant_v2.py",         # v2 grant fields: host x level pairs, restart units/window, paths, runtimes
+    "agentteams/vulnscan/server_apply.py",     # server-apply: digests, escalations, the per-path C-5 gate, quarantine
+    "agentteams/vulnscan/runtime_patch.py",    # runtime-patch: one homebrew/core bottle, same major, no sudo
+    "agentteams/vulnscan/host_change.py",      # the operator's preview-then-confirm for both
+    "agentteams/vulnscan/host_plan.py",        # the confirmed plan's digest (twin of the kit's plan_digest)
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
     "agentteams/vulnscan/handoff_lapse.py",    # B1b/OD10: when an own-pr verdict stops deferring open-pr
@@ -301,6 +307,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/data/server_kit/L3-node-runtime.sh",
     "agentteams/data/server_kit/L4-python-app.sh",
     "agentteams/data/server_kit/L5-containers.sh",
+    "agentteams/data/server_kit/L6-py-venv.sh",       # server-apply py-venv (vfr-s S2): venv beside, switch, revert
+    "agentteams/data/server_kit/L7-remove-path.sh",   # server-apply remove-path: quarantine only, never delete
     # M1: remote.sh embeds the IOC lists into the root-run payload; an emptied list silently stops detection.
     "agentteams/data/server_kit/ioc-2026-10-litellm-1.107.0.txt",
     "agentteams/data/vulnscan_agent/Dockerfile",

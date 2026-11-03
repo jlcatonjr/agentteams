@@ -17,6 +17,10 @@ REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "stage-c
 #: in-major ``cargo update --precise`` fixes on a ``Cargo.lock``, :mod:`.cargo_fix`). One staged fix per repository
 #: at a time, whichever op staged it.
 STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "stage-cargo")
+#: Host-changing ops (vfr-s ``server-apply``, vfr-d.D4 ``runtime-patch``): the operator runs them with ``vulnscan act``
+#: after confirming the dry-run plan's digest. A spooled (agent) request for one is refused, and the MCP server never
+#: offers them.
+OPERATOR_ONLY_OPS: tuple[str, ...] = ("server-apply", "runtime-patch")
 
 #: A PR URL the executor records for ``open-pr``: ``https://HOST/OWNER/REPO/pull/N`` (groups: host, owner, repo, n).
 PR_URL = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")
