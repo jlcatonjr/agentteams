@@ -21,6 +21,7 @@ Stdlib only.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from agentteams.cli.frozen_surfaces import frozen_owned_paths, touches_frozen
@@ -74,6 +75,27 @@ def frozen_refusal(manifest: dict, framework_id: str, output_dir: Path) -> str |
     return (f"Error: the '{owner}' surface is frozen (frozen_surfaces in the brief) and owns {output_dir}, so nothing "
             f"is rendered or written for '{framework_id}' there. Unfreezing is an operator decision.")
 
+
+def refuse_if_frozen(manifest: dict, framework_id: str, output_dir: Path) -> bool:
+    """Print :func:`frozen_refusal`'s message to stderr and return True when the render must stop.
+
+    Args:
+        manifest: The team manifest (``frozen_surfaces`` from the brief).
+        framework_id: The framework being rendered.
+        output_dir: The agents output directory.
+
+    Returns:
+        True when the caller must exit 1 before writing anything.
+
+    Raises:
+        Nothing.
+    """
+    message = frozen_refusal(manifest, framework_id, output_dir)
+    if message is None:
+        return False
+    sys.stdout.flush()  # keep the refusal after the banner already on stdout
+    print(message, file=sys.stderr)
+    return True
 
 def drop_frozen(manifest: dict, rendered: list[tuple[str, str]], output_dir: Path, *,
                 quiet: bool = False) -> list[tuple[str, str]]:
@@ -157,4 +179,4 @@ def prunable(manifest: dict, removed: list[dict], output_dir: Path) -> list[dict
     return [f for f in removed if f["path"] in kept]
 
 
-__all__ = ["drop_frozen", "exempt_frozen", "frozen_refusal", "prunable"]
+__all__ = ["drop_frozen", "exempt_frozen", "frozen_refusal", "prunable", "refuse_if_frozen"]

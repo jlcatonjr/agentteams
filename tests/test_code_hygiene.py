@@ -875,7 +875,9 @@ CEILING_WARN_MARGIN = 25
 #: and was baselined here as a minimal unblock by the framework-conformance PR (#63). It was carved
 #: back down the same day — the recipe-emission helpers moved to `frameworks/goose_recipe_emit.py`
 #: (goose.py 979 -> ~796) — so the entry came out and the baseline is empty again, the chosen state.
-CEILING_MARGIN_BASELINE: dict[str, int] = {}
+#: release/1.0 only (1.0.6, 2026-11-03): the frozen_surfaces and S-10 carve-out backports add seven wiring lines to
+#: cli/generate.py (973 -> 980). A patch release does not carve unrelated code; main carves it (973 there).
+CEILING_MARGIN_BASELINE: dict[str, int] = {"agentteams/cli/generate.py": 980}
 
 
 def _crowded_modules() -> dict[str, int]:

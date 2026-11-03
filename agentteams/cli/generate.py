@@ -39,7 +39,8 @@ from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
-from agentteams.cli.frozen_render import drop_frozen, frozen_refusal, prunable
+from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
+from agentteams.cli.s10_exempt_gate import authorize_into
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
@@ -182,9 +183,7 @@ def _run_generate_inner(
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
-    if not args.check and (frozen_msg := frozen_refusal(manifest, framework_id, output_dir)) is not None:
-        sys.stdout.flush()  # before anything is written: the build log, backups and post-build files included
-        print(frozen_msg, file=sys.stderr)
+    if not args.check and refuse_if_frozen(manifest, framework_id, output_dir):  # before anything is written
         return 1
 
     from agentteams.cli.artifacts import (
@@ -216,6 +215,7 @@ def _run_generate_inner(
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
+    authorize_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # Rule 15: S-10 carve-out
 
     print(f"  Output directory: {output_dir}")
 
