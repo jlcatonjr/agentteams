@@ -450,9 +450,10 @@ def _advise_codex_projection_outside_session(
 def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: Path) -> tuple[str, ...]:
     """Compute the present sibling team dirs onto the manifest (transient) and print the advisories.
 
-    The single place the transient ``SIBLING_DENY_DIRS_KEY`` is set: any input-supplied value is
-    discarded first, and the computed tuple is what the Claude block's ``denyWrite`` and the goose
-    Seatbelt ``.github`` ancestor literals read. Runs on every generate/update/heal/``--check``.
+    Where generation sets the transient ``SIBLING_DENY_DIRS_KEY`` (pinned-sync projection sets it in
+    ``multi_sync._projected_privilege_manifest``): any input-supplied value is discarded first, and
+    the computed tuple is what the Claude block's ``denyWrite`` and the goose Seatbelt ``.github``
+    ancestor literals read. Runs on every generate/update/heal/``--check``.
 
     Args:
         manifest: The team manifest (mutated: the transient key).
