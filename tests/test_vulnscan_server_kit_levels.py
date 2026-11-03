@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import grant_v2, server_apply
+from agentteams.vulnscan import grant_v2
+from agentteams.vulnscan.host_plan import plan_sha256
 
 KIT_SRC = Path(__file__).resolve().parents[1] / "agentteams" / "data" / "server_kit"
 BASH = os.environ.get("AGENTTEAMS_TEST_BASH") or ("/bin/bash" if Path("/bin/bash").is_file() else
@@ -121,9 +122,9 @@ def test_run_host_level_never_runs_on_all(kit: Kit) -> None:
 def test_level_plan_prints_the_digest_and_runs_only_that_level(kit: Kit) -> None:
     proc = kit.run("--level", "l2-security", "--restart-unit", "nginx.service")
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
-    digest = server_apply.plan_sha256(PLAN)
+    digest = plan_sha256(PLAN)
     assert f"PLANDIGEST\tl2-security\t{digest}" in proc.stdout
-    assert server_apply.plan_sha256(proc.stdout) == digest           # the executor recomputes the same digest
+    assert plan_sha256(proc.stdout) == digest           # the executor recomputes the same digest
     assert kit.calls() == [("L1-audit.sh", []), ("L2-os-patch.sh", ["--level", "--restart-unit", "nginx.service"])]
 
 
@@ -134,7 +135,7 @@ def test_level_apply_refuses_a_changed_plan_before_any_change(kit: Kit) -> None:
 
 
 def test_level_apply_passes_the_step_digest_and_reaudits(kit: Kit) -> None:
-    digest = server_apply.plan_sha256(PLAN)
+    digest = plan_sha256(PLAN)
     proc = kit.run("--level", "l2-security", "--apply", "--expect-digest", digest)
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     got = kit.calls()
@@ -145,7 +146,7 @@ def test_level_apply_passes_the_step_digest_and_reaudits(kit: Kit) -> None:
 
 @pytest.mark.parametrize("rc,want", [("6", 6), ("7", 7), ("4", 4), ("9", 3), ("1", 0)])
 def test_level_apply_exit_codes(kit: Kit, rc: str, want: int) -> None:
-    proc = kit.run("--level", "l2-security", "--apply", "--expect-digest", server_apply.plan_sha256(PLAN),
+    proc = kit.run("--level", "l2-security", "--apply", "--expect-digest", plan_sha256(PLAN),
                    FAKE_APPLY_RC=rc)
     assert proc.returncode == (1 if rc == "1" else want), (proc.stdout, proc.stderr)
     assert [s for s, _ in kit.calls()][-1] == "L1-audit.sh"          # the post-change audit always runs
@@ -213,7 +214,9 @@ def test_shell_copies_of_the_shared_functions_are_identical() -> None:
     assert len(digests) == 1
     runhost = (KIT_SRC / "run-host.sh").read_text()
     inline = re.search(r"\n  plan_digest\(\)\{\n(.*?\n)  \}\n", runhost, re.S)
-    assert inline and "\n".join(ln[2:] for ln in inline[1].splitlines()) + "\n" in next(iter(digests))
+    assert inline, "run-host.sh has no plan_digest"
+    body = "plan_digest(){\n" + "".join(ln[2:] + "\n" for ln in inline[1].splitlines()) + "}\n"
+    assert body == next(iter(digests))        # exact: the same function, indented by two in run-host.sh
     assert len({_block(texts[n], "health helpers") for n in ("L2-os-patch.sh", "L4-python-app.sh", "L6-py-venv.sh")}) == 1
 
 
@@ -223,7 +226,7 @@ def test_shell_plan_digest_equals_the_python_one() -> None:
     for text in (sample, "", "no plan\n"):
         proc = subprocess.run([BASH, "-c", f"TAB=$(printf '\\t')\n{fn}\nplan_digest"], input=text, capture_output=True,
                               text=True, check=True)
-        assert proc.stdout.strip() == server_apply.plan_sha256(text), text
+        assert proc.stdout.strip() == plan_sha256(text), text
 
 
 def test_l7_trust_roots_match_grant_v2() -> None:
@@ -235,12 +238,15 @@ def test_l7_trust_roots_match_grant_v2() -> None:
 
 
 @pytest.mark.parametrize("path", ["/root", "/root/anaconda3.disabled-20261101", "/".join(("", "home", "u")),
+                                  "//opt/x", "/usr/local/bin/x", "/usr/local/opt/x", "/usr/local/libexec",
+                                  "/".join(("", "home", "u", ".config", "agentteams", "k")),
+                                  "/".join(("", "home", "u", ".config")),
                                   "/".join(("", "home", "u", ".local")), "/".join(("", "home", "u", ".ssh", "x")),
                                   "/etc/x/y", "/usr/local", "/usr/local/lib/python3.9", "/usr/lib/x", "/var/backups",
                                   "/var/backups/agentteams/q", "/opt/a//b", "/opt/a/", "/opt/a b", "/opt/./a"])
 def test_l7_trust_rule_matches_python(path: str) -> None:
     text = (KIT_SRC / "L7-remove-path.sh").read_text()
-    lib = _block(text, "trust roots") + text[text.index("trust_problem(){"): text.index("owner_mode(){")]
+    lib = _block(text, "trust roots") + text[text.index("relation(){"): text.index("owner_mode(){")]
     proc = subprocess.run([BASH, "-c", f"set -f\n{lib}\ntrust_problem \"$1\"", "x", path], capture_output=True,
                           text=True, check=False)
     assert bool(proc.stdout.strip()) == bool(grant_v2.trust_root_problem(path)), (path, proc.stdout)
@@ -261,9 +267,10 @@ def l7(tmp_path: Path) -> dict:
     (tree / "lib").mkdir(parents=True)
     (tree / "lib" / "f.py").write_text("x = 1\n")
     q = tmp_path.resolve() / "quarantine"
+    mounts = tmp_path / "mounts"
+    mounts.write_text("/dev/disk1 / apfs rw 0 0\n")
     script = tmp_path / "L7.sh"
-    script.write_text((KIT_SRC / "L7-remove-path.sh").read_text().replace(
-        'QROOT="/var/backups/agentteams/quarantine"', f'QROOT="{q}"'))
+    script.write_text(l7_script(q=q, mounts=mounts, top=tmp_path.resolve()))
     bindir = tmp_path / "bin"
     bindir.mkdir()
     _mv_fake(bindir)
@@ -272,7 +279,19 @@ def l7(tmp_path: Path) -> dict:
     def run(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run([BASH, str(script), *args], capture_output=True, text=True, env=env, timeout=60,
                               check=False)
-    return {"tree": tree, "q": q, "run": run, "tmp": tmp_path.resolve()}
+    return {"tree": tree, "q": q, "run": run, "tmp": tmp_path.resolve(), "script": script, "mounts": mounts,
+            "bin": bindir, "env": env}
+
+
+def l7_script(*, q: Path, mounts: Path, top: Path, uid: int | None = None) -> str:
+    """L7 with its host constants moved into tmp: quarantine root, mounts table, ancestor check's top and root uid."""
+    text = (KIT_SRC / "L7-remove-path.sh").read_text()
+    for old, new in (('QROOT="/var/backups/agentteams/quarantine"', f'QROOT="{q}"'),
+                     ('MOUNTS="/proc/mounts"', f'MOUNTS="{mounts}"'), ('ANCESTOR_TOP="/"', f'ANCESTOR_TOP="{top}"'),
+                     ("ROOT_UID=0", f"ROOT_UID={os.getuid() if uid is None else uid}")):
+        assert text.count(old) == 1, old
+        text = text.replace(old, new)
+    return text
 
 
 def test_l7_plan_then_quarantine_with_archive_and_restore_manifest(l7: dict) -> None:
@@ -280,7 +299,7 @@ def test_l7_plan_then_quarantine_with_archive_and_restore_manifest(l7: dict) -> 
     plan = l7["run"]("--level", "--path", tree)
     assert plan.returncode == 0, (plan.stdout, plan.stderr)
     assert "PLAN ONLY" in plan.stdout and l7["tree"].is_dir()
-    digest = server_apply.plan_sha256(plan.stdout)
+    digest = plan_sha256(plan.stdout)
     bad = l7["run"]("--level", "--path", tree, "--apply", "--expect-digest", "c" * 64)
     assert bad.returncode == 5 and l7["tree"].is_dir() and not l7["q"].exists()
     done = l7["run"]("--level", "--path", tree, "--apply", "--expect-digest", digest)
@@ -322,7 +341,7 @@ FAKE_COMMON = {
     "sleep": "#!/bin/sh\nexit 0\n",
     "hostname": "#!/bin/sh\necho host1\n",
     "getent": '#!/bin/sh\necho "svc:x:1:1::$FAKE_HOME:/bin/sh"\n',
-    "runuser": '#!/bin/bash\nwhile [ "$1" != "--" ]; do shift; done; shift; exec "$@"\n',
+    "runuser": '#!/bin/bash\nwhile [ "$1" != "--" ]; do shift; done; shift; export FAKE_RUNAS=svc; exec "$@"\n',
     "curl": "#!/bin/sh\nexit 0\n",
 }
 
@@ -339,7 +358,8 @@ def _host(tmp_path: Path, extra: dict[str, str]) -> dict[str, str]:
             "FAKE_HOME": str(tmp_path)}
 
 
-APT = ('#!/bin/bash\necho "apt-get $*" >> "$FAKE_LOG"\nif [ "$1" = -s ]; then\n'
+APT = ('#!/bin/bash\necho "apt-get $* NR=${NEEDRESTART_SUSPEND:-}/${NEEDRESTART_MODE:-}" >> "$FAKE_LOG"\n'
+       'if [ "$1" = -s ]; then\n'
        "  echo 'Inst libssl3 [3.0.2-1] (3.0.2-2 Ubuntu:22.04/jammy-security [amd64])'\n"
        "  echo 'Inst vim [9.0-1] (9.0-2 Ubuntu:22.04/jammy-updates [amd64])'\n"
        "  echo 'Inst newdep (1.0 Ubuntu:22.04/jammy-security [amd64])'\nfi\nexit 0\n")
@@ -358,20 +378,20 @@ def test_l2_level_plans_security_upgrades_only_and_installs_exactly_them(tmp_pat
     assert plan.returncode == 0, (plan.stdout, plan.stderr)
     assert [ln for ln in plan.stdout.splitlines() if ln.startswith("PLAN")] == ["PLAN\tos\tapt\tlibssl3\t3.0.2-1\t3.0.2-2"]
     assert "PRESTATE\tdpkg\tlibssl3 3.0.2-1" in plan.stdout
-    digest = server_apply.plan_sha256(plan.stdout)
+    digest = plan_sha256(plan.stdout)
     assert _l2(tmp_path, "--level", "--apply", "--expect-digest", "d" * 64).returncode == 5
     assert "install" not in (tmp_path / "log").read_text()
     done = _l2(tmp_path, "--level", "--restart-unit", "nginx.service", "--apply", "--expect-digest", digest)
     assert done.returncode == 0, (done.stdout, done.stderr)
     log = (tmp_path / "log").read_text()
-    assert "install --only-upgrade libssl3=3.0.2-2" in log and "vim" not in log.split("-s upgrade")[-1]
+    assert "install --only-upgrade libssl3=3.0.2-2 NR=1/l" in log and "vim" not in log.split("-s upgrade")[-1]
     assert "restart nginx.service" in log and "restart other.service" not in log
     assert "NEEDS  other.service restart pending" in done.stdout and "update" not in log   # no list refresh
 
 
 def test_l2_level_failed_health_is_exit_7_and_never_reboots(tmp_path: Path) -> None:
     plan = _l2(tmp_path, "--level")
-    digest = server_apply.plan_sha256(plan.stdout)
+    digest = plan_sha256(plan.stdout)
     res = _l2(tmp_path, "--level", "--restart-unit", "nginx.service", "--apply", "--expect-digest", digest,
               FAKE_INACTIVE="1")
     assert res.returncode == 7 and "FAIL" in res.stdout, (res.stdout, res.stderr)
@@ -381,7 +401,7 @@ def test_l2_level_failed_health_is_exit_7_and_never_reboots(tmp_path: Path) -> N
 
 def _fake_python(tmp_path: Path, versions: dict[str, str]) -> Path:
     shows = "".join(f'  {k}) echo "Version: {v}";;\n' for k, v in versions.items())
-    return tool(tmp_path, "fakepy", f'#!/bin/bash\necho "py $*" >> "$FAKE_LOG"\n'
+    return tool(tmp_path, "fakepy", f'#!/bin/bash\necho "py[${{FAKE_RUNAS:-root}}] $*" >> "$FAKE_LOG"\n'
                 f'if [ "$1" = -c ]; then exit 1; fi\nif [ "$1" = -V ]; then echo "Python 3.11.9"; exit 0; fi\n'
                 f'if [ "$1 $2" = "-m pip" ]; then case "$3" in\n  show) case "$4" in\n{shows}  esac;;\n'
                 f'  freeze) echo "idna==3.7"; echo "aiohttp==3.9.0"; echo "six==1.16.0";;\n  esac; exit 0; fi\n'
@@ -425,7 +445,7 @@ def test_l6_builds_beside_switches_and_keeps_the_old_venv(tmp_path: Path) -> Non
     args, env, venv = _l6(tmp_path)
     plan = subprocess.run(args, capture_output=True, text=True, env=env, timeout=60, check=False)
     assert plan.returncode == 0 and "PLAN\tvenv\ta.service\tpin\taiohttp\t3.9.0\t3.14.4" in plan.stdout, plan.stdout
-    digest = server_apply.plan_sha256(plan.stdout)
+    digest = plan_sha256(plan.stdout)
     done = subprocess.run([*args, "--apply", "--expect-digest", digest], capture_output=True, text=True, env=env,
                           timeout=60, check=False)
     assert done.returncode == 0, (done.stdout, done.stderr)
@@ -440,7 +460,7 @@ def test_l6_failed_health_switches_back_and_exits_6(tmp_path: Path) -> None:
     args, env, venv = _l6(tmp_path)
     plan = subprocess.run(args, capture_output=True, text=True, env=env, timeout=60, check=False)
     env = {**env, "FAKE_INACTIVE": "1", "FAKE_INACTIVE_IF_LINK": str(venv)}      # unhealthy only on the new venv
-    res = subprocess.run([*args, "--apply", "--expect-digest", server_apply.plan_sha256(plan.stdout)],
+    res = subprocess.run([*args, "--apply", "--expect-digest", plan_sha256(plan.stdout)],
                          capture_output=True, text=True, env=env, timeout=60, check=False)
     assert res.returncode == 6 and "REVERTED" in res.stdout, (res.stdout, res.stderr)
     assert venv.is_dir() and not venv.is_symlink() and (venv / "pyvenv.cfg").is_file()
@@ -450,3 +470,83 @@ def test_l6_runs_only_under_level(tmp_path: Path) -> None:
     args, env, _ = _l6(tmp_path)
     res = subprocess.run([a for a in args if a != "--level"], capture_output=True, text=True, env=env, timeout=60)
     assert res.returncode == 2 and "only under --level" in res.stdout
+
+
+# ---------------------------------------------------------------- review: L6 as the app user, no package manager
+
+def test_l6_never_runs_the_apps_interpreter_as_root(tmp_path: Path) -> None:
+    args, env, _ = _l6(tmp_path)
+    plan = subprocess.run(args, capture_output=True, text=True, env=env, timeout=60, check=False)
+    subprocess.run([*args, "--apply", "--expect-digest", plan_sha256(plan.stdout)], capture_output=True, text=True,
+                   env=env, timeout=60, check=False)
+    pip_lines = [ln for ln in (tmp_path / "log").read_text().splitlines() if ln.startswith("py[") and "-m pip" in ln]
+    assert pip_lines and all(ln.startswith("py[svc]") for ln in pip_lines), pip_lines
+
+
+def test_l6_refuses_without_a_package_manager_for_its_distro_package(tmp_path: Path) -> None:
+    args, env, venv = _l6(tmp_path)
+    args = [*args, "--distro-pkg", "python3.11"]
+    plan = subprocess.run(args, capture_output=True, text=True, env=env, timeout=60, check=False)
+    assert "PLAN\tvenv\ta.service\tdistro\tpython3.11\tinstall" in plan.stdout, plan.stdout
+    res = subprocess.run([*args, "--apply", "--expect-digest", plan_sha256(plan.stdout)], capture_output=True,
+                         text=True, env=env, timeout=60, check=False)
+    assert res.returncode == 3 and "no apt-get, dnf or yum" in res.stdout and venv.is_dir() and not venv.is_symlink()
+
+
+# ---------------------------------------------------------------- review 6: L7 checks before the move
+
+def _l7_copy(l7: dict, **kw: object) -> Path:
+    script = l7["tmp"] / "L7-variant.sh"
+    text = l7_script(q=l7["q"], mounts=kw.get("mounts", l7["mounts"]), top=l7["tmp"], uid=kw.get("uid"))
+    if kw.get("dev_split"):
+        text = text.replace("dev_of(){ stat -c %d", 'dev_of(){ case "$1" in *quarantine*) echo 2; return;; esac; stat -c %d')
+    script.write_text(text)
+    return script
+
+
+def _run(l7: dict, script: Path, *args: str, path: str | None = None) -> subprocess.CompletedProcess[str]:
+    env = {**l7["env"], "PATH": l7["env"]["PATH"]}
+    return subprocess.run([BASH, str(script), "--level", "--path", path or str(l7["tree"]), *args],
+                          capture_output=True, text=True, env=env, timeout=60, check=False)
+
+
+def test_l7_refuses_without_a_readable_mounts_table_or_with_a_mount_inside(l7: dict) -> None:
+    res = _run(l7, _l7_copy(l7, mounts=l7["tmp"] / "no-such-mounts"))
+    assert res.returncode == 2 and "cannot read" in res.stdout
+    (l7["tmp"] / "mounts2").write_text(f"/dev/x {l7['tree']}/lib ext4 rw 0 0\n")
+    res = _run(l7, _l7_copy(l7, mounts=l7["tmp"] / "mounts2"))
+    assert res.returncode == 2 and "mount point" in res.stdout
+
+
+def test_l7_refuses_an_ancestor_a_non_root_user_could_write(l7: dict) -> None:
+    res = _run(l7, _l7_copy(l7, uid=os.getuid() + 1))        # the ancestors' owner is not "root"
+    assert res.returncode == 2 and "owned by uid" in res.stdout
+    parent = l7["tree"].parent
+    parent.chmod(0o777)
+    try:
+        res = _run(l7, _l7_copy(l7))
+        assert res.returncode == 2 and "group/world-writable" in res.stdout
+    finally:
+        parent.chmod(0o755)
+
+
+def test_l7_refuses_a_move_across_filesystems(l7: dict) -> None:
+    l7["q"].mkdir()                                            # the quarantine root exists, on "another" device
+    res = _run(l7, _l7_copy(l7, dev_split=True))
+    assert res.returncode == 2 and "another filesystem" in res.stdout
+
+
+def test_l7_checks_again_immediately_before_the_move(l7: dict) -> None:
+    script = _l7_copy(l7)
+    plan = _run(l7, script)
+    digest = plan_sha256(plan.stdout)
+    parent = l7["tree"].parent
+    # a tar that, while archiving, makes the parent world-writable: the re-check before the move must catch it
+    tool(l7["bin"], "tar", f'#!/bin/bash\n/usr/bin/tar "$@"; rc=$?\ncase "$*" in *-cpzf*) chmod 777 "{parent}";; esac\n'
+                           'exit $rc\n')
+    try:
+        res = _run(l7, script, "--apply", "--expect-digest", digest)
+        assert res.returncode == 2 and "group/world-writable" in res.stdout, (res.stdout, res.stderr)
+        assert l7["tree"].is_dir()                                    # nothing moved
+    finally:
+        parent.chmod(0o755)

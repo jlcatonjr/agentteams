@@ -50,7 +50,7 @@ unit_ports(){   # TCP ports the unit's main process listens on, one per line, so
   ss -Hltnp 2>/dev/null | awk -v p="pid=$pid," 'index($0, p) {n=split($4, a, ":"); print a[n]}' | sort -un
 }
 unit_healthy(){   # $1 unit, $2 ports it listened on before: active 3 checks running, then each port listening again
-  local u="$1" before="$2" i ok=0 now p
+  local u="$1" before="$2" i ok=0 now p missing=""
   for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 2
     systemctl is-active --quiet "$u" || { echo "FAIL   $u not active"; return 1; }
@@ -91,7 +91,7 @@ plan(){
   printf 'PLAN\tvenv\t%s\tbase\t%s\n' "$UNIT" "$BASE"
   for p in ${PINS[@]+"${PINS[@]}"}; do
     name="${p%%==*}"; name="${name%%\[*}"; want="${p##*==}"
-    have=$("$PY" -m pip show "$name" 2>/dev/null | awk '/^Version:/{print $2}')
+    have=$("${ASU[@]}" "$PY" -m pip show "$name" 2>/dev/null | awk '/^Version:/{print $2}')
     if [ -n "$have" ] && [ "$(major_of "$have")" != "$(major_of "$want")" ] && ! $MAJOR; then
       echo "REFUSED $name $have -> $want crosses a major version; the signed grant does not allow it for $UNIT" >&2
       return 2
@@ -117,11 +117,15 @@ main(){
   systemctl cat "$UNIT" >/dev/null 2>&1 || die "unit $UNIT not found" 2
   [ -n "$AS" ] || AS=$(stat -c %U "$DIR")
   AS_HOME=$(getent passwd "$AS" | cut -d: -f6)
+  [ -n "$AS_HOME" ] || die "no such user $AS" 2
+  # The app's venv is writable by the app user: its interpreter never runs as root (pip show/freeze included).
+  ASU=(runuser -u "$AS" -- env HOME="$AS_HOME")
+  trap 'rm -f -- "$VENV.agentteams-tmp"' EXIT   # a switch interrupted between ln and mv leaves no stray link
   echo "host: $(hostname)  unit: $UNIT  venv: $VENV  base: $BASE  as: $AS  mode: $($APPLY && echo APPLY || echo PLAN)"
   local lplan; lplan=$(plan) || exit 2
   printf '%s\n' "$lplan"
   if ! $APPLY; then
-    "$PY" -m pip freeze 2>/dev/null | sed "s/^/PRESTATE${TAB}venv${TAB}${UNIT}${TAB}/"
+    "${ASU[@]}" "$PY" -m pip freeze 2>/dev/null | sed "s/^/PRESTATE${TAB}venv${TAB}${UNIT}${TAB}/"
     printf 'PRESTATE\tvenv\t%s\tpath %s -> %s\n' "$UNIT" "$VENV" "$(readlink "$VENV" 2>/dev/null || echo directory)"
     printf '\nPLAN ONLY — nothing changed.\n'; return 0
   fi
@@ -132,16 +136,18 @@ main(){
   if [ -n "$DPKG" ] && printf '%s\n' "$lplan" | grep -q "${TAB}distro${TAB}.*${TAB}install$"; then
     say "Installing the distro package $DPKG"
     if command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get -y install "$DPKG" || die "apt-get install $DPKG"
-    else "$(command -v dnf || command -v yum)" -y install "$DPKG" || die "install $DPKG"; fi
+    elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
+      "$(command -v dnf || command -v yum)" -y install "$DPKG" || die "install $DPKG"
+    else die "no apt-get, dnf or yum to install $DPKG"; fi
   fi
   [ -x "$BASE" ] || die "base interpreter $BASE is not executable"
   local ts; ts=$(date -u +%Y%m%d%H%M%S)
-  local new="$VENV.agentteams-$ts" as=(runuser -u "$AS" -- env HOME="$AS_HOME")
+  local new="$VENV.agentteams-$ts" as=("${ASU[@]}")
   say "Building $new"
   "${as[@]}" "$BASE" -m venv "$new" || die "venv creation failed (old venv untouched)"
   local req="$new/agentteams-requirements.txt" names=() n
   for p in "${PINS[@]}"; do n="${p%%==*}"; names+=("$(printf '%s' "${n%%\[*}" | tr 'A-Z_.' 'a-z--')"); done
-  { "$PY" -m pip freeze 2>/dev/null | grep -E '^[A-Za-z0-9][A-Za-z0-9._-]*==' | while IFS= read -r line; do
+  { "${ASU[@]}" "$PY" -m pip freeze 2>/dev/null | grep -E '^[A-Za-z0-9][A-Za-z0-9._-]*==' | while IFS= read -r line; do
       n=$(printf '%s' "${line%%==*}" | tr 'A-Z_.' 'a-z--'); keep=true
       for x in "${names[@]}"; do [ "$n" = "$x" ] && keep=false; done
       $keep && printf '%s\n' "$line"

@@ -66,7 +66,7 @@ from typing import Any, NamedTuple
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
 from agentteams.vulnscan import executor_pr, executor_supersede, image_fix, npm_major, open_prs, report_store
-from agentteams.vulnscan import handoff_lapse, repo_alias, retry_guard
+from agentteams.vulnscan import grant_v2, handoff_lapse, repo_alias, retry_guard
 from agentteams.vulnscan import cargo_fix, subproc_confine, subproc_confine_ssh, writer_prs
 from agentteams.vulnscan.executor_env import (  # leaf: re-exported for callers and tests (H2)
     GIT_IDENTITY,
@@ -249,7 +249,7 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
             raise ExecError(why)
     lapse = handoff_lapse.gate(op, Path(target), cfg)   # H3: the orchestrator approves first (B1b: or own-pr lapsed)
     grants, problems = grant.load_active()
-    usable = [g for g in grants if grant.covers(g, op, target) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
+    usable = [g for g in grants if grant.covers(g, op, target) and grant_v2.uses_left(g, op, rows)]
     if not usable:
         why = "; ".join(problems) if problems else "no valid grant covers it, or its uses are exhausted"
         raise ExecError(f"not authorized: {op} {target}: {why}")

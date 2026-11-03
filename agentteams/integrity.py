@@ -232,6 +232,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/server_apply.py",     # server-apply: digests, escalations, the per-path C-5 gate, quarantine
     "agentteams/vulnscan/runtime_patch.py",    # runtime-patch: one homebrew/core bottle, same major, no sudo
     "agentteams/vulnscan/host_change.py",      # the operator's preview-then-confirm for both
+    "agentteams/vulnscan/host_plan.py",        # the confirmed plan's digest (twin of the kit's plan_digest)
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
     "agentteams/vulnscan/handoff_lapse.py",    # B1b/OD10: when an own-pr verdict stops deferring open-pr

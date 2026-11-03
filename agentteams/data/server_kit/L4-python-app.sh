@@ -72,7 +72,7 @@ unit_ports(){   # TCP ports the unit's main process listens on, one per line, so
   ss -Hltnp 2>/dev/null | awk -v p="pid=$pid," 'index($0, p) {n=split($4, a, ":"); print a[n]}' | sort -un
 }
 unit_healthy(){   # $1 unit, $2 ports it listened on before: active 3 checks running, then each port listening again
-  local u="$1" before="$2" i ok=0 now p
+  local u="$1" before="$2" i ok=0 now p missing=""
   for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 2
     systemctl is-active --quiet "$u" || { echo "FAIL   $u not active"; return 1; }

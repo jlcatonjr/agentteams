@@ -117,7 +117,7 @@ esac
 if [ -n "$LEVEL" ]; then
   TAB=$(printf '\t')
   # The normalised plan's sha256: PLAN lines only, CR dropped, blank runs squeezed, sorted (C locale), unique. The same
-  # function is in every level script (and server_apply.plan_digest): a test keeps the copies identical.
+  # function is in L2, L4, L6 and L7 (and host_plan.plan_sha256 in Python): a test keeps the copies identical.
   plan_digest(){
     tr -d '\r' | LC_ALL=C grep "^PLAN$TAB" | LC_ALL=C sed -E 's/[[:space:]]+/ /g; s/ $//' | LC_ALL=C sort -u \
       | { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; } | awk '{print $1}'
@@ -184,6 +184,7 @@ if [ -n "$LEVEL" ]; then
   while [ "$i" -lt "$NSTEP" ]; do
     sd=$(plan_digest < "$TMPD/plan.$i")
     run_step "$i" "$TMPD/apply.$i" --apply --expect-digest "$sd"; rc=$?
+    printf 'APPLYSTEP\t%s\t%s\n' "$i" "$rc"   # server-apply: a later step's 2/5 after an applied step is a partial apply
     case "$rc" in 0|1) ;; 4) comp=true;; 5|6|7) ;; *) rc=3;; esac
     [ "$rc" -gt "$worst" ] && worst=$rc
     if [ "$rc" -gt 1 ]; then echo "step $i ended with exit $rc — no further step on $HOST" >&2; break; fi

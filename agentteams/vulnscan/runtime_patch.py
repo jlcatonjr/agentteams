@@ -1,20 +1,27 @@
 """``runtime-patch``: a same-major Homebrew bottle upgrade of ONE signed formula on this machine (vfr-d.D4, OD8).
 
-For a runtime the scan reports on this machine (``vulnscan runtimes``) that Homebrew provides. Operator-run only
-(``vulnscan act runtime-patch FORMULA``, :data:`ops.OPERATOR_ONLY_OPS`), under a v2 grant whose signed ``runtimes``
-list names the formula (@security Phase 2 design, condition D4):
+For a runtime the latest scan flagged on this machine (``vulnscan runtimes`` / the daily run's ``this-machine``
+findings) that Homebrew provides. Operator-run only (``vulnscan act runtime-patch FORMULA``,
+:data:`ops.OPERATOR_ONLY_OPS`), under a v2 grant whose signed ``runtimes`` list names the formula (@security Phase 2
+design, condition D4, and the P8 review's 8b):
 
+- **Flagged.** The latest completed run's ``summary.json`` has a ``runtime`` finding on ``this-machine`` for the
+  formula's runtime, installed by brew from this formula's Cellar.
 - **One formula.** ``brew upgrade --formula --dry-run FORMULA`` must name exactly that formula and nothing else (no
   dependency installs or upgrades, no dependents: ``HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK``), at the same major.
   The normalised dry-run plan's digest must equal the one the operator confirmed, recomputed just before the change.
+- **Aged.** The target version is its release line's latest patch and was released at least
+  :data:`RELEASE_COOLDOWN_DAYS` days ago (S-10's cooldown, per endoflife.date). An unknown date refuses.
 - **homebrew/core bottles only.** The formula's tap is ``homebrew/core``, it is installed and linked (the runtime on
   PATH is Homebrew's), not pinned, and a bottle exists for this Mac's tag (or ``all``): nothing builds from source.
-  No tap is added; only ``brew`` at a standard macOS prefix runs, never through a PATH lookup.
+  Afterwards the installed version must be linked and ``poured_from_bottle``, or the op escalates. No tap is added;
+  only ``brew`` at a standard macOS prefix runs, never through a PATH lookup.
 - **No sudo.** Refused as root; the Homebrew prefix must be the operator's; ``SUDO_*`` never reaches brew.
 - **Never the executor's own tools.** ``python*``, ``git``, ``gh``, ``openssh`` and ``gnupg`` are refused by name, and
-  so is any formula whose Cellar holds the running interpreter or the git/gh/ssh/gpg the executor runs.
+  so is any formula that holds the running interpreter or the git/gh/ssh/gpg the executor runs, or that one of them
+  depends on (:data:`TOOL_DEPENDENCIES` plus ``brew deps --installed`` of those formulae).
 - The preview may let Homebrew refresh its index; the apply never does (``HOMEBREW_NO_AUTO_UPDATE``), so it installs
-  the plan that was reviewed. Afterwards the formula's linked version must be the planned one, or the op escalates.
+  the plan that was reviewed.
 
 brew runs on this machine, not in the tools container: the runtime being patched is this machine's.
 """
@@ -29,23 +36,33 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import escalations, grant, grant_v2, ledger
+from agentteams.vulnscan import escalations, grant, grant_v2, ledger, paths, runtimes
 from agentteams.vulnscan.executor_env import ExecError
+from agentteams.vulnscan.host_plan import CONFIRM_KEY, HEX64, plan_sha256
 
 BREW_PATHS: tuple[str, ...] = ("/opt/homebrew/bin/brew", "/usr/local/bin/brew")
 TAP = "homebrew/core"
+#: S-10's release cooldown for the version runtime-patch installs (P8 review 8b).
+RELEASE_COOLDOWN_DAYS = 14
 APPLY_ENV: dict[str, str] = {"HOMEBREW_NO_AUTO_UPDATE": "1", "HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK": "1",
                              "HOMEBREW_NO_INSTALL_CLEANUP": "1", "HOMEBREW_NO_ANALYTICS": "1",
                              "HOMEBREW_NO_ENV_HINTS": "1", "HOMEBREW_NO_INSTALL_UPGRADE": "1"}
-CONFIRM_KEY = "confirm_sha256"
+#: Formulae python, git, gh, openssh and gnupg depend on (Homebrew, 2026-11); ``brew deps --installed`` adds the
+#: ones this machine actually has. runtime-patch refuses all of them: they are the executor's own toolchain.
+TOOL_DEPENDENCIES: frozenset[str] = frozenset({
+    "openssl@3", "ca-certificates", "mpdecimal", "readline", "sqlite", "xz", "gdbm", "zstd", "lz4", "expat",
+    "libffi", "zlib", "bzip2", "ncurses", "gettext", "pcre2", "libunistring", "libidn2", "ldns", "libfido2",
+    "libcbor", "gnutls", "libassuan", "libgcrypt", "libgpg-error", "libksba", "libusb", "npth", "pinentry",
+    "nettle", "p11-kit", "libtasn1", "unbound", "libevent", "brotli", "libnghttp2", "krb5", "libssh2", "curl",
+})
 #: macOS major version -> Homebrew bottle codename.
 MACOS_TAGS: dict[int, str] = {26: "tahoe", 15: "sequoia", 14: "sonoma", 13: "ventura", 12: "monterey"}
 _UPGRADE = re.compile(r"^(\S+) (\S+) -> (\S+)$")
 _HEADER = re.compile(r"^==> Would upgrade 1 outdated package:?$")
-_HEX64 = re.compile(r"^[0-9a-f]{64}$")
 Runner = Callable[[list[str], dict[str, str]], subprocess.CompletedProcess]
 
 
@@ -101,6 +118,24 @@ def own_tool_formulae() -> set[str]:
     return out
 
 
+def toolchain(run: Runner) -> set[str]:
+    """Return every formula the executor's own tools are, or depend on (static list plus ``brew deps``).
+
+    Args:
+        run: brew runner.
+
+    Returns:
+        Formula names (the static :data:`TOOL_DEPENDENCIES` even when ``brew deps`` fails).
+    """
+    own = own_tool_formulae()
+    found = set()
+    if own:
+        deps = run(["deps", "--installed", "--formula", *sorted(own)], APPLY_ENV)
+        if deps.returncode == 0:
+            found = {ln.strip() for ln in (deps.stdout or "").splitlines() if ln.strip()}
+    return own | found | set(TOOL_DEPENDENCIES)
+
+
 def major(version: str) -> str:
     """Return a Homebrew version's major component (``22.11.0_1`` -> ``22``).
 
@@ -114,13 +149,69 @@ def major(version: str) -> str:
     return m[0] if m else version
 
 
-def check(formula: str, *, apply: bool, run: Runner = _default_run) -> tuple[list[str], str]:
+def runtime_kind(formula: str) -> str:
+    """Return the :data:`runtimes.PRODUCTS` kind a formula provides (``node@22`` -> ``node``), or "".
+
+    Args:
+        formula: Formula name.
+
+    Returns:
+        The kind, or "" when vulnscan judges no such runtime.
+    """
+    base = formula.split("@", 1)[0]
+    return base if base in runtimes.PRODUCTS else ""
+
+
+def latest_findings() -> list[dict[str, Any]]:
+    """Return the findings of the latest completed run (its ``summary.json``).
+
+    Returns:
+        The findings.
+
+    Raises:
+        ExecError: No completed run, or an unreadable summary.
+    """
+    runs = paths.run_dirs()
+    if not runs:
+        raise ExecError("no completed scan: runtime-patch needs the latest scan to flag the runtime")
+    try:
+        data = json.loads((runs[-1] / "summary.json").read_text(encoding="utf-8"))
+        findings = data["findings"]
+        if not isinstance(findings, list):
+            raise TypeError("findings is not a list")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ExecError(f"the {runs[-1].name} summary.json is unreadable ({exc})") from exc
+    return [f for f in findings if isinstance(f, dict)]
+
+
+def flagged(formula: str, findings: list[dict[str, Any]]) -> bool:
+    """Return whether ``findings`` hold a this-machine runtime finding installed by brew from ``formula``.
+
+    Args:
+        formula: Formula name.
+        findings: The latest run's findings.
+
+    Returns:
+        True when one matches: kind ``runtime``, target ``this-machine``, the formula's runtime kind, ``[brew]`` in
+        its detail, and a location inside the formula's Cellar.
+    """
+    from agentteams.vulnscan import engine
+
+    kind = runtime_kind(formula)
+    return any(f.get("kind") == "runtime" and f.get("target") == engine.LOCAL_TARGET and f.get("name") == kind
+               and "[brew]" in str(f.get("detail", ""))
+               and any(f"/Cellar/{formula}/" in os.path.realpath(str(loc)) for loc in f.get("locations") or [])
+               for f in findings)
+
+
+def check(formula: str, *, apply: bool, run: Runner = _default_run, today: date | None = None) -> tuple[list[str], str]:
     """Run every D4 check and the dry run; return the plan and its digest.
 
     Args:
         formula: Formula name.
         apply: Whether this is the apply's pre-change recomputation (no index refresh).
         run: brew runner (tests).
+        today: Date override (tests).
 
     Returns:
         ``(plan lines, digest)``.
@@ -128,18 +219,18 @@ def check(formula: str, *, apply: bool, run: Runner = _default_run) -> tuple[lis
     Raises:
         ExecError: Any D4 condition fails.
     """
-    from agentteams.vulnscan.server_apply import plan_sha256
-
     if why := grant_v2.refused_formula(formula):
         raise ExecError(f"runtime-patch refuses {formula!r}: it {why}")
-    if formula in own_tool_formulae():
-        raise ExecError(f"runtime-patch refuses {formula}: the executor's own interpreter or git/gh/ssh/gpg is from it")
+    kind = runtime_kind(formula)
+    if not kind:
+        raise ExecError(f"runtime-patch refuses {formula}: vulnscan judges no runtime it provides")
+    if formula in toolchain(run):
+        raise ExecError(f"runtime-patch refuses {formula}: the executor's own interpreter or git/gh/ssh/gpg is, or "
+                        "depends on, it")
+    if not flagged(formula, latest_findings()):
+        raise ExecError(f"the latest scan has no this-machine runtime finding for {formula}: nothing to patch")
     env = APPLY_ENV if apply else {k: v for k, v in APPLY_ENV.items() if k != "HOMEBREW_NO_AUTO_UPDATE"}
-    info = run(["info", "--json=v2", "--formula", formula], env)
-    try:
-        f = json.loads(info.stdout)["formulae"][0]
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise ExecError(f"brew info {formula} gave no formula ({exc})") from exc
+    f = _info(formula, run, env)
     if f.get("name") != formula or f.get("tap") != TAP:
         raise ExecError(f"{formula} is from {f.get('tap')!r}, not {TAP}: refused (no other taps)")
     if not f.get("installed") or not f.get("linked_keg"):
@@ -161,8 +252,25 @@ def check(formula: str, *, apply: bool, run: Runner = _default_run) -> tuple[lis
     old, new = ups[0][2], ups[0][3]
     if major(old) != major(new):
         raise ExecError(f"{formula} {old} -> {new} crosses a major version: runtime-patch is same-major only")
+    upstream = re.sub(r"_\d+$", "", new)   # Homebrew's _N revision is not part of the upstream version
+    released = runtimes.patch_release_date(kind, upstream)
+    age = ((today or datetime.now(UTC).date()) - released).days if released else -1
+    if age < RELEASE_COOLDOWN_DAYS:
+        when = "its release date is unknown" if released is None else f"released {age} days ago"
+        raise ExecError(f"{formula} {new}: {when}; S-10 needs {RELEASE_COOLDOWN_DAYS} days")
     plan = [f"PLAN\truntime\t{formula}\t{old}\t{new}\tbottle {tag if tag in files else 'all'}"]
     return plan, plan_sha256("\n".join(plan))
+
+
+def _info(formula: str, run: Runner, env: dict[str, str]) -> dict[str, Any]:
+    info = run(["info", "--json=v2", "--formula", formula], env)
+    try:
+        f = json.loads(info.stdout)["formulae"][0]
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise ExecError(f"brew info {formula} gave no formula ({exc})") from exc
+    if not isinstance(f, dict):
+        raise ExecError(f"brew info {formula} gave no formula")
+    return f
 
 
 def precheck(target: str, payload: dict[str, Any] | None) -> str:
@@ -180,7 +288,7 @@ def precheck(target: str, payload: dict[str, Any] | None) -> str:
     """
     if why := grant_v2.refused_formula(target):
         raise ExecError(f"runtime-patch refuses {target!r}: it {why}")
-    if not _HEX64.match(str((payload or {}).get(CONFIRM_KEY, ""))):
+    if not HEX64.match(str((payload or {}).get(CONFIRM_KEY, ""))):
         raise ExecError(f"runtime-patch runs only the plan the operator confirmed: vulnscan act runtime-patch {target}")
     return target
 
@@ -214,17 +322,20 @@ def run(target: str, g: dict[str, Any], *, request_id: str, payload: dict[str, A
                   detail=json.dumps({"plan": plan, "plan_sha256": digest}))
     old, new = plan[0].split("\t")[3:5]
     up = runner(["upgrade", "--formula", formula], APPLY_ENV)
-    info = runner(["info", "--json=v2", "--formula", formula], APPLY_ENV)
     try:
-        linked = json.loads(info.stdout)["formulae"][0].get("linked_keg")
-    except (ValueError, KeyError, IndexError, TypeError):
-        linked = None
-    if up.returncode or linked != new:
+        after = _info(formula, runner, APPLY_ENV)
+    except ExecError:
+        after = {}
+    linked = after.get("linked_keg")
+    poured = any(isinstance(i, dict) and i.get("version") == new and i.get("poured_from_bottle") is True
+                 for i in after.get("installed") or [])
+    if up.returncode or linked != new or not poured:
         esc = escalations.record("other", f"runtime:{formula}", f"runtime-patch {formula}: brew exit {up.returncode}, "
-                                 f"linked {linked!r}, planned {new}", request_id=request_id,
-                                 run_id=f"runtime-patch-{request_id}", canonical=executor.canonical_target)
-        raise ExecError(f"runtime-patch {formula} did not end at {new} (brew exit {up.returncode}, linked {linked!r}); "
-                        f"escalation {esc.id}")
+                                 f"linked {linked!r}, planned {new}, poured from a bottle: {poured}",
+                                 request_id=request_id, run_id=f"runtime-patch-{request_id}",
+                                 canonical=executor.canonical_target)
+        raise ExecError(f"runtime-patch {formula} did not end at a poured {new} bottle (brew exit {up.returncode}, "
+                        f"linked {linked!r}, poured {poured}); escalation {esc.id}")
     return {"formula": formula, "from": old, "to": new, "plan_sha256": digest}
 
 
@@ -244,7 +355,7 @@ def preview(target: str, *, runner: Runner = _default_run) -> dict[str, Any]:
     formula = precheck(target, {CONFIRM_KEY: "0" * 64})
     grants, problems = grant.load_active()
     rows = ledger.read()
-    if not any(grant.covers(g, "runtime-patch", formula) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])
+    if not any(grant.covers(g, "runtime-patch", formula) and grant_v2.uses_left(g, "runtime-patch", rows)
                for g in grants):
         raise ExecError(f"not authorized: runtime-patch {formula}: " + ("; ".join(problems) or "no grant signs it"))
     plan, digest = check(formula, apply=False, run=runner)

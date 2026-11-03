@@ -16,18 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   --apply --expect-digest D`, then a post-audit. `run-host.sh` and each level script compute the plan again on the
   host just before changing anything (exit 5 on a mismatch, nothing changed). The executor never passes
   `--reboot`, `--all-updates`, `--node-major`, `--allow-fresh` or `--restart-services`, and a level never runs L3 or
-  L5. Exit 4 anywhere opens an escalation that blocks everything. A failed step, a failed health check (6: the
-  pins or venv restored, 7: not restored) or a worse post-audit opens one that stops the host.
+  L5. Exit 4 anywhere, the preview included, opens an escalation that blocks everything. Once the apply has
+  started, any failure opens one that stops the host: a failed step, a failed health check (6: the pins or venv
+  restored, 7: not restored), a partial apply, an incomplete or worse post-audit, a timeout, or output that is not
+  UTF-8. `l2-security` always runs inside the signed restart window, with needrestart's apt hook suspended. `py-venv`
+  never runs the app's interpreter as root. `act` needs a terminal; this is not an identity check.
 - **`remove-path` only quarantines.** It writes a tarball, moves the path to
   `/var/backups/agentteams/quarantine/<name>-<time>/payload` and leaves a `RESTORE.manifest`. Emptying the
-  quarantine is never automated. Each path must be signed exactly into the grant. Symlinks, symlinked ancestors,
-  mount points and trust roots are refused. The decision row `server-apply:remove-path:<host>:<path>` must be
+  quarantine is never automated. Each path must be signed exactly into the grant. Refused, again immediately before
+  the move: symlinks and symlinked ancestors, any ancestor a non-root user could write, mount points (or a mounts
+  table that cannot be read), a move across filesystems, and trust roots (`/usr/local/{bin,sbin,lib,etc,libexec}` and
+  `/home/*/.config/agentteams` among them). Any earlier failed or unfinished attempt on the same path refuses too. The decision row `server-apply:remove-path:<host>:<path>` must be
   cleared with `conditions_verified=verified`; a suffixed id never counts. A `<name>.disabled-YYYYMMDD` tree also
   needs the fresh L1 audit's `SCOPE <path> disabled` line.
 - **`runtime-patch FORMULA`** (vfr-d.D4) upgrades one signed Homebrew formula on this Mac. The formula must be
   from `homebrew/core`, upgraded within the same major, and installed from a bottle. The dry run must name only
-  that formula. No sudo, no source build, no tap. The executor's own python, git, gh, openssh and gnupg are
-  refused.
+  that formula. The latest scan must have flagged it, and the target version must be at least 14 days old (S-10). The
+  installed version must be poured from a bottle. No sudo, no source build, no tap. The executor's own python, git,
+  gh, openssh and gnupg, and the formulae they depend on, are refused.
 - **v2 grants** (`grant_v2`, purpose tag `...-grant-v2`) are the only grants that cover the two ops. They sign:
   - the host×level pairs;
   - the restart units and the restart window (UTC);
@@ -37,10 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the runtimes;
   - the `ancestor` they re-issue.
 
-  A grant naming `server-apply` holds server ops only and allows at most 20 uses. `grant revoke` now archives the
-  record in `<config>/vulnscan-grants-revoked/`. A re-issue's ancestor must be revoked and archived first.
+  A grant naming `server-apply` holds server ops only. Its `max_uses` (at most 20) counts `server-apply` uses only,
+  and a signed `max_read_uses` (at most 500) caps its audits and dry runs. `grant revoke` now archives the record in
+  `<config>/vulnscan-grants-revoked/`. A re-issue's ancestor must be revoked and archived first, which is checked at
+  every load as well. A revoked grant moved back is never honoured. `grant sign --check-only` validates a record
+  before the revoke.
   `grant sign` takes `--level`, `--restart-unit`, `--restart-window`, `--apps-conf-sha256`, `--major-allowed`,
-  `--remove-path`, `--runtime` and `--ancestor`. `merge` stays reserved.
+  `--remove-path`, `--runtime`, `--ancestor`, `--max-read-uses` and `--check-only`. `merge` stays reserved.
 
 ### added (vulnscan: repository levers C2, C4, D3, D6; @security design review 2026-11-02)
 

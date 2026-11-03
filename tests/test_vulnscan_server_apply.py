@@ -18,6 +18,7 @@ import pytest
 
 pytest.importorskip("cryptography")
 from agentteams.vulnscan import escalations, executor, executor_serve, grant, grant_v2, ledger, server_apply  # noqa: E402
+from agentteams.vulnscan.host_plan import plan_sha256  # noqa: E402
 from tests._vulnscan_helpers import operator_home, sign_grant  # noqa: E402
 
 ANACONDA = "/root/anaconda3.disabled-20261101"
@@ -34,31 +35,46 @@ class _Clock(datetime):
 
 
 class FakeKit:
-    """Answers run_kit/audit calls; records every call."""
+    """Answers run_kit/audit calls like run-host.sh / the L1 audit; records every call."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, list[str]]] = []
         self.plan = "PLAN\tos\tapt\tlibssl3\t3.0.2-1\t3.0.2-2\nPRESTATE\tdpkg\tlibssl3 3.0.2-1\n"
+        self.l1 = "RESULT clean\n"          # run-host's own pre-audit output, before the plan section
         self.apply_rc = 0
+        self.apply_steps: list[int] | None = None   # APPLYSTEP exits (default: one step with apply_rc)
         self.apply_out = "applied\n"
+        self.apply_raise: BaseException | None = None
         self.dry_rc = 0
+        self.dry_raise: BaseException | None = None
+        self.decoded = True
         self.printed_digest: str | None = None
-        self.audits: list[tuple[str, int, int]] = []
+        self.audits: list[tuple[str, int, int] | BaseException] = []
 
     def digest(self) -> str:
-        return server_apply.plan_sha256(self.plan)
+        return plan_sha256(self.plan)
 
-    def run_kit(self, script: str, host: str, args: list[str], conf: Path) -> subprocess.CompletedProcess:
+    def run_kit(self, script: str, host: str, args: list[str], conf: Path) -> server_apply.KitRun:
         self.calls.append((script, list(args)))
         level = args[args.index("--level") + 1]
         if "--apply" not in args:
-            out = self.plan + f"PLANDIGEST\t{level}\t{self.printed_digest or self.digest()}\n"
-            return subprocess.CompletedProcess(args, self.dry_rc, out, "")
-        return subprocess.CompletedProcess(args, self.apply_rc, self.apply_out, "")
+            if self.dry_raise:
+                raise self.dry_raise
+            out = (self.l1 + f"\n== Level {level} on {host}: plan (1 step(s))\n" + self.plan
+                   + f"PLANDIGEST\t{level}\t{self.printed_digest or self.digest()}\n")
+            return server_apply.KitRun(self.dry_rc, out, "", True)
+        if self.apply_raise:
+            raise self.apply_raise
+        steps = self.apply_steps if self.apply_steps is not None else [self.apply_rc]
+        marks = "".join(f"APPLYSTEP\t{i}\t{rc}\n" for i, rc in enumerate(steps))
+        return server_apply.KitRun(self.apply_rc, self.apply_out + marks, "", self.decoded)
 
     def audit(self, host: str, conf: Path) -> tuple[str, int, int]:
         self.calls.append(("audit", [host]))
-        return self.audits.pop(0) if self.audits else ("RESULT clean\n", 0, 0)
+        nxt = self.audits.pop(0) if self.audits else ("RESULT clean\n", 0, 0)
+        if isinstance(nxt, BaseException):
+            raise nxt
+        return nxt
 
 
 @pytest.fixture
@@ -88,7 +104,8 @@ def install_v2(env: dict[str, Any], **kw: Any) -> dict[str, Any]:
         server_levels=[f"jlc-prod:{lv}" for lv in grant_v2.LEVELS] + ["vk-api:l2-security"],
         remove_paths=[f"jlc-prod:{ANACONDA}"], restart_units=["jlc-prod:nginx.service"],
         restart_window="10:00-14:00",
-        apps_conf_sha256=hashlib.sha256(APPS.encode()).hexdigest(), major_allowed=["jlc-prod:api.service"])
+        apps_conf_sha256=hashlib.sha256(APPS.encode()).hexdigest(), major_allowed=["jlc-prod:api.service"],
+        max_read_uses=50)
     args.update(kw)
     g = sign_grant(env["pem"], grant.build(**args))
     grant.install(g)
@@ -266,10 +283,9 @@ def test_better_post_audit_is_done(env: dict[str, Any]) -> None:
 def test_restarting_levels_run_only_inside_the_signed_window(env: dict[str, Any]) -> None:
     install_v2(env)
     _Clock.now_value = datetime(2026, 11, 2, 15, 0, tzinfo=UTC)
-    for target in ("jlc-prod:l4-pins", "jlc-prod:py-venv", "jlc-prod:l2-security"):
-        res = act(env, target)
+    for target in ("jlc-prod:l4-pins", "jlc-prod:py-venv", "jlc-prod:l2-security", "vk-api:l2-security"):
+        res = act(env, target)   # l2-security too, with or without restart units: rpm scriptlets restart (OD4)
         assert res["status"] == "failed" and "restart window" in res["detail"], (target, res)
-    assert act(env, "vk-api:l2-security")["status"] == "done"   # no restart unit signed there: no window needed
     _Clock.now_value = datetime(2026, 11, 2, 10, 30, tzinfo=UTC)
     assert act(env, "jlc-prod:l4-pins")["status"] == "done"
 
@@ -304,20 +320,26 @@ def _scoped(env: dict[str, Any]) -> None:
     env["kit"].apply_out = f"QUARANTINED\t{ANACONDA}\t/var/backups/agentteams/quarantine/x-1\n"
 
 
-def test_remove_path_needs_its_own_cleared_and_verified_c5_row(env: dict[str, Any]) -> None:
+@pytest.mark.parametrize("rows,match", [
+    ([], "C-5"),
+    ([{"verified": "pending"}], "C-5"),
+    ([{"suffix": ":other-scope"}], "not exactly"),   # decorated id: action_matches accepts it, the exact check not
+])
+def test_remove_path_needs_its_own_cleared_and_verified_c5_row(env: dict[str, Any], rows: list[dict[str, str]],
+                                                               match: str) -> None:
     install_v2(env)
     _scoped(env)
     action = server_apply.removal_action("jlc-prod", ANACONDA)
+    for row in rows:
+        clearance(env, action + row.get("suffix", ""), verified=row.get("verified", "verified"))
     res = act(env, RP)
-    assert res["status"] == "failed" and "C-5" in res["detail"] and env["kit"].calls == []
-    clearance(env, action, verified="pending")
-    res = act(env, RP)
-    assert res["status"] == "failed" and "C-5" in res["detail"]
-    clearance(env, action + ":other-scope")            # decorated id: action_matches accepts it, exact check does not
-    res = act(env, RP)
-    assert res["status"] == "failed" and "not exactly" in res["detail"], res
-    clearance(env, action)
+    assert res["status"] == "failed" and match in res["detail"] and env["kit"].calls == [], res
+
+
+def test_remove_path_with_its_clearance_quarantines_once(env: dict[str, Any]) -> None:
+    install_v2(env)
     _scoped(env)
+    clearance(env, server_apply.removal_action("jlc-prod", ANACONDA))
     res = act(env, RP)
     assert res["status"] == "done" and res["quarantine"].startswith("/var/backups/agentteams/quarantine/"), res
     assert env["kit"].calls[1] == ("run-host.sh", ["--level", "remove-path", "--remove-path", ANACONDA])
@@ -368,3 +390,86 @@ def test_preview_changes_nothing_and_reserves_no_use(env: dict[str, Any]) -> Non
     shown = server_apply.preview("jlc-prod:l2-security")
     assert shown["plan_sha256"] == env["kit"].digest() and shown["plan"][0].startswith("PLAN\tos")
     assert all("--apply" not in a for _, a in env["kit"].calls) and not ledger.read()
+
+
+# ---------------------------------------------------------------- once the apply started, every failure escalates
+
+def test_a_later_steps_exit_5_after_an_applied_step_is_a_partial_apply(env: dict[str, Any]) -> None:
+    install_v2(env)
+    env["kit"].apply_rc, env["kit"].apply_steps = 5, [0, 5]
+    res = act(env, "jlc-prod:l4-pins")
+    assert res["status"] == "failed" and "partial apply" in res["detail"], res
+    (esc,) = escalations.open_escalations()
+    assert esc.scope == "jlc-prod" and esc.kind == "other"
+
+
+def test_exit_5_with_no_step_applied_changes_nothing(env: dict[str, Any]) -> None:
+    install_v2(env)
+    env["kit"].apply_rc, env["kit"].apply_steps = 5, [5]
+    res = act(env, "jlc-prod:l2-security")
+    assert res["status"] == "failed" and "changed nothing" in res["detail"] and not escalations.open_escalations()
+
+
+@pytest.mark.parametrize("what", ["post-audit incomplete", "apply timeout", "post-audit timeout", "not utf-8"])
+def test_failures_after_the_apply_started_escalate(env: dict[str, Any], what: str) -> None:
+    install_v2(env)
+    kit = env["kit"]
+    if what == "post-audit incomplete":
+        kit.audits = [("RESULT clean\n", 0, 0), executor.ExecError("L1 audit of jlc-prod did not complete")]
+    elif what == "apply timeout":
+        kit.apply_raise = subprocess.TimeoutExpired(["run-host.sh"], 3600)
+    elif what == "post-audit timeout":
+        kit.audits = [("RESULT clean\n", 0, 0), subprocess.TimeoutExpired(["remote.sh"], 3600)]
+    else:
+        kit.decoded = False
+    res = act(env, "jlc-prod:l2-security")
+    assert res["status"] == "failed" and "escalation" in res["detail"], res
+    (esc,) = escalations.open_escalations()
+    assert esc.scope == "jlc-prod"
+    assert [r["kind"] for r in ledger.read() if r["kind"] in ("begun", "note", "failed")] == ["begun", "note", "failed"]
+
+
+def test_a_timeout_before_the_apply_is_a_plain_failure(env: dict[str, Any]) -> None:
+    install_v2(env)
+    env["kit"].dry_raise = subprocess.TimeoutExpired(["run-host.sh"], 3600)
+    res = act(env, "jlc-prod:l2-security")
+    assert res["status"] == "failed" and not escalations.open_escalations()
+
+
+# ---------------------------------------------------------------- the digest covers the plan section only
+
+def test_plan_lines_in_the_l1_output_are_not_part_of_the_digest(env: dict[str, Any]) -> None:
+    install_v2(env)
+    env["kit"].l1 = "PLAN\tinjected\tby the host's audit\nRESULT clean\n"
+    assert act(env, "jlc-prod:l2-security")["status"] == "done"   # confirmed digest = the steps' PLAN lines only
+
+
+def test_a_forged_plandigest_inside_step_output_does_not_end_the_section() -> None:
+    out = ("RESULT clean\n\n== Level l2-security on h: plan\nPLAN\ta\nPLANDIGEST\tl2-security\t" + "0" * 64
+           + "\nPLAN\tb\nPLANDIGEST\tl2-security\t" + "1" * 64 + "\n")
+    section, printed = server_apply.plan_section(out, "l2-security")
+    assert printed == "1" * 64 and "PLAN\tb" in section
+    assert server_apply.plan_section("PLAN\tx\n", "l2-security") == ("", "")
+
+
+def test_preview_escalates_on_compromise(env: dict[str, Any]) -> None:
+    install_v2(env)
+    env["kit"].dry_rc = 4
+    with pytest.raises(executor.ExecError, match="stops everything"):
+        server_apply.preview("jlc-prod:l2-security")
+    assert escalations.open_escalations()[0].scope == escalations.ALL_SCOPE
+
+
+# ---------------------------------------------------------------- Q3: an earlier attempt refuses
+
+@pytest.mark.parametrize("kinds", [["begun", "failed"], ["begun"]])
+def test_an_earlier_failed_or_unfinished_quarantine_refuses(env: dict[str, Any], kinds: list[str]) -> None:
+    install_v2(env)
+    _scoped(env)
+    clearance(env, server_apply.removal_action("jlc-prod", ANACONDA))
+    with ledger.locked():
+        for kind in kinds:
+            ledger.append(kind, grant_id="vg-x", op="server-apply", target=RP, request_id="earlier")
+    res = act(env, RP)
+    assert res["status"] == "failed" and ("failed" in res["detail"] or "never finished" in res["detail"]), res
+    assert [c for c in env["kit"].calls if c[0] == "run-host.sh"] == []

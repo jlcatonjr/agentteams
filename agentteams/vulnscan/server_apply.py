@@ -8,23 +8,35 @@ One op, in order (the ``begun`` row, C-5's recorded clearance and use reservatio
 ``executor.authorize`` before any of it):
 
 1. **Pre-checks** (refuse, nothing contacted): the target grammar; the host is a hosts.conf name and no open
-   escalation blocks it; the operator's confirmed plan digest is present; for a level that may restart a service,
-   the time is inside the signed ``restart_window`` (OD4: off-hours); for ``l4-pins``/``py-venv`` the apps.conf the
-   run will read has the signed sha256 (the run reads a snapshot of it, not the live file); for ``remove-path`` the
-   path passes the trust-root rule, has not been quarantined before, and the per-path C-5 decision row
+   escalation blocks it; the operator's confirmed plan digest is present; for a level that may restart a service
+   (``l2-security`` included: a package's own scriptlets can restart one) the time is inside the signed
+   ``restart_window`` (OD4: off-hours); for ``l4-pins``/``py-venv`` the apps.conf the run will read has the signed
+   sha256 (the run reads a snapshot of it, not the live file); for ``remove-path`` the path passes the trust-root rule,
+   has no earlier ``done``, ``failed`` or unfinished attempt in the ledger, and the per-path C-5 decision row
    ``server-apply:remove-path:<host>:<path>`` is cleared **and verified** (:func:`removal_clearance`).
 2. **Pre-audit**: the kit's L1 audit. Compromise indicators (exit 4) open a global escalation: everything stops.
    ``remove-path`` of a ``<name>.disabled-YYYYMMDD`` tree also needs this audit's ``SCOPE <path> disabled`` line
-   (vfr-e.E1's inertness check, OD6b).
-3. **Plan**: ``run-host.sh HOST --level L`` (a dry run). Its normalised plan digest (:func:`plan_sha256`) must equal the
-   digest the operator confirmed. The pre-state it prints (``dpkg -l``/``rpm -qa`` or ``pip freeze``, or the path's
+   (vfr-e.E1's inertness check, OD6b), read from the audit's standard output only.
+3. **Plan**: ``run-host.sh HOST --level L`` (a dry run). The digest of the plan section of its output (the level
+   steps' PLAN lines, never the L1 audit's: :func:`plan_section`) must equal both the digest run-host printed and the
+   one the operator confirmed. The pre-state it prints (``dpkg -l``/``rpm -qa`` or ``pip freeze``, or the path's
    listing) is saved and recorded in a ledger ``note`` row with its sha256.
 4. **Apply**: ``run-host.sh HOST --level L --apply --expect-digest D``. ``run-host`` and each level script recompute
    the plan on the host just before changing anything and abort on a mismatch (exit 5). The executor's argv never
    carries ``--reboot``, ``--all-updates``, ``--node-major``, ``--allow-fresh`` or ``--restart-services``, and level
    mode never runs L3 or L5 (:func:`check_argv`).
-5. **Post-audit**: a fresh L1 audit. A post-audit worse than the pre-audit, a failed health check (exit 6: reverted,
-   7: not reverted) or a failed step escalates and stops the host; exit 4 (anywhere) escalates and refuses everything.
+5. **Post-audit**: a fresh L1 audit.
+
+**Once the apply has started, every failure escalates.** Exit 4 anywhere opens a global ``ioc`` escalation. On the
+host, an ``other`` escalation (which stops the host) follows any of:
+
+- a failed health check (exit 6: reverted, 7: not reverted) or a failed step;
+- a step refused or finding its plan changed (exit 2/5) after an earlier step applied (a partial apply, from
+  run-host's ``APPLYSTEP`` lines);
+- an incomplete post-audit, a timeout, output that is not UTF-8;
+- a post-audit worse than the pre-audit.
+
+Only an exit 2/5 with no step applied is a plain ``failed`` (nothing changed).
 """
 
 from __future__ import annotations
@@ -35,23 +47,26 @@ import os
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from agentteams.vulnscan import escalations, grant, grant_v2, ledger, paths, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.executor_env import ExecError
+from agentteams.vulnscan.host_plan import CONFIRM_KEY, HEX64, plan_lines, plan_sha256
 
 #: Flags the executor never passes to run-host.sh for a level (S1); :func:`check_argv` refuses them.
 FORBIDDEN_FLAGS: tuple[str, ...] = ("--reboot", "--all-updates", "--node-major", "--allow-fresh", "--restart-services")
 #: Kit scripts a level never runs (S1: never L5; never the Node runtime either).
 FORBIDDEN_SCRIPTS: tuple[str, ...] = ("L3-node-runtime.sh", "L5-containers.sh")
-CONFIRM_KEY = "confirm_sha256"
-#: run-host.sh level exits: what the executor does with each after the change started.
-EXIT_MISMATCH, EXIT_REVERTED, EXIT_NOT_REVERTED = 5, 6, 7
-_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+#: run-host.sh level exits.
+EXIT_REFUSED, EXIT_MISMATCH, EXIT_REVERTED, EXIT_NOT_REVERTED = 2, 5, 6, 7
+#: A step exit that changed nothing on the host.
+UNCHANGED_EXITS: frozenset[int] = frozenset({EXIT_REFUSED, EXIT_MISMATCH})
 _DISABLED = re.compile(r"\.disabled-20\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$")
 _RESULT = re.compile(r"^RESULT (clean|action-needed|COMPROMISE)", re.M)
+_APPLYSTEP = re.compile(r"^APPLYSTEP\t(\d+)\t(\d+)$", re.M)
 
 
 class Target(NamedTuple):
@@ -60,6 +75,24 @@ class Target(NamedTuple):
     host: str
     level: str
     path: str
+
+
+@dataclass(frozen=True)
+class KitRun:
+    """One kit run's result, its output decoded with ``errors="replace"``."""
+
+    returncode: int
+    stdout: str
+    stderr: str
+    decoded: bool   # False when the output was not valid UTF-8 (replacement characters were substituted)
+
+
+class Escalated(ExecError):
+    """A failure that has already opened its escalation."""
+
+
+class NothingChanged(ExecError):
+    """The apply run refused or found its plan changed before any step applied: a plain ``failed``."""
 
 
 def parse_target(target: str) -> Target:
@@ -89,34 +122,25 @@ def parse_target(target: str) -> Target:
     return Target(host, level, path)
 
 
-def plan_sha256(text: str) -> str:
-    """Return the sha256 of the normalised plan in ``text`` (the kit's ``plan_digest`` shell function, in Python).
+def plan_section(stdout: str, level: str) -> tuple[str, str]:
+    """Return the level steps' part of a run-host dry run and the digest run-host printed for it.
 
-    PLAN lines only (``PLAN<TAB>...``), CR dropped, whitespace runs squeezed to one space, trailing space dropped,
-    sorted bytewise and de-duplicated, each newline-terminated.
-
-    Args:
-        text: Kit output.
-
-    Returns:
-        Hex sha256 (of the empty string when there is no PLAN line).
-    """
-    lines = {re.sub(r"[ \t\v\f]+", " ", ln).rstrip(" ")
-             for ln in text.replace("\r", "").split("\n") if ln.startswith("PLAN\t")}
-    body = "".join(ln + "\n" for ln in sorted(lines, key=lambda s: s.encode()))
-    return hashlib.sha256(body.encode()).hexdigest()
-
-
-def plan_lines(text: str) -> list[str]:
-    """Return the PLAN lines of kit output (for display).
+    run-host digests only its steps' output, never the L1 pre-audit's, so the executor's own digest is computed
+    over the same part: from the first ``== Level`` line to the **last** ``PLANDIGEST`` line (a forged earlier
+    one inside step output never ends it early).
 
     Args:
-        text: Kit output.
+        stdout: run-host's standard output.
+        level: The level.
 
     Returns:
-        The lines, in order.
+        ``(section, printed digest)``; ``("", "")`` when either marker is missing.
     """
-    return [ln for ln in text.replace("\r", "").split("\n") if ln.startswith("PLAN\t")]
+    start = stdout.find("\n== Level ")
+    marks = list(re.finditer(rf"^PLANDIGEST\t{re.escape(level)}\t([0-9a-f]{{64}})$", stdout, re.M))
+    if start < 0 or not marks or marks[-1].start() < start:
+        return "", ""
+    return stdout[start:marks[-1].start()], marks[-1][1]
 
 
 def level_args(t: Target, g: dict[str, Any]) -> list[str]:
@@ -161,13 +185,27 @@ def check_argv(args: list[str], *, apply: bool) -> None:
         raise ExecError("--apply goes with --expect-digest, and only on the apply run")
 
 
+def removal_action(host: str, path: str) -> str:
+    """Return the decision-log action id that clears one quarantine.
+
+    Args:
+        host: Host.
+        path: Exact path.
+
+    Returns:
+        ``server-apply:remove-path:<host>:<path>``.
+    """
+    return f"server-apply:remove-path:{host}:{path}"
+
+
 def removal_clearance(gov: Path, host: str, path: str) -> None:
     """Require the per-path C-5 decision row ``server-apply:remove-path:<host>:<path>``, cleared and verified.
 
     The row is read through the same gate the other destructive actions use (``security_gate.check_clearance``:
     an unretracted HALT on the id refuses, the row must be an approved author's, signed when signing is active,
-    PASS or CONDITIONAL PASS, not consumed), read-only. On top of that the newest matching row must name **exactly**
-    this id (a decorated id such as ``...:/path.old`` never clears ``/path``: Rule 12) and carry
+    PASS or CONDITIONAL PASS, not consumed), read-only: it is not consumed, so :func:`gate` refuses any earlier
+    attempt on the same path instead (ruling Q3). On top of that the newest matching row must name **exactly** this
+    id (a decorated id such as ``...:/path.old`` never clears ``/path``: Rule 12) and carry
     ``conditions_verified=verified``.
 
     Args:
@@ -191,19 +229,6 @@ def removal_clearance(gov: Path, host: str, path: str) -> None:
         raise ExecError(f"C-5: clearance {action!r} is not conditions_verified=verified")
 
 
-def removal_action(host: str, path: str) -> str:
-    """Return the decision-log action id that clears one quarantine.
-
-    Args:
-        host: Host.
-        path: Exact path.
-
-    Returns:
-        ``server-apply:remove-path:<host>:<path>``.
-    """
-    return f"server-apply:remove-path:{host}:{path}"
-
-
 def precheck(target: str, payload: dict[str, Any] | None) -> Target:
     """Refuse before ``authorize`` (no use reserved): target grammar, host, host escalation, confirmed digest.
 
@@ -225,27 +250,27 @@ def precheck(target: str, payload: dict[str, Any] | None) -> Target:
     esc = escalations.blocking(t.host)
     if esc is not None:
         raise ExecError(f"blocked by open escalation {esc.id} ({esc.kind}, scope {esc.scope}); see: vulnscan halts")
-    if not _HEX64.match(str((payload or {}).get(CONFIRM_KEY, ""))):
+    if not HEX64.match(str((payload or {}).get(CONFIRM_KEY, ""))):
         raise ExecError("server-apply runs only the plan the operator confirmed: vulnscan act server-apply "
                         f"{target} (it shows the plan and its digest, then asks)")
     return t
 
 
-def gate(t: Target, g: dict[str, Any], conf: Path, *, now: datetime | None = None) -> None:
-    """The grant-dependent pre-checks: restart window, signed apps.conf, remove-path clearance and replay.
+def gate(t: Target, g: dict[str, Any], conf: Path, *, request_id: str = "", now: datetime | None = None) -> None:
+    """The grant-dependent pre-checks: restart window, signed apps.conf, remove-path clearance and earlier attempts.
 
     Args:
         t: Target.
         g: The covering v2 grant.
         conf: The config snapshot the run will read.
+        request_id: This op's request id (its own ``begun`` row is not an earlier attempt); "" for a preview.
         now: Clock override (tests).
 
     Raises:
         ExecError: Any check fails.
     """
-    restarts = t.level in grant_v2.RESTARTING_LEVELS or any(
-        e.split(":", 1)[0] == t.host for e in g.get("restart_units", []) if t.level == "l2-security")
-    if restarts and not grant_v2.in_window(g.get("restart_window", ""), now or datetime.now(UTC)):
+    if t.level in grant_v2.RESTARTING_LEVELS and not grant_v2.in_window(g.get("restart_window", ""),
+                                                                         now or datetime.now(UTC)):
         raise ExecError(f"{t.level} on {t.host} may restart a service: it runs only inside the signed restart window "
                         f"{g.get('restart_window') or '(none)'} UTC")
     if t.level in grant_v2.APPS_CONF_LEVELS:
@@ -255,10 +280,35 @@ def gate(t: Target, g: dict[str, Any], conf: Path, *, now: datetime | None = Non
             raise ExecError(f"apps.conf sha256 {have} is not the signed {g.get('apps_conf_sha256')}: re-sign the grant "
                             "after reviewing apps.conf")
     if t.level == "remove-path":
-        if any(r.get("op") == "server-apply" and r.get("kind") == "done" and r.get("target") == f"{t.host}:remove-path:"
-               f"{t.path}" for r in ledger.read()):
-            raise ExecError(f"{t.path} on {t.host} was already quarantined (ledger); restoring it is manual")
+        if why := earlier_attempt(f"{t.host}:remove-path:{t.path}", ledger.read(), request_id):
+            raise ExecError(f"{t.path} on {t.host}: {why}; restoring or retrying is the operator's decision (manual)")
         removal_clearance(Path(str(g["governance_dir"])), t.host, t.path)
+
+
+def earlier_attempt(target: str, rows: list[dict[str, Any]], request_id: str) -> str:
+    """Return why an earlier ``server-apply`` attempt on ``target`` refuses this one, or "" (ruling Q3).
+
+    An earlier ``done`` (already quarantined), ``failed``, or ``begun`` with no ``done``/``failed`` for its request
+    (an attempt that never finished) refuses; this op's own ``begun`` row (``request_id``) does not.
+
+    Args:
+        target: ``host:remove-path:/path``.
+        rows: Ledger rows.
+        request_id: This op's request id.
+
+    Returns:
+        A reason, or "".
+    """
+    mine = [r for r in rows if r.get("op") == "server-apply" and r.get("target") == target
+            and r.get("request_id") != request_id]
+    ended = {r.get("request_id") for r in mine if r.get("kind") in ("done", "failed")}
+    if any(r.get("kind") == "done" for r in mine):
+        return "it was already quarantined (ledger)"
+    if any(r.get("kind") == "failed" for r in mine):
+        return "an earlier attempt failed (ledger)"
+    if any(r.get("kind") == "begun" and r.get("request_id") not in ended for r in mine):
+        return "an earlier attempt never finished (ledger: begun, no done or failed)"
+    return ""
 
 
 def snapshot_conf() -> Path:
@@ -287,7 +337,17 @@ def snapshot_conf() -> Path:
     return dest
 
 
-def run_kit(script: str, host: str, args: list[str], conf: Path) -> subprocess.CompletedProcess:
+def _decode(data: bytes | str | None) -> tuple[str, bool]:
+    if isinstance(data, str):
+        return data, True
+    raw = data or b""
+    try:
+        return raw.decode("utf-8"), True
+    except UnicodeDecodeError:
+        return raw.decode("utf-8", errors="replace"), False
+
+
+def run_kit(script: str, host: str, args: list[str], conf: Path) -> KitRun:
     """Run one packaged kit script for ``host`` with config snapshot ``conf`` (confined when a scope is active).
 
     Args:
@@ -297,27 +357,36 @@ def run_kit(script: str, host: str, args: list[str], conf: Path) -> subprocess.C
         conf: Config snapshot.
 
     Returns:
-        The completed process.
+        The result, its output decoded with ``errors="replace"`` (``decoded`` says whether that was needed).
+
+    Raises:
+        subproc_confine.Unavailable: Confinement is on and the tools container cannot run it.
+        subprocess.TimeoutExpired: The run took longer than an hour.
+        OSError: bash could not be started.
     """
     from agentteams.vulnscan import executor
 
     logs = paths.state_dir() / "server-logs"
     logs.mkdir(parents=True, exist_ok=True)
     if subproc_confine.active():
-        return subproc_confine_ssh.run_kit(executor.kit_dir() / script, host, args, conf_dir=conf, logs=logs,
-                                           timeout=3600)
-    env = {k: v for k, v in os.environ.items() if not k.startswith("AGENTTEAMS_SERVER_KIT")}
-    env.update({"AGENTTEAMS_SERVER_KIT_CONFIG": str(conf), "AGENTTEAMS_SERVER_KIT_LOGS": str(logs),
-                "AGENTTEAMS_VULNSCAN_NO_REPORT": "1"})
-    return subprocess.run(["bash", str(executor.kit_dir() / script), host, *args], capture_output=True, text=True,
-                          env=env, timeout=3600, check=False)
+        proc = subproc_confine_ssh.run_kit(executor.kit_dir() / script, host, args, conf_dir=conf, logs=logs,
+                                           timeout=3600, text=False)
+    else:
+        env = {k: v for k, v in os.environ.items() if not k.startswith("AGENTTEAMS_SERVER_KIT")}
+        env.update({"AGENTTEAMS_SERVER_KIT_CONFIG": str(conf), "AGENTTEAMS_SERVER_KIT_LOGS": str(logs),
+                    "AGENTTEAMS_VULNSCAN_NO_REPORT": "1"})
+        proc = subprocess.run(["bash", str(executor.kit_dir() / script), host, *args], capture_output=True,
+                              env=env, timeout=3600, check=False)
+    out, ok_out = _decode(proc.stdout)
+    err, ok_err = _decode(proc.stderr)
+    return KitRun(proc.returncode, out, err, ok_out and ok_err)
 
 
-def _log(host: str, what: str, proc: subprocess.CompletedProcess) -> Path:
+def _log(host: str, what: str, run: KitRun) -> Path:
     logs = paths.state_dir() / "server-logs"
     logs.mkdir(parents=True, exist_ok=True)
     out = logs / f"{host}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-server-apply-{what}.log"
-    out.write_text((proc.stdout or "") + (proc.stderr or ""), encoding="utf-8")
+    out.write_text(run.stdout + run.stderr, encoding="utf-8")
     return out
 
 
@@ -329,19 +398,21 @@ def audit(host: str, conf: Path) -> tuple[str, int, int]:
         conf: Config snapshot.
 
     Returns:
-        ``(stdout, report exit code, number of findings)``.
+        ``(standard output, report exit code, number of findings)``.
 
     Raises:
-        ExecError: The audit did not complete.
+        ExecError: The audit did not complete, or its output was not UTF-8.
     """
     from agentteams.vulnscan import engine
 
-    proc = run_kit("remote.sh", host, ["L1-audit.sh"], conf)
-    log = _log(host, "audit", proc)
-    if not _RESULT.search(proc.stdout or ""):
-        raise ExecError(f"L1 audit of {host} did not complete (exit {proc.returncode}); log {log}")
-    rep = engine.scan_inventory(proc.stdout, host)
-    return proc.stdout, rep.exit_code(), len(rep.findings)
+    run = run_kit("remote.sh", host, ["L1-audit.sh"], conf)
+    log = _log(host, "audit", run)
+    if not run.decoded:
+        raise ExecError(f"L1 audit output of {host} is not UTF-8; log {log}")
+    if not _RESULT.search(run.stdout):
+        raise ExecError(f"L1 audit of {host} did not complete (exit {run.returncode}); log {log}")
+    rep = engine.scan_inventory(run.stdout, host)
+    return run.stdout, rep.exit_code(), len(rep.findings)
 
 
 def escalate(kind: str, host: str, evidence: str, request_id: str) -> str:
@@ -363,11 +434,11 @@ def escalate(kind: str, host: str, evidence: str, request_id: str) -> str:
     return esc.id
 
 
-def disabled_scope_problem(audit_text: str, path: str) -> str:
+def disabled_scope_problem(audit_stdout: str, path: str) -> str:
     """Return why a ``<name>.disabled-YYYYMMDD`` tree may not be quarantined yet, or "" (OD6b: E1's check first).
 
     Args:
-        audit_text: The pre-audit's output.
+        audit_stdout: The pre-audit's standard output (never its standard error).
         path: Exact path.
 
     Returns:
@@ -375,8 +446,7 @@ def disabled_scope_problem(audit_text: str, path: str) -> str:
     """
     if not _DISABLED.search(path):
         return ""
-    lines = audit_text.replace("\r", "").split("\n")
-    if any(ln.startswith(f"SCOPE\t{path}\tdisabled\t") for ln in lines):
+    if any(ln.startswith(f"SCOPE\t{path}\tdisabled\t") for ln in audit_stdout.replace("\r", "").split("\n")):
         return ""
     return f"the latest L1 audit does not label {path} as a disabled, inert tree (no 'SCOPE {path} disabled' line)"
 
@@ -402,17 +472,29 @@ def run(target: str, g: dict[str, Any], *, request_id: str, payload: dict[str, A
         raise ExecError("the covering grant does not sign this host:level")
     conf = snapshot_conf()
     try:
-        gate(t, g, conf)
-        return _run(t, g, conf, confirmed=confirmed, request_id=request_id)
+        gate(t, g, conf, request_id=request_id)
+        args, digest, dry_log, pre_file, pre_state = _prepare(t, g, conf, confirmed=confirmed, request_id=request_id)
+        try:
+            return _apply(t, conf, args, digest, request_id=request_id, pre=pre_state,
+                          extra={"plan_log": str(dry_log), "prestate": str(pre_file)})
+        except (Escalated, NothingChanged):
+            raise
+        except (ExecError, subprocess.SubprocessError, OSError, ValueError) as exc:   # incl. Unavailable, timeouts
+            eid = escalate("other", t.host, f"server-apply {t.level} on {t.host}: the apply started and then: "
+                           f"{type(exc).__name__}: {exc}"[:1500], request_id)
+            raise Escalated(f"{t.level} on {t.host}: the apply started and then failed ({exc}); state unknown; "
+                            f"escalation {eid} stops {t.host}") from exc
     finally:
         shutil.rmtree(conf, ignore_errors=True)
 
 
-def _run(t: Target, g: dict[str, Any], conf: Path, *, confirmed: str, request_id: str) -> dict[str, Any]:
+def _prepare(t: Target, g: dict[str, Any], conf: Path, *, confirmed: str,
+             request_id: str) -> tuple[list[str], str, Path, Path, tuple[int, int]]:
+    """Pre-audit, plan, digest checks and the pre-state ``note`` row (nothing on the host changes)."""
     pre_text, pre_exit, pre_n = audit(t.host, conf)
     if pre_exit == 4 or "RESULT COMPROMISE" in pre_text:
         eid = escalate("ioc", t.host, f"server-apply pre-audit of {t.host}: compromise indicators", request_id)
-        raise ExecError(f"compromise indicators on {t.host} before {t.level}: escalation {eid} stops everything")
+        raise Escalated(f"compromise indicators on {t.host} before {t.level}: escalation {eid} stops everything")
     if t.level == "remove-path" and (why := disabled_scope_problem(pre_text, t.path)):
         raise ExecError(f"remove-path refused: {why}")
     args = level_args(t, g)
@@ -421,17 +503,18 @@ def _run(t: Target, g: dict[str, Any], conf: Path, *, confirmed: str, request_id
     dry_log = _log(t.host, "plan", dry)
     if dry.returncode == 4:
         eid = escalate("ioc", t.host, f"server-apply plan on {t.host}: compromise indicators", request_id)
-        raise ExecError(f"compromise indicators on {t.host}: escalation {eid} stops everything; log {dry_log}")
-    if dry.returncode not in (0, 1):
-        raise ExecError(f"the {t.level} plan on {t.host} did not complete (exit {dry.returncode}); log {dry_log}")
-    digest = plan_sha256(dry.stdout)
-    printed = re.search(rf"^PLANDIGEST\t{re.escape(t.level)}\t([0-9a-f]{{64}})$", dry.stdout, re.M)
-    if not printed or printed[1] != digest:
+        raise Escalated(f"compromise indicators on {t.host}: escalation {eid} stops everything; log {dry_log}")
+    if dry.returncode not in (0, 1) or not dry.decoded:
+        raise ExecError(f"the {t.level} plan on {t.host} did not complete (exit {dry.returncode}"
+                        f"{'' if dry.decoded else ', output not UTF-8'}); log {dry_log}")
+    section, printed = plan_section(dry.stdout, t.level)
+    digest = plan_sha256(section)
+    if not printed or printed != digest:
         raise ExecError(f"the kit's plan digest does not match the executor's own ({digest}); log {dry_log}")
     if digest != confirmed:
         raise ExecError(f"the {t.level} plan on {t.host} changed since you confirmed it ({digest} != {confirmed}): "
                         "nothing changed; review it again")
-    pre = "".join(ln + "\n" for ln in dry.stdout.split("\n") if ln.startswith("PRESTATE\t"))
+    pre = "".join(ln + "\n" for ln in section.split("\n") if ln.startswith("PRESTATE\t"))
     pre_file = paths.state_dir() / "server-apply" / f"{t.host}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{t.level}.prestate"
     pre_file.parent.mkdir(parents=True, exist_ok=True)
     pre_file.write_text(pre, encoding="utf-8")
@@ -439,8 +522,14 @@ def _run(t: Target, g: dict[str, Any], conf: Path, *, confirmed: str, request_id
     ledger.append("note", grant_id=g["grant_id"], op="server-apply", target=":".join(filter(None, t)),
                   request_id=request_id, detail=json.dumps({
                       "prestate": str(pre_file), "prestate_sha256": hashlib.sha256(pre.encode()).hexdigest(),
-                      "prestate_lines": pre.count("\n"), "plan_sha256": digest, "plan_lines": len(plan_lines(dry.stdout)),
+                      "prestate_lines": pre.count("\n"), "plan_sha256": digest, "plan_lines": len(plan_lines(section)),
                       "pre_audit": {"exit": pre_exit, "findings": pre_n}}))
+    return args, digest, dry_log, pre_file, (pre_exit, pre_n)
+
+
+def _apply(t: Target, conf: Path, args: list[str], digest: str, *, request_id: str, pre: tuple[int, int],
+           extra: dict[str, str]) -> dict[str, Any]:
+    """The apply and the post-audit; every failure here escalates (the caller escalates the unexpected ones)."""
     args = [*args, "--apply", "--expect-digest", digest]
     check_argv(args, apply=True)
     applied = run_kit("run-host.sh", t.host, args, conf)
@@ -448,36 +537,43 @@ def _run(t: Target, g: dict[str, Any], conf: Path, *, confirmed: str, request_id
     rc = applied.returncode
     if rc == 4:
         eid = escalate("ioc", t.host, f"server-apply {t.level} on {t.host}: compromise indicators", request_id)
-        raise ExecError(f"compromise indicators on {t.host}: escalation {eid} stops everything; log {log}")
-    if rc in (2, EXIT_MISMATCH):   # refused or the plan changed on the host: nothing was changed
-        raise ExecError(f"{t.level} on {t.host} changed nothing (exit {rc}: "
+        raise Escalated(f"compromise indicators on {t.host}: escalation {eid} stops everything; log {log}")
+    steps = [int(m[2]) for m in _APPLYSTEP.finditer(applied.stdout)]
+    changed = any(code not in UNCHANGED_EXITS for code in steps)
+    if rc in UNCHANGED_EXITS and not changed and applied.decoded:   # refused, or the plan changed: nothing changed
+        raise NothingChanged(f"{t.level} on {t.host} changed nothing (exit {rc}: "
                         f"{'the plan changed on the host' if rc == EXIT_MISMATCH else 'refused'}); log {log}")
     post_text, post_exit, post_n = audit(t.host, conf)
     if post_exit == 4 or "RESULT COMPROMISE" in post_text:
         eid = escalate("ioc", t.host, f"server-apply post-audit of {t.host}: compromise indicators", request_id)
-        raise ExecError(f"compromise indicators on {t.host} after {t.level}: escalation {eid} stops everything")
+        raise Escalated(f"compromise indicators on {t.host} after {t.level}: escalation {eid} stops everything")
     problem = ""
-    if rc not in (0, 1):
+    if not applied.decoded:
+        problem = "the apply's output was not UTF-8"
+    elif rc in UNCHANGED_EXITS:
+        problem = f"a partial apply: a later step ended with exit {rc} after an earlier step had applied"
+    elif rc not in (0, 1):
         problem = {EXIT_REVERTED: "a health check failed; the pre-state was restored",
                    EXIT_NOT_REVERTED: "a health check failed and the pre-state was NOT restored"}.get(
                        rc, f"a step failed (exit {rc})")
-    elif post_exit > pre_exit or post_n > pre_n:
-        problem = f"the post-audit is worse (exit {pre_exit}->{post_exit}, findings {pre_n}->{post_n})"
+    elif post_exit > pre[0] or post_n > pre[1]:
+        problem = f"the post-audit is worse (exit {pre[0]}->{post_exit}, findings {pre[1]}->{post_n})"
     if problem:
         eid = escalate("other", t.host, f"server-apply {t.level} on {t.host}: {problem}", request_id)
-        raise ExecError(f"{t.level} on {t.host}: {problem}; escalation {eid} stops {t.host}; log {log}")
+        raise Escalated(f"{t.level} on {t.host}: {problem}; escalation {eid} stops {t.host}; log {log}")
     quarantined = re.findall(r"^QUARANTINED\t(\S+)\t(\S+)$", applied.stdout, re.M)
     return {"host": t.host, "level": t.level, **({"path": t.path} if t.path else {}), "plan_sha256": digest,
-            "exit": rc, "log": str(log), "plan_log": str(dry_log), "prestate": str(pre_file),
-            "pre_audit": {"exit": pre_exit, "findings": pre_n}, "post_audit": {"exit": post_exit, "findings": post_n},
-            **({"quarantine": quarantined[0][1]} if quarantined else {})}
+            "exit": rc, "log": str(log), **extra, "pre_audit": {"exit": pre[0], "findings": pre[1]},
+            "post_audit": {"exit": post_exit, "findings": post_n},
+            **({"quarantine": quarantined[-1][1]} if quarantined else {})}
 
 
 def preview(target: str, *, now: datetime | None = None) -> dict[str, Any]:
     """Show the plan an apply would run, without changing anything or reserving a use (``vulnscan act`` step 1).
 
     Needs a covering grant with uses left, and passes the same gates an apply does, so the operator is never asked
-    to confirm a plan the executor would refuse. Call inside the executor's confinement scope.
+    to confirm a plan the executor would refuse. Compromise indicators in the plan run open a global escalation. Call
+    inside the executor's confinement scope.
 
     Args:
         target: ``HOST:LEVEL[:path]``.
@@ -489,24 +585,32 @@ def preview(target: str, *, now: datetime | None = None) -> dict[str, Any]:
     Raises:
         ExecError: Refused.
     """
-    t = parse_target(target)
-    pre = precheck(target, {CONFIRM_KEY: "0" * 64})
+    t = precheck(target, {CONFIRM_KEY: "0" * 64})
     grants, problems = grant.load_active()
     rows = ledger.read()
-    usable = [g for g in grants if grant.covers(g, "server-apply", target)
-              and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
+    usable = [g for g in grants
+              if grant.covers(g, "server-apply", target) and grant_v2.uses_left(g, "server-apply", rows)]
     if not usable:
         raise ExecError(f"not authorized: server-apply {target}: " + ("; ".join(problems) or "no v2 grant signs it"))
     g = min(usable, key=lambda g: g["expires"])
     conf = snapshot_conf()
     try:
-        gate(pre, g, conf, now=now)
+        gate(t, g, conf, now=now)
         args = level_args(t, g)
         check_argv(args, apply=False)
         dry = run_kit("run-host.sh", t.host, args, conf)
     finally:
         shutil.rmtree(conf, ignore_errors=True)
     log = _log(t.host, "preview", dry)
-    if dry.returncode not in (0, 1):
+    if dry.returncode == 4:
+        with ledger.locked():
+            eid = escalate("ioc", t.host, f"server-apply preview on {t.host}: compromise indicators",
+                           "preview-" + os.urandom(8).hex())
+        raise ExecError(f"compromise indicators on {t.host}: escalation {eid} stops everything; log {log}")
+    if dry.returncode not in (0, 1) or not dry.decoded:
         raise ExecError(f"the {t.level} plan on {t.host} did not complete (exit {dry.returncode}); log {log}")
-    return {"plan": plan_lines(dry.stdout), "plan_sha256": plan_sha256(dry.stdout), "log": str(log)}
+    section, printed = plan_section(dry.stdout, t.level)
+    digest = plan_sha256(section)
+    if printed != digest:
+        raise ExecError(f"the kit's plan digest does not match the executor's own ({digest}); log {log}")
+    return {"plan": plan_lines(section), "plan_sha256": digest, "log": str(log)}

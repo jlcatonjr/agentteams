@@ -13,8 +13,10 @@
 # --level (server-apply l2-security): SECURITY updates only, from the cached package lists (no refresh, so the plan
 # the operator confirmed is what installs), each at its planned version; restarts only --restart-unit units that
 # still use replaced libraries, each health-checked (active + its TCP ports listening again); never reboots, never
-# --all. Exit 5: the plan on the host differs from --expect-digest (nothing changed); 7: a restarted unit failed
-# its health check (distro packages are not rolled back: the host is stopped for the operator).
+# --all. needrestart's apt hook is suspended (NEEDRESTART_SUSPEND=1, NEEDRESTART_MODE=l); an rpm scriptlet can still
+# restart a unit, which is why server-apply runs l2-security only inside the signed restart window. Exit 5: the plan
+# on the host differs from --expect-digest (nothing changed); 7: a restarted unit failed its health check (distro
+# packages are not rolled back: the host is stopped for the operator).
 #
 # Keeps existing config files on conflicts (--force-confold). Never touches sshd
 # config. Service restarts and reboots happen only when asked.
@@ -118,7 +120,7 @@ unit_ports(){   # TCP ports the unit's main process listens on, one per line, so
   ss -Hltnp 2>/dev/null | awk -v p="pid=$pid," 'index($0, p) {n=split($4, a, ":"); print a[n]}' | sort -un
 }
 unit_healthy(){   # $1 unit, $2 ports it listened on before: active 3 checks running, then each port listening again
-  local u="$1" before="$2" i ok=0 now p
+  local u="$1" before="$2" i ok=0 now p missing=""
   for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 2
     systemctl is-active --quiet "$u" || { echo "FAIL   $u not active"; return 1; }
@@ -160,7 +162,9 @@ level_main(){
   if printf '%s\n' "$plan" | grep -q "^PLAN${TAB}os${TAB}apt${TAB}"; then
     while IFS="$TAB" read -r _ _ _ pkg _ new; do specs+=("$pkg=$new"); done <<< "$plan"
     echo "+ apt-get -y install --only-upgrade ${specs[*]}"
-    DEBIAN_FRONTEND=noninteractive apt-get -y "${O[@]}" install --only-upgrade "${specs[@]}" || return 3
+    # needrestart's apt hook would restart services itself: list-only and suspended here (OD4; restarts below only)
+    DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l NEEDRESTART_SUSPEND=1 \
+      apt-get -y "${O[@]}" install --only-upgrade "${specs[@]}" || return 3
   else
     while IFS="$TAB" read -r _ _ _ nevra _; do specs+=("$nevra"); done <<< "$plan"
     local pm; pm=$(command -v dnf || command -v yum)

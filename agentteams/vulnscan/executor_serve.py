@@ -34,6 +34,7 @@ from typing import Any
 from agentteams.vulnscan import (
     escalations,
     grant,
+    grant_v2,
     ledger,
     notify,
     retry_guard,
@@ -86,7 +87,7 @@ def batch_block(cfg: dict[str, Any], op: str) -> str:
         rows = ledger.read()
     except ValueError:
         return ""   # act refuses everything on an untrusted ledger, with its own reason
-    if any(op in g.get("ops", ()) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"]) for g in grants):
+    if any(op in g.get("ops", ()) and grant_v2.uses_left(g, op, rows) for g in grants):
         return ""
     return f"no valid grant with uses left allows {op}" + (f" ({'; '.join(problems)})"[:600] if problems else "")
 

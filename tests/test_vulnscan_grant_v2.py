@@ -44,7 +44,7 @@ def server_v2(env: dict[str, Any], **kw: Any) -> dict[str, Any]:
         server_levels=[f"{h}:{lv}" for h in hosts for lv in grant_v2.LEVELS],
         remove_paths=[f"jlc-prod:{ANACONDA}", f"vk-bastion:{USER_SITE}", "vk-api:/opt/old-app"],
         restart_units=["vk-api:nginx.service"], restart_window="07:00-11:00", apps_conf_sha256=SHA,
-        major_allowed=["vk-api:api.service"])
+        major_allowed=["vk-api:api.service"], max_read_uses=500)
     args.update(kw)
     if "ancestor" not in args:
         args["ancestor"] = ancestor(env)
@@ -69,7 +69,8 @@ def test_v2_grant_signs_verifies_and_covers_exact_pairs(env: dict[str, Any]) -> 
 
 @pytest.mark.parametrize("field,value", [
     ("server_levels", ["jlc-prod:l2-security"]), ("restart_units", []), ("apps_conf_sha256", "b" * 64),
-    ("remove_paths", [f"jlc-prod:{ANACONDA}"]), ("restart_window", "00:00-23:59"), ("ancestor", "vg-" + "0" * 16)])
+    ("remove_paths", [f"jlc-prod:{ANACONDA}"]), ("restart_window", "00:00-23:59"), ("ancestor", "vg-" + "0" * 16),
+    ("max_read_uses", 499)])
 def test_every_v2_field_is_signed(env: dict[str, Any], field: str, value: Any) -> None:
     signed = sign_grant(env["pem"], server_v2(env))
     with pytest.raises(grant.GrantError):
@@ -102,6 +103,15 @@ def test_v1_signature_never_verifies_as_v2_and_v1_cannot_carry_v2_ops(env: dict[
     ({"remove_paths": ["jlc-prod:/usr/lib/python3"]}, "/usr/local"),
     ({"remove_paths": ["jlc-prod:/opt/a/../b"]}, "normalised"),
     ({"remove_paths": ["jlc-prod:/opt/a b"]}, "letters"),
+    ({"remove_paths": ["jlc-prod://opt/x"]}, "normalised"),
+    ({"remove_paths": ["jlc-prod:/usr/local/bin/tool"]}, "trust root /usr/local/bin"),
+    ({"remove_paths": ["jlc-prod:/usr/local/lib/python3.9"]}, "trust root /usr/local/lib"),
+    ({"remove_paths": ["vk-bastion:" + USER_HOME + "/.config/agentteams/x"]}, r"trust root /home/\*/\.config/agentteams"),
+    ({"remove_paths": ["vk-bastion:" + USER_HOME + "/.config"]}, "contains the trust root"),
+    ({"max_read_uses": 0}, "max_read_uses 1..500"),
+    ({"max_read_uses": 501}, "max_read_uses 1..500"),
+    ({"server_levels": ["jlc-prod:l2-security"], "remove_paths": [], "restart_units": [], "major_allowed": [],
+      "apps_conf_sha256": "", "restart_window": ""}, "restart_window"),
     ({"remove_paths": []}, "exact paths"),
     ({"apps_conf_sha256": ""}, "apps.conf sha256"),
     ({"restart_window": ""}, "restart_window"),
@@ -124,7 +134,8 @@ def test_ancestor_must_be_revoked_first_and_archived(env: dict[str, Any]) -> Non
         server_v2(env, ancestor="vg-" + "1" * 16)
     with pytest.raises(grant.GrantError, match="ancestor"):
         grant.build(ops=["server-apply"], repo_roots=[], hosts=["jlc-prod"], days=5, max_uses=5, key_id="op",
-                    governance_dir=str(env["gov"]), server_levels=["jlc-prod:l2-security"])
+                    governance_dir=str(env["gov"]), server_levels=["jlc-prod:l2-security"],
+                    restart_window="08:00-10:00")
     assert grant.revoke(live["grant_id"])
     assert not (grant.grants_dir() / f"{live['grant_id']}.json").exists()
     archived = json.loads((grant.revoked_dir() / f"{live['grant_id']}.json").read_text())
@@ -174,3 +185,87 @@ def test_unknown_build_fields_refused(env: dict[str, Any]) -> None:
 
 def test_merge_stays_reserved_and_server_apply_is_grantable() -> None:
     assert grant.OPS_RESERVED == {"merge"} and {"server-apply", "runtime-patch"} <= grant.OPS_V1
+
+
+# ---------------------------------------------------------------- Q1: separate apply and read caps
+
+def test_server_apply_uses_and_reads_have_separate_caps(env: dict[str, Any]) -> None:
+    g = sign_grant(env["pem"], server_v2(env, max_uses=2, max_read_uses=3))
+    rows: list[dict[str, Any]] = []
+
+    def begun(op: str) -> None:
+        rows.append({"kind": "begun", "grant_id": g["grant_id"], "op": op})
+    for _ in range(2):
+        begun("server-apply")
+    assert not grant_v2.uses_left(g, "server-apply", rows) and grant_v2.uses_left(g, "server-audit", rows)
+    for op in ("server-audit", "server-dryrun", "server-audit"):
+        begun(op)
+    assert not grant_v2.uses_left(g, "server-audit", rows) and not grant_v2.uses_left(g, "server-dryrun", rows)
+    v1 = {"grant_id": "vg-" + "3" * 16, "ops": ["server-audit"], "max_uses": 1}
+    assert grant_v2.uses_left(v1, "server-audit", [])
+    assert not grant_v2.uses_left(v1, "server-audit", [{"kind": "begun", "grant_id": v1["grant_id"], "op": "x"}])
+
+
+def test_max_read_uses_only_on_server_apply_grants(env: dict[str, Any]) -> None:
+    (env["tmp"] / "repos").mkdir()
+    with pytest.raises(grant.GrantError, match="max_read_uses"):
+        grant.build(ops=["stage-fix", "runtime-patch"], repo_roots=[str(env["tmp"] / "repos")], hosts=[], days=5,
+                    max_uses=5, key_id="op", governance_dir=str(env["gov"]), runtimes=["node@22"],
+                    ancestor=ancestor(env), max_read_uses=5)
+
+
+# ---------------------------------------------------------------- Rule 12: the revoke archive (5a, 5b, 5c)
+
+def test_a_revoked_grant_moved_back_is_never_honoured(env: dict[str, Any]) -> None:
+    g = sign_grant(env["pem"], grant.build(ops=["server-audit"], repo_roots=[], hosts=["jlc-prod"], days=5,
+                                           max_uses=5, key_id="op", governance_dir=str(env["gov"])))
+    grant.install(g)
+    grant.revoke(g["grant_id"])
+    (grant.revoked_dir() / f"{g['grant_id']}.json").replace(grant.grants_dir() / f"{g['grant_id']}.json")
+    shutil_copy = (grant.grants_dir() / f"{g['grant_id']}.json").read_bytes()
+    (grant.revoked_dir() / f"{g['grant_id']}.json").write_bytes(shutil_copy)   # un-revoked, archive kept
+    valid, problems = grant.load_active()
+    assert valid == [] and "was revoked" in problems[0], problems
+
+
+def test_an_archived_ancestor_must_be_that_grant(env: dict[str, Any]) -> None:
+    other = sign_grant(env["pem"], grant.build(ops=["server-audit"], repo_roots=[], hosts=["jlc-prod"], days=5,
+                                               max_uses=5, key_id="op", governance_dir=str(env["gov"])))
+    grant.revoked_dir().mkdir(parents=True, exist_ok=True)
+    fake = "vg-" + "4" * 16
+    (grant.revoked_dir() / f"{fake}.json").write_text(json.dumps(other))   # validly signed, but another grant
+    with pytest.raises(grant.GrantError, match="not a revoked, validly signed"):
+        server_v2(env, ancestor=fake)
+    assert not grant.ancestor_ok(grant.revoked_dir() / f"{fake}.json", fake)
+
+
+def test_the_lineage_is_checked_at_load_too(env: dict[str, Any]) -> None:
+    anc = ancestor(env)
+    g = sign_grant(env["pem"], server_v2(env, ancestor=anc))
+    grant.install(g)
+    assert [v["grant_id"] for v in grant.load_active()[0]] == [g["grant_id"]]
+    archived = grant.revoked_dir() / f"{anc}.json"
+    saved = archived.read_bytes()
+    archived.unlink()                                              # the ancestor's archive is gone
+    valid, problems = grant.load_active()
+    assert valid == [] and "lineage" in problems[0], problems
+    archived.write_bytes(saved)
+    (grant.grants_dir() / f"{anc}.json").write_bytes(saved)        # the ancestor moved back (un-revoked)
+    valid, problems = grant.load_active()
+    assert valid == [] and any("lineage" in p for p in problems) and any("was revoked" in p for p in problems)
+
+
+def test_check_only_validates_the_reissue_while_the_ancestor_is_still_installed(env: dict[str, Any]) -> None:
+    old = sign_grant(env["pem"], grant.build(ops=["server-audit", "server-dryrun"], repo_roots=[],
+                                            hosts=["jlc-prod", "vk-api", "vk-bastion"], days=30, max_uses=200,
+                                            key_id="op", governance_dir=str(env["gov"])))
+    grant.install(old)
+    rec = server_v2(env, ancestor=old["grant_id"], before_revoke=True)        # nothing revoked yet: still valid
+    assert rec["ancestor"] == old["grant_id"]
+    with pytest.raises(grant.GrantError, match="revoke it first"):
+        server_v2(env, ancestor=old["grant_id"])                              # a real sign still needs the revoke
+    with pytest.raises(grant.GrantError, match="max_read_uses"):
+        server_v2(env, ancestor=old["grant_id"], before_revoke=True, max_read_uses=0)   # a refusal, old untouched
+    assert (grant.grants_dir() / f"{old['grant_id']}.json").is_file()
+    with pytest.raises(grant.GrantError, match="installed, validly signed"):
+        server_v2(env, ancestor="vg-" + "5" * 16, before_revoke=True)

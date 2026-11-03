@@ -201,6 +201,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--confirm-review-sha256", default=None)
     sp.add_argument("--allow-checkout-signing", action="store_true")
     host_change.add_grant_options(sp)
+    sp.add_argument("--check-only", action="store_true",
+                    help="sign: validate the whole record (bounds, v2 fields, the still-installed ancestor); sign nothing")
     sp = sub.add_parser("act", help="run one grant-covered action through the executor")
     sp.add_argument("op", choices=sorted(grant.OPS_V1))
     sp.add_argument("target")
@@ -333,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
             ok = grant.revoke(args.grant_id)
             print("revoked" if ok else "no such grant")
             return 0 if ok else 1
-        capped = grant.cap_problem()
+        capped = "" if args.check_only else grant.cap_problem()   # check-only runs before the revoke that frees one
         if capped:
             print(f"refused: {capped}", file=sys.stderr)
             return 2
@@ -346,10 +348,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             rec = grant.build(ops=args.op, repo_roots=roots, hosts=args.host, days=args.days,
                               max_uses=args.max_uses, key_id=args.key_id, governance_dir=args.governance_dir,
-                              **host_change.grant_fields(args))
+                              before_revoke=args.check_only, **host_change.grant_fields(args))
         except grant.GrantError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
+        if args.check_only:
+            print(f"check-only: the {'v2 ' if rec.get('version') == 2 else ''}grant record is valid; nothing signed")
+            return 0
         signed = grant.sign(rec, confirm_sha256=args.confirm_review_sha256, allow_checkout=args.allow_checkout_signing)
         if signed is None:
             return 1

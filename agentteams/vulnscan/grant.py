@@ -98,7 +98,8 @@ def signed_values(record: dict[str, Any]) -> list[str]:
 
 
 def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int, max_uses: int,
-          key_id: str, governance_dir: str, now: datetime | None = None, **v2: Any) -> dict[str, Any]:
+          key_id: str, governance_dir: str, now: datetime | None = None, before_revoke: bool = False,
+          **v2: Any) -> dict[str, Any]:
     """Build an unsigned grant, enforcing every v1 bound (and every v2 bound for a v2 grant).
 
     A grant naming ``server-apply`` or ``runtime-patch``, or given any v2 field, is built as a v2 grant
@@ -114,6 +115,7 @@ def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int,
         governance_dir: Team directory whose ``references/security-decisions.log.csv`` the executor
             checks for HALTs. It is signed into the grant, so unsigned config cannot redirect the check.
         now: Clock override (tests).
+        before_revoke: ``grant sign --check-only``: the v2 ancestor is still installed and must verify there.
         **v2: v2 fields (``server_levels``, ``restart_units``, ``restart_window``, ``apps_conf_sha256``,
             ``major_allowed``, ``remove_paths``, ``runtimes``, ``ancestor``).
 
@@ -158,11 +160,11 @@ def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int,
            "governance_dir": str(gov)}
     if not set(ops) & grant_v2.V2_OPS and not any(v2.values()):
         return rec
-    args = {name: v2.get(name) or ([] if name in grant_v2.LIST_FIELDS else "") for name in grant_v2.EXTRA_FIELDS
-            if name != "version"}
+    args = {name: v2.get(name) or ([] if name in grant_v2.LIST_FIELDS else 0 if name == "max_read_uses" else "")
+            for name in grant_v2.EXTRA_FIELDS if name != "version"}
     try:
         return grant_v2.extend(rec, **args, grants_dir=grants_dir(), revoked_dir=revoked_dir(),
-                               ancestor_ok=lambda p: _signed_record(p) is not None)
+                               ancestor_ok=ancestor_ok, before_revoke=before_revoke)
     except GrantError:
         raise
     except ValueError as exc:
@@ -462,6 +464,11 @@ def _scan(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], list[st
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
             verify(rec, now=now)
+            if (revoked_dir() / f"{rec['grant_id']}.json").exists():   # Rule 12: a revoked grant moved back
+                raise GrantError(f"{rec['grant_id']} was revoked (it is in {revoked_dir()}): never honoured again")
+            if grant_v2.is_v2(rec) and rec["ancestor"] and (why := grant_v2.ancestor_problem(
+                    rec["ancestor"], grants_dir=d, revoked_dir=revoked_dir(), ancestor_ok=ancestor_ok)):
+                raise GrantError(f"its lineage no longer holds: {why}")
         except (OSError, ValueError, TypeError, KeyError) as exc:
             problems.append(f"{f.name}: {exc}")
             continue
@@ -589,7 +596,7 @@ def previous_grant() -> dict[str, Any] | None:
 
 
 def _signed_record(path: Path) -> dict[str, Any] | None:
-    """Return one grant file's record when it verifies as of its own issue time, else None."""
+    """Return one grant file's record when it verifies as of its own issue time and is named for itself, else None."""
     if file_problem(path):
         return None
     try:
@@ -597,7 +604,22 @@ def _signed_record(path: Path) -> dict[str, Any] | None:
         verify(rec, now=datetime.fromisoformat(rec["issued"]))
     except (OSError, ValueError, TypeError, KeyError):   # GrantError is a ValueError
         return None
-    return rec
+    return rec if rec.get("grant_id") == path.stem else None
+
+
+def ancestor_ok(path: Path, grant_id: str) -> bool:
+    """Return whether the archived ``path`` is grant ``grant_id``, validly signed (a v2 re-issue's ancestor check).
+
+    Args:
+        path: ``<revoked_dir>/<grant_id>.json``.
+        grant_id: The ancestor id the re-issue names.
+
+    Returns:
+        True when the file's record verifies as of its issue time and its ``grant_id`` is ``grant_id`` and the
+        file's name.
+    """
+    rec = _signed_record(path)
+    return rec is not None and rec["grant_id"] == grant_id == path.stem
 
 
 def registry_proposal(entries: list[Any], protected: dict[str, Path]) -> tuple[dict[str, str], list[str]]:

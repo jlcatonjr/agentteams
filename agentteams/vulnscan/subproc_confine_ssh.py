@@ -328,7 +328,7 @@ def _check_staged(copy: Path, digests: dict[str, str]) -> None:
 
 
 def run_kit(script: Path, host: str, script_args: list[str], *, conf_dir: Path, logs: Path,
-            timeout: float = 3600) -> subprocess.CompletedProcess:
+            timeout: float = 3600, text: bool = True) -> subprocess.CompletedProcess:
     """Run one packaged server-kit script (``bash script host args``) against ``host`` in the tools container.
 
     Args:
@@ -339,6 +339,7 @@ def run_kit(script: Path, host: str, script_args: list[str], *, conf_dir: Path, 
         conf_dir: The server-kit config dir (``hosts.conf``, ``apps.conf``, ``ioc-*.txt``), mounted read-only.
         logs: Log directory, the only writable mount.
         timeout: Seconds.
+        text: Decode the output (False: bytes, which server-apply decodes itself with ``errors="replace"``).
 
     Returns:
         The completed process.
@@ -367,6 +368,6 @@ def run_kit(script: Path, host: str, script_args: list[str], *, conf_dir: Path, 
         _check_staged(kit, digests)
         return run_confined("server-kit", ["bash", str(kit / script.name), host, *script_args], writable=[logs],
                             readonly=[kit, conf_dir], mounts=mounts, egress=(endpoint,),
-                            env=env, timeout=timeout, proxy_name=proxy)
+                            env=env, timeout=timeout, proxy_name=proxy, text=text)
     finally:
         shutil.rmtree(work, ignore_errors=True)

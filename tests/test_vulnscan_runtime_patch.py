@@ -5,16 +5,20 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 pytest.importorskip("cryptography")
-from agentteams.vulnscan import escalations, executor, grant, host_change, ledger, runtime_patch  # noqa: E402
+from agentteams.vulnscan import engine, escalations, executor, grant, host_change, ledger, runtime_patch  # noqa: E402
 from tests._vulnscan_helpers import operator_home, sign_grant  # noqa: E402
 
 TAG = "arm64_sequoia"
+REAL_LATEST = runtime_patch.latest_findings   # before the fixture replaces it
+FLAGGED = {"kind": "runtime", "target": engine.LOCAL_TARGET, "name": "node", "version": "22.11.0",
+           "detail": "behind-patch: 22.12.0 is out [brew]", "locations": ["/opt/homebrew/Cellar/node@22/22.11.0/bin/node"]}
 
 
 class FakeBrew:
@@ -25,14 +29,19 @@ class FakeBrew:
         self.dry = "==> Would upgrade 1 outdated package:\nnode@22 22.11.0 -> 22.12.0\n"
         self.upgrade_rc = 0
         self.after = "22.12.0"
+        self.poured = True
+        self.deps = "openssl@3\nmpdecimal\n"
         self.calls: list[tuple[list[str], dict[str, str]]] = []
 
     def __call__(self, argv: list[str], env: dict[str, str]) -> subprocess.CompletedProcess:
         self.calls.append((argv, env))
+        if argv[0] == "deps":
+            return subprocess.CompletedProcess(argv, 0, self.deps, "")
         if argv[0] == "info":
             info = dict(self.info)
             if any(a[0] == ["upgrade", "--formula", "node@22"] for a in self.calls):
                 info["linked_keg"] = self.after
+                info["installed"] = [{"version": self.after, "poured_from_bottle": self.poured}]
             return subprocess.CompletedProcess(argv, 0, json.dumps({"formulae": [info]}), "")
         if "--dry-run" in argv:
             return subprocess.CompletedProcess(argv, 0, self.dry, "")
@@ -46,9 +55,12 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(runtime_patch, "_default_run", brew)
     monkeypatch.setattr(runtime_patch, "bottle_tag", lambda: TAG)
     monkeypatch.setattr(runtime_patch, "own_tool_formulae", lambda: {"python@3.14"})
+    monkeypatch.setattr(runtime_patch, "latest_findings", lambda: [FLAGGED])
+    monkeypatch.setattr(runtime_patch.runtimes, "patch_release_date", lambda kind, v: date(2026, 10, 1))
     for fn in ("check", "run", "preview"):   # the defaults were bound at definition: point them at the fake
         f = getattr(runtime_patch, fn)
-        monkeypatch.setattr(f, "__kwdefaults__", {**(f.__kwdefaults__ or {}), ("run" if fn == "check" else "runner"): brew})
+        monkeypatch.setattr(f, "__kwdefaults__",
+                            {**(f.__kwdefaults__ or {}), ("run" if fn == "check" else "runner"): brew})
     (tmp_path / "repos").mkdir()
     old = sign_grant(world["pem"], grant.build(ops=["stage-fix"], repo_roots=[str(tmp_path / "repos")], hosts=[],
                                               days=5, max_uses=5, key_id="op", governance_dir=str(world["gov"])))
@@ -156,15 +168,65 @@ def test_operator_act_asks_and_runs_only_on_yes(env: dict[str, Any]) -> None:
     assert yes["status"] == "done" and calls[0]["payload"] == {"confirm_sha256": digest()}
 
 
-def test_operator_act_without_a_terminal_needs_the_digest(env: dict[str, Any]) -> None:
+def test_operator_act_needs_a_terminal_even_with_the_digest(env: dict[str, Any]) -> None:
     ran: list[Any] = []
-    res = host_change.operator_act("runtime-patch", "node@22", env["cfg"], confirm_sha256=None,
-                                   act=lambda *a, **k: ran.append(1) or {"status": "done"}, say=lambda _: None,
-                                   tty=lambda: False)
-    assert res["status"] == "refused" and "--confirm-plan-sha256" in res["detail"] and not ran
-    res = host_change.operator_act("runtime-patch", "node@22", env["cfg"], confirm_sha256="b" * 64,
-                                   act=lambda *a, **k: ran.append(1) or {"status": "done"}, say=lambda _: None)
+
+    def run(*a: Any, **k: Any) -> dict[str, Any]:
+        ran.append(1)
+        return {"status": "done"}
+    for confirm in (None, digest()):
+        res = host_change.operator_act("runtime-patch", "node@22", env["cfg"], confirm_sha256=confirm, act=run,
+                                       ask=lambda _: "y", say=lambda _: None, tty=lambda: False)
+        assert res["status"] == "refused" and "terminal" in res["detail"] and not ran
+    res = host_change.operator_act("runtime-patch", "node@22", env["cfg"], confirm_sha256="b" * 64, act=run,
+                                   ask=lambda _: "y", say=lambda _: None, tty=lambda: True)
     assert res["status"] == "refused" and not ran
-    res = host_change.operator_act("runtime-patch", "node@22", env["cfg"], confirm_sha256=digest(),
-                                   act=lambda *a, **k: ran.append(1) or {"status": "done"}, say=lambda _: None)
+    res = host_change.operator_act("runtime-patch", "node@22", env["cfg"], confirm_sha256=digest(), act=run,
+                                   ask=lambda _: "y", say=lambda _: None, tty=lambda: True)
     assert res["status"] == "done" and ran == [1]
+
+
+# ---------------------------------------------------------------- 8b: flagged, aged, poured; the executor's toolchain
+
+def test_a_formula_the_latest_scan_did_not_flag_is_refused(env: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    for findings in ([], [{**FLAGGED, "target": "web1"}], [{**FLAGGED, "detail": "eol [nvm]"}],
+                     [{**FLAGGED, "locations": ["/opt/homebrew/Cellar/node@20/20.1.0/bin/node"]}]):
+        monkeypatch.setattr(runtime_patch, "latest_findings", lambda f=findings: f)
+        with pytest.raises(executor.ExecError, match="no this-machine runtime finding"):
+            digest()
+
+
+@pytest.mark.parametrize("released,match", [(date(2026, 10, 25), "released"), (None, "unknown")])
+def test_s10_cooldown_on_the_target_version(env: dict[str, Any], monkeypatch: pytest.MonkeyPatch,
+                                            released: date | None, match: str) -> None:
+    monkeypatch.setattr(runtime_patch.runtimes, "patch_release_date", lambda kind, v: released)
+    with pytest.raises(executor.ExecError, match=match):
+        runtime_patch.check("node@22", apply=False, today=date(2026, 11, 3))
+
+
+def test_a_source_build_after_the_upgrade_escalates(env: dict[str, Any]) -> None:
+    d = digest()
+    env["brew"].poured = False
+    res = executor.act("runtime-patch", "node@22", env["cfg"], payload={"confirm_sha256": d})
+    assert res["status"] == "failed" and "poured False" in res["detail"] and escalations.open_escalations()
+
+
+def test_the_executors_toolchain_and_its_dependencies_are_refused(env: dict[str, Any],
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    assert {"openssl@3", "ca-certificates"} <= runtime_patch.TOOL_DEPENDENCIES
+    chain = runtime_patch.toolchain(env["brew"])
+    assert {"python@3.14", "openssl@3", "mpdecimal", "ca-certificates"} <= chain
+    env["brew"].deps = "node@22\n"                       # a tool depends on node@22 on this machine
+    with pytest.raises(executor.ExecError, match="depends on"):
+        digest()
+
+
+def test_latest_findings_reads_the_newest_completed_run(env: dict[str, Any]) -> None:
+    from agentteams.vulnscan import paths
+
+    with pytest.raises(executor.ExecError, match="no completed scan"):
+        REAL_LATEST()
+    run = paths.state_dir() / "2026-11-02"
+    run.mkdir(parents=True)
+    (run / "summary.json").write_text(json.dumps({"findings": [FLAGGED]}))
+    assert REAL_LATEST() == [FLAGGED]
