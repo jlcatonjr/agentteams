@@ -1012,15 +1012,18 @@ def _validate_memory_index_bytes(
     )
 
 
-def _read_memory_index(output_dir: Path) -> dict[str, object]:
+def _read_memory_index(output_dir: Path, *, cache: bool = True) -> dict[str, object]:
     """Load and parse references/memory-index.json (single file or shards) from output_dir.
+
+    With ``cache=False`` the validation runs in full and the ``memory-index.vcache`` sidecar is neither read nor
+    written, so a read-only command (``--query-index``) writes nothing.
 
     Raises RuntimeError when the file, or any shard it lists, is missing or invalid.
     """
     from agentteams.memory_index_store import orphan_part_files, read_memory_index_payload
 
     index, chunks = read_memory_index_payload(output_dir / MEMORY_INDEX_REL_PATH)
-    _validate_memory_index_bytes(index, chunks, output_dir)
+    _validate_memory_index_bytes(index, chunks, output_dir if cache else None)
     if orphans := orphan_part_files(output_dir / MEMORY_INDEX_REL_PATH):  # older writer left them
         print(f"  !  {len(orphans)} unused memory-index.part-*.json file(s) beside a single-file "
               "index (an older agentteams rewrote it?); --refresh-index removes them.", file=sys.stderr)
@@ -1047,18 +1050,18 @@ def _run_refresh_index(manifest: dict, output_dir: Path) -> int:
 def _run_query_index(
     manifest: dict, output_dir: Path, query: str, k: int, strategy: str = "lexical"
 ) -> int:
-    """Query memory-index.json and print ranked hits."""
+    """Query memory-index.json and print ranked hits. Read-only: a stale index is reported, never rebuilt.
+
+    A query used to rebuild a stale index, rewriting the tracked memory-index.json (and its .vcache) with or
+    without ``--no-scan`` (baseAgent P6, 2026-11-02).
+    """
     from agentteams.memory_index import is_index_stale, query_index
 
-    index = _read_memory_index(output_dir)
+    index = _read_memory_index(output_dir, cache=False)
     sources = _memory_index_sources(manifest, output_dir)
     if is_index_stale(index, sources, root=_memory_index_root(manifest, output_dir)):
-        refreshed_path = _write_memory_index(manifest, output_dir)
-        index = _read_memory_index(output_dir)
-        print(
-            "  !  Index was stale relative to source files. "
-            f"Auto-refreshed: {refreshed_path}"
-        )
+        print("  !  The memory index is stale relative to its source files, so results may miss recent changes. "
+              "A query never rebuilds it; run `agentteams --refresh-index`.", file=sys.stderr)
 
     hits = query_index(index, query, k=k, strategy=strategy)
 

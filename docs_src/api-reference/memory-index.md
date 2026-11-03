@@ -106,7 +106,7 @@ Check if any source file is newer than the index's `built_at` timestamp or no lo
 
 - `index` (`dict[str, Any]`) — Index dict from `build_memory_index()`.
 - `sources` (`Iterable[Path | str]`) — Original source paths (same list used for build, or a subset).
-- `root` (`Path | None`, keyword-only) — The project root the index was built against. **Required when the index stores relative paths:** without it each `path` resolves against the process CWD, the hash read fails, and the index reports stale on every call — triggering a full rebuild per query. Default: `None`, for indexes storing absolute paths.
+- `root` (`Path | None`, keyword-only) — The project root the index was built against. **Required when the index stores relative paths:** without it each `path` resolves against the process CWD, the hash read fails, and the index reports stale on every call (every query warns, and `--refresh-index` always rebuilds). Default: `None`, for indexes storing absolute paths.
 
 **Returns:** `bool` — `True` if any source content hash mismatches indexed `source_hash`, or if any source mtime > index `built_at` (index is stale); `False` otherwise.
 
@@ -307,8 +307,9 @@ Use `--refresh-index` after editing durable sources (for example `workSummaries/
 
 Query CLI synchronization behavior:
 
-- `--query-index` now checks staleness before serving results.
-- When stale, it auto-refreshes `references/memory-index.json` and then executes the query.
+- `--query-index` is read-only (baseAgent P6, 2026-11-02). It checks staleness and reports a stale index on stderr;
+  it never rebuilds the index or stores the validation sidecar. Until then a stale query rewrote the tracked
+  `memory-index.json`, with or without `--no-scan`.
 - `--refresh-index` remains useful for proactive pre-warm workflows and CI/operator scripts.
 
 Incremental update mode (feature-flagged) — see [`memory_index_incremental`](memory-index-incremental.md):
@@ -329,7 +330,7 @@ Domain boundary note:
 
 - **Durable sources** (I7): Caller is responsible for passing explicit source paths; the module never globs `tmp/` or ignored directories
 - **Absence safety** (I5): Empty source list is valid; returns a skeleton index with zero documents
-- **Stale detection** (via `is_index_stale()`, see the [stale-detection guide](../stale-detection-guide.md)) — Query CLI auto-refreshes stale indexes; callers may still refresh proactively
+- **Stale detection** (via `is_index_stale()`, see the [stale-detection guide](../stale-detection-guide.md)) — the query CLI reports a stale index and never rebuilds it; `--refresh-index` rebuilds
 - **Fallback protocol** — `@navigator` consults this index first, then opens referenced files for detail, then falls back to filesystem search
 - **Consumer-declared source dirs:** `brief.json` may add a `memory_index_extra_dirs` list — project-relative directories (recursive `*.md` scan) or glob patterns (literal expansion). Absolute paths are rejected; traversal is rejected via `Path.resolve` + `relative_to`; symlink escapes are rejected via a post-glob `os.path.realpath` check. Resolved paths are threaded through `analyze.build_manifest` and `build_team._memory_index_sources` and merged with the default source set.
 
