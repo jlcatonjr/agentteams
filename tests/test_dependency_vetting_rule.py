@@ -95,7 +95,7 @@ def test_local_repository_carve_out_lifts_the_cooldown_only():
     body = _s10_body()
     start = body.index("**Local interdependent-repository carve-out")
     carve = body[start: body.index("- ✅ Pin exact versions", start)]
-    assert "{S10_COOLDOWN_EXEMPT_REPOS}" in carve and "`s10_cooldown_exempt_repos`" in carve
+    assert "{S10_COOLDOWN_EXEMPT_REPOS}" in carve and "`s10_cooldown_exempt_repos` alone exempts nothing" in carve
     assert "lifts the cooldown only" in carve and "must still pass the" in carve and "Rule S-9" in carve
     assert "latest-stable rule still applies" in carve and "release candidate still needs a recorded" in carve
     assert "A repository not listed stays under the cooldown" in carve

@@ -80,3 +80,21 @@ def test_only_the_signed_repository_is_exempted(tmp_path, stub_ed25519) -> None:
     team = _team(tmp_path)
     _log(team, _row(_ACTION))
     assert gate.authorized_exempt_repos(team, [_REPO, "jlcatonjr/researchteam"], consume=True, now=_T0) == [_REPO]
+
+
+def test_a_halt_after_registration_removes_it_at_once(tmp_path, stub_ed25519) -> None:
+    team = _team(tmp_path)
+    _log(team, _row(_ACTION))
+    assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0) == [_REPO]
+    _log(team, _row(_ACTION, verdict="HALT", stamp="2026-11-04"))   # on the instance
+    assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
+    team2 = _team(tmp_path / "b")
+    _log(team2, _row(_ACTION))
+    assert gate.authorized_exempt_repos(team2, [_REPO], consume=True, now=_T0) == [_REPO]
+    _log(team2, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-04"))   # on the family
+    assert gate.authorized_exempt_repos(team2, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
+
+
+def test_case_only_duplicates_render_once(tmp_path) -> None:
+    team = _team(tmp_path, governed=False)
+    assert gate.authorized_exempt_repos(team, ["JLCatonJr/AgentTeams", _REPO], consume=False) == ["JLCatonJr/AgentTeams"]

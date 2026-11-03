@@ -87,11 +87,13 @@ def _check_new(team_dir: Path, action: str) -> dict[str, str]:
 def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime) -> None:
     """Authorize *repo* or raise (RuntimeError, ExceptionRegistryError, OSError or ValueError)."""
     action = action_for(repo)
+    # C-2 first, before any carry-over: a HALT recorded after registration removes the repository at once.
+    security_gate._assert_no_unretracted_halt(team_dir, action=S10_EXEMPT_KIND)
+    security_gate._assert_no_unretracted_halt(team_dir, action=action)
     entries = entries_for(team_dir, action)
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
     if any(_unbound_reason(team_dir, e) is None for e in active):
         return
-    security_gate._assert_no_unretracted_halt(team_dir, action=S10_EXEMPT_KIND)
     lapsed = [str(e.get("id")) for e in entries if (e.get("status") or "active").strip().lower() == "active"]
     row = _check_new(team_dir, action)
     assert_within_aggregate_cap(team_dir, adding=1, now=now, retiring=lapsed)
@@ -124,13 +126,18 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
         now: Reference time (defaults to now, UTC).
 
     Returns:
-        The authorized ``owner/name`` identifiers, in the brief's order, de-duplicated. Invalid entries are dropped.
+        The authorized ``owner/name`` identifiers, in the brief's order, de-duplicated ignoring case. Invalid
+        entries are dropped.
 
     Raises:
-        Nothing: a refusal or an unreadable log leaves that repository out (the cooldown applies to it).
+        RuntimeError: The signing switch can't be read (fail-closed). A per-repository refusal or an unreadable log
+            raises nothing: it leaves that repository out (the cooldown applies to it).
     """
-    valid = list(dict.fromkeys(r for r in repos if isinstance(r, str) and _REPO_ID_RE.fullmatch(r))) \
-        if isinstance(repos, list) else []
+    by_key: dict[str, str] = {}  # case-folded: GitHub treats Foo/Bar and foo/bar as one repository
+    for r in repos if isinstance(repos, list) else []:
+        if isinstance(r, str) and _REPO_ID_RE.fullmatch(r):
+            by_key.setdefault(r.lower(), r)
+    valid = list(by_key.values())
     if not valid:
         return []
     if not _enforce_decision_signing(team_dir):

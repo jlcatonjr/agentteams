@@ -40,14 +40,14 @@ def test_an_entry_that_could_carry_prose_is_dropped() -> None:
 def test_the_rendered_rule_names_only_what_the_gate_authorized() -> None:
     text = _security_text({}, authorized=["jlcatonjr/agentteams", "jlcatonjr/researchteam"])
     assert "Local interdependent-repository carve-out" in text
-    assert "Listed: `jlcatonjr/agentteams`, `jlcatonjr/researchteam`." in text
+    assert "window:\n  `jlcatonjr/agentteams`, `jlcatonjr/researchteam`. Only a repository named here is exempt" in text
     assert "{S10_COOLDOWN_EXEMPT_REPOS}" not in text
     assert "local-repository carve-outs) the cooldown" in text
 
 
 def test_without_the_key_the_rule_says_the_cooldown_applies_to_everything() -> None:
     text = _security_text({})
-    assert "Listed: none for this project, so the cooldown applies to every release." in text
+    assert "window:\n  none for this project, so the cooldown applies to every release. Only a repository named" in text
 
 
 def test_a_bare_name_is_refused() -> None:
@@ -67,4 +67,4 @@ def test_the_trigger_and_verdict_tables_know_the_carve_out() -> None:
 def test_the_raw_brief_list_never_renders_without_the_gate() -> None:
     # A path that skips the gate (convert, interop) must fail closed (Rule 15, @security 2026-11-03).
     text = _security_text({"s10_cooldown_exempt_repos": ["jlcatonjr/agentteams"]})
-    assert "Listed: none for this project" in text and "`jlcatonjr/agentteams`" not in text
+    assert "none for this project, so the cooldown" in text and "`jlcatonjr/agentteams`" not in text
