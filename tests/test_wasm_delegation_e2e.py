@@ -76,7 +76,8 @@ def test_parent_to_child_run_on_real_guests_with_the_attenuated_grant(tmp_path: 
     monkeypatch.setattr(L, "build_provider", lambda *a, **k: MP.Provider(MP.PROVIDERS["stub"], None, "",
                                                                          MP.StubProvider(script)))
     res = L.stage0(team.agent_spec("orchestrator"), "Delegate the reading.", project_root=root, budget=Budget(),
-                   resolver=DevResolver(), stub_script=[], resolve_agent=team.agent_spec)
+                   resolver=DevResolver(), stub_script=[], resolve_agent=team.agent_spec,
+                   host_confine="off")                     # in-process Stage 1, so the spy and provider reach it
     assert (res.status, res.output) == ("ok", "root final"), res
     own = root / ".agentteams" / "wasm" / "scratch" / "primary-producer"
     assert (own / "c.txt").read_text() == "child wrote"                     # the child's own scratch

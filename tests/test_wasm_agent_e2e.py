@@ -107,7 +107,8 @@ def test_full_run_in_process(tmp_path: Path, argv_spy: list) -> None:
         tool_reply(("t5", "read_file", {"path": "/scratch/out.txt"})),
         text_reply("finished"),
     ]
-    res = _run(root, scratch, script)
+    # host_confine=off keeps Stage 1 in this process, where the spy reaches it; each guest still nests where it can
+    res = _run(root, scratch, script, host_confine="off")
     assert (res.status, res.output) == ("ok", "finished"), res
     assert (root / "docs" / "a.md").read_text() == "granted doc\n"          # ro: host file unchanged
     assert (scratch / "out.txt").read_text() == "from the guest"            # rw scratch persisted
@@ -124,7 +125,7 @@ def test_full_run_in_process(tmp_path: Path, argv_spy: list) -> None:
     assert len(argv_spy) == len(steps) + 1
     assert not (root / ".agentteams" / "wasm" / "exec").exists() or not any(
         (root / ".agentteams" / "wasm" / "exec").iterdir())                 # exec dirs removed at release
-    assert "WASM host not OS-confined" in " ".join(res.notices)
+    assert "WASM host not OS-confined: host_confine=off" in res.notices
 
 
 @needs_wasmtime
@@ -142,7 +143,7 @@ def test_in_guest_results_reach_the_model(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(L, "build_provider", lambda *a, **k: MP.Provider(MP.PROVIDERS["stub"], None, "",
                                                                          MP.StubProvider(script)))
     root, scratch = _project(tmp_path)
-    res = _run(root, scratch, [])
+    res = _run(root, scratch, [], host_confine="off")                       # in-process, so the patch reaches it
     assert res.status == "ok"
     results = {b["tool_use_id"]: b for b in seen[1][-1]["content"]}
     assert results["t1"]["content"] == "granted doc\n" and results["t1"]["is_error"] is False
