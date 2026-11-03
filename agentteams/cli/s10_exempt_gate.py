@@ -79,17 +79,19 @@ def _check_new(team_dir: Path, action: str) -> dict[str, str]:
         raise RuntimeError(f"the decision is inconsistent: {exc}") from exc
     if not exception:  # unreachable while effect_relaxes classifies as relaxing; fail closed if that ever drifts
         raise RuntimeError("the decision does not classify as an operator-signed exception")
-    security_gate._assert_no_unretracted_halt(team_dir, action=S10_EXEMPT_KIND)   # the family (C-2)
-    security_gate._assert_destructive_action_allowed(team_dir, action=action, consume=False)
+    exempt_action, exempt_family = action, S10_EXEMPT_KIND
+    security_gate._assert_no_unretracted_halt(team_dir, action=exempt_family)   # the family (C-2)
+    security_gate._assert_destructive_action_allowed(team_dir, action=exempt_action, consume=False)
     return row
 
 
 def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime) -> None:
     """Authorize *repo* or raise (RuntimeError, ExceptionRegistryError, OSError or ValueError)."""
     action = action_for(repo)
+    exempt_action, exempt_family = action, S10_EXEMPT_KIND
     # C-2 first, before any carry-over: a HALT recorded after registration removes the repository at once.
-    security_gate._assert_no_unretracted_halt(team_dir, action=S10_EXEMPT_KIND)
-    security_gate._assert_no_unretracted_halt(team_dir, action=action)
+    security_gate._assert_no_unretracted_halt(team_dir, action=exempt_family)
+    security_gate._assert_no_unretracted_halt(team_dir, action=exempt_action)
     entries = entries_for(team_dir, action)
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
     if any(_unbound_reason(team_dir, e) is None for e in active):
@@ -99,7 +101,7 @@ def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime) -
     assert_within_aggregate_cap(team_dir, adding=1, now=now, retiring=lapsed)
     if not consume:
         return
-    security_gate._assert_destructive_action_allowed(team_dir, action=action, consume=True)
+    security_gate._assert_destructive_action_allowed(team_dir, action=exempt_action, consume=True)
     entry_id = f"{action}@{(row.get('signature') or '').strip()[:16]}"
     for old_id in lapsed:
         retire_exception(team_dir, old_id, reason=f"replaced by {entry_id}")
