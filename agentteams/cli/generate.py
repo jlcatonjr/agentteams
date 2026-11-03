@@ -16,8 +16,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
+from agentteams import update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
@@ -40,7 +42,8 @@ from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
-from agentteams.cli.frozen_render import drop_frozen, frozen_refusal
+from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
+from agentteams.cli.s10_exempt_gate import authorize_into
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
@@ -185,11 +188,34 @@ def _run_generate_inner(
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
-    if not args.check and (frozen_msg := frozen_refusal(manifest, framework_id, output_dir)) is not None:
-        sys.stdout.flush()  # before anything is written: the build log, backups and post-build files included
-        print(frozen_msg, file=sys.stderr)
+    if not args.check and refuse_if_frozen(manifest, framework_id, output_dir):  # before anything is written
         return 1
 
+    # Everything after this point writes, so it runs under the per-checkout update lock and leaves one
+    # run-record row (agentteams/update_lock.py). Every return of the locked body passes through set_exit.
+    try:
+        with update_lock.update_run(
+            project_root, getattr(args, "raw_argv", None) or (), dry_run=update_lock.is_lock_exempt(args),
+            mode=update_lock.run_mode(args, migrate_exemption=migrate_exemption), framework=framework_id,
+        ) as run:
+            rc = _run_generate_locked(
+                args, build_team, adapter, description, manifest, brief_derived_files,
+                project_root, output_dir, migrate_exemption=migrate_exemption,
+            )
+            run.set_exit(rc)
+            return rc
+    except update_lock.UpdateLockError as exc:
+        print(f"[UPDATE-LOCK] refused: {exc}", file=sys.stderr)
+        return 1
+
+
+def _run_generate_locked(
+    args: argparse.Namespace, build_team: Any, adapter: Any, description: dict, manifest: dict,
+    brief_derived_files: frozenset, project_root: Path, output_dir: Path, *, migrate_exemption: bool,
+) -> int:
+    """The writing half of the pipeline, run under the update lock (split out of ``_run_generate_inner``)."""
+    framework_id: str = args.framework
+    project_name = manifest["project_name"]
     from agentteams.cli.artifacts import PRIVILEGE_WIRING_ERRORS, finalize_privilege_wiring as _finalize_privilege
 
     # CC-2: --allow-fallback-fail-open keeps the constitutional-gate hook fail-OPEN even for a
@@ -219,10 +245,7 @@ def _run_generate_inner(
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
-    from agentteams.cli.s10_exempt_gate import authorized_exempt_repos  # Rule 15: never the raw brief list
-
-    manifest["s10_cooldown_exempt_authorized"] = authorized_exempt_repos(
-        output_dir, manifest.get("s10_cooldown_exempt_repos"), consume=not (args.dry_run or args.check))
+    authorize_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # Rule 15: S-10 carve-out
 
     print(f"  Output directory: {output_dir}")
 
@@ -597,9 +620,7 @@ def _run_generate_inner(
 
         # --prune: delete removed files (with confirmation unless --yes)
         if args.prune and sdreport.removed_files:
-            kept = {rel for rel, _ in drop_frozen(manifest, [(f["path"], "") for f in sdreport.removed_files],
-                                                  output_dir)}
-            rc = build_team._prune_removed_files([f for f in sdreport.removed_files if f["path"] in kept],
+            rc = build_team._prune_removed_files(prunable(manifest, sdreport.removed_files, output_dir),
                                                  output_dir, args.yes, args.dry_run)
             if rc != 0:
                 return rc

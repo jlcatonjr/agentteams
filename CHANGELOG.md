@@ -36,6 +36,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The schema already described this contract.
 
+### added (per-checkout update lock and run record; remediation row 597)
+
+- **Concurrent writes to one checkout are now visible** (`update_lock`). Every writing generate/`--update` run holds
+  an exclusive `flock` on `<git-dir>/agentteams-update.lock`, taken right after the output directory is resolved
+  and held through the adopt step, the standalone modes, the write phase and post-build. A second run against the
+  same checkout refuses before writing anything (`[UPDATE-LOCK] refused`, exit 1) and names the holder (pid,
+  invoker, start time, redacted argv). The lock lives in the per-checkout git directory (a worktree's own
+  `.git/worktrees/<name>`), found without spawning git, so consumer trees gain nothing and separate worktrees stay
+  independent. The OS releases it when the holder dies.
+- **Run record.** Each locked run appends one row to `<git-dir>/agentteams-update-runs.log.csv`: start and finish
+  time, pid, invoker (`claude-code`, `goose`, `codex` or `terminal`), mode, framework, argv as flag names only
+  (values dropped except the `--framework`, `--shrink-policy` and `--adopt-only` slugs), the agentteams commit and
+  the exit code. `build-log.json` keeps only the last run; this keeps them all.
+- A symlinked git directory or lock file refuses the run, as does a `gitdir:` target without `HEAD` or one whose
+  worktree back-pointer names another `.git` (new `gitdirs` module); the lock, holder and record files are created
+  `O_NOFOLLOW`, mode 0600. `--restore-backup` and `--pin-templates` are locked even under `--dry-run`, since both
+  write there. `--dry-run` and inspection-only runs (`--check`, `--query-index`, …) take no lock and
+  print a notice when it is held. Outside git, without `fcntl`, or when a sandbox denies creating the lock, the
+  run proceeds unlocked with a notice. Nested in-process runs are re-entrant.
+- Not covered (they still write unlocked): the bridge, interop and convert commands, `--stale-remediate`,
+  `--add-fence-markers`, `--sync`/`--sync-init` (dispatched before the pipeline), the pre-commit hook's
+  pipeline-graph refresh, and the other standalone commands dispatched before the pipeline (listed on the
+  `update_lock` API page).
+
 ### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
 
 - **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one
@@ -217,6 +241,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call as `os_confinement`, where only `nested` counts as OS-enforced. The docs now say so, state the Goose
   `GOOSE_SANDBOX` precondition, and note that the `DESCRIPTION-FORMAT.md` `wasm_sandbox` example needs two standing
   exceptions, over the registry's default cap of one.
+
+### changed (WASM: native Windows is not supported for now)
+
+- **Native Windows is not supported for WASM for now.** With WASM on, a render on native Windows now also prints and
+  records a `wasm-windows-unsupported` advisory, next to `wasm-only-host`. It says what fails there: without an OS
+  sandbox every read-only mount is a snapshot copy that needs `dir_fd` support, which Windows lacks, so any read
+  grant refuses, and so does the Python guest even with a compute-only grant (its pinned `/lib` runtime is a
+  read-only mount). Only JavaScript and raw modules with compute-only grants run. Use WSL, Linux or macOS. It is an
+  advisory, not a refusal. The `--wasm-sandbox` help, the man page, `known-limitations.md` (whose old "keep Windows
+  grants compute-only" workaround was wrong for Python), the WASM agent runtime guide and Sandboxing Guide Part IX
+  say so.
+
+### added (CI: live WASM tests on Linux and macOS)
+
+- **The live WASM tests now run in CI.** Until now CI never installed wasmtime, so every live WASM test skipped.
+  A new advisory `wasm-live` job on `ubuntu-24.04` installs bubblewrap and the pinned runtimes
+  (`--wasm-install all`), checks that bwrap can start (and records whether the runner's AppArmor user-namespace
+  restriction needed a remedy), and runs the live tests with wasmtime nested under bwrap. The `macos-seatbelt` job
+  runs the same tests nested under Seatbelt. In both, `scripts/wasm_live_ci.py` fails the job when a test skips
+  outside an explicit nodeid allowlist, and logs the R13 full-step timing (not gated on shared runners). The Linux
+  claim is narrower than macOS: the nested network-deny and credential-deny cases are Seatbelt-only.
+- `test_bwrap_unbound_path_is_unreadable` no longer passes when the guest never ran (before, a bwrap setup or exec
+  error passed it): it fails unless `cat` itself reports the path missing, skips with the reason when bwrap cannot
+  create its namespaces (which the `wasm-live` job treats as a failure), and binds `/lib64` so `cat` can run on
+  x86_64.
 
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 

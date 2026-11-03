@@ -740,7 +740,8 @@ def composition_advisories(state: Any, framework_id: str, *, platform: str | Non
     Returns:
         ``wasm-without-os-sandbox`` when the OS sandbox is off; ``wasm-only-host`` when this host has no OS sandbox
         for the framework (native Windows, ``is_sandbox_capable`` False, or the mechanism probe False; D6: WASM
-        runs alone). Empty when WASM is off.
+        runs alone); and, on native Windows, ``wasm-windows-unsupported`` as well (WASM is not supported there for
+        now). Empty when WASM is off.
 
     Raises:
         Nothing.
@@ -762,6 +763,14 @@ def composition_advisories(state: Any, framework_id: str, *, platform: str | Non
         mechanism = host_features.os_sandbox_mechanism_available()
     if not capable or mechanism is False:
         out.append({"code": "wasm-only-host", "message": "No OS sandbox on this host; WASM runs alone (D6)."})
+    if plat.startswith("win"):
+        # Advisory, not a refusal: "not supported for now" (D1) stays reversible. Without an OS sandbox every
+        # read-only mount but /src is a snapshot copy, and _sandbox_profiles.snapshot_tree needs dir_fd.
+        out.append({"code": "wasm-windows-unsupported", "message": (
+            "WASM is not supported on native Windows for now. The Python guest refuses even with a compute-only "
+            "grant (its pinned /lib runtime mount needs a read-only snapshot copy, which needs dir_fd support "
+            "Windows lacks), and any read grant refuses for the same reason. Only JavaScript and raw modules "
+            "with compute-only grants run. Use WSL, Linux or macOS.")})
     return out
 
 

@@ -150,9 +150,95 @@ jobs:
       - name: Lineage corpus provenance and regeneration
         run: pytest tests/test_template_lineage.py -v
 
+  # Live WASM tests on Linux (WASM follow-up F2): the `test` matrix never installs wasmtime, so every live WASM test
+  # skips there. This job installs bubblewrap and the pinned runtimes, then runs the live tests with wasmtime nested
+  # under bwrap (os_confinement=nested, nested:bwrap). A skip guard fails the job if any test skips outside the
+  # allowlist below, so a missing precondition cannot leave it green for nothing. ubuntu-24.04 for the same reason as
+  # the test matrix. ADVISORY until 2026-11-30 (remediation row wasm-live-job-required): a red result is visible but
+  # does not block merges yet.
+  wasm-live:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"  # the project target
+
+      - name: Install package and pytest
+        run: pip install -e ".[test]"
+
+      - name: Install bubblewrap
+        run: sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+
+      # Ubuntu 23.10+ can restrict unprivileged user namespaces through AppArmor, which bwrap needs. Probe with the
+      # exact _sandbox_profiles.available() command. On failure, first apply the remedy a stock-Ubuntu user would
+      # (an unconfined bwrap profile that allows userns, as in scripts/test-sandbox-apparmor-userns.sh), and only
+      # if that fails relax the sysctl. Either remedy is a warning, and the outcome goes in the step summary.
+      - name: bwrap probe (AppArmor user-namespace restriction)
+        run: |
+          probe() { bwrap --ro-bind / / --dev /dev --unshare-pid --die-with-parent true; }
+          knob="$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo absent)"
+          echo "kernel.apparmor_restrict_unprivileged_userns = $knob"
+          remedy=none
+          if ! probe; then
+            printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' \
+              'profile bwrap /usr/bin/bwrap flags=(unconfined) {' '  userns,' \
+              '  include if exists <local/bwrap>' '}' \
+              | sudo tee /etc/apparmor.d/bwrap >/dev/null
+            if sudo apparmor_parser -r /etc/apparmor.d/bwrap && probe; then
+              remedy="AppArmor profile /etc/apparmor.d/bwrap (userns)"
+            else
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+              remedy="sysctl kernel.apparmor_restrict_unprivileged_userns=0 (the profile was not enough)"
+              probe || { echo "::error::bwrap still cannot start after both remedies"; exit 1; }
+            fi
+            echo "::warning::bwrap needed a remedy on this runner: $remedy"
+          fi
+          { echo "### bwrap / AppArmor"
+            echo "- kernel.apparmor_restrict_unprivileged_userns: $knob"
+            echo "- remedy: $remedy"; } >> "$GITHUB_STEP_SUMMARY"
+
+      # The install refuses a missing project root (wasm_runtime._check_project_root).
+      - name: Install the pinned WASM runtimes into a scratch project
+        run: |
+          mkdir -p "$RUNNER_TEMP/wasm-proj"
+          python build_team.py --wasm-install all --project "$RUNNER_TEMP/wasm-proj" --yes
+          python build_team.py --wasm-status --project "$RUNNER_TEMP/wasm-proj"
+          python scripts/wasm_live_ci.py env "$RUNNER_TEMP/wasm-proj" | tee -a "$GITHUB_ENV"
+
+      # Without a usable OS sandbox every nested test would skip (or run unnested) and prove nothing.
+      - name: Precondition — bwrap is usable for nesting
+        run: |
+          got="$(python -c 'from agentteams import _sandbox_profiles as SP; print(SP.available())')"
+          echo "_sandbox_profiles.available() = $got"
+          [ "$got" = "bwrap" ]
+
+      # The file list and the skip allowlists live in scripts/wasm_live_ci.py (LIVE_FILES, COMMON_ALLOW,
+      # SANDBOX_ALLOW), shared with the macos-seatbelt job. Narrowed Linux claim: the bwrap deny_reads /
+      # network-deny cases are a logged follow-up.
+      - name: Live WASM tests (nested under bwrap)
+        id: live
+        run: |
+          # shellcheck disable=SC2046  # the file list is space-separated on purpose
+          pytest -v -rs --junitxml="$RUNNER_TEMP/wasm-live.xml" $(python scripts/wasm_live_ci.py files) \
+            tests/test_os_sandbox_enforcement.py::test_bwrap_unbound_path_is_unreadable
+
+      - name: Skip guard — no unexplained skips
+        if: success() || steps.live.outcome == 'failure'  # also after failing tests, but not when they never ran
+        run: |
+          python scripts/wasm_live_ci.py skips "$RUNNER_TEMP/wasm-live.xml" --sandbox bwrap
+
+      - name: R13 full-step timing (logged, not gated)
+        run: python scripts/wasm_live_ci.py timing "$RUNNER_TEMP/wasm-proj" --expect-reason nested:bwrap
+
   # Follow-up #5 (2026-09-30): the goose Seatbelt profile under the REAL sandbox-exec on an unnested
   # macOS runner, plus the macOS launcher gate. ADVISORY until 2026-10-14 (remediation row
   # macos-seatbelt-job-required): a red result is visible but does not block merges yet.
+  # WASM follow-up F2 adds the live WASM tests here too: sandbox-exec runs unnested on this runner, so wasmtime
+  # nests under Seatbelt (nested:seatbelt), with the same skip guard as the wasm-live job.
   macos-seatbelt:
     runs-on: macos-latest
     continue-on-error: true
@@ -182,3 +268,37 @@ jobs:
           echo "PASS=$pass UNTRUSTED/INDETERMINATE/FAIL=$bad"
           # the egress gate needs network and may be INDETERMINATE: reported, not required
           [ "$pass" -gt 0 ] && [ "$(grep -E '^  (UNTRUSTED|INDETERMINATE|FAIL)' "$d/out.txt" | grep -vic egress || true)" -eq 0 ]
+
+      - name: Install the pinned WASM runtimes into a scratch project
+        if: ${{ !cancelled() }}  # run even when the launcher gate above is red
+        run: |
+          mkdir -p "$RUNNER_TEMP/wasm-proj"
+          python build_team.py --wasm-install all --project "$RUNNER_TEMP/wasm-proj" --yes
+          python build_team.py --wasm-status --project "$RUNNER_TEMP/wasm-proj"
+          python scripts/wasm_live_ci.py env "$RUNNER_TEMP/wasm-proj" | tee -a "$GITHUB_ENV"
+
+      - name: Precondition — Seatbelt is usable for nesting
+        if: ${{ !cancelled() }}  # run even when the launcher gate above is red
+        run: |
+          got="$(python -c 'from agentteams import _sandbox_profiles as SP; print(SP.available())')"
+          echo "_sandbox_profiles.available() = $got"
+          [ "$got" = "seatbelt" ]
+
+      # ~/.ssh must exist, or test_nested_credential_store_unreadable skips. Same file list and common allowlist
+      # as the wasm-live job (scripts/wasm_live_ci.py); the Seatbelt-only cases must run here.
+      - name: Live WASM tests (nested under Seatbelt)
+        if: ${{ !cancelled() }}  # run even when the launcher gate above is red
+        id: live
+        run: |
+          mkdir -p ~/.ssh
+          # shellcheck disable=SC2046  # the file list is space-separated on purpose
+          pytest -v -rs --junitxml="$RUNNER_TEMP/wasm-live.xml" $(python scripts/wasm_live_ci.py files)
+
+      - name: Skip guard — no unexplained skips
+        if: ${{ !cancelled() && (steps.live.outcome == 'success' || steps.live.outcome == 'failure') }}
+        run: |
+          python scripts/wasm_live_ci.py skips "$RUNNER_TEMP/wasm-live.xml" --sandbox seatbelt
+
+      - name: R13 full-step timing (logged, not gated)
+        if: ${{ !cancelled() && steps.live.outcome == 'success' }}
+        run: python scripts/wasm_live_ci.py timing "$RUNNER_TEMP/wasm-proj" --expect-reason nested:seatbelt

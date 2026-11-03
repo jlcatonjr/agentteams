@@ -158,4 +158,22 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
     return kept
 
 
-__all__ = ["S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorized_exempt_repos"]
+def authorize_into(manifest: dict, team_dir: Path, *, consume: bool) -> None:
+    """Set ``manifest["s10_cooldown_exempt_authorized"]`` through the gate; the render reads only that key.
+
+    Args:
+        manifest: The team manifest (``s10_cooldown_exempt_repos`` from the brief).
+        team_dir: The team directory.
+        consume: Passed to :func:`authorized_exempt_repos`.
+
+    Returns:
+        None.
+
+    Raises:
+        RuntimeError: As :func:`authorized_exempt_repos`.
+    """
+    manifest["s10_cooldown_exempt_authorized"] = authorized_exempt_repos(
+        team_dir, manifest.get("s10_cooldown_exempt_repos"), consume=consume)
+
+
+__all__ = ["S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorize_into", "authorized_exempt_repos"]

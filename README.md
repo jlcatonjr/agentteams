@@ -470,6 +470,13 @@ Regenerate the module's own meta-agent team:
 agentteams --self
 ```
 
+Only one writing run per checkout at a time: a second `--self --update` (or any generate/`--update`) against the
+same checkout refuses and names the run that holds the lock. Every locked generate/`--update` run is recorded in
+`.git/agentteams-update-runs.log.csv`, or `.git/worktrees/<name>/agentteams-update-runs.log.csv` in a linked
+worktree (invoker, flags, exit code). Unlocked runs and commands dispatched before the pipeline (bridge, interop,
+convert, `--sync`, …) are not recorded; see
+[`update_lock`](docs_src/api-reference/update-lock.md).
+
 ### Daily security maintenance (agentteams only)
 
 Daily security maintenance is invoked as part of the scheduled bridge workflow at `.github/workflows/bridge-maintenance.yml`.
