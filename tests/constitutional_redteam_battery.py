@@ -942,11 +942,10 @@ def d5_s10_cooldown_text_survives_tamper() -> None:
     end_idx = live_text.index(end_marker) + len(end_marker)
     pristine_fence = live_text[begin_idx:end_idx]
 
-    # The release cooldown is deprecated (2026-10-26); the probe guards S-10's binding rule instead.
-    cooldown_phrase = "Never install a release that fails the vulnerability search"
-    weakened_phrase = "Installing a release that fails the vulnerability search is fine"
+    cooldown_phrase = "if a release is less than 14 days old, wait before installing it"
+    weakened_phrase = "installing a release immediately after publication is fine"
     assert cooldown_phrase in pristine_fence, (
-        "S-10 vetting text not found in the live fence — probe target moved, fix the "
+        "S-10 cooldown text not found in the live fence — probe target moved, fix the "
         "anchor string before trusting this probe's result"
     )
     weakened_fence = pristine_fence.replace(cooldown_phrase, weakened_phrase)
@@ -958,11 +957,11 @@ def d5_s10_cooldown_text_survives_tamper() -> None:
     )
     record(
         pid="D5",
-        name="S-10's live vetting text is restored when a deployed copy is tampered",
+        name="S-10's live cooldown text is restored when a deployed copy is tampered",
         article="C-1", tier="T1",
         outcome=DEFENDED if restored else EXPLOITED,
         expected_if_sound="restored",
-        evidence=f"cooldown phrase present={cooldown_phrase in res.merged_content}; "   # label kept: F-5 baseline digest
+        evidence=f"cooldown phrase present={cooldown_phrase in res.merged_content}; "
                  f"weakened phrase present={weakened_phrase in res.merged_content}",
         control="D0",
         notes="Uses the same mechanism D0 already establishes as a control, applied to a "

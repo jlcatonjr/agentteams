@@ -43,13 +43,34 @@ Every generated `@security` agent carries two install-time defaults
    install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD,
    GitHub Advisories, `npm audit` / `pip-audit` / `cargo audit`) for known
    vulnerabilities in the exact name and version being adopted.
-2. **No package-release cooldown** (deprecated 2026-10-26, operator ruling) — a release that
-   passes the vulnerability review may be adopted the day it is published, in
-   every ecosystem; no cooldown exception or exemption is needed. Pin exact
-   versions with a lockfile, and verify the artifact's identity (Rule S-9).
+2. **Package-release cooldown** — if a release is less than **14 days** old,
+   wait before installing it (a configurable default that governs every
+   update and installation in every ecosystem — npm, PyPI, crates.io,
+   Homebrew, …; npm is the motivating precedent after the recent registry
+   supply-chain wave, not the scope). Enforce mechanically where tooling
+   allows: `npm install --before=<date>`, pnpm `minimumReleaseAge`,
+   uv `--exclude-newer <date>`, Renovate/Dependabot cooldown; check age with
+   `npm view <pkg> time` or the PyPI JSON API's `upload_time_iso_8601`; pin
+   exact versions with a lockfile. Distro-curated security updates of
+   already-installed packages (apt/dnf/apk, DSA/USN/RHSA-backed) are
+   remediation, not adoption — the cooldown and the latest-stable rule do not
+   apply to them (third-party repositories, PPAs, and vendor-added sources are
+   not that channel).
+3. **Latest stable release only** — adopt the newest stable release that has
+   cleared the cooldown: no pre-release (alpha, beta, rc, dev, nightly), no
+   yanked or deprecated release, no older release when a newer stable one has
+   cleared it. Holding a package back needs a recorded `@security` clearance
+   that names the reason.
 
-Remediating an already-installed vulnerable version is never delayed —
-KEV/patch-urgency guidance applies.
+**Remediation carve-out.** Neither the cooldown nor the latest-stable rule ever
+blocks remediating a vulnerability a scan detected: `npm audit`, `pip-audit`,
+`cargo audit`, or an OSV.dev query of the installed versions (a report from any
+other source gets the carve-out only once one of those confirms it). The fix
+release may be adopted inside the window and need not be the latest stable
+release; the change cites the tool, the advisory id and the installed version. The
+carve-out covers only the flagged packages (and the dependencies their fix pulls
+in), and the fix release must still pass the known-vulnerability search (no OSV
+`MAL-*` entry) and Rule S-9's identity check. KEV/patch-urgency guidance applies.
 
 ### Generated Security Reference Files
 
@@ -416,7 +437,7 @@ op-2026-05-10-001,2026-05-10T14:30:00Z,cross-repo-write,CONDITIONAL_PASS,"waiver
 4. **Monitor EPSS trends** — Generated `security.agent.md` shows exploit likelihood; escalate high values
 5. **Document exceptions** — Use `notes` column in `security-decisions.log.csv` to explain policy overrides
 6. **Vet before install** — Search OSV.dev / Snyk DB / NVD / `npm audit` for known vulnerabilities in the exact name@version before any install (Rule S-10)
-7. **No release cooldown** — The 14-day package-release cooldown is deprecated 2026-10-26; vetting (item 6) still gates every install (Rule S-10)
+7. **Respect the release cooldown** — Adopt only the latest stable release, and only after 14 days; fixes for a vulnerability one of the carve-out's scans detected are the carve-out (Rule S-10)
 
 ---
 
