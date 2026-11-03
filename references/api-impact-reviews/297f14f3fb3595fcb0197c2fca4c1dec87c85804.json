@@ -1,0 +1,8 @@
+{
+  "patch_id": "297f14f3fb3595fcb0197c2fca4c1dec87c85804",
+  "commit": "e9433ae31120e715bbff6c0c980d727e5115d949",
+  "subject": "fix(vulnscan): P8 review conditions for server-apply and runtime-patch",
+  "impact": "1 modules added, 15 symbols added, 2 symbols removed, 9 symbols changed, 1 cli added",
+  "note": "P8 review fixes: grant_v2 max_read_uses/uses_left/ancestor_problem/before_revoke; grant.ancestor_ok, revoke-archive checks at load; new host_plan module (plan_sha256 moved from server_apply, CONFIRM_KEY, HEX64); server_apply KitRun/Escalated/NothingChanged/plan_section/earlier_attempt; runtime_patch cooldown/flagged/toolchain/poured check; runtimes.patch_release_date; subproc_confine_ssh.run_kit text=; host_change terminal-only; CLI grant sign --max-read-uses/--check-only; kit run-host APPLYSTEP, L2 needrestart, L6 as app user, L7 pre-move checks. Unreviewed.",
+  "recorded_at": "2026-11-03T13:48:15Z"
+}
