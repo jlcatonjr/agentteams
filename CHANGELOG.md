@@ -6,6 +6,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan: changing hosts (server-apply, runtime-patch)
+
+- **`server-apply HOST:LEVEL` is no longer reserved.** It applies one signed level to one signed host. The levels
+  are `l2-security`, `l4-pins`, `py-venv` and `remove-path`. Only the operator runs it, with `vulnscan act`, which
+  shows the dry-run plan and its sha256 and asks first. A spooled agent request for it is refused, and the MCP
+  server never offers it. The executor's sequence: the `begun` row, a pre-audit, the plan, which must still have
+  the confirmed digest, a pre-state `note` row (`dpkg -l` / `pip freeze` / the path), `run-host.sh --level L
+  --apply --expect-digest D`, then a post-audit. `run-host.sh` and each level script compute the plan again on the
+  host just before changing anything (exit 5 on a mismatch, nothing changed). The executor never passes
+  `--reboot`, `--all-updates`, `--node-major`, `--allow-fresh` or `--restart-services`, and a level never runs L3 or
+  L5. Exit 4 anywhere opens an escalation that blocks everything. A failed step, a failed health check (6: the
+  pins or venv restored, 7: not restored) or a worse post-audit opens one that stops the host.
+- **`remove-path` only quarantines.** It writes a tarball, moves the path to
+  `/var/backups/agentteams/quarantine/<name>-<time>/payload` and leaves a `RESTORE.manifest`. Emptying the
+  quarantine is never automated. Each path must be signed exactly into the grant. Symlinks, symlinked ancestors,
+  mount points and trust roots are refused. The decision row `server-apply:remove-path:<host>:<path>` must be
+  cleared with `conditions_verified=verified`; a suffixed id never counts. A `<name>.disabled-YYYYMMDD` tree also
+  needs the fresh L1 audit's `SCOPE <path> disabled` line.
+- **`runtime-patch FORMULA`** (vfr-d.D4) upgrades one signed Homebrew formula on this Mac. The formula must be
+  from `homebrew/core`, upgraded within the same major, and installed from a bottle. The dry run must name only
+  that formula. No sudo, no source build, no tap. The executor's own python, git, gh, openssh and gnupg are
+  refused.
+- **v2 grants** (`grant_v2`, purpose tag `...-grant-v2`) are the only grants that cover the two ops. They sign:
+  - the host×level pairs;
+  - the restart units and the restart window (UTC);
+  - the `apps.conf` sha256;
+  - the major-allowed units;
+  - the exact quarantine paths;
+  - the runtimes;
+  - the `ancestor` they re-issue.
+
+  A grant naming `server-apply` holds server ops only and allows at most 20 uses. `grant revoke` now archives the
+  record in `<config>/vulnscan-grants-revoked/`. A re-issue's ancestor must be revoked and archived first.
+  `grant sign` takes `--level`, `--restart-unit`, `--restart-window`, `--apps-conf-sha256`, `--major-allowed`,
+  `--remove-path`, `--runtime` and `--ancestor`. `merge` stays reserved.
+
 ### added (vulnscan: repository levers C2, C4, D3, D6; @security design review 2026-11-02)
 
 - **vfr-c.C2: `stage-major` keeps an off-registry entry byte for byte.** `stage-major` used to refuse any base with an

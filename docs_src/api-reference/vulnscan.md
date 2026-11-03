@@ -519,6 +519,7 @@ needs no config).
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
 | `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
 | `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
+| `act server-apply HOST:LEVEL [--confirm-plan-sha256 D]` / `act runtime-patch FORMULA [--confirm-plan-sha256 D]` | The host-changing ops, operator-run only ([`host_change`](#agentteamsvulnscanhost_change)): `act` shows the dry-run plan and its sha256, then asks on a terminal (or takes `--confirm-plan-sha256` from an earlier preview) before the executor runs exactly that plan. `server-apply` targets are `HOST:l2-security`, `HOST:l4-pins`, `HOST:py-venv` or `HOST:remove-path:/exact/path` ([`server_apply`](#agentteamsvulnscanserver_apply)); `runtime-patch` takes one signed Homebrew formula ([`runtime_patch`](#agentteamsvulnscanruntime_patch)) |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
@@ -550,7 +551,11 @@ The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious 
 
 `grant sign` takes `--op OP` (repeatable, no default: `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`,
 `close-superseded`, `server-audit`, `server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
-`--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. `publish-grant sign` takes
+`--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. For a v2 grant ([`grant_v2`](#agentteamsvulnscangrant_v2)),
+`grant sign` also takes `--op server-apply` / `--op runtime-patch` with `--level HOST:LEVEL`, `--restart-unit HOST:UNIT`,
+`--major-allowed HOST:UNIT` and `--remove-path HOST:/path` (repeatable), `--runtime FORMULA` (repeatable),
+`--restart-window HH:MM-HH:MM` (UTC), `--apps-conf-sha256 HEX|auto` and `--ancestor GRANT_ID` (the revoked grant it
+re-issues). `publish-grant sign` takes
 `--ops-repo DIR`, `--remote-url URL` (default: the ops repository's `remote.origin.url`), `--node-id`,
 `--owner-id`, `--governance-dir DIR`, `--days N` (default 30), `--max-uses N` (default 60) and `--key-id ID`.
 Both `revoke` actions take `--grant-id`.
@@ -880,8 +885,9 @@ for one can never verify as the other.
 | Gate action (HALT) | `vulnscan-remediation` | `vulnscan-publish` |
 
 **Operations.** v1 grants may name `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`,
-`server-audit` and `server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build`
-refuses them. An existing grant does not cover `close-superseded`, `stage-major` or `stage-image` until the operator
+`server-audit` and `server-dryrun`. A v2 grant ([`grant_v2`](#agentteamsvulnscangrant_v2)) may also name
+`server-apply` and `runtime-patch`; a v1 record naming either is refused. `merge` is reserved: the CLI lists it,
+and `grant.build` refuses it. An existing grant does not cover `close-superseded`, `stage-major` or `stage-image` until the operator
 signs one that names it; `grant sign --op` has no default, so no grant names an op the operator did not list.
 `stage-image` is constraint-relaxing too: it lifts the "dependency pins and lockfiles only" bound to Dockerfile
 `FROM` tags ([Base images](#base-images-stage-image)).
@@ -2437,7 +2443,7 @@ All raise `executor.ExecError` when they refuse.
 
 ### `agentteams.vulnscan.grant`
 
-#### `grant.build(*, ops, repo_roots, hosts, days, max_uses, key_id, governance_dir, now)`
+#### `grant.build(*, ops, repo_roots, hosts, days, max_uses, key_id, governance_dir, now, **v2)`
 
 An unsigned grant, after every bound above. Raises `GrantError`.
 
@@ -2521,6 +2527,70 @@ allowed), or `None`. Unsigned, forged or unreadable files are ignored.
 
 The shared signing flow described under [Signing](#signing). Returns the signed record, or `None`
 after printing why nothing was signed.
+
+### `agentteams.vulnscan.grant_v2`
+
+The v2 grant record that bounds the host-changing ops (vfr-s S1-S3, vfr-d.D4). Its signature uses
+`PURPOSE_TAG_V2` (`agentteams-vulnscan-remediation-grant-v2`) over every v1 field plus `EXTRA_FIELDS`: `version`
+(`2`), `server_levels` (`host:level` pairs; `LEVELS` = `l2-security`, `l4-pins`, `py-venv`, `remove-path`),
+`restart_units` (`host:unit.service`, for `l2-security`), `restart_window` (`HH:MM-HH:MM` UTC; needed when a signed
+level may restart a service), `apps_conf_sha256` (needed for `l4-pins` / `py-venv`), `major_allowed`
+(`host:unit.service`), `remove_paths` (`host:/exact/path`, each passing `trust_root_problem`), `runtimes`
+(Homebrew formulae; `refused_formula` refuses `python*`, `git`, `gh`, `openssh`, `gnupg`) and `ancestor` (the grant
+id it re-issues). `check_shape` enforces the bounds at build and verify time. A grant naming `server-apply`
+holds server ops only and at most `MAX_USES_SERVER_APPLY` (20) uses. `extend` also requires the ancestor to be
+gone from the active grants directory and archived, validly signed, in `grant.revoked_dir()` (`grant revoke`
+moves a revoked record there). `in_window` reads the restart window and handles windows that wrap midnight.
+`grant.covers` matches `server-apply` targets exactly (`HOST:LEVEL`, or `HOST:remove-path:/path` against
+`remove_paths`) and `runtime-patch` targets against `runtimes`.
+
+### `agentteams.vulnscan.server_apply`
+
+`server-apply HOST:LEVEL[:path]` runs as follows, inside `executor.act`, after `authorize` has written the
+`begun` row. `precheck` validates the target and the host, refuses on an open escalation for the host, and requires
+the operator's confirmed digest (payload `confirm_sha256`). `gate` checks the signed restart window for a level that
+may restart a service, and the signed sha256 of a private `apps.conf` snapshot. For `remove-path` it also refuses a
+path already quarantined (ledger), and `removal_clearance` requires the decision row
+`server-apply:remove-path:<host>:<path>`. That row must pass `security_gate.check_clearance` (read-only), name
+exactly that id and carry `conditions_verified=verified`.
+
+The executor then runs, in order:
+
+1. A pre-audit (L1). A `<name>.disabled-YYYYMMDD` path also needs its `SCOPE <path> disabled` line
+   (`disabled_scope_problem`).
+2. `run-host.sh HOST --level L` (`level_args` builds it from the grant only; `check_argv` refuses anything but
+   exactly one level and never passes `FORBIDDEN_FLAGS`). The digest the kit prints and `plan_sha256`'s own digest
+   of that output must agree, and must equal the confirmed one.
+3. A ledger `note` row with the pre-state file's sha256.
+4. `run-host.sh … --apply --expect-digest D`.
+5. A post-audit.
+
+Exit 4 at any stage opens an `ioc` escalation (blocks everything). Exits 6 and 7 (health failed: reverted, not
+reverted), any other failed step, and a post-audit worse than the pre-audit open an `other` escalation on the host.
+Exits 2 and 5 changed nothing. `preview` runs only the plan (no use reserved), for `host_change`.
+
+### `agentteams.vulnscan.runtime_patch`
+
+`runtime-patch FORMULA` (vfr-d.D4) upgrades one Homebrew formula on this machine. `check` refuses on any of these:
+
+- a refused name, or a formula that holds the executor's interpreter or its git/gh/ssh/gpg (`own_tool_formulae`);
+- a tap other than `homebrew/core`;
+- a formula that is not installed and linked, or is pinned;
+- no bottle for `bottle_tag()` (or `all`);
+- a dry run that names anything but exactly this formula, at the same major.
+
+The preview may refresh Homebrew's index. The apply (`run`) uses `APPLY_ENV` (`HOMEBREW_NO_AUTO_UPDATE`,
+`HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK`, …), recomputes the digest and compares it with the confirmed one, writes a
+`note` row, upgrades, and then requires the linked version to be the planned one, escalating otherwise. brew runs
+only from `BREW_PATHS`, never as root and never with `SUDO_*`.
+
+### `agentteams.vulnscan.host_change`
+
+The operator side of the two ops. `operator_act` previews (`server_apply.preview` inside the confinement scope,
+or `runtime_patch.preview`), shows the PLAN lines and their sha256, and asks `Apply exactly this plan?` on a
+terminal. Without a terminal it requires `--confirm-plan-sha256` to equal the preview's digest. Only then does it
+call `executor.act` with that digest. `add_grant_options` and `grant_fields` are the v2 `grant sign` options
+(`V2_OPTIONS`; `--apps-conf-sha256 auto` hashes the current `apps.conf`).
 
 ### `agentteams.vulnscan.publish`
 

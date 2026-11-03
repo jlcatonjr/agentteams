@@ -16,7 +16,7 @@ One op, in order (the ``begun`` row, C-5's recorded clearance and use reservatio
 2. **Pre-audit**: the kit's L1 audit. Compromise indicators (exit 4) open a global escalation: everything stops.
    ``remove-path`` of a ``<name>.disabled-YYYYMMDD`` tree also needs this audit's ``SCOPE <path> disabled`` line
    (vfr-e.E1's inertness check, OD6b).
-3. **Plan**: ``run-host.sh HOST --level L`` (a dry run). Its normalised plan digest (:func:`plan_digest`) must equal the
+3. **Plan**: ``run-host.sh HOST --level L`` (a dry run). Its normalised plan digest (:func:`plan_sha256`) must equal the
    digest the operator confirmed. The pre-state it prints (``dpkg -l``/``rpm -qa`` or ``pip freeze``, or the path's
    listing) is saved and recorded in a ledger ``note`` row with its sha256.
 4. **Apply**: ``run-host.sh HOST --level L --apply --expect-digest D``. ``run-host`` and each level script recompute
@@ -89,7 +89,7 @@ def parse_target(target: str) -> Target:
     return Target(host, level, path)
 
 
-def plan_digest(text: str) -> str:
+def plan_sha256(text: str) -> str:
     """Return the sha256 of the normalised plan in ``text`` (the kit's ``plan_digest`` shell function, in Python).
 
     PLAN lines only (``PLAN<TAB>...``), CR dropped, whitespace runs squeezed to one space, trailing space dropped,
@@ -424,7 +424,7 @@ def _run(t: Target, g: dict[str, Any], conf: Path, *, confirmed: str, request_id
         raise ExecError(f"compromise indicators on {t.host}: escalation {eid} stops everything; log {dry_log}")
     if dry.returncode not in (0, 1):
         raise ExecError(f"the {t.level} plan on {t.host} did not complete (exit {dry.returncode}); log {dry_log}")
-    digest = plan_digest(dry.stdout)
+    digest = plan_sha256(dry.stdout)
     printed = re.search(rf"^PLANDIGEST\t{re.escape(t.level)}\t([0-9a-f]{{64}})$", dry.stdout, re.M)
     if not printed or printed[1] != digest:
         raise ExecError(f"the kit's plan digest does not match the executor's own ({digest}); log {dry_log}")
@@ -509,4 +509,4 @@ def preview(target: str, *, now: datetime | None = None) -> dict[str, Any]:
     log = _log(t.host, "preview", dry)
     if dry.returncode not in (0, 1):
         raise ExecError(f"the {t.level} plan on {t.host} did not complete (exit {dry.returncode}); log {log}")
-    return {"plan": plan_lines(dry.stdout), "plan_sha256": plan_digest(dry.stdout), "log": str(log)}
+    return {"plan": plan_lines(dry.stdout), "plan_sha256": plan_sha256(dry.stdout), "log": str(log)}

@@ -46,7 +46,7 @@ class FakeKit:
         self.audits: list[tuple[str, int, int]] = []
 
     def digest(self) -> str:
-        return server_apply.plan_digest(self.plan)
+        return server_apply.plan_sha256(self.plan)
 
     def run_kit(self, script: str, host: str, args: list[str], conf: Path) -> subprocess.CompletedProcess:
         self.calls.append((script, list(args)))

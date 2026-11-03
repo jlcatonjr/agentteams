@@ -121,9 +121,9 @@ def test_run_host_level_never_runs_on_all(kit: Kit) -> None:
 def test_level_plan_prints_the_digest_and_runs_only_that_level(kit: Kit) -> None:
     proc = kit.run("--level", "l2-security", "--restart-unit", "nginx.service")
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
-    digest = server_apply.plan_digest(PLAN)
+    digest = server_apply.plan_sha256(PLAN)
     assert f"PLANDIGEST\tl2-security\t{digest}" in proc.stdout
-    assert server_apply.plan_digest(proc.stdout) == digest           # the executor recomputes the same digest
+    assert server_apply.plan_sha256(proc.stdout) == digest           # the executor recomputes the same digest
     assert kit.calls() == [("L1-audit.sh", []), ("L2-os-patch.sh", ["--level", "--restart-unit", "nginx.service"])]
 
 
@@ -134,7 +134,7 @@ def test_level_apply_refuses_a_changed_plan_before_any_change(kit: Kit) -> None:
 
 
 def test_level_apply_passes_the_step_digest_and_reaudits(kit: Kit) -> None:
-    digest = server_apply.plan_digest(PLAN)
+    digest = server_apply.plan_sha256(PLAN)
     proc = kit.run("--level", "l2-security", "--apply", "--expect-digest", digest)
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     got = kit.calls()
@@ -145,7 +145,7 @@ def test_level_apply_passes_the_step_digest_and_reaudits(kit: Kit) -> None:
 
 @pytest.mark.parametrize("rc,want", [("6", 6), ("7", 7), ("4", 4), ("9", 3), ("1", 0)])
 def test_level_apply_exit_codes(kit: Kit, rc: str, want: int) -> None:
-    proc = kit.run("--level", "l2-security", "--apply", "--expect-digest", server_apply.plan_digest(PLAN),
+    proc = kit.run("--level", "l2-security", "--apply", "--expect-digest", server_apply.plan_sha256(PLAN),
                    FAKE_APPLY_RC=rc)
     assert proc.returncode == (1 if rc == "1" else want), (proc.stdout, proc.stderr)
     assert [s for s, _ in kit.calls()][-1] == "L1-audit.sh"          # the post-change audit always runs
@@ -223,7 +223,7 @@ def test_shell_plan_digest_equals_the_python_one() -> None:
     for text in (sample, "", "no plan\n"):
         proc = subprocess.run([BASH, "-c", f"TAB=$(printf '\\t')\n{fn}\nplan_digest"], input=text, capture_output=True,
                               text=True, check=True)
-        assert proc.stdout.strip() == server_apply.plan_digest(text), text
+        assert proc.stdout.strip() == server_apply.plan_sha256(text), text
 
 
 def test_l7_trust_roots_match_grant_v2() -> None:
@@ -280,7 +280,7 @@ def test_l7_plan_then_quarantine_with_archive_and_restore_manifest(l7: dict) -> 
     plan = l7["run"]("--level", "--path", tree)
     assert plan.returncode == 0, (plan.stdout, plan.stderr)
     assert "PLAN ONLY" in plan.stdout and l7["tree"].is_dir()
-    digest = server_apply.plan_digest(plan.stdout)
+    digest = server_apply.plan_sha256(plan.stdout)
     bad = l7["run"]("--level", "--path", tree, "--apply", "--expect-digest", "c" * 64)
     assert bad.returncode == 5 and l7["tree"].is_dir() and not l7["q"].exists()
     done = l7["run"]("--level", "--path", tree, "--apply", "--expect-digest", digest)
@@ -358,7 +358,7 @@ def test_l2_level_plans_security_upgrades_only_and_installs_exactly_them(tmp_pat
     assert plan.returncode == 0, (plan.stdout, plan.stderr)
     assert [ln for ln in plan.stdout.splitlines() if ln.startswith("PLAN")] == ["PLAN\tos\tapt\tlibssl3\t3.0.2-1\t3.0.2-2"]
     assert "PRESTATE\tdpkg\tlibssl3 3.0.2-1" in plan.stdout
-    digest = server_apply.plan_digest(plan.stdout)
+    digest = server_apply.plan_sha256(plan.stdout)
     assert _l2(tmp_path, "--level", "--apply", "--expect-digest", "d" * 64).returncode == 5
     assert "install" not in (tmp_path / "log").read_text()
     done = _l2(tmp_path, "--level", "--restart-unit", "nginx.service", "--apply", "--expect-digest", digest)
@@ -371,7 +371,7 @@ def test_l2_level_plans_security_upgrades_only_and_installs_exactly_them(tmp_pat
 
 def test_l2_level_failed_health_is_exit_7_and_never_reboots(tmp_path: Path) -> None:
     plan = _l2(tmp_path, "--level")
-    digest = server_apply.plan_digest(plan.stdout)
+    digest = server_apply.plan_sha256(plan.stdout)
     res = _l2(tmp_path, "--level", "--restart-unit", "nginx.service", "--apply", "--expect-digest", digest,
               FAKE_INACTIVE="1")
     assert res.returncode == 7 and "FAIL" in res.stdout, (res.stdout, res.stderr)
@@ -425,7 +425,7 @@ def test_l6_builds_beside_switches_and_keeps_the_old_venv(tmp_path: Path) -> Non
     args, env, venv = _l6(tmp_path)
     plan = subprocess.run(args, capture_output=True, text=True, env=env, timeout=60, check=False)
     assert plan.returncode == 0 and "PLAN\tvenv\ta.service\tpin\taiohttp\t3.9.0\t3.14.4" in plan.stdout, plan.stdout
-    digest = server_apply.plan_digest(plan.stdout)
+    digest = server_apply.plan_sha256(plan.stdout)
     done = subprocess.run([*args, "--apply", "--expect-digest", digest], capture_output=True, text=True, env=env,
                           timeout=60, check=False)
     assert done.returncode == 0, (done.stdout, done.stderr)
@@ -440,7 +440,7 @@ def test_l6_failed_health_switches_back_and_exits_6(tmp_path: Path) -> None:
     args, env, venv = _l6(tmp_path)
     plan = subprocess.run(args, capture_output=True, text=True, env=env, timeout=60, check=False)
     env = {**env, "FAKE_INACTIVE": "1", "FAKE_INACTIVE_IF_LINK": str(venv)}      # unhealthy only on the new venv
-    res = subprocess.run([*args, "--apply", "--expect-digest", server_apply.plan_digest(plan.stdout)],
+    res = subprocess.run([*args, "--apply", "--expect-digest", server_apply.plan_sha256(plan.stdout)],
                          capture_output=True, text=True, env=env, timeout=60, check=False)
     assert res.returncode == 6 and "REVERTED" in res.stdout, (res.stdout, res.stderr)
     assert venv.is_dir() and not venv.is_symlink() and (venv / "pyvenv.cfg").is_file()

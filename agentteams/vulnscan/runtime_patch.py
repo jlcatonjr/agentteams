@@ -128,7 +128,7 @@ def check(formula: str, *, apply: bool, run: Runner = _default_run) -> tuple[lis
     Raises:
         ExecError: Any D4 condition fails.
     """
-    from agentteams.vulnscan.server_apply import plan_digest
+    from agentteams.vulnscan.server_apply import plan_sha256
 
     if why := grant_v2.refused_formula(formula):
         raise ExecError(f"runtime-patch refuses {formula!r}: it {why}")
@@ -162,7 +162,7 @@ def check(formula: str, *, apply: bool, run: Runner = _default_run) -> tuple[lis
     if major(old) != major(new):
         raise ExecError(f"{formula} {old} -> {new} crosses a major version: runtime-patch is same-major only")
     plan = [f"PLAN\truntime\t{formula}\t{old}\t{new}\tbottle {tag if tag in files else 'all'}"]
-    return plan, plan_digest("\n".join(plan))
+    return plan, plan_sha256("\n".join(plan))
 
 
 def precheck(target: str, payload: dict[str, Any] | None) -> str:

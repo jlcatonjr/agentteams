@@ -43,8 +43,7 @@ Operations (v1):
   (:mod:`.executor_guard`). The PR body passes the publish scrubber (home paths, host name, private IPs).
 - ``server-audit HOST`` / ``server-dryrun HOST``: run the *packaged* server kit's read-only audit,
   or ``run-host.sh`` without ``--apply``, on an exact host named in the grant and in ``hosts.conf``.
-- ``server-apply HOST:LEVEL`` (:mod:`.server_apply`) and ``runtime-patch FORMULA`` (:mod:`.runtime_patch`): operator-run
-  host changes under a v2 grant, each only for the dry-run plan whose digest the operator confirmed.
+- ``server-apply HOST:LEVEL`` / ``runtime-patch FORMULA``: operator-confirmed host changes (:mod:`.server_apply`).
 
 git always runs with system/global config ignored, hooks and commit/tag signing disabled, a fixed ssh
 command and an explicit credential helper, so repository or user config cannot redirect what runs. Granted ops
