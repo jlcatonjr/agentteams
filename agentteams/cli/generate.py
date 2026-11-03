@@ -214,6 +214,10 @@ def _run_generate_inner(
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
+    from agentteams.cli.s10_exempt_gate import authorized_exempt_repos  # Rule 15: never the raw brief list
+
+    manifest["s10_cooldown_exempt_authorized"] = authorized_exempt_repos(
+        output_dir, manifest.get("s10_cooldown_exempt_repos"), consume=not (args.dry_run or args.check))
 
     print(f"  Output directory: {output_dir}")
 

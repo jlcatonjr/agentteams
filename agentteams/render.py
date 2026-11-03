@@ -249,8 +249,10 @@ def _build_placeholder_map_for_file(
     """Build the placeholder map for a single file, merging global and per-component values."""
     # Start with all auto-resolved global placeholders
     mapping = dict(manifest["auto_resolved_placeholders"])
-    # Rule S-10's local-repository carve-out (an operator ruling): from the brief, filled here to keep analyze.py small.
-    mapping.setdefault("S10_COOLDOWN_EXEMPT_REPOS", format_s10_exempt_repos(manifest.get("s10_cooldown_exempt_repos")))
+    # Rule S-10's local-repository carve-out: only what cli/s10_exempt_gate authorized, never the raw brief list, so
+    # a path that skips the gate (convert, interop) renders "none" (fail-closed, Rule 15).
+    mapping.setdefault("S10_COOLDOWN_EXEMPT_REPOS",
+                       format_s10_exempt_repos(manifest.get("s10_cooldown_exempt_authorized")))
 
     # Add component-specific overrides for workstream expert files
     if component_slug:

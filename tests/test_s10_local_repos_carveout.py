@@ -13,10 +13,12 @@ BRIEF = ROOT / "examples" / "software-project" / "brief.json"
 TEMPLATES = ROOT / "agentteams" / "templates"
 
 
-def _security_text(extra: dict) -> str:
+def _security_text(extra: dict, authorized: list[str] | None = None) -> str:
     description = ingest.load(BRIEF, scan_project=False)
     description.update(extra)
     manifest = analyze.build_manifest(description, framework="copilot-vscode")
+    if authorized is not None:
+        manifest["s10_cooldown_exempt_authorized"] = authorized  # what cli/s10_exempt_gate sets
     rendered = dict(render.render_all(manifest, templates_dir=TEMPLATES))
     return next(text for rel, text in rendered.items() if rel.endswith("security.agent.md"))
 
@@ -35,8 +37,8 @@ def test_an_entry_that_could_carry_prose_is_dropped() -> None:
     assert format_s10_exempt_repos(hostile) == "`ok/repo`"
 
 
-def test_the_rendered_rule_names_the_listed_repositories() -> None:
-    text = _security_text({"s10_cooldown_exempt_repos": ["jlcatonjr/agentteams", "jlcatonjr/researchteam"]})
+def test_the_rendered_rule_names_only_what_the_gate_authorized() -> None:
+    text = _security_text({}, authorized=["jlcatonjr/agentteams", "jlcatonjr/researchteam"])
     assert "Local interdependent-repository carve-out" in text
     assert "Listed: `jlcatonjr/agentteams`, `jlcatonjr/researchteam`." in text
     assert "{S10_COOLDOWN_EXEMPT_REPOS}" not in text
@@ -60,3 +62,9 @@ def test_the_trigger_and_verdict_tables_know_the_carve_out() -> None:
     assert "outside both the remediation and the local-repository carve-outs" in verdict
     assert "(for the cooldown only) that the release is of a repository listed in `s10_cooldown_exempt_repos`" in verdict
     assert "verifies\n  against the operator's release key" in template
+
+
+def test_the_raw_brief_list_never_renders_without_the_gate() -> None:
+    # A path that skips the gate (convert, interop) must fail closed (Rule 15, @security 2026-11-03).
+    text = _security_text({"s10_cooldown_exempt_repos": ["jlcatonjr/agentteams"]})
+    assert "Listed: none for this project" in text and "`jlcatonjr/agentteams`" not in text
