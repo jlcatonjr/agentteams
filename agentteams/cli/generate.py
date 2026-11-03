@@ -56,6 +56,7 @@ from agentteams.errors import (
 from agentteams.frameworks.registry import FRAMEWORKS
 # Pipeline helpers carved to generate_helpers.py (CH-07); re-imported so call sites and
 # tests/redteam references that resolve them via cli.generate keep working.
+from agentteams.cli.post_build import project_rules, write_suite_and_index
 from agentteams.cli.generate_helpers import (  # noqa: F401
     _sweep_capability_key,
     _apply_sibling_team_denies,
@@ -65,6 +66,7 @@ from agentteams.cli.generate_helpers import (  # noqa: F401
     _verify_enforcement_integrity,
     _bridge_entry_files,
     _bridge_gate_refusal,
+    _bridge_gate_before_render,
     _update_target_is_bridge,
     _BRIDGE_FENCE_BEGIN_RE,
     _handle_check,
@@ -320,6 +322,9 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     # Step 5: Render
     # -----------------------------------------------------------------------
+    if (gate_rc := _bridge_gate_before_render(args, project_root, output_dir, framework_id)) is not None:
+        return gate_rc
+
     print("Rendering templates...")
 
     # Compute template hashes for drift detection
@@ -340,11 +345,6 @@ def _run_generate_inner(
     # Step 5b: Handle --update (structural + content drift, manual preservation)
     # -----------------------------------------------------------------------
     if args.update:
-        # D3 bridge gate (fail closed on a detected bridge; policy in generate_helpers).
-        refusal = _bridge_gate_refusal(project_root, output_dir, framework_id)
-        if refusal and not getattr(args, "materialize_native", False):
-            print(refusal, file=sys.stderr)
-            return 1
         if manifest.get("write_policy") == "orchestrator-only":
             print("  ⚠  write_policy orchestrator-only: --update merges the proposal sections and Goose recipe "
                   "extensions (their tool grants follow the template), but never Markdown front matter or Codex TOML "
@@ -527,6 +527,8 @@ def _run_generate_inner(
             # fact that security_refresh_paths kept update_rendered non-empty.
             # The destructive-action gate already cleared above; a blocked
             # update returned before this point. Dry-run never heals.
+            if not args.dry_run:  # a rules edit alone changes no fingerprint, so a converged run still projects
+                project_rules(manifest, output_dir)
             if heal_converged and not args.dry_run:
                 build_team._heal_build_log_baseline(output_dir, manifest)
                 try:
@@ -536,20 +538,7 @@ def _run_generate_inner(
                         f"  !  Delivery receipt write failed (build-log healed): {exc}",
                         file=sys.stderr,
                     )
-                try:
-                    _write_eval_suite(manifest, output_dir)
-                except (OSError, EvalSuiteError) as exc:
-                    print(
-                        f"  !  Eval suite write failed (build-log healed): {exc}",
-                        file=sys.stderr,
-                    )
-                try:
-                    _write_memory_index(manifest, output_dir)
-                except (OSError, MemoryIndexError) as exc:
-                    print(
-                        f"  !  Memory index write failed: {exc}",
-                        file=sys.stderr,
-                    )
+                write_suite_and_index(manifest, output_dir, after="build-log healed")
                 if args.cost_routing:
                     try:
                         _write_model_routing(manifest, output_dir)
@@ -690,6 +679,8 @@ def _run_generate_inner(
                                                   mcp_seed_rows=_mcp_seed_rows(manifest))
             if created:
                 print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
+            # Before the build-log, so its hashes record the projected copies (baseAgent P1/P2).
+            project_rules(manifest, output_dir)
             build_team._write_run_log(manifest, result, output_dir, template_hashes)
             warn_unnarrowed_adopted(manifest, output_dir, [rel for rel, _ in final_rendered])
             # Receipt write AFTER build-log (R3 — "heal first, attest
@@ -703,22 +694,8 @@ def _run_generate_inner(
                     f"  !  Delivery receipt write failed (build-log healed): {exc}",
                     file=sys.stderr,
                 )
-            try:
-                _write_eval_suite(manifest, output_dir)
-            except (OSError, EvalSuiteError) as exc:
-                # Non-fatal, same contract as the receipt: next --update
-                # re-emits the suite.
-                print(
-                    f"  !  Eval suite write failed (build-log healed): {exc}",
-                    file=sys.stderr,
-                )
-            try:
-                _write_memory_index(manifest, output_dir)
-            except (OSError, MemoryIndexError) as exc:
-                print(
-                    f"  !  Memory index write failed: {exc}",
-                    file=sys.stderr,
-                )
+            # Non-fatal, same contract as the receipt: the next --update re-emits both.
+            write_suite_and_index(manifest, output_dir, after="build-log healed")
             # Code index (F-CODEIDX) — lazy: keep an *existing* gitignored cache
             # fresh on --update (query-time is the primary trigger). §8.2.
             _refresh_existing_code_index(manifest, output_dir)
@@ -934,6 +911,7 @@ def _run_generate_inner(
     # Step 9: Write run log (skip in dry-run)
     # -----------------------------------------------------------------------
     if not args.dry_run and result.success:
+        project_rules(manifest, output_dir)  # before the build-log, as on --update
         build_team._write_run_log(manifest, result, output_dir, template_hashes)
         warn_unnarrowed_adopted(manifest, output_dir, [rel for rel, _ in final_rendered])
         # F2 increment 1b: emit the framework-neutral eval suite on the
@@ -941,20 +919,7 @@ def _run_generate_inner(
         # RCC2 unified the render pipeline. Non-fatal, same contract as on
         # --update; eval-suite.json is drift-excluded by construction so it
         # does not perturb snapshot comparisons (.md-only).
-        try:
-            _write_eval_suite(manifest, output_dir)
-        except (OSError, EvalSuiteError) as exc:
-            print(
-                f"  !  Eval suite write failed (team generated): {exc}",
-                file=sys.stderr,
-            )
-        try:
-            _write_memory_index(manifest, output_dir)
-        except (OSError, MemoryIndexError) as exc:
-            print(
-                f"  !  Memory index write failed: {exc}",
-                file=sys.stderr,
-            )
+        write_suite_and_index(manifest, output_dir, after="team generated")
         if args.cost_routing:
             try:
                 _write_model_routing(manifest, output_dir)

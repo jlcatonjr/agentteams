@@ -280,6 +280,9 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   custom-agent limit (about 70,000 and 49,000 characters on one project), so Copilot truncates or rejects them.
 - **Who:** copilot-vscode teams. Claude, Codex, Goose and Grok are unaffected.
 - **Workaround:** rely on the Claude or Codex surface for those two roles, or trim their Project-Specific Notes.
+- **Partly addressed (baseAgent P4, 2026-11-02):** a fresh Copilot render puts `## Project-Specific Notes` before the
+  body's first fence, so the operator's text sits inside the limit, and `--check` fails when operator notes on disk start
+  past it (move them before the first fence; `--update --merge` keeps them there). The template overrun itself remains.
 - **Tracking:** 1.0 known limitation. Splitting long sections into references, with an emit-time size check, is
   planned for 1.0.x (found by masterTeacher).
 

@@ -151,7 +151,8 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Re-render drifted files and emit new agents added to the taxonomy. "
              "Default behavior merges only template-fenced regions, preserving all "
-             "user-authored content outside fence markers (same as --update --merge). "
+             "user-authored content outside fence markers (same as --update --merge), except "
+             "the generated PROJECTED-RULES / PROJECT-RULES-POINTER blocks (see --sync-project-rules). "
              "Use --update --overwrite to fully re-render existing files, replacing "
              "user-authored content (requires security clearance). "
              "Preserves manually-filled {MANUAL:*} values from existing files. "
@@ -228,7 +229,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="Check for template drift and structural changes without writing any files "
-             "(exit code 1 if drift or structural changes are detected)",
+             "(exit code 1 if drift or structural changes are detected, when a Copilot "
+             "agent's Project-Specific Notes start past the 30,000-character body limit, or "
+             "when a projected Project-Specific Rules copy is out of date or refused). "
+             "Operator text in a Project-Specific Notes/Rules region is not drift.",
     )
     parser.add_argument(
         "--strict-prompt-roots",
@@ -239,12 +243,36 @@ def _build_parser() -> argparse.ArgumentParser:
              "it the PROMPT-ROOT CHANGED warning is advisory",
     )
     parser.add_argument(
+        "--doctor",
+        action="store_true",
+        dest="doctor",
+        help=(
+            "Report whether the project's providers agree, and write nothing: Project-Specific Rules copies and "
+            "notes pointers, memory-index copies, Copilot body limits, agents missing on some provider, notes "
+            "that differ by provider, and a frozen AGENTS.md with an older constitutional core. Exit code 1 on "
+            "a failure. Uses --project (else the working directory)."
+        ),
+    )
+    parser.add_argument(
+        "--sync-project-rules",
+        action="store_true",
+        dest="sync_project_rules",
+        help=(
+            "Copy the project's Project-Specific Rules (from the brief's project_rules_source, else the source "
+            "the copies record, else the one instruction file that has rules) into every other provider's entry "
+            "file, and a pointer into the security and orchestrator notes; frozen surfaces skipped, hand-edited "
+            "copies refused. Runs after every generate and --update too. Runs in the working directory only; "
+            "with --dry-run it writes nothing."
+        ),
+    )
+    parser.add_argument(
         "--refresh-index",
         action="store_true",
         dest="refresh_index",
         help=(
-            "Rebuild references/memory-index.json only (no template emit/update). "
-            "Useful after editing work summaries or docs."
+            "Rebuild every surface's references/memory-index.json from the same sources "
+            "(frozen surfaces skipped; no template emit/update). Useful after editing "
+            "work summaries or docs."
         ),
     )
     parser.add_argument(
@@ -279,8 +307,9 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="query_index",
         default=None,
         help=(
-            "Query references/memory-index.json and print ranked hits. "
-            "Requires a pre-existing index in the output directory."
+            "Query references/memory-index.json and print ranked hits. Read-only: a "
+            "stale index is reported, not rebuilt. Uses another surface's index when "
+            "the output directory has none."
         ),
     )
     parser.add_argument(

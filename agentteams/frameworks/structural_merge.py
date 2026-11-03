@@ -8,6 +8,9 @@ the front-matter merge, for every merged file. Each step is a no-op for files it
 * Every markdown agent file and goose recipe: an ``AGENTTEAMS-LEARNED`` block the fence merge
   dropped is carried back from the fresh render (which :func:`agentteams.emit.emit_all` already
   seeded from the on-disk file) — :func:`agentteams.learned_blocks.carry_block_text`.
+* Instruction files (``CLAUDE.md``, ``AGENTS.md``, ``copilot-instructions.md``): a user region the template
+  declares but the file predates is inserted empty, with its SECTION MANIFEST row
+  (:func:`agentteams.user_regions.insert_missing_regions`).
 * Repo-root ``AGENTS.md``: a remaining unfenced Constitutional Rules list beside the fenced
   baseline is reported on every run
   (:func:`agentteams.frameworks._agents_md_rules.duplicate_rules_notice`).
@@ -23,6 +26,7 @@ from agentteams.frameworks._agents_md_rules import duplicate_rules_notice
 from agentteams.frameworks.goose_recipe_merge import (reconcile_extensions, reconcile_sub_recipes,
                                                       repair_misplaced_sections, repair_stranded_markers)
 from agentteams.learned_blocks import carry_block_text
+from agentteams.user_regions import insert_missing_regions
 
 
 def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, list[str]]:
@@ -41,6 +45,8 @@ def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, 
     notices: list[str] = []
     if "/" not in rel_path and Path(rel_path).name not in ("CLAUDE.md", "AGENTS.md"):
         merged, notices = carry_block_text(rel_path, fresh, merged)
+    merged, added = insert_missing_regions(rel_path, fresh, merged)  # instruction files only
+    notices += added
     if rel_path.endswith(".yaml"):
         merged, repaired = repair_stranded_markers(merged)  # before the span reconciles, which need the block intact
         notices += repaired

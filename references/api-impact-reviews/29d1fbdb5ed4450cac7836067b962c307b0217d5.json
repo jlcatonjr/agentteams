@@ -1,0 +1,8 @@
+{
+  "patch_id": "29d1fbdb5ed4450cac7836067b962c307b0217d5",
+  "commit": "67f3600b0382ecffca1db9a69d7e68a3fce6f4f7",
+  "subject": "fix(memory-index): Phase 2 review fixes (hygiene + adversarial)",
+  "impact": "1 symbols added, 2 symbols changed, 1 schemas changed",
+  "note": "Cross-surface Phases 1-4 (PRs #356-#359). Reviewed every added/changed public symbol, CLI flag (--sync-project-rules, --doctor) and schema key (memory_index_extra_files, project_rules_source, frozen_surfaces in the team manifest) against docs_src/api-reference, cli-reference, the man page and CHANGELOG; @conflict-auditor ran per phase. Open flags resolved in the final tree: cli/post_build.py is a cli module (no api page by the parity rule); can_write_run was replaced by the documented capability().",
+  "recorded_at": "2026-11-02T21:24:04Z"
+}

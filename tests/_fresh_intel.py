@@ -50,3 +50,29 @@ def seed_offline_intel(output: Path, framework: str) -> list[str]:
     (refs / "security-vulnerability-watch.json").write_text(json.dumps(payload), encoding="utf-8")
     return [OFFLINE_FLAG]
 
+
+
+def run_build(brief: Path, project: Path, framework: str, output: Path, *extra: str,
+              seed: bool = True) -> "subprocess.CompletedProcess[str]":
+    """Run ``build_team.py`` for *framework* in a subprocess, reading hermetic intel.
+
+    Args:
+        brief: The brief to pass as ``--description``.
+        project: The project root (``--project`` and the working directory).
+        framework: The ``--framework``.
+        output: The ``--output`` agents directory.
+        *extra: More CLI arguments (``--update``, ``--check`` …).
+        seed: Seed a fresh intel cache first. Pass ``False`` when the caller has seeded already and the
+            cache must not change (a write-nothing check).
+
+    Returns:
+        The completed process (text mode, output captured).
+    """
+    import subprocess
+    import sys
+
+    intel = seed_offline_intel(output, framework) if seed else [OFFLINE_FLAG]
+    build_team = Path(__file__).resolve().parent.parent / "build_team.py"
+    return subprocess.run([sys.executable, str(build_team), "--description", str(brief), "--project", str(project),
+                           "--framework", framework, "--output", str(output), "--no-scan", "--yes", *extra, *intel],
+                          cwd=project, capture_output=True, text=True, timeout=300)

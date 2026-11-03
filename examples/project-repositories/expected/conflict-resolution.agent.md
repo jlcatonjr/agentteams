@@ -30,6 +30,10 @@ You make **ACCEPT / REJECT / REVISE** decisions on conflicts flagged by `@confli
 
 ---
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
 
@@ -99,7 +103,3 @@ Update `.github/agents/references/conflict-log.csv`: change `status` to `resolve
 4. Update the conflict log for every decision, including ACCEPT
 <!-- AGENTTEAMS:END rules -->
 
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

@@ -624,6 +624,12 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         # from description so _memory_index_sources can see it without depending
         # on the description being re-attached later in the update path.
         "memory_index_extra_dirs": description.get("memory_index_extra_dirs") or [],
+        # Named Markdown files for the memory index (baseAgent P7).
+        "memory_index_extra_files": description.get("memory_index_extra_files") or [],
+        # Surfaces a cross-surface write (--refresh-index of every copy) must leave alone.
+        "frozen_surfaces": description.get("frozen_surfaces") or [],
+        # The instruction file whose Project-Specific Rules every provider gets (rules_projection).
+        "project_rules_source": description.get("project_rules_source") or "",
         # Paths/globs to EXCLUDE from the memory index (e.g. content relocated to a
         # private repo). Read directly from description, like memory_index_extra_dirs.
         "memory_index_exclude": description.get("memory_index_exclude") or [],

@@ -1,7 +1,7 @@
 """Prompt-root change detection (follow-up #8 phase 1, 2026-10-01).
 
 A *prompt root* is a file another harness reads as instructions: ``.github/copilot-instructions.md``,
-``.github/instructions/**``, ``.github/prompts/**``, root ``AGENTS.md``, ``.goosehints``,
+``.github/instructions/**``, ``.github/prompts/**``, root ``AGENTS.md``, ``AGENTS.override.md``, ``.goosehints``,
 ``CLAUDE.md`` / ``.claude/CLAUDE.md``, and each present team's agent files (``.github/agents/*.agent.md``,
 ``.codex/agents/*.toml``, ``.goose/recipes/*.yaml``, ``.claude/agents/*.md``). Most of them are
 writable from a Claude sandbox, so a confined agent could rewrite what an unconfined Copilot, Codex
@@ -52,9 +52,14 @@ SHARED_ROOT_FILES: tuple[str, ...] = (
 )
 #: Prompt-root directories agentteams never emits: snapshotted whole-file at generation.
 SNAPSHOT_DIRS: tuple[str, ...] = (".github/instructions", ".github/prompts")
+#: Single-file prompt roots agentteams never emits, snapshotted whole-file when present. Codex loads
+#: ``AGENTS.override.md`` *in place of* ``AGENTS.md`` (baseAgent P13). ``CLAUDE.local.md`` is left out: it is a
+#: personal, usually untracked file, so recording it would report every other checkout as changed.
+SNAPSHOT_FILES: tuple[str, ...] = ("AGENTS.override.md",)
 #: Every prompt root, as glob-style patterns (documentation and :func:`is_prompt_root`).
 PROMPT_ROOTS: tuple[str, ...] = (
     *SHARED_ROOT_FILES,
+    *SNAPSHOT_FILES,
     *(f"{d}/**" for d in SNAPSHOT_DIRS),
     *(f"{d}/{g}" for d, g in TEAM_AGENT_GLOBS.items()),
 )
@@ -82,7 +87,7 @@ def is_prompt_root(rel: str) -> bool:
     Returns:
         ``True`` for a shared root file, a file under a snapshot dir, or a team agent file.
     """
-    if rel in SHARED_ROOT_FILES or any(rel.startswith(d + "/") for d in SNAPSHOT_DIRS):
+    if rel in SHARED_ROOT_FILES or rel in SNAPSHOT_FILES or any(rel.startswith(d + "/") for d in SNAPSHOT_DIRS):
         return True
     head, _, name = rel.rpartition("/")
     glob = TEAM_AGENT_GLOBS.get(head)
@@ -173,8 +178,8 @@ def _team_agent_files(root: Path, team_dir: str) -> list[str]:
 
 
 def _snapshot_files(root: Path) -> list[str]:
-    """Project-relative files under the snapshot dirs, never following a symlink."""
-    out: list[str] = []
+    """Project-relative snapshot files and files under the snapshot dirs, never following a symlink."""
+    out: list[str] = [rel for rel in SNAPSHOT_FILES if (root / rel).is_symlink() or (root / rel).is_file()]
     for rel_dir in SNAPSHOT_DIRS:
         base = root / rel_dir
         if base.is_symlink():
@@ -336,7 +341,8 @@ def detect_prompt_root_changes(project_root: Path) -> list[str]:
     for rel, hashes in shared.items():
         found.update(_diff_file(rel, hashes, _file_hashes(root / rel, fenced=True, root=root)))
     newest = records[-1][2]
-    snap_recorded = {k for k in newest if any(k == d or k.startswith(d + "/") for d in SNAPSHOT_DIRS)}
+    snap_recorded = {k for k in newest
+                     if k in SNAPSHOT_FILES or any(k == d or k.startswith(d + "/") for d in SNAPSHOT_DIRS)}
     for rel in snap_recorded | set(_snapshot_files(root)):
         if rel not in newest:
             found.add(f"{rel!r}: added")

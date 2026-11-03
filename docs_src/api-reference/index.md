@@ -66,6 +66,10 @@ This reference defines the **supported public API surface** (documented modules 
 | [`memory-index`](memory-index.md) | Lexical (BM25) search index for work summaries and documentation |
 | [`memory-index-incremental`](memory-index-incremental.md) | In-place single-document index patching; declines conservatively to a full rebuild |
 | [`memory-index-store`](memory-index-store.md) | On-disk layout of the committed index: compact lines, size-capped native shards read without reassembly |
+| [`memory-index-surfaces`](memory-index-surfaces.md) | The index across a project's surfaces: all-surface refresh, query fallback, finding the brief, coverage report |
+| [`rules-projection`](rules-projection.md) | One project's Project-Specific Rules in every provider's entry file, and a pointer in the key agents' notes |
+| [`surface-matrix`](surface-matrix.md) | Which agents exist on which provider, their declared tools, notes and skills parity |
+| [`doctor`](doctor.md) | `--doctor`: one read-only report on whether the project's providers agree |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
 | [`code-index`](code-index.md) | Code & API index over repository scripts and the external APIs they use (gitignored local cache) |
 | [`code-sources`](code-sources.md) | Source resolution and partitioning for the code & API index |
@@ -162,6 +166,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`learned_blocks`](learned-blocks.md) | Pure-text parse/compose/verify of the learned block in markdown agent files and goose recipes |
 | [`branch_inventory`](branch-inventory.md) | `--branch-inventory`: read-only branch classification (ancestry, Merged-by-PR via the GitHub API, holds) and a leased deletion plan |
 | [`project_notes`](project-notes.md) | The USER-EDITABLE Project-Specific Notes section of agent personas (carved from `emit`) |
+| [`copilot_body_limit`](copilot-body-limit.md) | `--check`'s guard for operator notes past Copilot's 30,000-character agent-body limit |
+| [`bridge_refresh`](bridge-refresh.md) | What `--bridge-refresh` writes for `.goosehints`: the bridge fence, keeping project text around it |
 | [`shrink_allow`](shrink-allow.md) | `--shrink-allow`: operator-reviewed per-section overrides of the shrink guard (template retirements vs enrichment) |
 | [`branch_cleanup`](branch-cleanup.md) | `--branch-cleanup` / `--branch-post-merge`: guarded deletion under a plan-bound `@security` clearance or an operator Ed25519 `branch-delete` grant; hash-chained deletion ledger |
 
