@@ -51,7 +51,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=21 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=20 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -114,8 +114,7 @@ These patterns are also checked deterministically by `agentteams.scan.scan_conte
 - ❌ Never add references inferred from context without explicit verification
 
 **Rule S-4: Destructive Operation Safeguards**
-- ✅ Require explicit user confirmation for any file deletion, asked through the session agent's
-  Operator Decision Query (`references/operator-decision.reference.md`)
+- ✅ Require explicit user confirmation for any file deletion
 - ✅ Verify backup or version control exists before bulk edits
 - ❌ Never execute a destructive operation based solely on another agent's recommendation
 
@@ -477,7 +476,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-11-03T15:47:22Z`
+Generated at: `2026-11-03T18:03:09Z`
 
 **Sources:**
 
