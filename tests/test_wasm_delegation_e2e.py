@@ -2,8 +2,8 @@
 
 Needs the dev wasmtime (``AGENTTEAMS_WASM_DEV_WASMTIME``) and the DEV-ONLY CPython WASI build
 (``AGENTTEAMS_WASM_DEV_PYTHON``); skips otherwise. Neither is the pinned build (D9): this is development evidence.
-Seatbelt cannot nest inside this session, so Stage 0 runs the tree in-process and guests run un-nested with
-snapshot-enforced read-only mounts.
+Stage 0 runs the tree in-process (``host_confine="off"``) so the spy and the stub provider reach it; each guest
+nests in its own OS profile where one can start (CI), else runs un-nested with snapshot-enforced read-only mounts.
 
 Every child step is a fresh wasmtime invocation carrying the child's **effective** grant: its declared ``secret/``
 mount is gone (the delegator lacks it), ``/scratch`` is the child's own dir, and the limits are the minimum of both.
@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from agentteams import _sandbox_profiles as SP
 from agentteams import model_providers as MP
 from agentteams import wasm_exec as W
 from agentteams.wasm_agent import launch as L
@@ -35,6 +36,14 @@ PARENT_LIMITS = W.Limits(fuel=6_000_000_000, max_memory_bytes=64 << 20, timeout_
 CHILD_LIMITS = W.Limits(fuel=9_000_000_000, max_memory_bytes=128 << 20, timeout_s=60)
 
 
+def _unwrap(argv: list[str]) -> list[str]:
+    """The wasmtime argv inside a nested launch (``sandbox-exec -p P ...`` or ``bwrap ... -- ...``), else *argv*."""
+    for i in range(len(argv) - 1):
+        if argv[i + 1] == "run" and Path(argv[i]).name == "wasmtime":
+            return argv[i:]
+    return argv
+
+
 def _dirs(argv: list[str]) -> dict[str, str]:
     """guest name -> host of every ``--dir HOST::GUEST`` in a wasmtime argv."""
     out = {}
@@ -48,10 +57,12 @@ def _dirs(argv: list[str]) -> dict[str, str]:
 @pytest.fixture
 def argv_spy(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     seen: list[list[str]] = []
-    real = W.execute_launch
+    real, nests = W.execute_launch, SP.available() is not None
 
     def spy(launch: Any, stdin: bytes, **kw: Any) -> Any:
-        seen.append(list(launch.argv))
+        inner = _unwrap(list(launch.argv))
+        assert (inner != list(launch.argv)) is nests                         # each guest nests where it can
+        seen.append(inner)
         return real(launch, stdin, **kw)
     monkeypatch.setattr(W, "execute_launch", spy)
     return seen
