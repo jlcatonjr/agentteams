@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-11-02
+
+### release notes
+
+agentteams 1.0.5 is a patch release on the 1.0 line with five fixes, backported from `main`, that came out of
+baseAgent's cross-surface hand-off of 2026-11-02. It adds no dependencies and no new configuration. The cross-surface
+features from the same hand-off (rules projection, `--doctor`, the agent-surface matrix, all-surface index refresh)
+are in the 1.1 line.
+
+- `--query-index` no longer rewrites the tracked memory index; it reports a stale one.
+- `--check` no longer fails on an operator's own Project-Specific Notes or Rules.
+- `--bridge-refresh` keeps project text in `.goosehints`.
+- `AGENTS.override.md` is tracked as a prompt root.
+- A region that mentions the learned-block marker in prose carries across `--overwrite`.
+- **Install:** from a verified, detached checkout of the signed `v1.0.5` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
 ### fixed (cross-surface fixes backported from main; baseAgent hand-off 2026-11-02)
 
 - **A learned-block marker mentioned in prose no longer blocks `--overwrite`.** `carry_regions` refused any user
