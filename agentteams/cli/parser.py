@@ -1138,7 +1138,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "write-protects the .agentteams control plane. \"off\" after WASM was on is constraint-relaxing: "
             "in a governed workspace it needs an operator Ed25519-signed decision "
             "sandbox-wasm-off:<framework> (Rule 15). Grants, native-exec exceptions and network are never "
-            "set from argv."
+            "set from argv. Native Windows: not supported for now (use WSL, Linux or macOS)."
         ),
     )
     parser.add_argument(

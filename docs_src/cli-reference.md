@@ -686,7 +686,8 @@ when the block is absent, and write-protects the `.agentteams` control plane in 
 Ed25519-signed decision for `sandbox-wasm-off:<framework>`; elsewhere generation prints a `SANDBOX RELAXATION` notice.
 Grants, native-exec exceptions and network are never set from argv. With WASM on, generation also prints the D6
 composition notes (`wasm-without-os-sandbox` when the OS sandbox is off, `wasm-only-host` on a host with no OS
-sandbox) and records them in the team manifest's `advisories`; it never claims enforcement.
+sandbox, and `wasm-windows-unsupported` on native Windows, where WASM is not supported for now) and records them in
+the team manifest's `advisories`; it never claims enforcement.
 `--check-wiring --wasm-sandbox on` checks the control-plane denies too.
 
 ### `--wasm-substrate {on,off}`

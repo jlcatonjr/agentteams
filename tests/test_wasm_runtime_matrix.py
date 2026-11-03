@@ -11,7 +11,8 @@ Per-plan tests own each layer (``test_wasm_exec*.py``, ``test_wasm_guests*.py``)
 * **Live (dev wasmtime; dev CPython-WASI for Python; skip otherwise).** For each language x ``os_confine``
   (``auto`` / ``off`` / ``inherited``) the deny probe shows no file, env or network access; fuel and timeout traps
   are reported; ``os_confinement`` is exactly ``nested`` / ``inherited`` / ``none`` with ``read_only_mode == "os"``
-  only when ``nested`` (R5: only nested counts as enforced). ``require`` either nests or refuses, never a false pass.
+  only when ``nested`` (R5: only nested counts as enforced; a raw module has no read-only mounts, so ``none``).
+  ``require`` either nests or refuses, never a false pass.
   JavaScript skips until QuickJS-ng is pinned and installed (D10).
 
 Seatbelt cannot nest inside this session's sandbox (``sandbox_apply: Operation not permitted``), so here ``auto``
@@ -270,10 +271,11 @@ def test_os_confinement_is_three_state_and_only_nested_is_enforced(probes: Any, 
     assert res.os_confinement == expected, res.os_reason
     if confine == "auto" and not _NESTABLE:
         assert res.os_reason == f"unavailable:{sys.platform}"   # said, never a silent fresh-sandbox claim
-    # read-only mounts (the interpreter's /lib, /src) are OS-enforced only when nested; else a snapshot
-    assert (res.read_only_mode == "os") is (res.os_confinement == "nested")
-    if language != "module":
-        assert res.read_only_mode in ("os", "snapshot")
+    if language == "module":
+        assert res.read_only_mode == "none"                      # a raw module has no read-only mounts
+    else:
+        # read-only mounts (the interpreter's /lib, /src) are OS-enforced only when nested; else a snapshot
+        assert res.read_only_mode == ("os" if res.os_confinement == "nested" else "snapshot")
 
 
 @pytest.mark.parametrize("language", _LANGS)

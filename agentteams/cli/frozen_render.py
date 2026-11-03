@@ -136,4 +136,22 @@ def exempt_frozen(manifest: dict, output_dir: Path, dreport: object, sdreport: o
         setattr(report, name, [e for e in entries if e[key] in kept])
 
 
-__all__ = ["drop_frozen", "exempt_frozen", "frozen_refusal"]
+def prunable(manifest: dict, removed: list[dict], output_dir: Path) -> list[dict]:
+    """The ``--prune`` candidates (build-log entries with a ``path``) outside every frozen surface.
+
+    Args:
+        manifest: The team manifest (``frozen_surfaces`` from the brief).
+        removed: The structural diff's ``removed_files`` entries.
+        output_dir: The agents output directory.
+
+    Returns:
+        The entries ``--prune`` may delete; a frozen file is never deleted (it is skipped with a notice).
+
+    Raises:
+        ValueError: ``frozen_surfaces`` names an unknown surface.
+    """
+    kept = {rel for rel, _ in drop_frozen(manifest, [(f["path"], "") for f in removed], output_dir)}
+    return [f for f in removed if f["path"] in kept]
+
+
+__all__ = ["drop_frozen", "exempt_frozen", "frozen_refusal", "prunable"]
