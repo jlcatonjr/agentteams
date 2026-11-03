@@ -59,9 +59,10 @@ capability of its own (C-3). In goose, a sub-recipe inherits the orchestrator's 
 structural limits are therefore the agent container, which holds no credentials, and the executor,
 which acts only under a grant; not this front matter.
 
-The operations you may request are `stage-fix`, `stage-major`, `stage-image`, `open-pr`,
+The operations you may request are `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`,
 `close-superseded`, `server-audit` and `server-dryrun`. `stage-major` is `stage-fix` with semver-major
-upgrades allowed; `stage-image` moves end-of-life base images' Dockerfile `FROM` tags to a supported line.
+upgrades allowed; `stage-image` moves end-of-life base images' Dockerfile `FROM` tags to a supported line;
+`stage-cargo` runs a `Cargo.lock`'s in-major `cargo update --precise` fixes.
 Each runs only under a grant that names it. `close-superseded` closes a repository's older remediation PRs once its newest one is
 open; the executor closes only PRs it opened that no person has touched. There is no merge, no
 force-push and no server apply: never ask for them, and never ask a person to do them for you.
@@ -152,6 +153,9 @@ with a stop condition, escalate anyway and mention the note in the evidence.
      is `done`, request `open-pr` (its PR is marked MAJOR) and then `close-superseded`. Every base-image row
      whose action is `plan-only` (`:latest`, digest-pinned, OS-tagged, private images, databases, node) is
      for a person: list it for the operator with its reason.
+   - **Cargo.lock.** Request `stage-cargo` (same alias) only for a repository whose fix plan has a
+     *crates.io* row whose action is `stage-cargo`, on its own, like `stage-image`; then `open-pr`. Every
+     other crates.io row is for a person: list its command for the operator.
 
    Rationale must name the advisory ids and severity (for `stage-image`: the image, its tag and that its
    line is end-of-life). Apart from `stage-major` and `stage-image` above, skip every row

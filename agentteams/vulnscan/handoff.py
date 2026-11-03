@@ -95,6 +95,7 @@ class RepoHandoff:
     ask: str = ""                    # own-pr: the request the next handoff packet carries (handoff_lapse.packet_ask)
     lapsed: bool = False             # own-pr: its LAPSE_DAYS have run (open-pr opens the PR unless owner_prs)
     owner_prs: list[int] = field(default_factory=list)   # own-pr, due: the open owner PRs that keep it deferring
+    needs_you: str = ""              # reject, stale and unanswered: the operator's line (handoff_stale, C4), or ""
 
     @property
     def launcher_warning(self) -> str:
@@ -124,7 +125,8 @@ class RepoHandoff:
                 "verdict": self.verdict, "verdict_handoff": self.verdict_handoff, "homes": self.homes,
                 "pending": self.pending, "problems": self.problems, "launcher": self.launcher,
                 "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail,
-                "lapses": self.lapses, "lapsed": self.lapsed, "ask": self.ask, "owner_prs": self.owner_prs}
+                "lapses": self.lapses, "lapsed": self.lapsed, "ask": self.ask, "owner_prs": self.owner_prs,
+                "needs_you": self.needs_you}
 
 
 def digest_of(branch: str) -> str:
@@ -436,14 +438,16 @@ def status(cfg: dict[str, Any] | None, repos: list[Path], *, fallback: Path | No
 
 
 def _lapse_fields(rec: RepoHandoff, repo: Path) -> None:
-    """Fill ``rec``'s own-pr lapse fields; start or stop the clock at this sight of the verdict (B1b, OD10)."""
-    from agentteams.vulnscan import handoff_lapse, ledger   # lazy: both import this module (via the executor)
+    """Fill ``rec``'s own-pr lapse fields and its stale-reject line; start or stop both clocks at this sight of the
+    verdict (B1b, OD10; C4)."""
+    from agentteams.vulnscan import handoff_lapse, handoff_stale, ledger   # lazy: they import this module
 
     try:
         with ledger.locked():
             clock = handoff_lapse.clock(repo, rec.staged_branch)
+            rec.needs_you = handoff_stale.needs_you(repo, handoff_stale.clock(repo, rec.staged_branch))
     except (OSError, ValueError) as exc:   # no lock, or an untrusted ledger: show nothing rather than guess
-        rec.problems.append(f"own-pr lapse clock unreadable: {exc}")
+        rec.problems.append(f"handoff clocks unreadable: {exc}")
         return
     rec.lapses = clock["lapses"] if clock else ""
     rec.ask = handoff_lapse.packet_ask(repo, rec.staged_branch, clock)
@@ -491,6 +495,8 @@ def markdown(records: list[RepoHandoff]) -> str:
         if r.launcher_state and r.launcher_state != "current":
             bits.append(f"launcher {r.launcher_state}")
         lines.append(f"- {Path(r.repo).name} ({mode}): " + "; ".join(bits))
+        if r.needs_you:
+            lines.append(f"  - **Needs you:** {r.needs_you}")
     lines.append("- details: `python -m agentteams.vulnscan handoff status`")
     return "\n".join(lines) + "\n"
 
@@ -503,13 +509,13 @@ DIRECTIVE_SCOPE_PREFIX = "review-vulnscan-handoff-"
 
 
 def register(sub: Any) -> None:
-    """Add ``handoff status`` and ``handoff verify-directive`` to the vulnscan parser.
+    """Add ``handoff status``, ``handoff verify-directive`` and ``handoff answer`` (C4) to the vulnscan parser.
 
     Args:
         sub: The parser's subparsers action.
     """
     sp = sub.add_parser("handoff", help="remediation handoffs to each repository's own orchestrator")
-    sp.add_argument("action", choices=("status", "verify-directive"))
+    sp.add_argument("action", choices=("status", "verify-directive", "answer"))
     sp.add_argument("--repo", action="append", default=[], type=Path,
                     help="status: a repository (default: every repository with a staged fix)")
     sp.add_argument("--json", action="store_true", help="JSON output (status: one object per repository)")
@@ -519,6 +525,8 @@ def register(sub: Any) -> None:
                     help=f"verify-directive: the handoff id (scope {DIRECTIVE_SCOPE_PREFIX}<id>)")
     sp.add_argument("--directive-id", default="",
                     help="verify-directive: the directive id just issued (omit on a resume)")
+    sp.add_argument("--answer", default="", help="answer: your answer to a stale reject (keep-rejected, ask-again)")
+    sp.add_argument("--note", default="", help="answer: a note kept with it")
 
 
 def verify_directive(team_dir: Path, handoff_id: str, directive_id: str = "") -> dict[str, Any]:
@@ -579,7 +587,8 @@ def _dispatch_verify_directive(args: argparse.Namespace) -> int:
 
 
 def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -> int:
-    """Run ``handoff status`` (or ``handoff verify-directive``, :func:`_dispatch_verify_directive`).
+    """Run ``handoff status`` (or ``handoff verify-directive``, :func:`_dispatch_verify_directive`; or ``handoff
+    answer``, :func:`.handoff_stale.cmd_answer`).
 
     ``status``: each repository shows its delivery (handoff or direct), the staged branch, the newest verdict for
     that fix (``approved`` means ``open-pr`` may push it) and the packets no verdict answers yet.
@@ -593,10 +602,12 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
     Returns:
         0 printed, 2 an unusable config (verify-directive: 0 verified, 1 unverified, 2 bad arguments).
     """
-    from agentteams.vulnscan import paths
+    from agentteams.vulnscan import handoff_stale, paths
 
     if args.action == "verify-directive":
         return _dispatch_verify_directive(args)
+    if args.action == "answer":
+        return handoff_stale.cmd_answer(args)
 
     try:
         cfg = load_cfg() if paths.config_file().exists() else {}
@@ -625,6 +636,8 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
             if rec.owner_prs:
                 print(f"  owner PR(s) keeping it deferred: {', '.join(f'#{n}' for n in rec.owner_prs)}")
             print(f"  ask (for the next handoff packet): {rec.ask}")
+        if rec.needs_you:
+            print(f"  NEEDS YOU: {rec.needs_you}")
         print(f"  launcher: {rec.launcher or '—'} ({rec.launcher_state}: {rec.launcher_detail})")
         if rec.launcher_warning:
             print(f"  warning: {rec.launcher_warning}")

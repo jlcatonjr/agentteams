@@ -1,4 +1,5 @@
-# agentteams vulnscan TOOLS image: git, the OpenSSH client, netcat (ssh's ProxyCommand), Node.js + npm, the egress
+# agentteams vulnscan TOOLS image: git, the OpenSSH client, netcat (ssh's ProxyCommand), Node.js + npm, cargo
+# (stage-cargo's `cargo update --precise`, Debian's package from the signed apt sources), the egress
 # proxy and the isolation probe. No credentials and no agentteams code. The executor runs it read-only, with every
 # capability dropped, no-new-privileges and the operator's uid (agentteams/vulnscan/subproc_confine.py).
 #
@@ -18,7 +19,8 @@ ARG TARGETARCH
 RUN test -n "$NODE_VERSION" && test -n "$NODE_SHA256_AMD64" && test -n "$NODE_SHA256_ARM64" \
  || { echo "NODE_VERSION, NODE_SHA256_AMD64 and NODE_SHA256_ARM64 build args are required" >&2; exit 1; }
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl git git-lfs openssh-client netcat-openbsd xz-utils \
+ && apt-get install -y --no-install-recommends ca-certificates cargo curl git git-lfs openssh-client netcat-openbsd \
+      xz-utils \
  && rm -rf /var/lib/apt/lists/*
 RUN case "${TARGETARCH:-amd64}" in \
       amd64) NARCH=x64; NSHA="$NODE_SHA256_AMD64" ;; \
@@ -36,7 +38,12 @@ COPY egress_proxy.py selftest.py /usr/local/lib/vulnscan/
 COPY vulnscan-with-token git-credential-vulnscan /usr/local/bin/
 RUN chmod 0644 /usr/local/lib/vulnscan/egress_proxy.py /usr/local/lib/vulnscan/selftest.py \
  && chmod 0755 /usr/local/bin/vulnscan-with-token /usr/local/bin/git-credential-vulnscan \
- && git --version && git lfs version && ssh -V && nc -h 2>&1 | head -1
+ && git --version && git lfs version && ssh -V && nc -h 2>&1 | head -1 && cargo --version
+# stage-cargo needs Cargo.lock v4 (cargo >= 1.78): Debian bookworm's cargo is older, so fail the build there.
+RUN cv="$(cargo --version | sed -n 's/^cargo \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')" \
+ && set -- $cv && { [ "${1:-0}" -gt 1 ] || { [ "${1:-0}" -eq 1 ] && [ "${2:-0}" -ge 78 ]; }; } \
+ || { echo "cargo >= 1.78 is required (Cargo.lock v4, stage-cargo); this base image has $(cargo --version 2>&1)." \
+         "Build with a Debian trixie based PYTHON_IMAGE (e.g. python:3.12-slim-trixie@sha256:...)." >&2; exit 1; }
 LABEL org.agentteams.vulnscan.tools-node="${NODE_VERSION}"
 # Run time always passes --user <operator uid>:<gid>; this default only keeps a bare `docker run` from being root.
 USER 65534:65534

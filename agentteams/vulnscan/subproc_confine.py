@@ -66,6 +66,7 @@ CRED_HELPER = "/usr/local/bin/git-credential-vulnscan"
 WITH_TOKEN = "/usr/local/bin/vulnscan-with-token"
 PROXY_SCRIPT = "/usr/local/lib/vulnscan/egress_proxy.py"
 NPM_ENDPOINT = "registry.npmjs.org:443"          # fix.NPM_REGISTRY's host (a test keeps them equal)
+CARGO_ENDPOINT = "index.crates.io:443"            # crates.io's sparse index: all cargo update reads (stage-cargo)
 INFRA_EXIT = (125, 126, 127)                     # docker could not run the container, or the command is missing
 ENABLED_BY_DEFAULT = True                        # tests/conftest.py turns this off for the host-git test suite
 DEFAULTS: dict[str, Any] = {"subprocesses": None, "image": "", "ssh_identity": ""}
@@ -672,6 +673,20 @@ def run_npm(args: Sequence[str], *, workdir: Path, scratch_root: Path, env: dict
     if active() is None:
         raise Unavailable("tools container unavailable: no confinement scope is active")
     return run_confined("npm", ["npm", *args], writable=[scratch_root], egress=(NPM_ENDPOINT,), env=env,
+                        timeout=timeout, workdir=str(Path(workdir).resolve()))
+
+
+def run_cargo(args: Sequence[str], *, workdir: Path, scratch_root: Path, env: dict[str, str],
+              timeout: float = 600) -> subprocess.CompletedProcess:
+    """Run ``cargo args`` in the tools container: ``scratch_root`` writable, only crates.io's sparse index reachable.
+
+    Raises:
+        Unavailable: No scope is active or the container could not run.
+        subprocess.TimeoutExpired: cargo ran longer than ``timeout``.
+    """
+    if active() is None:
+        raise Unavailable("tools container unavailable: no confinement scope is active")
+    return run_confined("cargo", ["cargo", *args], writable=[scratch_root], egress=(CARGO_ENDPOINT,), env=env,
                         timeout=timeout, workdir=str(Path(workdir).resolve()))
 
 
