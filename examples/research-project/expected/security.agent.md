@@ -25,6 +25,10 @@ SECTION MANIFEST — security.template.md
 
 # Security — ResearchPaperProject
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN security_authority v=1 -->
 > **PRIORITY LEVEL: HIGHEST.** The orchestrator MUST consult this agent BEFORE executing any action matching a row of the *Mandatory Review Triggers* table in this agent's Invariant Core. No other agent, rule, or delegation overrides this agent's HALT directives.
 
@@ -429,7 +433,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-10-27T15:22:57Z`
+Generated at: `2026-11-03T00:43:28Z`
 
 **Sources:**
 
@@ -526,7 +530,3 @@ Cleared for: [specific action cleared, or NONE if HALT]
 
 > **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.
 <!-- AGENTTEAMS:END security_verdict_contract -->
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
