@@ -483,3 +483,8 @@ unrecorded agentteams code.
   files follow branch switches, and editable installs would render them. Local registers and logs belong in
   `.gitignore`, not as stray files.
 - **Merging a PR doesn't need the shared checkout** (`gh pr merge`). Resolve a conflict in a fresh worktree.
+- **One writer per checkout.** A generate or `--update` (including `--self`) holds a lock in the checkout's git
+  directory while it writes. A second run that hits it refuses before writing anything and names the holder (pid,
+  invoker, start time, flags). Wait for it rather than retrying in a loop. Every writing run is listed in
+  `.git/agentteams-update-runs.log.csv` (a worktree's is under `.git/worktrees/<name>/`), with its invoker, flags
+  and exit code. Bridge, interop, convert, `--sync` and `--stale-remediate` runs are not locked or listed.

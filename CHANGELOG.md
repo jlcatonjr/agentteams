@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (per-checkout update lock and run record; remediation row 597)
+
+- **Concurrent writes to one checkout are now visible** (`update_lock`). Every writing generate/`--update` run holds
+  an exclusive `flock` on `<git-dir>/agentteams-update.lock`, taken right after the output directory is resolved
+  and held through the adopt step, the standalone modes, the write phase and post-build. A second run against the
+  same checkout refuses before writing anything (`[UPDATE-LOCK] refused`, exit 1) and names the holder (pid,
+  invoker, start time, redacted argv). The lock lives in the per-checkout git directory (a worktree's own
+  `.git/worktrees/<name>`), found without spawning git, so consumer trees gain nothing and separate worktrees stay
+  independent. The OS releases it when the holder dies.
+- **Run record.** Each locked run appends one row to `<git-dir>/agentteams-update-runs.log.csv`: start and finish
+  time, pid, invoker (`claude-code`, `goose`, `codex` or `terminal`), mode, framework, argv as flag names only
+  (values dropped except the `--framework`, `--shrink-policy` and `--adopt-only` slugs), the agentteams commit and
+  the exit code. `build-log.json` keeps only the last run; this keeps them all.
+- A symlinked git directory or lock file refuses the run; the lock, holder and record files are created
+  `O_NOFOLLOW`, mode 0600. `--dry-run` and inspection-only runs (`--check`, `--query-index`, …) take no lock and
+  print a notice when it is held. Outside git, without `fcntl`, or when a sandbox denies creating the lock, the
+  run proceeds unlocked with a notice. Nested in-process runs are re-entrant.
+- Not covered (they still write unlocked): the bridge, interop and convert commands, `--stale-remediate`,
+  `--add-fence-markers`, `--sync`/`--sync-init` (dispatched before the pipeline), the pre-commit hook's
+  pipeline-graph refresh, and the other standalone commands dispatched before the pipeline (listed on the
+  `update_lock` API page).
+
 ### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
 
 - **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one

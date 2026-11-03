@@ -16,8 +16,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
+from agentteams import update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
@@ -185,6 +187,31 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
 
+    # Everything after this point writes, so it runs under the per-checkout update lock and leaves one
+    # run-record row (agentteams/update_lock.py). Every return of the locked body passes through set_exit.
+    try:
+        with update_lock.update_run(
+            project_root, getattr(args, "raw_argv", None) or (), dry_run=update_lock.is_lock_exempt(args),
+            mode=update_lock.run_mode(args, migrate_exemption=migrate_exemption), framework=framework_id,
+        ) as run:
+            rc = _run_generate_locked(
+                args, build_team, adapter, description, manifest, brief_derived_files,
+                project_root, output_dir, migrate_exemption=migrate_exemption,
+            )
+            run.set_exit(rc)
+            return rc
+    except update_lock.UpdateLockError as exc:
+        print(f"[UPDATE-LOCK] refused: {exc}", file=sys.stderr)
+        return 1
+
+
+def _run_generate_locked(
+    args: argparse.Namespace, build_team: Any, adapter: Any, description: dict, manifest: dict,
+    brief_derived_files: frozenset, project_root: Path, output_dir: Path, *, migrate_exemption: bool,
+) -> int:
+    """The writing half of the pipeline, run under the update lock (split out of ``_run_generate_inner``)."""
+    framework_id: str = args.framework
+    project_name = manifest["project_name"]
     from agentteams.cli.artifacts import PRIVILEGE_WIRING_ERRORS, finalize_privilege_wiring as _finalize_privilege
 
     # CC-2: --allow-fallback-fail-open keeps the constitutional-gate hook fail-OPEN even for a

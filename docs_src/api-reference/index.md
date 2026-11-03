@@ -34,6 +34,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`cli`](cli.md) | CLI package decomposition — which module owns which stage (flags live in [the CLI Reference](../cli-reference.md)) |
 | [`output-plan`](output-plan.md) | Plans which files a manifest produces, before anything renders |
 | [`update-report`](update-report.md) | `update.report.md` — durable record of an `--update` run's decisions |
+| [`update-lock`](update-lock.md) | Per-checkout update lock (`<git-dir>/agentteams-update.lock`) and run record (`agentteams-update-runs.log.csv`): a concurrent writer refuses and names the holder |
 | [`fleet`](fleet.md) | Multi-workspace `--update --merge` (`--fleet DIR`) with git snapshot + diff audit |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
