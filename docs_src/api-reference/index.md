@@ -29,6 +29,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`convert`](convert.md) | Direct format migration between framework outputs |
 | [`interop`](interop.md) | Canonical Agent Interface (CAI) interop pipeline |
 | [`bridge`](bridge.md) | Lightweight runtime compatibility bridge artifacts |
+| [`bridge_refresh`](bridge-refresh.md) | What `--bridge-refresh` writes for `.goosehints`: the bridge fence, keeping project text around it |
 | [`team_package`](team-package.md) | Portable team package: a durable canonical directory plus its generic bridge, zipped for a repo with zero `agentteams` integration |
 | [`cli`](cli.md) | CLI package decomposition — which module owns which stage (flags live in [the CLI Reference](../cli-reference.md)) |
 | [`output-plan`](output-plan.md) | Plans which files a manifest produces, before anything renders |

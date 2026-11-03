@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import backup
+from agentteams.bridge_refresh import refresh_keeping_project_text
 from agentteams.canonical import DEFAULT_CANONICAL_SUBDIR
 from agentteams.interop import detect_framework
 from agentteams.capability_hints import RESEARCH_CAPABILITY_BULLET
@@ -576,6 +577,9 @@ def run_bridge(
         if not overwrite:
             result.skipped.append(str(path))
             continue
+        content, refresh_notice = refresh_keeping_project_text(path.name, path.read_text(encoding="utf-8"), content)
+        if refresh_notice:
+            result.notices.append(f"{path}: --bridge-refresh {refresh_notice}.")
         if not dry_run:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")

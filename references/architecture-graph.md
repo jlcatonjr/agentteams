@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **268**
+- Modules mapped: **269**
 - Packages: **9**
-- Internal import edges: **799**
+- Internal import edges: **801**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 147 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
+| `agentteams` | 148 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 49 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.data` | 6 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
@@ -71,8 +71,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.behavioral_drift` | `agentteams.handoff_payloads` | — |
 | `agentteams.branch_cleanup` | `agentteams._utils`, `agentteams.branch_inventory`, `agentteams.cli.grants`, `agentteams.cli.security_gate` | `agentteams.cli.branch_switch` |
 | `agentteams.branch_inventory` | — | `agentteams.branch_cleanup`, `agentteams.cli.branch_switch` |
-| `agentteams.bridge` | `agentteams.backup`, `agentteams.bridge_pair_docs`, `agentteams.bridge_skills`, `agentteams.bridge_sources`, `agentteams.bridge_subagents`, `agentteams.bridge_subagents_goose`, `agentteams.canonical`, `agentteams.capability_hints`, `agentteams.frameworks.goose`, `agentteams.hooks_emit`, `agentteams.instructions_split`, `agentteams.interop`, `agentteams.interop_write_policy`, `agentteams.parallel_plan`, `agentteams.plan_steps_todo`, `agentteams.projection_marker`, `agentteams.schedule_emit` | `agentteams.cli.commands`, `agentteams.stale_detector`, `agentteams.team_package` |
+| `agentteams.bridge` | `agentteams.backup`, `agentteams.bridge_pair_docs`, `agentteams.bridge_refresh`, `agentteams.bridge_skills`, `agentteams.bridge_sources`, `agentteams.bridge_subagents`, `agentteams.bridge_subagents_goose`, `agentteams.canonical`, `agentteams.capability_hints`, `agentteams.frameworks.goose`, `agentteams.hooks_emit`, `agentteams.instructions_split`, `agentteams.interop`, `agentteams.interop_write_policy`, `agentteams.parallel_plan`, `agentteams.plan_steps_todo`, `agentteams.projection_marker`, `agentteams.schedule_emit` | `agentteams.bridge_refresh`, `agentteams.cli.commands`, `agentteams.stale_detector`, `agentteams.team_package` |
 | `agentteams.bridge_pair_docs` | `agentteams.canonical` | `agentteams.bridge` |
+| `agentteams.bridge_refresh` | `agentteams.bridge` | `agentteams.bridge` |
 | `agentteams.bridge_skills` | — | `agentteams.bridge` |
 | `agentteams.bridge_sources` | `agentteams.canonical`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.redteam.instantiate` |
 | `agentteams.bridge_subagents` | `agentteams.frameworks.claude` | `agentteams.bridge`, `agentteams.bridge_subagents_goose` |
@@ -691,6 +692,7 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.backup",
         "agentteams.bridge_pair_docs",
+        "agentteams.bridge_refresh",
         "agentteams.bridge_skills",
         "agentteams.bridge_sources",
         "agentteams.bridge_subagents",
@@ -716,6 +718,16 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.canonical"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.bridge_refresh": {
+      "package": "agentteams",
+      "path": "agentteams/bridge_refresh.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.bridge"
       ],
       "external": [],
       "repo_local": []
@@ -3876,6 +3888,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.bridge",
+      "target": "agentteams.bridge_refresh"
+    },
+    {
+      "source": "agentteams.bridge",
       "target": "agentteams.bridge_skills"
     },
     {
@@ -3937,6 +3953,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.bridge_pair_docs",
       "target": "agentteams.canonical"
+    },
+    {
+      "source": "agentteams.bridge_refresh",
+      "target": "agentteams.bridge"
     },
     {
       "source": "agentteams.bridge_sources",
