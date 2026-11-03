@@ -7,7 +7,7 @@ Carved out of ``emit.py`` (CH-07, 2026-10-04) when the shrink-override work push
 from __future__ import annotations
 
 from agentteams.fences import PROJECT_NOTES_SECTION as _PROJECT_NOTES_SECTION
-from agentteams.fences import _YAML_FM_RE
+from agentteams.fences import _WHOLE_BODY_FENCE, _YAML_FM_RE
 
 _PROJECT_NOTES_HEADING = "## Project-Specific Notes"
 
@@ -22,6 +22,7 @@ PROJECT_LAYOUT_SECTION = (
 )
 _INSTRUCTION_FILES = frozenset({"copilot-instructions.md", "CLAUDE.md", "AGENTS.md"})
 _DIRECTORY_STRUCTURE_END = "<!-- AGENTTEAMS:END directory_structure -->"
+_BEGIN = "<!-- AGENTTEAMS:BEGIN "
 
 
 def _ensure_project_layout_section(rel_path: str, content: str) -> str:
@@ -62,9 +63,10 @@ def _is_agent_doc(rel_path: str, content: str) -> bool:
 
 
 def _ensure_project_notes_section(rel_path: str, content: str) -> str:
-    """Append the USER-EDITABLE 'Project-Specific Notes' section if absent.
+    """Add the USER-EDITABLE 'Project-Specific Notes' section if absent.
 
-    Pure append: existing content — including project-authored orphan fences
+    Appended, except on a Copilot ``.agent.md``, where it goes before the body's first fence
+    (:func:`_copilot_notes_position`). Insert-only: existing content — including project-authored orphan fences
     and hand edits outside the templated structure — is never rewritten, only
     extended. Idempotent: a file that already carries the section is returned
     unchanged. Applied to merged output as well as fresh renders, so existing
@@ -79,6 +81,31 @@ def _ensure_project_notes_section(rel_path: str, content: str) -> str:
         return content
     if _PROJECT_NOTES_HEADING in content:
         return content
+    if rel_path.endswith(".agent.md"):
+        at = _copilot_notes_position(content)
+        if at is not None:
+            return content[:at] + _PROJECT_NOTES_SECTION.lstrip("\n") + "\n" + content[at:]
     if not content.endswith("\n"):
         content += "\n"
     return content + _PROJECT_NOTES_SECTION
+
+
+def _copilot_notes_position(content: str) -> int | None:
+    """Where a Copilot agent's notes go: just before the body's first fence (baseAgent P4).
+
+    GitHub truncates a custom-agent body past 30,000 characters, and the generated orchestrator and security
+    bodies are longer than that, so notes at the end are the first text cut. Placed before the first fence,
+    the region still ends at a fence line (:func:`agentteams.user_regions.find_region`), so no template text
+    is absorbed into it. ``None`` when the body has no fence, or when its first fence is the whole-body
+    ``content`` wrapper, which holds the title too (notes there would precede it): the notes are appended.
+    """
+    fm = _YAML_FM_RE.match(content)
+    body_start = fm.end() if fm else 0
+    if content.startswith(_BEGIN, body_start):
+        at = body_start
+    else:
+        at = content.find("\n" + _BEGIN, body_start)
+        at = -1 if at < 0 else at + 1
+    if at < 0 or content.startswith(f"{_BEGIN}{_WHOLE_BODY_FENCE} ", at):
+        return None  # no fence, or a whole-body wrapper that holds the title too: append as elsewhere
+    return at

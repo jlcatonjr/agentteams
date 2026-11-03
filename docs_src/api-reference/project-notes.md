@@ -8,7 +8,7 @@ It was carved out of [`emit`](emit.md) on 2026-10-04 (CH-07), and `emit` re-expo
 | Name | Purpose |
 |---|---|
 | `_is_agent_doc(rel_path, content) -> bool` | True for a generated agent persona: Markdown with front matter, not a reference, skill, instructions file or `SETUP-REQUIRED.md`. |
-| `_ensure_project_notes_section(rel_path, content) -> str` | Append the section when it is absent. Pure append and idempotent; applied to fresh renders and merged output alike. |
+| `_ensure_project_notes_section(rel_path, content) -> str` | Add the section when it is absent: appended, except on a Copilot `.agent.md`, where it goes just before the body's first fence (GitHub's 30,000-character body limit) (when its first fence is a named section; an agent wrapped whole in the legacy `content` fence keeps them last). Never rewrites existing text; idempotent; applied to fresh renders and merged output alike. |
 
 The section text is `fences.PROJECT_NOTES_SECTION`. A natively rendered Codex TOML gets the same
 section, inside its `developer_instructions`.

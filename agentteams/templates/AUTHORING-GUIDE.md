@@ -194,6 +194,13 @@ and unambiguous about which regions are immutable versus team-owned.
 Tier-specific content lives as **H3 subsections inside `## Invariant Core`**.
 Optional non-invariant H2 sections may follow `## Project-Specific Notes`.
 
+**Copilot exception (2026-11-02):** on copilot-vscode and copilot-cli, `emit` places `## Project-Specific Notes`
+just before the body's first fence instead of last, when that fence is a named section. An agent wrapped whole in
+the legacy `content` fence (title included) keeps the notes last. GitHub truncates a custom-agent body past 30,000
+characters, and the orchestrator and security bodies are longer than that, so notes placed last would be the
+first text cut. A template that writes the heading itself (pr-manager, pr-notifier, agentteams-updater) keeps
+it where it puts it, which must be outside every fence.
+
 ### 3.2 Canonical per-tier subsections
 
 | Tier | Recommended subsections (in order) |

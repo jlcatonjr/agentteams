@@ -262,7 +262,8 @@ def _split_handoff_entries(block: str) -> list[str]:
 #: remediation-log follow-up instead. Warning still closes the actual P8 gap: the
 #: limit was previously invisible at render time; now it is surfaced, non-fatally,
 #: at every call site that would otherwise ship an oversized file silently.
-_MAX_BODY_CHARS = 30_000
+MAX_BODY_CHARS = 30_000
+_MAX_BODY_CHARS = MAX_BODY_CHARS  # older private name, still imported by interop_grant_check
 
 
 def _check_body_length(body_text: str, agent_slug: str) -> None:

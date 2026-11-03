@@ -69,7 +69,7 @@ from typing import Any
 from agentteams import fence_twins
 from agentteams.fences import _WHOLE_BODY_FENCE
 from agentteams.unfenced import _FENCE_BEGIN_RE, _FENCE_END_RE
-from agentteams.user_regions import HEADINGS as _USER_HEADINGS
+from agentteams.user_regions import HEADINGS as _USER_HEADINGS, find_region
 
 #: The section id ``_normalize_generated_content`` uses when it wraps an entire unfenced body (single-sourced
 #: in :mod:`agentteams.fences`, which fence_twins imports first).
@@ -401,6 +401,11 @@ def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str
     Raises:
         Nothing.
     """
+    # A Copilot render carries its empty notes before its first fence (baseAgent P4), inside the span rebuilt
+    # below. The file's own notes stay where they are, so the render's copy would duplicate the heading.
+    notes = find_region(new_rendered, _USER_HEADINGS[0])
+    if notes is not None and find_region(existing, _USER_HEADINGS[0]) is not None:
+        new_rendered = new_rendered[:notes[0]] + new_rendered[notes[1]:]
     d_lines = existing.splitlines(keepends=True)
     r_lines = new_rendered.splitlines(keepends=True)
     begin = next((i for i, x in enumerate(d_lines) if (m := _FENCE_BEGIN_RE.search(x))

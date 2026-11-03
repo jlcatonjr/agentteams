@@ -66,6 +66,7 @@ from agentteams.cli.generate_helpers import (  # noqa: F401
     _verify_enforcement_integrity,
     _bridge_entry_files,
     _bridge_gate_refusal,
+    _bridge_gate_before_render,
     _update_target_is_bridge,
     _BRIDGE_FENCE_BEGIN_RE,
     _handle_check,
@@ -321,6 +322,9 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     # Step 5: Render
     # -----------------------------------------------------------------------
+    if (gate_rc := _bridge_gate_before_render(args, project_root, output_dir, framework_id)) is not None:
+        return gate_rc
+
     print("Rendering templates...")
 
     # Compute template hashes for drift detection
@@ -341,11 +345,6 @@ def _run_generate_inner(
     # Step 5b: Handle --update (structural + content drift, manual preservation)
     # -----------------------------------------------------------------------
     if args.update:
-        # D3 bridge gate (fail closed on a detected bridge; policy in generate_helpers).
-        refusal = _bridge_gate_refusal(project_root, output_dir, framework_id)
-        if refusal and not getattr(args, "materialize_native", False):
-            print(refusal, file=sys.stderr)
-            return 1
         if manifest.get("write_policy") == "orchestrator-only":
             print("  ⚠  write_policy orchestrator-only: --update merges the proposal sections and Goose recipe "
                   "extensions (their tool grants follow the template), but never Markdown front matter or Codex TOML "

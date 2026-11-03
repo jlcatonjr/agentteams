@@ -234,7 +234,7 @@
     "agentteams/wasm_pins.py": "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df",
     "agentteams/wasm_policy.py": "141a54428268b9b76b96dda94f4ce64a77bc9d843806251cb67875604a6325fa",
     "agentteams/wasm_runtime.py": "b70019b822466cbda1ecfeab6df02514cffdb821ea44c4d3b2ac698b955d6e90",
-    "agentteams/whole_body_migration.py": "37ba265cbacd5ca198c9989a92a3087587771bdaff90ad722d752818c405b72d",
+    "agentteams/whole_body_migration.py": "7487a2e960563de1bcf4c495ce11b52a433b7082150727a63b057b6c509eea02",
     "agentteams/write_policy.py": "8fa129e0bca9d1d10fcfec433c3da831512d0b08ec5772998a1a8aa4a5ea64e8"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",

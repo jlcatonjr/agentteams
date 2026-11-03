@@ -41,6 +41,10 @@ SECTION MANIFEST — technical-validator.template.md
 
 You perform read-only technical accuracy audits on deliverables in ProjectRepositories. You verify that **code examples, file excerpts, API references, and tool invocations match what actually exists on disk** in:
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN authority_sources_list v=1 -->
 - `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/FRED.py` — Federal Reserve monetary data fetch conventions and series codes
 - `MappingTheFederalReserve'sResponseFunctionWithDirectedAcyclicGraphs/datlib/` — DAG construction, time-series testing, statistical analysis, and plotting conventions for the Fed DAG project
@@ -123,7 +127,3 @@ Recommended action: <correction specifics>
 - Delegate logical conflicts revealed by technical findings to `@conflict-auditor`.
 <!-- AGENTTEAMS:END boundary_rules -->
 
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.

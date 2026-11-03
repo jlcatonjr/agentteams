@@ -201,3 +201,39 @@ def test_wellformed_paths_are_unaffected():
 
     fenced = "<!-- AGENTTEAMS:BEGIN x v=1 -->\nbody\n<!-- AGENTTEAMS:END x -->\n"
     assert _normalize_generated_content("a.md", fenced) == fenced
+
+
+def test_copilot_notes_before_the_first_fence_are_not_duplicated_by_migration():
+    """baseAgent P4 moved a fresh Copilot render's notes before its first fence (emit applies it to the render).
+
+    The migration rebuilds the render's whole body up to its last fence, so the render's empty notes landed in
+    the rebuilt section while the operator's notes stayed after it: two headings, and find_region (hence
+    --overwrite and --check) saw only the empty one.
+    """
+    from agentteams.project_notes import _ensure_project_notes_section
+
+    render = _ensure_project_notes_section("a.agent.md", _render())
+    assert render.index("## Project-Specific Notes") < render.index("AGENTTEAMS:BEGIN invariant_core")
+    for twin_drop in (False, True):
+        merged = _merge_fenced_content(render, _deployed_with_operator_notes(), twin_drop=twin_drop).merged_content
+        assert merged.count("## Project-Specific Notes") == 1, merged
+        assert "Never delete anything under" in merged and "NEW text" in merged
+
+
+def test_no_template_puts_the_notes_heading_inside_a_fence():
+    """migrate() cuts the render's notes region up to the next fence line (security review, 2026-11-02).
+
+    A template with the heading inside a fence would lose the fenced text up to that fence's END line.
+    """
+    from pathlib import Path
+
+    from agentteams.user_regions import _inside_fence
+
+    templates = Path(__file__).resolve().parent.parent / "agentteams" / "templates"
+    offenders = []
+    for path in templates.rglob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        at = text.find("\n## Project-Specific Notes")
+        if at >= 0 and _inside_fence(text, at):
+            offenders.append(str(path.relative_to(templates)))
+    assert not offenders, offenders

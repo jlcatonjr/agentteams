@@ -736,6 +736,20 @@ def _bridge_gate_roots(project_root: Path, output_dir: Path, framework_id: str) 
     return roots
 
 
+def _bridge_gate_before_render(args: argparse.Namespace, project_root: Path, output_dir: Path,
+                               framework_id: str) -> int | None:
+    """D3: refuse ``--update`` on a bridge (1) before the render, so it doesn't read as a render failure.
+    ``--reconcile-front-matter`` stays exempt: it returned before the gate when the gate ran after the render."""
+    if not args.update or getattr(args, "reconcile_front_matter", False):
+        return None
+    refusal = _bridge_gate_refusal(project_root, output_dir, framework_id)
+    if refusal and not getattr(args, "materialize_native", False):
+        sys.stdout.flush()  # in order with the stdout banner
+        print(refusal, file=sys.stderr)
+        return 1
+    return None
+
+
 def _update_target_is_bridge(
     project_root: Path, framework_id: str, *, manifest_only: bool = False
 ) -> bool:
@@ -940,6 +954,9 @@ def _handle_check(
     if getattr(args, "strict_prompt_roots", False) and strict_failure():  # #8: warn-only by default
         print("\n--strict-prompt-roots: failing on the PROMPT-ROOT CHANGED warning above.", file=sys.stderr)
         has_any = True
+    from agentteams.copilot_body_limit import report_body_limit
+
+    has_any = report_body_limit(output_dir, manifest.get("framework", "")) or has_any  # baseAgent P4
     # Advisory only (exit code unchanged): the grant tool map is pinned to one Goose release.
     if manifest.get("framework") == "goose" and manifest.get("goose_tool_scoping") == "grant":
         from agentteams.frameworks.goose_tool_scoping import goose_version_notice
