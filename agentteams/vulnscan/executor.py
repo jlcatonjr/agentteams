@@ -43,6 +43,8 @@ Operations (v1):
   (:mod:`.executor_guard`). The PR body passes the publish scrubber (home paths, host name, private IPs).
 - ``server-audit HOST`` / ``server-dryrun HOST``: run the *packaged* server kit's read-only audit,
   or ``run-host.sh`` without ``--apply``, on an exact host named in the grant and in ``hosts.conf``.
+- ``server-apply HOST:LEVEL`` (:mod:`.server_apply`) and ``runtime-patch FORMULA`` (:mod:`.runtime_patch`): operator-run
+  host changes under a v2 grant, each only for the dry-run plan whose digest the operator confirmed.
 
 git always runs with system/global config ignored, hooks and commit/tag signing disabled, a fixed ssh
 command and an explicit credential helper, so repository or user config cannot redirect what runs. Granted ops
@@ -709,13 +711,8 @@ def origin_repo(wt: Path) -> str:
 
 def _kit_hosts() -> set[str]:
     conf = paths.server_kit_dir() / "hosts.conf"
-    if not conf.is_file():
-        return set()
-    names = set()
-    for ln in conf.read_text(encoding="utf-8").splitlines():
-        if ln.strip() and not ln.lstrip().startswith("#"):
-            names.add(ln.split("|", 1)[0].strip())
-    return names
+    lines = conf.read_text(encoding="utf-8").splitlines() if conf.is_file() else []
+    return {ln.split("|", 1)[0].strip() for ln in lines if ln.strip() and not ln.lstrip().startswith("#")}
 
 
 def server_op(op: str, host: str) -> dict[str, Any]:
@@ -877,7 +874,7 @@ def act(op: str, target: str, cfg: dict[str, Any], *, rationale: str = "", reque
         if request_id in ledger.consumed_request_ids(rows):   # a concurrent server took it first
             return {"status": "refused", "detail": "request id already used (replay)"}
         if op not in INTERNAL_OPS:
-            return _granted(op, target, cfg, rationale=rationale, request_id=request_id)
+            return _granted(op, target, cfg, rationale=rationale, request_id=request_id, payload=payload)
         try:
             result = _internal(op, target, payload=payload or {}, request_id=request_id,
                                run_dir=run_dir, run_id=run_id)
@@ -890,7 +887,8 @@ def act(op: str, target: str, cfg: dict[str, Any], *, rationale: str = "", reque
     return {"status": "done", **result}
 
 
-def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str) -> dict[str, Any]:
+def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str,
+             payload: dict[str, Any] | None = None) -> dict[str, Any]:
     """Authorize and perform one granted op, its subprocesses confined (fail closed). Call inside ``ledger.locked()``."""
     try:
         confined = subproc_confine.scope(cfg, scratch=[_worktrees_dir()])
@@ -899,13 +897,18 @@ def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, reque
         ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000], **code)
         return {"status": "refused", "detail": str(exc), **code}
     with confined:
-        return _granted_op(op, target, cfg, rationale=rationale, request_id=request_id)
+        return _granted_op(op, target, cfg, rationale=rationale, request_id=request_id, payload=payload)
 
 
-def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str) -> dict[str, Any]:
+def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str,
+                payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from agentteams.vulnscan import runtime_patch, server_apply   # they import this module lazily too
+    change = {"server-apply": server_apply, "runtime-patch": runtime_patch}.get(op)   # OPERATOR_ONLY_OPS
     try:
         if op not in grant.OPS_V1:
             raise ExecError(f"unknown or non-v1 operation {op!r}")
+        if change is not None:   # host changes: grammar, host escalation, confirmed digest, before any use
+            change.precheck(target, payload)
         canonical = str(_repo_root(executor_guard.refuse_outside_grants(op, target))) if op in REPO_OPS else target
         g = authorize(op, canonical, request_id, cfg)
     except (ExecError, subprocess.SubprocessError) as exc:   # incl. subproc_confine.Unavailable and git timeouts
@@ -919,6 +922,8 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
             result = open_pr(Path(canonical), rationale)
         elif op == "close-superseded":
             result = executor_supersede.close_superseded(Path(canonical))
+        elif change is not None:
+            result = change.run(canonical, g, request_id=request_id, payload=payload)
         else:
             result = server_op(op, canonical)
     except (ExecError, OSError, subprocess.SubprocessError, ValueError) as exc:

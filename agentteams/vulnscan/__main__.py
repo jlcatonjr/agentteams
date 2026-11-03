@@ -11,7 +11,7 @@
 | ``schedule install\\|remove\\|status [--apply]`` | Manage the daily job |
 | ``server-kit [DEST]`` | Export the Linux server scripts (keeps an existing ``hosts.conf`` / ``apps.conf``) |
 | ``grant sign\\|list\\|revoke`` | Operator-signed standing remediation grants (sign: operator only, outside agent sessions; ``--from-registry`` proposes enrolled ``remediate`` projects, reviewed per owner) |
-| ``act OP TARGET`` | Run one grant-covered action through the executor (ledgered) |
+| ``act OP TARGET`` | Run one grant-covered action through the executor (ledgered); ``server-apply``/``runtime-patch`` show the plan and ask first (:mod:`.host_change`) |
 | ``serve-requests`` | Execute the agents' spooled requests that a grant covers |
 | ``review [--ack]`` | After-action review of what unattended agents did; ``--ack`` records your review |
 | ``agent-image build`` | Build the credential-free agent container image (goose pinned by version + sha256) |
@@ -55,6 +55,7 @@ from agentteams.vulnscan import (
     fix,
     grant,
     handoff,
+    host_change,
     known_cli,
     operator_cli,
     paths,
@@ -65,6 +66,7 @@ from agentteams.vulnscan import (
     tools_image,
     verify,
 )
+from agentteams.vulnscan.ops import OPERATOR_ONLY_OPS
 from agentteams.vulnscan.report import Report
 
 KIT_CONFIGS = ("hosts.conf", "apps.conf")
@@ -198,10 +200,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--grant-id", default="")
     sp.add_argument("--confirm-review-sha256", default=None)
     sp.add_argument("--allow-checkout-signing", action="store_true")
+    host_change.add_grant_options(sp)
     sp = sub.add_parser("act", help="run one grant-covered action through the executor")
     sp.add_argument("op", choices=sorted(grant.OPS_V1))
     sp.add_argument("target")
     sp.add_argument("--rationale", default="operator-run")
+    sp.add_argument("--confirm-plan-sha256", default=None, help="server-apply/runtime-patch: the previewed plan's digest")
     sub.add_parser("serve-requests", help="execute spooled agent requests that a grant covers")
     sp = sub.add_parser("review", help="after-action review of unattended remediation")
     sp.add_argument("--since", default=None, type=operator_cli.iso_date,
@@ -321,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "list":
             valid, problems = grant.load_active()
             for g in valid:
-                print(json.dumps({k: g[k] for k in grant.FIELDS}))
+                print(json.dumps({k: v for k, v in g.items() if k != "signature"}))
             for pr in problems:
                 print(f"INVALID {pr}", file=sys.stderr)
             return 0
@@ -341,7 +345,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         try:
             rec = grant.build(ops=args.op, repo_roots=roots, hosts=args.host, days=args.days,
-                              max_uses=args.max_uses, key_id=args.key_id, governance_dir=args.governance_dir)
+                              max_uses=args.max_uses, key_id=args.key_id, governance_dir=args.governance_dir,
+                              **host_change.grant_fields(args))
         except grant.GrantError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
@@ -360,7 +365,11 @@ def main(argv: list[str] | None = None) -> int:
         if cfg is None:
             return 2
         if args.cmd == "act":
-            res = executor.act(args.op, args.target, cfg, rationale=args.rationale)
+            if args.op in OPERATOR_ONLY_OPS:
+                res = host_change.operator_act(args.op, args.target, cfg, confirm_sha256=args.confirm_plan_sha256,
+                                               act=executor.act)
+            else:
+                res = executor.act(args.op, args.target, cfg, rationale=args.rationale)
             print(json.dumps(res, indent=2))
             return {"done": 0, "refused": 1}.get(res["status"], 3)
         import fcntl

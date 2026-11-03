@@ -50,7 +50,7 @@ KNOWN_IN = "/etc/ssh/vulnscan_known_hosts"
 _UNSAFE = set(" \t\r\n\"'\\#")
 #: Kit files a staged copy must hold; a package missing one is refused, never run in part.
 KIT_REQUIRED = ("remote.sh", "run-host.sh", "L1-audit.sh", "L2-os-patch.sh", "L3-node-runtime.sh",
-                "L4-python-app.sh", "L5-containers.sh")
+                "L4-python-app.sh", "L5-containers.sh", "L6-py-venv.sh", "L7-remove-path.sh")
 #: A kit file larger than this is not staged (the packaged scripts are a few KiB each).
 KIT_MAX_BYTES = 1_000_000
 #: Source kit dir -> (staged copy, {file name: sha256}) for this process (:func:`stage_kit`).

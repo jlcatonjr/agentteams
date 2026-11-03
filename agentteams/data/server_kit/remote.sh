@@ -32,8 +32,8 @@ fi
 HOST="$1"; SCRIPT="$2"; shift 2
 # Only the kit's own L-scripts are streamed: no paths, no `..`, no other file beside this script.
 case "$SCRIPT" in
-  L1-audit.sh|L2-os-patch.sh|L3-node-runtime.sh|L4-python-app.sh|L5-containers.sh) ;;
-  *) echo "refusing script '$SCRIPT': only L1-audit.sh, L2-os-patch.sh, L3-node-runtime.sh, L4-python-app.sh and L5-containers.sh run" >&2; exit 2;;
+  L1-audit.sh|L2-os-patch.sh|L3-node-runtime.sh|L4-python-app.sh|L5-containers.sh|L6-py-venv.sh|L7-remove-path.sh) ;;
+  *) echo "refusing script '$SCRIPT': only L1-audit.sh, L2-os-patch.sh, L3-node-runtime.sh, L4-python-app.sh, L5-containers.sh, L6-py-venv.sh and L7-remove-path.sh run" >&2; exit 2;;
 esac
 [ -f "$KIT/$SCRIPT" ] || { echo "no such script: $SCRIPT" >&2; exit 2; }
 # Host names: the same grammar as vulnscan's MCP server; `all` is reserved for "every host".
