@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (cross-surface fixes backported from main; baseAgent hand-off 2026-11-02)
+
+- **A learned-block marker mentioned in prose no longer blocks `--overwrite`.** `carry_regions` refused any user
+  region containing `AGENTTEAMS-LEARNED`; it now refuses only a marker line.
+- **`AGENTS.override.md` is a prompt root.** Codex loads it in place of `AGENTS.md`; edits to it are now reported like
+  edits to any other instruction file.
+- **`--bridge-refresh` keeps project text in `.goosehints`.** Its render is only the `goose-bridge-hints` fence, so a
+  refresh replaces that fence and keeps the text around it, with a notice. Unpaired bridge markers fall back to the
+  old whole-file write. Other target files keep the documented whole-file refresh.
+- **`--query-index` never rewrites the tracked index.** A stale index is reported on stderr; `--refresh-index`
+  rebuilds. Before, a query rebuilt it, rewriting `memory-index.json` and its `.vcache`.
+- **`--check` no longer fails on an operator's own notes.** When the manifest fingerprint moved, any text in a
+  Project-Specific Notes or Rules region failed `--check`; the comparison now carries user regions first. An edit
+  inside a fence still fails.
+
 ## [1.0.4] - 2026-10-26
 
 ### release notes
