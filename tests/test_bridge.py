@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from agentteams.bridge import run_bridge
+from agentteams.bridge_refresh import refresh_keeping_project_text
 
 
 def _vscode_agent(slug: str) -> str:
@@ -1366,3 +1367,62 @@ def test_generic_requires_bridge_from_at_parse_time():
     parser2 = _build_parser()
     args2 = parser2.parse_args(["--framework", "generic", "--bridge-from", "some/dir"])
     _validate_option_combinations(parser2, args2)  # must not raise
+
+
+# --- baseAgent P12: --bridge-refresh keeps project text in a fence-only target (.goosehints) -------------
+
+_HINTS_FENCE = ("<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-hints v=1 -->\nSTALE HINTS\n"
+                "<!-- AGENTTEAMS-BRIDGE:END goose-bridge-hints -->\n")
+
+
+@pytest.mark.parametrize("existing", [
+    "## Project-Specific Rules\n\nKEEP THIS PROJECT RULE\n\n" + _HINTS_FENCE,  # fence present
+    "KEEP THIS PROJECT RULE\n",                                                 # no fence yet
+])
+def test_bridge_refresh_keeps_project_text_in_goosehints(tmp_path: Path, existing: str):
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    hints = out_root / ".goosehints"
+    hints.parent.mkdir(parents=True, exist_ok=True)
+    hints.write_text(existing, encoding="utf-8")
+    result = run_bridge(source_dir=source_dir, source_framework="copilot-vscode", target_framework="goose",
+                        output_root=out_root, overwrite=True)
+    after = hints.read_text(encoding="utf-8")
+    assert "KEEP THIS PROJECT RULE" in after and "STALE HINTS" not in after
+    assert after.count("AGENTTEAMS-BRIDGE:BEGIN goose-bridge-hints") == 1
+    assert any(".goosehints" in n and "kept" in n for n in result.notices)
+
+
+def test_bridge_refresh_still_replaces_a_file_whose_render_has_text_outside_the_fence(tmp_path: Path):
+    # AGENTS.md's render owns the whole file: refresh semantics there are unchanged (bridge-refresh-safety.md).
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    agents_md = out_root / "AGENTS.md"
+    agents_md.parent.mkdir(parents=True, exist_ok=True)
+    agents_md.write_text("OLD PROJECT LINE\n", encoding="utf-8")
+    run_bridge(source_dir=source_dir, source_framework="copilot-vscode", target_framework="goose",
+               output_root=out_root, overwrite=True)
+    assert "OLD PROJECT LINE" not in agents_md.read_text(encoding="utf-8")
+
+
+def test_bridge_refresh_of_an_untouched_goosehints_is_the_plain_render():
+    rendered = _HINTS_FENCE.replace("STALE HINTS", "NEW")
+    assert refresh_keeping_project_text(".goosehints", _HINTS_FENCE, rendered) == (rendered, None)
+    assert refresh_keeping_project_text(".goosehints", "\n\n" + _HINTS_FENCE, rendered) == (rendered, None)
+
+
+def test_other_fence_only_targets_are_still_written_whole():
+    # .claude/agent-team.md also renders fence-only, but it is bridge-owned: a refresh still resets it.
+    rendered = _HINTS_FENCE.replace("STALE HINTS", "NEW")
+    assert refresh_keeping_project_text("agent-team.md", "planted\n" + _HINTS_FENCE, rendered) == (rendered, None)
+
+
+def test_unpaired_bridge_markers_fall_back_to_the_whole_write():
+    # Appending a fence after a BEGIN with no END would let the next refresh's in-place replacement span
+    # (and delete) the project text between the old BEGIN and the new END.
+    rendered = _HINTS_FENCE.replace("STALE HINTS", "NEW")
+    half = "mine\n<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-hints v=1 -->\nmore\n"
+    content, notice = refresh_keeping_project_text(".goosehints", half, rendered)
+    assert content == rendered and notice and "backup" in notice

@@ -29,6 +29,11 @@ import tomllib
 HEADINGS = ("## Project-Specific Notes", "## Project-Specific Rules")
 _NOTES_HEADING, _RULES_HEADING = HEADINGS
 
+# A learned-block marker *line* (:mod:`agentteams.learned_blocks` matches whole stripped lines). The word in
+# prose is not a marker: a region that only mentions it is carried. Whitespace inside the comment is optional
+# here so that a near-miss marker is refused too.
+_LEARNED_MARKER_LINE_RE = re.compile(r"^[ \t]*<!--\s*AGENTTEAMS-LEARNED\b", re.MULTILINE)
+
 
 def find_region(text: str, heading: str) -> tuple[int, int, str] | None:
     """Locate a user region.
@@ -144,7 +149,8 @@ def carry_regions(old: str, new: str, *, toml: bool = False) -> tuple[str, list[
                     cut_at = (following.strip(), old[o_start + hits[0]:o_end])
                     o_end = o_start + hits[0]
         region = old[o_start:o_end]
-        if _inside_fence(old, o_start) or "<!-- AGENTTEAMS" in region or "AGENTTEAMS-LEARNED" in region:
+        if (_inside_fence(old, o_start) or "<!-- AGENTTEAMS" in region
+                or _LEARNED_MARKER_LINE_RE.search(region)):
             problems.append(f"'{heading}' sits inside a fence or contains an AGENTTEAMS marker; it can't be "
                             "carried safely")
             continue

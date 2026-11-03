@@ -1096,7 +1096,7 @@ ledger was truncated, or it was rewritten without the key.
 `--project` (else the current directory). An MCP client launches it from the team's catalogue entry
 (`agentteams-recall`, `agentteams-gitread`); you do not run it by hand.
 - **`recall`:** `query_index` and `query_code` over the existing memory and code indexes. It never refreshes a
-  stale index (the CLI's `--query-index` would); results carry the index's build time.
+  stale index, nor does the CLI's `--query-index`; results carry the index's build time.
 - **`gitread`:** `git_log`, `git_show`, `git_diff`, `git_blame`, `git_status` in an isolated git. Repository
   config cannot run a program (fsmonitor, hooks, external diff, textconv and the pager are overridden; any
   `filter.*` is refused). There is no network (no lazy fetch) and no lock. Refs and paths are validated; time and

@@ -183,6 +183,7 @@ nav:
       - capability-map: api-reference/capability-map.md
       - canonical: api-reference/canonical.md
       - bridge: api-reference/bridge.md
+      - bridge-refresh: api-reference/bridge-refresh.md
       - bridge-skills: api-reference/bridge-skills.md
       - bridge-pair-docs: api-reference/bridge-pair-docs.md
       - fleet: api-reference/fleet.md
