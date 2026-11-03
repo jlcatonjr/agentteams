@@ -6,6 +6,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
+
+- **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one
+  row per agent and one column per surface. Each agent missing somewhere has its declared tools (front-matter
+  `tools`, a recipe's `extensions`, a Codex `sandbox_mode`) and a conservative label: read-only only when every
+  declared tool is known read-only, otherwise assumed to write and run. Names that don't look like names show as
+  `(invalid entry)`. It is never written through a symlink or over a file agentteams didn't generate. The file also states that
+  another provider's file is a role description, never a grant, and lists notes that differ by surface and skills on
+  some surfaces only. Every projected rules block points to it. It is reported, never enforced.
+- **`--doctor`** reports, without writing, whether the project's providers agree: rules copies and pointers (FAIL),
+  memory-index copies built from different sources (WARN), Copilot operator notes past the body limit (FAIL), agents
+  missing by surface and notes that differ (INFO), and a frozen `AGENTS.md` with an older constitutional core
+  (WARN). Exits 1 on a FAIL.
+
+### added (cross-surface Phase 3: one project's rules reach every provider; baseAgent 2026-11-02)
+
+- **Project-Specific Rules are projected into every enabled provider's entry file** (`rules_projection`). The source
+  is the brief's new `project_rules_source`, else the source the existing copies record, else the only one of
+  `.claude/CLAUDE.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, `AGENTS.md` whose Rules region holds rules. Each target gets the rules in its own
+  Rules region between `PROJECTED-RULES` markers: `.github/copilot-instructions.md`, `.claude/CLAUDE.md` or
+  `CLAUDE.md`, `AGENTS.override.md` when it exists (else `AGENTS.md`), and `.goosehints`. Past Codex's 32 KiB budget
+  the Codex block is a binding reference with the rules' titles. `frozen_surfaces` are skipped; since Goose gets
+  `.goosehints`, a Codex freeze of the shared `AGENTS.md` no longer keeps rules from Goose. A copy edited by hand,
+  or a file with two Rules regions, is refused, not overwritten. Projection runs after every generate and
+  `--update` (a converged run included), and on the new `--sync-project-rules` (working directory only; `--dry-run`).
+  `--check` exits 1 when a copy is out of date or refused. The source never moves silently: `project_rules_source`
+  must be one of the four instruction files, and without it a second file with rules, or copies recording another
+  source, is refused. Each change is printed as a diff as it spreads.
+- **`security` and `orchestrator` notes point to the rules file** on each Markdown and Goose surface
+  (`PROJECT-RULES-POINTER`), because a delegated agent may not load its provider's entry file. The pointer says the
+  rules extend the agent's instructions and never weaken its Invariant Core or the Constitutional Core.
+- `--update --overwrite` no longer refuses a file whose Rules region holds only a projected block the render doesn't
+  declare (`.goosehints`, `AGENTS.override.md`); the next projection writes it again. A Codex TOML agent is
+  reported, not edited.
+- The generate and update paths share one eval-suite and memory-index write (`cli/post_build.py`).
+
+### fixed
+
+- **`--check` no longer fails on an operator's own notes.** When the manifest fingerprint moved (the live intel
+  moves it daily), `--check` compared each file with a fresh render, so any text in `## Project-Specific Notes` or
+  `## Project-Specific Rules` failed it. The comparison now carries the file's user regions into the render first,
+  as `--update` keeps them. An edit inside a fence still fails.
+
+### fixed (cross-surface Phase 2: memory-index retrieval is read-only and spans every surface; baseAgent 2026-11-02)
+
+- **`--query-index` never writes.** A stale index used to be rebuilt by the query itself, rewriting the tracked
+  `memory-index.json` (and its `.vcache`) with or without `--no-scan`. The query now reports the staleness and its
+  reason on stderr and leaves the files alone; `--refresh-index` rebuilds.
+- **Retrieval commands find the brief.** `--query-index`, `--refresh-index` and `--query-code` look for
+  `.agentteams/brief.json`, `brief.json`, then `.github/agents/_build-description.json` (the canonical fleet lookup)
+  when no `--description` is given; a read-only query also does when the one given doesn't exist. A symlinked brief,
+  or one naming another project, is not used, and `--refresh-index` never swaps in a brief nobody named. The recall skill's bare command and the agents' fenced
+  `--description .agentteams/brief.json` both work now. A query on a surface with no index uses another surface's.
+- **`--refresh-index` rebuilds every surface's copy** (`.github/agents`, `.claude/agents`, `.goose/recipes`,
+  `.codex/agents`, `.grok/agents`, `.agents`) from the same sources, each keeping its framework stamp
+  (`memory_index_surfaces`). It skips surfaces in `frozen_surfaces`, creates no index for a provider the project
+  doesn't use, and exits 1, naming each copy, when any copy fails. baseAgent's three copies had been built from 77, 103 and 103 of 110 sources.
+- **Staleness catches an added source.** `memory_index.index_staleness` gives the reason. With the full source set,
+  it compares the source count too, so a file added with an older modification time is no longer missed.
+- **`memory_index_extra_files`**, a new brief key, names single Markdown files for the index. Each build and
+  `--refresh-index` reports a file entry under `memory_index_extra_dirs` (which is skipped), an entry that matches
+  nothing, a folder or glob entry (it indexes, and commits snippets of, every later file there), and Markdown under
+  `Projects/` or `docs/` the index leaves out.
+- The recall and code-recall skills and the bridge pair doc give the working command and say a query is read-only.
+
+### fixed (cross-surface Phase 1: user regions, prompt roots, bridge refresh, Copilot notes; baseAgent 2026-11-02)
+
+- **`--update --merge` adds a missing `## Project-Specific Rules` region.** An instruction file rendered before its
+  template declared the region (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`) now gets it empty, at the
+  template's position, with its SECTION MANIFEST row (`user_regions.insert_missing_regions`). A heading already there in
+  any spelling is left alone. Before, `--merge` never took unfenced text from the template.
+- **A region that mentions the learned-block marker in prose is carried across `--overwrite`.** Only an actual
+  `<!-- AGENTTEAMS-LEARNED…` line refuses the carry now; a substring match refused baseAgent's rules region.
+- **`AGENTS.override.md` is a prompt root**, hashed whole-file: Codex loads it in place of `AGENTS.md`, so edits to it
+  are now reported like edits to any other instruction file.
+- **`--bridge-refresh` keeps project text in `.goosehints`.** Its render is only the `goose-bridge-hints` fence, so a
+  refresh now replaces that fence and keeps the text around it, with a notice. If the bridge markers don't pair up the
+  file is written whole as before. Other target files keep the documented whole-file refresh
+  (`references/bridge-refresh-safety.md`).
+- **Copilot agent notes move inside the 30,000-character body limit.** A fresh `.agent.md` render places
+  `## Project-Specific Notes` before the body's first fence when it is a named section (an agent wrapped whole in the
+  legacy `content` fence keeps them last), and `--check` exits 1 when operator notes on disk start
+  past the limit (`copilot_body_limit.py`). A body over the limit without such notes is an advisory: the generated
+  orchestrator and security bodies exceed it from the templates alone. Golden snapshots regenerated.
+- **`--update` against a bridge target refuses before rendering.** The refusal printed after "Rendering templates…",
+  so a claude or goose dry run over a bridge looked like a render crash.
+- New test: `--update --merge --dry-run` leaves the whole project tree byte-identical (copilot-vscode, claude, goose).
+
 ## [1.1.0-rc.12] - 2026-10-30
 
 ### release notes

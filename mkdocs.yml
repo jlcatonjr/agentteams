@@ -207,6 +207,7 @@ nav:
       - memory-index: api-reference/memory-index.md
       - memory-index-incremental: api-reference/memory-index-incremental.md
       - memory-index-store: api-reference/memory-index-store.md
+      - memory-index-surfaces: api-reference/memory-index-surfaces.md
       - output-plan: api-reference/output-plan.md
       - update-report: api-reference/update-report.md
       - living-doc: api-reference/living-doc.md
@@ -289,6 +290,11 @@ nav:
       - branch-cleanup: api-reference/branch-cleanup.md
       - shrink-allow: api-reference/shrink-allow.md
       - project-notes: api-reference/project-notes.md
+      - copilot-body-limit: api-reference/copilot-body-limit.md
+      - bridge-refresh: api-reference/bridge-refresh.md
+      - rules-projection: api-reference/rules-projection.md
+      - surface-matrix: api-reference/surface-matrix.md
+      - doctor: api-reference/doctor.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md
