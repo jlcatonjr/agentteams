@@ -239,7 +239,7 @@ def _wasm_sandbox_record(description: dict[str, Any], agent_slugs: list[str]) ->
 #: memory-index extra dirs/globs (W22) and named files (P7), exclusions (content moved to a private repo), extra
 #: code-index dirs, and the frozen surfaces a cross-surface write (--refresh-index of every copy) leaves alone.
 _LIST_PASSTHROUGH_KEYS = ("memory_index_extra_dirs", "memory_index_extra_files", "memory_index_exclude",
-                          "code_index_extra_dirs", "frozen_surfaces")
+                          "code_index_extra_dirs", "frozen_surfaces", "s10_cooldown_exempt_repos")
 
 
 def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vscode") -> dict[str, Any]:

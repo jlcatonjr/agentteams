@@ -42,6 +42,8 @@ from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
+from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
+from agentteams.cli.s10_exempt_gate import authorize_into
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
@@ -186,6 +188,8 @@ def _run_generate_inner(
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
+    if not args.check and refuse_if_frozen(manifest, framework_id, output_dir):  # before anything is written
+        return 1
 
     # Everything after this point writes, so it runs under the per-checkout update lock and leaves one
     # run-record row (agentteams/update_lock.py). Every return of the locked body passes through set_exit.
@@ -241,6 +245,7 @@ def _run_generate_locked(
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
+    authorize_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # Rule 15: S-10 carve-out
 
     print(f"  Output directory: {output_dir}")
 
@@ -615,7 +620,8 @@ def _run_generate_locked(
 
         # --prune: delete removed files (with confirmation unless --yes)
         if args.prune and sdreport.removed_files:
-            rc = build_team._prune_removed_files(sdreport.removed_files, output_dir, args.yes, args.dry_run)
+            rc = build_team._prune_removed_files(prunable(manifest, sdreport.removed_files, output_dir),
+                                                 output_dir, args.yes, args.dry_run)
             if rc != 0:
                 return rc
 
@@ -653,7 +659,8 @@ def _run_generate_locked(
                     f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
                 )
 
-        update_rendered = apply_adapter_guard(adapter, update_rendered, output_dir)
+        update_rendered = drop_frozen(manifest, apply_adapter_guard(adapter, update_rendered, output_dir), output_dir)
+        final_rendered = drop_frozen(manifest, final_rendered, output_dir, quiet=True)  # the post-audit's list
         result = emit.emit_all(
             update_rendered,
             output_dir=output_dir,
@@ -878,7 +885,7 @@ def _run_generate_locked(
                 f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
             )
 
-    final_rendered = apply_adapter_guard(adapter, final_rendered, output_dir)
+    final_rendered = drop_frozen(manifest, apply_adapter_guard(adapter, final_rendered, output_dir), output_dir)
     result = emit.emit_all(
         final_rendered,
         output_dir=output_dir,

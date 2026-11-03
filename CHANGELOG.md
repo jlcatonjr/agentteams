@@ -28,6 +28,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot spread its body to every framework (the operator-run `--sync-refresh-instructions` still takes it).
 - A deployed `v=` above the newest shipped template's version is not kept by the guard (no release wrote it).
 
+### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
+
+- **The 14-day release cooldown no longer holds back the project's own interdependent repositories.** Jim's ruling: the
+  cooldown stays in force, with the remediation carve-out, but does not apply to updates between his own local,
+  interdependent repositories (agentteams, researchteam, baseAgent, mathAgents, …). The new brief key
+  `s10_cooldown_exempt_repos` lists them per project; generated `@security` agents name them in Rule S-10 (fence
+  `security_rules_invariant` v21). The carve-out lifts the cooldown only: the vulnerability search, Rule S-9's
+  signed-tag identity check and the latest-stable rule (a release candidate still needs a recorded clearance) still
+  apply, and only `owner/name` identifiers are rendered. Absent or empty, it exempts nothing.
+- **Listing a repository is a Rule 15 relaxation, so a brief edit alone doesn't do it** (`cli/s10_exempt_gate`,
+  integrity-pinned). In a governed workspace each listed repository renders only when the operator's Ed25519-signed
+  decision row covers `s10-cooldown-exempt:<owner/name>` (`scope` and `effect_relaxes` exactly, traceable lineage,
+  no HALT on it or the family). The row is registered as an exception under the aggregate cap with a 90-day sunset
+  and re-verified on every later render. Anything else is left out with a notice naming the row to record, so the
+  cooldown applies to it. An ungoverned workspace renders the list with a notice. A path that skips the gate
+  (convert, interop) renders none.
+
+### fixed (renders honour `frozen_surfaces`; baseAgent D63)
+
+- **A render never writes a path a frozen surface owns.** `frozen_surfaces` was read by the effect classifier, the
+  rules projection and the memory index, but not by the render, so a goose `--update` adopted and rewrote a repo-root
+  `AGENTS.md` that a Codex freeze owns (a legacy goose render classifies as goose's). Now (`cli/frozen_render`):
+  - a render is refused before it writes anything when its framework is frozen, or its output directory lies in a
+    directory another frozen surface owns (`copilot-cli` and `copilot-vscode` share `.github/agents/`);
+  - each rendered file in a path a frozen surface owns (`cli/frozen_surfaces.FROZEN_SURFACE_PATHS`) is skipped
+    with a notice, after resolving symlinks, and `--prune` never deletes one;
+  - `--check` leaves frozen files out of its drift verdict, with a notice, since they are never brought up to date.
+
+  The schema already described this contract.
+
 ### added (per-checkout update lock and run record; remediation row 597)
 
 - **Concurrent writes to one checkout are now visible** (`update_lock`). Every writing generate/`--update` run holds

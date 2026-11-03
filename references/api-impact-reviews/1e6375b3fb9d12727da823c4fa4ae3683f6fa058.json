@@ -1,0 +1,8 @@
+{
+  "patch_id": "1e6375b3fb9d12727da823c4fa4ae3683f6fa058",
+  "commit": "0a83d413e034dc98f2376fa53f0bc50eaadbbb40",
+  "subject": "fix(render): never write a path a frozen surface owns (baseAgent D63)",
+  "impact": "1 modules added, 4 symbols added",
+  "note": "cli/frozen_render (drop_frozen, exempt_frozen, frozen_refusal): CLI-internal; no public API change. cli/ modules are exempt from API-doc parity; behaviour documented in DESCRIPTION-FORMAT (frozen_surfaces) and CHANGELOG.",
+  "recorded_at": "2026-11-03T15:33:08Z"
+}
