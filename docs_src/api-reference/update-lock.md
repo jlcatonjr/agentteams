@@ -55,7 +55,7 @@ lock; its delegated `--overwrite` is locked. `--fleet` locks each workspace's ru
 
 - `LOCK_NAME`, `HOLDER_NAME`, `RECORD_NAME`: the three file names in the git directory.
 - `RECORD_FIELDS`: the run record's header, in column order.
-- `INVOKER_ENV_MARKERS`: `(variable, invoker)` pairs — `CLAUDECODE` → `claude-code`, `GOOSE_TERMINAL` → `goose`,
+- `INVOKER_ENV_MARKERS`: `(variable, invoker)` pairs — `CLAUDECODE` / `CLAUDE_CODE_ENTRYPOINT` → `claude-code`, `GOOSE_SESSION_ID` / `GOOSE_TERMINAL` → `goose`,
   `CODEX_SANDBOX` / `CODEX_SANDBOX_NETWORK_DISABLED` → `codex`; none → `terminal`. Advisory: an environment can
   be forged.
 

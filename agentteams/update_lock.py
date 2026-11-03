@@ -57,6 +57,8 @@ RECORD_FIELDS = ("started_at", "finished_at", "pid", "invoker", "mode", "framewo
 #: First match wins; no marker means a terminal. Advisory only: an environment can be forged.
 INVOKER_ENV_MARKERS: tuple[tuple[str, str], ...] = (
     ("CLAUDECODE", "claude-code"),
+    ("CLAUDE_CODE_ENTRYPOINT", "claude-code"),
+    ("GOOSE_SESSION_ID", "goose"),
     ("GOOSE_TERMINAL", "goose"),
     ("CODEX_SANDBOX", "codex"),
     ("CODEX_SANDBOX_NETWORK_DISABLED", "codex"),

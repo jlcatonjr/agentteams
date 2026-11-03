@@ -291,6 +291,8 @@ def test_detect_invoker() -> None:
     assert ul.detect_invoker({}) == "terminal"
     assert ul.detect_invoker({"CLAUDECODE": "1"}) == "claude-code"
     assert ul.detect_invoker({"GOOSE_TERMINAL": "1"}) == "goose"
+    assert ul.detect_invoker({"GOOSE_SESSION_ID": "s"}) == "goose"
+    assert ul.detect_invoker({"CLAUDE_CODE_ENTRYPOINT": "cli"}) == "claude-code"
     assert ul.detect_invoker({"CODEX_SANDBOX": "seatbelt"}) == "codex"
 
 
