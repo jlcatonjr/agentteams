@@ -167,13 +167,26 @@ def test_composition_advisories():
     assert codes(_state(os=False, wasm=False), platform="linux") == []
     assert codes(_state(os=True, wasm=True), platform="linux") == []
     assert codes(_state(os=False, wasm=True), platform="linux") == ["wasm-without-os-sandbox"]
-    assert codes(_state(os=True, wasm=True), platform="win32") == ["wasm-only-host"]
+    assert codes(_state(os=True, wasm=True), platform="win32") == ["wasm-only-host", "wasm-windows-unsupported"]
     assert codes(_state(os=True, wasm=True), mechanism=False) == ["wasm-only-host"]
     assert [a["code"] for a in wc.composition_advisories(_state(os=True, wasm=True), "codex", platform="win32")] == [
-        "wasm-only-host"]
-    assert codes(_state(os=False, wasm=True), platform="win32") == ["wasm-without-os-sandbox", "wasm-only-host"]
+        "wasm-only-host", "wasm-windows-unsupported"]
+    assert codes(_state(os=False, wasm=True), platform="win32") == [
+        "wasm-without-os-sandbox", "wasm-only-host", "wasm-windows-unsupported"]
+    assert codes(_state(os=False, wasm=False), platform="win32") == []
     msg = wc.composition_advisories(_state(os=False, wasm=True), "claude", platform="linux")[0]["message"]
     assert "WASM limits guest code only" in msg and "enforced" not in msg
+
+
+def test_windows_unsupported_advisory_names_what_fails_and_what_runs():
+    (adv,) = [a for a in wc.composition_advisories(_state(os=True, wasm=True), "claude", platform="win32")
+              if a["code"] == "wasm-windows-unsupported"]
+    msg = adv["message"]
+    assert "not supported on native Windows for now" in msg
+    assert "Python guest refuses even with a compute-only grant" in msg and "dir_fd" in msg
+    assert "any read grant refuses" in msg
+    assert "Only JavaScript and raw modules with compute-only grants run" in msg
+    assert "WSL, Linux or macOS" in msg and "enforced" not in msg
 
 
 def test_advisories_are_printed_and_recorded_by_finalize(tmp_path, monkeypatch, capsys):

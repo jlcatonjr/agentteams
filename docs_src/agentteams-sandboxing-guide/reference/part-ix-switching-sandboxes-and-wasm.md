@@ -68,7 +68,7 @@ inside it.
 | | WASM off | WASM on |
 |---|---|---|
 | **OS on** | Today's behaviour. The agent process is write-confined once wired (SB14); its code runs natively inside the boundary. | Strongest. The process is OS-confined; eligible agents lose native exec where their host gives them `run_wasm`; the `.agentteams` control plane, `.claude/agents` and every config that launches the WASM server are session-write-denied (METAPLAN R1). Only here can a provider row read `enforced` or `conditional` (SB27). |
-| **OS off** | Nothing is confined. | Guest code is WASM-confined, but nothing protects the control plane from the session, so every provider row is `advisory`. Generation prints `wasm-without-os-sandbox` and records it in the manifest's `advisories`. On a host with no OS sandbox (native Windows), WASM runs alone and the notice is `wasm-only-host`. |
+| **OS off** | Nothing is confined. | Guest code is WASM-confined, but nothing protects the control plane from the session, so every provider row is `advisory`. Generation prints `wasm-without-os-sandbox` and records it in the manifest's `advisories`. On a host with no OS sandbox (native Windows), WASM runs alone and the notice is `wasm-only-host`, plus `wasm-windows-unsupported` (not supported for now). |
 
 **A third, independent switch.** `wasm_sandbox.model_substrate` (`--wasm-substrate on|off`) is not agent
 confinement. It projects a floor into `.agentteams/sandbox-state.json` (schema
@@ -292,8 +292,10 @@ Operator guide: [WASM agent runtime](../../wasm-agent-runtime.md).
 3. **Advisory rows are guidance.** Wherever the verdict is `advisory` (Copilot, AGENTS.md, Grok under
    `replace`, every top-level session, and every OS-off combination), WASM is a tool offer plus
    instructions, not a boundary.
-4. **Windows.** Native Windows has WASM but no OS sandbox (`wasm-only-host`), and read-only mounts there
-   are refused: the un-nested read-only snapshot needs `dir_fd` support.
+4. **Windows: not supported for now** (`wasm-windows-unsupported`). Native Windows has no OS sandbox
+   (`wasm-only-host`), and read-only mounts there are refused: the un-nested read-only snapshot needs
+   `dir_fd` support. That refuses the Python guest too, even with a compute-only grant, because its `/lib`
+   runtime is a read-only mount. Only JavaScript and raw modules with compute-only grants run.
 5. **Residuals.**
    - The launching-config scan is name-based: it finds configs whose launch strings name
      `agentteams-wasm-mcp.py`. A shell wrapper that builds the server path at run time evades it, so that

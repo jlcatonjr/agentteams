@@ -98,7 +98,7 @@ Line numbers are as of `origin/main` after the `fix/convert-bridge-write-policy`
 | Fact | Source |
 |---|---|
 | OS switch (`os_sandbox` / `--os-sandbox`), derived state, precedence | `agentteams/sandbox_state.py` `effective_sandbox_state`, `os_switch_state`; `agentteams/cli/os_sandbox_switch.py` |
-| WASM switch opt-in; `framework` reason; composition notices `wasm-without-os-sandbox` / `wasm-only-host` | `agentteams/wasm_config.py` `wasm_switch`, `composition_advisories`; `agentteams/cli/wasm_sandbox_switch.py` |
+| WASM switch opt-in; `framework` reason; composition notices `wasm-without-os-sandbox` / `wasm-only-host` / `wasm-windows-unsupported` | `agentteams/wasm_config.py` `wasm_switch`, `composition_advisories`; `agentteams/cli/wasm_sandbox_switch.py` |
 | Compute-only default grant and limits (10^10 fuel, 64 MiB, 120 s) | `agentteams/wasm_exec.py` `GRANT_SPEC`, `DEFAULT_LIMITS`, `COMPUTE_ONLY` |
 | Model-substrate projection (`.agentteams/sandbox-state.json`) | `agentteams/sandbox_projection.py`; `agentteams/schemas/sandbox-state.schema.json` |
 | Five relaxation kinds; action ids and tokens | `agentteams/cli/sandbox_effects.py` |
@@ -111,7 +111,7 @@ Line numbers are as of `origin/main` after the `fix/convert-bridge-write-policy`
 | WASM-native runtime, lock, host confinement | `agentteams/frameworks/wasm.py`; `agentteams/wasm_agent/launch.py`, `team.py` |
 | Delegation subset (D11) and caps | `agentteams/wasm_agent/delegation.py`; `agentteams/wasm_agent/child_runs.py` |
 | Explicit downloads, pins, fail-closed verification, pin update | `agentteams/wasm_runtime.py`; `agentteams/_wasm_archive.py`; `agentteams/_wasm_pin_update.py`; `agentteams/data/wasm_runtime_pins.json`; `agentteams/cli/wasm_commands.py` |
-| Guest languages; Windows read-only mounts need `dir_fd`; Keychain residual | `agentteams/wasm_guests.py` `LANGUAGES`; `agentteams/_sandbox_profiles.py` `snapshot_tree`; `agentteams/wasm_exec.py` `NEST_DENY_READS` |
+| Guest languages; Windows read-only mounts (and so the Python guest's `/lib`) need `dir_fd`; Keychain residual | `agentteams/wasm_guests.py` `LANGUAGES`; `agentteams/_sandbox_profiles.py` `snapshot_tree`; `agentteams/wasm_exec.py` `NEST_DENY_READS` |
 
 ## Related, authoritative
 

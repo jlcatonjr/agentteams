@@ -126,7 +126,8 @@ reviewed before commit.
   WASM-confined.
 - **Advisory is not a boundary:** Copilot, AGENTS.md, Grok under `replace`, every top-level session, and
   every OS-off combination.
-- **Windows:** WASM without an OS sandbox, and no read-only mounts (the snapshot copy needs `dir_fd`).
+- **Windows (not supported for now):** WASM without an OS sandbox, and no read-only mounts (the snapshot
+  copy needs `dir_fd`), so the Python guest refuses too; only JavaScript and raw modules run, compute-only.
 - **Residuals a red team should probe:** the launching-config scan is name-based (a wrapper that builds
   the server path at run time evades it); credential and config scans are point-in-time (TOCTOU); file
   denies do not stop Keychain access through the macOS Security framework; the model-substrate file can be

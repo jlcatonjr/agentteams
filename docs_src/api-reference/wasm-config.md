@@ -32,7 +32,8 @@ normalised block as `manifest["wasm_sandbox"]` only when the brief has it, so ev
   shell holder to compute-only `run_wasm` narrows its grant (C-3). Agents with missing or unknown tools are not
   eligible.
 - `composition_advisories(state, framework_id, *, platform=None, mechanism=None)`: the D6 notes
-  `wasm-without-os-sandbox` and `wasm-only-host`.
+  `wasm-without-os-sandbox`, `wasm-only-host`, and `wasm-windows-unsupported` (native Windows, also with
+  `wasm-only-host`: not supported for now, and an advisory, not a refusal).
 - `NATIVE_EXEC_VALUES`, `NATIVE_EXEC_DEFAULT`, `NATIVE_EXEC_EXEMPT` (`orchestrator`, `team-builder`),
   `NATIVE_EXEC_KEEP_DEFAULT` (`git-operations`, `navigator`): the keep set when the brief omits `native_exec_keep`.
 - `WASM_SUBSTRATE_CLI_KEY = "_wasm_substrate_cli"`, `WASM_SUBSTRATE_KEPT_KEY = "_wasm_substrate_kept"` (transient,
