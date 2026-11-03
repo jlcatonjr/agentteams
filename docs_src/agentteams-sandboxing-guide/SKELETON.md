@@ -764,7 +764,8 @@ flowchart TD
      session-write-denied (R1), and only here can a provider row read `enforced` / `conditional`.
    - *OS off, WASM on* — guest code is still WASM-confined, but nothing protects the control plane from
      the session, so every provider row is `advisory`; generation prints `wasm-without-os-sandbox`.
-     On a host with no OS sandbox (native Windows) WASM runs alone with `wasm-only-host`.
+     On a host with no OS sandbox (native Windows) WASM runs alone with `wasm-only-host`, plus
+     `wasm-windows-unsupported` (not supported for now).
    - *OS off, WASM off* — nothing is confined.
 5. **A third, independent switch: `wasm_sandbox.model_substrate`** (`--wasm-substrate on|off`) is not
    agent confinement. It projects a floor to consumers that run model code (for example baseAgent) in
@@ -885,8 +886,9 @@ flowchart TD
    Vendor CLIs themselves are not confined by WASM; only the code they send to `run_wasm` is.
 2. Wherever the verdict is `advisory` (Copilot, AGENTS.md, Grok under `replace`, top-level sessions, any
    OS-off combination), WASM is guidance plus a tool offer, not a boundary.
-3. Native Windows has WASM but no OS sandbox, and read-only mounts there are refused (the un-nested
-   snapshot needs `dir_fd`).
+3. Native Windows is not supported for now: no OS sandbox, and read-only mounts there are refused (the
+   un-nested snapshot needs `dir_fd`), which also refuses the Python guest's `/lib` runtime mount. Only
+   JavaScript and raw modules with compute-only grants run.
 4. Residuals: the launching-config scan is name-based (a shell wrapper that builds the server path at run
    time evades it); the credential and config scans are point-in-time (TOCTOU); the nested profiles' file
    denies do not stop Keychain access through the macOS Security framework; with the OS sandbox off (or on

@@ -8,8 +8,8 @@ called from ``cli.artifacts.finalize_privilege_wiring``:
   so a bad value, a symlinked read path or an unknown project root refuses the render with a WASM message (fail
   closed) before anything is emitted.
 * :func:`advise_wasm` prints the WASM ENABLED / inert-grants notices and the D6 composition advisories
-  (``wasm-without-os-sandbox``, ``wasm-only-host``) and records the advisories in ``manifest["advisories"]``. It
-  never claims enforcement: the per-provider status is P13's notice.
+  (``wasm-without-os-sandbox``, ``wasm-only-host``, ``wasm-windows-unsupported``) and records the advisories in
+  ``manifest["advisories"]``. It never claims enforcement: the per-provider status is P13's notice.
 
 No new gate call site: P00's ``engage_relaxation_gate`` sees the WASM fields through
 :func:`~agentteams.sandbox_state.effective_sandbox_state` (``sandbox-wasm-off`` on on->off, ``wasm-grant-widen``

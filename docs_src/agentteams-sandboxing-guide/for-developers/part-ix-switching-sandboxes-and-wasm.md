@@ -48,7 +48,7 @@ Where a grant has no effect, the render prints `NOTE (WASM): ... has no effect o
 | | WASM off | WASM on |
 |---|---|---|
 | **OS on** | today's behaviour; code runs natively inside the wired boundary | strongest: process OS-confined, code in WASM, control plane write-denied; the only cell where a provider can read `enforced` or `conditional` |
-| **OS off** | nothing confined | code in WASM, but every provider row is `advisory`; notice `wasm-without-os-sandbox` (`wasm-only-host` on native Windows) |
+| **OS off** | nothing confined | code in WASM, but every provider row is `advisory`; notice `wasm-without-os-sandbox` (`wasm-only-host` and `wasm-windows-unsupported` on native Windows) |
 
 WASM never replaces the OS sandbox: when one is available, the host process still runs inside it.
 
@@ -168,7 +168,8 @@ agentteams --wasm-pin-update wasmtime <VERSION> [--remediation GHSA-...] [--pins
 - Guests run `.wasm`, Python and JavaScript only: no Bash, git or npm.
 - The vendor CLI is not confined by WASM, only the code it sends to `run_wasm`.
 - `advisory` rows are guidance, not a boundary.
-- Native Windows: WASM without an OS sandbox, and no read-only mounts.
+- Native Windows: not supported for now (`wasm-windows-unsupported`). No OS sandbox and no read-only mounts,
+  so the Python guest refuses; only JavaScript and raw modules run, compute-only. Use WSL, Linux or macOS.
 - Residuals (name-based config scan, point-in-time scans, Keychain via the Security framework, the
   model-substrate file deletable when nothing write-protects it) are listed in
   [Known limitations](../../known-limitations.md).

@@ -45,6 +45,10 @@ _HAS_BWRAP = sys.platform.startswith("linux") and Path(_BWRAP).exists()
 _seatbelt = pytest.mark.skipif(
     not _HAS_SEATBELT, reason="macOS Seatbelt (sandbox-exec) not available on this host"
 )
+#: bwrap's namespace-setup failures (unprivileged user namespaces restricted or unavailable), as opposed to a guest
+#: that started and failed.
+_BWRAP_NAMESPACE_ERRORS = ("setting up uid map", "Creating new namespace failed", "No permissions to create",
+                           "Operation not permitted")
 _bwrap = pytest.mark.skipif(
     not _HAS_BWRAP, reason="Linux bubblewrap (bwrap) not available on this host"
 )
@@ -151,11 +155,22 @@ def test_bwrap_unbound_path_is_unreadable(tmp_path: Path) -> None:
     deriving these binds from agentteams' JSON) remains untested — see P3-4/B-4."""
     secret = (tmp_path / "secret.txt").resolve()
     secret.write_text("s3cr3t\n", encoding="utf-8")
-    # Minimal read-only root, /usr bound, but NOT the secret's dir.
+    # Minimal read-only root, /usr bound, but NOT the secret's dir. /lib64 holds the x86_64 ELF loader: without it
+    # bwrap's execvp of /bin/cat fails and the test would pass without the guest ever running.
     res = subprocess.run(
         [_BWRAP, "--ro-bind", "/usr", "/usr", "--ro-bind", "/bin", "/bin",
-         "--ro-bind", "/lib", "/lib", "--proc", "/proc", "--dev", "/dev",
+         "--ro-bind", "/lib", "/lib", "--ro-bind-try", "/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
          "--unshare-all", "/bin/cat", str(secret)],
         capture_output=True, text=True,
     )
     assert "s3cr3t" not in res.stdout, "bwrap guest could read an unbound secret path"
+    # bwrap present but unable to create its namespaces (e.g. AppArmor's unprivileged-userns restriction on a stock
+    # runner): skip, never pass vacuously. The wasm-live CI job applies a remedy first and fails on this skip (not
+    # allowlisted). Any other bwrap error, such as an execvp failure, falls through to the assertions and fails.
+    if res.stderr.startswith("bwrap:") and any(m in res.stderr for m in _BWRAP_NAMESPACE_ERRORS):
+        pytest.skip(f"bwrap cannot create namespaces on this host: {res.stderr.strip()[:200]}")
+    # Prove the guest ran: cat itself reports the path missing ("/bin/cat: <path>: No such file or directory").
+    # A bwrap setup or exec failure ("bwrap: setting up uid map: ...", "bwrap: execvp /bin/cat: ...") never names
+    # the secret path, so it fails here instead of passing vacuously.
+    assert res.returncode != 0, f"expected cat to fail on the unbound path: {res.stderr!r}"
+    assert f"{secret}: No such file or directory" in res.stderr, f"cat did not report the path missing: {res.stderr!r}"

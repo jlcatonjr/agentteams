@@ -18,8 +18,8 @@ workshop, and a timer that stops the work if it runs too long.
 
 They work best together. The glovebox alone still keeps the risky work sealed, but a worker who is not in
 a locked room could walk over and change the glovebox's settings, so the system never calls that
-combination "enforced". On Windows computers there is no room lock to offer, so only the glovebox is
-available there.
+combination "enforced". On Windows computers there is no room lock to offer, and for now the glovebox
+is not supported there either.
 
 ## Opening a lock needs the owner's signature
 

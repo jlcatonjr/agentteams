@@ -102,7 +102,9 @@ to Anthropic's own host.
   launcher wraps the host in a fresh OS sandbox (Seatbelt or bwrap) where the machine allows it. The guests then run
   inside the host's profile and the transcript reports them as `inherited`, which means "inside the host's profile",
   not a fresh guest sandbox. Where no OS sandbox can start (inside another sandbox, native Windows) the run says
-  `WASM host not OS-confined`. With `--os-sandbox off` the file says `off` and the host is never confined; that
+  `WASM host not OS-confined`. Native Windows is not supported for now: the Python guest refuses there even with a
+  compute-only grant (see [Known limitations](known-limitations.md#wasm-is-not-supported-on-native-windows-for-now)),
+  so use WSL, Linux or macOS. With `--os-sandbox off` the file says `off` and the host is never confined; that
   switch is constraint-relaxing (`sandbox-os-off`) and needs a signed decision in a governed workspace.
 - **Read-only mounts** are never mounted writable: `snapshot` is a size-capped copy per run (a read path over the cap
   refuses the run); `os` is a nested OS profile.

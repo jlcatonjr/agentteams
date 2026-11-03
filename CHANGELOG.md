@@ -188,6 +188,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GOOSE_SANDBOX` precondition, and note that the `DESCRIPTION-FORMAT.md` `wasm_sandbox` example needs two standing
   exceptions, over the registry's default cap of one.
 
+### changed (WASM: native Windows is not supported for now)
+
+- **Native Windows is not supported for WASM for now.** With WASM on, a render on native Windows now also prints and
+  records a `wasm-windows-unsupported` advisory, next to `wasm-only-host`. It says what fails there: without an OS
+  sandbox every read-only mount is a snapshot copy that needs `dir_fd` support, which Windows lacks, so any read
+  grant refuses, and so does the Python guest even with a compute-only grant (its pinned `/lib` runtime is a
+  read-only mount). Only JavaScript and raw modules with compute-only grants run. Use WSL, Linux or macOS. It is an
+  advisory, not a refusal. The `--wasm-sandbox` help, the man page, `known-limitations.md` (whose old "keep Windows
+  grants compute-only" workaround was wrong for Python), the WASM agent runtime guide and Sandboxing Guide Part IX
+  say so.
+
+### added (CI: live WASM tests on Linux and macOS)
+
+- **The live WASM tests now run in CI.** Until now CI never installed wasmtime, so every live WASM test skipped.
+  A new advisory `wasm-live` job on `ubuntu-24.04` installs bubblewrap and the pinned runtimes
+  (`--wasm-install all`), checks that bwrap can start (and records whether the runner's AppArmor user-namespace
+  restriction needed a remedy), and runs the live tests with wasmtime nested under bwrap. The `macos-seatbelt` job
+  runs the same tests nested under Seatbelt. In both, `scripts/wasm_live_ci.py` fails the job when a test skips
+  outside an explicit nodeid allowlist, and logs the R13 full-step timing (not gated on shared runners). The Linux
+  claim is narrower than macOS: the nested network-deny and credential-deny cases are Seatbelt-only.
+- `test_bwrap_unbound_path_is_unreadable` no longer passes when the guest never ran (before, a bwrap setup or exec
+  error passed it): it fails unless `cat` itself reports the path missing, skips with the reason when bwrap cannot
+  create its namespaces (which the `wasm-live` job treats as a failure), and binds `/lib64` so `cat` can run on
+  x86_64.
+
 ### fixed (vulnscan: the scheduled jobs refuse an agentteams the deploy did not install)
 
 - **A reinstall over the deployed venv no longer runs silently.** On 2026-11-01 a "latest release" `pipx install
