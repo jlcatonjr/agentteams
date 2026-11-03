@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.15] - 2026-11-03
+
+### release notes
+
+agentteams 1.1.0-rc.15 is the fifteenth release candidate of the 1.1 line. It ships the S-10 restore that rc.13 and
+rc.14 were missing, the operator's local-repository carve-out from that cooldown, and a fix so renders honour
+`frozen_surfaces`.
+
+- **S-10 release cooldown restored** (#349, opened for rc.13 and never merged). The 14-day cooldown is back in
+  force with only the latest stable release adopted, and neither rule blocks remediating a scan-detected
+  vulnerability. rc.13 and rc.14 still said the cooldown was deprecated.
+- **Local interdependent-repository carve-out** (Jim's ruling, 2026-11-03). Releases of the project's own
+  repositories named in Rule S-10 are exempt from the cooldown only. A repository is named there only once the
+  operator's Ed25519-signed decision covers `s10-cooldown-exempt:<owner/name>` (new brief key
+  `s10_cooldown_exempt_repos`, gated by `cli/s10_exempt_gate`). A name in the brief alone exempts nothing.
+- **Renders honour `frozen_surfaces`** (baseAgent D63). A goose `--update` no longer rewrites a repo-root `AGENTS.md`
+  that a Codex freeze owns, rendering a frozen framework is refused, and `--check` skips frozen files.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.15` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+### Changes since 1.1.0-rc.14
+
 ### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
 
 ### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
