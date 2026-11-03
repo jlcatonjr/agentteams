@@ -28,6 +28,8 @@ Operations (v1):
 - ``stage-image REPO``: moves end-of-life official runtime images' Dockerfile ``FROM`` tags (:mod:`.image_fix`; a
   grant must name it, Rule 15), never with a dependency file; MAJOR commit, title and label; ``"image": true`` marks
   its staged state and ``open-pr`` result (``close-superseded`` lane).
+- ``stage-cargo REPO``: in-major ``cargo update --precise`` on ``Cargo.lock`` (:mod:`.cargo_fix`; a grant must name
+  it, Rule 15): crates.io only, ``Cargo.toml`` unchanged, only planned ``version``/``checksum`` lines change.
 - ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
   ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
   removes the executor's worktree. It never merges.
@@ -64,7 +66,7 @@ from typing import Any, NamedTuple
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
 from agentteams.vulnscan import executor_pr, executor_supersede, image_fix, npm_major, open_prs, report_store
 from agentteams.vulnscan import handoff_lapse, repo_alias, retry_guard
-from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import cargo_fix, subproc_confine, subproc_confine_ssh, writer_prs
 from agentteams.vulnscan.executor_env import (  # leaf: re-exported for callers and tests (H2)
     GIT_IDENTITY,
     ExecError,
@@ -448,13 +450,14 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
     Content is judged byte for byte by :func:`manifests.check_pin_edit` and :func:`manifests.check_lock_edit`.
     With ``major`` (``stage-major``) a ``package.json`` may change too (:func:`npm_major.check_package_json_edit`),
     and its lockfile's root dependencies then only to mirror it. With mode ``image`` (``stage-image``) only Dockerfiles
-    may change, and only by :func:`image_fix.check_from_edit`'s ``FROM`` tag moves: never a dependency file too.
+    may change, and only by :func:`image_fix.check_from_edit`'s ``FROM`` tag moves; with ``cargo`` only ``Cargo.lock``
+    files, by :func:`cargo_fix.check_lock_edit`'s in-major version moves.
 
     Args:
         wt: Worktree.
         base: Base commit.
         major: Accept a ``stage-major`` change.
-        mode: :data:`executor_pr.MODES` (``"image"``: accept a ``stage-image`` change and nothing else).
+        mode: :data:`executor_pr.MODES` (``"image"`` / ``"cargo"``: only a ``stage-image`` / ``stage-cargo`` change).
 
     Returns:
         The changed paths, and one note per unchanged off-registry lockfile entry that was kept
@@ -464,7 +467,7 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
         ExecError: Any disallowed change.
     """
     mode = executor_pr.resolve_mode(major, mode)
-    major, image = mode == "major", mode == "image"
+    major, image, cargo = mode == "major", mode == "image", mode == "cargo"
     raw = git(wt, "diff", "--raw", "-z", "--no-renames", "--no-abbrev", base).split("\0")
     changed: list[str] = []
     kept: list[str] = []
@@ -481,7 +484,9 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
         if image:
             if not image_fix.is_dockerfile(rel):
                 raise ExecError(f"refusing change outside Dockerfile FROM tags (stage-image): {rel}")
-        elif not (ALLOWED_CHANGED.search(rel) or major and npm_major.PACKAGE_JSON.search(rel)):
+        elif cargo and Path(rel).name != cargo_fix.LOCK:
+            raise ExecError(f"refusing change outside Cargo.lock (stage-cargo): {rel}")
+        elif not cargo and not (ALLOWED_CHANGED.search(rel) or major and npm_major.PACKAGE_JSON.search(rel)):
             raise ExecError(f"refusing change outside dependency pins/lockfiles: {rel}")
         st = os.lstat(wt / rel)
         if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o111:
@@ -492,6 +497,8 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
         try:
             if image:
                 image_fix.check_from_edit(rel, old, new)
+            elif cargo:
+                cargo_fix.check_lock_edit(rel, old, new)
             elif REQ_NAME.search(Path(rel).name):
                 check_pin_edit(rel, old, new)
             elif npm_major.PACKAGE_JSON.search(rel):
@@ -547,8 +554,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False, mode: str
             raise ExecError(f"{repo}: in the executor's worktree, {unsafe}")
         git(wt, "reset", "-q", "--hard", base)
         cooldown = REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
-        claims = open_prs.staging_claims(lambda: origin_repo(wt))   # D1: never duplicate another open PR
-        res = image_fix.fix_result(wt, claims) if image else \
+        claims = writer_prs.staging_claims(lambda: origin_repo(wt))   # D1/D6: never duplicate another open PR
+        res = image_fix.fix_result(wt, claims) if image else cargo_fix.fix_result(wt, claims) if mode == "cargo" else \
             fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown, skip=claims)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
@@ -906,7 +913,8 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
         return {"status": "refused", "detail": str(exc)}
     try:
         if op in STAGE_OPS:
-            result = stage_fix(Path(canonical), cfg, mode={"stage-major": "major", "stage-image": "image"}.get(op, "fix"))
+            result = stage_fix(Path(canonical), cfg, mode={"stage-major": "major", "stage-image": "image",
+                                                                  "stage-cargo": "cargo"}.get(op, "fix"))
         elif op == "open-pr":
             result = open_pr(Path(canonical), rationale)
         elif op == "close-superseded":

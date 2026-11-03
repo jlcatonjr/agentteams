@@ -23,6 +23,10 @@ a grant listing ``stage-fix`` never implies it.
 only a grant that lists it covers it. No grant listing ``stage-fix`` or ``stage-major`` implies it, and nothing signs
 it by default: the operator signs a grant naming it.
 
+``stage-cargo`` (in-major ``cargo update -p <crate>@<ver> --precise <fix>`` on a ``Cargo.lock``, :mod:`.cargo_fix`,
+vfr-d.D3) relaxes the "no Cargo.lock edit" bound the same way: only a grant that lists it covers it, and no grant
+listing ``stage-fix`` implies it.
+
 ``merge`` and ``server-apply`` are part of the schema for the planned full-automation stage, but
 version 1 refuses to sign or honour them. Every use also re-checks for an unretracted @security
 HALT (C-2), which no grant overrides.
@@ -47,7 +51,8 @@ from agentteams.vulnscan import paths
 from agentteams.vulnscan.ops import REPO_OPS
 
 PURPOSE_TAG = "agentteams-vulnscan-remediation-grant-v1"
-OPS_V1: frozenset[str] = frozenset({"stage-fix", "stage-major", "stage-image", "open-pr", "close-superseded",
+OPS_V1: frozenset[str] = frozenset({"stage-fix", "stage-major", "stage-image", "stage-cargo", "open-pr",
+                                    "close-superseded",
                                     "server-audit", "server-dryrun"})
 OPS_RESERVED: frozenset[str] = frozenset({"merge", "server-apply"})   # full-automation stage; refused in v1
 MAX_DAYS = 30

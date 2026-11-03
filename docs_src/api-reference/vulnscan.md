@@ -518,7 +518,7 @@ needs no config).
 | `scan`, `inventory`, `runtimes`: `--unscored-as critical\|high\|moderate\|low` | What an unscored advisory counts as for `--fail-on` (default `high`; `daily` uses the config's `unscored_as`) |
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
 | `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
-| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
+| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
@@ -530,8 +530,9 @@ needs no config).
 | `roots` | Every candidate scan root with its source: `repo_roots`, `registry (scan)`, `registry (remediate)`, `excluded`, `opted out`, `unanswered` or `duplicate` (`SCAN` or `SKIP` per line) |
 | `status [--project DIR] [--json]` | One project's status, read-only and without the network: identity, enrolment level, fix checkout, whether the daily run scans it, last scan time, its open package findings by severity in the latest run, the `stage-fix` / `open-pr` actions the ledger recorded for it (branch and PR URL, not checked online), and whether a valid grant covers its fix checkout |
 | `halts` | Open escalations and decision-log HALTs, with how to clear each |
-| `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)) |
+| `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)). A stale `reject` shows a `NEEDS YOU:` line ([handoff_stale](#agentteamsvulnscanhandoff_stale)) |
 | `handoff verify-directive --team-dir DIR --handoff-id ID [--directive-id ID] [--json]` | One handoff's review directive against its team's ledger (`management_directives.verify_handoff_directive`): verified only when the `prev_digest` chain is intact, exactly one row carries the scope `review-vulnscan-handoff-<id>` (and `--directive-id`, when given), that row passes every check, and every other row is valid or only expired. Prints one line (or the verdict as JSON, with a reason code); exit 0 verified, 1 not, 2 bad arguments. Reporting only: it authorizes nothing ([handoff](#agentteamsvulnscanhandoff)) |
+| `handoff answer --repo PATH --answer keep-rejected\|ask-again [--note TEXT]` | Record your answer to a stale `reject` of the staged fix (interactive confirmation; a `handoff-answer` ledger row). It clears that digest's Needs-you line and authorizes nothing. Exit 0 recorded, 1 declined, 2 refused ([handoff_stale](#agentteamsvulnscanhandoff_stale)) |
 | `remediation-report LEDGER SINCE [--log FILE] [--run NAME] [--attempt N] [--out FILE] [--agent-since TS] [--agent-until TS]` | One unattended remediation attempt's outcome from the executor's ledger rows at or after `SINCE` (ISO, UTC or with an offset): one JSON object (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) on stdout, and `remediation.md` written to `--out`. `--agent-since`/`--agent-until` (the agent run's `started`/`finished`) add its executor rows, never past `SINCE`, in their own section; a bad or out-of-range time is a Needs-you note, never a usage error (listed under Needs you, never counted as infra). Run by `scripts/vulnscan-remediation/vulnscan-remediate-auto.sh` ([remediation_report](#agentteamsvulnscanremediation_report)) |
 | `ready [--ensure] [--json]` | Docker readiness, layer by layer (`cli`, `daemon`, `tools_image`, `agent_image`, `tools_selftest`, `agent_selftest`), each with its state and, when it fails, a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). Read-only without `--ensure`; `--ensure` makes the repairs the `docker` config allows (start Docker, re-run a stale self-test) under the daily run lock, and only checks while a daily run holds it. `--json` prints `{layer: {state, code, message}}`. Never builds an image ([`docker_readiness`](#agentteamsvulnscandocker_readiness)) |
 | `verify [--mirror-refresh SCRIPT] [--force] [--date DATE]` | Same-day verification, run by the afternoon job (`vulnscan-daily-wrapped.sh --verify`, installed by `vulnscan-remediate-auto.sh --install`): refresh the scan mirrors with `--mirror-refresh` (`bash SCRIPT refresh`), re-scan each root whose mirror moved since the morning run, re-audit the hosts an executor `server-*` op ran against today, and write `<run>/verify.json` with each assessed morning finding's outcome. Takes `remediate.flock` and `daily.lock` without waiting; stages nothing and opens no PR. `--force` verifies again although today's `verify.json` is complete; `--date` names the run (default today). Prints one JSON line ([verify](#agentteamsvulnscanverify)) |
@@ -547,7 +548,7 @@ The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious 
 `--allow-checkout-signing` and `--confirm-review-sha256` ([Signing](#signing)). `DATE` is always
 `YYYY-MM-DD`.
 
-`grant sign` takes `--op OP` (repeatable, no default: `stage-fix`, `stage-major`, `stage-image`, `open-pr`,
+`grant sign` takes `--op OP` (repeatable, no default: `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`,
 `close-superseded`, `server-audit`, `server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
 `--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. `publish-grant sign` takes
 `--ops-repo DIR`, `--remote-url URL` (default: the ops repository's `remote.origin.url`), `--node-id`,
@@ -823,7 +824,7 @@ container. Everything it returns that came from advisories or repositories is pr
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
 | `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix, stage-major or stage-image*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names), or, for a mark with `"after": "fix-pr"`, **fix PR opened `<date>` for this plan's `fix` rows; its major-held rows remain → request `stage-major` for this repository now**. The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
-| `request` | `op` (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix`, `stage-major` or `stage-image` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)), and `stage-image` only for one whose plan has base-image rows with action `stage-image`, on its own ([Base images](#base-images-stage-image)) |
+| `request` | `op` (`stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix`, `stage-major` or `stage-image` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)), and `stage-image` only for one whose plan has base-image rows with action `stage-image`, on its own ([Base images](#base-images-stage-image)) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
@@ -853,7 +854,7 @@ executor validates):
 |---|---|
 | `id` | 32 lowercase hex characters; equals the file name; never reused (replay is refused) |
 | `op` | an `OPS` value, or `report` / `escalate` |
-| `target` | absolute repo path (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
+| `target` | absolute repo path (`stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
 | `rationale` | string, kept in the ledger |
 | `created` | ISO timestamp |
 | `payload` | only for `report` (`{"markdown"}`) and `escalate` (`{"kind", "evidence"}`) |
@@ -3651,6 +3652,56 @@ reading side: writing packets and issuing the directive is operator tooling outs
   `handoff_lapse.log` writes a `handoff-lapsed` ledger row only once a grant covers the `open-pr`. The owner PRs
   that keep it deferring are named in the summary (`own-pr kept: owner PR #N open`). Only `own-pr` lapses; a gh
   failure or a staged record without packages keeps deferring.
+
+### `agentteams.vulnscan.handoff_stale`
+
+A stale `reject` (vfr-c.C4). `handoff_stale.clock(repo, branch)` starts a `handoff-reject-clock`
+  ledger row the first time the newest verdict for a staged fix's digest is `reject` (keyed by the digest alone; any
+  other verdict stops it, a new digest starts a new one). After `STALE_DAYS` (14) `needs_you(repo, rec)` returns a
+  line naming the repository, handoff, digest and date; `RepoHandoff.needs_you` carries it into the summary
+  (`**Needs you:**`) and `handoff status` (`NEEDS YOU:`). Nothing re-asks the orchestrator: no packet text, no request,
+  and `open-pr` stays refused. Only a person clears the line, for that digest: `handoff answer --repo PATH --answer
+  keep-rejected|ask-again [--note TEXT]` (`cmd_answer`, interactive confirmation; `record_answer` writes a
+  `handoff-answer` ledger row). An answer authorizes nothing.
+
+### `agentteams.vulnscan.npm_kept`
+
+`stage-major` on a base with kept off-registry entries (vfr-c.C2, vfail F2's rule). `base_problem(rel, manifest_text,
+lock_text)` returns `(problem, kept)`: an off-registry entry passes only as a top-level `packages` entry
+`node_modules/<name>` resolved over `https://` with a `sha512-` integrity and a plain version, not a link, that
+`package.json` names by exactly that URL (portal's SheetJS `xlsx`); every other non-registry source is refused as
+`manifests.npm_off_registry` refuses it. `after_problem(rel, kept, lock_text)` refuses the re-resolved lockfile
+unless its off-registry entries are exactly `kept`, byte-identical in every field at the same key (none added,
+changed, moved or removed). npm runs lockfile-only and script-free in the tools container, whose egress is
+`registry.npmjs.org:443` only, so the CDN is never fetched.
+
+### `agentteams.vulnscan.writer_prs`
+
+A writer's open PR holds its packages back from staging (vfr-d D6). `staging_claims(target_repo)` returns a
+`Claims` (`open_prs.claimed`'s Dependabot / Renovate map plus `holds`); any gh failure means no claim and no hold.
+`holds(target_repo, prs)` looks at same-repository, non-`vulnscan/*`, non-bot PRs (at most `MAX_PRS`) whose author
+`can_write` (the collaborator-permission API: `admin` or `write`), and reads `parse_diff(gh pr diff)` as data:
+`requirements*.txt` and npm lockfiles only, plain names and versions only, nothing for a diff over `MAX_DIFF_BYTES`
+or naming over `MAX_NAMES` packages. Each hold's start is a `writer-hold` ledger row. `leave_to_prs(rows, skip)`
+(also used by `fix`) marks a row `pr-held` ("held by #N ... expires <time>, Rule S-VM") only when the PR changes the
+same file and moves the package to the row's fixed version or later, until `deadline(hold, ids)`: the start plus
+`DEADLINES` by the worst advisory (24 h critical, 7 days high or unscored, 30 days moderate or low; an unreadable
+advisory counts as critical). An expired hold is noted on the row the fix then takes. `open-pr`'s fail-closed
+duplicate check is unchanged (Dependabot / Renovate only).
+
+### `agentteams.vulnscan.cargo_fix`
+
+`stage-cargo` (vfr-d.D3; a grant must name it). `in_major_target(name, installed, ids)` picks the smallest version
+the advisories name `fixed` in the installed version's caret line that passes the S-10 search (an OSV query on the
+exact release; any advisory, or a malicious one, refuses). `annotate(path, rows)` (from `fix.plan_cargo_lock`)
+turns such rows into `stage-cargo` rows; `sources_problem(text)` refuses git and alternate-registry packages.
+`fix_result(wt, claims)` runs `run_updates(lock, moves)`: `cargo update -p <name>@<old> --precise <new>` per move,
+in the tools container only (`subproc_confine.run_cargo`, egress `index.crates.io:443`), on a scratch copy with the
+tree's `Cargo.toml` files, its `Cargo.lock` and empty `.rs` stubs (no `.cargo` config, an empty `CARGO_HOME`); only
+`Cargo.lock` is copied back. `check_lock_edit(rel, old, new, planned=None)` (also `validate_diff`'s check in
+`cargo` mode, which accepts no other file) allows only in-major `version` and matching `checksum` lines of crates.io
+packages and the dependency references that follow them; with `planned`, exactly those moves. Nothing to update
+raises `FUTILE_DETAIL`, held per op by `retry_guard`.
 
 ### `agentteams.vulnscan.remediation_status`
 

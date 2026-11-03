@@ -197,12 +197,13 @@ def left_to_prs(changes: list[Any], claims: dict[str, list[int]]) -> dict[str, l
 
     Args:
         changes: :attr:`.fix.FixResult.changes`.
-        claims: :func:`claimed`'s map the fix was given.
+        claims: :func:`claimed`'s map the fix was given (a :class:`.writer_prs.Claims` adds its ``held`` PRs).
 
     Returns:
         The map, by each row's own package name.
     """
-    return {c.name: claims.get(normalize(c.name), []) for c in changes if c.action == "pr-held"}
+    held = getattr(claims, "held", {})   # writer_prs.Claims: the writer PRs each row was held for (D6)
+    return {c.name: claims.get(normalize(c.name)) or held.get(c.name, []) for c in changes if c.action == "pr-held"}
 
 
 def refuse_duplicate(target_repo: str, packages: list[str]) -> str:

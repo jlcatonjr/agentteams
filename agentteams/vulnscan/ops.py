@@ -11,11 +11,12 @@ import re
 from typing import Any
 
 #: Operations whose target is an absolute repository path (the executor guards and the MCP server check it).
-REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "open-pr", "close-superseded")
+REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "stage-cargo", "open-pr", "close-superseded")
 #: The ops that stage a fix (``stage-major`` is ``stage-fix`` with semver-major upgrades allowed; ``stage-image``
-#: moves an end-of-life official runtime image's Dockerfile ``FROM`` tag, :mod:`.image_fix`). One staged fix per
-#: repository at a time, whichever op staged it.
-STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image")
+#: moves an end-of-life official runtime image's Dockerfile ``FROM`` tag, :mod:`.image_fix`; ``stage-cargo`` runs
+#: in-major ``cargo update --precise`` fixes on a ``Cargo.lock``, :mod:`.cargo_fix`). One staged fix per repository
+#: at a time, whichever op staged it.
+STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "stage-cargo")
 
 #: A PR URL the executor records for ``open-pr``: ``https://HOST/OWNER/REPO/pull/N`` (groups: host, owner, repo, n).
 PR_URL = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")

@@ -59,8 +59,9 @@ def sanitize(text: str, limit: int = 2000) -> str:
     return "\n".join("> " + ln for ln in text.splitlines()) or "> (none)"
 
 
-#: A staged change's mode: ``stage-fix``, ``stage-major`` or ``stage-image``.
-MODES: tuple[str, ...] = ("fix", "major", "image")
+#: A staged change's mode: ``stage-fix``, ``stage-major``, ``stage-image`` or ``stage-cargo`` (``"cargo"``: titled,
+#: committed and opened like ``stage-fix``; only ``validate_diff`` and the fix it runs differ).
+MODES: tuple[str, ...] = ("fix", "major", "image", "cargo")
 
 
 def lane_fields(st: dict[str, Any]) -> dict[str, bool]:

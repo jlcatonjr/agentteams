@@ -230,6 +230,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
     "agentteams/vulnscan/handoff_lapse.py",    # B1b/OD10: when an own-pr verdict stops deferring open-pr
+    "agentteams/vulnscan/handoff_stale.py",    # C4: a stale reject becomes Needs you; only a person clears it
+    "agentteams/vulnscan/npm_kept.py",         # C2: stage-major's kept off-registry entries, byte-identical after
+    "agentteams/vulnscan/writer_prs.py",       # D6: a writer's open PR holds its packages until the S-VM deadline
+    "agentteams/vulnscan/cargo_fix.py",        # D3: stage-cargo's in-major cargo update and its Cargo.lock check
     "agentteams/vulnscan/remediation_status.py",  # what blocks the executor (summary + notifications)
     "agentteams/vulnscan/remediation_report.py",  # infra (retried) vs policy (final): the anchored classification
     "agentteams/vulnscan/server_fixplan.py",   # per-host server fix plans (read-only)

@@ -22,6 +22,8 @@ Tools:
   own, never mixed with a non-major fix.
   ``stage-image`` (only a grant naming it covers it) moves end-of-life base images' Dockerfile ``FROM`` tags: for a
   repository whose plan has base-image rows with action ``stage-image``, staged on its own.
+  ``stage-cargo`` (only a grant naming it covers it) runs in-major ``cargo update --precise`` fixes on a
+  ``Cargo.lock``: for a repository whose plan has crates.io rows with action ``stage-cargo``, staged on its own.
 - ``request_status`` / ``list_requests``: the executor's results. A pending request gets an instruction not to
   poll (the executor serves requests on its own schedule); after :data:`MAX_PENDING_POLLS` pending answers for
   one id, further polls of it are refused, so a polling loop cannot burn the run's token cap.
@@ -110,7 +112,9 @@ SCHEMAS: dict[str, dict[str, Any]] = {
                                 "a stage-fix is pending or staged there. "
                                 "stage-image moves end-of-life base images' Dockerfile FROM tags to a supported "
                                 "line: request it only for a repository whose plan has base-image rows with action "
-                                "stage-image, on its own (never while another fix is staged)."),
+                                "stage-image, on its own (never while another fix is staged). "
+                                "stage-cargo runs the plan's in-major Cargo.lock fixes: request it only for a "
+                                "repository whose plan has crates.io rows with action stage-cargo, on its own."),
                 "inputSchema": {"type": "object", "required": ["op", "target", "rationale"], "properties": {
                     "op": {"type": "string", "enum": list(OPS)},
                     "target": {"type": "string", "description": ("repository alias from get_fix_plans or "
