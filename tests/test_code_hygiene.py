@@ -386,6 +386,8 @@ _REFACTOR_MODULES = (
     "agentteams/errors.py",
     # CH-07 module extractions (keep the annotation ratchet honest on new modules)
     "agentteams/atomicio.py",
+    "agentteams/gitdirs.py",
+    "agentteams/update_lock.py",
     "agentteams/backup.py",
     "agentteams/output_plan.py",
     "agentteams/cli/schema_cache.py",

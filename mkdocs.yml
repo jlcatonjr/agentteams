@@ -227,6 +227,8 @@ nav:
               - cli: api-reference/cli.md
               - output-plan: api-reference/output-plan.md
               - update-report: api-reference/update-report.md
+              - gitdirs: api-reference/gitdirs.md
+              - update-lock: api-reference/update-lock.md
               - fleet: api-reference/fleet.md
               - drift: api-reference/drift.md
               - behavioral-drift: api-reference/behavioral-drift.md

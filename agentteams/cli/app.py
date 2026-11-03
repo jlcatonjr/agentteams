@@ -120,6 +120,7 @@ def main(argv: list[str] | None = None, *, migrate_exemption: bool = False) -> i
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
+    args.raw_argv = list(argv) if argv is not None else sys.argv[1:]  # recorded, redacted, by update_lock
     _validate_option_combinations(parser, args)
     return run_with_json_stdout(
         _main_dispatch, args, parser, argv, migrate_exemption=migrate_exemption
