@@ -106,6 +106,9 @@ point (`id|prereqs|cmd|what`; work waiting on code or a peer is listed as held).
 - asks before every change, reading `/dev/tty`; refuses without a terminal when it signs or confirms a plan;
 - refuses inside the change window; pins the deployed interpreter (`…/pipx/venvs/agentteams/bin/python -P`);
 - validates before it revokes, backs up before it overwrites, dry-runs before it applies, and prints the undo;
+- shows a diff by writing it to a file and opening that in the pager (`less FILE </dev/tty`), never by piping into a
+  pager whose stdin is redirected (the diff is lost and the review step silently shows nothing); reports a test step
+  that ran nothing as "not run", never as passed;
 - never reads or prints a secret (names only), and never merges;
 - ends with its log path and "paste the output to Claude";
 - has a `@security` review whose verdict and conditions are recorded (C-5 row) before the operator runs it.
