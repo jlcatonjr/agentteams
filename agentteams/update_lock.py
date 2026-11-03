@@ -15,16 +15,21 @@ tracked, so consumer trees gain no file or directory and no output layout change
 stay independent. It is found without spawning git. Outside a git checkout the run proceeds unlocked with
 a one-line notice.
 
-**Custody.** The git directory is ``lstat``-ed and refused when it is a symlink; the lock and the record are
+**Custody.** The git directory is found by :mod:`agentteams.gitdirs` and refused when it is a symlink, when a
+``gitdir:`` target holds no ``HEAD``, or when a linked worktree's back-pointer names another ``.git``; the lock and the record are
 opened ``O_NOFOLLOW`` (a planted link is refused, never followed) with mode 0600. The holder JSON
 (``{pid, started_at, invoker, argv_redacted}``) is a separate file replaced atomically, so a reader never
 sees half a record and the locked inode is never swapped out from under ``flock``. Recorded argv keeps flag
 names only; values are dropped except the ``--framework``, ``--shrink-policy`` and ``--adopt-only`` slugs.
 
-**Fail-open cases.** No ``fcntl`` (non-POSIX), or ``EPERM``/``EACCES``/``EROFS`` creating the lock (a
-sandbox), proceeds unlocked with a notice; under a sandbox the sandboxed-write preflight refuses the real
-write anyway. Dry runs and inspection-only runs take no lock and write no record; they print a notice when
-the lock is held, because what they read may be mid-write.
+**Fail-open cases.** No ``fcntl`` (non-POSIX), an unreadable ``.git``, or ``EPERM``/``EACCES``/``EROFS``
+creating the lock (a sandbox) proceeds unlocked and unrecorded, with a notice. This is wider than "a sandboxed
+run cannot write anyway": the sandboxed-write preflight runs only before the render/emit write phase, so the
+adopt step, ``--adopt-only``, ``--restore-backup`` and ``--pin-templates`` still write unlocked when they are
+allowed to; and a linked worktree whose git directory lies outside the sandbox's writable roots, while its team
+directory is writable, runs the whole pipeline unlocked. Dry runs and inspection-only runs take no lock and
+write no record (``--restore-backup`` and ``--pin-templates`` are always locked: they write under
+``--dry-run``); they print a notice when the lock is held, because what they read may be mid-write.
 
 **Re-entrant per process.** A nested :func:`update_run` in a process that already holds the lock (an
 in-process re-entry of the pipeline) is a no-op, so a run never refuses itself.
@@ -33,6 +38,7 @@ in-process re-entry of the pipeline) is a no-op, so a run never refuses itself.
 from __future__ import annotations
 
 import csv
+import functools
 import errno
 import io
 import json
@@ -43,8 +49,9 @@ import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any, Collection, Iterator, Mapping, Sequence
 
+from agentteams import gitdirs
 from agentteams.atomicio import read_regular_nofollow, write_new_atomic
 
 LOCK_NAME = "agentteams-update.lock"
@@ -53,7 +60,7 @@ RECORD_NAME = "agentteams-update-runs.log.csv"
 RECORD_FIELDS = ("started_at", "finished_at", "pid", "invoker", "mode", "framework", "argv",
                  "agentteams_commit", "exit")
 
-#: Environment markers naming the agent shell a run came from (the markers the sign scripts check).
+#: Environment variables an agent host sets in the shells it starts, and the invoker each names.
 #: First match wins; no marker means a terminal. Advisory only: an environment can be forged.
 INVOKER_ENV_MARKERS: tuple[tuple[str, str], ...] = (
     ("CLAUDECODE", "claude-code"),
@@ -67,8 +74,8 @@ INVOKER_ENV_MARKERS: tuple[tuple[str, str], ...] = (
 #: Flags whose value is kept in recorded argv (a framework id, a policy name, adopted slugs).
 _KEPT_VALUE_FLAGS = frozenset({"--framework", "-f", "--shrink-policy", "--adopt-only"})
 _SLUG_VALUE_RE = re.compile(r"^[a-z0-9][a-z0-9,_-]{0,199}$")
-_FLAG_NAME_RE = re.compile(r"^--?[A-Za-z0-9][A-Za-z0-9-]{0,63}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
+_MAX_PACKED_REFS = 16 * 1024 * 1024
 _SANDBOX_ERRNOS = frozenset({errno.EPERM, errno.EACCES, errno.EROFS})
 
 #: Read-only flags; a run carrying one of them (and none of :data:`_WRITING_FLAGS`) takes no lock.
@@ -76,7 +83,9 @@ _INSPECTION_FLAGS = ("check", "list_backups", "scan_security", "check_budget", "
                      "check_rank_strict", "check_wiring", "query_index", "query_code")
 #: Flags that write even beside an inspection flag (they run first, or write on the adopt step).
 _WRITING_FLAGS = ("adopt_only", "adopt_orphans", "overwrite", "refresh_index", "refresh_code_index",
-                  "reconcile_front_matter")
+                  "reconcile_front_matter", "pin_templates")
+#: Flags that write even under ``--dry-run`` (neither mode checks it), so they are always locked.
+_DRY_RUN_WRITING_FLAGS = ("restore_backup", "pin_templates")
 
 _depth = 0  # >0 while this process holds (or deliberately skipped) the lock; nested runs are no-ops
 
@@ -109,55 +118,53 @@ class RunHandle:
 
 
 def find_git_dir(start: Path) -> Path | None:
-    """Return the per-checkout git directory for *start*, without spawning git.
-
-    Walks up from *start* to the first ``.git``. A directory is the git dir; a file is a linked worktree
-    (or submodule) whose ``gitdir:`` line names it, relative to the file's directory when not absolute.
+    """Return the per-checkout git directory for *start* (see :func:`agentteams.gitdirs.git_dirs`).
 
     Args:
-        start: A path inside the checkout (need not exist yet).
+        start: A path inside the checkout (resolved first; need not exist yet).
 
     Returns:
-        The git directory, or ``None`` outside a git checkout.
+        The per-checkout git directory, or ``None`` outside a git checkout.
 
     Raises:
-        UpdateLockError: ``.git`` or the directory a ``gitdir:`` line names is a symlink or not a
-            directory, or a ``.git`` file has no ``gitdir:`` line.
+        UpdateLockError: A ``.git`` pointer failed a custody or consistency check (a symlink, a ``gitdir:``
+            target without ``HEAD`` or whose back-pointer names another ``.git``, an oversized pointer file).
         OSError: ``.git`` exists but cannot be read (a sandbox denying it).
     """
-    for base in (start, *start.parents):
-        dot_git = base / ".git"
-        if not os.path.lexists(dot_git):
-            continue
-        st = os.lstat(dot_git)
-        if stat.S_ISDIR(st.st_mode):
-            return dot_git
-        if not stat.S_ISREG(st.st_mode):
-            raise UpdateLockError(f"{dot_git} is a symlink or not a regular file/directory")
-        text = read_regular_nofollow(dot_git, 4096).decode("utf-8", "replace")
-        match = re.search(r"^gitdir:\s*(.+?)\s*$", text, re.M)
-        if not match:
-            raise UpdateLockError(f"{dot_git} has no gitdir: line")
-        target = Path(match.group(1))
-        target = target if target.is_absolute() else base / target
-        tst = os.lstat(target)
-        if not stat.S_ISDIR(tst.st_mode):
-            raise UpdateLockError(f"{target} (named by {dot_git}) is a symlink or not a directory")
-        return target
-    return None
+    try:
+        found = gitdirs.git_dirs(start)
+    except gitdirs.GitDirError as exc:
+        raise UpdateLockError(str(exc)) from exc
+    return None if found is None else found[0]
 
 
-def redact_argv(argv: Sequence[str]) -> list[str]:
+@functools.lru_cache(maxsize=1)
+def known_options() -> frozenset[str]:
+    """Every option string the agentteams CLI parser defines (``--update``, ``-f``, ...).
+
+    Returns:
+        The option strings; :func:`redact_argv` records only these, so a secret passed where a flag
+        name goes (``-AKIA...``) never reaches the record.
+    """
+    from agentteams.cli.parser import _build_parser  # lazy: cli imports this module
+
+    return frozenset(opt for action in _build_parser()._actions for opt in action.option_strings)
+
+
+def redact_argv(argv: Sequence[str], known: Collection[str] | None = None) -> list[str]:
     """Reduce *argv* to flag names, keeping only the values of the framework/policy/slug flags.
 
     Args:
         argv: The command-line arguments (without the program name).
+        known: The option strings to keep (default :func:`known_options`, the CLI parser's own).
 
     Returns:
         The flag names in order; ``--framework``, ``-f``, ``--shrink-policy`` and ``--adopt-only`` keep
-        their value (inline ``=value`` or the next token) when it looks like a slug. Anything else —
-        positional values, other flags' values, malformed flag names — is dropped.
+        their value (inline ``=value`` or the next token) when it is a slug of at most 200 characters
+        (``[a-z0-9][a-z0-9,_-]*``). Anything else — positional values, other flags' values, any token
+        that is not one of *known* (abbreviations included) — is dropped.
     """
+    known = known_options() if known is None else known
     out: list[str] = []
     keep_next = False
     for token in argv:
@@ -170,7 +177,7 @@ def redact_argv(argv: Sequence[str]) -> list[str]:
         if not token.startswith("-") or token in ("-", "--"):
             continue
         name, has_value, value = token.partition("=")
-        if not _FLAG_NAME_RE.match(name):
+        if name not in known:
             continue
         out.append(name)
         if name in _KEPT_VALUE_FLAGS:
@@ -205,7 +212,8 @@ def run_mode(args: Any, *, migrate_exemption: bool = False) -> str:
         migrate_exemption: The run is ``--migrate``'s delegated overwrite.
 
     Returns:
-        ``migrate``, ``adopt-only``, ``restore-backup``, ``update``, ``overwrite`` or ``generate``.
+        ``migrate``, ``adopt-only``, ``restore-backup``, ``pin-templates``, ``update``, ``overwrite`` or
+        ``generate``.
     """
     if migrate_exemption:
         return "migrate"
@@ -213,6 +221,8 @@ def run_mode(args: Any, *, migrate_exemption: bool = False) -> str:
         return "adopt-only"
     if getattr(args, "restore_backup", None) is not None:
         return "restore-backup"
+    if getattr(args, "pin_templates", False):
+        return "pin-templates"
     if getattr(args, "update", False):
         return "update"
     return "overwrite" if getattr(args, "overwrite", False) else "generate"
@@ -222,7 +232,8 @@ def is_lock_exempt(args: Any) -> bool:
     """Whether a run writes nothing and so takes no lock and leaves no record.
 
     True for ``--dry-run``, and for an inspection-only run (``--check``, ``--list-backups``, the scan/check
-    modes, ``--query-index``/``--query-code``) that carries none of the flags that write first.
+    modes, ``--query-index``/``--query-code``) that carries none of the flags that write first. Never true
+    with ``--restore-backup`` or ``--pin-templates``: both write even under ``--dry-run``.
 
     Args:
         args: The parsed CLI namespace.
@@ -230,9 +241,11 @@ def is_lock_exempt(args: Any) -> bool:
     Returns:
         ``True`` when the run is lock-exempt.
     """
+    if any(getattr(args, f, None) not in (None, False) for f in _DRY_RUN_WRITING_FLAGS):
+        return False
     if getattr(args, "dry_run", False):
         return True
-    if getattr(args, "restore_backup", None) is not None or any(getattr(args, f, None) for f in _WRITING_FLAGS):
+    if any(getattr(args, f, None) for f in _WRITING_FLAGS):
         return False
     return any(getattr(args, f, None) for f in _INSPECTION_FLAGS)
 
@@ -244,30 +257,27 @@ def agentteams_commit() -> str:
         The full commit sha, or ``unknown`` (an installed wheel, a detached state that can't be read).
     """
     try:
-        git_dir = find_git_dir(Path(__file__).resolve().parent)
-        if git_dir is None:
+        found = gitdirs.git_dirs(Path(__file__).resolve().parent)
+        if found is None:
             return "unknown"
-        head = read_regular_nofollow(git_dir / "HEAD", 4096).decode("ascii", "replace").strip()
+        git_dir, common = found
+        head = gitdirs.read_pointer(git_dir / "HEAD")
         if _SHA_RE.match(head):
             return head
-        if not head.startswith("ref: "):
+        ref = head[5:].strip() if head.startswith("ref: ") else ""
+        if not ref.startswith("refs/") or ".." in ref.split("/"):
             return "unknown"
-        ref = head[5:].strip()
-        common = git_dir
-        if (git_dir / "commondir").is_file():
-            rel = (git_dir / "commondir").read_text(encoding="utf-8").strip()
-            common = Path(rel) if Path(rel).is_absolute() else git_dir / rel
         for root in (git_dir, common):
-            if (root / ref).is_file():
-                sha = (root / ref).read_text(encoding="ascii").strip()
+            if os.path.lexists(root / ref):
+                sha = gitdirs.read_pointer(root / ref)
                 return sha if _SHA_RE.match(sha) else "unknown"
-        packed = common / "packed-refs"
-        if packed.is_file():
-            for line in packed.read_text(encoding="utf-8").splitlines():
+        if os.path.lexists(common / "packed-refs"):
+            packed = read_regular_nofollow(common / "packed-refs", _MAX_PACKED_REFS).decode("utf-8", "replace")
+            for line in packed.splitlines():
                 parts = line.split()
                 if len(parts) == 2 and parts[1] == ref and _SHA_RE.match(parts[0]):
                     return parts[0]
-    except (OSError, ValueError, UpdateLockError):
+    except (OSError, ValueError, gitdirs.GitDirError):
         return "unknown"
     return "unknown"
 
@@ -402,7 +412,9 @@ def update_run(project_root: Path, argv: Sequence[str], *, dry_run: bool, mode: 
 
     Raises:
         UpdateLocked: Another process holds the lock (raised before the body runs; nothing is written).
-        UpdateLockError: The git directory or lock file failed a custody check.
+        UpdateLockError: The git directory or lock file failed a custody check, or a ``.git`` pointer file is
+            malformed or oversized (wrapped, never a bare ``ValueError``, so the CLI prints a refusal rather
+            than a traceback).
     """
     global _depth
     handle = RunHandle()
@@ -414,7 +426,7 @@ def update_run(project_root: Path, argv: Sequence[str], *, dry_run: bool, mode: 
             _depth -= 1
         return
     try:
-        git_dir = find_git_dir(Path(project_root).absolute())
+        git_dir = find_git_dir(Path(project_root))
     except OSError as exc:
         print(f"  ℹ  update lock: cannot read the git directory ({exc.strerror}); running unlocked and "
               "unrecorded.", file=sys.stderr)
@@ -423,7 +435,7 @@ def update_run(project_root: Path, argv: Sequence[str], *, dry_run: bool, mode: 
         if git_dir is None:
             print(f"  ℹ  update lock: {project_root} is not in a git checkout; running unlocked and unrecorded.",
                   file=sys.stderr)
-    fd: int | None = None  # find_git_dir has already lstat-refused a symlinked git dir
+    fd: int | None = None  # find_git_dir has already refused a symlinked or mismatched git dir
     if git_dir is not None and dry_run:
         if _lock_held(git_dir):
             print(f"  ⚠  update lock is held: another run is writing this checkout ({describe_holder(git_dir)}); "

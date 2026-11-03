@@ -19,8 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time, pid, invoker (`claude-code`, `goose`, `codex` or `terminal`), mode, framework, argv as flag names only
   (values dropped except the `--framework`, `--shrink-policy` and `--adopt-only` slugs), the agentteams commit and
   the exit code. `build-log.json` keeps only the last run; this keeps them all.
-- A symlinked git directory or lock file refuses the run; the lock, holder and record files are created
-  `O_NOFOLLOW`, mode 0600. `--dry-run` and inspection-only runs (`--check`, `--query-index`, …) take no lock and
+- A symlinked git directory or lock file refuses the run, as does a `gitdir:` target without `HEAD` or one whose
+  worktree back-pointer names another `.git` (new `gitdirs` module); the lock, holder and record files are created
+  `O_NOFOLLOW`, mode 0600. `--restore-backup` and `--pin-templates` are locked even under `--dry-run`, since both
+  write there. `--dry-run` and inspection-only runs (`--check`, `--query-index`, …) take no lock and
   print a notice when it is held. Outside git, without `fcntl`, or when a sandbox denies creating the lock, the
   run proceeds unlocked with a notice. Nested in-process runs are re-entrant.
 - Not covered (they still write unlocked): the bridge, interop and convert commands, `--stale-remediate`,

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from agentteams import gitdirs
 from agentteams import update_lock as ul
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="flock is POSIX-only")
@@ -28,6 +29,14 @@ def checkout(tmp_path: Path) -> Path:
     root = tmp_path / "proj"
     (root / ".git").mkdir(parents=True)
     return root
+
+
+def _link_worktree(wt: Path, wt_git: Path) -> None:
+    """Make *wt* a linked worktree of *wt_git*: a ``.git`` file, HEAD, a back-pointer and a commondir."""
+    (wt_git / "HEAD").write_text("ref: refs/heads/wt\n")
+    (wt_git / "gitdir").write_text(f"{wt / '.git'}\n")
+    (wt_git / "commondir").write_text("../..\n")
+    (wt / ".git").write_text(f"gitdir: {wt_git}\n")
 
 
 def _rows(git_dir: Path) -> list[dict[str, str]]:
@@ -172,6 +181,7 @@ def test_symlinked_git_dir_is_refused(tmp_path: Path) -> None:
 def test_symlinked_gitdir_target_is_refused(tmp_path: Path) -> None:
     real = tmp_path / "real-git"
     real.mkdir()
+    (real / "HEAD").write_text("ref: refs/heads/main\n")
     (tmp_path / "link-git").symlink_to(real)
     root = tmp_path / "proj"
     root.mkdir()
@@ -179,7 +189,7 @@ def test_symlinked_gitdir_target_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ul.UpdateLockError):
         with ul.update_run(root, [], dry_run=False):
             pytest.fail("body must not run")
-    assert list(real.iterdir()) == []
+    assert sorted(p.name for p in real.iterdir()) == ["HEAD"]
 
 
 def test_symlinked_lock_file_is_refused(checkout: Path, tmp_path: Path) -> None:
@@ -219,8 +229,9 @@ def test_worktree_gitdir_file_is_followed(tmp_path: Path) -> None:
     wt_git.mkdir(parents=True)
     wt = tmp_path / "wt"
     (wt / "sub").mkdir(parents=True)
-    (wt / ".git").write_text(f"gitdir: {wt_git}\n")
-    assert ul.find_git_dir(wt / "sub" / "not-yet") == wt_git
+    _link_worktree(wt, wt_git)
+    assert ul.find_git_dir(wt / "sub" / "not-yet") == wt_git.resolve()
+    assert gitdirs.git_dirs(wt) == (wt_git.resolve(), common.resolve())
     with ul.update_run(wt / "sub", ["--update"], dry_run=False, mode="update") as run:
         run.set_exit(0)
     assert (wt_git / ul.RECORD_NAME).exists()
@@ -229,9 +240,11 @@ def test_worktree_gitdir_file_is_followed(tmp_path: Path) -> None:
 
 def test_relative_gitdir_line(tmp_path: Path) -> None:
     (tmp_path / "store").mkdir()
+    (tmp_path / "store" / "HEAD").write_text("ref: refs/heads/main\n")
     (tmp_path / "proj").mkdir()
     (tmp_path / "proj" / ".git").write_text("gitdir: ../store\n")
-    assert ul.find_git_dir(tmp_path / "proj") == tmp_path / "proj" / ".." / "store"
+    found = ul.find_git_dir(tmp_path / "proj")
+    assert found is not None and found.resolve() == (tmp_path / "store").resolve()
 
 
 def test_outside_git_runs_unlocked_with_notice(tmp_path: Path, capsys: pytest.CaptureFixture,
@@ -299,3 +312,121 @@ def test_detect_invoker() -> None:
 def test_agentteams_commit_reads_git_files() -> None:
     commit = ul.agentteams_commit()
     assert commit == "unknown" or (len(commit) >= 40 and all(c in "0123456789abcdef" for c in commit))
+
+
+# --- review fixes (S1-S5, H2, H3) ---------------------------------------------------------------------------
+
+
+def test_restore_backup_and_pin_templates_are_locked_even_under_dry_run() -> None:
+    """S1: both write under --dry-run (and beside inspection flags), so neither may skip the lock."""
+    ns = argparse.Namespace
+    assert not ul.is_lock_exempt(ns(dry_run=True, restore_backup="latest"))
+    assert not ul.is_lock_exempt(ns(dry_run=True, pin_templates=True))
+    assert not ul.is_lock_exempt(ns(dry_run=False, check=True, pin_templates=True))
+    assert not ul.is_lock_exempt(ns(dry_run=False, query_index="x", pin_templates=True))
+    assert ul.is_lock_exempt(ns(dry_run=True, restore_backup=None, pin_templates=False))
+    assert ul.run_mode(ns(pin_templates=True)) == "pin-templates"
+
+
+def test_dry_run_restore_backup_takes_the_lock(checkout: Path) -> None:
+    """S1 through the CLI: --dry-run --restore-backup against a held lock is refused."""
+    proc = _hold_lock(checkout / ".git")
+    try:
+        rc = _main(checkout, "--dry-run", "--restore-backup", "latest")
+    finally:
+        _release(proc)
+    assert rc == 1
+    assert sorted(p.name for p in checkout.iterdir()) == [".git"]
+
+
+def test_gitdir_target_without_head_is_refused(tmp_path: Path) -> None:
+    """S2: a .git file naming a directory that is not a git directory is refused."""
+    (tmp_path / "victim").mkdir()
+    (tmp_path / "proj").mkdir()
+    (tmp_path / "proj" / ".git").write_text(f"gitdir: {tmp_path / 'victim'}\n")
+    with pytest.raises(ul.UpdateLockError, match="no HEAD"):
+        with ul.update_run(tmp_path / "proj", [], dry_run=False):
+            pytest.fail("body must not run")
+    assert list((tmp_path / "victim").iterdir()) == []
+
+
+def test_worktree_back_pointer_must_name_this_git_file(tmp_path: Path) -> None:
+    """S2: a .git file cannot borrow another worktree's git directory."""
+    wt_git = tmp_path / "main" / ".git" / "worktrees" / "wt"
+    wt_git.mkdir(parents=True)
+    owner = tmp_path / "wt"
+    owner.mkdir()
+    _link_worktree(owner, wt_git)
+    thief = tmp_path / "thief"
+    thief.mkdir()
+    (thief / ".git").write_text(f"gitdir: {wt_git}\n")
+    with pytest.raises(ul.UpdateLockError, match="worktree repair"):
+        with ul.update_run(thief, [], dry_run=False):
+            pytest.fail("body must not run")
+    assert not (wt_git / ul.LOCK_NAME).exists()
+
+
+def test_symlinked_commondir_is_refused(tmp_path: Path) -> None:
+    wt_git = tmp_path / "main" / ".git" / "worktrees" / "wt"
+    wt_git.mkdir(parents=True)
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    _link_worktree(wt, wt_git)
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "common-link").symlink_to(tmp_path / "elsewhere")
+    (wt_git / "commondir").write_text(f"{tmp_path / 'common-link'}\n")
+    with pytest.raises(gitdirs.GitDirError, match="symlink"):
+        gitdirs.git_dirs(wt)
+
+
+def test_oversized_git_file_is_a_refusal_not_a_traceback(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """H2: an oversized .git file raises UpdateLockError (which the CLI prints), never a bare ValueError."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / ".git").write_text("gitdir: " + "x" * (gitdirs.MAX_POINTER_BYTES + 10) + "\n")
+    with pytest.raises(ul.UpdateLockError):
+        with ul.update_run(proj, [], dry_run=False):
+            pytest.fail("body must not run")
+    assert _main(proj) == 1
+    assert "[UPDATE-LOCK] refused" in capsys.readouterr().err
+
+
+def test_redaction_keeps_only_parser_option_strings() -> None:
+    """S4: a token shaped like a flag but unknown to the parser (a key, an abbreviation) is dropped."""
+    argv = ["-AKIAABCDEFGHIJKLMNOP", "--update", "--AKIAabcdef=1", "--upd", "--merge", "--x" * 3]
+    assert ul.redact_argv(argv) == ["--update", "--merge"]
+    assert {"--update", "--framework", "-f", "--shrink-policy", "--adopt-only"} <= ul.known_options()
+
+
+def test_start_path_is_resolved(checkout: Path, tmp_path: Path) -> None:
+    """S5: a symlink to the checkout finds the checkout's git dir (resolved), not a .git beside the link."""
+    link = tmp_path / "elsewhere" / "link"
+    link.parent.mkdir()
+    (tmp_path / "elsewhere" / ".git").mkdir()
+    link.symlink_to(checkout)
+    assert ul.find_git_dir(link) == (checkout / ".git").resolve()
+
+
+def test_lock_flag_names_are_real_parser_dests() -> None:
+    """H3: every flag name the exemption logic reads is a real dest of the CLI parser."""
+    from agentteams.cli.parser import _build_parser
+
+    dests = {action.dest for action in _build_parser()._actions}
+    names = set(ul._INSPECTION_FLAGS) | set(ul._WRITING_FLAGS) | set(ul._DRY_RUN_WRITING_FLAGS) | {"dry_run"}
+    assert names <= dests, names - dests
+
+
+def test_commit_reads_do_not_follow_symlinks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H1: the commit lookup reads HEAD and refs no-follow; a symlinked ref yields ``unknown``."""
+    git_dir = tmp_path / "g"
+    (git_dir / "refs" / "heads").mkdir(parents=True)
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n")
+    (tmp_path / "planted").write_text("a" * 40 + "\n")
+    (git_dir / "refs" / "heads" / "main").symlink_to(tmp_path / "planted")
+    monkeypatch.setattr(ul.gitdirs, "git_dirs", lambda start: (git_dir, git_dir))
+    assert ul.agentteams_commit() == "unknown"
+    (git_dir / "refs" / "heads" / "main").unlink()
+    (git_dir / "refs" / "heads" / "main").write_text("b" * 40 + "\n")
+    assert ul.agentteams_commit() == "b" * 40
+    (git_dir / "HEAD").write_text("ref: refs/../../planted\n")
+    assert ul.agentteams_commit() == "unknown"
