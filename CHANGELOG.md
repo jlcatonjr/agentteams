@@ -17,23 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   container, with registry-only egress.
 - **vfr-c.C4: a stale `reject` needs you.** New `agentteams.vulnscan.handoff_stale`: a `reject` on an unchanged fix
   digest for 14 days (a `handoff-reject-clock` ledger row) becomes a *Needs you* line in the summary and in
-  `handoff status`. Nothing re-asks the orchestrator. Only a person's answer (`handoff answer --repo PATH --answer
+  `handoff status`. A reject in between other verdicts never restarts the 14 days. Nothing re-asks the orchestrator.
+  Only a person's answer (`handoff answer --repo PATH --answer
   keep-rejected|ask-again`, interactive, a `handoff-answer` ledger row) or a new digest clears it; an answer
   authorizes nothing.
 - **vfr-d.D3: `stage-cargo`.** A new grantable op (Rule 15; a grant must name it, `stage-fix` never implies it) runs
   in-major `cargo update -p <crate>@<ver> --precise <fix>` (new `agentteams.vulnscan.cargo_fix`). The target is the
   smallest advisory-named fixed version in the installed caret line that passes the S-10 search (OSV on the exact
-  release). crates.io only (git or alternate-registry packages refuse), on a scratch copy with only `Cargo.toml`
+  release), never a yanked one (the sparse index is read first, inside the container; unreadable refuses). crates.io
+  only (git or alternate-registry packages refuse), on a scratch copy with only `Cargo.toml`
   files, the lockfile and empty `.rs` stubs, in the tools container (cargo egress `index.crates.io:443`); only
   `Cargo.lock` comes back, and only the planned packages' `version`/`checksum` lines may change (no new
   `[[package]]`, `Cargo.toml` unchanged). The fix plan marks such rows `stage-cargo`. The tools image gains
-  Debian's `cargo` (rebuild it).
+  Debian's `cargo` (rebuild it); its build fails below cargo 1.78 (Cargo.lock v4: use a trixie-based
+  `PYTHON_IMAGE`).
 - **vfr-d D6: a writer's open PR holds its packages back.** New `agentteams.vulnscan.writer_prs`: a same-repository
   PR by an author with live write permission (collaborator-permission API) holds a row's package when its diff
   (parsed as data, capped at `MAX_NAMES` names and `MAX_DIFF_BYTES`) moves it in the same file to the fixed
   version or later, until the Rule S-VM deadline (24 h critical, 7 days high or unscored, 30 days moderate or low,
-  from a `writer-hold` ledger row). The plan says "held by #N" with the expiry; any gh failure holds nothing.
-  `fix._leave_to_prs` moved to `writer_prs.leave_to_prs`.
+  from the package's first `writer-hold` ledger row in the repository: a new PR never renews it). The plan says "held by #N" with the expiry; any gh failure holds nothing.
+  `fix._leave_to_prs` moved to `writer_prs.leave_to_prs`; the unused `open_prs.staging_claims` is gone
+  (`writer_prs.staging_claims` replaces it).
 
 ### security (sandbox switches and WASM)
 

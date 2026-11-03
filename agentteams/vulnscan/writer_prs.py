@@ -16,15 +16,16 @@ was never trusted (a title is only text). D6 adds a second, narrower kind of hol
   later** (every version the diff writes for it) [hold only if the diff moves to a fixed version].
 - The hold **expires at the Rule S-VM deadline** [hold expires at the S-VM deadline]: 24 h for a critical
   advisory, 7 days for high (and for an unscored one, which counts as high), 30 days for moderate and low, counted
-  from the first time the executor held the package for that PR (a :data:`CLOCK_KIND` row in the MAC-chained
-  ledger: no unsigned file can move it). An advisory that cannot be read counts as critical (the shortest hold).
+  from the first time the executor held the package in that repository, by whichever PR (a :data:`CLOCK_KIND`
+  row in the MAC-chained ledger: no unsigned file can move it, and a new PR for the package never restarts it).
+  An advisory that cannot be read counts as critical (the shortest hold).
   CISA KEV is not wired into the scanner, so a KEV listing does not shorten a hold below its severity's window.
 - The fix plan says **"held by #N"** with the deadline, and the PR body lists it under "left to other open PRs"
   [report held by #N, Rule 12]; an expired hold says so on the row the fix then takes.
 
 Every failure means **no hold, the fix proceeds** (a gh failure, an unreadable permission or diff, an unreadable
 ledger): a hold only ever delays a fix, so it needs positive evidence. This is staging's side of
-:func:`.open_prs.staging_claims`' split (fail open at stage); ``open-pr``'s fail-closed duplicate check
+:func:`staging_claims`' split (fail open at stage); ``open-pr``'s fail-closed duplicate check
 (:func:`.open_prs.refuse_duplicate`) is unchanged and covers the Dependabot / Renovate claims only.
 """
 
@@ -161,15 +162,24 @@ def _candidates(prs: list[dict[str, Any]]) -> list[tuple[int, str]]:
 
 
 def _since(target_repo: str, number: int, name: str, rows: list[dict[str, Any]]) -> datetime:
-    """Return the hold's start: its :data:`CLOCK_KIND` row, written now when there is none (inside the lock)."""
+    """Return the package's hold start in this repository: its first :data:`CLOCK_KIND` row, written now when there is
+    none (inside the lock).
+
+    The clock is keyed by repository and package only, never by PR: closing a PR and opening another for the same
+    package keeps the first start, so a writer cannot renew a hold past its S-VM deadline. ``number`` is recorded on a
+    new row for the audit trail and never read back.
+
+    Raises:
+        ValueError: The row has no readable ``ts`` (the caller then holds nothing).
+    """
     from agentteams.vulnscan import ledger   # lazy: the ledger is the executor's
 
     row = next((r for r in rows if r.get("kind") == CLOCK_KIND and r.get("target") == target_repo
-                and r.get("number") == number and r.get("name") == name), None)
+                and r.get("name") == name), None)
     if row is None:
         row = ledger.append(CLOCK_KIND, target=target_repo, number=number, name=name)
         rows.append(row)
-    return datetime.fromisoformat(str(row["ts"]))
+    return datetime.fromisoformat(str(row.get("ts")))   # no ts: ValueError, so no hold
 
 
 def holds(target_repo: str, prs: list[dict[str, Any]], *,
@@ -187,27 +197,28 @@ def holds(target_repo: str, prs: list[dict[str, Any]], *,
     from agentteams.vulnscan import ledger
 
     gh = gh or _gh
-    out: dict[str, list[Hold]] = {}
+    found: list[tuple[int, str, str, tuple[str, ...]]] = []   # (PR, path, name, versions)
     writers: dict[str, bool] = {}
+    for number, login in _candidates(prs):
+        if login not in writers:
+            writers[login] = can_write(target_repo, login, gh=gh)
+        if not writers[login]:
+            continue
+        try:
+            text = gh(["pr", "diff", str(number), "--repo", target_repo])
+        except ExecError:
+            text = ""   # no diff: nothing to hold for this PR
+        moved = parse_diff(text) if len(text.encode("utf-8", "replace")) <= MAX_DIFF_BYTES else {}
+        if len({name for _path, name in moved}) <= MAX_NAMES:
+            found += [(number, path, name, tuple(versions)) for (path, name), versions in moved.items()]
+    out: dict[str, list[Hold]] = {}
     try:
         rows = ledger.read()
-        for number, login in _candidates(prs):
-            if login not in writers:
-                writers[login] = can_write(target_repo, login, gh=gh)
-            if not writers[login]:
-                continue
-            try:
-                text = gh(["pr", "diff", str(number), "--repo", target_repo])
-            except ExecError:
-                text = ""   # no diff: nothing to hold for this PR
-            moved = parse_diff(text) if len(text.encode("utf-8", "replace")) <= MAX_DIFF_BYTES else {}
-            if len({name for _path, name in moved}) > MAX_NAMES:
-                continue
-            for (path, name), versions in moved.items():
-                out.setdefault(name, []).append(Hold(number, path, tuple(versions),
-                                                     _since(target_repo, number, name, rows)))
+        starts = {name: _since(target_repo, number, name, rows) for number, _path, name, _v in found}
     except (OSError, ValueError):   # an unreadable or untrusted ledger: no hold, never a guessed clock
         return {}
+    for number, path, name, versions in found:
+        out.setdefault(name, []).append(Hold(number, path, versions, starts[name]))
     return out
 
 

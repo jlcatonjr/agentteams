@@ -39,6 +39,11 @@ COPY vulnscan-with-token git-credential-vulnscan /usr/local/bin/
 RUN chmod 0644 /usr/local/lib/vulnscan/egress_proxy.py /usr/local/lib/vulnscan/selftest.py \
  && chmod 0755 /usr/local/bin/vulnscan-with-token /usr/local/bin/git-credential-vulnscan \
  && git --version && git lfs version && ssh -V && nc -h 2>&1 | head -1 && cargo --version
+# stage-cargo needs Cargo.lock v4 (cargo >= 1.78): Debian bookworm's cargo is older, so fail the build there.
+RUN cv="$(cargo --version | sed -n 's/^cargo \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')" \
+ && set -- $cv && { [ "${1:-0}" -gt 1 ] || { [ "${1:-0}" -eq 1 ] && [ "${2:-0}" -ge 78 ]; }; } \
+ || { echo "cargo >= 1.78 is required (Cargo.lock v4, stage-cargo); this base image has $(cargo --version 2>&1)." \
+         "Build with a Debian trixie based PYTHON_IMAGE (e.g. python:3.12-slim-trixie@sha256:...)." >&2; exit 1; }
 LABEL org.agentteams.vulnscan.tools-node="${NODE_VERSION}"
 # Run time always passes --user <operator uid>:<gid>; this default only keeps a bare `docker run` from being root.
 USER 65534:65534

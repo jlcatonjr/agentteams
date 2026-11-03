@@ -109,6 +109,32 @@ def test_a_hold_starts_once_in_the_ledger(lock_env: None) -> None:
     assert len([r for r in ledger.read() if r.get("kind") == writer_prs.CLOCK_KIND]) == 2   # flask-cors, vite
 
 
+def test_a_new_pr_for_the_same_package_keeps_the_first_clock(lock_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Closing a PR and opening another never renews a hold (@security review: keyed by repository and package)."""
+    from agentteams.vulnscan import ledger
+    with ledger.locked():
+        first = writer_prs.holds(REPO, [WRITER], gh=_gh()[1])
+        renewed = writer_prs.holds(REPO, [{**WRITER, "number": 32, "headRefName": "deps/again"}], gh=_gh()[1])
+    [h1], [h2] = first["flask-cors"], renewed["flask-cors"]
+    assert h2.number == 32 and h2.since == h1.since
+    _severity(monkeypatch, 3)
+    assert writer_prs.deadline(h2, ["GHSA-x"]) == writer_prs.deadline(h1, ["GHSA-x"])
+    rows = [r for r in ledger.read() if r.get("kind") == writer_prs.CLOCK_KIND and r.get("name") == "flask-cors"]
+    assert [r["number"] for r in rows] == [31]   # one clock; the new PR wrote none
+
+
+def test_an_expired_hold_stays_expired_when_a_new_pr_opens(lock_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.vulnscan import ledger
+    _severity(monkeypatch, 4)   # critical: 24 h
+    with ledger.locked():
+        writer_prs.holds(REPO, [WRITER], gh=_gh()[1])
+        claims = writer_prs.Claims({}, writer_prs.holds(REPO, [{**WRITER, "number": 33}], gh=_gh()[1]))
+    [hold] = claims.holds["flask-cors"]
+    row = _row()
+    writer_prs.leave_to_prs([row], claims, now=hold.since.astimezone(UTC) + timedelta(hours=25))
+    assert row.action == "fix" and "the hold by #33 expired" in row.note
+
+
 def test_staging_claims_fail_open_on_a_listing_failure(lock_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
     def broken(target: str) -> list:
         raise ExecError("gh pr list (open PRs) failed: HTTP 503")

@@ -4,6 +4,9 @@ Until D3 a ``Cargo.lock`` was plan-only (:data:`.manifests.PLAN_ONLY_LOCKS`): th
 ``cargo update -p <name>@<installed> --precise <version>`` for a person. ``stage-cargo`` is that command run by the
 executor, for one class of fix only (``@security`` 2026-11-02, conditions in brackets):
 
+- **Never a yanked release**: before cargo runs, each target's crates.io sparse-index entry is read inside the
+  same confinement and egress (:func:`fetch_index`); a yanked, missing or unreadable entry refuses
+  (:func:`yanked_problem`), since cargo 1.77+ lets ``--precise`` pick a yanked version.
 - **In the current major line** (Cargo's caret rule: ``0.13.3`` may become ``0.13.x``, ``7.2.4`` may become
   ``7.x``): the target is the smallest version the advisories name as ``fixed`` that is above the installed one and
   in its line (:func:`in_major_target`). Anything else stays plan-only, or is ``stage-major`` work.
@@ -25,6 +28,7 @@ executor, for one class of fix only (``@security`` 2026-11-02, conditions in bra
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -52,6 +56,12 @@ _SKIP_DIRS = frozenset({".git", ".cargo", "target", "node_modules", ".venv"})
 _FIELD = re.compile(r'^(name|version|source|checksum) = "([^"\n]*)"\r?\n?$')
 _DEP = re.compile(r'^ "([A-Za-z0-9_-]+)(?: ([0-9][0-9A-Za-z.+-]*))?(?: \(([^)\n]*)\))?",\r?\n?$')
 _CHECKSUM = re.compile(r"[0-9a-f]{64}")
+INDEX_URL = "https://index.crates.io/"
+#: A crate's sparse-index file larger than this is not read (the index is remote content: refuse, never truncate).
+MAX_INDEX_BYTES = 4_000_000
+#: Fetches one URL inside the tools container (its image has Python; the egress proxy allows only the index).
+_FETCH = ("import sys,urllib.request\nr=urllib.request.urlopen(sys.argv[1],timeout=60)\n"
+          "sys.stdout.write(r.read(int(sys.argv[2])+1).decode('utf-8','replace'))")
 
 
 def in_major_target(name: str, installed: str, ids: list[str]) -> tuple[str, str]:
@@ -91,7 +101,14 @@ def in_major_target(name: str, installed: str, ids: list[str]) -> tuple[str, str
 
 
 def sources_problem(text: str) -> str:
-    """Return why ``stage-cargo`` refuses a lockfile's sources, or "" (crates.io and local path packages only)."""
+    """Return why ``stage-cargo`` refuses a lockfile's sources, or "" (crates.io and local path packages only).
+
+    Args:
+        text: The Cargo.lock text.
+
+    Returns:
+        The refusal (not valid TOML, or a git or alternate-registry ``[[package]]``), or "".
+    """
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
@@ -124,6 +141,65 @@ def annotate(path: Path, rows: list[Any]) -> None:
                       f"S-10 search clean; {len(c.ids)} advisories)")
         else:
             c.note += f"; not {STAGE}: {why}"
+
+
+def index_path(name: str) -> str:
+    """Return a crate's file in crates.io's sparse index (``1/a``, ``2/ab``, ``3/a/abc``, ``se/rd/serde``).
+
+    Args:
+        name: A crate name (:data:`.manifests.CRATE_NAME`).
+
+    Returns:
+        The path below :data:`INDEX_URL`.
+    """
+    n = name.lower()
+    return f"{len(n)}/{n}" if len(n) < 3 else f"3/{n[0]}/{n}" if len(n) == 3 else f"{n[:2]}/{n[2:4]}/{n}"
+
+
+def fetch_index(name: str) -> str:
+    """Return a crate's sparse-index file, fetched in the tools container through the index-only egress.
+
+    Args:
+        name: A crate name.
+
+    Returns:
+        The file's text (JSON lines, one per published version).
+
+    Raises:
+        ExecError: The fetch failed, or the file is larger than :data:`MAX_INDEX_BYTES`.
+    """
+    proc = subproc_confine.run_confined("crates-index", ["python3", "-I", "-c", _FETCH, INDEX_URL + index_path(name),
+                                                         str(MAX_INDEX_BYTES)],
+                                        egress=(subproc_confine.CARGO_ENDPOINT,), env={}, timeout=120)
+    text = proc.stdout if isinstance(proc.stdout, str) else ""
+    if proc.returncode or len(text.encode("utf-8", "replace")) > MAX_INDEX_BYTES:
+        raise ExecError(f"{STAGE}: the crates.io index for {name[:64]} could not be read; nothing is staged")
+    return text
+
+
+def yanked_problem(name: str, version: str, text: str) -> str:
+    """Return why ``version`` of ``name`` may not be the target in its sparse-index file ``text``, or "".
+
+    cargo 1.77 and later lets ``--precise`` select a yanked release, so the executor checks first.
+
+    Args:
+        name: The crate.
+        version: The target version.
+        text: :func:`fetch_index`'s result (untrusted).
+
+    Returns:
+        ``yanked``, ``not in the index`` or an unreadable-line refusal; "" for a published, unyanked release.
+    """
+    try:   # every line first: one unreadable line anywhere refuses (the file is read whole, never in part)
+        entries = [json.loads(line) for line in text.splitlines() if line.strip()]
+    except ValueError:
+        return f"{name}: the crates.io index has an unreadable line; refused"
+    found = [e for e in entries if isinstance(e, dict) and str(e.get("name")).lower() == name.lower()
+             and e.get("vers") == version]
+    if not found:
+        return f"{name} {version} is not in the crates.io index; refused"
+    # only an explicit "yanked": false counts as published (a missing flag refuses)
+    return "" if all(e.get("yanked") is False for e in found) else f"{name} {version} is yanked on crates.io; refused"
 
 
 def _blocks(lines: list[str]) -> list[dict[str, Any]]:
@@ -232,12 +308,16 @@ def run_updates(lock: Path, moves: dict[tuple[str, str], str]) -> str:
         cargo's output.
 
     Raises:
-        ExecError: Not in the tools container, cargo failed, or the result breaks :func:`check_lock_edit`.
+        ExecError: Not in the tools container, a target is yanked or its index unreadable (:func:`yanked_problem`),
+            cargo failed, or the result breaks :func:`check_lock_edit`.
     """
     if subproc_confine.active() is None:   # like stage-major's npm install: never on the host
         raise ExecError(f"{STAGE} refuses to run cargo outside the tools container (confinement is off or opted out)")
     if not (lock.parent / "Cargo.toml").is_file() or lock.is_symlink():
         raise ExecError(f"{STAGE}: no Cargo.toml beside {lock.name}, or the lockfile is a symlink")
+    for (name, _was), now in sorted(moves.items()):   # fail closed: an unreadable index refuses as well
+        if why := yanked_problem(name, now, fetch_index(name)):
+            raise ExecError(f"{STAGE}: {why}")
     old = lock.read_bytes()
     out: list[str] = []
     with tempfile.TemporaryDirectory(prefix="agentteams-cargo-", dir=subproc_confine.scratch_parent()) as tmp_name:

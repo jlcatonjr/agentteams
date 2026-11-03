@@ -352,7 +352,7 @@ def fix_result(wt: Path, claims: dict[str, list[int]]) -> FixResult:
 
     Args:
         wt: The executor's worktree.
-        claims: ``{normalized name: [PR numbers]}`` other open PRs update (:func:`.open_prs.staging_claims`).
+        claims: ``{normalized name: [PR numbers]}`` other open PRs update (:func:`.writer_prs.staging_claims`).
 
     Returns:
         The result; ``resolved`` is the number of tags moved.

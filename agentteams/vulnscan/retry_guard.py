@@ -102,10 +102,11 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
     """Return why a staging op on ``target`` would only repeat a "nothing fixable" result, or "".
 
     Each op is held only by its own last result: a futile ``stage-major`` never holds ``stage-fix``, nor the reverse,
-    and ``stage-image`` likewise.
+    and ``stage-image`` and ``stage-cargo`` likewise.
 
     Args:
-        op: The requested operation (only ``stage-fix``, ``stage-major`` and ``stage-image`` are ever held).
+        op: The requested operation (only ``stage-fix``, ``stage-major``, ``stage-image`` and ``stage-cargo`` are
+            ever held).
         target: Canonical repository path.
         rows: Ledger rows.
 

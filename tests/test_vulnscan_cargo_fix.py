@@ -58,7 +58,7 @@ def _osv(monkeypatch: pytest.MonkeyPatch, *, still_affected: set[tuple[str, str]
             if (name, ver) in (("zstd", "0.13.3"), ("zstd-safe", "7.2.4")):
                 out[k] = [next(v for v, (n, _r) in ADVISORIES.items() if n == name)]
             elif (name, ver) in still_affected:
-                out[k] = ["MAL-2026-1" if malicious else "RUSTSEC-0000-0009"]
+                out[k] = ["MAL-0000-0001" if malicious else "RUSTSEC-0000-0009"]
         return out
     monkeypatch.setattr(osv, "details", details)
     monkeypatch.setattr(osv, "vulnerable_ids", vulnerable)
@@ -144,8 +144,16 @@ def test_a_dependency_reference_may_follow_its_package() -> None:
 
 # ---------------------------------------------------------------- running cargo
 
+def _index(name: str, *, yanked: dict[str, bool] | None = None) -> str:
+    """A crate's sparse-index file: the old and the in-major target release, unyanked unless ``yanked`` says so."""
+    import json
+    vers = {"zstd": ("0.13.3", "0.13.4"), "zstd-safe": ("7.2.4", "7.4.0")}[name]
+    return "".join(json.dumps({"name": name, "vers": v, "deps": [], "cksum": "0" * 64,
+                               "yanked": (yanked or {}).get(v, False)}) + "\n" for v in vers)
+
+
 def _cargo_world(tmp: Path, monkeypatch: pytest.MonkeyPatch, *, writes: str | None = None,
-                 confined: bool = True, rc: int = 0) -> list[dict]:
+                 confined: bool = True, rc: int = 0, index: object = None) -> list[dict]:
     (tmp / "Cargo.toml").write_text(TOML)
     (tmp / "Cargo.lock").write_text(_lock())
     (tmp / "src").mkdir()
@@ -171,6 +179,7 @@ def _cargo_world(tmp: Path, monkeypatch: pytest.MonkeyPatch, *, writes: str | No
         return subprocess.CompletedProcess(args, rc, "", "error: no matching package" if rc else "")
 
     monkeypatch.setattr(subproc_confine, "run_cargo", run_cargo)
+    monkeypatch.setattr(cargo_fix, "fetch_index", index or _index)
     _osv(monkeypatch)
     monkeypatch.setattr(osv, "minimal_fix", lambda ids, eco, name, ver: ({"zstd": "0.14.3"}.get(name, "8.2.0"), 0))
     return calls
@@ -201,6 +210,49 @@ def test_a_run_that_cannot_be_trusted_stages_nothing(tmp_path: Path, monkeypatch
         cargo_fix.fix_result(tmp_path, {})
     assert (tmp_path / "Cargo.lock").read_text() == _lock()
     assert calls == [] if case == "outside" else calls
+
+
+@pytest.mark.parametrize("case,match", [
+    ("yanked", "zstd 0.13.4 is yanked on crates.io"),
+    ("missing-flag", "zstd 0.13.4 is yanked"),          # only an explicit "yanked": false counts as published
+    ("absent", "is not in the crates.io index"),
+    ("garbage", "unreadable line"),
+    ("unreadable", "could not be read"),
+])
+def test_a_yanked_or_unknown_target_is_refused_before_cargo_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                 case: str, match: str) -> None:
+    def index(name: str) -> str:
+        if case == "unreadable":
+            raise ExecError("stage-cargo: the crates.io index for zstd could not be read; nothing is staged")
+        text = _index(name, yanked={"0.13.4": True} if case == "yanked" else None)
+        if name == "zstd" and case == "missing-flag":
+            text = text.replace(', "yanked": false}', "}")
+        if name == "zstd" and case == "absent":
+            text = text.splitlines()[0] + "\n"
+        if name == "zstd" and case == "garbage":
+            text += "{not json\n"
+        return text
+    calls = _cargo_world(tmp_path, monkeypatch, index=index)
+    with pytest.raises(ExecError, match=match):
+        cargo_fix.fix_result(tmp_path, {})
+    assert calls == [] and (tmp_path / "Cargo.lock").read_text() == _lock()
+
+
+def test_the_index_is_fetched_in_the_container_through_the_index_egress(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict = {}
+
+    def run_confined(op: str, argv: list, **kw: object) -> object:
+        seen.update(kw, argv=argv)
+        return subprocess.CompletedProcess(argv, 0, _index("zstd"), "")
+    monkeypatch.setattr(subproc_confine, "run_confined", run_confined)
+    assert '"vers": "0.13.4"' in cargo_fix.fetch_index("zstd")
+    assert seen["egress"] == (subproc_confine.CARGO_ENDPOINT,)
+    assert seen["argv"][:3] == ["python3", "-I", "-c"] and seen["argv"][4] == "https://index.crates.io/zs/td/zstd"
+    monkeypatch.setattr(subproc_confine, "run_confined", lambda op, argv, **kw: subprocess.CompletedProcess(
+        argv, 1, "", "HTTP 503"))
+    with pytest.raises(ExecError, match="could not be read"):   # fail closed
+        cargo_fix.fetch_index("zstd")
+    assert [cargo_fix.index_path(n) for n in ("a", "ab", "abc", "Serde")] == ["1/a", "2/ab", "3/a/abc", "se/rd/serde"]
 
 
 def test_a_crate_another_pr_updates_is_left_to_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

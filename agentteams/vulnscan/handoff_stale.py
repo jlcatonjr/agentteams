@@ -5,16 +5,19 @@ reject and nothing should re-ask: the orchestrator is a model, and asking again 
 So the rule is:
 
 - **The clock** starts the first time the executor sees ``reject`` as the newest verdict for a staged fix's content
-  digest (:func:`clock`): a :data:`CLOCK_KIND` row in the MAC-chained ledger, keyed by the digest alone, so its
-  ``since`` is the row's own timestamp. When the newest verdict is seen to be anything else the clock stops (a
-  ``stop`` row), and a new digest (a re-staged, changed fix) starts a new one.
+  digest (:func:`clock`): a :data:`CLOCK_KIND` row in the MAC-chained ledger, keyed by the digest alone. Its
+  ``since`` is the timestamp of the digest's *earliest* start row after the newest person's answer for that digest
+  (or the earliest at all, without one). A verdict in between (reject, defer, reject) writes a ``stop`` and a new
+  ``start`` row for the record but never moves ``since``: only a person's answer or a new digest (a re-staged,
+  changed fix) restarts the clock.
 - **After** :data:`STALE_DAYS` the reject is a *Needs you* line for the operator (:func:`needs_you`) in the
   summary's handoff section and in ``handoff status``, naming the repository, the handoff and the date.
 - **Nothing re-asks the orchestrator.** This module writes no packet and no request; a reject never gets the
   ``ask`` text an ``own-pr`` gets (:func:`.handoff_lapse.packet_ask`), and the line never lets ``open-pr`` proceed.
 - **Only a person clears it**: an answer recorded with ``handoff answer`` (:func:`record_answer`, an
   :data:`ANSWER_KIND` ledger row written after an interactive confirmation; the agents cannot reach this CLI from
-  their container), or a new digest. An answer clears only the line for that digest. It authorizes nothing:
+  their container), or a new digest. An answer clears only the line for that digest and restarts its clock (the
+  line returns after another :data:`STALE_DAYS` if the reject still stands). It authorizes nothing:
   ``keep-rejected`` keeps the fix unopened; ``ask-again`` records that the operator will re-ask through the handoff
   tooling, by hand.
 
@@ -58,7 +61,8 @@ def clock(repo: Path, branch: str, *, record: bool = True) -> dict[str, str] | N
 
     Returns:
         ``{"digest", "handoff_id", "since", "stale"}`` (ISO dates) while the newest verdict for the digest is
-        ``reject``; None otherwise.
+        ``reject``: ``since`` from the digest's earliest start row after its newest :data:`ANSWER_KIND` row (module
+        docstring). None otherwise, and when that row has no readable ``ts``.
 
     Raises:
         OSError: The ledger lock or file could not be used.
@@ -67,7 +71,8 @@ def clock(repo: Path, branch: str, *, record: bool = True) -> dict[str, str] | N
     from agentteams.vulnscan import ledger   # lazy: the ledger module imports nothing of ours, the executor does
 
     found, _problems = handoff.latest_verdict(repo, branch)
-    last = _last(CLOCK_KIND, repo, ledger.read())
+    rows = ledger.read()
+    last = _last(CLOCK_KIND, repo, rows)
     running = last is not None and last.get("state") == "start"
     if found is None or found.verdict != REJECT:
         if record and running:
@@ -76,15 +81,27 @@ def clock(repo: Path, branch: str, *, record: bool = True) -> dict[str, str] | N
     if not (running and last is not None and last.get("digest") == found.digest):
         if not record:
             return None
-        last = ledger.append(CLOCK_KIND, target=str(repo), state="start", digest=found.digest,
-                             handoff_id=found.handoff_id)
-    since = datetime.fromisoformat(str(last["ts"])).astimezone().date()
-    return {"digest": str(last["digest"]), "handoff_id": str(last.get("handoff_id", "")), "since": since.isoformat(),
+        rows.append(ledger.append(CLOCK_KIND, target=str(repo), state="start", digest=found.digest,
+                                  handoff_id=found.handoff_id))
+    mine = [(i, r) for i, r in enumerate(rows) if r.get("target") == str(repo) and r.get("digest") == found.digest]
+    answered = max((i for i, r in mine if r.get("kind") == ANSWER_KIND), default=-1)
+    first = next((r for i, r in mine if i > answered and r.get("kind") == CLOCK_KIND and r.get("state") == "start"),
+                 None)
+    if first is None:   # an answer after the running start: the next sight starts the clock again
+        if not record:
+            return None
+        first = ledger.append(CLOCK_KIND, target=str(repo), state="start", digest=found.digest,
+                              handoff_id=found.handoff_id)
+    try:
+        since = datetime.fromisoformat(str(first["ts"])).astimezone().date()
+    except (KeyError, ValueError):
+        return None
+    return {"digest": found.digest, "handoff_id": str(first.get("handoff_id", "")), "since": since.isoformat(),
             "stale": (since + timedelta(days=STALE_DAYS)).isoformat()}
 
 
 def needs_you(repo: Path, rec: dict[str, str] | None, *, today: date | None = None) -> str:
-    """Return the Needs-you line for a stale reject, or "" (no reject, not yet stale, or a person answered).
+    """Return the Needs-you line for a stale reject, or "" (no reject, or not yet stale: an answer restarts the clock).
 
     Args:
         repo: Canonical repository path.
@@ -94,15 +111,8 @@ def needs_you(repo: Path, rec: dict[str, str] | None, *, today: date | None = No
     Returns:
         One line naming the repository, the handoff, the digest and the reject's date.
 
-    Raises:
-        OSError: The ledger could not be read.
-        ValueError: The ledger fails verification.
     """
     if rec is None or (today or date.today()).isoformat() < rec["stale"]:
-        return ""
-    from agentteams.vulnscan import ledger
-
-    if _last(ANSWER_KIND, repo, ledger.read(), digest=rec["digest"]) is not None:
         return ""
     return (f"{repo.name}: the orchestrator rejected the staged fix {rec['digest']} (handoff {rec['handoff_id']}) on "
             f"{rec['since']}, unchanged for {STALE_DAYS} days. Nothing re-asks it: decide, then record your answer "
@@ -137,6 +147,10 @@ def record_answer(repo: Path, branch: str, answer: str, note: str = "") -> dict[
 
 def cmd_answer(args: argparse.Namespace, *, ask: Callable[[str], str] = input) -> int:
     """Run ``handoff answer --repo PATH --answer WORD [--note TEXT]`` (interactive confirmation required).
+
+    The terminal check (``stdin`` is a TTY) is not an identity check: it keeps an unattended process from recording
+    an answer by accident, nothing more. That is enough here because an answer can only hide the alert for one
+    digest (and restart its clock); it never authorizes anything, so a forged one cannot open a PR or clear a gate.
 
     Args:
         args: Parsed arguments (``repo``, ``answer``, ``note``).

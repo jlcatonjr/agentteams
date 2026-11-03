@@ -2338,7 +2338,7 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
   a gh failure opens nothing). If a PR that is not the executor's now updates a package the staged change updates,
   the staged state is retired and the result is `failed` with `an open PR already updates <names> (#N); not
   duplicated`. `stage_fix` checks the same list before staging and leaves such packages out (`fix_path(...,
-  skip=open_prs.staging_claims(...))`); see [Major upgrades](#major-upgrades-stage-major) for the matching rules.
+  skip=writer_prs.staging_claims(...))`); see [Major upgrades](#major-upgrades-stage-major) for the matching rules.
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
@@ -3656,13 +3656,16 @@ reading side: writing packets and issuing the directive is operator tooling outs
 ### `agentteams.vulnscan.handoff_stale`
 
 A stale `reject` (vfr-c.C4). `handoff_stale.clock(repo, branch)` starts a `handoff-reject-clock`
-  ledger row the first time the newest verdict for a staged fix's digest is `reject` (keyed by the digest alone; any
-  other verdict stops it, a new digest starts a new one). After `STALE_DAYS` (14) `needs_you(repo, rec)` returns a
+  ledger row the first time the newest verdict for a staged fix's digest is `reject` (keyed by the digest alone).
+  Its `since` is the digest's earliest start row after the newest `handoff-answer` row for it (or the earliest at
+  all): reject → defer → reject writes stop and start rows but keeps `since`; only a person's answer or a new
+  digest restarts it. After `STALE_DAYS` (14) `needs_you(repo, rec)` returns a
   line naming the repository, handoff, digest and date; `RepoHandoff.needs_you` carries it into the summary
   (`**Needs you:**`) and `handoff status` (`NEEDS YOU:`). Nothing re-asks the orchestrator: no packet text, no request,
   and `open-pr` stays refused. Only a person clears the line, for that digest: `handoff answer --repo PATH --answer
   keep-rejected|ask-again [--note TEXT]` (`cmd_answer`, interactive confirmation; `record_answer` writes a
-  `handoff-answer` ledger row). An answer authorizes nothing.
+  `handoff-answer` ledger row), which also restarts its 14 days. The terminal check is not an identity check: an
+  answer can only hide the alert, never authorize anything.
 
 ### `agentteams.vulnscan.npm_kept`
 
@@ -3682,7 +3685,8 @@ A writer's open PR holds its packages back from staging (vfr-d D6). `staging_cla
 `holds(target_repo, prs)` looks at same-repository, non-`vulnscan/*`, non-bot PRs (at most `MAX_PRS`) whose author
 `can_write` (the collaborator-permission API: `admin` or `write`), and reads `parse_diff(gh pr diff)` as data:
 `requirements*.txt` and npm lockfiles only, plain names and versions only, nothing for a diff over `MAX_DIFF_BYTES`
-or naming over `MAX_NAMES` packages. Each hold's start is a `writer-hold` ledger row. `leave_to_prs(rows, skip)`
+or naming over `MAX_NAMES` packages. Each hold's start is the package's first `writer-hold` ledger row in that
+repository, whichever PR wrote it: a new PR for the same package never renews a hold. `leave_to_prs(rows, skip)`
 (also used by `fix`) marks a row `pr-held` ("held by #N ... expires <time>, Rule S-VM") only when the PR changes the
 same file and moves the package to the row's fixed version or later, until `deadline(hold, ids)`: the start plus
 `DEADLINES` by the worst advisory (24 h critical, 7 days high or unscored, 30 days moderate or low; an unreadable
@@ -3695,7 +3699,9 @@ duplicate check is unchanged (Dependabot / Renovate only).
 the advisories name `fixed` in the installed version's caret line that passes the S-10 search (an OSV query on the
 exact release; any advisory, or a malicious one, refuses). `annotate(path, rows)` (from `fix.plan_cargo_lock`)
 turns such rows into `stage-cargo` rows; `sources_problem(text)` refuses git and alternate-registry packages.
-`fix_result(wt, claims)` runs `run_updates(lock, moves)`: `cargo update -p <name>@<old> --precise <new>` per move,
+`fix_result(wt, claims)` runs `run_updates(lock, moves)`, which first refuses a target that `yanked_problem` finds
+yanked, missing or unreadable in crates.io's sparse index (`fetch_index`, inside the container through the same
+index-only egress; `index_path`), since cargo 1.77+ lets `--precise` pick a yanked release; then `cargo update -p <name>@<old> --precise <new>` per move,
 in the tools container only (`subproc_confine.run_cargo`, egress `index.crates.io:443`), on a scratch copy with the
 tree's `Cargo.toml` files, its `Cargo.lock` and empty `.rs` stubs (no `.cargo` config, an empty `CARGO_HOME`); only
 `Cargo.lock` is copied back. `check_lock_edit(rel, old, new, planned=None)` (also `validate_diff`'s check in

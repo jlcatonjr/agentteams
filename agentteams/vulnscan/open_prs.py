@@ -12,7 +12,7 @@ not start with ``vulnscan/`` (the executor's own PRs are handled by ``close-supe
 
 Names compare in :func:`normalize`'s form (lower case, runs of ``_``, ``-``, ``.`` as one ``-``: PEP 503, which also
 leaves npm names comparable). Staging does not wait on gh: a failed listing stages as before (the change is
-checked again at ``open-pr``). ``open-pr`` fails closed: no listing, no PR.
+checked again at ``open-pr``; :func:`.writer_prs.staging_claims`). ``open-pr`` fails closed: no listing, no PR.
 
 Imports only the standard library and :mod:`.executor_env`.
 """
@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from collections.abc import Callable
 from typing import Any
 
 from agentteams.vulnscan.executor_env import ExecError, gh_cwd, gh_push_env
@@ -144,23 +143,6 @@ def duplicate_detail(left: dict[str, list[int]]) -> str:
     nums = sorted({n for v in left.values() for n in v})
     return (f"an open PR already updates {', '.join(sorted(left))} ({', '.join(f'#{n}' for n in nums)}); "
             "not duplicated")
-
-
-def staging_claims(target_repo: Callable[[], str]) -> dict[str, list[int]]:
-    """Return :func:`claimed` for staging: on any failure (gh, or an origin gh cannot target) ``{}``, never a refusal.
-
-    Staging does not wait on gh; ``open-pr`` lists the PRs again and fails closed (:func:`refuse_duplicate`).
-
-    Args:
-        target_repo: Returns ``HOST/OWNER/REPO`` (``executor.origin_repo``); it may raise :class:`ExecError`.
-
-    Returns:
-        ``{normalized package: [PR numbers]}``.
-    """
-    try:
-        return claimed(list_open(target_repo()))
-    except ExecError:   # not blocking: the same check runs again, fail-closed, at open-pr
-        return {}
 
 
 def owner_prs(prs: list[dict[str, Any]], packages: list[str]) -> list[int]:

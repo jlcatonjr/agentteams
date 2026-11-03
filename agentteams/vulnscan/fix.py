@@ -54,7 +54,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, cargo_fix, image_fix, images, lockfiles, npm_groups, npm_kept, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine, writer_prs
+from agentteams.vulnscan import _http, cargo_fix, image_fix, images, lockfiles, npm_groups, npm_kept, npm_major
+from agentteams.vulnscan import npm_ops, osv, private_sources, project_policy, subproc_confine, writer_prs
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.npm_ops import OWN_PR  # noqa: F401  (re-export: defined in the leaf npm_ops)
