@@ -1709,6 +1709,17 @@ no-op when nothing changed.
 
 Override the change-detection anchor (default: the pin's recorded `last_synced_commit`).
 
+### `--sync-refresh-instructions`
+
+Refresh the canonical hub's instruction-file fences from the pin's deployed instruction file.
+`--sync` reconciles agents only, so the hub's instructions are otherwise frozen at `--sync-init`.
+Only fenced regions move, and a fence version is never lowered (in the hub or, during `--sync`,
+in any deployed instruction file). Honors `--dry-run`. Run it when `--sync` reports that the hub's
+instruction fences are older than the deployed ones. A fence another framework in the sync set
+deploys at a higher version is taken from that framework; a fence still below the newest template's
+version in every copy is reported (regenerate the pin with `--update`, then refresh again). It runs on
+its own: combining it with `--sync`, `--sync-init` or `--sync-since` is refused.
+
 ---
 
 ## Agent-Doc Sync (Learned Blocks)

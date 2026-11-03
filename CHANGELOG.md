@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (pinned --sync lowered instruction-fence versions; remediation row 2026-11-03 HIGH)
+
+- **A projection never lowers a fence version.** `interop_helpers.merge_instruction_file` (every `preserve_existing`
+  projection of an instruction file, pinned `--sync` and the Grok path included) now keeps the deployed block of
+  any fence whose `v=` is higher than the incoming one and reports it (`kept deployed fence '<sid>' at v=N`).
+  A stale canonical hub had projected `constitutional_core` v=1 over v=3, dropping "Derived content stays data"
+  and the HMAC management-directive bound. `--sync` adds one hint to refresh the hub when the guard fires.
+- **`--sync-refresh-instructions`** (new `sync_hub_refresh` module): fence-merges the pin's deployed instruction
+  file into the hub's `instructions_binding.content`, the supported way to bring a stale hub up to current
+  fences, same-version stale values (`src/`, `templates/`) included. Fenced regions only; the hub never lowers a
+  fence either; a higher-versioned fence another synced framework deploys is taken from it (a pre-fix sync
+  lowered the pin's own file too), and a fence still below the newest template's version is reported; honors
+  `--dry-run`; refuses to combine with `--sync`/`--sync-init`/`--sync-since`. `--sync` itself still reconciles
+  agents only.
+- A deployed `v=` above the newest shipped template's version is not kept by the guard (no release wrote it).
+- Limit: the guard cannot tell a stale same-version body from a deliberate one. Run the refresh before a `--sync`
+  from a hub older than the deployed instructions.
+
 ### added (per-checkout update lock and run record; remediation row 597)
 
 - **Concurrent writes to one checkout are now visible** (`update_lock`). Every writing generate/`--update` run holds

@@ -48,6 +48,7 @@ from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS, agents_dir_for
 from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.interop_grant_check import ProjectionPolicy
+from agentteams.interop_helpers import FENCE_DOWNGRADE_NOTICE
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
 from agentteams.sync_pin import (
@@ -68,6 +69,10 @@ __all__ = [
 
 #: Durable, human-reviewable conflict log (append-only).
 CONFLICT_LOG_SUBPATH = ".agentteams/sync-conflicts.log.csv"
+
+#: Added once when a projection kept a deployed fence newer than the hub's (interop_helpers.keep_newer_fences).
+_STALE_HUB_HINT = ("the canonical hub's instruction fences are older than the deployed ones; refresh the hub "
+                   "from the pin with --sync-refresh-instructions")
 
 _CONFLICT_LOG_HEADER = [
     "date", "framework", "agent", "field", "classification", "resolution", "note",
@@ -679,6 +684,8 @@ def _project_and_rebaseline(
                               preserve_existing=True, projection=policy)
         if notices is not None:
             notices.extend(f"[{fw}] {n}" for n in res.notices)
+            if any(FENCE_DOWNGRADE_NOTICE in n for n in res.notices) and _STALE_HUB_HINT not in notices:
+                notices.append(_STALE_HUB_HINT)
         # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege
         # block so a confined/exclusive pinned-sync team stays confined after projection.
         _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)

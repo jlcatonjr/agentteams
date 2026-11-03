@@ -52,8 +52,8 @@ through `set_exit`.
   re-entry of the pipeline never refuses itself and writes no second row.
 
 **Not covered** (accepted residue; these write without the lock): `--bridge-from`/`--bridge-refresh`/`--bridge-merge`,
-`--interop-from`, `--convert-from`, `--stale-remediate`, `--add-fence-markers`, `--sync`/`--sync-init` (dispatched
-before the pipeline, through `multi_sync`), and the pre-commit hook's pipeline-graph refresh. The other standalone
+`--interop-from`, `--convert-from`, `--stale-remediate`, `--add-fence-markers`, `--sync`/`--sync-init`/`--sync-refresh-instructions` (dispatched
+before the pipeline, through `multi_sync` and `sync_hub_refresh`), and the pre-commit hook's pipeline-graph refresh. The other standalone
 commands that `cli/app.py` dispatches before the pipeline are unlocked too; those that write into a project include
 `--stale-restore`, `--prune-backups`, `--refresh-graph`, `--refresh-architecture`, `--install-git-hooks`,
 `--sync-project-rules`, `--apply-proposal`, `--set-vulnscan`, `--revert-migration`, `--absorb-from --absorb-apply`,

@@ -56,7 +56,10 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
 Projection backs up each framework's agents dir, instruction file and skills to
 `.agentteams-backups/` first (pruned to the default most-recent N). It keeps unchanged Markdown
 agents byte-for-byte and fence-merges existing instruction files (see `import_from_cai`'s
-`preserve_existing`).
+`preserve_existing`). The fence-merge never lowers a fence version: a deployed fence
+with a higher `v=` than the hub's is kept and reported, with a hint to refresh the hub through
+[`sync_hub_refresh`](sync-hub-refresh.md) (`--sync-refresh-instructions`). `--sync` reconciles
+agents only, never the hub's instruction content.
 
 ## Public functions
 

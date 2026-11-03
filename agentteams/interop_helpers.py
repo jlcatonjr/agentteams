@@ -7,6 +7,7 @@ the 1000-line CH-07 module ceiling.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -424,10 +425,71 @@ def raw_scopes(raw: str) -> list[str] | None:
             or capability_map.canonical_tools_for_claude(fm) or [])
 
 
+#: Opening words of the notice :func:`keep_newer_fences` emits; ``multi_sync`` keys its stale-hub hint on it.
+FENCE_DOWNGRADE_NOTICE = "kept newer fence"
+_VERSIONED_BEGIN_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN (?P<sid>[a-z][a-z0-9_]*) v=(?P<v>\d+) -->")
+
+
+@functools.cache
+def template_fence_versions() -> dict[str, int]:
+    """The highest ``v=`` each fence id carries in the shipped templates (the newest version that exists).
+
+    Returns:
+        section_id -> version, read from every file under ``agentteams/templates/``.
+    """
+    versions: dict[str, int] = {}
+    for path in (Path(__file__).parent / "templates").rglob("*"):
+        if path.is_file():
+            for m in _VERSIONED_BEGIN_RE.finditer(path.read_text(encoding="utf-8", errors="replace")):
+                versions[m["sid"]] = max(versions.get(m["sid"], 0), int(m["v"]))
+    return versions
+
+
+def keep_newer_fences(rendered: str, existing: str) -> tuple[str, list[str]]:
+    """Put back every *existing* fence whose ``v=`` is higher than the same fence in *rendered*.
+
+    A projection from a stale canonical hub carried older fence bodies over newer deployed ones
+    (constitutional_core v=3 -> v=1, remediation-log 2026-11-03): a fence version is never lowered.
+    An *existing* version above the newest shipped template's (:func:`template_fence_versions`) is
+    not kept — no release wrote it, and keeping it would pin that body against every later update.
+    Fences only one side has, equal versions and unparseable input are left as *rendered* has them.
+
+    Args:
+        rendered: The content being merged in (its fence blocks normally win).
+        existing: The content already in place.
+
+    Returns:
+        ``(rendered with each newer existing block swapped in, one notice per kept or refused fence)``.
+    """
+    from agentteams.fences import _extract_fenced_regions
+
+    new_regions = _extract_fenced_regions(rendered)
+    old_regions = _extract_fenced_regions(existing)
+    if isinstance(new_regions, str) or isinstance(old_regions, str):
+        return rendered, []
+    ceiling = template_fence_versions()
+    notices: list[str] = []
+    for sid, old_block in old_regions.items():
+        new_block = new_regions.get(sid)
+        old_m, new_m = _VERSIONED_BEGIN_RE.search(old_block), _VERSIONED_BEGIN_RE.search(new_block or "")
+        if new_block is None or old_m is None or new_m is None or int(old_m["v"]) <= int(new_m["v"]):
+            continue
+        if sid in ceiling and int(old_m["v"]) > ceiling[sid]:
+            notices.append(f"fence '{sid}' v={old_m['v']} is above the newest template's v={ceiling[sid]}; "
+                           f"not kept (incoming v={new_m['v']} used)")
+            continue
+        # The BEGIN marker names a unique sid, so the first occurrence is the fence itself.
+        rendered = rendered.replace(new_block, old_block, 1)
+        notices.append(f"{FENCE_DOWNGRADE_NOTICE} '{sid}' at v={old_m['v']} "
+                       f"(incoming v={new_m['v']} is older; a fence version is never lowered)")
+    return rendered, notices
+
+
 def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, str]:
     """Fence-merge a projected instruction file into the one already on disk.
 
-    Fenced (template-owned) regions come from *rendered*; everything outside a fence — the
+    Fenced (template-owned) regions come from *rendered*, except a fence whose deployed
+    version is higher (:func:`keep_newer_fences`); everything outside a fence — the
     USER-EDITABLE Constitutional/Project-Specific rules a framework's own instruction file
     carries — is kept from *existing*. When *existing* has no parseable fences it is not
     replaced at all (it may be project-owned).
@@ -442,12 +504,14 @@ def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, st
     """
     from agentteams.fences import _merge_fenced_content
 
+    rendered, kept = keep_newer_fences(rendered, existing)
+    notice = "; ".join(kept)
     result = _merge_fenced_content(rendered, existing, preserve_on_shrink=True)
     if result.parse_errors or not result.merged_content:
         return None, "existing instruction file has no mergeable AGENTTEAMS fences; left untouched"
     if result.merged_content == existing:
-        return None, ""
-    return result.merged_content, ""
+        return None, notice
+    return result.merged_content, notice
 
 
 # Carved from interop.py (CH-07, 2026-09-29); re-imported there as _capture_mcp_servers.

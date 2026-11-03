@@ -662,7 +662,8 @@ def _main_dispatch(
     # -----------------------------------------------------------------------
     # --sync-init / --sync: multi-framework pinned sync (standalone)
     # -----------------------------------------------------------------------
-    if getattr(args, "sync_init", False) or getattr(args, "sync", False):
+    if (getattr(args, "sync_init", False) or getattr(args, "sync", False)
+            or getattr(args, "sync_refresh_instructions", False)):
         from agentteams.cli.sync_switch import run_sync_cli
         return run_sync_cli(args)
 
