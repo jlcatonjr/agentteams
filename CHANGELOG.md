@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-11-03
+
+### release notes
+
+agentteams 1.0.6 is a patch release on the 1.0 line with two fixes backported from `main`. It adds no dependencies.
+
+- **Local interdependent-repository carve-out from the S-10 cooldown** (Jim's ruling, 2026-11-03). Releases of the
+  project's own repositories named in Rule S-10 (fence v14) are exempt from the 14-day cooldown only. A repository
+  is named there only once the operator's Ed25519-signed decision covers `s10-cooldown-exempt:<owner/name>` (new
+  brief key `s10_cooldown_exempt_repos`, gated by `cli/s10_exempt_gate`). A name in the brief alone exempts nothing.
+- **Renders honour `frozen_surfaces`** (baseAgent D63). The brief key now reaches the manifest on this line, a goose
+  `--update` no longer rewrites a repo-root `AGENTS.md` that a Codex freeze owns, rendering a frozen framework is
+  refused, and `--check` skips frozen files.
+- **Install:** from a verified, detached checkout of the signed `v1.0.6` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
 ### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
 
 - **The 14-day release cooldown no longer holds back the project's own interdependent repositories.** Jim's ruling: the
