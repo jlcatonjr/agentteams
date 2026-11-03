@@ -1,0 +1,8 @@
+{
+  "patch_id": "e62c607a7ab685ba2da6e68c7abc8aaabbaba569",
+  "commit": "9961b2ac90659679e039789ac6a786e90a5b8145",
+  "subject": "security(S-10): @security conditions \u2014 trigger + verdict rows know the carve-out; owner/name only; tag verifies against the operator's release key",
+  "impact": "1 schemas changed",
+  "note": "format_s10_exempt_repos (public, documented); s10_cooldown_exempt_repos in both schemas, owner/name only (additive, optional).",
+  "recorded_at": "2026-11-03T15:38:40Z"
+}
