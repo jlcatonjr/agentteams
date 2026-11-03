@@ -25,9 +25,9 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.canonical import load_canonical, materialize_canonical
+from agentteams.frameworks.registry import agents_dir_for
 from agentteams.interop import export_to_cai
 from agentteams.interop_helpers import _VERSIONED_BEGIN_RE, keep_newer_fences, template_fence_versions
-from agentteams.multi_sync import framework_agents_dir
 from agentteams.sync_pin import DEFAULT_CANONICAL_REL, read_pin
 
 __all__ = ["HubRefreshResult", "refresh_hub_binding", "refresh_hub_instructions"]
@@ -149,7 +149,7 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
 def _deployed_instructions(root: Path, framework: str) -> str:
     """The instruction content a framework deploys ("" when it has none or cannot be read)."""
     try:
-        cai = export_to_cai(framework_agents_dir(root, framework), framework)
+        cai = export_to_cai(agents_dir_for(framework, Path(root)), framework)
     except (OSError, ValueError):
         return ""
     return str(cai.get("instructions_binding", {}).get("content", ""))
