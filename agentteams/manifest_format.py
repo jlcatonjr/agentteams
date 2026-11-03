@@ -137,7 +137,7 @@ def format_s10_exempt_repos(repos: object) -> str:
     """
     valid = [r for r in repos if isinstance(r, str) and _REPO_ID_RE.fullmatch(r)] if isinstance(repos, list) else []
     if not valid:
-        return "none are listed for this project, so the cooldown applies to every release"
+        return "none for this project, so the cooldown applies to every release"
     return ", ".join(f"`{r}`" for r in dict.fromkeys(valid))
 
 def _format_authority_hierarchy(hierarchy: list[dict[str, Any]]) -> str:

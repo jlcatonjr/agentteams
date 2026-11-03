@@ -27,7 +27,7 @@ def test_listed_repositories_render_as_inline_code() -> None:
 
 def test_nothing_listed_exempts_nothing() -> None:
     for value in (None, [], "jlcatonjr/agentteams", [1, None]):
-        assert format_s10_exempt_repos(value).startswith("none are listed")
+        assert format_s10_exempt_repos(value).startswith("none for this project")
 
 
 def test_an_entry_that_could_carry_prose_is_dropped() -> None:
@@ -38,11 +38,11 @@ def test_an_entry_that_could_carry_prose_is_dropped() -> None:
 def test_the_rendered_rule_names_the_listed_repositories() -> None:
     text = _security_text({"s10_cooldown_exempt_repos": ["jlcatonjr/agentteams", "jlcatonjr/researchteam"]})
     assert "Local interdependent-repository carve-out" in text
-    assert "`jlcatonjr/agentteams`, `jlcatonjr/researchteam` (brief key" in text
+    assert "Listed: `jlcatonjr/agentteams`, `jlcatonjr/researchteam`." in text
     assert "{S10_COOLDOWN_EXEMPT_REPOS}" not in text
     assert "local-repository carve-outs) the cooldown" in text
 
 
 def test_without_the_key_the_rule_says_the_cooldown_applies_to_everything() -> None:
     text = _security_text({})
-    assert "none are listed for this project, so the cooldown applies to every release" in text
+    assert "Listed: none for this project, so the cooldown applies to every release." in text

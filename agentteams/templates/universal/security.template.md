@@ -283,9 +283,9 @@ known-vulnerable, malicious, too new to trust, or not the latest stable release.
   identity check. Anything else installed or updated in the same change stays under both
   rules
 - ✅ **Local interdependent-repository carve-out — the cooldown does not apply.** Releases of the
-  project's own interdependent repositories — {S10_COOLDOWN_EXEMPT_REPOS} (brief key
-  `s10_cooldown_exempt_repos`, an operator ruling) — may be adopted inside the cooldown window:
-  the same operator cuts, signs and reviews them, so the registry-detection window the cooldown
+  project's own interdependent repositories listed in the brief (`s10_cooldown_exempt_repos`, an
+  operator ruling) may be adopted inside the cooldown window. Listed: {S10_COOLDOWN_EXEMPT_REPOS}.
+  The same operator cuts, signs and reviews them, so the registry-detection window the cooldown
   buys does not apply. The carve-out lifts the cooldown only. The release must still pass the
   vulnerability search above and Rule S-9's identity check (a verified signed tag), and the
   latest-stable rule still applies: adopting a release candidate still needs a recorded
