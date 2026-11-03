@@ -198,6 +198,26 @@ def test_region_with_a_fence_marker_is_refused():
     assert not carried and problems and "AGENTTEAMS marker" in problems[0]
 
 
+def test_learned_marker_in_prose_is_carried():
+    # baseAgent's rules name the marker in prose; a substring match refused the whole region on --overwrite.
+    prose = "\n- An agentteams learned block (marker `AGENTTEAMS-LEARNED`) is allowed in agent files.\n"
+    content, carried, problems = U.carry_regions(_md(prose), _md())
+    assert not problems and carried and "marker `AGENTTEAMS-LEARNED`" in content
+
+
+@pytest.mark.parametrize("line", [
+    "<!-- AGENTTEAMS-LEARNED:BEGIN -->",
+    "  <!-- AGENTTEAMS-LEARNED:END -->",
+    "<!--AGENTTEAMS-LEARNED:BEGIN-->",
+])
+def test_learned_marker_line_is_refused(line):
+    # A marker line either ends the region (find_region) or makes carry_regions refuse it; never carried.
+    content, carried, problems = U.carry_regions(_md(f"\nmine\n{line}\nsmuggled\n"), _md())
+    assert "smuggled" not in content and not any("smuggled" in c for c in map(str, carried))
+    if "<!-- AGENTTEAMS" not in line:
+        assert not carried and problems and "AGENTTEAMS marker" in problems[0]
+
+
 def test_rules_heading_appears_once_in_the_template():
     text = (REPO / "agentteams" / "templates" / "copilot-instructions.template.md").read_text(encoding="utf-8")
     assert text.count("## Project-Specific Rules") == 1
