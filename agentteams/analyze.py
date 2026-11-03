@@ -656,6 +656,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "manual_required_placeholders": manual_required,
         "output_files": output_files,
         **{key: description.get(key) or [] for key in _LIST_PASSTHROUGH_KEYS},  # read directly, as given
+        "project_rules_source": description.get("project_rules_source") or "",  # rules_projection's source
     }
     # MCP-suitability detection (report §5). Advisory only — populated solely
     # when the description declares mcp_hints, so manifests for projects without

@@ -665,6 +665,9 @@ def _main_dispatch(
         from agentteams.cli.sync_switch import run_sync_cli
         return run_sync_cli(args)
 
+    if getattr(args, "sync_project_rules", False):
+        from agentteams.cli.post_build import run_sync_project_rules
+        return run_sync_project_rules(getattr(args, "project", None), dry_run=bool(getattr(args, "dry_run", False)))
     if any(getattr(args, flag, None) for flag in ("query_index", "refresh_index", "query_code")):
         _resolve_retrieval_brief(args)  # baseAgent P6: the recall skills' bare commands
     if not args.description:

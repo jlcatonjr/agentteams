@@ -957,6 +957,9 @@ def _handle_check(
     from agentteams.copilot_body_limit import report_body_limit
 
     has_any = report_body_limit(output_dir, manifest.get("framework", "")) or has_any  # baseAgent P4
+    from agentteams.cli.post_build import project_rules
+
+    has_any = project_rules(manifest, output_dir, write=False) or has_any  # baseAgent P2: a copy drifted
     # Advisory only (exit code unchanged): the grant tool map is pinned to one Goose release.
     if manifest.get("framework") == "goose" and manifest.get("goose_tool_scoping") == "grant":
         from agentteams.frameworks.goose_tool_scoping import goose_version_notice

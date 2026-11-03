@@ -447,6 +447,33 @@ This is detection only: the build-log is agent-writable, and a fresh generate or
 re-baselines (it prints a `PROMPT-ROOT RE-BASELINE` notice first when it re-records over a detected
 change). See [`prompt_roots`](api-reference/prompt-roots.md).
 
+### `--sync-project-rules`
+
+Copy the project's `## Project-Specific Rules` into every other enabled provider's entry file, so a rule written in one
+provider's file binds them all ([`rules_projection`](api-reference/rules-projection.md)). It also runs after every
+successful generate and `--update`, and `--check` exits `1` when a copy is out of date, hand-edited, or its file has
+two Rules regions.
+
+- **Source:** the brief's `project_rules_source`, which must be one of `.claude/CLAUDE.md`, `CLAUDE.md`,
+  `.github/copilot-instructions.md`, `AGENTS.md`. Without it, the source the existing copies record, else the only one of
+  those files whose region holds rules. The source never moves silently: a second file with rules of its own, or
+  copies recording a source that no longer holds rules, is refused until the brief names one (an agent on any provider
+  can write rules into its own entry file). Every change to the rules is printed as a diff when it spreads.
+- **Targets:** `.github/copilot-instructions.md`; `.claude/CLAUDE.md` else `CLAUDE.md`; `AGENTS.override.md` when it
+  exists (Codex loads it in place of `AGENTS.md`), else `AGENTS.md`; and `.goosehints`. A copy that would take a Codex
+  file past its 32 KiB budget becomes a binding reference with the rules' titles. Surfaces in `frozen_surfaces` are
+  skipped (`AGENTS.override.md` counts as Codex's).
+- **The copy** sits in the target's own Rules region between `PROJECTED-RULES` markers that record the source's hash
+  and the copy's. A copy edited by hand is refused, not overwritten; the target's own rules beside it are kept.
+- **Pointers:** the `security` and `orchestrator` agents' `## Project-Specific Notes` get a short pointer to the rules
+  file on each Markdown and Goose surface (a delegated agent may not load its provider's instruction file). It says the
+  rules extend the agent's instructions and never weaken its Invariant Core or the Constitutional Core. A Codex TOML
+  agent is reported, not edited.
+
+Runs in the working directory, with the brief found there; a `--project` naming another directory is refused (a write
+into another repository needs that repository's own run). With `--dry-run` it reports and writes nothing. Exits `1`
+when a copy or pointer was refused (or, with `--dry-run`, is out of date), or the source was refused.
+
 ### `--refresh-index`
 
 Rebuild `references/memory-index.json` on every surface of the project that has one (`.github/agents`, `.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`, `.agents`), from the same sources, so the copies agree. Each keeps its own framework stamp. The output directory's index is rebuilt when it exists, when `--output` names it, or when no surface has one yet; a surface in the brief's `frozen_surfaces` is left alone. Without `--description` the project's brief is found as for `--query-index`; a `--description` that doesn't exist is an error here, since this mode writes. Exits `1` when any copy could not be rebuilt. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
