@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.13] - 2026-11-02
+
+### release notes
+
+agentteams 1.1.0-rc.13 is the thirteenth release candidate of the 1.1 line. It answers baseAgent's cross-surface
+hand-off of 2026-11-02: in an instance that runs on Claude, Copilot, Codex and Goose, a rule, memory index or agent
+recorded for one provider now reaches the others, and `--doctor` reports where they still disagree.
+
+- **Project-Specific Rules reach every provider.** One source region (`project_rules_source`) is copied into
+  `.github/copilot-instructions.md`, `CLAUDE.md` or `.claude/CLAUDE.md`, `AGENTS.override.md` (else `AGENTS.md`; a
+  binding reference past Codex's 32 KiB budget) and `.goosehints`, after every generate and `--update` and on
+  `--sync-project-rules`. Frozen surfaces are skipped, hand-edited copies are refused, and the source never moves
+  silently. `--check` fails when a copy drifts. The `security` and `orchestrator` notes point to the rules.
+- **Memory-index queries are read-only.** `--query-index` no longer rewrites the tracked index; it reports a stale
+  one. Retrieval commands find the brief themselves, and `--refresh-index` rebuilds every surface's copy together.
+  New brief key `memory_index_extra_files`.
+- **`--doctor`** reports cross-surface drift without writing; **`references/agent-surface-matrix.md`** lists which
+  agents exist on which provider, with conservative capability labels and the never-a-grant rule.
+- **Fixes:** `--update --merge` adds a missing Project-Specific Rules region; prose naming the learned-block marker no
+  longer blocks `--overwrite`; `--bridge-refresh` keeps project text in `.goosehints`; `AGENTS.override.md` is a
+  prompt root; Copilot notes sit inside the 30,000-character body limit, and `--check` fails when operator notes sit
+  past it; `--check` no longer fails on an operator's own notes; `--update` against a bridge refuses before
+  rendering.
+- **After upgrading:** set `project_rules_source` in the brief if more than one instruction file holds rules (the
+  projection refuses until you do), and remove any hand-made copies of the rules from the other entry files first.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.13` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes follows.
+
+### Changes since 1.1.0-rc.12
+
 ### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
 
 - **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one
