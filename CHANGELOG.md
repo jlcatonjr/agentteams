@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
 
+### fixed (renders honour `frozen_surfaces`; baseAgent D63)
+
+- **A render never writes a path a frozen surface owns.** `frozen_surfaces` was read by the effect classifier, the
+  rules projection and the memory index, but not by the render, so a goose `--update` adopted and rewrote a repo-root
+  `AGENTS.md` that a Codex freeze owns (a legacy goose render classifies as goose's). Now (`cli/frozen_render`):
+  - a render is refused before it writes anything when its framework is frozen, or its output directory lies in a
+    directory another frozen surface owns (`copilot-cli` and `copilot-vscode` share `.github/agents/`);
+  - each rendered file in a path a frozen surface owns (`cli/frozen_surfaces.FROZEN_SURFACE_PATHS`) is skipped
+    with a notice, after resolving symlinks, and `--prune` never deletes one;
+  - `--check` leaves frozen files out of its drift verdict, with a notice, since they are never brought up to date.
+
+  The schema already described this contract.
+
+
 - **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the
   2026-10-26 deprecation below, in every ecosystem. **New: only the latest stable release is adopted**: no
   pre-releases, no yanked or deprecated releases, no older release when a newer stable one has cleared the
