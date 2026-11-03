@@ -261,3 +261,6 @@ references/feature-audit-handoff.reference.md
 .agentteams-queue/
 .agentteams-status/
 /references/agent-surface-matrix.md
+# Operator-script backups beside the pin (e.g. `cp -p .agentteams/pin.json .agentteams/pin.json.bak-YYYYMMDD`)
+# are local rollback copies, never committed.
+.agentteams/*.bak-*
