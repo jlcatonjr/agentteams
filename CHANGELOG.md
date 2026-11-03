@@ -6,6 +6,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-11-03
+
+### release notes
+
+agentteams 1.0.6 is a patch release on the 1.0 line with two fixes backported from `main`. It adds no dependencies.
+
+- **Local interdependent-repository carve-out from the S-10 cooldown** (Jim's ruling, 2026-11-03). Releases of the
+  project's own repositories named in Rule S-10 (fence v14) are exempt from the 14-day cooldown only. A repository
+  is named there only once the operator's Ed25519-signed decision covers `s10-cooldown-exempt:<owner/name>` (new
+  brief key `s10_cooldown_exempt_repos`, gated by `cli/s10_exempt_gate`). A name in the brief alone exempts nothing.
+- **Renders honour `frozen_surfaces`** (baseAgent D63). The brief key now reaches the manifest on this line, a goose
+  `--update` no longer rewrites a repo-root `AGENTS.md` that a Codex freeze owns, rendering a frozen framework is
+  refused, and `--check` skips frozen files.
+- **Install:** from a verified, detached checkout of the signed `v1.0.6` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
+### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
+
+- **The 14-day release cooldown no longer holds back the project's own interdependent repositories.** Jim's ruling: the
+  cooldown stays in force, with the remediation carve-out, but does not apply to updates between his own local,
+  interdependent repositories (agentteams, researchteam, baseAgent, mathAgents, …). The new brief key
+  `s10_cooldown_exempt_repos` lists them per project; generated `@security` agents name them in Rule S-10 (fence
+  `security_rules_invariant` v14). The carve-out lifts the cooldown only: the vulnerability search, Rule S-9's
+  signed-tag identity check and the latest-stable rule (a release candidate still needs a recorded clearance) still
+  apply, and only `owner/name` identifiers are rendered. Absent or empty, it exempts nothing.
+- **Listing a repository is a Rule 15 relaxation, so a brief edit alone doesn't do it** (`cli/s10_exempt_gate`,
+  integrity-pinned). In a governed workspace each listed repository renders only when the operator's Ed25519-signed
+  decision row covers `s10-cooldown-exempt:<owner/name>` (`scope` and `effect_relaxes` exactly, traceable lineage,
+  no HALT on it or the family). The row is registered as an exception under the aggregate cap with a 90-day sunset
+  and re-verified on every later render. Anything else is left out with a notice naming the row to record, so the
+  cooldown applies to it. An ungoverned workspace renders the list with a notice. A path that skips the gate
+  (convert, interop) renders none.
+
+### fixed (renders honour `frozen_surfaces`; baseAgent D63)
+
+- **A render never writes a path a frozen surface owns.** `frozen_surfaces` was read by the effect classifier, the
+  rules projection and the memory index, but not by the render, so a goose `--update` adopted and rewrote a repo-root
+  `AGENTS.md` that a Codex freeze owns (a legacy goose render classifies as goose's). Now (`cli/frozen_render`):
+  - a render is refused before it writes anything when its framework is frozen, or its output directory lies in a
+    directory another frozen surface owns (`copilot-cli` and `copilot-vscode` share `.github/agents/`);
+  - each rendered file in a path a frozen surface owns (`cli/frozen_surfaces.FROZEN_SURFACE_PATHS`) is skipped
+    with a notice, after resolving symlinks, and `--prune` never deletes one;
+  - `--check` leaves frozen files out of its drift verdict, with a notice, since they are never brought up to date.
+
+  The schema already described this contract.
+
 ## [1.0.5] - 2026-11-02
 
 ### release notes

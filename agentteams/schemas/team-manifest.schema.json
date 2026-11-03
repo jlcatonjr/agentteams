@@ -114,6 +114,8 @@
         "type": "string"
       }
     },
+    "s10_cooldown_exempt_repos": {"type": "array", "description": "The brief's s10_cooldown_exempt_repos: repositories Rule S-10's local-repository carve-out exempts from the release cooldown. Empty when none were declared.", "items": {"type": "string"}},
+    "frozen_surfaces": {"type": "array", "description": "The brief's frozen_surfaces: surfaces a cross-surface write (such as --refresh-index rebuilding every surface's memory index) leaves alone. Empty when none were declared.", "items": {"type": "string"}},
     "memory_index_extra_dirs": {
       "type": "array",
       "description": "Additional directories to include when building the memory index, beyond the defaults. Empty when none were declared.",

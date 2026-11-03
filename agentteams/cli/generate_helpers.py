@@ -23,6 +23,7 @@ from agentteams.cli.artifacts import (
     _write_agent_privilege_config,
     _write_management_authority_config,
 )
+from agentteams.cli.frozen_render import exempt_frozen
 from agentteams.cli.render_pipeline import _build_final_rendered, _make_content_matches
 
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
@@ -841,7 +842,6 @@ def _handle_check(
     except FileNotFoundError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    drift.print_drift_report(dreport)
     # Structural diff (team composition comparison)
     sdreport = None
     try:
@@ -850,6 +850,8 @@ def _handle_check(
             sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
     except FileNotFoundError:
         sdreport = None  # no build-log — structural diff not available
+    exempt_frozen(manifest, output_dir, dreport, sdreport)  # a frozen file is never written (baseAgent D63)
+    drift.print_drift_report(dreport)
 
     # --------------------------------------------------------------
     # P0 — Option C render-faithful reconciliation (D1, R1, R1b, R1c).
