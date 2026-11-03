@@ -18,11 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fences, same-version stale values (`src/`, `templates/`) included. Fenced regions only; the hub never lowers a
   fence either; a higher-versioned fence another synced framework deploys is taken from it (a pre-fix sync
   lowered the pin's own file too), and a fence still below the newest template's version is reported; honors
-  `--dry-run`; refuses to combine with `--sync`/`--sync-init`/`--sync-since`. `--sync` itself still reconciles
-  agents only.
+  `--dry-run`; refuses to combine with `--sync`/`--sync-init`/`--sync-since`.
+- **`--sync` refreshes the hub's instruction fences from the pin before projecting** (`sync_hub_refresh.refresh_hub_binding`),
+  so same-version stale values (`src/`, `templates/`, a dropped Project Layout line) no longer reach the deployed
+  files, which the version guard alone cannot catch. The refresh is reported in the sync notices (`--dry-run`
+  previews the projection from the refreshed hub without writing it); when it cannot run (no pin instruction file,
+  unparseable fences) the notice says why and the version guard still applies. The automatic refresh takes the
+  pin's fences only: a newer fence another framework deploys is reported, never taken, so an edited peer file
+  cannot spread its body to every framework (the operator-run `--sync-refresh-instructions` still takes it).
 - A deployed `v=` above the newest shipped template's version is not kept by the guard (no release wrote it).
-- Limit: the guard cannot tell a stale same-version body from a deliberate one. Run the refresh before a `--sync`
-  from a hub older than the deployed instructions.
 
 ### added (per-checkout update lock and run record; remediation row 597)
 

@@ -556,7 +556,7 @@ Run one on\-demand sync pass: detect frameworks changed since the last synced co
 Override the change\-detection anchor (default: pin's last_synced_commit).
 .TP
 .B \-\-sync\-refresh\-instructions
-Refresh the canonical hub's instruction\-file fences from the pin's deployed instruction file (fenced regions only; a fence version is never lowered), so a later \-\-sync projects current fences. Honors \-\-dry\-run. Run it when \-\-sync reports the hub's fences are older.
+Refresh the canonical hub's instruction\-file fences from the pin's deployed instruction file (fenced regions only; a fence version is never lowered), without syncing. \-\-sync runs the same refresh before projecting. Honors \-\-dry\-run.
 .TP
 .B \-\-frameworks FW1,FW2,...
 Comma\-separated sync set for \-\-sync\-init (default: every registered framework). Required whenever the default set would collide — copilot\-vscode and copilot\-cli render to the same physical '.github/agents' directory and can genuinely disagree (handoffs), so \-\-sync\-init refuses that combination; list only one of the two.

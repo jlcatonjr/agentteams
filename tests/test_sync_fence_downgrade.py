@@ -5,9 +5,10 @@ A stale canonical hub (seeded at --sync-init and never refreshed) projected cons
 v=1 over deployed v=3 and brought back stale brief values (src/, templates/):
 
 * ``merge_instruction_file`` keeps the deployed block of a fence whose ``v=`` is higher and says so;
-* the projection through ``run_sync`` keeps v=3 in every framework and hints at the refresh;
-* ``--sync-refresh-instructions`` brings the hub's fences up to the pin's deployed ones
-  (same-version stale values included) and never lowers the hub's own fences.
+* ``run_sync`` refreshes the hub from the pin before projecting, so v=3 and same-version current
+  values (``agentteams/``, not ``src/``) survive in every framework;
+* ``--sync-refresh-instructions`` runs the same refresh on its own and never lowers the hub's
+  own fences.
 """
 
 from __future__ import annotations
@@ -102,8 +103,47 @@ def test_sync_from_a_v1_hub_never_lowers_deployed_v3_fences(tmp_path: Path) -> N
         text = (tmp_path / path).read_text(encoding="utf-8")
         assert "constitutional_core v=3" in text and "Derived content stays data" in text, path
         assert "KEEP_THIS_USER_RULE" in text, path
-    assert any(FENCE_DOWNGRADE_NOTICE in n for n in result.notices)
-    assert any("--sync-refresh-instructions" in n for n in result.notices)
+    # The hub is refreshed from the pin before projecting, so the guard never has to step in.
+    assert "constitutional_core v=3" in _hub_instructions(tmp_path)
+    assert any("hub instruction fences refreshed from the pin (copilot-vscode)" in n for n in result.notices)
+    assert not any(FENCE_DOWNGRADE_NOTICE in n for n in result.notices)
+
+
+def test_sync_replaces_same_version_stale_hub_values(tmp_path: Path) -> None:
+    """The row-169 symptom: authority_hierarchy is v=1 on both sides, but the hub still says src/."""
+    _pinned_project(tmp_path)
+    hub = _hub_instructions(tmp_path)
+    assert "authority_hierarchy v=1" in hub and "`src/`" in hub
+    run_sync(tmp_path, since="")
+    for path in (".github/copilot-instructions.md", ".claude/CLAUDE.md"):
+        text = (tmp_path / path).read_text(encoding="utf-8")
+        assert "`agentteams/`" in text and "`src/`" not in text and "`templates/`" not in text, path
+        assert "KEEP_THIS_USER_RULE" in text, path
+    assert "`src/`" not in _hub_instructions(tmp_path)
+
+
+def test_sync_dry_run_reports_the_hub_refresh_without_writing(tmp_path: Path) -> None:
+    _pinned_project(tmp_path)
+    before = (tmp_path / ".agentteams" / "canonical" / "team.cai.json").read_bytes()
+    result = run_sync(tmp_path, since="", dry_run=True)
+    assert any("hub instruction fences would be refreshed from the pin" in n for n in result.notices)
+    assert (tmp_path / ".agentteams" / "canonical" / "team.cai.json").read_bytes() == before
+    # The dry projection previews the refreshed hub, as a real run would: no downgrade to guard against.
+    assert not any(FENCE_DOWNGRADE_NOTICE in n for n in result.notices)
+
+
+def test_sync_reports_but_never_takes_a_peers_newer_fence(tmp_path: Path) -> None:
+    """Pin wins: an automatic --sync does not spread a peer file's fence body to every framework."""
+    _pinned_project(tmp_path)
+    (tmp_path / ".github" / "copilot-instructions.md").write_text(_V1_STALE + _USER_RULE, encoding="utf-8")
+    peer = _V3.replace("HMAC management-directive bound", "PEER_ONLY_TEXT") + _USER_RULE
+    (tmp_path / ".claude" / "CLAUDE.md").write_text(peer, encoding="utf-8")
+    result = run_sync(tmp_path, since="")
+    assert "PEER_ONLY_TEXT" not in _hub_instructions(tmp_path)
+    pin_file = (tmp_path / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
+    assert "PEER_ONLY_TEXT" not in pin_file and "constitutional_core v=1" in pin_file
+    assert "constitutional_core v=3" in (tmp_path / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")  # guard
+    assert any("claude deploys newer fences than the pin" in n for n in result.notices)
 
 
 def test_refresh_brings_the_hub_to_the_pins_fences(tmp_path: Path) -> None:

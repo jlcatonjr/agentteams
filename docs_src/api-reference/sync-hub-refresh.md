@@ -5,11 +5,12 @@ instruction file (`--sync-refresh-instructions`).
 
 > *Source: `agentteams/sync_hub_refresh.py`*
 
-[`multi_sync`](multi-sync.md) reconciles agents only. The hub's `instructions_binding.content` is
-seeded by `--sync-init` and never refreshed by `--sync`, so it ages while the deployed instruction
-files are regenerated from newer templates. Projection no longer lowers a fence version (see
-`interop_helpers.keep_newer_fences` below), but a stale hub still carries stale same-version
-values (`src/`, `templates/`). This module brings the hub up to date.
+The hub's `instructions_binding.content` is seeded by `--sync-init`, and [`multi_sync`](multi-sync.md)
+reconciles agents three-way, so the hub used to age while the deployed instruction files were
+regenerated from newer templates. The version guard (`interop_helpers.keep_newer_fences`, below) stops
+a projection lowering a fence, but cannot catch stale same-version values (`src/`, `templates/`).
+`run_sync` therefore calls `refresh_hub_binding` before every projection, and
+`--sync-refresh-instructions` runs the same refresh on its own.
 
 ## Public types
 
@@ -32,6 +33,17 @@ copy is stale, so regenerate the pin natively (`--update`) and refresh again. Wi
 written. Raises `ValueError` when the project is not pinned, the pin has no instruction file, or
 fences do not parse, and `FileNotFoundError` when the hub has no `team.cai.json`.
 
+### `refresh_hub_binding`
+
+`refresh_hub_binding(root, pin_doc, hub, *, dry_run=False, take_peer_fences=True) -> HubRefreshResult`
+
+The same refresh applied in memory to an already-loaded hub (`hub["instructions_binding"]["content"]`
+is updated unless `dry_run`); the caller persists it. `run_sync` uses it before projecting, always in
+memory (a dry run previews the projection from the refreshed hub and only skips the save), with
+`take_peer_fences=False`: a peer framework's newer fence is reported, not taken, so the pin stays
+authoritative and an edited peer file cannot spread its body unasked. It turns a `ValueError` (no pin
+instruction file, unparseable fences) into a notice rather than aborting the sync.
+
 ## The projection guard
 
 `interop_helpers.keep_newer_fences(rendered, existing)` puts back every existing fence whose `v=`
@@ -40,5 +52,6 @@ is higher than the incoming one and returns one notice per kept fence (starting
 (`template_fence_versions()`) is not kept: no release wrote it, and keeping it would pin that body
 against every later update. `merge_instruction_file`, which every `preserve_existing` projection of
 an instruction file uses (pinned `--sync` and the Grok path included), runs it first. When it fires
-during `--sync`, `SyncResult.notices` also carries a hint to run `--sync-refresh-instructions`.
-The guard cannot tell a stale same-version body from a deliberate one; the refresh handles those.
+during `--sync` (only when the pre-projection refresh could not run), `SyncResult.notices` also
+carries a hint to run `--sync-refresh-instructions`. The guard cannot tell a stale same-version body
+from a deliberate one; the refresh handles those.

@@ -71,8 +71,9 @@ __all__ = [
 CONFLICT_LOG_SUBPATH = ".agentteams/sync-conflicts.log.csv"
 
 #: Added once when a projection kept a deployed fence newer than the hub's (interop_helpers.keep_newer_fences).
-_STALE_HUB_HINT = ("the canonical hub's instruction fences are older than the deployed ones; refresh the hub "
-                   "from the pin with --sync-refresh-instructions")
+_STALE_HUB_HINT = ("the canonical hub's instruction fences are older than some deployed ones even after the "
+                   "automatic refresh from the pin (see the notices above); regenerate the pin natively "
+                   "(--update), or run --sync-refresh-instructions to take a peer's newer fences")
 
 _CONFLICT_LOG_HEADER = [
     "date", "framework", "agent", "field", "classification", "resolution", "note",
@@ -837,6 +838,36 @@ def sync_init(
     )
 
 
+def _refresh_hub_instructions(
+    root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], canonical_dir: Path, *,
+    dry_run: bool, notices: list[str],
+) -> None:
+    """Bring the hub's instruction fences up to the pin's deployed file before projecting (pin wins).
+
+    The hub's instruction content is seeded at ``--sync-init`` and otherwise never reconciled, so
+    without this a stale hub projected same-version stale fence bodies (src/, templates/, a dropped
+    Project Layout line) over current deployed files (remediation-log 2026-11-03, HIGH). When the
+    refresh cannot run (no pin instruction file, unparseable fences) the projection still never
+    lowers a fence version, and the notice says why. *hub* is refreshed in memory even under
+    *dry_run*, so the dry projection previews what a real run writes; only the save is skipped.
+    Peer frameworks' newer fences are reported, never taken (the pin wins).
+    """
+    from agentteams.sync_hub_refresh import refresh_hub_binding
+
+    try:
+        result = refresh_hub_binding(root, pin_doc, hub, take_peer_fences=False)
+    except ValueError as exc:
+        notices.append(f"hub instructions not refreshed from the pin: {exc}")
+        return
+    notices.extend(result.notices)
+    if not result.changed:
+        return
+    moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
+    notices.append(f"hub instruction fences {'would be ' if dry_run else ''}refreshed from the pin "
+                   f"({result.pin}): {moved}")
+    materialize_canonical(hub, canonical_dir, dry_run=dry_run)
+
+
 def run_sync(
     root: Path,
     *,
@@ -907,6 +938,7 @@ def run_sync(
         final_canonical["privilege"] = priv
         materialize_canonical(final_canonical, canonical_dir, dry_run=dry_run)
     notices: list[str] = []
+    _refresh_hub_instructions(root, pin_doc, final_canonical, canonical_dir, dry_run=dry_run, notices=notices)
     projected = _project_and_rebaseline(
         root, canonical_dir, final_canonical, fws, dry_run=dry_run, notices=notices,
         accepted_write_roots=accepted_write_roots,

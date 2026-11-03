@@ -87,8 +87,8 @@ def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "Refresh the canonical hub's instruction-file fences from the pin's "
             "deployed instruction file (fenced regions only; a fence version is "
-            "never lowered), so a later --sync projects current fences. Honors "
-            "--dry-run. Run it when --sync reports the hub's fences are older."
+            "never lowered), without syncing. --sync runs the same refresh "
+            "before projecting. Honors --dry-run."
         ),
     )
     group.add_argument(
