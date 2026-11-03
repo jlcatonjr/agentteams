@@ -475,6 +475,10 @@ unrecorded agentteams code.
 - **Never run `git reset --hard`, `git checkout -- .` or `git clean -fd` in the shared checkout.** They discard
   other people's uncommitted or untracked work. To update it, use `git switch main` and `git pull --ff-only`,
   which carry unrelated uncommitted changes across.
+- **Never run `git worktree prune` in the shared checkout.** It deletes the record of every worktree whose
+  directory is missing, including other sessions' worktrees. Remove your own with `git worktree remove <path>`,
+  and delete only your own stale record under `.git/worktrees/<name>` (after checking its `gitdir` names your
+  path) when its directory is already gone.
 - **Before you leave the shared checkout, run `git status`** and account for every untracked file. Untracked
   files follow branch switches, and editable installs would render them. Local registers and logs belong in
   `.gitignore`, not as stray files.
