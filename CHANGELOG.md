@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (management state moves out of this checkout; 2026-11-03)
+
+- **Data about other repositories no longer lives in the agentteams checkout.** `references/filing-conventions.md`
+  gains a *Data about other repositories* section that sends fleet runs, the fleet registry, consumer plans and
+  other-repo ledger rows to the operator's private management repository. `.gitignore` now also ignores
+  `.agentteams-fleet/`, `.agentteams-queue/`, `.agentteams-status/` and the self-emitted
+  `references/agent-surface-matrix.md`. Coordination artifacts that agentteams code, docs or tests cite stay.
+
 ### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
 
 - **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one

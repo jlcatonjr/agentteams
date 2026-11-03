@@ -252,3 +252,12 @@ references/feature-audit-handoff.reference.md
 # WASM deny-probe canaries (agentteams/wasm_guests.py probe_language): a temporary
 # .agentteams-wasm-probe-<hex>/ dir in the project root, removed after the probe; never commit a leftover.
 .agentteams-wasm-probe-*
+
+# Machine-wide agent-infrastructure management state never lives in this checkout. Fleet run reports,
+# the runner queue/status dirs and the self-emitted agent-surface matrix are local instance artifacts;
+# cross-repository plans, ledgers and the fleet registry belong in the private infrastructureManagement
+# repo (see references/filing-conventions.md, "Data about other repositories").
+.agentteams-fleet/
+.agentteams-queue/
+.agentteams-status/
+/references/agent-surface-matrix.md

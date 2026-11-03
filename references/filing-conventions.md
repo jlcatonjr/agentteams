@@ -22,6 +22,28 @@ The repo root holds only a small, fixed set of canonical project files.
 | **Daily / weekly / monthly work summaries** | `workSummaries/` | ignored | Per-date session records. |
 | **Scratch / one-off** | `tmp/` | ignored | Sanitize before promoting anything out of `tmp/`. |
 
+### Data about other repositories
+
+This checkout holds data about **agentteams only**. Anything about another repository goes to the
+operator's private management repository, `~/githubrepositories/infrastructureManagement`, never
+here, not even under an ignored path. That covers a consumer's plan or report, fleet-update runs and
+their reports, the fleet registry (`adjacent-repos.md`), and ledger rows sourced from another repo
+(remediation, security decisions, conflicts). Ignored paths still count because this checkout is a
+shared editable install, and its memory and code indexes read ignored files.
+
+| Document kind | Home |
+|---|---|
+| Fleet registry, fleet scope, delegation records | `infrastructureManagement/references/`, `fleet/` |
+| Plans and step CSVs for work in (or across) other repos | `infrastructureManagement/tmp/by-week/YYYY-Www/` |
+| Fleet run reports (`--fleet-report`) | `infrastructureManagement/fleet/runs/<run-id>/` |
+| Tool defects found while working in another repo | `infrastructureManagement/references/` intake log; the agentteams fix is then filed here as an agentteams-own row |
+| Operational cross-orchestrator requests (fleet coordination, another repo's rollout) | `infrastructureManagement/references/cross-orchestrator-requests/` |
+
+Some coordination artifacts are agentteams material and stay here: feature requests that agentteams
+code, docs or tests cite (`references/cross-orchestrator-requests/`, linted by
+`tests/test_cross_orchestrator_request_lint.py`), and inbound design inputs such as
+`references/branch-lifecycle-policy.handoff.md` and `references/jev-openrouter-goose-access.handoff.md`.
+
 ### Naming convention inside `references/plans/`
 
 - Plans: `<slug>.plan.md` (optionally `<slug>-YYYY-MM-DD.plan.md`)
