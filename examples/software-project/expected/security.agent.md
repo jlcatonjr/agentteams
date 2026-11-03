@@ -51,7 +51,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=20 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=21 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -286,11 +286,20 @@ known-vulnerable, malicious, too new to trust, or not the latest stable release.
   vulnerability search above (no known vulnerability, no OSV `MAL-*` entry) and Rule S-9's
   identity check. Anything else installed or updated in the same change stays under both
   rules
+- ✅ **Local interdependent-repository carve-out — the cooldown does not apply.** Releases of the
+  project's own interdependent repositories listed in the brief (`s10_cooldown_exempt_repos`, an
+  operator ruling) may be adopted inside the cooldown window. Listed: none for this project, so the cooldown applies to every release.
+  The same operator cuts, signs and reviews them, so the registry-detection window the cooldown
+  buys does not apply. The carve-out lifts the cooldown only. The release must still pass the
+  vulnerability search above and Rule S-9's identity check (a verified signed tag), and the
+  latest-stable rule still applies: adopting a release candidate still needs a recorded
+  `@security` clearance. A repository not listed stays under the cooldown
 - ✅ Pin exact versions with a lockfile so these checks are enforceable and reproducible
 - ✅ Remediating a vulnerability the scan detected is never delayed by this rule;
   patch-urgency guidance (KEV prioritization, patch windows, the Rule S-VM deadlines) applies
 - ❌ Never install a release that fails the vulnerability search, or (outside the remediation
-  carve-out) the cooldown or the latest-stable rule, without a recorded `@security` clearance
+  and local-repository carve-outs) the cooldown or the latest-stable rule, without a recorded
+  `@security` clearance
 
 **Rule S-VM: Continuous Vulnerability Monitoring and Standing Remediation Grants**
 
@@ -464,7 +473,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-11-02T18:13:42Z`
+Generated at: `2026-11-03T15:36:18Z`
 
 **Sources:**
 
