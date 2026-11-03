@@ -25,6 +25,10 @@ SECTION MANIFEST — security.template.md
 
 # Security — SalesDataPipeline
 
+## Project-Specific Notes
+
+> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
+
 <!-- AGENTTEAMS:BEGIN security_authority v=1 -->
 > **PRIORITY LEVEL: HIGHEST.** The orchestrator MUST consult this agent BEFORE executing any action matching a row of the *Mandatory Review Triggers* table in this agent's Invariant Core. No other agent, rule, or delegation overrides this agent's HALT directives.
 
@@ -459,7 +463,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-10-29T15:01:28Z`
+Generated at: `2026-11-03T17:59:57Z`
 
 **Sources:**
 
@@ -487,7 +491,7 @@ Generated at: `2026-10-29T15:01:28Z`
 - Add detections for exploitation attempts and verify telemetry coverage for affected assets.
 - Before any package/module install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD, GitHub Advisories, `npm audit`/`pip-audit`) for known vulnerabilities in the exact name and version being adopted.
 - Apply a package-release cooldown (default 14 days) before adopting a newly published release — every ecosystem and installer, not only npm — so registry scanners can catch malicious releases first, and adopt only the latest stable release that has cleared it (no pre-releases, yanked or older releases).
-- Neither the cooldown nor the latest-stable rule ever blocks remediating a vulnerability the vulnerability scan detected: its fix release may be adopted at once, and need not be the latest, once it passes the known-vulnerability search (OSV, including MAL-* entries).
+- Neither the cooldown nor the latest-stable rule ever blocks remediating a vulnerability the vulnerability scan detected: its fix release may be adopted at once, and need not be the latest, once it passes the known-vulnerability search (OSV, including MAL-* entries) and its identity checks out.
 
 ### LLM and AI-Specific Threat Intelligence
 
@@ -557,7 +561,3 @@ Cleared for: [specific action cleared, or NONE if HALT]
 
 > **HALT is final.** If this agent returns HALT, the operation must stop. The orchestrator must surface the finding to the user before any alternative path is attempted.
 <!-- AGENTTEAMS:END security_verdict_contract -->
-
-## Project-Specific Notes
-
-> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions for this agent. This section lies outside every `AGENTTEAMS` fence and is preserved verbatim across `agentteams --update --merge`.
