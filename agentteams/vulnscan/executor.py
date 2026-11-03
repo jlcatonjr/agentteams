@@ -61,7 +61,7 @@ from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_e
 from agentteams.vulnscan.ops import REPO_OPS   # repo-targeted ops: executor_guard applies
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
-RELEASE_COOLDOWN_DAYS = 0                    # Rule S-10's cooldown is deprecated (2026-10-26); cooldown_days is ignored
+REMEDIATION_COOLDOWN_DAYS = 0                # S-10's carve-out: a fix for a scanned vulnerability is never age-gated
 ALLOWED_CHANGED = re.compile(r"(^|/)(requirements[\w.-]*\.txt|package-lock\.json|npm-shrinkwrap\.json)$", re.I)
 REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 #: origin URL forms gh can target: https://HOST/OWNER/REPO, git@HOST:OWNER/REPO, ssh://git@HOST/OWNER/REPO
@@ -521,7 +521,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         if unsafe := fix.git_config_problem(wt):
             raise ExecError(f"{repo}: in the executor's worktree, {unsafe}")
         git(wt, "reset", "-q", "--hard", base)
-        cooldown = RELEASE_COOLDOWN_DAYS   # the config's cooldown_days is deprecated and ignored
+        cooldown = REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
         res = fix.fix_path(wt, apply=True, allow_major=False, cooldown_days=cooldown)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))

@@ -234,7 +234,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `fail_on` | `"high"` | Lowest severity that makes the run exit 1 |
 | `unscored_as` | `"high"` | What an advisory with neither a CVSS vector nor a severity label counts as: `critical`, `high`, `moderate` or `low` ([Severity](#severity)). Such findings are marked UNSCORED and listed separately |
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
-| `cooldown_days` | `0` | Deprecated (deprecated 2026-10-26) and ignored: fix releases are not age-gated. A configured value prints a note; remove the key |
+| `cooldown_days` | `0` | Ignored: every fix release the scanner adopts remediates a vulnerability the scan detected, which Rule S-10's remediation carve-out exempts from the release cooldown. A configured value prints a note; remove the key |
 | `local_runtimes` | `true` | Check Node.js, PHP and Python on this machine |
 | `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with the cooldown clamped to at least 14 days. The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
@@ -1053,7 +1053,7 @@ unusual format, for that package version in this process; `(0, 0)` for advisorie
 #### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests)`
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
-`allow_major=False`, `cooldown_days=0` (no release-age gate; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
+`allow_major=False`, `cooldown_days=0` (no release-age gate, under Rule S-10's remediation carve-out; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
 `manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists
 each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
 never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
@@ -1067,7 +1067,8 @@ refused, because `npm audit` would send it to the registry.
 `(rows, note)` for one `package-lock.json` / `npm-shrinkwrap.json`, from OSV; npm is not run. One
 `PinChange` per vulnerable package version, with `new` the smallest version the advisories call fixed.
 `stage-fix` runs `npm audit fix` on the lockfile as a whole, and npm picks the versions, so `new` is a
-floor, not a promise (the plan shows it as `≥`). Actions follow `plan_requirements`, with npm's limits:
+floor, not a promise (the plan shows it as `≥`). npm runs without `--before` (`executor.REMEDIATION_COOLDOWN_DAYS` is 0):
+the fix releases, and the dependencies they pull in, fall under Rule S-10's remediation carve-out. Actions follow `plan_requirements`, with npm's limits:
 `malicious`; `no-clean-release` (no advisory names a fix); `major-held` when the fix leaves the
 installed version's caret range (`1.x` → `2.x`, `0.3.x` → `0.4.x`), whatever `allow_major` says,
 because npm without `--force` never takes it; `workspace-held` when the lockfile's root package or
@@ -2410,7 +2411,10 @@ findings, and the summary lists them by file name. A plan
 sorts each finding to the kit level that fixes it:
 
 - compromise indicators first (the kit refuses to patch such a host in place);
-- the `run-host.sh` dry-run and `--apply` commands;
+- the `run-host.sh` dry-run and `--apply` commands, with `--allow-fresh` and a note saying why when the scan found
+  the host's Node.js missing a security release (a `security-release-missing` runtime finding, or `behind-patch` at
+  HIGH): Rule S-10's remediation carve-out, so the kit's 14-day release cooldown does not hold the L3 fix (L3 then
+  takes the newest release of the line for every Node install on the host, checked by SHA-256, not by OSV);
 - **L2** OS security updates for OS-managed packages;
 - **L3** runtimes;
 - **L4** per `apps.conf` entry whose app directory holds the packages, with the entry's current pins and candidate

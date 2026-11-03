@@ -115,7 +115,7 @@ decides.
 | **S-7** | scope limitation |
 | **S-8** | no machine-specific info in any tracked file (**any match = HALT**, stricter than S-1) |
 | **S-9** | pathway-safety verification |
-| **S-10** | dependency vetting (known-vulnerability search; release cooldown deprecated 2026-10-26) |
+| **S-10** | dependency vetting (known-vulnerability search, 14-day release cooldown, latest stable release only; scan-detected vulnerability fixes exempt from the last two) |
 
 **S-1 and S-8 have a deterministic scanner backstop** (`agentteams.scan`,
 S15); the remaining S-rules are **procedural judgment calls**. Every verdict —

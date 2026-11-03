@@ -6,7 +6,9 @@ what it would not:
 
 - **compromise indicators** first: the kit refuses to patch such a host in place (exit 4); nothing else applies;
 - **L2 OS security updates** for OS-managed packages (``distro``), with the dry-run and apply commands;
-- **L3 Node runtime** for stale runtimes;
+- **L3 Node runtime** for stale runtimes. When the scan found Node missing a security release, the apply command
+  carries ``--allow-fresh``: Rule S-10's remediation carve-out, so the kit's 14-day release cooldown does not hold
+  the fix;
 - **L4 Python apps** per ``apps.conf`` entry of the host whose app directory holds the vulnerable packages, with
   candidate ``--pin`` values (the minimal fixed versions; prefer the versions of the reviewed repository fix);
 - **Python packages with no apps.conf entry**: ``run-host.sh`` never updates them; add an entry or fix them by hand;
@@ -84,6 +86,17 @@ def _row(f: Finding) -> str:
 _TABLE = ["| Package | Installed | Fixed in | Severity | Advisories |", "|---|---|---|---|---|"]
 
 
+def _node_vulnerable(f: Finding) -> bool:
+    """Return whether a runtime finding is a Node.js install the scan found missing a security release.
+
+    The finding's detail starts with its :func:`runtimes.evaluate` verdict. ``behind-patch`` counts only at HIGH,
+    which the scan reports when it has no security-release data and assumes the newer patch is one.
+    """
+    verdict = f.detail.partition(":")[0]
+    return "node" in f.name.lower() and (verdict == "security-release-missing"
+                                         or (verdict == "behind-patch" and f.severity >= 3))
+
+
 def markdown(host: str, findings: list[Finding], apps: list[App], *, kit: str = "<server kit>") -> str:
     """Return the fix plan for one host.
 
@@ -123,9 +136,14 @@ def markdown(host: str, findings: list[Finding], apps: list[App], *, kit: str = 
                 py_orphans[where].append(f)
         else:
             npm[where].append(f)
-    out += ["## Commands", "", f"- dry run (changes nothing): `{kit}/run-host.sh {host}`",
-            f"- apply OS security updates, Node and the apps.conf pins: `{kit}/run-host.sh {host} --apply` "
-            "(add `--restart-services` / `--reboot` only when you mean it)", ""]
+    fresh = " --allow-fresh" if any(_node_vulnerable(f) for f in runtimes) else ""
+    out += ["## Commands", "", f"- dry run (changes nothing): `{kit}/run-host.sh {host}{fresh}`",
+            f"- apply OS security updates, Node and the apps.conf pins: `{kit}/run-host.sh {host} --apply{fresh}` "
+            "(add `--restart-services` / `--reboot` only when you mean it)"]
+    if fresh:
+        out.append("- `--allow-fresh`: the scan found Node missing a security release, so Rule S-10's remediation "
+                   "carve-out lets L3 take a fix release inside the 14-day release cooldown")
+    out.append("")
     if distro:
         out += [f"## L2 — OS security updates ({len(distro)} OS-managed package(s))", "",
                 "`run-host.sh --apply` installs the distribution's security updates for these.", "", *_TABLE,

@@ -57,7 +57,7 @@ def test_choose_version_smallest_clean_and_cooldown(feed: Feed) -> None:
     feed.vulns[("PyPI", "requests", "2.33.0")] = ["G"]
     v, why = fix.choose_version("requests", "2.31.0", cooldown_days=14)
     assert v == "" and "2.35.0" in why and "cooldown" in why
-    assert fix.choose_version("requests", "2.31.0") == ("2.35.0", "")   # default: no cooldown (deprecated)
+    assert fix.choose_version("requests", "2.31.0") == ("2.35.0", "")   # default: none (S-10 remediation carve-out)
 
 
 def test_plan_and_apply_requirements_preserves_bytes(tmp_path: Path, feed: Feed) -> None:

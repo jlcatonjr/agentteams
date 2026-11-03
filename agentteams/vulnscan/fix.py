@@ -2,7 +2,8 @@
 
 - **requirements*.txt**: each vulnerable ``==`` pin moves to the *smallest* PyPI release that
   (a) OSV reports as clean, (b) was uploaded at least ``cooldown_days`` ago (0 by default: Rule S-10's
-  release cooldown is deprecated since 2026-10-26), and (c) is neither a pre-release nor fully yanked. A major-version jump
+  remediation carve-out exempts a fix for a scanned vulnerability from the release cooldown and the
+  latest-stable rule), and (c) is neither a pre-release nor fully yanked. A major-version jump
   is proposed but written only with ``allow_major``. A pin whose current version is
   **malicious** (OSV ``MAL-*``) is never edited: that is an incident, not an upgrade. Line
   endings and every other byte of the file are preserved. A file that pins ``--hash`` values is
@@ -510,7 +511,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         root: Working tree to change. Point it at a worktree or branch you control.
         apply: Write changes.
         allow_major: Also take major-version jumps.
-        cooldown_days: Minimum release age (0, the default: none; Rule S-10's cooldown is deprecated).
+        cooldown_days: Minimum release age (0, the default: none; Rule S-10's remediation carve-out).
         include_worktrees: Descend into linked worktrees too.
         allow_dirty: Edit files that already have uncommitted changes.
         npm: Run the npm step (needs npm on PATH). A dry run lists each lockfile's vulnerable
