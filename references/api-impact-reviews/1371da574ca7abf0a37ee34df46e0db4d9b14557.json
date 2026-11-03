@@ -1,0 +1,8 @@
+{
+  "patch_id": "1371da574ca7abf0a37ee34df46e0db4d9b14557",
+  "commit": "0474d6c97cfda8e29cd9a8a987d875e8f3a99d62",
+  "subject": "docs(vulnscan): follow-up remediation reference and template",
+  "impact": "1 structural added",
+  "note": "docs only: new published reference references/vulnscan-followup-remediation.reference.md; no code or API change; audited by @adversarial, @conflict-auditor, @security",
+  "recorded_at": "2026-11-03T15:12:44Z"
+}
