@@ -26,8 +26,8 @@ Carved from [`analyze.py`](analyze.md) (CH-07 line ceiling) and re-exported ther
 ### `format_s10_exempt_repos(repos: object) -> str`
 
 Renders the brief's `s10_cooldown_exempt_repos` for Rule S-10's local interdependent-repository carve-out (the
-`{S10_COOLDOWN_EXEMPT_REPOS}` placeholder, filled by [`render`](render.md)). Valid entries (`owner/name` or a bare
-name, nothing else, so brief text can't carry prose into the rule) come back as inline code, comma-separated and
+`{S10_COOLDOWN_EXEMPT_REPOS}` placeholder, filled by [`render`](render.md)). Valid entries (`owner/name` only — a bare
+name could read as a whole org — so brief text can't carry prose into the rule) come back as inline code, comma-separated and
 de-duplicated; a missing, non-list or all-invalid value gives `none for this project, so the cooldown applies to
 every release`. Raises nothing.
 

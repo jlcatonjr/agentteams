@@ -117,16 +117,16 @@ def _build_placeholder_map(**kwargs: str) -> dict[str, str]:
     return mapping
 
 
-#: A repository identifier ``s10_cooldown_exempt_repos`` may hold: ``owner/name`` or a bare name, nothing that could
-#: carry prose into the rendered @security rule (brief content is data, C-4).
-_REPO_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,99})?")
+#: A repository identifier ``s10_cooldown_exempt_repos`` may hold: ``owner/name`` only — a bare name could read as a
+#: whole org or a squattable registry package — and nothing that could carry prose into the rule (C-4).
+_REPO_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 
 
 def format_s10_exempt_repos(repos: object) -> str:
     """Render the brief's ``s10_cooldown_exempt_repos`` for Rule S-10's local-repository carve-out.
 
     Args:
-        repos: The brief value: a list of repository identifiers (``owner/name`` or a bare name).
+        repos: The brief value: a list of ``owner/name`` repository identifiers.
 
     Returns:
         The identifiers as inline code, comma-separated, or a sentence saying none are listed, so the carve-out exempts

@@ -22,7 +22,7 @@ def _security_text(extra: dict) -> str:
 
 
 def test_listed_repositories_render_as_inline_code() -> None:
-    assert format_s10_exempt_repos(["jlcatonjr/agentteams", "researchteam"]) == "`jlcatonjr/agentteams`, `researchteam`"
+    assert format_s10_exempt_repos(["jlcatonjr/agentteams", "researchteam"]) == "`jlcatonjr/agentteams`"
 
 
 def test_nothing_listed_exempts_nothing() -> None:
@@ -46,3 +46,17 @@ def test_the_rendered_rule_names_the_listed_repositories() -> None:
 def test_without_the_key_the_rule_says_the_cooldown_applies_to_everything() -> None:
     text = _security_text({})
     assert "Listed: none for this project, so the cooldown applies to every release." in text
+
+
+def test_a_bare_name_is_refused() -> None:
+    # A bare name could read as a whole org or a squattable registry package (@security, 2026-11-03).
+    assert format_s10_exempt_repos(["jlcatonjr", "requests"]).startswith("none for this project")
+
+
+def test_the_trigger_and_verdict_tables_know_the_carve_out() -> None:
+    template = (TEMPLATES / "universal" / "security.template.md").read_text(encoding="utf-8")
+    assert "| Any addition to the brief's `s10_cooldown_exempt_repos` | Constraint relaxation (Rule 15)" in template
+    verdict = next(line for line in template.splitlines() if "younger than the Rule S-10 cooldown" in line)
+    assert "outside both the remediation and the local-repository carve-outs" in verdict
+    assert "(for the cooldown only) that the release is of a repository listed in `s10_cooldown_exempt_repos`" in verdict
+    assert "verifies\n  against the operator's release key" in template

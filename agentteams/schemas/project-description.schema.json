@@ -788,8 +788,8 @@
       "type": "array",
       "uniqueItems": true,
       "maxItems": 100,
-      "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}(/[A-Za-z0-9][A-Za-z0-9._-]{0,99})?$"},
-      "description": "Rule S-10 local-repository carve-out (an operator ruling): the project's own interdependent repositories (owner/name or name) whose releases may be adopted inside the 14-day package-release cooldown. Lifts the cooldown only: the vulnerability search, Rule S-9's signed-tag identity check and the latest-stable rule still apply. [] or absent exempts nothing."
+      "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"},
+      "description": "Rule S-10 local-repository carve-out (an operator ruling): the project's own interdependent repositories (owner/name only) whose releases may be adopted inside the 14-day package-release cooldown. Lifts the cooldown only: the vulnerability search, Rule S-9's signed-tag identity check and the latest-stable rule still apply. [] or absent exempts nothing."
     },
     "researchteam_notes": {
       "type": "object",
