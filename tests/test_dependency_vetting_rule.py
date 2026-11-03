@@ -81,12 +81,24 @@ def test_scan_remediation_carve_out_lifts_both_rules_and_only_those():
     rule, never from the vulnerability search or S-9 identity, and covers only the flagged packages."""
     body = _s10_body()
     start = body.index("**Vulnerability-scan remediation carve-out")
-    carve = body[start: body.index("- ✅ Pin exact versions", start)]
+    carve = body[start: body.index("- ✅ **Local interdependent-repository carve-out", start)]
     assert "the cooldown and the latest-stable rule never block remediation" in carve
     assert "may be adopted inside the cooldown window" in carve and "need not be the latest stable release" in carve
     assert "must still pass the vulnerability search" in carve and "Rule S-9" in carve
     assert "covers only the packages the scan flagged" in carve
-    assert "(outside the remediation carve-out) the cooldown or the latest-stable rule" in body
+    assert "(outside the remediation and local-repository carve-outs) the cooldown or the latest-stable rule" in body
+
+
+def test_local_repository_carve_out_lifts_the_cooldown_only():
+    """The operator's local-repository carve-out (2026-11-03) exempts listed repositories from the cooldown,
+    never from the vulnerability search, S-9 identity or the latest-stable rule."""
+    body = _s10_body()
+    start = body.index("**Local interdependent-repository carve-out")
+    carve = body[start: body.index("- ✅ Pin exact versions", start)]
+    assert "{S10_COOLDOWN_EXEMPT_REPOS}" in carve and "`s10_cooldown_exempt_repos`" in carve
+    assert "lifts the cooldown only" in carve and "must still pass the" in carve and "Rule S-9" in carve
+    assert "latest-stable rule still applies" in carve and "release candidate still needs a recorded" in carve
+    assert "A repository not listed stays under the cooldown" in carve
 
 
 def test_verdict_table_has_a_rule_s10_row():

@@ -5,7 +5,7 @@
 
 - Modules mapped: **419**
 - Packages: **14**
-- Internal import edges: **1500**
+- Internal import edges: **1501**
 - Distinct external dependencies: **11**
 
 ---
@@ -256,7 +256,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.liaison_logs` | `agentteams.atomicio`, `agentteams.mcp_need` | `agentteams.backup`, `agentteams.cli.generate` |
 | `agentteams.living_doc` | — | `agentteams.audit` |
 | `agentteams.man` | — | — |
-| `agentteams.manifest_format` | `agentteams.frameworks.registry` | `agentteams.analyze` |
+| `agentteams.manifest_format` | `agentteams.frameworks.registry` | `agentteams.analyze`, `agentteams.render` |
 | `agentteams.mcp_catalog` | `agentteams.codex_mcp_emit`, `agentteams.frameworks.goose`, `agentteams.grok_config_emit`, `agentteams.mcp_emit` | `agentteams.analyze`, `agentteams.cli.artifacts` |
 | `agentteams.mcp_detect` | `agentteams.mcp_need`, `agentteams.write_policy` | `agentteams.analyze` |
 | `agentteams.mcp_direct_grants` | `agentteams.cli.signed_ledger`, `agentteams.confinement`, `agentteams.frameworks._sandbox_emit`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.runner_mcp` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.operator_signing`, `agentteams.proposal_runner`, `agentteams.proposal_staging`, `agentteams.vulnscan.grant` |
@@ -317,7 +317,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.redteam.selfaudit` | `agentteams.redteam.checks_report`, `agentteams.redteam.checks_static`, `agentteams.redteam.registry` | `agentteams.redteam.cycle`, `agentteams.redteam.report` |
 | `agentteams.redteam.sweep` | `agentteams.frameworks.registry` | — |
 | `agentteams.remediate` | — | — |
-| `agentteams.render` | `agentteams.frameworks.registry`, `agentteams.tool_version_source` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.frameworks._agents_md_rules`, `agentteams.template_pins` |
+| `agentteams.render` | `agentteams.frameworks.registry`, `agentteams.manifest_format`, `agentteams.tool_version_source` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.frameworks._agents_md_rules`, `agentteams.template_pins` |
 | `agentteams.research` | `agentteams.research.backends`, `agentteams.research.briefing`, `agentteams.research.news`, `agentteams.research.reputable`, `agentteams.research.scholarly`, `agentteams.research.screen`, `agentteams.research.search`, `agentteams.research.verify` | `agentteams.cli.commands` |
 | `agentteams.research.__main__` | `agentteams.research.browser`, `agentteams.research.scholarly`, `agentteams.research.search` | — |
 | `agentteams.research.backends` | — | `agentteams.research`, `agentteams.research.search` |
@@ -3914,6 +3914,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.frameworks.registry",
+        "agentteams.manifest_format",
         "agentteams.tool_version_source"
       ],
       "external": [],
@@ -9720,6 +9721,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.render",
       "target": "agentteams.frameworks.registry"
+    },
+    {
+      "source": "agentteams.render",
+      "target": "agentteams.manifest_format"
     },
     {
       "source": "agentteams.render",

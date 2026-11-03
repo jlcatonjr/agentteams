@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
+
+- **The 14-day release cooldown no longer holds back the project's own interdependent repositories.** Jim's ruling: the
+  cooldown stays in force, with the remediation carve-out, but does not apply to updates between his own local,
+  interdependent repositories (agentteams, researchteam, baseAgent, mathAgents, …). The new brief key
+  `s10_cooldown_exempt_repos` lists them per project; generated `@security` agents name them in Rule S-10 (fence
+  `security_rules_invariant` v21). The carve-out lifts the cooldown only: the vulnerability search, Rule S-9's
+  signed-tag identity check and the latest-stable rule (a release candidate still needs a recorded clearance) still
+  apply, and only plain repository identifiers are rendered. Absent or empty, it exempts nothing.
+
 ### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
 
 - **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one

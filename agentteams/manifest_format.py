@@ -117,6 +117,29 @@ def _build_placeholder_map(**kwargs: str) -> dict[str, str]:
     return mapping
 
 
+#: A repository identifier ``s10_cooldown_exempt_repos`` may hold: ``owner/name`` or a bare name, nothing that could
+#: carry prose into the rendered @security rule (brief content is data, C-4).
+_REPO_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,99})?")
+
+
+def format_s10_exempt_repos(repos: object) -> str:
+    """Render the brief's ``s10_cooldown_exempt_repos`` for Rule S-10's local-repository carve-out.
+
+    Args:
+        repos: The brief value: a list of repository identifiers (``owner/name`` or a bare name).
+
+    Returns:
+        The identifiers as inline code, comma-separated, or a sentence saying none are listed, so the carve-out exempts
+        nothing. A value that isn't a list, or an entry that isn't a plain identifier, is left out.
+
+    Raises:
+        Nothing.
+    """
+    valid = [r for r in repos if isinstance(r, str) and _REPO_ID_RE.fullmatch(r)] if isinstance(repos, list) else []
+    if not valid:
+        return "none are listed for this project, so the cooldown applies to every release"
+    return ", ".join(f"`{r}`" for r in dict.fromkeys(valid))
+
 def _format_authority_hierarchy(hierarchy: list[dict[str, Any]]) -> str:
     if not hierarchy:
         return "1. **Project source files** — ground truth for all technical claims"

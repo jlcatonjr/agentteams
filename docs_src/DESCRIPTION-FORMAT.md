@@ -391,6 +391,7 @@ Fields:
 |---|---|---|
 | `layer2_profile` | string (lowercase slug) | The Layer-2 profile the project was scaffolded with, e.g. `"scholarly"`. |
 | `frozen_surfaces` | array of framework ids (`codex`, `goose`, `agents-md`, `claude`, `copilot-vscode`, `copilot-cli`, `grok`), unique | Rule 15: the agent surfaces the project keeps frozen. The effect classifier reads the recorded freeze state, not the working brief. |
+| `s10_cooldown_exempt_repos` | array of repository identifiers (`owner/name` or `name`), unique | Rule S-10's local-repository carve-out (an operator ruling): the project's own interdependent repositories, whose releases may be adopted inside the 14-day cooldown. The vulnerability search, Rule S-9's signed-tag check and the latest-stable rule still apply. |
 | `researchteam_notes` | object; `exclude`: array of agent slugs | researchteam notes agents this project does not take. |
 | `governance_agents` | array of agent slugs, unique | The governance roster the Layer-2 tooling expects. Informational: agentteams still derives the generated roster itself. |
 | `license` | string (1–200 characters) | The project's licence, preferably an SPDX expression such as `"Apache-2.0"`. |
