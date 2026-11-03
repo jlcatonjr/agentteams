@@ -805,9 +805,8 @@ def scan_inventory(text: str, target: str) -> Report:
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
-        if tag in ("INV", "RUNTIME", "OSREL", "ESM", "IOC", "SCOPE", "PYSITE", "DISTROPKG", "UPDATEINFO",
-                   "UPDATEINFOREAD", "AUTOUPD"):
-            check = None   # HOSTEVIDENCE belongs to the HOSTCHECK it directly follows
+        if len(parts) > 1 and tag not in ("HOSTCHECK", "HOSTEVIDENCE"):
+            check = None   # HOSTEVIDENCE belongs to the HOSTCHECK before it: any other record (a tab) breaks the link
         if tag == "INV" and len(parts) == 5:
             _, eco, name, ver, loc = parts
             deps.append((target, Dep(eco, name, ver, "runtime", loc)))

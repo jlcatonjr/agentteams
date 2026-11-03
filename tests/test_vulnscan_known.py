@@ -480,6 +480,19 @@ def test_host_evidence_line_parsing() -> None:
         assert engine.host_evidence(*bad) == ""
 
 
+@pytest.mark.parametrize("between, attached", [
+    ("ACTION      secret-looking file\nINFO        note", True),   # human lines (no tab) keep the link
+    ("SCOPE\t/x\tdisabled\ttree\tev", False),                        # any other record breaks it,
+    ("NEWTAG\tsomething", False),                                     # including one added later
+    ("HOSTCHECK\tLOW\tanother check", False),                         # and the evidence is the newer check's
+])
+def test_host_evidence_attaches_only_to_the_check_before_it(between: str, attached: bool) -> None:
+    d = "b" * 64
+    text = f"HOSTCHECK\tHIGH\tsecret-looking file\n{between}\nHOSTEVIDENCE\t{d}\t2\t1\n"
+    first = next(f for f in engine.scan_inventory(text, "jlc-prod").findings if f.kind == "host")
+    assert (first.evidence == f"sha256:{d};files=2;deny=1") is attached
+
+
 def test_email_api_entry_voids_when_a_file_or_the_deny_rule_changes(env: dict[str, Any], audit: Audit) -> None:
     make(env, [host(audit.evidence())], days=90)
     rep, rows = applied([host(audit.evidence())])
