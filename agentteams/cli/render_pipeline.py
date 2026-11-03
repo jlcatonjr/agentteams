@@ -338,8 +338,14 @@ def _make_content_matches(
     Files in ``security_refresh_paths`` always return False (they are
     force-written on every ``--update``). Missing files return False.
     The comparison mirrors what ``emit`` writes: manual-value preservation
-    followed by merge-fence normalization.
+    followed by merge-fence normalization. The disk file's user regions
+    (``## Project-Specific Notes`` / ``Rules``) are carried into the render first,
+    as ``--update`` keeps them: an operator's notes, or a projected rules block
+    (:mod:`agentteams.rules_projection`), are not drift. A region that can't be
+    carried still counts as a mismatch.
     """
+    from agentteams.user_regions import carry_regions
+
     def _matches(path: str) -> bool:
         if path in security_refresh_paths:
             return False
@@ -353,7 +359,8 @@ def _make_content_matches(
         preserved = _preserve_manual_values(disk_text, rendered)
         effective = emit._normalize_generated_content(path, preserved)
         effective = emit._ensure_project_notes_section(path, effective)
-        return effective == disk_text
+        effective, _carried, problems = carry_regions(disk_text, effective, toml=path.endswith(".toml"))
+        return not problems and effective == disk_text
     return _matches
 def _stale_tool_agent_paths(
     manifest: dict[str, Any],

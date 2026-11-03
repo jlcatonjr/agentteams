@@ -122,6 +122,24 @@
         "type": "string"
       }
     },
+    "memory_index_extra_files": {
+      "type": "array",
+      "description": "Named project-relative Markdown files to include in the memory index. Empty when none were declared.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "project_rules_source": {
+      "type": "string",
+      "description": "The brief's project_rules_source: the instruction file whose Project-Specific Rules are projected into every provider's entry file. Empty when the brief names none (the source the copies record, else the only file with rules, is used)."
+    },
+    "frozen_surfaces": {
+      "type": "array",
+      "description": "The brief's frozen_surfaces: surfaces a cross-surface write (such as --refresh-index rebuilding every surface's memory index) leaves alone. Empty when none were declared.",
+      "items": {
+        "type": "string"
+      }
+    },
     "memory_index_exclude": {
       "type": "array",
       "description": "Project-relative paths/globs to exclude from the memory index, even when the built-in defaults or memory_index_extra_dirs would otherwise include them. Empty when none were declared.",

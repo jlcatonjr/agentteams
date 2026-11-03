@@ -262,5 +262,6 @@
         "No test requires external dependencies or network access"
       ]
     }
-  ]
+  ],
+  "pr_management": true
 }

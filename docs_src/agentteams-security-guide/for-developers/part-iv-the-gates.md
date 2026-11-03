@@ -106,7 +106,8 @@ deliberately**.
 ## Bridge-refresh safety  ✅ *(policy)* / ⚙ *(operator Pre-Flight)* {#S14}
 
 `--bridge-refresh` **unconditionally overwrites** target entry files
-(`CLAUDE.md`, `.claude/*`, goose `AGENTS.md`/`.goosehints`). Origin: a
+(`CLAUDE.md`, `.claude/*`, goose `AGENTS.md`/`.goosehints`; in `.goosehints` only the bridge
+fence, keeping project text around it). Origin: a
 **2026-05-27 incident** where a refresh silently replaced user content,
 recoverable only because the files were git-tracked
 (`references/bridge-refresh-safety.md:5-95`).

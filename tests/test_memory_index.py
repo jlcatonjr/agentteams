@@ -584,7 +584,8 @@ def test_query_index_cli_mode_returns_1_when_no_hits(tmp_path):
     assert rc == 1
 
 
-def test_query_index_cli_mode_auto_refreshes_when_stale(tmp_path):
+def test_query_index_cli_mode_reports_a_stale_index_and_never_rewrites_it(tmp_path, capsys):
+    """baseAgent P6 (2026-11-02): a query used to rebuild a stale index, rewriting the tracked file."""
     output_dir = tmp_path / ".github" / "agents"
     index_dir = output_dir / "references"
     index_dir.mkdir(parents=True)
@@ -594,11 +595,11 @@ def test_query_index_cli_mode_auto_refreshes_when_stale(tmp_path):
     src = ws / "day.md"
     src.write_text("# Daily\n\nOriginal summary text only.\n")
 
-    # Seed an index that does not contain the future query term.
-    idx = build_memory_index([src], project_name="P", framework="copilot-vscode")
-    (index_dir / "memory-index.json").write_text(json.dumps(idx), encoding="utf-8")
+    idx = build_memory_index([src], project_name="P", framework="copilot-vscode", root=tmp_path)
+    index_path = index_dir / "memory-index.json"
+    index_path.write_text(json.dumps(idx), encoding="utf-8")
+    before = index_path.read_bytes()
 
-    # Modify source after index write so the query path sees a stale artifact.
     src.write_text("# Daily\n\nUpdated content now includes autorefresh-token.\n")
 
     manifest = {
@@ -607,11 +608,13 @@ def test_query_index_cli_mode_auto_refreshes_when_stale(tmp_path):
         "existing_project_path": str(tmp_path),
     }
     rc = build_team._run_query_index(manifest, output_dir, "autorefresh-token", 3)
-    assert rc == 0
+    assert rc == 1  # the stale index doesn't hold the new term
+    assert "stale" in capsys.readouterr().err
+    assert index_path.read_bytes() == before
+    assert not (index_dir / "memory-index.vcache").exists()
 
-    refreshed = json.loads((index_dir / "memory-index.json").read_text(encoding="utf-8"))
-    hits = query_index(refreshed, "autorefresh-token", k=3)
-    assert hits, "expected persisted memory index to be refreshed before query serving"
+    assert build_team._run_refresh_index(manifest, output_dir) == 0
+    assert build_team._run_query_index(manifest, output_dir, "autorefresh-token", 3) == 0
 
 
 def test_write_memory_index_incremental_sed_single_doc_success_without_full_rebuild(

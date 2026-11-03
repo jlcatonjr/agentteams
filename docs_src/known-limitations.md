@@ -280,6 +280,9 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   custom-agent limit (about 70,000 and 49,000 characters on one project), so Copilot truncates or rejects them.
 - **Who:** copilot-vscode teams. Claude, Codex, Goose and Grok are unaffected.
 - **Workaround:** rely on the Claude or Codex surface for those two roles, or trim their Project-Specific Notes.
+- **Partly addressed (baseAgent P4, 2026-11-02):** a fresh Copilot render puts `## Project-Specific Notes` before the
+  body's first fence, so the operator's text sits inside the limit, and `--check` fails when operator notes on disk start
+  past it (move them before the first fence; `--update --merge` keeps them there). The template overrun itself remains.
 - **Tracking:** 1.0 known limitation. Splitting long sections into references, with an emit-time size check, is
   planned for 1.0.x (found by masterTeacher).
 
@@ -332,14 +335,17 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
   needs `GOOSE_SANDBOX` on in the live Goose config, or the verdict reads `advisory` ("Seatbelt profile not wired").
 - **Tracking:** WASM sandbox plan P13 (Rule 12 carve-outs 1 and 6).
 
-### Windows has WASM but no OS sandbox, and no read-only mounts
+### WASM is not supported on native Windows for now
 
 - **What:** native Windows has no OS sandbox for the agent process (for every framework, including Claude), so WASM
-  runs alone and generation prints `wasm-only-host` ("No OS sandbox on this host; WASM runs alone"). A read-only mount (`read_paths`) without an OS sandbox is enforced
-  by a per-run snapshot copy, which needs `dir_fd` support that Windows lacks, so a grant with read paths is refused
-  there. Exit codes and the `SYSTEMROOT`-only environment are untested on Windows.
+  runs alone and generation prints `wasm-only-host` ("No OS sandbox on this host; WASM runs alone") and
+  `wasm-windows-unsupported`. A read-only mount without an OS sandbox is enforced by a per-run snapshot copy, which
+  needs `dir_fd` support that Windows lacks. So any grant with read paths refuses there, and so does the Python
+  guest even with a compute-only grant: its pinned CPython runtime is always mounted read-only at `/lib`. What still
+  runs is JavaScript and raw `.wasm` modules with compute-only grants. None of the Windows code paths (exit codes,
+  the `SYSTEMROOT`-only environment, process-group kill) has run on a Windows host or in CI.
 - **Who:** Windows hosts with `wasm_sandbox.enabled`.
-- **Workaround:** keep Windows grants compute-only, or run under WSL or a Linux / macOS host.
+- **Workaround:** run under WSL, or on a Linux or macOS host.
 - **Tracking:** WASM sandbox plan P02 (open items).
 
 ### The launching-config scan is name-based

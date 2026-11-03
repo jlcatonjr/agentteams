@@ -15,7 +15,7 @@ never prevents it.
 |---|---|
 | `.github/copilot-instructions.md`, root `AGENTS.md`, `.goosehints`, `CLAUDE.md`, `.claude/CLAUDE.md` (when this team emits them) | per `AGENTTEAMS` fenced region |
 | each team's agent files: `.github/agents/*.agent.md`, `.codex/agents/*.toml`, `.goose/recipes/*.yaml`, `.claude/agents/*.md` | per fenced region (whole file when it has no parseable fence) |
-| `.github/instructions/**`, `.github/prompts/**` (never emitted) | whole file |
+| `.github/instructions/**`, `.github/prompts/**`, `AGENTS.override.md` (never emitted; Codex loads the override in place of `AGENTS.md`) | whole file |
 
 Every generate and `--update` writes the map to this team's `references/build-log.json` as
 `prompt_root_hashes` (`{project-relative path: {section id: sha256}}`, `"*"` for a whole-file hash).

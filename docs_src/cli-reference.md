@@ -298,7 +298,7 @@ Overwrite existing agent files without prompting. Default behavior: prompt for e
 
 ### `--merge`
 
-Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
+Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. The one exception is generated: the `PROJECTED-RULES` and `PROJECT-RULES-POINTER` blocks inside the user regions, which every generate and `--update` regenerates in every provider's files (see `--sync-project-rules`). Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
 
 ### `--yes` / `-y`
 
@@ -316,7 +316,7 @@ OFF by default. When set, emit `references/model-routing.json` — a framework-n
 
 Re-render drifted agent files and emit newly added agents without touching unchanged files. Preserves manually filled `{MANUAL:*}` values from existing files. Agents removed from the taxonomy are reported but not deleted (use `--prune` to also remove them).
 
-A backup of the output directory is created automatically before any writes. By default, `--update` uses merge mode (equivalent to `--update --merge`): only template-fenced regions are re-rendered, and user-authored content outside fence markers is preserved. To perform a full destructive re-render, pass `--update --overwrite` (this invokes the security gate and requires a clearance in `references/security-decisions.log.csv`). Use `--no-backup` to suppress the backup.
+A backup of the output directory is created automatically before any writes. By default, `--update` uses merge mode (equivalent to `--update --merge`): only template-fenced regions are re-rendered, and user-authored content outside fence markers is preserved (apart from the generated rules blocks; see `--sync-project-rules`). To perform a full destructive re-render, pass `--update --overwrite` (this invokes the security gate and requires a clearance in `references/security-decisions.log.csv`). Use `--no-backup` to suppress the backup.
 
 On a successful (non-dry-run) `--update`, AgentTeams writes a delivery receipt to `references/delivery-receipt.json` (schema: `agentteams/schemas/delivery-receipt.schema.json`) recording the project name, framework, manifest fingerprint, and fingerprint algorithm version of the delivered build. When no material drift is detected but the build-log baseline is stale (for example after a `FINGERPRINT_ALGO_VERSION` bump), the baseline is healed in place: the build-log is rewritten first, the delivery receipt is then written against the healed baseline (heal-first-attest-second), and `--update` prints `✓  Healed build-log baseline (no material drift; fingerprint refreshed).` after both writes complete. Receipt write failures warn on stderr but do not fail the run.
 
@@ -428,13 +428,20 @@ The gate also fires when `--output` names the framework's agents directory itsel
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
 
+It also exits `1` when a projected Project-Specific Rules copy or notes pointer is out of date or refused (see
+`--sync-project-rules`). Operator text in a `## Project-Specific Notes` or `## Project-Specific Rules` region is
+not drift: when the manifest fingerprint moves, each file is compared with a fresh render after its user regions are
+carried in, as `--update` keeps them.
+
+On a copilot-vscode or copilot-cli team it also measures each agent body on disk against GitHub's 30,000-character limit. It exits `1` when an agent's `## Project-Specific Notes` hold operator text and start past the limit, where a truncation removes them first; move the region to just before the body's first fence. A body over the limit with no operator notes past it is reported as an advisory only, because the generated orchestrator and security bodies exceed the limit from the templates alone.
+
 When the structural diff reports a manifest-promotion event (manifest fingerprint changed, fingerprint unavailable, or `fingerprint_algo_version` bumped), `--check` runs the full render pipeline in memory and reconciles each promoted file against its on-disk content; fingerprint-only promotions whose rendered output matches disk byte-for-byte are demoted back to unchanged. `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs.
 
 ### `--strict-prompt-roots`
 
 With `--check`, also exit `1` when a prompt root changed since the last build. Prompt roots are the
 files other harnesses read as instructions: `.github/copilot-instructions.md`,
-`.github/instructions/**`, `.github/prompts/**`, root `AGENTS.md`, `.goosehints`, `CLAUDE.md` /
+`.github/instructions/**`, `.github/prompts/**`, root `AGENTS.md`, `AGENTS.override.md` (which Codex loads in place of `AGENTS.md`), `.goosehints`, `CLAUDE.md` /
 `.claude/CLAUDE.md`, and each present team's agent files. Every generate, `--update` and `--check`
 compares them with the `prompt_root_hashes` recorded in every present team's build-log and prints a
 `PROMPT-ROOT CHANGED since last build` warning. Emitted files are compared per `AGENTTEAMS` fenced
@@ -445,15 +452,58 @@ This is detection only: the build-log is agent-writable, and a fresh generate or
 re-baselines (it prints a `PROMPT-ROOT RE-BASELINE` notice first when it re-records over a detected
 change). See [`prompt_roots`](api-reference/prompt-roots.md).
 
+### `--doctor`
+
+Report whether the project's providers agree, and write nothing ([`doctor`](api-reference/doctor.md)). Uses `--project`,
+else the working directory, and the brief found there. The report covers:
+
+- **Rules projection (FAIL):** a Project-Specific Rules copy or notes pointer that is missing, out of date or refused.
+- **Memory index (WARN):** surface copies built from different sources.
+- **Copilot body limit (FAIL):** operator notes past 30,000 characters.
+- **Agents (INFO):** agents missing on some surface (the full list is in `references/agent-surface-matrix.md`, written on
+  every generate and `--update`), and notes that differ by surface.
+- **Shared AGENTS.md (WARN):** a root `AGENTS.md` whose `constitutional_core` is older than the other entry files'.
+
+Exits `1` when any FAIL is reported.
+
+### `--sync-project-rules`
+
+Copy the project's `## Project-Specific Rules` into every other enabled provider's entry file, so a rule written in one
+provider's file binds them all ([`rules_projection`](api-reference/rules-projection.md)). It also runs after every
+successful generate and `--update`, and `--check` exits `1` when a copy is out of date, hand-edited, or its file has
+two Rules regions.
+
+- **Source:** the brief's `project_rules_source`, which must be one of `.claude/CLAUDE.md`, `CLAUDE.md`,
+  `.github/copilot-instructions.md`, `AGENTS.md`. Without it, the source the existing copies record, else the only one of
+  those files whose region holds rules. The source never moves silently: a second file with rules of its own, or
+  copies recording a source that no longer holds rules, is refused until the brief names one (an agent on any provider
+  can write rules into its own entry file). Every change to the rules is printed as a diff when it spreads.
+- **Targets:** `.github/copilot-instructions.md`; `.claude/CLAUDE.md` else `CLAUDE.md`; `AGENTS.override.md` when it
+  exists (Codex loads it in place of `AGENTS.md`), else `AGENTS.md`; and `.goosehints`. A copy that would take a Codex
+  file past its 32 KiB budget becomes a binding reference with the rules' titles. Surfaces in `frozen_surfaces` are
+  skipped (`AGENTS.override.md` counts as Codex's).
+- **The copy** sits in the target's own Rules region between `PROJECTED-RULES` markers that record the source's hash
+  and the copy's. A copy edited by hand is refused, not overwritten; the target's own rules beside it are kept.
+- **Pointers:** the `security` and `orchestrator` agents' `## Project-Specific Notes` get a short pointer to the rules
+  file on each Markdown and Goose surface (a delegated agent may not load its provider's instruction file). It says the
+  rules extend the agent's instructions and never weaken its Invariant Core or the Constitutional Core. A Codex TOML
+  agent is reported, not edited.
+
+Runs in the working directory, with the brief found there; a `--project` naming another directory is refused (a write
+into another repository needs that repository's own run). With `--dry-run` it reports and writes nothing. Exits `1`
+when a copy or pointer was refused (or, with `--dry-run`, is out of date), or the source was refused.
+
 ### `--refresh-index`
 
-Rebuild only `references/memory-index.json` in the output directory. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
+Rebuild `references/memory-index.json` on every surface of the project that has one (`.github/agents`, `.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`, `.agents`), from the same sources, so the copies agree. Each keeps its own framework stamp. The output directory's index is rebuilt when it exists, when `--output` names it, or when no surface has one yet; a surface in the brief's `frozen_surfaces` is left alone. Without `--description` the project's brief is found as for `--query-index`; a `--description` that doesn't exist is an error here, since this mode writes. Exits `1` when any copy could not be rebuilt. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
 
 The index is written in a compact one-line-per-entry layout. When it is larger than 20 MiB (override with `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES`), it is split into `references/memory-index.part-NNNN.json` shards, each under the cap, and `memory-index.json` becomes a manifest recording each shard's size and sha256. Commit the shards with the manifest. Every reader loads the shards directly, so nothing has to be reassembled after a pull and no git hook is needed. A missing or corrupt shard fails the read with a pointer back to this flag. See [`memory_index_store`](api-reference/memory-index-store.md).
 
 ### `--query-index TEXT`
 
 Query an existing `references/memory-index.json` and print ranked hits (title, path, score, snippet). Exits `0` when at least one hit is found and `1` when no matches are found.
+
+The query is read-only. A stale index (a source changed, added or removed since the build) is reported on stderr with the reason and is never rebuilt; run `--refresh-index`. Without `--description`, or with one that doesn't exist, the project's brief is found under `--project` (else the working directory): `.agentteams/brief.json`, then `brief.json`, then `.github/agents/_build-description.json`. A symlinked brief, or one whose `existing_project_path` names another project, is not used. When the selected surface has no index, another surface's copy is queried and named on stderr.
 
 ### `--query-k N`
 
@@ -636,7 +686,8 @@ when the block is absent, and write-protects the `.agentteams` control plane in 
 Ed25519-signed decision for `sandbox-wasm-off:<framework>`; elsewhere generation prints a `SANDBOX RELAXATION` notice.
 Grants, native-exec exceptions and network are never set from argv. With WASM on, generation also prints the D6
 composition notes (`wasm-without-os-sandbox` when the OS sandbox is off, `wasm-only-host` on a host with no OS
-sandbox) and records them in the team manifest's `advisories`; it never claims enforcement.
+sandbox, and `wasm-windows-unsupported` on native Windows, where WASM is not supported for now) and records them in
+the team manifest's `advisories`; it never claims enforcement.
 `--check-wiring --wasm-sandbox on` checks the control-plane denies too.
 
 ### `--wasm-substrate {on,off}`
@@ -1143,7 +1194,7 @@ ledger was truncated, or it was rewritten without the key.
 `--project` (else the current directory). An MCP client launches it from the team's catalogue entry
 (`agentteams-recall`, `agentteams-gitread`); you do not run it by hand.
 - **`recall`:** `query_index` and `query_code` over the existing memory and code indexes. It never refreshes a
-  stale index (the CLI's `--query-index` would); results carry the index's build time.
+  stale index, nor does the CLI's `--query-index`; results carry the index's build time.
 - **`gitread`:** `git_log`, `git_show`, `git_diff`, `git_blame`, `git_status` in an isolated git. Repository
   config cannot run a program (fsmonitor, hooks, external diff, textconv and the pager are overridden; any
   `filter.*` is refused). There is no network (no lazy fetch) and no lock. Refs and paths are validated; time and

@@ -315,7 +315,7 @@ Core; `agentteams/templates/universal/security.template.md`;
 ### S14 — Bridge-refresh safety  ✅ *(policy)* / ⚙ *(operator Pre-Flight)*
 **Canonical facts.**
 1. `--bridge-refresh` **unconditionally overwrites** target entry files (`CLAUDE.md`, `.claude/*`,
-   goose `AGENTS.md`/`.goosehints`) — origin: a 2026-05-27 incident where a refresh silently replaced
+   goose `AGENTS.md`/`.goosehints`; in `.goosehints` only the bridge fence) — origin: a 2026-05-27 incident where a refresh silently replaced
    user content, recoverable only because the files were git-tracked.
 2. **`--bridge-merge` is the correct default** whenever the target has user content (re-renders only
    `AGENTTEAMS-BRIDGE`-fenced regions; unfenced files are skipped). `--bridge-check` is always safe. A

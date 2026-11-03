@@ -1,0 +1,8 @@
+{
+  "patch_id": "edb8d597ba9d8d63fd5a85567ffb1429d428b437",
+  "commit": "9d4ffc145496fd40cbafaca205edb9464076afa3",
+  "subject": "feat(memory-index): read-only queries, all-surface refresh, brief discovery (Phase 2)",
+  "impact": "1 modules added, 7 symbols added, 1 symbols changed, 2 schemas changed",
+  "note": "Cross-surface Phases 1-4 (PRs #356-#359). Reviewed every added/changed public symbol, CLI flag (--sync-project-rules, --doctor) and schema key (memory_index_extra_files, project_rules_source, frozen_surfaces in the team manifest) against docs_src/api-reference, cli-reference, the man page and CHANGELOG; @conflict-auditor ran per phase. Open flags resolved in the final tree: cli/post_build.py is a cli module (no api page by the parity rule); can_write_run was replaced by the documented capability().",
+  "recorded_at": "2026-11-02T21:24:04Z"
+}

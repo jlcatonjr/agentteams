@@ -1,0 +1,8 @@
+{
+  "patch_id": "dd55b8e74cae08f74b4174e43b13123db2e3d46a",
+  "commit": "968d62e51d24d6a6ab9ad1483772561ee0244a94",
+  "subject": "fix(rules): Phase 3 adversarial review (HALT 1-3, conditions 4-8) and hygiene",
+  "impact": "2 symbols added, 1 symbols changed",
+  "note": "Cross-surface Phases 1-4 (PRs #356-#359). Reviewed every added/changed public symbol, CLI flag (--sync-project-rules, --doctor) and schema key (memory_index_extra_files, project_rules_source, frozen_surfaces in the team manifest) against docs_src/api-reference, cli-reference, the man page and CHANGELOG; @conflict-auditor ran per phase. Open flags resolved in the final tree: cli/post_build.py is a cli module (no api page by the parity rule); can_write_run was replaced by the documented capability().",
+  "recorded_at": "2026-11-02T21:24:04Z"
+}
