@@ -650,8 +650,8 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
             git(wt, "fetch", "--no-tags", "origin", ref, push=True)
             if git(wt, "rev-parse", f"{remote_sha}^{{tree}}").strip() != git(wt, "rev-parse", "HEAD^{tree}").strip():
                 raise ExecError(f"open PR {url} on {branch} does not hold the staged change — not claiming it")
-            _finish_open_pr(repo, wt, staged)
-            return {"repo": str(repo), "branch": branch, "pr": url, "existing": True, **lane}
+            _finish_open_pr(repo, wt, staged)   # head: the pushed commit auto-merge must still find (C1)
+            return {"repo": str(repo), "branch": branch, "pr": url, "existing": True, "head": remote_sha, **lane}
         if remote_sha != git(wt, "rev-parse", "HEAD").strip():
             raise ExecError(f"remote branch {branch} already exists at another commit and has no open PR "
                             "— not overwriting")
@@ -675,8 +675,9 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
                                           kept=st.get("kept_off_registry")), encoding="utf-8")
     url = executor_pr.create(target_repo, base_branch, branch, body_file, mode=mode,
                              open_url=lambda: executor_pr.open_pr_url(target_repo, branch))
+    head = git(wt, "rev-parse", "HEAD").strip()   # the commit pushed (or already there, equal): ledgered for auto-merge
     _finish_open_pr(repo, wt, staged)
-    return {"repo": str(repo), "branch": branch, "pr": url, **lane}
+    return {"repo": str(repo), "branch": branch, "pr": url, "head": head, **lane}
 
 
 def _finish_open_pr(repo: Path, wt: Path, staged: Path) -> None:

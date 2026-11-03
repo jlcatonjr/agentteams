@@ -157,7 +157,7 @@
     "agentteams/vulnscan/effectiveness.py": "15eb20f15442bcd92a4f913c028feb48f07b3d979fcc9b09c1041d8871211bdd",
     "agentteams/vulnscan/engine.py": "f306cfb487e66a3da3432f612db89249e8bc4fc6d9b0daf8cab4073fc612eae8",
     "agentteams/vulnscan/escalations.py": "b64b1b256a2523ae457be5c4a468b1ae142099924158ccd7a5bb9e9823ec8cca",
-    "agentteams/vulnscan/executor.py": "6c974566986277aec050be3496b3bb3cad592b97feacb68fcef1230c89d454b7",
+    "agentteams/vulnscan/executor.py": "8947c11bca91d34bf441a3c8e156597ae951b419d29773aab6bedcd5f0b380a7",
     "agentteams/vulnscan/executor_env.py": "7d2dd15042d48eb7d871cb70c2ffb6b594e34440995a031c834cf5486cb694c9",
     "agentteams/vulnscan/executor_guard.py": "28464667b03ba38f337e12399783dc0bab0b1c5470961c0178f44303dbd15291",
     "agentteams/vulnscan/executor_pr.py": "2882a65966b4e5a730d3425642c1ac28df04a6c882967fb9bae0a6289873203f",

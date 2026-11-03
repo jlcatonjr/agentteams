@@ -220,6 +220,9 @@ def test_stage_fix_and_open_pr_end_to_end(env: dict, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     pr = executor.act("open-pr", str(repo), env["cfg"], rationale="please @someone merge ```x```")
     assert pr["status"] == "done" and pr["pr"].endswith("/pull/7")
+    pushed = subprocess.run(["git", "-C", str(env["tmp"] / "remote.git"), "rev-parse", f"refs/heads/{staged['branch']}"],
+                            capture_output=True, text=True).stdout.strip()
+    assert pr["head"] == pushed and len(pushed) == 40              # the ledgered head auto-merge requires (C1)
     gh_args = (bindir / "gh.args").read_text()
     assert "--repo github.com/o/svc " in gh_args                      # never left to gh's remote resolution
     heads = subprocess.run(["git", "-C", str(env["tmp"] / "remote.git"), "branch"], capture_output=True, text=True).stdout
@@ -747,6 +750,7 @@ def test_d4_restaging_the_same_fix_and_an_already_open_pr(env: dict, monkeypatch
     n = len(_gh_calls(bindir))
     again = executor.act("open-pr", str(repo), env["cfg"])
     assert again["status"] == "done" and again["pr"].endswith("/pull/9") and again.get("existing") is True
+    assert again["head"] == pushed                                  # a claimed PR records the commit it holds
     assert not any(c.startswith("pr create") for c in _gh_calls(bindir)[n:])
     assert _executor_worktrees(repo) == []
     executor.act("stage-fix", str(repo), env["cfg"])
