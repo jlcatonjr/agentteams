@@ -321,6 +321,7 @@ def test_every_gate_call_site_is_listed():
     call = _re.compile(r"(?:_assert_destructive_action_allowed|check_clearance|_assert_no_unretracted_halt)"
                        r"\([^)]*?action=(\"[^\"]+\"|[A-Za-z_]+)")
     dynamic = []
+    s10_sites: list[str] = []
     for path, text in sources.items():
         for arg in call.findall(text):
             if arg.startswith('"'):
@@ -329,9 +330,16 @@ def test_every_gate_call_site_is_listed():
                 assert constants[arg] in GATE_ACTIONS, (path.name, arg)
             elif arg == "action" and path.name in {"branch_cleanup.py", "security_gate.py"}:
                 dynamic.append(path.name)
+            elif arg in {"exempt_action", "exempt_family"} and path.name == "s10_exempt_gate.py":
+                s10_sites.append(arg)  # s10-cooldown-exempt:<owner/name> and the bare family, checked below
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
     assert "branch-cleanup" in GATE_ACTIONS and dynamic
+
+    # The S-10 carve-out gate builds s10-cooldown-exempt:<owner/name>; its family is listed.
+    from agentteams.cli.s10_exempt_gate import S10_EXEMPT_KIND
+
+    assert set(s10_sites) == {"exempt_action", "exempt_family"} and S10_EXEMPT_KIND in GATE_ACTIONS
     # A call shape the regex cannot parse would be skipped silently; the count makes such a miss fail.
     assert sum(len(call.findall(t)) for t in sources.values()) >= 11
 

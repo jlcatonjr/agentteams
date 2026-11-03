@@ -14,6 +14,7 @@ These are filled automatically by the rendering engine from the project descript
 - `{PROJECT_GOAL}` — One-sentence project goal
 - `{PRIMARY_OUTPUT_DIR}` — Path to the primary output directory. It is a directory (or literal glob text) inside the project; the repository itself is `{PROJECT_NAME}`.
 - `{AGENT_SLUG_LIST}` — Multi-line YAML list of all agent slugs
+- `{S10_COOLDOWN_EXEMPT_REPOS}` — The brief's `s10_cooldown_exempt_repos` as inline code, comma-separated, for Rule S-10's local-repository carve-out; when none are listed, a phrase saying the cooldown applies to every release. Only plain repository identifiers are rendered (`manifest_format.format_s10_exempt_repos`)
 - `{ADOPTED_AGENT_ROUTING_ROWS}` — Orchestrator routing-table rows for `--adopt-orphans` agents, one `\n`-prefixed row each, sorted by slug; `""` when nothing is adopted. Sits at the end of the last fixed row (not on its own line) so a team without adopted agents renders byte-identically
 - `{DOMAIN_AGENT_SLUGS}` — Comma-separated list of domain agent slugs
 - `{WORKSTREAM_EXPERT_SLUGS}` — Comma-separated list of workstream expert slugs

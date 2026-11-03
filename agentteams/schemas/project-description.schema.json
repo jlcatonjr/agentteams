@@ -621,6 +621,13 @@
       "items": {"type": "string", "enum": ["codex", "goose", "agents-md", "claude", "copilot-vscode", "copilot-cli", "grok"]},
       "description": "Layer-2 key (Rule 15): the agent surfaces (framework ids) the project keeps frozen; updates leave the paths each one owns (agentteams.cli.frozen_surfaces.FROZEN_SURFACE_PATHS) to the project. The working brief is not the freeze baseline: the effect classifier takes the recorded freeze state. [] or absent freezes nothing."
     },
+    "s10_cooldown_exempt_repos": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 100,
+      "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"},
+      "description": "Rule S-10 local-repository carve-out (an operator ruling): the project's own interdependent repositories (owner/name only) whose releases may be adopted inside the 14-day package-release cooldown. Lifts the cooldown only: the vulnerability search, Rule S-9's signed-tag identity check and the latest-stable rule still apply. [] or absent exempts nothing."
+    },
     "researchteam_notes": {
       "type": "object",
       "additionalProperties": true,
