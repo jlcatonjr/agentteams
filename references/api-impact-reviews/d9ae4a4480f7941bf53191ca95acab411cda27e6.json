@@ -1,0 +1,8 @@
+{
+  "patch_id": "d9ae4a4480f7941bf53191ca95acab411cda27e6",
+  "commit": "c08a25b1f4ab04d697769c2e1832939c111e7000",
+  "subject": "feat(vulnscan): repository levers C2, C4, D3, D6 (vfr-c, vfr-d; @security 2026-11-02)",
+  "impact": "4 modules added, 22 symbols added, 2 cli added",
+  "note": "P9 repo levers: npm_kept, handoff_stale, cargo_fix, writer_prs; stage-cargo op; fix._leave_to_prs moved to writer_prs.leave_to_prs; unreviewed",
+  "recorded_at": "2026-11-03T00:49:49Z"
+}
