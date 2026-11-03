@@ -6,13 +6,15 @@ Two regions are user-owned and outside every ``AGENTTEAMS`` fence:
   body, and (from P5a) a Goose recipe's ``instructions: |`` block. A fresh Copilot ``.agent.md`` render puts it
   before the body's first named-section fence instead (baseAgent P4: GitHub truncates a body past 30,000 characters);
 * ``## Project-Specific Rules``, in the rendered instruction files (``CLAUDE.md``, ``.claude/CLAUDE.md``,
-  ``AGENTS.md``, ``.github/copilot-instructions.md``).
+  ``AGENTS.md``, ``.github/copilot-instructions.md``), and in ``AGENTS.override.md`` / ``.goosehints`` when
+  :mod:`agentteams.rules_projection` adds one there.
 
 ``--merge`` keeps them because it keeps everything outside a fence. ``--overwrite`` used to write the new
 render straight over the file, so a team's own rules and duties were lost. mathAgents lost its orchestrator's
 D39 duties and two instruction-file rules that way. :func:`carry_regions` carries each region from the file on
 disk into the new render. It re-indents for a YAML block scalar, and refuses rather than drop a region the new
-render has no place for.
+render has no place for, unless the region holds only generated text (the USER-EDITABLE note and a projected
+block, which the next projection writes again).
 
 :func:`insert_missing_regions` adds the empty Rules region (and its SECTION MANIFEST row) to an instruction file
 that predates it on ``--update --merge``, which otherwise never takes unfenced text from the template.

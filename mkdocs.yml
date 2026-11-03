@@ -255,6 +255,8 @@ nav:
               - memory-index-store: api-reference/memory-index-store.md
               - memory-index-surfaces: api-reference/memory-index-surfaces.md
               - rules-projection: api-reference/rules-projection.md
+              - surface-matrix: api-reference/surface-matrix.md
+              - doctor: api-reference/doctor.md
               - fence-inject: api-reference/fence-inject.md
               - code-index: api-reference/code-index.md
               - code-sources: api-reference/code-sources.md

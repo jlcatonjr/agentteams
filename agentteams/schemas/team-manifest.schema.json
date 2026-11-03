@@ -131,7 +131,7 @@
     },
     "project_rules_source": {
       "type": "string",
-      "description": "The brief's project_rules_source: the instruction file whose Project-Specific Rules are projected into every provider's entry file. Empty when the brief names none (the first file with rules is used)."
+      "description": "The brief's project_rules_source: the instruction file whose Project-Specific Rules are projected into every provider's entry file. Empty when the brief names none (the source the copies record, else the only file with rules, is used)."
     },
     "frozen_surfaces": {
       "type": "array",

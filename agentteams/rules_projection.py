@@ -41,7 +41,7 @@ from pathlib import Path
 from agentteams.user_regions import HEADINGS, _next_heading, find_region, reindent, skip_banner
 
 _NOTES_HEADING, _RULES_HEADING = HEADINGS
-#: Where the source is looked for, in order, when the brief names none.
+#: The files that may be the source (``project_rules_source`` must name one; see :func:`find_source`).
 SOURCE_CANDIDATES: tuple[str, ...] = (".claude/CLAUDE.md", "CLAUDE.md", ".github/copilot-instructions.md", "AGENTS.md")
 #: Codex's combined project-instructions budget (``project_doc_max_bytes``).
 CODEX_BUDGET_BYTES = 32 * 1024
@@ -232,6 +232,24 @@ def targets(root: Path, source: str, frozen: object = None) -> list[tuple[str, s
     return [(rel, who) for rel, who in found if rel != source and not touches_frozen(rel, frozen_paths)]
 
 
+def frozen_targets(root: Path, source: str, frozen: object) -> list[str]:
+    """The targets :func:`targets` leaves out because a frozen surface owns them (reported, never written).
+
+    Args:
+        root: The project root.
+        source: The source's relative path.
+        frozen: The brief's ``frozen_surfaces``.
+
+    Returns:
+        Their relative paths.
+
+    Raises:
+        ValueError: *frozen* is not a list of known surface ids.
+    """
+    kept = {rel for rel, _ in targets(root, source, frozen)}
+    return [rel for rel, _ in targets(root, source, None) if rel not in kept]
+
+
 def table_of_contents(body: str) -> list[str]:
     """The rules' titles: their headings, else the bold lead of each top-level list item, else the item itself.
 
@@ -277,7 +295,8 @@ def projection_content(source: str, body: str, mode: str) -> str:
         Nothing.
     """
     note = (f"> **Projected from `{source}`** (`## Project-Specific Rules`) by agentteams. Edit the rules there; "
-            "this block is regenerated on `--update` and by `--sync-project-rules`.\n\n")
+            "this block is regenerated on `--update` and by `--sync-project-rules`. Agents missing on this provider "
+            "are listed in `references/agent-surface-matrix.md`.\n\n")
     if mode == "copy":
         return note + body
     titles, kept = "", 0
@@ -356,6 +375,7 @@ def project(root: Path, *, configured: str | None = None, frozen: object = None,
     if len(_RULES_HEADING_RE.findall(source_text)) > 1:
         report.outcomes.append(Outcome(source, "refused", "the source has more than one Rules region"))
         return report
+    report.outcomes += [Outcome(rel, "skipped", "a frozen surface owns it") for rel in frozen_targets(root, source, frozen)]
     for rel, provider in targets(root, source, frozen):
         path = root / rel
         if path.is_symlink():
@@ -399,7 +419,8 @@ def _pointer_content(source: str) -> str:
     return (f"**Project rules.** This project's operator rules are in `{source}`, under `## Project-Specific Rules`. "
             "They extend this agent's instructions; they never weaken its Invariant Core or the Constitutional Core, "
             "and where they conflict with either, the Core governs. Read them before acting: a delegated agent may "
-            "not load its provider's instruction file.\n")
+            "not load its provider's instruction file. (agentteams regenerates this block; write your own notes "
+            "outside it.)\n")
 
 
 def pointer_files(root: Path) -> list[Path]:
@@ -472,4 +493,4 @@ def sync_pointers(root: Path, *, configured: str | None = None, frozen: object =
 
 __all__ = ["CODEX_BUDGET_BYTES", "POINTER_AGENTS", "SOURCE_CANDIDATES", "Outcome", "Report", "find_source",
            "pointer_files", "project", "projection_content", "rules_body", "sync_pointers", "table_of_contents",
-           "targets"]
+           "targets", "frozen_targets"]

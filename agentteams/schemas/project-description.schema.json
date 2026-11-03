@@ -642,7 +642,7 @@
     },
     "project_rules_source": {
       "type": "string",
-      "description": "The project-relative instruction file whose '## Project-Specific Rules' region is the one source of the project's rules (for example .claude/CLAUDE.md). Every --update, and --sync-project-rules, keeps a generated copy of it in every other enabled provider's entry file: .github/copilot-instructions.md, CLAUDE.md or .claude/CLAUDE.md, AGENTS.override.md (else AGENTS.md; a binding reference past Codex's 32 KiB budget) and .goosehints; frozen surfaces are skipped. --check fails when a copy drifts. Absent: the first of .claude/CLAUDE.md, CLAUDE.md, .github/copilot-instructions.md, AGENTS.md whose region holds rules. See docs_src/api-reference/rules-projection.md.",
+      "description": "The project-relative instruction file whose '## Project-Specific Rules' region is the one source of the project's rules (for example .claude/CLAUDE.md). Every generate and --update, and --sync-project-rules, keeps a generated copy of it in every other enabled provider's entry file: .github/copilot-instructions.md, CLAUDE.md or .claude/CLAUDE.md, AGENTS.override.md (else AGENTS.md; a binding reference past Codex's 32 KiB budget) and .goosehints; frozen surfaces are skipped. --check fails when a copy drifts. Must be one of .claude/CLAUDE.md, CLAUDE.md, .github/copilot-instructions.md, AGENTS.md. Absent: the source the existing copies record, else the only one of those files whose region holds rules; two such files, or copies recording a source that no longer holds rules, are refused until this key names one. See docs_src/api-reference/rules-projection.md.",
       "examples": [".claude/CLAUDE.md"]
     },
     "memory_index_extra_files": {

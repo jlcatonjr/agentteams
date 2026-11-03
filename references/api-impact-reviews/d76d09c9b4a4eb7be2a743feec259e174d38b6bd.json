@@ -1,0 +1,8 @@
+{
+  "patch_id": "d76d09c9b4a4eb7be2a743feec259e174d38b6bd",
+  "commit": "b98707bf9f59cb4a008dc985e6e5a51791d6fb5f",
+  "subject": "feat(regions): cross-surface Phase 1 from baseAgent's 2026-11-02 hand-off",
+  "impact": "2 modules added, 5 symbols added",
+  "note": "Cross-surface Phases 1-4 (PRs #356-#359). Reviewed every added/changed public symbol, CLI flag (--sync-project-rules, --doctor) and schema key (memory_index_extra_files, project_rules_source, frozen_surfaces in the team manifest) against docs_src/api-reference, cli-reference, the man page and CHANGELOG; @conflict-auditor ran per phase. Open flags resolved in the final tree: cli/post_build.py is a cli module (no api page by the parity rule); can_write_run was replaced by the documented capability().",
+  "recorded_at": "2026-11-02T21:24:04Z"
+}

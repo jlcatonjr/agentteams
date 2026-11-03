@@ -6,11 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
+
+- **`references/agent-surface-matrix.md`** is written on every generate and `--update` (`surface_matrix`). It has one
+  row per agent and one column per surface. Each agent missing somewhere has its declared tools (front-matter
+  `tools`, a recipe's `extensions`, a Codex `sandbox_mode`) and a conservative label: read-only only when every
+  declared tool is known read-only, otherwise assumed to write and run. Names that don't look like names show as
+  `(invalid entry)`. It is never written through a symlink or over a file agentteams didn't generate. The file also states that
+  another provider's file is a role description, never a grant, and lists notes that differ by surface and skills on
+  some surfaces only. Every projected rules block points to it. It is reported, never enforced.
+- **`--doctor`** reports, without writing, whether the project's providers agree: rules copies and pointers (FAIL),
+  memory-index copies built from different sources (WARN), Copilot operator notes past the body limit (FAIL), agents
+  missing by surface and notes that differ (INFO), and a frozen `AGENTS.md` with an older constitutional core
+  (WARN). Exits 1 on a FAIL.
+
 ### added (cross-surface Phase 3: one project's rules reach every provider; baseAgent 2026-11-02)
 
 - **Project-Specific Rules are projected into every enabled provider's entry file** (`rules_projection`). The source
-  is the brief's new `project_rules_source`, else the first of `.claude/CLAUDE.md`, `CLAUDE.md`,
-  `.github/copilot-instructions.md`, `AGENTS.md` whose Rules region holds rules. Each target gets the rules in its own
+  is the brief's new `project_rules_source`, else the source the existing copies record, else the only one of
+  `.claude/CLAUDE.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, `AGENTS.md` whose Rules region holds rules. Each target gets the rules in its own
   Rules region between `PROJECTED-RULES` markers: `.github/copilot-instructions.md`, `.claude/CLAUDE.md` or
   `CLAUDE.md`, `AGENTS.override.md` when it exists (else `AGENTS.md`), and `.goosehints`. Past Codex's 32 KiB budget
   the Codex block is a binding reference with the rules' titles. `frozen_surfaces` are skipped; since Goose gets
