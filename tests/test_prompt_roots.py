@@ -121,6 +121,27 @@ def test_default_warns_only_and_strict_exits_1(project: Path, capsys) -> None:
     assert WARNING in out and rc == 1
 
 
+def test_agents_override_is_a_prompt_root(project: Path, capsys) -> None:
+    # baseAgent P13: Codex loads AGENTS.override.md in place of AGENTS.md, so additions, edits and removals
+    # must be reported. (CLAUDE.local.md is personal and untracked: not recorded.)
+    rel = "AGENTS.override.md"
+    override = project / rel
+    override.write_text("planted\n", encoding="utf-8")
+    _rc, out = _check(project, capsys)
+    assert f"'{rel}': added" in out
+    capsys.readouterr()
+    assert _run(project, "copilot-vscode", ".github/agents", "--update") == 0
+    capsys.readouterr()
+    _rc, out = _check(project, capsys)
+    assert rel not in out
+    override.write_text("changed\n", encoding="utf-8")
+    _rc, out = _check(project, capsys)
+    assert f"'{rel}'" in out
+    override.unlink()
+    _rc, out = _check(project, capsys)
+    assert f"'{rel}'" in out
+
+
 def test_added_agent_file_is_reported(project: Path, capsys) -> None:
     (project / ".codex/agents/planted.toml").write_text('name = "planted"\n', encoding="utf-8")
     _rc, out = _check(project, capsys)
@@ -161,7 +182,7 @@ def test_malformed_recorded_hash_is_a_change(tmp_path: Path) -> None:
 
 
 def test_is_prompt_root() -> None:
-    for rel in (".github/copilot-instructions.md", "AGENTS.md", ".goosehints", "CLAUDE.md",
+    for rel in (".github/copilot-instructions.md", "AGENTS.md", "AGENTS.override.md", ".goosehints", "CLAUDE.md",
                 ".github/prompts/a/b.md", ".github/instructions/x.md", ".github/agents/a.agent.md",
                 ".codex/agents/a.toml", ".goose/recipes/a.yaml", ".claude/agents/a.md"):
         assert prompt_roots.is_prompt_root(rel), rel
