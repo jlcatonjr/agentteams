@@ -1,0 +1,8 @@
+{
+  "patch_id": "a1406e6914b5aece6448c9c4adabc86a49ade959",
+  "commit": "b6b71f4ebe76c91a6619c7801650601fc72d9d3d",
+  "subject": "security(S-10): Rule 15 gate for the local-repository carve-out (@security condition 3)",
+  "impact": "1 modules added, 3 symbols added",
+  "note": "cli/s10_exempt_gate (new, integrity-pinned; CLI-internal, cli/ exempt from API-doc parity) + format_s10_exempt_repos (documented) + s10_cooldown_exempt_repos schema key (additive).",
+  "recorded_at": "2026-11-03T15:47:33Z"
+}

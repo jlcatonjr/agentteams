@@ -311,3 +311,15 @@ def _goose_switch_machinery_under_test():
         os.environ.pop(write_policy.GOOSE_OVERRIDE_ENV, None)
     else:
         os.environ[write_policy.GOOSE_OVERRIDE_ENV] = previous
+
+
+@pytest.fixture
+def stub_ed25519(monkeypatch):
+    """Stub Ed25519 decision verification with a payload hash (``tests._decision_gate_helpers._stub_sig``), so the
+    decision gates' own logic runs without the ``signing`` extra. Shared here, not imported from a test
+    module (wave-3 @code-hygiene H8)."""
+    from agentteams.cli import decision_log as dl
+    from tests._decision_gate_helpers import _stub_sig
+
+    monkeypatch.setattr(dl, "verify_by_scheme",
+                        lambda scheme, values, signature, public_pem=None: signature == _stub_sig(values))

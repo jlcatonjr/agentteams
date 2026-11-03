@@ -386,7 +386,59 @@ def write_registry(root: Path, registry: dict) -> None:
     _atomic_write_text(path, json.dumps(registry, indent=2, sort_keys=True) + "\n")
 
 
+# Backported from main for the S-10 carve-out gate (cli/s10_exempt_gate), 2026-11-03.
+def entries_for(root: Path, action: str) -> list[dict]:
+    """Return every registry entry recorded for a gate ``action`` (exact id, case-insensitive), in file order.
+
+    Args:
+        root: The workspace root.
+        action: The gate action id, e.g. ``sandbox-os-off:claude``.
+
+    Returns:
+        The entries, whatever their status.
+
+    Raises:
+        ExceptionRegistryError: The registry is malformed.
+    """
+    wanted = (action or "").strip().lower()
+    return [e for e in load_registry(root).get("exceptions", [])
+            if isinstance(e, dict) and str(e.get("action") or "").strip().lower() == wanted]
+
+
+def retire_exception(root: Path, exception_id: str, *, reason: str) -> dict:
+    """Flip an active exception to the terminal ``sunset`` state because what it relaxed has ended.
+
+    Strictly tightening: an entry already in a terminal state is left as it is (a ``declined`` entry is never
+    relabelled), and nothing is ever re-activated here.
+
+    Args:
+        root: The workspace root.
+        exception_id: The id to retire.
+        reason: Why it ended (recorded as ``retired_reason``).
+
+    Returns:
+        The registry as written (or as read, when the entry was already terminal).
+
+    Raises:
+        ExceptionRegistryError: The id is unknown, or no reason was given.
+    """
+    if not (reason or "").strip():
+        raise ExceptionRegistryError("retiring an exception requires a reason")
+    registry = load_registry(root)
+    entry = _find_entry(registry, exception_id)
+    if entry is None:
+        raise ExceptionRegistryError(f"unknown exception id {exception_id!r}")
+    if (entry.get("status") or _ACTIVE_STATUS).strip().lower() in _TERMINAL_STATUSES:
+        return registry
+    entry["status"] = "sunset"
+    entry["retired_reason"] = reason
+    write_registry(root, registry)
+    return registry
+
+
 __all__ = [
+    "entries_for",
+    "retire_exception",
     "EXCEPTION_REGISTRY_REL",
     "ExceptionRegistryError",
     "active_relaxing_exceptions",

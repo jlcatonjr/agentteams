@@ -628,6 +628,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "memory_index_extra_files": description.get("memory_index_extra_files") or [],
         # Surfaces a cross-surface write (--refresh-index of every copy) must leave alone.
         "frozen_surfaces": description.get("frozen_surfaces") or [],
+        "s10_cooldown_exempt_repos": description.get("s10_cooldown_exempt_repos") or [],  # S-10 carve-out (gated)
         # The instruction file whose Project-Specific Rules every provider gets (rules_projection).
         "project_rules_source": description.get("project_rules_source") or "",
         # Paths/globs to EXCLUDE from the memory index (e.g. content relocated to a

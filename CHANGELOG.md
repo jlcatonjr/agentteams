@@ -6,6 +6,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.15] - 2026-11-03
+
+### release notes
+
+agentteams 1.1.0-rc.15 is the fifteenth release candidate of the 1.1 line. It ships the S-10 restore that rc.13 and
+rc.14 were missing, the operator's local-repository carve-out from that cooldown, and a fix so renders honour
+`frozen_surfaces`.
+
+- **S-10 release cooldown restored** (#349, opened for rc.13 and never merged). The 14-day cooldown is back in
+  force with only the latest stable release adopted, and neither rule blocks remediating a scan-detected
+  vulnerability. rc.13 and rc.14 still said the cooldown was deprecated.
+- **Local interdependent-repository carve-out** (Jim's ruling, 2026-11-03). Releases of the project's own
+  repositories named in Rule S-10 are exempt from the cooldown only. A repository is named there only once the
+  operator's Ed25519-signed decision covers `s10-cooldown-exempt:<owner/name>` (new brief key
+  `s10_cooldown_exempt_repos`, gated by `cli/s10_exempt_gate`). A name in the brief alone exempts nothing.
+- **Renders honour `frozen_surfaces`** (baseAgent D63). A goose `--update` no longer rewrites a repo-root `AGENTS.md`
+  that a Codex freeze owns, rendering a frozen framework is refused, and `--check` skips frozen files.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.15` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+### Changes since 1.1.0-rc.14
+
+### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
+
+### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
+
+- **The 14-day release cooldown no longer holds back the project's own interdependent repositories.** Jim's ruling: the
+  cooldown stays in force, with the remediation carve-out, but does not apply to updates between his own local,
+  interdependent repositories (agentteams, researchteam, baseAgent, mathAgents, …). The new brief key
+  `s10_cooldown_exempt_repos` lists them per project; generated `@security` agents name them in Rule S-10 (fence
+  `security_rules_invariant` v20). The carve-out lifts the cooldown only: the vulnerability search, Rule S-9's
+  signed-tag identity check and the latest-stable rule (a release candidate still needs a recorded clearance) still
+  apply, and only `owner/name` identifiers are rendered. Absent or empty, it exempts nothing.
+- **Listing a repository is a Rule 15 relaxation, so a brief edit alone doesn't do it** (`cli/s10_exempt_gate`,
+  integrity-pinned). In a governed workspace each listed repository renders only when the operator's Ed25519-signed
+  decision row covers `s10-cooldown-exempt:<owner/name>` (`scope` and `effect_relaxes` exactly, traceable lineage,
+  no HALT on it or the family). The row is registered as an exception under the aggregate cap with a 90-day sunset
+  and re-verified on every later render. Anything else is left out with a notice naming the row to record, so the
+  cooldown applies to it. An ungoverned workspace renders the list with a notice. A path that skips the gate
+  (convert, interop) renders none.
+
+### fixed (renders honour `frozen_surfaces`; baseAgent D63)
+
+- **A render never writes a path a frozen surface owns.** `frozen_surfaces` was read by the effect classifier, the
+  rules projection and the memory index, but not by the render, so a goose `--update` adopted and rewrote a repo-root
+  `AGENTS.md` that a Codex freeze owns (a legacy goose render classifies as goose's). Now (`cli/frozen_render`):
+  - a render is refused before it writes anything when its framework is frozen, or its output directory lies in a
+    directory another frozen surface owns (`copilot-cli` and `copilot-vscode` share `.github/agents/`);
+  - each rendered file in a path a frozen surface owns (`cli/frozen_surfaces.FROZEN_SURFACE_PATHS`) is skipped
+    with a notice, after resolving symlinks, and `--prune` never deletes one;
+  - `--check` leaves frozen files out of its drift verdict, with a notice, since they are never brought up to date.
+
+  The schema already described this contract.
+
+
+- **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the
+  2026-10-26 deprecation below, in every ecosystem. **New: only the latest stable release is adopted**: no
+  pre-releases, no yanked or deprecated releases, no older release when a newer stable one has cleared the
+  cooldown; holding a package back needs a recorded `@security` clearance.
+- **Carve-out: neither rule ever blocks remediating a vulnerability the vulnerability scan detected.** The fix
+  release may be adopted inside the cooldown and need not be the latest stable release. It must still pass
+  the known-vulnerability search (no OSV `MAL-*` entry) and Rule S-9's identity check, and the carve-out covers
+  only the packages the scan flagged (and the dependencies their fix pulls in). Generated `@security` agents carry it in Rule S-10 (fence v19), the S-VM
+  deadline paragraph, the verdict table and the install trigger; the orchestrator's vulnscan-PR steps and the
+  security feed playbook follow.
+- vulnscan only ever remediates scan findings, so `fix`, `stage-fix` and the daily job keep adopting fix
+  releases without an age gate. The constant is renamed `executor.REMEDIATION_COOLDOWN_DAYS` (still 0), and
+  `cooldown_days` / `fix --cooldown-days` stay ignored, with notes that name the carve-out.
+- Server kit: `L3-node-runtime.sh` and `L5-containers.sh` default to a 14-day cooldown again; `--allow-fresh`
+  is the carve-out. `run-host.sh --allow-fresh` passes it on to L3 (never L5), and a server fix plan puts it in
+  its commands when the scan found the host's Node runtime missing a security release.
+- The carve-out stays per flagged host: `run-host.sh all --allow-fresh` is refused (exit 2). L5's `--allow-fresh`
+  and `vulnscan-agent-image.sh --trust-download` (which lifts the script's codex age check) say they need a recorded
+  `@security` clearance, since vulnscan does not scan container images or the agent CLIs. The API reference (server fix plans, npm
+  fixes without `--before`) and the remediation guide describe the carve-out.
+
 ## [1.1.0-rc.14] - 2026-11-03
 
 ### release notes

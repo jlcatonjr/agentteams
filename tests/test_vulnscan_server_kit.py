@@ -4,11 +4,14 @@ Every test copies the packaged kit's ``*.sh`` scripts into a tmp dir, puts a fak
 PATH and uses a tmp ``hosts.conf`` with ``example.com`` names. No real host is ever contacted.
 ``/bin/bash`` (3.2 on macOS, the compatibility floor) runs the scripts when it exists.
 
-Items (vulnscan-test-matrix Rev 4): G5, G6, G19, G20, G21, G27, G35, G36.
+Items (vulnscan-test-matrix Rev 4): G5, G6, G19, G20, G21, G27, G35, G36; Rule S-10's release cooldown and its
+scan-remediation carve-out (``--allow-fresh``).
 """
 
 from __future__ import annotations
 
+import datetime as dt
+import json
 import os
 import shlex
 import shutil
@@ -233,7 +236,7 @@ def test_g6_dry_run_passes_no_apply_and_never_reboots(kit: Kit) -> None:
 def test_g6_every_flag_is_accepted_by_its_target_script(kit: Kit) -> None:
     """The args run-host builds parse in the real L2/L3/L5 option loops (no `unknown option`)."""
     for script, args in (("L2-os-patch.sh", ["--apply", "--restart-services", "--all", "--reboot"]),
-                         ("L3-node-runtime.sh", ["--apply", "--restart-services", "--major", "24"]),
+                         ("L3-node-runtime.sh", ["--apply", "--restart-services", "--major", "24", "--allow-fresh"]),
                          ("L5-containers.sh", ["--apply"])):
         text = (kit.kit / script).read_text()
         loop = text[text.index("while [ $# -gt 0 ]") if "while [ $# -gt 0 ]" in text else text.index('for a in "$@"'):]
@@ -249,6 +252,71 @@ def test_g6_all_mode_forwards_flags_per_host(kit: Kit) -> None:
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     l3 = [(c["argv"][-2], c["args"]) for c in kit.calls() if c["script"] == "L3-node-runtime.sh"]
     assert l3 == [("deploy@web1.example.com", ["--major", "24"]), ("deploy@web2.example.com", ["--major", "24"])]
+
+
+# ---------------------------------------------------------------- S-10: release cooldown, scan-remediation carve-out
+
+def test_s10_allow_fresh_reaches_l3_only(kit: Kit) -> None:
+    """``--allow-fresh`` is the carve-out for a Node runtime the scan found vulnerable: L3 gets it, L5 never does."""
+    proc = kit.run("run-host.sh", "web1", "--apply", "--allow-fresh")
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    got = dict((c["script"], c["args"]) for c in kit.calls() if c["script"] in ("L3-node-runtime.sh", "L5-containers.sh"))
+    assert got == {"L3-node-runtime.sh": ["--apply", "--allow-fresh"], "L5-containers.sh": ["--apply"]}
+    kit.hosts("web1 | deploy@web1.example.com\nweb2 | deploy@web2.example.com\n")
+    before = len(kit.calls())
+    proc = kit.run("run-host.sh", "all", "--allow-fresh")   # the carve-out is per flagged host, never fleet-wide
+    assert proc.returncode == 2 and "needs a host name" in proc.stderr, (proc.stdout, proc.stderr)
+    assert len(kit.calls()) == before
+
+
+@pytest.mark.parametrize("script", ["L3-node-runtime.sh", "L5-containers.sh"])
+def test_s10_kit_cooldown_defaults_to_14_days(script: str) -> None:
+    assert "COOLDOWN=14;" in (KIT_SRC / script).read_text()
+
+
+def _latest_of(args: list[str], releases: list[tuple[str, int]]) -> str:
+    """Run L3's real option loop and ``latest_of 24`` against an index of (version, age in days), newest first."""
+    text = (KIT_SRC / "L3-node-runtime.sh").read_text()
+    head = text[text.index("APPLY=false;"): text.index("SCAN_ROOTS=")]
+    fn = text[text.index("latest_of(){"):]
+    fn = fn[: fn.index("\n}\n") + 3]
+    today = dt.datetime.now(dt.UTC).date()
+    index = json.dumps([{"version": f"v{v}", "date": (today - dt.timedelta(days=age)).isoformat()}
+                        for v, age in releases], separators=(",", ":"))
+    probe = f"set -u\n{head}\nINDEX={shlex.quote(index)}\n{fn}\nlatest_of 24\n"
+    proc = subprocess.run([BASH, "-c", probe, "x", *args], capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout.strip()
+
+
+def test_s10_l3_never_holds_a_fix_silently(tmp_path: Path) -> None:
+    """Installed v24.22.0 is the newest release past the cooldown; v24.23.0 is inside it. L3 says HOLD, not OK."""
+    text = (KIT_SRC / "L3-node-runtime.sh").read_text()
+    body = text[text.index("APPLY=false;"): text.index("restart_node_services(){")]
+    node = tmp_path / "node"
+    node.write_text("#!/bin/bash\necho v24.22.0\n")
+    node.chmod(0o755)
+    today = dt.datetime.now(dt.UTC).date()
+    index = json.dumps([{"version": f"v{v}", "date": (today - dt.timedelta(days=age)).isoformat()}
+                        for v, age in (("24.23.0", 3), ("24.22.0", 20))], separators=(",", ":"))
+    curl = tmp_path / "curl"   # latest_of runs in a subshell, so INDEX comes from a fake curl
+    curl.write_text(f"#!/bin/bash\nprintf '%s' {shlex.quote(index)}\n")
+    curl.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:/usr/bin:/bin"}
+    for args, want in (([], "HOLD"), (["--allow-fresh"], "UPGRADE")):
+        probe = f"set -u\n{body}\nhandle_binary {shlex.quote(str(node))}\n"
+        proc = subprocess.run([BASH, "-c", probe, "x", *args], capture_output=True, text=True, env=env, check=False)
+        assert proc.stdout.startswith(want), (args, proc.stdout, proc.stderr)
+    assert "--allow-fresh if the vulnerability scan flagged" in subprocess.run(
+        [BASH, "-c", f"set -u\n{body}\nhandle_binary {shlex.quote(str(node))}\n", "x"],
+        capture_output=True, text=True, env=env, check=False).stdout
+
+
+def test_s10_l3_takes_the_newest_release_past_the_cooldown_unless_allow_fresh() -> None:
+    releases = [("24.23.0", 3), ("24.22.0", 20), ("24.21.0", 52), ("22.30.0", 1)]
+    assert _latest_of([], releases) == "24.22.0"                       # 24.23.0 is inside the 14-day cooldown
+    assert _latest_of(["--allow-fresh"], releases) == "24.23.0"        # the scan-remediation carve-out
+    assert _latest_of(["--cooldown-days", "30"], releases) == "24.21.0"
 
 
 # ---------------------------------------------------------------- G19: host-name grammar, no split/glob
