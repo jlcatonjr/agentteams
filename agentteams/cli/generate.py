@@ -39,6 +39,7 @@ from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
+from agentteams.cli.frozen_render import drop_frozen, frozen_refusal, prunable
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
@@ -181,6 +182,10 @@ def _run_generate_inner(
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
+    if not args.check and (frozen_msg := frozen_refusal(manifest, framework_id, output_dir)) is not None:
+        sys.stdout.flush()  # before anything is written: the build log, backups and post-build files included
+        print(frozen_msg, file=sys.stderr)
+        return 1
 
     from agentteams.cli.artifacts import (
         PrivilegeConfinementError,
@@ -598,7 +603,8 @@ def _run_generate_inner(
 
         # --prune: delete removed files (with confirmation unless --yes)
         if args.prune and sdreport.removed_files:
-            rc = build_team._prune_removed_files(sdreport.removed_files, output_dir, args.yes, args.dry_run)
+            rc = build_team._prune_removed_files(prunable(manifest, sdreport.removed_files, output_dir),
+                                                 output_dir, args.yes, args.dry_run)
             if rc != 0:
                 return rc
 
@@ -636,7 +642,8 @@ def _run_generate_inner(
                     f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
                 )
 
-        update_rendered = apply_adapter_guard(adapter, update_rendered, output_dir)
+        update_rendered = drop_frozen(manifest, apply_adapter_guard(adapter, update_rendered, output_dir), output_dir)
+        final_rendered = drop_frozen(manifest, final_rendered, output_dir, quiet=True)  # the post-audit's list
         result = emit.emit_all(
             update_rendered,
             output_dir=output_dir,
@@ -873,7 +880,7 @@ def _run_generate_inner(
                 f"{mresult.coord_log_rows_moved} coordination row(s) to CSV files."
             )
 
-    final_rendered = apply_adapter_guard(adapter, final_rendered, output_dir)
+    final_rendered = drop_frozen(manifest, apply_adapter_guard(adapter, final_rendered, output_dir), output_dir)
     result = emit.emit_all(
         final_rendered,
         output_dir=output_dir,

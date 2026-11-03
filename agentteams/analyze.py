@@ -619,6 +619,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "memory_index_exclude": description.get("memory_index_exclude") or [],
         # Extra local-script dirs/globs for the code & API index (gitignored cache).
         "code_index_extra_dirs": description.get("code_index_extra_dirs") or [],
+        "frozen_surfaces": description.get("frozen_surfaces") or [],  # renders skip what a frozen surface owns
     }
     # MCP-suitability detection (report §5). Advisory only — populated solely
     # when the description declares mcp_hints, so manifests for projects without
