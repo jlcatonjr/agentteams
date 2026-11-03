@@ -6,7 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.14] - 2026-11-03
+
+### release notes
+
+agentteams 1.1.0-rc.14 is the first tag that carries the 1.1.0-rc.13 changes below. The signed `v1.1.0-rc.13` tag was
+cut from a stale ref and points at the rc.12 commit (`ac93628a`), so it installs 1.1.0rc12 and none of the
+cross-surface work. It is left in place rather than moved, because it was already fetched. Do not install it.
+
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.14` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`). Everything in the rc.13 notes applies, including **After upgrading**.
+- No code changes since the rc.13 release commit; only the version moves to 1.1.0rc14.
+
 ## [1.1.0-rc.13] - 2026-11-02
+
+> **Not shipped under this tag.** `v1.1.0-rc.13` points at the rc.12 commit; these changes first ship in
+> 1.1.0-rc.14.
 
 ### release notes
 
