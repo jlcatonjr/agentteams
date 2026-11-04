@@ -45,6 +45,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cooldown applies to it. An ungoverned workspace renders the list with a notice. A path that skips the gate
   (convert, interop) renders none.
 
+### security (pinned sync kept dropping sibling-team denies; remediation-log 2026-11-03)
+
+- **A pinned-sync projection now keeps the sibling-team denies a native generate emits.**
+  `multi_sync._projected_privilege_manifest` never set the transient `SIBLING_DENY_DIRS_KEY`, so every
+  `--sync`/`--sync-init` rendered the boundary as if no sibling team existed: goose's `.goose/sandbox.sb` lost the
+  `.github`, `.github/agents` and `.github/agents/references` F-4 ancestor rename-deny literals when a copilot team
+  was present (a goose agent could rename the copilot team's dir away and plant a replacement), and the
+  `denyWrite` in the projected `.claude/settings.hooks.example.json` lost the sibling team dirs (sync never
+  rewrites the live `.claude/settings.json`). The projection now computes it with `present_sibling_deny_dirs`,
+  as `cli/generate_helpers.py` does. Found in collector-management (`--sync-init`, 2026-11-03).
+
 ### fixed (renders honour `frozen_surfaces`; baseAgent D63)
 
 - **A render never writes a path a frozen surface owns.** `frozen_surfaces` was read by the effect classifier, the

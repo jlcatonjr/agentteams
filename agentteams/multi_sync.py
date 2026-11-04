@@ -40,9 +40,11 @@ from typing import Any
 from agentteams.git_exec import run_git
 from agentteams.canonical import load_canonical, materialize_canonical
 from agentteams.frameworks._sandbox_emit import (
+    SIBLING_DENY_DIRS_KEY,
     TEAM_MARKER_REL,
     VERIFY_KEY_STORE_SENTINEL_REL,
     VERIFY_KEY_STORE_SENTINEL_TEXT,
+    present_sibling_deny_dirs,
 )
 from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS, agents_dir_for
@@ -295,6 +297,11 @@ def _projected_privilege_manifest(root: Path, framework: str, privilege: dict[st
         "host_features": merge_profile_features([], profile, framework, os_sandbox=privilege.get("os_sandbox")),
         # Transient, never persisted: the project root for the write-root hard bans (#2).
         PROJECT_ROOT_KEY: Path(root).resolve(),
+        # Transient: the sibling teams present, as generate computes them (cli/generate_helpers.py). Without
+        # it a projected boundary treated every sibling as absent, so goose's sandbox.sb lost the .github
+        # F-4 ancestor rename-deny literals and claude's denyWrite the sibling team dirs (remediation-log
+        # 2026-11-03, SECURITY).
+        SIBLING_DENY_DIRS_KEY: present_sibling_deny_dirs(Path(root)),
     }
     for key in ("os_sandbox", "workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
                 "resolve_deny_read_abspath"):
