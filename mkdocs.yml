@@ -345,6 +345,7 @@ nav:
               - bridge-skills: api-reference/bridge-skills.md
           - Multi-framework pinned sync:
               - multi-sync: api-reference/multi-sync.md
+              - sync-hub-refresh: api-reference/sync-hub-refresh.md
               - sync-pin: api-reference/sync-pin.md
               - sync-baseline: api-reference/sync-baseline.md
               - sync-classifier: api-reference/sync-classifier.md

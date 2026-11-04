@@ -48,7 +48,7 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `backup_switch.py` | Glue for `--stale-check` / `--stale-remediate` / `--prune-backups` / `--backup-mirror`. |
 | `fleet_switch.py` | Glue for `--fleet` / `--fleet-frameworks` / `--fleet-report`. |
 | `package_switch.py` | Glue + dispatch for `--package-team` / `--package-source-framework`. |
-| `sync_switch.py` | Glue + dispatch for `--sync-init` / `--sync` / `--sync-since` / `--pin`. |
+| `sync_switch.py` | Glue + dispatch for `--sync-init` / `--sync` / `--sync-since` / `--pin` / `--sync-refresh-instructions`. |
 | `recipe_check.py` | Standalone structural validator for Goose recipe YAML. |
 | `standalone_modes.py` | The "do one thing and exit" modes carved out of `generate.py`: restore-backup, scan-security, check-budget, template pinning, and the retrieval utilities. They were never part of the generate pipeline. |
 | `output_target.py` | Resolves and validates the output directory, including the foreign-output refusal behind `--allow-foreign-output`. |

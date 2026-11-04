@@ -10,6 +10,9 @@ Flags:
 - ``--sync`` runs one on-demand pass (detects changed frameworks from commit
   diffs, reconciles to the pin, projects to all, logs conflicts).
 - ``--sync-since <commit>`` overrides the change-detection anchor.
+- ``--sync-refresh-instructions`` fence-merges the pin's deployed instruction
+  file into the canonical hub (``sync_hub_refresh``); ``--sync`` itself never
+  refreshes the hub's instructions.
 - ``--frameworks <fw1,fw2,...>`` narrows --sync-init's sync set (default: every
   registered framework). Needed since the P1 convergence (2026-08-15):
   copilot-vscode and copilot-cli now share one physical agents directory, so
@@ -32,7 +35,7 @@ def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
 
     Returns:
         None. The parser gains a "multi-framework pinned sync" group
-        (--sync-init, --pin, --sync, --sync-since).
+        (--sync-init, --pin, --sync, --sync-since, --sync-refresh-instructions).
     """
     group = parser.add_argument_group("multi-framework pinned sync")
     group.add_argument(
@@ -77,6 +80,18 @@ def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
         help="Override the change-detection anchor (default: pin's last_synced_commit).",
     )
     group.add_argument(
+        "--sync-refresh-instructions",
+        action="store_true",
+        dest="sync_refresh_instructions",
+        default=False,
+        help=(
+            "Refresh the canonical hub's instruction-file fences from the pin's "
+            "deployed instruction file (fenced regions only; a fence version is "
+            "never lowered), without syncing. --sync runs the same refresh "
+            "before projecting. Honors --dry-run."
+        ),
+    )
+    group.add_argument(
         "--frameworks",
         metavar="FW1,FW2,...",
         default=None,
@@ -92,7 +107,7 @@ def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_sync_cli(args: argparse.Namespace) -> int:
-    """Dispatch --sync-init / --sync.
+    """Dispatch --sync-init / --sync / --sync-refresh-instructions.
 
     Args:
         args: Parsed CLI namespace carrying sync_init/sync/pin/sync_since,
@@ -106,7 +121,7 @@ def run_sync_cli(args: argparse.Namespace) -> int:
     if getattr(args, "output", None):
         # --sync/--sync-init take their root from --project; a silently ignored --output ran a
         # projection against the CWD project instead of the intended one (incident 2026-09-29).
-        print("Error: --sync-init/--sync do not use --output; pass the project root with "
+        print("Error: --sync-init/--sync/--sync-refresh-instructions do not use --output; pass the project root with "
               "--project <dir>.", file=sys.stderr)
         return 2
     root = Path(getattr(args, "project", None) or ".").resolve()
@@ -115,6 +130,13 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         return 2
     dry = bool(getattr(args, "dry_run", False))
     dry_label = " (dry-run)" if dry else ""
+
+    if getattr(args, "sync_refresh_instructions", False):
+        if getattr(args, "sync_init", False) or getattr(args, "sync", False) or getattr(args, "sync_since", None):
+            print("Error: --sync-refresh-instructions runs on its own; run --sync/--sync-init "
+                  "(and --sync-since) separately.", file=sys.stderr)
+            return 2
+        return _run_refresh(root, dry_run=dry, dry_label=dry_label)
 
     if getattr(args, "sync_init", False):
         pin = getattr(args, "pin", None)
@@ -153,4 +175,24 @@ def run_sync_cli(args: argparse.Namespace) -> int:
             f"  {len(result.conflicts)} conflict(s) resolved to the pin — "
             f"logged to {CONFLICT_LOG_SUBPATH} for review."
         )
+    return 0
+
+
+def _run_refresh(root: Path, *, dry_run: bool, dry_label: str) -> int:
+    """Run --sync-refresh-instructions and print what moved into the hub."""
+    from agentteams.sync_hub_refresh import refresh_hub_instructions
+
+    try:
+        result = refresh_hub_instructions(root, dry_run=dry_run)
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    verb = ("would refresh from" if dry_run else "refreshed from") if result.changed else "already current with"
+    print(f"Hub instructions{dry_label}: {verb} the pin ({result.pin})")
+    if result.refreshed:
+        print(f"  fences replaced: {', '.join(result.refreshed)}")
+    if result.added:
+        print(f"  fences added:    {', '.join(result.added)}")
+    for notice in result.notices:
+        print(f"  ⚠  {notice}")
     return 0

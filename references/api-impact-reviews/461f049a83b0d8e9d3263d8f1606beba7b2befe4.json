@@ -1,0 +1,8 @@
+{
+  "patch_id": "461f049a83b0d8e9d3263d8f1606beba7b2befe4",
+  "commit": "90f8c114c0394a8c2fb79780a374eb3dc12cb653",
+  "subject": "fix(sync): refresh the hub's instruction fences from the pin before projecting",
+  "impact": "1 symbols added, 1 symbols changed",
+  "note": "Reviewed: refresh_hub_binding (new, take_peer_fences) documented in docs_src/api-reference/sync-hub-refresh.md; __all__ change is that addition only. run_sync's pre-projection refresh documented in multi-sync.md, cli-reference.md, agentteams.1 and the --sync-refresh-instructions help; CHANGELOG updated. No other callers.",
+  "recorded_at": "2026-11-03T19:51:55Z"
+}
