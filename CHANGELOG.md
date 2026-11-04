@@ -14,8 +14,9 @@ agentteams 1.1.0-rc.16 is the sixteenth release candidate of the 1.1 line. It ca
 
 - **The S-10 local-repository carve-out now holds on every surface** (reported from researchteam #139). In rc.15
   only copilot-vscode could exempt a repository: claude, goose and codex read their own decisions logs, which hold
-  none of the operator's signed policy rows, so they kept the cooldown. Every surface now authorizes against the
-  project's `.github/agents`, so one signed `s10-cooldown-exempt:<owner/name>` row covers all of them. A row already
+  none of the operator's signed policy rows, so they kept the cooldown. In a governed project, every surface now
+  authorizes against the project's `.github/agents` (when it is a real, governed directory), so one signed
+  `s10-cooldown-exempt:<owner/name>` row covers all of them. A row already
   consumed under rc.15 carries over; no new signature is needed.
 - **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.16` tag (release key `SHA256:IPdnLwlF…`,
   as in `SECURITY.md`).
