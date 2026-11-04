@@ -8,10 +8,10 @@ P10 (:mod:`agentteams.wasm_mcp`) builds the server's entries; this module decide
 * per-agent copies (each launch carries that agent's grant) where the host scopes MCP servers per agent: Claude
   subagent front matter, Goose recipes (grant mode, direct ``goose run --recipe``);
 * one compute-only ``--agent _session`` copy where the config is project-wide: Codex ``.codex/config.toml``;
-  inert examples the operator merges for the Claude top-level session, VS Code and Copilot CLI (agentteams never
-  writes a live ``.mcp.json`` / ``.vscode/mcp.json`` / ``.github/mcp.json``);
-* nothing where the format is unverified (Grok: custom agents carry ``mcpInheritance: none``) or absent
-  (agents-md), with an explicit notice.
+  inert examples the operator merges for the Claude top-level session, VS Code, Copilot CLI and Grok (agentteams
+  never writes a live ``.mcp.json`` / ``.vscode/mcp.json`` / ``.github/mcp.json``, or the server's table in
+  ``.grok/config.toml``);
+* nothing where the channel is absent (agents-md), with an explicit notice.
 
 The record is ``manifest["wasm_wiring"]``: ``protected_config_paths`` (every emitted file that launches the server;
 METAPLAN R1 — :mod:`._control_plane_protect` adds each to the session denyWrite and an ``Edit`` deny) and one row
@@ -50,19 +50,20 @@ WIRED_STATUSES = frozenset({WIRED_PER_AGENT, WIRED_SHARED})
 CLAUDE_EXAMPLE = ".claude/mcp.agentteams-wasm.example.json"
 VSCODE_EXAMPLE = ".vscode/mcp.agentteams-wasm.example.json"
 COPILOT_CLI_EXAMPLE = ".github/mcp.agentteams-wasm.example.json"
+GROK_EXAMPLE = ".grok/mcp.agentteams-wasm.example.toml"
 CODEX_CONFIG = ".codex/config.toml"
 #: Per-agent MCP config hosts: ``framework -> (agents dir, extension)`` (project-relative, canonical layout).
 PER_AGENT_DIRS: Mapping[str, tuple[str, str]] = {"claude": (".claude/agents", ".md"),
                                                  "goose": (".goose/recipes", ".yaml")}
 #: Frameworks whose agents dir sits two levels below the root, so ``wasm_mcp.install_files`` paths resolve.
-_INSTALL_FRAMEWORKS = frozenset({"claude", "goose", "codex", "copilot-vscode", "copilot-cli"})
+_INSTALL_FRAMEWORKS = frozenset({"claude", "goose", "codex", "copilot-vscode", "copilot-cli", "grok"})
 #: The text every file that launches the server carries (its install path), used by :func:`launching_config_paths`.
 LAUNCH_MARKER = "agentteams-wasm-mcp.py"
 #: Where a launching config can live (``(dir, globs, recursive)``, project-relative), for the disk scan.
 _SCAN: tuple[tuple[str, tuple[str, ...], bool], ...] = (
     (".claude/agents", ("*.md",), False), (".claude", ("*.json",), False), (".", (".mcp.json",), False),
     (".goose/recipes", ("*.yaml", "*.yml", "*.json"), True), (".codex", ("config.toml",), False),
-    (".grok", ("config.toml",), False), (".grok/agents", ("*.md",), False), (".vscode", ("*.json",), False),
+    (".grok", ("config.toml", "mcp*.toml"), False), (".grok/agents", ("*.md",), False), (".vscode", ("*.json",), False),
     (".github", ("mcp*.json",), False), (".github/agents", ("*.md",), False),
 )
 #: Bounds of the scan (fail closed: a file or tree past a bound is reported as unscanned, never half-read).
@@ -111,6 +112,10 @@ def _goose_block(manifest: Mapping[str, Any]) -> str | None:
 _HOST_NOTE = ("the host launches the server outside its own session sandbox (operator spike B, 2026-11-01), so the "
               "server's own nested OS profile around wasmtime and the shell-side denyWrite of every config carrying "
               "its launch flags are what protect it")
+#: Operator spike 07 (2026-11-03, wasmtime 36.0.20, macOS): what the other hosts did with one `run_wasm` call.
+_NESTED_UNLESS_SANDBOXED = ("live call nested under Seatbelt with the host's sandbox off, os_confinement=none "
+                            "(unavailable:darwin, snapshot read-only mounts) under {flag}, which runs the server "
+                            "inside it (operator spike 07, 2026-11-03)")
 
 
 def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
@@ -139,15 +144,20 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
     if framework == "copilot-vscode":
         return row(EXAMPLE_ONLY, "session-compute-only", f"inert {VSCODE_EXAMPLE} (servers/stdio, VS Code docs "
                    "2026-10-31); merge into .vscode/mcp.json; run_wasm is not in agent tools (custom-agent MCP "
-                   "tool spelling unverified)", True, [VSCODE_EXAMPLE])
+                   "tool spelling unverified); live call nested under Seatbelt, after an approval prompt (operator "
+                   "spike 07, 2026-11-03)", True, [VSCODE_EXAMPLE])
     if framework == "copilot-cli":
         return row(EXAMPLE_ONLY, "session-compute-only", f"inert {COPILOT_CLI_EXAMPLE} (mcpServers/local, GitHub "
                    "docs 2026-10-31); merge into .github/mcp.json (loaded after folder trust); per-agent "
-                   "mcp-servers in CLI agent profiles unverified", True, [COPILOT_CLI_EXAMPLE])
+                   "mcp-servers in CLI agent profiles unverified; "
+                   + _NESTED_UNLESS_SANDBOXED.format(flag="--sandbox"), True, [COPILOT_CLI_EXAMPLE])
     if framework == "grok":
-        return row(UNVERIFIED_FORMAT, "none", "not wired: whether a custom agent with mcpInheritance: none sees "
-                   "project MCP servers, or launches front-matter mcpServers, is unverified on the pinned Grok "
-                   "Build (operator check pending)", False)
+        return row(EXAMPLE_ONLY, "session-compute-only", f"inert {GROK_EXAMPLE} (not write-protected on Grok: check it "
+                   "against a fresh render before merging); merge its table into .grok/config.toml, outside the "
+                   "agentteams-managed block (loaded after folder trust); no "
+                   "[permission] ask rule covers it, and custom agents carry mcpInheritance: none (their access and "
+                   "Grok's approval prompt are untested); "
+                   + _NESTED_UNLESS_SANDBOXED.format(flag="--sandbox workspace"), True, [GROK_EXAMPLE])
     if framework == "agents-md":
         return row(INSTRUCTIONS_ONLY, "none", "AGENTS.md has no MCP channel; instructions only", True)
     return row(NOT_WIRED, "none", f"no agentteams_wasm wiring for {framework}", False)
@@ -263,11 +273,21 @@ def _example(target: str, key: str, entry: dict[str, Any]) -> str:
                       indent=2) + "\n"
 
 
+def _toml_example(target: str, entry: Mapping[str, Any]) -> str:
+    note = _MERGE_NOTE.format(target=target)
+    table = "".join(f"{key} = {json.dumps(value, ensure_ascii=False)}\n" for key, value in entry.items())  # valid TOML
+    caveat = ("A render with grok:mcp wiring any server owns [mcp_servers] and replaces this table (it says so); "
+              "merge it again after such a render.")
+    verify = ("Grok does not write-protect this file: before merging, check it matches a fresh render (the "
+              "--agent value must be _session).")
+    return f"# {note}\n# {caveat}\n# {verify}\n[mcp_servers.agentteams_wasm]\n{table}"
+
+
 def output_files(manifest: dict[str, Any], framework: str) -> list[tuple[str, str]]:
     """The text files a framework's ``extra_output_files`` adds for WASM: the server + text bundle, and the example.
 
     Empty when WASM is off (default teams byte-identical) or when nothing launches the server for this framework
-    (Grok, agents-md, Goose not wired). The binary deny probe goes through :func:`install_binary` (the emit phase
+    (agents-md, Goose not wired). The binary deny probe goes through :func:`install_binary` (the emit phase
     writes text only). Paths are relative to the agents dir (two levels below the root).
 
     Args:
@@ -300,6 +320,8 @@ def output_files(manifest: dict[str, Any], framework: str) -> list[tuple[str, st
     elif framework == "copilot-cli":
         files.append((f"../../{COPILOT_CLI_EXAMPLE}", _example(
             ".github/mcp.json", "mcpServers", {"type": "local", **entry, "tools": list(wasm_mcp.TOOLS)})))
+    elif framework == "grok":
+        files.append((f"../../{GROK_EXAMPLE}", _toml_example(".grok/config.toml", entry)))
     return files
 
 
@@ -809,6 +831,7 @@ __all__ = [
     "CLAUDE_EXAMPLE",
     "CODEX_CONFIG",
     "COPILOT_CLI_EXAMPLE",
+    "GROK_EXAMPLE",
     "ConfigScan",
     "LAUNCH_MARKER",
     "PER_AGENT_DIRS",

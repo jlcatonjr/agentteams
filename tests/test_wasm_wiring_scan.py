@@ -65,8 +65,9 @@ def test_wasm_off_reports_every_launching_config(tmp_path):
 
 def test_wasm_on_but_nothing_installed_here_reports_launching_configs(tmp_path):
     rel = _write(tmp_path, ".mcp.json", _entry(SERVER))
-    problems = ww.check_wiring_problems(tmp_path, "grok", _manifest("grok"))
-    assert len(problems) == 1 and problems[0].startswith(rel) and "grok does not wire agentteams_wasm" in problems[0]
+    problems = ww.check_wiring_problems(tmp_path, "agents-md", _manifest("agents-md"))
+    assert len(problems) == 1 and problems[0].startswith(rel)
+    assert "agents-md does not wire agentteams_wasm" in problems[0]
 
 
 def test_verify_sandbox_wiring_reports_a_launching_config_with_wasm_off(tmp_path):

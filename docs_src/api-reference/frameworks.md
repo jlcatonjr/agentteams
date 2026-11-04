@@ -461,21 +461,36 @@ never gets `run_wasm`. With WASM off nothing is recorded or emitted, so renders 
 | codex | `wired-shared` | One compute-only `--agent _session` table in `.codex/config.toml`, configured with `default_tools_approval_mode = "prompt"` (a default the host applies; agentteams does not verify it is enforced), through `codex_mcp_emit`'s `first_party_tables` hook. No `codex:mcp` token is needed (turning WASM on is the opt-in); without it, an existing config's other `[mcp_servers.*]` tables refuse the write instead of being dropped. |
 | copilot-vscode | `example-only` | Inert `.vscode/mcp.agentteams-wasm.example.json` (`servers` / `stdio`). `run_wasm` is not added to agent `tools:`; the custom-agent MCP tool spelling is unverified. |
 | copilot-cli | `example-only` | Inert `.github/mcp.agentteams-wasm.example.json` (`mcpServers` / `local`). Per-agent `mcp-servers` in CLI agent profiles is unverified. |
-| grok | `unverified-format` | Nothing. Whether a custom agent with `mcpInheritance: none` sees project MCP servers, or launches front-matter `mcpServers`, is unverified on the pinned Grok Build. |
+| grok | `example-only` | Inert `.grok/mcp.agentteams-wasm.example.toml` (`[mcp_servers.agentteams_wasm]`, `command` / `args`). The operator merges the table into `.grok/config.toml` outside the agentteams-managed block; Grok loads it once the folder is trusted. No `[permission]` ask rule covers it. A render where `grok:mcp` wires any server replaces the merged table (the render reports it as replaced), so merge it again after such a render. Grok gets no write-protection for the example itself, so check it against a fresh render before merging. Custom agents keep `mcpInheritance: none`, so whether they see it is untested. |
 | agents-md | `instructions-only` | Nothing (no MCP channel). |
 
 **Where the server runs.** Operator spike B (2026-11-01, dev wasmtime 36.0.16) showed that Claude Code (with its
 session sandbox on or off) and Goose both launch stdio MCP servers *outside* their own session sandbox; the server
 then applied its own nested Seatbelt profile around wasmtime (`os_confinement: "nested"`). So on these hosts the
 session sandbox does not confine the server: its own nesting, and the shell-side `denyWrite` of every config file that
-carries its launch flags, are what protect it. Codex, Grok and Copilot were not measured; nothing here claims nesting
-for them beyond what the server reports at run time.
+carries its launch flags, are what protect it.
 
-Hosts with one shared copy (codex, copilot-vscode, copilot-cli) refuse a widened `wasm_sandbox.agents` grant at
+Operator spike 07 (2026-11-03, wasmtime 36.0.20, macOS) made one `run_wasm` call from each other host's top-level
+session:
+
+| Host | Host sandbox | `os_confinement` |
+|---|---|---|
+| Codex (`codex exec`) | `workspace-write` (default) | none: the call is blocked, because non-interactive `codex exec` cannot answer the `prompt` approval |
+| Codex | `danger-full-access`, or bypass approvals and sandbox | `nested` (Seatbelt) |
+| Copilot CLI | off (default) | `nested` (Seatbelt) |
+| Copilot CLI | `--sandbox` | `none` (`unavailable:darwin`): the server runs inside the host's Seatbelt, so read-only mounts fall back to a snapshot |
+| Copilot VS Code | agent mode | `nested` (Seatbelt), after an approval prompt |
+| Grok (`grok -p`, `--always-approve`) | `--sandbox off` | `nested` (Seatbelt) |
+| Grok | `--sandbox workspace` | `none` (`unavailable:darwin`), as for Copilot CLI |
+
+So where a host runs MCP servers inside its own sandbox, that sandbox is the only OS layer, and the result says so
+(`os_confinement: "none"`). Linux hosts and custom agents were not measured.
+
+Hosts with one shared copy (codex, copilot-vscode, copilot-cli, grok) refuse a widened `wasm_sandbox.agents` grant at
 render time instead of downgrading it (I3). agentteams never writes a live `.mcp.json`, `.vscode/mcp.json` or
-`.github/mcp.json`.
+`.github/mcp.json`, and never adds the server's table to `.grok/config.toml`.
 
-Where the server is installed (claude, codex, copilot, goose when wired), the text bundle is emitted with the team and
+Where the server is installed (claude, codex, copilot, grok, goose when wired), the text bundle is emitted with the team and
 the binary deny probe is written after the emit by `install_binary` (the emit phase writes text only).
 
 ### The manifest record
