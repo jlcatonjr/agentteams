@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-11-03
+
+### release notes
+
+agentteams 1.0.7 is a patch release on the 1.0 line with one fix backported from `main`. It adds no dependencies.
+
+- **The S-10 local-repository carve-out now holds on every surface** (reported from researchteam #139). In 1.0.6
+  only copilot-vscode could exempt a repository: claude, goose and codex read their own decisions logs, which hold
+  none of the operator's signed policy rows, so they kept the cooldown. In a governed project, every surface now
+  authorizes against the project's `.github/agents` (when it is a real, governed directory), so one signed
+  `s10-cooldown-exempt:<owner/name>` row covers all of them. A row already
+  consumed under 1.0.6 carries over; no new signature is needed.
+- **Install:** from a verified, detached checkout of the signed `v1.0.7` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
+### fix (Rule S-10 carve-out: every surface authorizes against the canonical `.github/agents`)
+
+- **One signed row now exempts a repository on every surface** (reported from researchteam #139). On a multi-surface
+  repo the Rule 15 gate read each surface's own decisions log. Those logs hold none of the operator's signed policy
+  rows, so only copilot-vscode could exempt a repository, and claude, goose and codex over-tightened. In a governed
+  project, every native surface (`.claude`, `.goose`, `.codex`, `.grok`, agents-md, wasm) now authorizes against
+  `<project>/.github/agents`: one decision row, one consumption, one registered exception under the cap and sunset.
+- The project root is derived from the output path only, never from the brief. A symlinked `.github` or
+  `.github/agents` is never followed, and a HALT in a surface's own log still removes the repository there. An
+  unreadable canonical signing switch exempts nothing, and the render goes on.
+- The sandbox-relaxation, WASM-widen and adopt-merge gates stay per-surface: their action ids name the framework.
+
 ## [1.0.6] - 2026-11-03
 
 ### release notes
