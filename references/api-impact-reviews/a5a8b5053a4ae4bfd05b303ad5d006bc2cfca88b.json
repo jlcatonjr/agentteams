@@ -1,0 +1,8 @@
+{
+  "patch_id": "a5a8b5053a4ae4bfd05b303ad5d006bc2cfca88b",
+  "commit": "7bd4c10de637d77fb2342a9c423c0c570437b012",
+  "subject": "fix(S-10): native surfaces authorize the carve-out against the canonical .github/agents",
+  "impact": "1 symbols added, 1 symbols changed",
+  "note": "Reviewed: governance_team_dir is a new public helper of the integrity-pinned S-10 gate (added to __all__ with CANONICAL_TEAM_DIR); authorize_into's signature is unchanged, so generate.py and every caller are unaffected. DESCRIPTION-FORMAT.md updated (one row in .github/agents covers every surface). No API reference page documents s10_exempt_gate.",
+  "recorded_at": "2026-11-03T23:44:45Z"
+}
