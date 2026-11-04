@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (Rule S-10 carve-out: every surface authorizes against the canonical `.github/agents`)
+
+- **One signed row now exempts a repository on every surface** (reported from researchteam #139). On a multi-surface
+  repo the Rule 15 gate read each surface's own decisions log. Those logs hold none of the operator's signed policy
+  rows, so only copilot-vscode could exempt a repository, and claude, goose and codex over-tightened. In a governed
+  project, every native surface (`.claude`, `.goose`, `.codex`, `.grok`, agents-md, wasm) now authorizes against
+  `<project>/.github/agents`: one decision row, one consumption, one registered exception under the cap and sunset.
+- The project root is derived from the output path only, never from the brief. A symlinked `.github` or
+  `.github/agents` is never followed, and a HALT in a surface's own log still removes the repository there. An
+  unreadable canonical signing switch exempts nothing, and the render goes on.
+- The sandbox-relaxation and WASM-widen gates stay per-surface: their action ids name the framework.
+
 ## [1.1.0-rc.15] - 2026-11-03
 
 ### release notes
