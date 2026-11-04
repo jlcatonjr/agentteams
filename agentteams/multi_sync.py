@@ -51,6 +51,7 @@ from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.interop_grant_check import ProjectionPolicy
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
+from agentteams.sync_hub_refresh import refresh_hub_for_projection, refuse_unsafe_pin_instructions
 from agentteams.sync_pin import (
     DEFAULT_CANONICAL_REL,
     read_pin,
@@ -797,7 +798,7 @@ def sync_init(
             if two frameworks in ``frameworks`` resolve to the same
             physical agents directory (see :func:`_reject_directory_collisions`),
             or if the pin's instruction file is unsafe to sync from
-            (see :func:`_refuse_unsafe_pin_instructions`).
+            (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
     fws = list(frameworks) if frameworks else list(FRAMEWORK_IDS)
@@ -810,7 +811,7 @@ def sync_init(
     canonical_dir = root / canonical_rel
     pin_dir = framework_agents_dir(root, pin)
     seed = export_to_cai(pin_dir, pin)
-    _refuse_unsafe_pin_instructions(root, {"pinned_framework": pin, "frameworks": fws}, seed)
+    refuse_unsafe_pin_instructions(root, {"pinned_framework": pin, "frameworks": fws}, seed)
     # C2: capture the pin's brief privilege posture into the team-level canonical block so it
     # persists in team.cai.json and projection re-emits each framework's OS boundary.
     priv = _read_brief_privilege(root)
@@ -841,51 +842,6 @@ def sync_init(
     )
 
 
-def _refuse_unsafe_pin_instructions(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]) -> None:
-    """Refuse a sync whose pin instruction file would spread bad content, before anything is written.
-
-    Raises:
-        ValueError: The pin's instruction file is missing or unparseable while the hub has fences to
-            project, or a peer deploys a newer fence (``sync_hub_refresh.pin_instruction_problem``).
-    """
-    from agentteams.sync_hub_refresh import pin_instruction_problem
-
-    problem = pin_instruction_problem(root, pin_doc, hub)
-    if problem:
-        raise ValueError(f"refusing to sync, nothing was written: {problem}")
-
-
-def _refresh_hub_instructions(
-    root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], canonical_dir: Path, *,
-    dry_run: bool, notices: list[str],
-) -> None:
-    """Bring the hub's instruction fences up to the pin's deployed file before projecting (pin wins).
-
-    The hub's instruction content is seeded at ``--sync-init`` and otherwise never reconciled, so
-    without this a stale hub projected same-version stale fence bodies (src/, templates/, a dropped
-    Project Layout line) over current deployed files (remediation-log 2026-11-03, HIGH). When the
-    refresh cannot run (no pin instruction file, unparseable fences) the projection still never
-    lowers a fence version, and the notice says why. *hub* is refreshed in memory even under
-    *dry_run*, so the dry projection previews what a real run writes; only the save is skipped.
-    Peer frameworks' fences are never taken (the pin wins); ``_refuse_unsafe_pin_instructions`` has
-    already refused a pin older than a peer.
-    """
-    from agentteams.sync_hub_refresh import refresh_hub_binding
-
-    try:
-        result = refresh_hub_binding(root, pin_doc, hub, take_peer_fences=False)
-    except ValueError as exc:
-        notices.append(f"hub instructions not refreshed from the pin: {exc}")
-        return
-    notices.extend(result.notices)
-    if not result.changed:
-        return
-    moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
-    notices.append(f"hub instruction fences {'would be ' if dry_run else ''}refreshed from the pin "
-                   f"({result.pin}): {moved}")
-    materialize_canonical(hub, canonical_dir, dry_run=dry_run)
-
-
 def run_sync(
     root: Path,
     *,
@@ -910,7 +866,7 @@ def run_sync(
             if two frameworks in the pinned sync set resolve to the same
             physical agents directory (see :func:`_reject_directory_collisions`),
             or if the pin's instruction file is unsafe to sync from
-            (see :func:`_refuse_unsafe_pin_instructions`).
+            (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
     pin_doc = read_pin(root)
@@ -928,7 +884,7 @@ def run_sync(
     if not changed:
         return SyncResult(note="no framework changed since last sync")
 
-    _refuse_unsafe_pin_instructions(root, pin_doc, load_canonical(canonical_dir))
+    refuse_unsafe_pin_instructions(root, pin_doc, load_canonical(canonical_dir))
 
     # Process the pin first (authoritative), then peers.
     ordered = ([pin] if pin in changed else []) + [f for f in changed if f != pin]
@@ -960,7 +916,7 @@ def run_sync(
         final_canonical["privilege"] = priv
         materialize_canonical(final_canonical, canonical_dir, dry_run=dry_run)
     notices: list[str] = []
-    _refresh_hub_instructions(root, pin_doc, final_canonical, canonical_dir, dry_run=dry_run, notices=notices)
+    refresh_hub_for_projection(root, pin_doc, final_canonical, canonical_dir, dry_run=dry_run, notices=notices)
     projected = _project_and_rebaseline(
         root, canonical_dir, final_canonical, fws, dry_run=dry_run, notices=notices,
         accepted_write_roots=accepted_write_roots,

@@ -30,7 +30,14 @@ from agentteams.interop import export_to_cai
 from agentteams.interop_helpers import _VERSIONED_BEGIN_RE, keep_newer_fences, template_fence_versions
 from agentteams.sync_pin import DEFAULT_CANONICAL_REL, read_pin
 
-__all__ = ["HubRefreshResult", "pin_instruction_problem", "refresh_hub_binding", "refresh_hub_instructions"]
+__all__ = [
+    "HubRefreshResult",
+    "pin_instruction_problem",
+    "refresh_hub_binding",
+    "refresh_hub_for_projection",
+    "refresh_hub_instructions",
+    "refuse_unsafe_pin_instructions",
+]
 
 #: Reads the fence id and both versions back out of a ``keep_newer_fences`` "kept" notice.
 _KEPT_RE = re.compile(r"'(?P<sid>[a-z][a-z0-9_]*)' at v=(?P<peer>\d+) \(incoming v=(?P<pin>\d+)")
@@ -180,6 +187,54 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
         binding["content"] = new
         binding.setdefault("source_name", "")
     return result
+
+
+def refuse_unsafe_pin_instructions(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]) -> None:
+    """Refuse a sync whose pin instruction file would spread bad content, before anything is written.
+
+    Args:
+        root: The pinned project root.
+        pin_doc: The parsed pin (``pinned_framework`` and ``frameworks``).
+        hub: The canonical team about to be projected.
+
+    Raises:
+        ValueError: :func:`pin_instruction_problem` found a problem.
+    """
+    problem = pin_instruction_problem(root, pin_doc, hub)
+    if problem:
+        raise ValueError(f"refusing to sync, nothing was written: {problem}")
+
+
+def refresh_hub_for_projection(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], canonical_dir: Path, *,
+                               dry_run: bool, notices: list[str]) -> None:
+    """Bring the hub's instruction fences up to the pin's deployed file before projecting (pin wins).
+
+    The hub's instruction content is seeded at ``--sync-init`` and otherwise never reconciled, so without
+    this a stale hub projected same-version stale fence bodies over current deployed files. *hub* is
+    refreshed in memory even under *dry_run*, so the dry projection previews what a real run writes; only
+    the save is skipped. Peers' fences are never taken: :func:`refuse_unsafe_pin_instructions` has already
+    refused a pin older than a peer.
+
+    Args:
+        root: The pinned project root.
+        pin_doc: The parsed pin.
+        hub: The canonical team about to be projected (updated in place).
+        canonical_dir: The hub's directory.
+        dry_run: Skip the save.
+        notices: Receives what was refreshed, or why it could not be.
+    """
+    try:
+        result = refresh_hub_binding(root, pin_doc, hub, take_peer_fences=False)
+    except ValueError as exc:
+        notices.append(f"hub instructions not refreshed from the pin: {exc}")
+        return
+    notices.extend(result.notices)
+    if not result.changed:
+        return
+    moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
+    notices.append(f"hub instruction fences {'would be ' if dry_run else ''}refreshed from the pin "
+                   f"({result.pin}): {moved}")
+    materialize_canonical(hub, canonical_dir, dry_run=dry_run)
 
 
 def _deployed_instructions(root: Path, framework: str) -> str:

@@ -54,6 +54,19 @@ fence newer than both the pin and the hub. `run_sync` and `sync_init` raise on i
 Running `--sync-refresh-instructions` takes the peer's fence into the hub, which clears the refusal, and the
 next sync brings the pin up to it. Stale values at the same fence version can't be detected here.
 
+### `refuse_unsafe_pin_instructions`
+
+`refuse_unsafe_pin_instructions(root, pin_doc, hub) -> None`
+
+Raises `ValueError` carrying `pin_instruction_problem`'s text. `run_sync` and `sync_init` call it first.
+
+### `refresh_hub_for_projection`
+
+`refresh_hub_for_projection(root, pin_doc, hub, canonical_dir, *, dry_run, notices) -> None`
+
+`run_sync`'s pre-projection step: `refresh_hub_binding` from the pin alone, reported in `notices`, saved unless
+`dry_run`.
+
 ## The projection guard
 
 `interop_helpers.keep_newer_fences(rendered, existing)` puts back every existing fence whose `v=`
