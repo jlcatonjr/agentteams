@@ -1704,7 +1704,8 @@ Run one on-demand sync pass: detect the frameworks changed since the last synced
 reconcile the pin into canonical (peers' differences are logged for review, never absorbed), project
 canonical to every framework, log conflicts and proposals, and advance the sync anchor. A no-op when
 nothing changed. Refuses before writing when the pin's instruction file is missing or unparseable, or
-older than another framework's copy; the error names the remedy.
+older than another framework's copy; the error names the remedy (`--update --merge` can't repair a missing
+or unparseable file, so restore it from git or a backup, or repair its fence markers).
 
 ### `--sync-since COMMIT`
 
@@ -1714,7 +1715,8 @@ Override the change-detection anchor (default: the pin's recorded `last_synced_c
 
 Refresh the canonical hub's instruction-file fences from the pin's deployed instruction file,
 without syncing. `--sync` runs the same refresh before every projection, from the pin only; this command
-also takes a newer fence from another framework, which clears the refusal described under `--sync`.
+also takes a newer fence from another framework, which clears the refusal described under `--sync`. Only the
+fence's version number says it is newer, so review each fence it reports taking.
 Only fenced regions move, and a fence version is never lowered (in the hub or, during `--sync`,
 in any deployed instruction file). Honors `--dry-run`. A fence another framework in the sync set
 deploys at a higher version is taken from that framework; a fence still below the newest template's

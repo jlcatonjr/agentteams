@@ -51,8 +51,8 @@ has already refused the cases that would raise it, apart from a team with no ins
 Why the pin's deployed instruction file is unsafe to sync from, with the remedy, or `""`. Unsafe means:
 missing, or with no parseable fences, while the hub has fences to project; or another framework deploys a
 fence newer than both the pin and the hub. `run_sync` and `sync_init` raise on it before writing anything.
-Running `--sync-refresh-instructions` takes the peer's fence into the hub, which clears the refusal, and the
-next sync brings the pin up to it. Stale values at the same fence version can't be detected here.
+Running `--sync-refresh-instructions` takes the peer's fence into the hub and reports it for review, which clears
+the refusal, and the next sync brings the pin up to it. Stale values at the same fence version can't be detected here.
 
 ### `refuse_unsafe_pin_instructions`
 

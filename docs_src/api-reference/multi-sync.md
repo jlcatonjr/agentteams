@@ -31,8 +31,10 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
   and capability fields — are absorbed into canonical (the pin is the trusted source of truth).
 - **Peers next, log only.** A peer's `native-moved` field is logged as a proposal, and a capability
   change as withheld. A `both-moved-conflict` keeps canonical and is logged. Nothing is absorbed, and
-  projection then replaces the peer's copy (the projection backup keeps it). To spread a peer edit,
-  make it in the pin or adopt it with `--absorb-from`.
+  projection then replaces the peer's copy; each framework's `.agentteams-backups` keeps it (newest 10).
+  Every framework is classified once a pass runs, including uncommitted edits. A peer's edit inside an
+  instruction fence is reported in `SyncResult.notices` rather than the log. To spread a peer edit, make it
+  in the pin, or restore it to the peer and adopt it with `--absorb-from` before the next sync.
 - **Project + rebaseline.** Canonical is projected to every framework and every baseline is
   rewritten from the on-disk result, so the next run never re-absorbs this run's own output.
 - **Change detection is commit-to-commit** (operator decision): a framework is "changed" when a

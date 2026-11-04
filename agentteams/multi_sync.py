@@ -571,7 +571,8 @@ def _reconcile(
                 conflicts.append(ConflictRecord(
                     framework, slug, fname, cls.value,
                     resolution="proposed (peer change; not absorbed, make it in the pin)",
-                    note=fr.notice,
+                    note=("Projection replaces this copy. Recover it from this framework's .agentteams-backups "
+                          "(newest 10 kept), then make the change in the pin."),
                 ))
             elif cls == Classification.BOTH_MOVED_CONFLICT:
                 conflicts.append(ConflictRecord(
@@ -886,13 +887,16 @@ def run_sync(
 
     refuse_unsafe_pin_instructions(root, pin_doc, load_canonical(canonical_dir))
 
-    # Process the pin first (authoritative), then peers.
-    ordered = ([pin] if pin in changed else []) + [f for f in changed if f != pin]
+    # Pin first (authoritative), then peers. Every framework, not only the changed ones: projection overwrites them
+    # all, so a peer edit that isn't committed would otherwise vanish with no proposal in the log.
+    ordered = [pin] + [f for f in fws if f != pin]
 
     all_conflicts: list[ConflictRecord] = []
     applied_total = 0
     for fw in ordered:
         agents_dir = framework_agents_dir(root, fw)
+        if not agents_dir.is_dir():
+            continue
         native_cai = export_to_cai(agents_dir, fw)
         canonical_cai = load_canonical(canonical_dir)
         baseline = load_baseline(canonical_dir, fw)

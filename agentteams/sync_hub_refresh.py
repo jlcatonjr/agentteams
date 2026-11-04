@@ -104,25 +104,28 @@ def pin_instruction_problem(root: Path, pin_doc: dict[str, Any], hub: dict[str, 
     current = str(hub.get("instructions_binding", {}).get("content", ""))
     hub_regions = _extract_fenced_regions(current) if current else {}
     hub_has_fences = isinstance(hub_regions, dict) and bool(hub_regions)
-    regenerate = f"regenerate it natively (--framework {pin} --update --merge), then sync again"
+    # --update --merge can't repair these: it skips a file with no parseable fences and doesn't recreate a missing one.
+    restore = f"restore it from git or the newest {pin} .agentteams-backups copy, or repair its fence markers by hand"
     deployed = _deployed_instructions(root, pin)
     if not deployed:
-        return f"the pin ({pin}) has no deployed instruction file; {regenerate}" if hub_has_fences else ""
+        return f"the pin ({pin}) has no deployed instruction file; {restore}" if hub_has_fences else ""
     regions = _extract_fenced_regions(deployed)
     if isinstance(regions, str):
-        return f"the pin's ({pin}) instruction file has unparseable fences ({regions}); {regenerate}"
+        return f"the pin's ({pin}) instruction file has unparseable fences ({regions}); {restore}"
     if not regions and hub_has_fences:
-        return f"the pin's ({pin}) instruction file has no AGENTTEAMS fences; {regenerate}"
+        return f"the pin's ({pin}) instruction file has no AGENTTEAMS fences; {restore}"
     effective = keep_newer_fences(deployed, current)[0] if current else deployed
     newer: list[str] = []
     for fw in pin_doc.get("frameworks", []):
         if fw != pin and (peer := _deployed_instructions(root, fw)):
             newer += [f"{fw} '{m['sid']}' v={m['peer']} (pin v={m['pin']})"
                       for m in map(_KEPT_RE.search, keep_newer_fences(effective, peer)[1]) if m]
-    if newer:
-        return (f"other frameworks deploy newer fences than the pin: {', '.join(newer)}; {regenerate}, "
-                "or take them into the hub with --sync-refresh-instructions")
-    return ""
+    if not newer:
+        return ""
+    remedy = f"update the pin natively (--framework {pin} --update --merge), then sync again"
+    if read_pin(root) is not None:  # --sync-refresh-instructions needs an existing pin; --sync-init has none yet
+        remedy += ", or review those fences and take them into the hub with --sync-refresh-instructions"
+    return f"other frameworks deploy newer fences than the pin: {', '.join(newer)}; {remedy}"
 
 
 def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], *,
@@ -160,7 +163,10 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
     result = HubRefreshResult(pin=pin, dry_run=dry_run)
     for fw in pin_doc.get("frameworks", []) if take_peer_fences else ():
         if fw != pin and (peer := _deployed_instructions(root, fw)):
-            deployed, _ = keep_newer_fences(deployed, peer)  # a peer's higher fence beats the pin's
+            deployed, kept = keep_newer_fences(deployed, peer)  # a peer's higher fence beats the pin's
+            # Only its version number says this body is newer, so name what the operator should now review.
+            result.notices += [f"took fence '{m['sid']}' v={m['peer']} from {fw}, not the pin (v={m['pin']}): "
+                               "review its body" for m in map(_KEPT_RE.search, kept) if m]
     binding = hub.setdefault("instructions_binding", {})
     current = str(binding.get("content", ""))
     if current:
@@ -229,12 +235,34 @@ def refresh_hub_for_projection(root: Path, pin_doc: dict[str, Any], hub: dict[st
         notices.append(f"hub instructions not refreshed from the pin: {exc}")
         return
     notices.extend(result.notices)
+    notices.extend(_peer_fences_replaced(root, pin_doc, hub))
     if not result.changed:
         return
     moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
     notices.append(f"hub instruction fences {'would be ' if dry_run else ''}refreshed from the pin "
                    f"({result.pin}): {moved}")
     materialize_canonical(hub, canonical_dir, dry_run=dry_run)
+
+
+def _peer_fences_replaced(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]) -> list[str]:
+    """One notice per peer whose fence bodies differ from the hub's, so the projection doesn't replace them unsaid.
+
+    ``--sync`` classifies agent fields only; a peer's edit inside an instruction fence gets no log row.
+    """
+    from agentteams.fences import _extract_fenced_regions
+
+    hub_regions = _extract_fenced_regions(str(hub.get("instructions_binding", {}).get("content", "")))
+    if isinstance(hub_regions, str):
+        return []
+    out: list[str] = []
+    for fw in pin_doc.get("frameworks", []):
+        peer = _deployed_instructions(root, fw) if fw != pin_doc["pinned_framework"] else ""
+        regions = _extract_fenced_regions(peer) if peer else {}
+        if isinstance(regions, dict) and (differ := sorted(s for s, b in regions.items() if s in hub_regions
+                                                           and b != hub_regions[s])):
+            out.append(f"{fw}: instruction fences {', '.join(differ)} differ from the pin's and get the pin's text "
+                       f"(the projection backup keeps {fw}'s copy)")
+    return out
 
 
 def _deployed_instructions(root: Path, framework: str) -> str:

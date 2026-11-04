@@ -24,6 +24,7 @@ from agentteams.cli.sync_switch import run_sync_cli
 from agentteams.interop_helpers import FENCE_DOWNGRADE_NOTICE, keep_newer_fences, merge_instruction_file
 from agentteams.multi_sync import run_sync, sync_init
 from agentteams.sync_hub_refresh import refresh_hub_instructions
+from agentteams.sync_pin import update_last_synced_commit
 
 
 def _instr(core_v: int, core_body: str, authority: str, extra: str = "") -> str:
@@ -295,3 +296,82 @@ def test_cli_refresh_refuses_to_combine_with_sync(tmp_path: Path, capsys) -> Non
                               sync_since=None, sync_refresh_instructions=True)
     assert run_sync_cli(args) == 2
     assert "runs on its own" in capsys.readouterr().err
+
+
+# --- review findings on the pin-authority change (@adversarial 2026-11-04) --------------------
+
+def _committed_sync(root: Path) -> None:
+    """Sync and commit everything, so the next pass sees only what the test changes."""
+    _git(root, "add", "-Af")
+    _git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "a")
+    run_sync(root, since="")
+    _git(root, "add", "-Af")
+    _git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "b")
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    update_last_synced_commit(root, head)
+
+
+def test_an_uncommitted_peer_edit_is_logged_when_another_change_triggers_the_pass(tmp_path: Path) -> None:
+    _pinned_project(tmp_path)
+    _committed_sync(tmp_path)
+    peer = tmp_path / ".claude" / "agents" / "orchestrator.md"
+    peer.write_text(peer.read_text(encoding="utf-8").replace("Routes.", "Routes. PEER"), encoding="utf-8")
+    pin = tmp_path / ".github" / "agents" / "orchestrator.agent.md"
+    pin.write_text(pin.read_text(encoding="utf-8").replace("Routes.", "Routes. PIN"), encoding="utf-8")
+    _git(tmp_path, "add", "-Af", ".github")
+    _git(tmp_path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "c")
+    result = run_sync(tmp_path)
+    assert result.changed_frameworks == ["copilot-vscode"]
+    logged = [c for c in result.conflicts if c.framework == "claude" and c.field_name == "body_markdown"]
+    assert logged, "the peer's edit vanished with nothing in the log"
+    assert "PIN" in peer.read_text(encoding="utf-8")
+
+
+def test_a_proposal_says_how_to_recover_the_peers_copy(tmp_path: Path) -> None:
+    _pinned_project(tmp_path)
+    run_sync(tmp_path, since="")
+    peer = tmp_path / ".claude" / "agents" / "orchestrator.md"
+    peer.write_text(peer.read_text(encoding="utf-8").replace("Routes work", "Claude wording"), encoding="utf-8")
+    proposals = [c for c in run_sync(tmp_path, since="").conflicts if c.resolution.startswith("proposed")]
+    assert proposals and all(".agentteams-backups" in c.note and "Safe to absorb" not in c.note for c in proposals)
+
+
+def test_a_peers_instruction_fence_edit_is_reported(tmp_path: Path) -> None:
+    _pinned_project(tmp_path)
+    run_sync(tmp_path, since="")
+    peer = tmp_path / ".claude" / "CLAUDE.md"
+    peer.write_text(peer.read_text(encoding="utf-8").replace("`agentteams/`", "`peer-edit/`"), encoding="utf-8")
+    result = run_sync(tmp_path, since="")
+    assert any("claude: instruction fences authority_hierarchy differ" in n for n in result.notices)
+    assert "peer-edit" not in peer.read_text(encoding="utf-8")
+
+
+def test_refresh_names_a_fence_it_took_from_a_peer(tmp_path: Path) -> None:
+    _pinned_project(tmp_path)
+    (tmp_path / ".github" / "copilot-instructions.md").write_text(_V1_STALE, encoding="utf-8")
+    result = refresh_hub_instructions(tmp_path)
+    assert any("took fence 'constitutional_core' v=3 from claude" in n and "review" in n for n in result.notices)
+
+
+@pytest.mark.parametrize("content", [None, "# Hand-written, no fences\n"])
+def test_a_missing_or_fenceless_pin_is_never_told_to_use_update_merge(tmp_path: Path, content: str | None) -> None:
+    """--update --merge skips such a file and doesn't recreate a missing one, so it can't be the remedy."""
+    _pinned_project(tmp_path)
+    pin_file = tmp_path / ".github" / "copilot-instructions.md"
+    pin_file.unlink() if content is None else pin_file.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match="restore it from git") as exc:
+        run_sync(tmp_path, since="")
+    assert "--update" not in str(exc.value)
+
+
+def test_sync_init_refusal_does_not_suggest_the_refresh_it_cannot_run(tmp_path: Path) -> None:
+    (tmp_path / ".github" / "agents").mkdir(parents=True)
+    (tmp_path / ".github" / "agents" / "orchestrator.agent.md").write_text(_ORCH, encoding="utf-8")
+    (tmp_path / ".github" / "copilot-instructions.md").write_text(_V1_STALE, encoding="utf-8")
+    (tmp_path / ".claude" / "agents").mkdir(parents=True)
+    (tmp_path / ".claude" / "agents" / "orchestrator.md").write_text(_ORCH, encoding="utf-8")
+    (tmp_path / ".claude" / "CLAUDE.md").write_text(_V3, encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+    with pytest.raises(ValueError, match="--update --merge") as exc:
+        sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "claude"])
+    assert "--sync-refresh-instructions" not in str(exc.value)

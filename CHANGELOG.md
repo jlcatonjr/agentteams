@@ -12,8 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   framework was absorbed into the hub and projected to the rest. A peer's render differs just by being written for
   that framework, so this overwrote the pin's own agent files: a real sync changed `team-builder`'s description from
   "VS Code Copilot project" to "Claude project" and dropped front matter from `test-suite-expert`. A peer's difference
-  is now logged as `proposed` in `.agentteams/sync-conflicts.log.csv`, and projection replaces the peer's copy (the
-  projection backup keeps it). To spread a peer edit, make it in the pin or adopt it with `--absorb-from`.
+  is now logged as `proposed` in `.agentteams/sync-conflicts.log.csv`, and projection replaces the peer's copy (each
+  framework's `.agentteams-backups` keeps it). To spread a peer edit, make it in the pin, or restore it and adopt it
+  with `--absorb-from`. Every framework is now classified once a pass runs, so an uncommitted peer edit is logged
+  rather than lost silently, and a peer's edit inside an instruction fence is reported in the sync notices.
 - **`--sync` and `--sync-init` refuse before writing when the pin's instruction file is unsafe:** missing or with no
   parseable fences while the hub has fences, or older than a fence another framework deploys. Previously the sync
   warned and continued, spreading stale values and giving a new `AGENTS.md` `constitutional_core` v=1. The error names
