@@ -176,6 +176,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`multi_sync`](multi-sync.md) | Pinned-sync orchestrator: keeps every agentic interface in sync through the canonical hub, pin authoritative on conflict |
+| [`sync_hub_refresh`](sync-hub-refresh.md) | `--sync-refresh-instructions`: refresh the hub's instruction fences from the pin's deployed file, never lowering a fence version |
 | [`sync_pin`](sync-pin.md) | The pinned-source contract for multi-framework sync |
 | [`sync_baseline`](sync-baseline.md) | Real-content baseline snapshot writer for native ↔ canonical synchronization |
 | [`sync_classifier`](sync-classifier.md) | Generalized three-way classifier for native ↔ canonical synchronization |

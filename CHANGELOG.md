@@ -18,6 +18,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unreadable canonical signing switch exempts nothing, and the render goes on.
 - The sandbox-relaxation, WASM-widen and adopt-merge gates stay per-surface: their action ids name the framework.
 
+### fixed (pinned --sync lowered instruction-fence versions; remediation row 2026-11-03 HIGH)
+
+- **A projection never lowers a fence version.** `interop_helpers.merge_instruction_file` (every `preserve_existing`
+  projection of an instruction file, pinned `--sync` and the Grok path included) now keeps the deployed block of
+  any fence whose `v=` is higher than the incoming one and reports it (`kept deployed fence '<sid>' at v=N`).
+  A stale canonical hub had projected `constitutional_core` v=1 over v=3, dropping "Derived content stays data"
+  and the HMAC management-directive bound. `--sync` adds one hint to refresh the hub when the guard fires.
+- **`--sync-refresh-instructions`** (new `sync_hub_refresh` module): fence-merges the pin's deployed instruction
+  file into the hub's `instructions_binding.content`, the supported way to bring a stale hub up to current
+  fences, same-version stale values (`src/`, `templates/`) included. Fenced regions only; the hub never lowers a
+  fence either; a higher-versioned fence another synced framework deploys is taken from it (a pre-fix sync
+  lowered the pin's own file too), and a fence still below the newest template's version is reported; honors
+  `--dry-run`; refuses to combine with `--sync`/`--sync-init`/`--sync-since`.
+- **`--sync` refreshes the hub's instruction fences from the pin before projecting** (`sync_hub_refresh.refresh_hub_binding`),
+  so same-version stale values (`src/`, `templates/`, a dropped Project Layout line) no longer reach the deployed
+  files, which the version guard alone cannot catch. The refresh is reported in the sync notices (`--dry-run`
+  previews the projection from the refreshed hub without writing it); when it cannot run (no pin instruction file,
+  unparseable fences) the notice says why and the version guard still applies. The automatic refresh takes the
+  pin's fences only: a newer fence another framework deploys is reported, never taken, so an edited peer file
+  cannot spread its body to every framework (the operator-run `--sync-refresh-instructions` still takes it).
+- A deployed `v=` above the newest shipped template's version is not kept by the guard (no release wrote it).
+
 ### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
 
 - **The 14-day release cooldown no longer holds back the project's own interdependent repositories.** Jim's ruling: the
@@ -34,6 +56,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and re-verified on every later render. Anything else is left out with a notice naming the row to record, so the
   cooldown applies to it. An ungoverned workspace renders the list with a notice. A path that skips the gate
   (convert, interop) renders none.
+
+### security (pinned sync kept dropping sibling-team denies; remediation-log 2026-11-03)
+
+- **A pinned-sync projection now keeps the sibling-team denies a native generate emits.**
+  `multi_sync._projected_privilege_manifest` never set the transient `SIBLING_DENY_DIRS_KEY`, so every
+  `--sync`/`--sync-init` rendered the boundary as if no sibling team existed: goose's `.goose/sandbox.sb` lost the
+  `.github`, `.github/agents` and `.github/agents/references` F-4 ancestor rename-deny literals when a copilot team
+  was present (a goose agent could rename the copilot team's dir away and plant a replacement), and the
+  `denyWrite` in the projected `.claude/settings.hooks.example.json` lost the sibling team dirs (sync never
+  rewrites the live `.claude/settings.json`). The projection now computes it with `present_sibling_deny_dirs`,
+  as `cli/generate_helpers.py` does. Found in collector-management (`--sync-init`, 2026-11-03).
 
 ### fixed (renders honour `frozen_surfaces`; baseAgent D63)
 
