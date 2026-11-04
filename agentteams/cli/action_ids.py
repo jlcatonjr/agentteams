@@ -31,7 +31,7 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: (``cli/sandbox_effects.py``) are called as ``<kind>:<qualifier>`` instance ids and as the bare family.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
                                  "branch-cleanup", "vulnscan-remediation", "vulnscan-publish", "wasm-pin-remediation",
-                                 "vulnscan-known", *SANDBOX_RELAXATION_KINDS)
+                                 "vulnscan-known", *SANDBOX_RELAXATION_KINDS, "s10-cooldown-exempt")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:

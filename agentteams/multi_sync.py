@@ -40,14 +40,17 @@ from typing import Any
 from agentteams.git_exec import run_git
 from agentteams.canonical import load_canonical, materialize_canonical
 from agentteams.frameworks._sandbox_emit import (
+    SIBLING_DENY_DIRS_KEY,
     TEAM_MARKER_REL,
     VERIFY_KEY_STORE_SENTINEL_REL,
     VERIFY_KEY_STORE_SENTINEL_TEXT,
+    present_sibling_deny_dirs,
 )
 from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS, agents_dir_for
 from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.interop_grant_check import ProjectionPolicy
+from agentteams.interop_helpers import FENCE_DOWNGRADE_NOTICE
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
 from agentteams.sync_pin import (
@@ -68,6 +71,11 @@ __all__ = [
 
 #: Durable, human-reviewable conflict log (append-only).
 CONFLICT_LOG_SUBPATH = ".agentteams/sync-conflicts.log.csv"
+
+#: Added once when a projection kept a deployed fence newer than the hub's (interop_helpers.keep_newer_fences).
+_STALE_HUB_HINT = ("the canonical hub's instruction fences are older than some deployed ones even after the "
+                   "automatic refresh from the pin (see the notices above); regenerate the pin natively "
+                   "(--update), or run --sync-refresh-instructions to take a peer's newer fences")
 
 _CONFLICT_LOG_HEADER = [
     "date", "framework", "agent", "field", "classification", "resolution", "note",
@@ -289,6 +297,11 @@ def _projected_privilege_manifest(root: Path, framework: str, privilege: dict[st
         "host_features": merge_profile_features([], profile, framework, os_sandbox=privilege.get("os_sandbox")),
         # Transient, never persisted: the project root for the write-root hard bans (#2).
         PROJECT_ROOT_KEY: Path(root).resolve(),
+        # Transient: the sibling teams present, as generate computes them (cli/generate_helpers.py). Without
+        # it a projected boundary treated every sibling as absent, so goose's sandbox.sb lost the .github
+        # F-4 ancestor rename-deny literals and claude's denyWrite the sibling team dirs (remediation-log
+        # 2026-11-03, SECURITY).
+        SIBLING_DENY_DIRS_KEY: present_sibling_deny_dirs(Path(root)),
     }
     for key in ("os_sandbox", "workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
                 "resolve_deny_read_abspath"):
@@ -679,6 +692,8 @@ def _project_and_rebaseline(
                               preserve_existing=True, projection=policy)
         if notices is not None:
             notices.extend(f"[{fw}] {n}" for n in res.notices)
+            if any(FENCE_DOWNGRADE_NOTICE in n for n in res.notices) and _STALE_HUB_HINT not in notices:
+                notices.append(_STALE_HUB_HINT)
         # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege
         # block so a confined/exclusive pinned-sync team stays confined after projection.
         _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)
@@ -830,6 +845,36 @@ def sync_init(
     )
 
 
+def _refresh_hub_instructions(
+    root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], canonical_dir: Path, *,
+    dry_run: bool, notices: list[str],
+) -> None:
+    """Bring the hub's instruction fences up to the pin's deployed file before projecting (pin wins).
+
+    The hub's instruction content is seeded at ``--sync-init`` and otherwise never reconciled, so
+    without this a stale hub projected same-version stale fence bodies (src/, templates/, a dropped
+    Project Layout line) over current deployed files (remediation-log 2026-11-03, HIGH). When the
+    refresh cannot run (no pin instruction file, unparseable fences) the projection still never
+    lowers a fence version, and the notice says why. *hub* is refreshed in memory even under
+    *dry_run*, so the dry projection previews what a real run writes; only the save is skipped.
+    Peer frameworks' newer fences are reported, never taken (the pin wins).
+    """
+    from agentteams.sync_hub_refresh import refresh_hub_binding
+
+    try:
+        result = refresh_hub_binding(root, pin_doc, hub, take_peer_fences=False)
+    except ValueError as exc:
+        notices.append(f"hub instructions not refreshed from the pin: {exc}")
+        return
+    notices.extend(result.notices)
+    if not result.changed:
+        return
+    moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
+    notices.append(f"hub instruction fences {'would be ' if dry_run else ''}refreshed from the pin "
+                   f"({result.pin}): {moved}")
+    materialize_canonical(hub, canonical_dir, dry_run=dry_run)
+
+
 def run_sync(
     root: Path,
     *,
@@ -900,6 +945,7 @@ def run_sync(
         final_canonical["privilege"] = priv
         materialize_canonical(final_canonical, canonical_dir, dry_run=dry_run)
     notices: list[str] = []
+    _refresh_hub_instructions(root, pin_doc, final_canonical, canonical_dir, dry_run=dry_run, notices=notices)
     projected = _project_and_rebaseline(
         root, canonical_dir, final_canonical, fws, dry_run=dry_run, notices=notices,
         accepted_write_roots=accepted_write_roots,

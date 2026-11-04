@@ -1,0 +1,8 @@
+{
+  "patch_id": "94a91438718c6f6c80894fe10254301aced7c8df",
+  "commit": "cacb58a0dd0071e88f908d727e8ba895088b2bea",
+  "subject": "fix(sync): never lower instruction-fence versions; add --sync-refresh-instructions",
+  "impact": "1 modules added, 5 symbols added, 1 cli added",
+  "note": "Reviewed: sync_hub_refresh documented in docs_src/api-reference/sync-hub-refresh.md (+index, mkdocs nav); keep_newer_fences/template_fence_versions/FENCE_DOWNGRADE_NOTICE documented there and in interop.md/multi-sync.md; --sync-refresh-instructions in cli-reference.md, api-reference/cli.md, agentteams.1 (regenerated). Parity: no stale pages; interop_helpers coverage gap pre-existing.",
+  "recorded_at": "2026-11-03T17:58:31Z"
+}

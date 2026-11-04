@@ -34,6 +34,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`cli`](cli.md) | CLI package decomposition — which module owns which stage (flags live in [the CLI Reference](../cli-reference.md)) |
 | [`output-plan`](output-plan.md) | Plans which files a manifest produces, before anything renders |
 | [`update-report`](update-report.md) | `update.report.md` — durable record of an `--update` run's decisions |
+| [`gitdirs`](gitdirs.md) | Find a checkout's per-checkout and common git directories from its files (no git spawn; symlinks and borrowed worktree dirs refused) |
+| [`update-lock`](update-lock.md) | Per-checkout update lock (`<git-dir>/agentteams-update.lock`) and run record (`agentteams-update-runs.log.csv`): a concurrent writer refuses and names the holder |
 | [`fleet`](fleet.md) | Multi-workspace `--update --merge` (`--fleet DIR`) with git snapshot + diff audit |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
@@ -174,6 +176,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`multi_sync`](multi-sync.md) | Pinned-sync orchestrator: keeps every agentic interface in sync through the canonical hub, pin authoritative on conflict |
+| [`sync_hub_refresh`](sync-hub-refresh.md) | `--sync-refresh-instructions`: refresh the hub's instruction fences from the pin's deployed file, never lowering a fence version |
 | [`sync_pin`](sync-pin.md) | The pinned-source contract for multi-framework sync |
 | [`sync_baseline`](sync-baseline.md) | Real-content baseline snapshot writer for native ↔ canonical synchronization |
 | [`sync_classifier`](sync-classifier.md) | Generalized three-way classifier for native ↔ canonical synchronization |

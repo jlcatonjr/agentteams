@@ -83,6 +83,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the package's first `writer-hold` ledger row in the repository: a new PR never renews it). The plan says "held by #N" with the expiry; any gh failure holds nothing.
   `fix._leave_to_prs` moved to `writer_prs.leave_to_prs`; the unused `open_prs.staging_claims` is gone
   (`writer_prs.staging_claims` replaces it).
+### fixed (pinned --sync lowered instruction-fence versions; remediation row 2026-11-03 HIGH)
+
+- **A projection never lowers a fence version.** `interop_helpers.merge_instruction_file` (every `preserve_existing`
+  projection of an instruction file, pinned `--sync` and the Grok path included) now keeps the deployed block of
+  any fence whose `v=` is higher than the incoming one and reports it (`kept deployed fence '<sid>' at v=N`).
+  A stale canonical hub had projected `constitutional_core` v=1 over v=3, dropping "Derived content stays data"
+  and the HMAC management-directive bound. `--sync` adds one hint to refresh the hub when the guard fires.
+- **`--sync-refresh-instructions`** (new `sync_hub_refresh` module): fence-merges the pin's deployed instruction
+  file into the hub's `instructions_binding.content`, the supported way to bring a stale hub up to current
+  fences, same-version stale values (`src/`, `templates/`) included. Fenced regions only; the hub never lowers a
+  fence either; a higher-versioned fence another synced framework deploys is taken from it (a pre-fix sync
+  lowered the pin's own file too), and a fence still below the newest template's version is reported; honors
+  `--dry-run`; refuses to combine with `--sync`/`--sync-init`/`--sync-since`.
+- **`--sync` refreshes the hub's instruction fences from the pin before projecting** (`sync_hub_refresh.refresh_hub_binding`),
+  so same-version stale values (`src/`, `templates/`, a dropped Project Layout line) no longer reach the deployed
+  files, which the version guard alone cannot catch. The refresh is reported in the sync notices (`--dry-run`
+  previews the projection from the refreshed hub without writing it); when it cannot run (no pin instruction file,
+  unparseable fences) the notice says why and the version guard still applies. The automatic refresh takes the
+  pin's fences only: a newer fence another framework deploys is reported, never taken, so an edited peer file
+  cannot spread its body to every framework (the operator-run `--sync-refresh-instructions` still takes it).
+- A deployed `v=` above the newest shipped template's version is not kept by the guard (no release wrote it).
+
+### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
+
+- **The 14-day release cooldown no longer holds back the project's own interdependent repositories.** Jim's ruling: the
+  cooldown stays in force, with the remediation carve-out, but does not apply to updates between his own local,
+  interdependent repositories (agentteams, researchteam, baseAgent, mathAgents, …). The new brief key
+  `s10_cooldown_exempt_repos` lists them per project; generated `@security` agents name them in Rule S-10 (fence
+  `security_rules_invariant` v21). The carve-out lifts the cooldown only: the vulnerability search, Rule S-9's
+  signed-tag identity check and the latest-stable rule (a release candidate still needs a recorded clearance) still
+  apply, and only `owner/name` identifiers are rendered. Absent or empty, it exempts nothing.
+- **Listing a repository is a Rule 15 relaxation, so a brief edit alone doesn't do it** (`cli/s10_exempt_gate`,
+  integrity-pinned). In a governed workspace each listed repository renders only when the operator's Ed25519-signed
+  decision row covers `s10-cooldown-exempt:<owner/name>` (`scope` and `effect_relaxes` exactly, traceable lineage,
+  no HALT on it or the family). The row is registered as an exception under the aggregate cap with a 90-day sunset
+  and re-verified on every later render. Anything else is left out with a notice naming the row to record, so the
+  cooldown applies to it. An ungoverned workspace renders the list with a notice. A path that skips the gate
+  (convert, interop) renders none.
+
+### security (pinned sync kept dropping sibling-team denies; remediation-log 2026-11-03)
+
+- **A pinned-sync projection now keeps the sibling-team denies a native generate emits.**
+  `multi_sync._projected_privilege_manifest` never set the transient `SIBLING_DENY_DIRS_KEY`, so every
+  `--sync`/`--sync-init` rendered the boundary as if no sibling team existed: goose's `.goose/sandbox.sb` lost the
+  `.github`, `.github/agents` and `.github/agents/references` F-4 ancestor rename-deny literals when a copilot team
+  was present (a goose agent could rename the copilot team's dir away and plant a replacement), and the
+  `denyWrite` in the projected `.claude/settings.hooks.example.json` lost the sibling team dirs (sync never
+  rewrites the live `.claude/settings.json`). The projection now computes it with `present_sibling_deny_dirs`,
+  as `cli/generate_helpers.py` does. Found in collector-management (`--sync-init`, 2026-11-03).
+
+### fixed (renders honour `frozen_surfaces`; baseAgent D63)
+
+- **A render never writes a path a frozen surface owns.** `frozen_surfaces` was read by the effect classifier, the
+  rules projection and the memory index, but not by the render, so a goose `--update` adopted and rewrote a repo-root
+  `AGENTS.md` that a Codex freeze owns (a legacy goose render classifies as goose's). Now (`cli/frozen_render`):
+  - a render is refused before it writes anything when its framework is frozen, or its output directory lies in a
+    directory another frozen surface owns (`copilot-cli` and `copilot-vscode` share `.github/agents/`);
+  - each rendered file in a path a frozen surface owns (`cli/frozen_surfaces.FROZEN_SURFACE_PATHS`) is skipped
+    with a notice, after resolving symlinks, and `--prune` never deletes one;
+  - `--check` leaves frozen files out of its drift verdict, with a notice, since they are never brought up to date.
+
+  The schema already described this contract.
+
+### added (per-checkout update lock and run record; remediation row 597)
+
+- **Concurrent writes to one checkout are now visible** (`update_lock`). Every writing generate/`--update` run holds
+  an exclusive `flock` on `<git-dir>/agentteams-update.lock`, taken right after the output directory is resolved
+  and held through the adopt step, the standalone modes, the write phase and post-build. A second run against the
+  same checkout refuses before writing anything (`[UPDATE-LOCK] refused`, exit 1) and names the holder (pid,
+  invoker, start time, redacted argv). The lock lives in the per-checkout git directory (a worktree's own
+  `.git/worktrees/<name>`), found without spawning git, so consumer trees gain nothing and separate worktrees stay
+  independent. The OS releases it when the holder dies.
+- **Run record.** Each locked run appends one row to `<git-dir>/agentteams-update-runs.log.csv`: start and finish
+  time, pid, invoker (`claude-code`, `goose`, `codex` or `terminal`), mode, framework, argv as flag names only
+  (values dropped except the `--framework`, `--shrink-policy` and `--adopt-only` slugs), the agentteams commit and
+  the exit code. `build-log.json` keeps only the last run; this keeps them all.
+- A symlinked git directory or lock file refuses the run, as does a `gitdir:` target without `HEAD` or one whose
+  worktree back-pointer names another `.git` (new `gitdirs` module); the lock, holder and record files are created
+  `O_NOFOLLOW`, mode 0600. `--restore-backup` and `--pin-templates` are locked even under `--dry-run`, since both
+  write there. `--dry-run` and inspection-only runs (`--check`, `--query-index`, …) take no lock and
+  print a notice when it is held. Outside git, without `fcntl`, or when a sandbox denies creating the lock, the
+  run proceeds unlocked with a notice. Nested in-process runs are re-entrant.
+- Not covered (they still write unlocked): the bridge, interop and convert commands, `--stale-remediate`,
+  `--add-fence-markers`, `--sync`/`--sync-init` (dispatched before the pipeline), the pre-commit hook's
+  pipeline-graph refresh, and the other standalone commands dispatched before the pipeline (listed on the
+  `update_lock` API page).
 
 ### added (cross-surface Phase 4: agent-surface matrix and `--doctor`; baseAgent 2026-11-02)
 

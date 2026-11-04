@@ -1,0 +1,8 @@
+{
+  "patch_id": "61d77b881534c1a60b333fbee1cd17b750eebb42",
+  "commit": "4c16696b77b93d825e60000bce4b95578981c518",
+  "subject": "security(S-10): local interdependent-repository carve-out from the cooldown",
+  "impact": "1 symbols added, 2 schemas changed",
+  "note": "manifest_format.format_s10_exempt_repos (public, documented in api-reference/manifest-format.md); new brief key s10_cooldown_exempt_repos in project-description + team-manifest schemas (additive, optional).",
+  "recorded_at": "2026-11-03T15:36:24Z"
+}

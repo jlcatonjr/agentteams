@@ -23,6 +23,7 @@ from agentteams.cli.artifacts import (
     _write_agent_privilege_config,
     _write_management_authority_config,
 )
+from agentteams.cli.frozen_render import exempt_frozen
 from agentteams.cli.render_pipeline import _build_final_rendered, _make_content_matches
 
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
@@ -449,9 +450,10 @@ def _advise_codex_projection_outside_session(
 def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: Path) -> tuple[str, ...]:
     """Compute the present sibling team dirs onto the manifest (transient) and print the advisories.
 
-    The single place the transient ``SIBLING_DENY_DIRS_KEY`` is set: any input-supplied value is
-    discarded first, and the computed tuple is what the Claude block's ``denyWrite`` and the goose
-    Seatbelt ``.github`` ancestor literals read. Runs on every generate/update/heal/``--check``.
+    Where generation sets the transient ``SIBLING_DENY_DIRS_KEY`` (pinned-sync projection sets it in
+    ``multi_sync._projected_privilege_manifest``): any input-supplied value is discarded first, and
+    the computed tuple is what the Claude block's ``denyWrite`` and the goose Seatbelt ``.github``
+    ancestor literals read. Runs on every generate/update/heal/``--check``.
 
     Args:
         manifest: The team manifest (mutated: the transient key).
@@ -857,7 +859,6 @@ def _handle_check(
     except FileNotFoundError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    drift.print_drift_report(dreport)
     # Structural diff (team composition comparison)
     sdreport = None
     try:
@@ -866,6 +867,8 @@ def _handle_check(
             sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
     except FileNotFoundError:
         sdreport = None  # no build-log — structural diff not available
+    exempt_frozen(manifest, output_dir, dreport, sdreport)  # a frozen file is never written (baseAgent D63)
+    drift.print_drift_report(dreport)
 
     # --------------------------------------------------------------
     # P0 — Option C render-faithful reconciliation (D1, R1, R1b, R1c).

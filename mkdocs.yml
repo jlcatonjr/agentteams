@@ -227,6 +227,8 @@ nav:
               - cli: api-reference/cli.md
               - output-plan: api-reference/output-plan.md
               - update-report: api-reference/update-report.md
+              - gitdirs: api-reference/gitdirs.md
+              - update-lock: api-reference/update-lock.md
               - fleet: api-reference/fleet.md
               - drift: api-reference/drift.md
               - behavioral-drift: api-reference/behavioral-drift.md
@@ -343,6 +345,7 @@ nav:
               - bridge-skills: api-reference/bridge-skills.md
           - Multi-framework pinned sync:
               - multi-sync: api-reference/multi-sync.md
+              - sync-hub-refresh: api-reference/sync-hub-refresh.md
               - sync-pin: api-reference/sync-pin.md
               - sync-baseline: api-reference/sync-baseline.md
               - sync-classifier: api-reference/sync-classifier.md
