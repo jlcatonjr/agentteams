@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
+
+- **BEHAVIOUR CHANGE: `--sync` no longer absorbs a peer framework's changes.** Previously a clean difference in any
+  framework was absorbed into the hub and projected to the rest. A peer's render differs just by being written for
+  that framework, so this overwrote the pin's own agent files: a real sync changed `team-builder`'s description from
+  "VS Code Copilot project" to "Claude project" and dropped front matter from `test-suite-expert`. A peer's difference
+  is now logged as `proposed` in `.agentteams/sync-conflicts.log.csv`, and projection replaces the peer's copy (the
+  projection backup keeps it). To spread a peer edit, make it in the pin or adopt it with `--absorb-from`.
+- **`--sync` and `--sync-init` refuse before writing when the pin's instruction file is unsafe:** missing or with no
+  parseable fences while the hub has fences, or older than a fence another framework deploys. Previously the sync
+  warned and continued, spreading stale values and giving a new `AGENTS.md` `constitutional_core` v=1. The error names
+  the remedy. Stale values at the same fence version can't be detected and still follow the pin.
+
 ### fixed (pinned --sync lowered instruction-fence versions; remediation row 2026-11-03 HIGH)
 
 - **A projection never lowers a fence version.** `interop_helpers.merge_instruction_file` (every `preserve_existing`
@@ -22,10 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--sync` refreshes the hub's instruction fences from the pin before projecting** (`sync_hub_refresh.refresh_hub_binding`),
   so same-version stale values (`src/`, `templates/`, a dropped Project Layout line) no longer reach the deployed
   files, which the version guard alone cannot catch. The refresh is reported in the sync notices (`--dry-run`
-  previews the projection from the refreshed hub without writing it); when it cannot run (no pin instruction file,
-  unparseable fences) the notice says why and the version guard still applies. The automatic refresh takes the
-  pin's fences only: a newer fence another framework deploys is reported, never taken, so an edited peer file
-  cannot spread its body to every framework (the operator-run `--sync-refresh-instructions` still takes it).
+  previews the projection from the refreshed hub without writing it). The automatic refresh takes the pin's fences
+  only, so an edited peer file cannot spread its body to every framework (the operator-run
+  `--sync-refresh-instructions` still takes a newer peer fence).
 - A deployed `v=` above the newest shipped template's version is not kept by the guard (no release wrote it).
 
 ### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)

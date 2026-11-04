@@ -10,8 +10,8 @@ fence version (``interop_helpers.keep_newer_fences``), and ``run_sync`` refreshe
 
 The pin's deployed instruction file is the source (the pin wins, as everywhere in pinned sync).
 The operator-run ``--sync-refresh-instructions`` also takes a fence another framework in the sync set
-deploys at a higher ``v=`` (a pre-guard sync lowered the pin's own file too); the automatic refresh in
-``run_sync`` only reports such a fence. Only fenced regions move; the hub's text outside fences is
+deploys at a higher ``v=`` (a pre-guard sync lowered the pin's own file too); ``--sync`` and
+``--sync-init`` refuse such a pin first (:func:`pin_instruction_problem`). Only fenced regions move; the hub's text outside fences is
 kept, and the same max(v=) rule applies, so the hub never takes an older fence than it has. A hub
 fence still below the newest template's version afterwards is reported: the copies it was refreshed
 from are stale too, and the pin needs a native ``--update`` before the refresh can help.
@@ -30,7 +30,7 @@ from agentteams.interop import export_to_cai
 from agentteams.interop_helpers import _VERSIONED_BEGIN_RE, keep_newer_fences, template_fence_versions
 from agentteams.sync_pin import DEFAULT_CANONICAL_REL, read_pin
 
-__all__ = ["HubRefreshResult", "refresh_hub_binding", "refresh_hub_instructions"]
+__all__ = ["HubRefreshResult", "pin_instruction_problem", "refresh_hub_binding", "refresh_hub_instructions"]
 
 #: Reads the fence id and both versions back out of a ``keep_newer_fences`` "kept" notice.
 _KEPT_RE = re.compile(r"'(?P<sid>[a-z][a-z0-9_]*)' at v=(?P<peer>\d+) \(incoming v=(?P<pin>\d+)")
@@ -75,6 +75,49 @@ def refresh_hub_instructions(root: Path, *, dry_run: bool = False) -> HubRefresh
     return result
 
 
+def pin_instruction_problem(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]) -> str:
+    """Why the pin's deployed instruction file is unsafe to sync from (``""`` when it is safe).
+
+    The pin wins, so a bad pin file would spread to every framework. Unsafe means: the file is missing or
+    has no parseable fences while the hub has fences to project, or another framework deploys a fence
+    newer than both the pin and the hub. Stale values at the same version cannot be detected here.
+
+    Args:
+        root: The pinned project root.
+        pin_doc: The parsed pin (``pinned_framework`` and ``frameworks``).
+        hub: The canonical team about to be projected.
+
+    Returns:
+        The problem and its remedy, or ``""``.
+    """
+    from agentteams.fences import _extract_fenced_regions
+
+    root = Path(root)
+    pin = pin_doc["pinned_framework"]
+    current = str(hub.get("instructions_binding", {}).get("content", ""))
+    hub_regions = _extract_fenced_regions(current) if current else {}
+    hub_has_fences = isinstance(hub_regions, dict) and bool(hub_regions)
+    regenerate = f"regenerate it natively (--framework {pin} --update --merge), then sync again"
+    deployed = _deployed_instructions(root, pin)
+    if not deployed:
+        return f"the pin ({pin}) has no deployed instruction file; {regenerate}" if hub_has_fences else ""
+    regions = _extract_fenced_regions(deployed)
+    if isinstance(regions, str):
+        return f"the pin's ({pin}) instruction file has unparseable fences ({regions}); {regenerate}"
+    if not regions and hub_has_fences:
+        return f"the pin's ({pin}) instruction file has no AGENTTEAMS fences; {regenerate}"
+    effective = keep_newer_fences(deployed, current)[0] if current else deployed
+    newer: list[str] = []
+    for fw in pin_doc.get("frameworks", []):
+        if fw != pin and (peer := _deployed_instructions(root, fw)):
+            newer += [f"{fw} '{m['sid']}' v={m['peer']} (pin v={m['pin']})"
+                      for m in map(_KEPT_RE.search, keep_newer_fences(effective, peer)[1]) if m]
+    if newer:
+        return (f"other frameworks deploy newer fences than the pin: {', '.join(newer)}; {regenerate}, "
+                "or take them into the hub with --sync-refresh-instructions")
+    return ""
+
+
 def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], *,
                         dry_run: bool = False, take_peer_fences: bool = True) -> HubRefreshResult:
     """Refresh *hub*'s ``instructions_binding`` in memory from the pin's deployed instruction file.
@@ -90,8 +133,8 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
         dry_run: Report what would change without touching *hub*.
         take_peer_fences: Take a fence another framework in the sync set deploys at a higher ``v=``
             than the pin (the operator-run ``--sync-refresh-instructions``). ``run_sync`` passes False:
-            an automatic pass keeps the pin authoritative and only reports such a fence, so an edited
-            peer file cannot spread its body to every framework unasked.
+            an automatic pass keeps the pin authoritative, so an edited peer file cannot spread its
+            body to every framework unasked.
 
     Returns:
         A :class:`HubRefreshResult` naming the fences replaced or added.
@@ -108,16 +151,9 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
     if not deployed:
         raise ValueError(f"pin {pin!r} has no deployed instruction file to refresh the hub from")
     result = HubRefreshResult(pin=pin, dry_run=dry_run)
-    for fw in pin_doc.get("frameworks", []):
-        if fw == pin or not (peer := _deployed_instructions(root, fw)):
-            continue
-        with_peer, kept = keep_newer_fences(deployed, peer)  # a peer's higher fence beats the pin's
-        if take_peer_fences:
-            deployed = with_peer
-        elif newer := [f"'{m['sid']}' v={m['peer']} (pin v={m['pin']})" for m in map(_KEPT_RE.search, kept) if m]:
-            result.notices.append(
-                f"{fw} deploys newer fences than the pin: {', '.join(newer)}; not taken automatically (the pin "
-                f"wins). Regenerate the pin natively (--update), or run --sync-refresh-instructions to take them")
+    for fw in pin_doc.get("frameworks", []) if take_peer_fences else ():
+        if fw != pin and (peer := _deployed_instructions(root, fw)):
+            deployed, _ = keep_newer_fences(deployed, peer)  # a peer's higher fence beats the pin's
     binding = hub.setdefault("instructions_binding", {})
     current = str(binding.get("content", ""))
     if current:

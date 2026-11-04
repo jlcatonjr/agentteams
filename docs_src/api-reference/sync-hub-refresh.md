@@ -40,9 +40,19 @@ fences do not parse, and `FileNotFoundError` when the hub has no `team.cai.json`
 The same refresh applied in memory to an already-loaded hub (`hub["instructions_binding"]["content"]`
 is updated unless `dry_run`); the caller persists it. `run_sync` uses it before projecting, always in
 memory (a dry run previews the projection from the refreshed hub and only skips the save), with
-`take_peer_fences=False`: a peer framework's newer fence is reported, not taken, so the pin stays
-authoritative and an edited peer file cannot spread its body unasked. It turns a `ValueError` (no pin
-instruction file, unparseable fences) into a notice rather than aborting the sync.
+`take_peer_fences=False`, so the pin stays authoritative and an edited peer file cannot spread its body
+unasked. It turns a `ValueError` into a notice rather than aborting the sync; `pin_instruction_problem`
+has already refused the cases that would raise it, apart from a team with no instruction files.
+
+### `pin_instruction_problem`
+
+`pin_instruction_problem(root, pin_doc, hub) -> str`
+
+Why the pin's deployed instruction file is unsafe to sync from, with the remedy, or `""`. Unsafe means:
+missing, or with no parseable fences, while the hub has fences to project; or another framework deploys a
+fence newer than both the pin and the hub. `run_sync` and `sync_init` raise on it before writing anything.
+Running `--sync-refresh-instructions` takes the peer's fence into the hub, which clears the refusal, and the
+next sync brings the pin up to it. Stale values at the same fence version can't be detected here.
 
 ## The projection guard
 
@@ -51,7 +61,6 @@ is higher than the incoming one and returns one notice per kept fence (starting
 `FENCE_DOWNGRADE_NOTICE`). A version above the newest shipped template's
 (`template_fence_versions()`) is not kept: no release wrote it, and keeping it would pin that body
 against every later update. `merge_instruction_file`, which every `preserve_existing` projection of
-an instruction file uses (pinned `--sync` and the Grok path included), runs it first. When it fires
-during `--sync` (only when the pre-projection refresh could not run), `SyncResult.notices` also
-carries a hint to run `--sync-refresh-instructions`. The guard cannot tell a stale same-version body
-from a deliberate one; the refresh handles those.
+an instruction file uses (pinned `--sync` and the Grok path included), runs it first. The guard cannot
+tell a stale same-version body from a deliberate one, and it protects only fences that already exist;
+the refresh and `pin_instruction_problem` cover the rest.
