@@ -30,7 +30,7 @@ agentteams 1.0.7 is a patch release on the 1.0 line with one fix backported from
 - The project root is derived from the output path only, never from the brief. A symlinked `.github` or
   `.github/agents` is never followed, and a HALT in a surface's own log still removes the repository there. An
   unreadable canonical signing switch exempts nothing, and the render goes on.
-- The sandbox-relaxation and WASM-widen gates stay per-surface: their action ids name the framework.
+- The sandbox-relaxation, WASM-widen and adopt-merge gates stay per-surface: their action ids name the framework.
 
 ## [1.0.6] - 2026-11-03
 
