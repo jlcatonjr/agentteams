@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The project root is derived from the output path only, never from the brief. A symlinked `.github` or
   `.github/agents` is never followed, and a HALT in a surface's own log still removes the repository there. An
   unreadable canonical signing switch exempts nothing, and the render goes on.
-- The sandbox-relaxation and WASM-widen gates stay per-surface: their action ids name the framework.
+- The sandbox-relaxation, WASM-widen and adopt-merge gates stay per-surface: their action ids name the framework.
 
 ### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)
 
