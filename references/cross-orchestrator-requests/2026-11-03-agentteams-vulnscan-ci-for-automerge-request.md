@@ -5,6 +5,9 @@
   ("This task should be handed off to the collector-management repo", 2026-11-03)
 - **To:** collector-management `@orchestrator` (owner of the Visual-Knowledge-LLC repositories below)
 - **Type:** Cross-orchestrator request (work item); agentteams changes nothing in these repositories
+- **Protocol:** 3
+- **Clearance:** `@security` PASS and `@repo-liaison` CLEAR-WITH-CONDITIONS, 2026-11-03 (agentteams `references/security-decisions.log.csv`)
+- **Channel:** a new file in collector-management's `references/cross-orchestrator-requests/`, delivered by the operator; reply beside it
 - **Tracking:** agentteams `tmp/by-week/2026-W45/vfollow-20261103.plan.md` item 9
 
 ## Why
