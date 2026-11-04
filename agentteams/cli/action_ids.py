@@ -29,9 +29,10 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: per-plan ``branch-cleanup:<sha256>`` id. The pre-upgrade report checks old HALTs against these; a
 #: test checks both directions against the call sites. The five sandbox-relaxation families
 #: (``cli/sandbox_effects.py``) are called as ``<kind>:<qualifier>`` instance ids and as the bare family.
+#: ``server-apply`` is the family of the per-path ``server-apply:remove-path:<host>:<path>`` id.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
                                  "branch-cleanup", "vulnscan-remediation", "vulnscan-publish", "wasm-pin-remediation",
-                                 "vulnscan-known", *SANDBOX_RELAXATION_KINDS, "s10-cooldown-exempt")
+                                 "vulnscan-known", "server-apply", *SANDBOX_RELAXATION_KINDS, "s10-cooldown-exempt")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:

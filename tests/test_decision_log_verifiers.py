@@ -342,6 +342,12 @@ def test_every_gate_call_site_is_listed():
                 assert text.count(call_text) == 1 and text.count("if not ENTRY_ID_RE.fullmatch(action):") == 1
                 guard = text.index("if not ENTRY_ID_RE.fullmatch(action):")
                 assert guard < text.index(call_text) < guard + 400
+            elif arg == "action" and path.name == "server_apply.py":
+                # Per-path ids only: both calls use the one action built from removal_action, in the server-apply family.
+                from agentteams.vulnscan.server_apply import removal_action
+
+                assert "server-apply" in GATE_ACTIONS and removal_action("h", "/p") == "server-apply:remove-path:h:/p"
+                assert text.count("action = removal_action(host, path)") == 1 and text.count("action=action") == 2
             elif arg in {"exempt_action", "exempt_family"} and path.name == "s10_exempt_gate.py":
                 s10_sites.append(arg)  # s10-cooldown-exempt:<owner/name> and the bare family, checked below
             else:
