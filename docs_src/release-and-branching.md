@@ -14,8 +14,9 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 - **`release/1.0`** collects the reviewed fixes for the next patch release. It changes only when Jim copies in a fix
   that is already on `main` (a *backport*). Between tags its commits are unsigned, so it is not for installing or
   pinning.
-- **Each tag is cut on `release/1.0`** and signed by Jim. After each tag, `release/1.0` is merged back into `main`.
-- **The next minor version gets its own branch.** `release/1.1` will be cut from `main` at its first release
+- **Each tag is cut on its release branch** and signed by Jim. Release branches are not merged back into `main`:
+  every fix is already there, because it landed on `main` first and was copied out with `git cherry-pick -x`.
+- **The next minor version gets its own branch.** `release/1.1` was cut from `main` at its first release
   candidate.
 
 ## Branches and tags
@@ -27,7 +28,7 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 | `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved; what you install and pin | Jim only |
 | Your work branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`) | One change, deleted after merge | Its author |
 
-`main` is `1.1.0.dev0`. `release/1.0` is at `1.0.1`, which is tagged `v1.0.1` (the first patch release; `v1.0.0` is the first 1.0 release).
+`main` is `1.1.0.dev0`. `release/1.0` is tagged `v1.0.7`, and `release/1.1` is tagged `v1.1.0-rc.16`. `v1.0.0` is the first 1.0 release.
 
 **Older lines:** none. The 1.0 line is the first maintained line. RCs 1–9 were tags on `main`.
 
@@ -138,7 +139,7 @@ GitHub enforces the release rules here. Four active rulesets cover them:
 You only need this for context:
 
 1. **Fixes accumulate.** They land on `main`, and the ones requested for backport are copied to `release/1.0`.
-2. **Jim releases.** He bumps the version on `release/1.0` in a pull request, signs `vX.Y.Z` from his own terminal, publishes the GitHub release, and merges `release/1.0` forward into `main`.
+2. **Jim releases.** He bumps the version on `release/1.0` in a pull request, signs `vX.Y.Z` from his own terminal, and publishes the GitHub release. The release branch is not merged back into `main`.
 3. **Repositories release in order:** agentteams → researchteam → mathAgents → baseAgent. Each one moves its pins only
    after verifying the upstream tag's signature.
 4. **Next minor.** When `1.1` reaches its first release candidate, Jim cuts `release/1.1` from `main`. From then on,
