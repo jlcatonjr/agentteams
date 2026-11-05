@@ -154,11 +154,10 @@ jobs:
   # skips there. This job installs bubblewrap and the pinned runtimes, then runs the live tests with wasmtime nested
   # under bwrap (os_confinement=nested, nested:bwrap). A skip guard fails the job if any test skips outside the
   # allowlist below, so a missing precondition cannot leave it green for nothing. ubuntu-24.04 for the same reason as
-  # the test matrix. ADVISORY until 2026-11-30 (remediation row wasm-live-job-required): a red result is visible but
-  # does not block merges yet.
+  # the test matrix. BLOCKING since 2026-11-05 (remediation row wasm-live-job-required; green on #367, #381 and main),
+  # so a red result fails the run.
   wasm-live:
     runs-on: ubuntu-24.04
-    continue-on-error: true
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -235,13 +234,12 @@ jobs:
         run: python scripts/wasm_live_ci.py timing "$RUNNER_TEMP/wasm-proj" --expect-reason nested:bwrap
 
   # Follow-up #5 (2026-09-30): the goose Seatbelt profile under the REAL sandbox-exec on an unnested
-  # macOS runner, plus the macOS launcher gate. ADVISORY until 2026-10-14 (remediation row
-  # macos-seatbelt-job-required): a red result is visible but does not block merges yet.
+  # macOS runner, plus the macOS launcher gate. BLOCKING since 2026-11-05 (remediation rows
+  # macos-seatbelt-job-required and wasm-live-job-required): a red result fails the run.
   # WASM follow-up F2 adds the live WASM tests here too: sandbox-exec runs unnested on this runner, so wasmtime
   # nests under Seatbelt (nested:seatbelt), with the same skip guard as the wasm-live job.
   macos-seatbelt:
     runs-on: macos-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
 
