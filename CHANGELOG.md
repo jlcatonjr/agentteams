@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (a grok:mcp render no longer strips the merged `agentteams_wasm` table; WASM follow-up row wasm-hosts, gap 2)
+
+- **The operator's merged `[mcp_servers.agentteams_wasm]` now survives a `grok:mcp` render**, if it equals that
+  render's `.grok/mcp.agentteams-wasm.example.toml` table exactly. Before, any render where `grok:mcp` wired a server
+  stripped it, so `run_wasm` disappeared until the operator merged it again. Grok stays `example-only`: agentteams
+  still never writes this table, it only stops deleting an exact copy. The comparison uses the table this render
+  computes, not the example on disk, which Grok does not write-protect. A copy that differs (a widened grant, an extra
+  key, another header spelling, or WASM off) is still replaced and reported.
+- **The CLI warning for a replaced `agentteams_wasm` now gives the right remedy:** check the example against a fresh
+  render and merge it again. It used to say "add them to `mcp_servers[]`", which a schema-valid server id cannot do
+  for this table. Other replaced tables keep the old message.
+- `emit_grok_config` takes `keep_if_exact`, bounded to the compute-only `agentteams_wasm` table and refusing anything
+  else with `ValueError`. `_wasm_wiring.grok_kept_tables` supplies it. `strip_unmanaged_mcp_tables` takes `keep`.
+  Supersedes the "replaces the merged table" sentence in the F3 entry below.
+
 ### fix (pinned sync: the roster follows the pin; sandbox denies see every team)
 
 - **BEHAVIOUR CHANGE: `--sync` now carries the pin's roster.** An agent deleted from the pin came back on the
