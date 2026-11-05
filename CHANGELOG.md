@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (vulnscan: a remediation PR behind its base is superseded, not claimed; operator decision 2026-11-04)
+
+- `open-pr` no longer claims an earlier day's executor PR carrying the same change when that PR does not contain the base
+  the fix was just re-staged on. Its checks tested an old base, and auto-merge pins a PR's head to the commit the executor
+  pushed, so nothing may update it in place. `open-pr` opens a current PR instead, and `close-superseded` retires the old
+  one. The operator-actions script now runs `close-superseded` after every newly opened PR (it had never run: no ledger row).
+
 ### vulnscan: changing hosts (server-apply, runtime-patch)
 
 - **`server-apply HOST:LEVEL` is no longer reserved.** It applies one signed level to one signed host. The levels
