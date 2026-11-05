@@ -909,7 +909,7 @@ def run_sync(
         if fw == pin:  # the pin's added and removed agents (sync_roster), before its fields are classified
             peers = [f for f in ordered if f != pin]  # "deleted everywhere" needs every peer present (review)
             peer_slugs = ({a.get("slug") for f in peers for a in exports[f].get("agents") or []}
-                          if peers and all(f in exports for f in peers) else None)
+                          if peers and all(exports.get(f, {}).get("agents") for f in peers) else None)
             canonical_cai, roster, dropped = apply_pin_roster(canonical_cai, native_cai, baseline, root=root,
                                                               pin_agents_dir=agents_dir, peer_slugs=peer_slugs)
             all_conflicts += [ConflictRecord(fw, s, "__agent__", "roster", resolution=r, note=n) for s, r, n in roster]

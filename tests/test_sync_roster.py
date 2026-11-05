@@ -172,13 +172,16 @@ def test_an_untracked_pin_deletion_needs_every_framework_to_agree(tmp_path: Path
     assert any(c.agent == "helper" and c.resolution == "applied (pin removed agent)" for c in result.conflicts)
 
 
-def test_a_missing_peer_dir_never_confirms_a_deletion(tmp_path: Path) -> None:
-    """An absent peer is not "deleted everywhere" (re-review 2026-11-05): with git unable to confirm, keep it."""
+@pytest.mark.parametrize("empty", [False, True])
+def test_a_missing_peer_dir_never_confirms_a_deletion(tmp_path: Path, empty: bool) -> None:
+    """An absent or empty peer is not "deleted everywhere" (re-review 2026-11-05): git can't confirm, so keep it."""
     _team(tmp_path)
     _git(tmp_path, "rm", "-rq", "--cached", ".github/agents", ".claude/agents")
     (tmp_path / ".gitignore").write_text(".github/agents/\n.claude/agents/\n", encoding="utf-8")
     _commit(tmp_path)
     shutil.rmtree(tmp_path / _PEER)  # a fresh clone, or git clean -X
+    if empty:
+        (tmp_path / _PEER).mkdir()
     (tmp_path / _PIN / "helper.agent.md").unlink()
     run_sync(tmp_path, since="")
     assert "helper" in _hub(tmp_path) and (tmp_path / _PIN / "helper.agent.md").is_file()
