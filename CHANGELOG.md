@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (Rule S-10: build-system requirements pinned)
+
+- **`[build-system] requires` is pinned exactly: `setuptools==84.2.1`, and nothing else.** It was published on
+  2026-10-20 (past the 14-day cooldown) and has no OSV advisory. Before this, an isolated build of an agentteams pin installed the newest setuptools and
+  wheel, with nothing holding them to the release cooldown (reported by mathAgents through researchteam).
+  `wheel` is dropped from the build requirements: setuptools has built wheels itself since 70.1, and
+  `wheel` 0.48 would have pulled in an unpinned `packaging`. setuptools has no required dependencies, so the
+  isolated build environment is exactly one pinned package. Verified by building the wheel offline with only
+  hash-checked setuptools 84.2.1 installed; the JSON schemas still ship.
+
 ## [1.1.3] - 2026-11-14
 
 ### release notes
