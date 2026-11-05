@@ -22,6 +22,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warned and continued, spreading stale values and giving a new `AGENTS.md` `constitutional_core` v=1. The error names
   the remedy. Stale values at the same fence version can't be detected and still follow the pin.
 
+### changed (Grok gets an inert `run_wasm` example; WASM follow-up F3, operator spike 07)
+
+- **Grok is `example-only`, no longer `unverified-format`.** With WASM on, a grok render now installs the
+  `agentteams_wasm` server bundle and writes an inert `.grok/mcp.agentteams-wasm.example.toml`
+  (`[mcp_servers.agentteams_wasm]`, `command`/`args`, one compute-only `--agent _session` copy). The operator merges
+  that table into `.grok/config.toml` outside the agentteams-managed block; agentteams never writes it there itself.
+  The example is in `protected_config_paths` and is found by the launching-config scan (`.grok/mcp*.toml`), but
+  Grok itself enforces no write-protection for it (the other surfaces' denies do).
+  Operator spike 07 (grok 1.0.52, wasmtime 36.0.20, macOS) loaded exactly this table and returned `print(42)` from
+  `grok -p --always-approve`: `nested` (Seatbelt) under `--sandbox off`, `none` (`unavailable:darwin`) under
+  `--sandbox workspace`. Custom agents keep `mcpInheritance: none`; whether they see the server is untested. A
+  render where `grok:mcp` wires any server replaces the merged table (reported as replaced); merge it again after
+  such a render.
+- **Behaviour change:** Grok is now a shared-copy host, so a `wasm_sandbox.agents` grant that widens an agent (read
+  paths, scratch) refuses a grok render (I3), as on Codex and Copilot. Before, the render succeeded and the grant
+  had no effect.
+- **Wiring reasons now carry the spike results** for Copilot CLI (`--sandbox` runs the server inside the host's
+  Seatbelt: `none`) and Copilot VS Code (`nested`, after an approval prompt). `docs_src/api-reference/frameworks.md`
+  has the per-host table, including Codex: `codex exec` under `workspace-write` blocks the call on its `prompt`
+  approval.
+
 ### fix (Rule S-10 carve-out: every surface authorizes against the canonical `.github/agents`)
 
 - **One signed row now exempts a repository on every surface** (reported from researchteam #139). On a multi-surface

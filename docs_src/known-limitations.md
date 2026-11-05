@@ -324,7 +324,7 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
 
 - **What:** the verdict is `advisory` (instructions plus a tool offer, nothing that stops native exec) for
   copilot-vscode and copilot-cli (only an inert MCP example is emitted; no `run_wasm` in agent tools), agents-md (no
-  tool channel), grok under `native_exec: replace` (no `run_wasm` yet; `deny` gives `declared`), goose delegates,
+  tool channel), grok under `native_exec: replace` (only an inert MCP example is emitted; `deny` gives `declared`), goose delegates,
   goose under legacy scoping, and every top-level session on every framework. It is also `advisory` on every
   framework while the OS sandbox is off, or while the control-plane rules are not merged in the live configuration
   (a fresh Claude render reads `advisory` until the settings are merged). A narrowed sub-agent can still ask an
@@ -334,6 +334,19 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
   Use Claude or Goose (direct recipe runs) with the OS sandbox on where enforcement matters; on Goose that also
   needs `GOOSE_SANDBOX` on in the live Goose config, or the verdict reads `advisory` ("Seatbelt profile not wired").
 - **Tracking:** WASM sandbox plan P13 (Rule 12 carve-outs 1 and 6).
+
+### A host that runs MCP servers inside its own sandbox leaves `run_wasm` un-nested
+
+- **What:** the `agentteams_wasm` server nests wasmtime in its own Seatbelt or bwrap profile, but Seatbelt cannot
+  nest inside Seatbelt. Copilot CLI with `--sandbox` and Grok with `--sandbox workspace` start the server inside
+  their own sandbox, so each call reports `os_confinement: "none"` (`unavailable:darwin`) and enforces read-only
+  mounts with a per-run snapshot. The host's sandbox is then the only OS layer. Separately, `codex exec` under
+  `workspace-write` blocks the call on the server's `prompt` approval, because a non-interactive run cannot answer
+  it (operator spike 07, 2026-11-03, macOS).
+- **Who:** Copilot CLI, Grok and Codex sessions with their own sandbox on.
+- **Workaround:** read `os_confinement` in each result. Turn the host's sandbox off where you want the server's own
+  nested profile. Claude Code, Goose, Copilot VS Code and these hosts with their sandbox off all report `nested`.
+- **Tracking:** remediation log row `wasm-hosts` (2026-11-03).
 
 ### WASM is not supported on native Windows for now
 
