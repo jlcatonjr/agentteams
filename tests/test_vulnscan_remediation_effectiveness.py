@@ -263,3 +263,23 @@ def test_the_staged_index_lists_staged_repositories(env: dict, tmp_path: Path) -
     run_dir.mkdir()
     assert executor_serve.write_staged_index(run_dir) == ["/repos/app"]
     assert json.loads((run_dir / executor_serve.STAGED_INDEX).read_text()) == {"repos": ["/repos/app"]}
+
+
+def _on(target: str, *keys: str) -> list[Finding]:
+    return [Finding(kind="package", target=target, name=k, version="1.0.0", ecosystem="npm", severity=3,
+                    ids=[f"GHSA-{k}"]) for k in keys]
+
+
+def test_findings_on_a_target_this_run_did_not_scan_are_carried_not_fixed(env: dict) -> None:
+    """Unknown is not clean: a host whose audit did not complete keeps its findings out of fixed, new and net."""
+    prev, now = Report(target="daily"), Report(target="daily")
+    prev.findings += _on("host-up", "a", "b") + _on("host-down", "c", "d", "e")
+    now.findings += _on("host-up", "b", "f")          # host-down: audit failed, no findings and no scan record
+    st = effectiveness.PrStats()
+    md, _ = effectiveness.section(now, prev, stats=st, scanned={"host-up"})
+    assert "| Findings fixed since the previous run | 1 |" in md          # only "a"; c, d, e are not fixed
+    assert "| Findings new since the previous run | 1 |" in md and "| Net change in findings | +0 |" in md
+    assert "| Previous findings on targets this run did not scan (carried, not counted above) | 3 |" in md
+    # Rule 12: the same host, scanned this time, counts again (the exclusion is per run, not sticky)
+    md2, _ = effectiveness.section(now, prev, stats=st, scanned={"host-up", "host-down"})
+    assert "| Findings fixed since the previous run | 4 |" in md2 and "carried, not counted" not in md2

@@ -183,8 +183,19 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         stats = pr_stats(pr_urls(rows))
     # Range findings (unpinned requirements) are not counted: switching ``unpinned_ranges`` off, or a cap, would
     # "fix" them without any change to a repository. They have a line of their own.
-    now_keys = {f.key() for f in total.findings if f.kind != "range"}
-    before = {f.key() for f in previous.findings if f.kind != "range"} if previous else set()
+    # Unknown is not clean: with ``scanned`` known, a target this run did not cover (an audit that did not complete,
+    # an unreachable host, a missing root) is left out of fixed, new and net on both sides; its previous findings
+    # are carried and counted on a line of their own, so an outage never reads as remediation.
+    covered = (assessed({f.target for f in [*total.findings, *(previous.findings if previous else [])]}, scanned)
+               if scanned is not None else None)
+
+    def counted(f: Finding) -> bool:
+        return f.kind != "range" and (covered is None or f.target in covered)
+
+    now_keys = {f.key() for f in total.findings if counted(f)}
+    before = {f.key() for f in previous.findings if counted(f)} if previous else set()
+    carried = (sum(1 for f in previous.findings if f.kind != "range" and f.target not in covered)
+               if previous and covered is not None else 0)
     ranges = sum(1 for f in total.findings if f.kind == "range")
     fixed = len(before - now_keys) if previous else 0
     new = len(now_keys - before) if previous else len(now_keys)
@@ -209,6 +220,9 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         f"| PRs ready to merge (open, mergeable, every check passed) | {len(stats.green)} |",
         f"| Repositories held at scan time (nothing stageable; see the held reasons) | {retry_guard.held_count()} |",
     ]
+    if carried:
+        lines.insert(lines.index(next(x for x in lines if x.startswith("| Findings already fixed upstream"))),
+                     f"| Previous findings on targets this run did not scan (carried, not counted above) | {carried} |")
     if stats.unknown:
         lines.append(f"| PR lookups that failed (state unknown) | {stats.unknown} |")
     if previous is not None and scanned is not None:

@@ -526,6 +526,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `moved (not remediated)`. The daily summary's effectiveness section adds the previous run's findings per outcome
   (counts only). Only targets the run has a scan record for are assessed. New command `effectiveness BASE LATER
   [--alias] [--path-alias] [--csv] [--out]`, which replaces the audit script.
+- **Unknown is not fixed (headline counts).** "Findings fixed / new since the previous run" and the net change now
+  leave out every target the run has no complete scan record for, on both sides: before, a host whose audit did not
+  complete (ssh exit 255, a proxy 502) had all its previous findings counted as fixed. Those findings are carried on
+  a line of their own ("Previous findings on targets this run did not scan"). Without a scan record set (callers
+  that pass none) the counts are unchanged.
 - **Same-day verification (V1).** New command `verify` (module `agentteams.vulnscan.verify`) and job
   `io.agentteams.vulnscan-verify`, which `vulnscan-remediate-auto.sh --install` loads (17:15 and 18:45,
   `VULNSCAN_VERIFY_TIMES`). Its entry point is `vulnscan-daily-wrapped.sh --verify`: the install guard, the wrapper

@@ -155,7 +155,7 @@
     "agentteams/vulnscan/distro_verdict.py": "ce474b9c6d25874e8f70ca9809c967349d0adf547142989222d7cb8f99c367f6",
     "agentteams/vulnscan/docker_mode.py": "04104757e47b41aa5eb16f5665c8616462cb527b27f279f63ffd79fafc99d439",
     "agentteams/vulnscan/docker_readiness.py": "e000be08e05b0452665cacc18caa3d0bea17f7d5d06f57c2b2507b6850705cea",
-    "agentteams/vulnscan/effectiveness.py": "15eb20f15442bcd92a4f913c028feb48f07b3d979fcc9b09c1041d8871211bdd",
+    "agentteams/vulnscan/effectiveness.py": "07179a50f8963ead71820d30146c00e7d59def848a49fcf200990d08bbc2fd0a",
     "agentteams/vulnscan/engine.py": "f306cfb487e66a3da3432f612db89249e8bc4fc6d9b0daf8cab4073fc612eae8",
     "agentteams/vulnscan/escalations.py": "b64b1b256a2523ae457be5c4a468b1ae142099924158ccd7a5bb9e9823ec8cca",
     "agentteams/vulnscan/executor.py": "8947c11bca91d34bf441a3c8e156597ae951b419d29773aab6bedcd5f0b380a7",
