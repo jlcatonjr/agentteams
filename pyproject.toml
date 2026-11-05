@@ -1,5 +1,9 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+# Exact pins (Rule S-10): an isolated build installs these, so they follow the 14-day release cooldown and the
+# OSV check like any other dependency. Bump them through a reviewed PR, never by widening to a range.
+# No `wheel`: setuptools >= 70.1 builds wheels itself and has no required dependencies, so this is the whole
+# isolated build environment (`wheel` would add an unpinned `packaging`).
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -39,8 +43,9 @@ test = [
     # which builds a real wheel with `--no-isolation` (no network) to assert the JSON
     # schemas ship. Editable CI never exercises a built wheel, so this is the only guard.
     "build>=1.0",
-    "setuptools>=68",
-    "wheel",
+    # The same exact pin as [build-system]: `build --no-isolation` refuses to build when the installed
+    # setuptools differs from it.
+    "setuptools==84.2.1",
 ]
 # The `agentteams.research` subpackage (search/reputable/verify) is a real, optional runtime
 # library, not part of the CLI/generator pipeline — the base install stays exactly as
