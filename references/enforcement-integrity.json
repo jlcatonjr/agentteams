@@ -85,7 +85,7 @@
     "agentteams/frameworks/_sandbox_emit.py": "bbecbc3ff6732533625a4dcda5d4bef0ce22e72dc3ae96ffdcebdb9a3a67b3d1",
     "agentteams/frameworks/_wasm_team_docs.py": "9b9ec101a305112ff1675b984c662fa6ea341825162192c72df96e90da7ec076",
     "agentteams/frameworks/_wasm_tool_scoping.py": "54f7a9c9db5fa267fb0c532360e68ffc1e9aec28e3880c7cc48d4648ca673285",
-    "agentteams/frameworks/_wasm_wiring.py": "9fdb69161563b990f85d0b5ba05c5e1fd42602942f70ace8a4ae77b4db283277",
+    "agentteams/frameworks/_wasm_wiring.py": "624d4f1cfbca7899ed203dc478a0c3751b67c363ba36b866326a5abda96aa171",
     "agentteams/frameworks/_write_roots.py": "bfa42145214d90b29afd4b0b933721bb7176194edecb0f31dff6e03e294f1b4a",
     "agentteams/frameworks/goose_recipe_grants.py": "8404d8d445ea49d3010c79f3eb63995354a3f6b6d5cc6f248e8a3ecb323e9d32",
     "agentteams/frameworks/goose_tool_scoping.py": "2b8c3410dc31c2fa00aed94de932742c91946a4d2b15b05174eafd413e10a0cf",
@@ -234,7 +234,7 @@
     "agentteams/wasm_guests.py": "af3a2cd745190320ff47a1637ea2eb8287bd1cf17a32dcf8c30bbfc7512f0b90",
     "agentteams/wasm_mcp.py": "f8ddca22765d5fbf2ec75351030f8f9050f0ab6568a1fb742a109bd237219801",
     "agentteams/wasm_pins.py": "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df",
-    "agentteams/wasm_policy.py": "141a54428268b9b76b96dda94f4ce64a77bc9d843806251cb67875604a6325fa",
+    "agentteams/wasm_policy.py": "0f517df4b6859fc5d0fcdd803363cc58fcc7581575f325dc883c6801c9bc31bc",
     "agentteams/wasm_runtime.py": "b70019b822466cbda1ecfeab6df02514cffdb821ea44c4d3b2ac698b955d6e90",
     "agentteams/whole_body_migration.py": "7487a2e960563de1bcf4c495ce11b52a433b7082150727a63b057b6c509eea02",
     "agentteams/write_policy.py": "8fa129e0bca9d1d10fcfec433c3da831512d0b08ec5772998a1a8aa4a5ea64e8"

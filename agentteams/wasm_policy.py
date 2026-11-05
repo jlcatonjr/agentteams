@@ -283,7 +283,7 @@ def _session_example(framework: str) -> str | None:
     from agentteams.frameworks import _wasm_wiring as ww
 
     return {"claude": ww.CLAUDE_EXAMPLE, "copilot-vscode": ww.VSCODE_EXAMPLE,
-            "copilot-cli": ww.COPILOT_CLI_EXAMPLE}.get(framework)
+            "copilot-cli": ww.COPILOT_CLI_EXAMPLE, "grok": ww.GROK_EXAMPLE}.get(framework)
 
 
 def _orchestrator_section(manifest: dict[str, Any], framework: str, slug: str, *, top_level: bool) -> str:
@@ -332,7 +332,8 @@ def _security_section(manifest: dict[str, Any]) -> str:
         f"- **Grant widening (`{fx.WASM_GRANT_WIDEN}`).** A read path must be project-relative and must not hold "
         "credentials, keys or the control plane (`.agentteams/`, `.git/`, agent directories, MCP configs). A scratch "
         "dir is the agent's own `.agentteams/wasm/scratch/<agent>/`, nothing wider. Network is never grantable. A "
-        "sub-agent's grant is never wider than its delegator's. Shared hosts (Codex, Copilot) run compute-only only.\n"
+        "sub-agent's grant is never wider than its delegator's. Shared hosts (Codex, Copilot, Grok) run compute-only "
+        "only.\n"
         f"- **Kept native exec (`{fx.NATIVE_EXEC_KEEP}`).** Each `native_exec_keep` entry, and `native_exec: keep`, "
         f"leaves an agent a shell WASM does not confine. Current entries: "
         f"{', '.join(f'`@{s}`' for s in cfg.native_exec_keep) or 'none'}. Confirm the role needs host tooling.\n"

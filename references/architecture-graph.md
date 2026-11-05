@@ -5,7 +5,7 @@
 
 - Modules mapped: **425**
 - Packages: **14**
-- Internal import edges: **1534**
+- Internal import edges: **1533**
 - Distinct external dependencies: **11**
 
 ---
@@ -253,7 +253,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.integrity` | `agentteams.git_exec` | `agentteams.cli.commands`, `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.redteam.checks_static`, `agentteams.redteam.runner` |
 | `agentteams.interop` | `agentteams._interop_grok`, `agentteams.backup`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.interop_write_policy`, `agentteams.mcp_emit`, `agentteams.projection_marker`, `agentteams.wasm_enforcement`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.bridge`, `agentteams.canonical`, `agentteams.cli.commands`, `agentteams.multi_sync`, `agentteams.sync_hub_refresh`, `agentteams.team_package` |
 | `agentteams.interop_grant_check` | `agentteams.capability_map`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.frameworks.registry`, `agentteams.governance_logs`, `agentteams.runner_mcp`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.convert`, `agentteams.interop`, `agentteams.multi_sync` |
-| `agentteams.interop_helpers` | `agentteams.canonical`, `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._grok_tool_scoping`, `agentteams.mcp_emit`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.interop`, `agentteams.multi_sync`, `agentteams.sync_hub_refresh` |
+| `agentteams.interop_helpers` | `agentteams.canonical`, `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._grok_tool_scoping`, `agentteams.mcp_emit`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.interop`, `agentteams.sync_hub_refresh` |
 | `agentteams.interop_write_policy` | `agentteams.atomicio`, `agentteams.audit_agent_contract`, `agentteams.proposal_policy`, `agentteams.runner_mcp`, `agentteams.write_policy` | `agentteams.bridge`, `agentteams.cli.app`, `agentteams.convert`, `agentteams.interop` |
 | `agentteams.launcher_lineage` | `agentteams.atomicio`, `agentteams.frameworks._linux_sandbox_emit` | `agentteams.vulnscan.handoff`, `agentteams.vulnscan.project_cli` |
 | `agentteams.learned_blocks` | `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.scan`, `agentteams.unfenced` | `agentteams.agent_doc_sync`, `agentteams.emit`, `agentteams.frameworks.structural_merge` |
@@ -285,7 +285,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.model_providers._transport` | `agentteams.model_providers._common`, `agentteams.model_providers._config` | `agentteams.model_providers` |
 | `agentteams.model_providers._validate` | `agentteams.model_providers._anthropic`, `agentteams.model_providers._common`, `agentteams.model_providers._gemini` | `agentteams.model_providers` |
 | `agentteams.model_routing` | — | `agentteams.cli.artifacts`, `agentteams.frameworks.wasm` |
-| `agentteams.multi_sync` | `agentteams.backup`, `agentteams.canonical`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.fleet`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.registry`, `agentteams.git_exec`, `agentteams.host_features`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.sync_baseline`, `agentteams.sync_classifier`, `agentteams.sync_hub_refresh`, `agentteams.sync_pin`, `agentteams.wasm_config` | `agentteams.cli.sync_switch`, `agentteams.stale_detector` |
+| `agentteams.multi_sync` | `agentteams.backup`, `agentteams.canonical`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.fleet`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.registry`, `agentteams.git_exec`, `agentteams.host_features`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.sync_baseline`, `agentteams.sync_classifier`, `agentteams.sync_hub_refresh`, `agentteams.sync_pin`, `agentteams.wasm_config` | `agentteams.cli.sync_switch`, `agentteams.stale_detector` |
 | `agentteams.orphan_advisory` | `agentteams.bridge_subagents_goose`, `agentteams.cli.adopt_merge_gate` | — |
 | `agentteams.output_plan` | `agentteams.analyze`, `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.analyze` |
 | `agentteams.parallel_plan` | — | `agentteams.bridge` |
@@ -3586,7 +3586,6 @@ digraph "agentteams architecture" {
         "agentteams.host_features",
         "agentteams.interop",
         "agentteams.interop_grant_check",
-        "agentteams.interop_helpers",
         "agentteams.projection_marker",
         "agentteams.sandbox_projection",
         "agentteams.sandbox_state",
@@ -9587,10 +9586,6 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.multi_sync",
       "target": "agentteams.interop_grant_check"
-    },
-    {
-      "source": "agentteams.multi_sync",
-      "target": "agentteams.interop_helpers"
     },
     {
       "source": "agentteams.multi_sync",

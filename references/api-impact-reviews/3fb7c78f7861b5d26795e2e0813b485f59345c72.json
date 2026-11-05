@@ -1,0 +1,8 @@
+{
+  "patch_id": "3fb7c78f7861b5d26795e2e0813b485f59345c72",
+  "commit": "a02fc04c311d3a1d3a4c6c126250a560c1d28260",
+  "subject": "refactor(sync): move the hub-instruction steps into sync_hub_refresh",
+  "impact": "2 symbols added, 1 symbols changed",
+  "note": "Reviewed: refuse_unsafe_pin_instructions and refresh_hub_for_projection moved from multi_sync's private helpers; documented in docs_src/api-reference/sync-hub-refresh.md. No behaviour change.",
+  "recorded_at": "2026-11-04T16:54:29Z"
+}
