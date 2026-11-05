@@ -35,8 +35,14 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
   Every framework is classified once a pass runs, including uncommitted edits. A peer's edit inside an
   instruction fence is reported in `SyncResult.notices` rather than the log. To spread a peer edit, make it
   in the pin, or restore it to the peer and adopt it with `--absorb-from` before the next sync.
+- **The roster follows the pin** ([`sync_roster`](sync-roster.md)). An agent the pin adds projects to every
+  framework, and one it deletes (confirmed by git, or gone from every framework) leaves the hub and every
+  framework, after the backup. A peer's
+  own added agent stays in that peer and is proposed; an agent a peer deletes is restored.
 - **Project + rebaseline.** Canonical is projected to every framework and every baseline is
-  rewritten from the on-disk result, so the next run never re-absorbs this run's own output.
+  rewritten from the on-disk result, so the next run never re-absorbs this run's own output. The
+  sandbox files are written only after every framework's team marker exists, so each framework's
+  sibling denies include a team created in the same pass.
 - **Change detection is commit-to-commit** (operator decision): a framework is "changed" when a
   path under its agents directory moved between the last synced commit and HEAD. A framework's
   own projected-but-uncommitted output therefore never re-triggers a sync.

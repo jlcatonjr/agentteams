@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (pinned sync: the roster follows the pin; sandbox denies see every team)
+
+- **BEHAVIOUR CHANGE: `--sync` now carries the pin's roster.** An agent deleted from the pin came back on the
+  next sync, and one added to the pin never reached the hub or the other frameworks. Now an added agent
+  projects everywhere, and a deleted one leaves the hub and every framework once the deletion is confirmed:
+  committed in a git-tracked pin directory, or deleted from every framework. Each framework's
+  `.agentteams-backups` keeps its copy (newest 10). Any other deletion, including one git can't confirm, is
+  logged and restored. A peer's own added agent stays in that peer and is proposed, and an agent a peer
+  deletes is restored. `--sync` and `--sync-init` refuse a pin with no agents while the hub has some.
+  `--sync-init` over an existing hub drops the hub agents the pin lacks but leaves other frameworks' files
+  alone. See `docs_src/api-reference/sync-roster.md`.
+- **The sandbox files are written after every framework is projected.** On a first `--sync-init` where goose
+  came before copilot in the framework list, `.goose/sandbox.sb` had none of the `.github` F-4 rename-deny
+  lines, and claude's `settings.hooks.example.json` missed later teams, until a later sync that did work.
+
 ### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
 
 - **BEHAVIOUR CHANGE: `--sync` no longer absorbs a peer framework's changes.** Previously a clean difference in any
