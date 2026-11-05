@@ -55,7 +55,7 @@ CELLS = ("claude", "goose", "goose-grant", "codex", "grok", "copilot-vscode", "c
 SWITCHES = (("on", "on"), ("on", "off"), ("off", "on"), ("off", "off"))
 #: P11's wiring row per cell while WASM is on (the acceptance table; ``wasm`` runs guests itself, no MCP).
 WIRING = {"claude": "wired-per-agent", "goose": "not-wired", "goose-grant": "wired-per-agent", "codex": "wired-shared",
-          "grok": "unverified-format", "copilot-vscode": "example-only", "copilot-cli": "example-only",
+          "grok": "example-only", "copilot-vscode": "example-only", "copilot-cli": "example-only",
           "agents-md": "instructions-only", "wasm": "not-wired"}
 _LAUNCHING = frozenset({"wired-per-agent", "wired-shared", "example-only"})
 _BOUNDARY = frozenset({"confine-run.sh", "mac-escape-tests.sh", "sandbox.sb", "config.yaml.agentteams.example",

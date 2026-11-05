@@ -1,0 +1,8 @@
+{
+  "patch_id": "1c125bcfde22a87bb0130bfd9ab2208ca51168c1",
+  "commit": "e9f4d5095be2620bce8d06bac74bb8b8b4b0861e",
+  "subject": "feat(wasm): Grok gets an inert run_wasm example (example-only)",
+  "impact": "1 symbols changed",
+  "note": "GROK_EXAMPLE added to _wasm_wiring.__all__ beside CLAUDE/VSCODE/COPILOT_CLI_EXAMPLE; no API-reference page lists those constants (grep docs_src, agentteams.1); frameworks.md grok row + CHANGELOG updated",
+  "recorded_at": "2026-11-04T22:26:33Z"
+}

@@ -11,8 +11,8 @@ Flags:
   diffs, reconciles to the pin, projects to all, logs conflicts).
 - ``--sync-since <commit>`` overrides the change-detection anchor.
 - ``--sync-refresh-instructions`` fence-merges the pin's deployed instruction
-  file into the canonical hub (``sync_hub_refresh``); ``--sync`` itself never
-  refreshes the hub's instructions.
+  file into the canonical hub (``sync_hub_refresh``), taking a peer's newer
+  fence too; ``--sync`` runs the same refresh from the pin alone.
 - ``--frameworks <fw1,fw2,...>`` narrows --sync-init's sync set (default: every
   registered framework). Needed since the P1 convergence (2026-08-15):
   copilot-vscode and copilot-cli now share one physical agents directory, so
