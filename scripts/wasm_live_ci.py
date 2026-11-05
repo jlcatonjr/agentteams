@@ -52,7 +52,7 @@ COMMON_ALLOW = (
 )
 
 #: Per-sandbox extras. Empty: the network-deny and credential-deny nested cases now run under both bwrap and
-#: Seatbelt (remediation row bwrap-nested-deny), so a skip of either fails both jobs.
+#: Seatbelt (WASM follow-up: bwrap versions of the nested deny tests), so a skip of either fails both jobs.
 SANDBOX_ALLOW: dict[str, tuple[str, ...]] = {
     "bwrap": (),
     "seatbelt": (),

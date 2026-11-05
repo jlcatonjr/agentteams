@@ -72,7 +72,7 @@ def test_sandbox_allowlist_composes_common_and_per_sandbox_entries(mod, tmp_path
                      '<testcase classname="tests.test_wasm_exec_nested" name="test_nested_network_denied">'
                      '<skipped message="needs Seatbelt"/></testcase></testsuite></testsuites>')
     args = ["skips", str(junit), "--root", str(tmp_path)]
-    for sandbox in ("bwrap", "seatbelt"):  # the deny cases run under both now (row bwrap-nested-deny)
+    for sandbox in ("bwrap", "seatbelt"):  # the deny cases run under both now
         assert mod.main([*args, "--sandbox", sandbox]) == 1
         assert mod.main([*args, "--sandbox", sandbox,
                          "--allow", "tests/test_wasm_exec_nested.py::test_nested_network_denied"]) == 0
