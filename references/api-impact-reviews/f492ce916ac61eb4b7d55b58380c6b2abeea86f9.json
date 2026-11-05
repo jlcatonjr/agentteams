@@ -1,0 +1,8 @@
+{
+  "patch_id": "f492ce916ac61eb4b7d55b58380c6b2abeea86f9",
+  "commit": "cbb676bcb46e59a40942cd49c25fd71eb4e63d7a",
+  "subject": "fix(sync): the pin decides; refuse an unsafe pin instruction file",
+  "impact": "1 symbols added, 1 symbols changed",
+  "note": "Reviewed: pin_instruction_problem (new) documented in docs_src/api-reference/sync-hub-refresh.md; __all__ change is that addition only. Behaviour change to run_sync/sync_init documented in multi-sync.md, cli-reference.md and CHANGELOG.",
+  "recorded_at": "2026-11-04T16:52:57Z"
+}
