@@ -42,9 +42,9 @@ what happens to one that reaches none depends on the framework's wiring:
 
 - **Claude, and Goose under `goose_tool_scoping: grant`** (`wired-per-agent`): only a WASM-eligible agent (one
   holding an execute-class tool) gets a copy. A grant on any other agent has no effect.
-- **Goose under legacy scoping, Grok and AGENTS.md** (`not-wired`, `unverified-format`, `instructions-only`):
+- **Goose under legacy scoping and AGENTS.md** (`not-wired`, `instructions-only`):
   no agent gets a copy, so every widened grant has no effect.
-- **Codex, Copilot VS Code and Copilot CLI** (one shared, compute-only copy for the whole project): a widened
+- **Codex, Copilot VS Code, Copilot CLI and Grok** (one shared, compute-only copy for the whole project): a widened
   grant is refused and the render stops (`_wasm_wiring.unhonoured_grants`); it is never silently dropped.
 
 In the first two cases the render prints `NOTE (WASM): the wasm_sandbox.agents grant for <slug> has no effect
@@ -166,7 +166,7 @@ explicit list replaces the default (`[]` keeps none).
 | goose | `wired-per-agent` (grant mode); `not-wired` under legacy scoping | recipe extensions, honoured on a direct `goose run --recipe`; a delegate cannot add the server |
 | codex | `wired-shared` | one compute-only instance in `.codex/config.toml` (loaded for a trusted project), approval mode `prompt` |
 | copilot-vscode / copilot-cli | `example-only` | inert `.vscode/` / `.github/mcp.agentteams-wasm.example.json`; no `run_wasm` in agent tools |
-| grok | `unverified-format` | nothing emitted (operator check pending) |
+| grok | `example-only` | inert `.grok/mcp.agentteams-wasm.example.toml`; the operator merges its table into `.grok/config.toml`, outside the agentteams-managed block |
 | agents-md | `instructions-only` | no MCP channel |
 
 **Operator spike B.** Run on the operator's macOS host on 2026-11-01 with the development wasmtime 36.0.16

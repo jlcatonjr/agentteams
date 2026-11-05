@@ -117,7 +117,7 @@ def test_codex_states_the_shared_compute_only_instance():
     assert "shared compute-only instance" in out and "mcp__agentteams_wasm" not in out
 
 
-@pytest.mark.parametrize("framework, status", [("copilot-vscode", "example-only"), ("grok", "unverified-format"),
+@pytest.mark.parametrize("framework, status", [("copilot-vscode", "example-only"), ("grok", "example-only"),
                                                ("agents-md", "instructions-only")])
 def test_hosts_without_run_wasm_get_the_advisory_wording(framework, status):
     out = wasm_policy.apply(SHELL, "cleanup", _manifest(framework), framework)

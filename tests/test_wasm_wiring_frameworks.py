@@ -5,8 +5,8 @@
   ``codex:mcp`` is off (carve-out 4); a widened grant is refused, never downgraded.
 * goose: grant mode carries the exact extension per eligible recipe, with the OS sandbox on or off (operator spike
   B: Goose runs MCP servers outside its sandbox); legacy scoping is ``not-wired``; a delegate cannot add it.
-* grok: ``unverified-format`` and nothing emitted. copilot-vscode / copilot-cli: inert examples only (no live
-  ``.vscode/mcp.json`` / ``.github/mcp.json``). agents-md: instructions only.
+* copilot-vscode / copilot-cli / grok: inert examples only (no live ``.vscode/mcp.json`` / ``.github/mcp.json``, no
+  server table in ``.grok/config.toml``). agents-md: instructions only.
 """
 
 from __future__ import annotations
@@ -159,14 +159,28 @@ def test_goose_delegate_cannot_add_the_wasm_copy():
 
 # --- grok, copilot, agents-md --------------------------------------------------------------------------------------
 
-def test_grok_is_unverified_and_emits_nothing():
+def test_grok_example_is_inert_and_protected():
     manifest = _manifest("grok")
     agent = FRAMEWORKS["grok"]().render_agent_file(SHELL, "navigator", manifest)
-    extras = FRAMEWORKS["grok"]().extra_output_files(manifest)
+    extras = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))
+    example = extras[f"../../{ww.GROK_EXAMPLE}"]
+    entry = tomllib.loads(example)["mcp_servers"]["agentteams_wasm"]
+    assert set(entry) == {"command", "args"}  # Codex's default_tools_approval_mode is not a Grok key
+    assert entry["args"][entry["args"].index("--agent") + 1] == wasm_mcp.SESSION_AGENT
+    assert example.startswith("# ") and ".grok/config.toml" in example.splitlines()[0]
+    assert not any(p.endswith("config.toml") and ww.LAUNCH_MARKER in text for p, text in extras.items())
+    assert "agentteams_wasm" not in agent
     row = manifest[ww.WIRING_KEY]["frameworks"]["grok"]
-    assert row["status"] == "unverified-format" and row["verified"] is False and not row["config_paths"]
-    assert "agentteams_wasm" not in agent and not any(ww.LAUNCH_MARKER in text for _, text in extras)
-    assert "wired" not in ww.report_line(manifest, "grok").split(":")[1].split("(")[0].replace("unverified", "")
+    assert row["status"] == "example-only" and row["verified"] is True and row["grant_scope"] == "session-compute-only"
+    assert ww.GROK_EXAMPLE in manifest[ww.WIRING_KEY]["protected_config_paths"]
+
+
+def test_scan_finds_the_grok_example(tmp_path):
+    manifest = _manifest("grok")
+    example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
+    (tmp_path / ".grok").mkdir()
+    (tmp_path / ww.GROK_EXAMPLE).write_text(example, encoding="utf-8")
+    assert ww.launching_config_paths(tmp_path) == (ww.GROK_EXAMPLE,)
 
 
 @pytest.mark.parametrize("framework, path, key, kind", [
@@ -196,10 +210,10 @@ def test_agents_md_is_instructions_only():
 
 
 def test_unverified_and_not_wired_rows_become_advisories(capsys):
-    manifest = _manifest("grok")
-    ww.print_report(manifest, "grok", effective_sandbox_state(manifest))
-    assert "[WASM-WIRING] grok: unverified-format [unverified]" in capsys.readouterr().err
-    assert manifest["advisories"][-1]["code"] == "wasm-wiring-unverified-format"
+    manifest = _manifest("goose", goose_tool_scoping="legacy")
+    ww.print_report(manifest, "goose", effective_sandbox_state(manifest))
+    assert "[WASM-WIRING] goose: not-wired [unverified]" in capsys.readouterr().err
+    assert manifest["advisories"][-1]["code"] == "wasm-wiring-not-wired"
 
 
 def test_binary_probe_is_installed_where_the_server_was_emitted(tmp_path):
@@ -217,12 +231,33 @@ def test_binary_probe_is_installed_where_the_server_was_emitted(tmp_path):
     assert ww.install_binary(manifest, ww.install_root("claude", agents)) == list(wasm_mcp.BINARY_FILES)
     data = (tmp_path / wasm_mcp.BINARY_FILES[0]).read_bytes()
     assert data == wasm_mcp.bundle_content(wasm_mcp.BINARY_FILES[0]) and data[:4] == b"\0asm"
-    assert ww.install_binary(_manifest("grok"), tmp_path) == []
+    assert ww.install_binary(_manifest("agents-md"), tmp_path) == []
 
 
 def test_check_wiring_problems_only_where_the_server_is_installed(tmp_path):
-    assert ww.check_wiring_problems(tmp_path, "grok", _manifest("grok")) == []
     assert ww.check_wiring_problems(tmp_path, "agents-md", _manifest("agents-md")) == []
-    problems = ww.check_wiring_problems(tmp_path, "claude", _manifest("claude"))
-    assert any(wasm_mcp.PROTECTED_PATH in p for p in problems)  # not installed here: reported, never passed
+    for framework in ("claude", "grok"):
+        problems = ww.check_wiring_problems(tmp_path, framework, _manifest(framework))
+        assert any(wasm_mcp.PROTECTED_PATH in p for p in problems)  # not installed here: reported, never passed
     assert ww.check_wiring_problems(tmp_path, "claude", analyze.build_manifest(BRIEF, framework="claude")) == []
+
+
+@pytest.mark.parametrize("wires_a_server", [False, True])
+def test_a_merged_grok_example_survives_a_re_render_unless_grok_mcp_wires_servers(tmp_path, wires_a_server):
+    from agentteams.grok_config_emit import emit_grok_config
+    from tests.test_grok_config_emit import _server
+
+    manifest = _manifest("grok")
+    example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
+    assert "grok:mcp" in example and "fresh render" in example  # warns about the drop and the missing protection
+    assert not emit_grok_config(servers=[], features=["grok:sandbox"], output_root=tmp_path).errors
+    config = tmp_path / ".grok" / "config.toml"
+    config.write_text(config.read_text(encoding="utf-8") + "\n" + example, encoding="utf-8")  # the operator's merge
+    merged = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]["agentteams_wasm"]
+    features = ["grok:mcp", "grok:sandbox"] if wires_a_server else ["grok:sandbox"]
+    res = emit_grok_config(servers=[_server()], features=features, output_root=tmp_path)
+    after = tomllib.loads(config.read_text(encoding="utf-8")).get("mcp_servers", {})
+    if wires_a_server:  # the managed block owns [mcp_servers]: the merged copy is replaced, and reported
+        assert "agentteams_wasm" not in after and res.dropped_unmanaged == ["agentteams_wasm"]
+    else:
+        assert after.get("agentteams_wasm") == merged and not res.dropped_unmanaged
