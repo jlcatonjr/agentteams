@@ -375,3 +375,19 @@ def test_sync_init_refusal_does_not_suggest_the_refresh_it_cannot_run(tmp_path: 
     with pytest.raises(ValueError, match="--update --merge") as exc:
         sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "claude"])
     assert "--sync-refresh-instructions" not in str(exc.value)
+
+
+def test_an_uncommitted_pin_change_that_spreads_is_logged(tmp_path: Path) -> None:
+    _pinned_project(tmp_path)
+    _committed_sync(tmp_path)
+    pin = tmp_path / ".github" / "agents" / "orchestrator.agent.md"
+    pin.write_text(pin.read_text(encoding="utf-8").replace("Routes.", "Routes. UNCOMMITTED_PIN"), encoding="utf-8")
+    peer = tmp_path / ".claude" / "agents" / "orchestrator.md"
+    peer.write_text(peer.read_text(encoding="utf-8").replace("Routes.", "Routes. PEER"), encoding="utf-8")
+    _git(tmp_path, "add", "-Af", ".claude")
+    _git(tmp_path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "c")
+    result = run_sync(tmp_path)
+    assert "UNCOMMITTED_PIN" in peer.read_text(encoding="utf-8")
+    assert any(c.framework == "copilot-vscode" and c.resolution.startswith("applied (uncommitted pin change")
+               for c in result.conflicts)
+

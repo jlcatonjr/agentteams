@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.git_exec import run_git
+from agentteams.backup import DEFAULT_BACKUP_KEEP_LAST
 from agentteams.canonical import load_canonical, materialize_canonical
 from agentteams.frameworks._sandbox_emit import (
     SIBLING_DENY_DIRS_KEY,
@@ -515,6 +516,7 @@ def _reconcile(
     *,
     framework: str,
     is_pin: bool,
+    committed: bool = True,
 ) -> tuple[dict[str, Any], list[ConflictRecord], int]:
     """Fold one framework's classified changes into canonical.
 
@@ -523,6 +525,8 @@ def _reconcile(
         report: The ``SyncReport`` from :func:`classify_sync`.
         framework: The framework being reconciled.
         is_pin: Whether ``framework`` is the bootstrap pin (authoritative).
+        committed: Whether ``framework`` has a committed change in this pass. An uncommitted pin change
+            still spreads (the pin wins), but each absorbed field is then logged for review.
 
     Returns:
         ``(updated_canonical_cai, conflicts, applied_field_count)``.
@@ -558,7 +562,14 @@ def _reconcile(
                 if cls in (Classification.NATIVE_MOVED, Classification.BOTH_MOVED_CONFLICT):
                     target[fname] = fr.native_value
                     applied += 1
-                    if cls == Classification.BOTH_MOVED_CONFLICT:
+                    if not committed:
+                        conflicts.append(ConflictRecord(
+                            framework, slug, fname, cls.value,
+                            resolution="applied (uncommitted pin change; review)",
+                            note="The pin's working tree differs from its last commit and wins; this spreads to "
+                                 "every framework. Commit it, or restore the pin and sync again.",
+                        ))
+                    elif cls == Classification.BOTH_MOVED_CONFLICT:
                         conflicts.append(ConflictRecord(
                             framework, slug, fname, cls.value,
                             resolution="pin-wins (pin is bootstrap authority)",
@@ -572,7 +583,7 @@ def _reconcile(
                     framework, slug, fname, cls.value,
                     resolution="proposed (peer change; not absorbed, make it in the pin)",
                     note=("Projection replaces this copy. Recover it from this framework's .agentteams-backups "
-                          "(newest 10 kept), then make the change in the pin."),
+                          f"(newest {DEFAULT_BACKUP_KEEP_LAST} kept), then make the change in the pin."),
                 ))
             elif cls == Classification.BOTH_MOVED_CONFLICT:
                 conflicts.append(ConflictRecord(
@@ -895,7 +906,7 @@ def run_sync(
     applied_total = 0
     for fw in ordered:
         agents_dir = framework_agents_dir(root, fw)
-        if not agents_dir.is_dir():
+        if fw != pin and not agents_dir.is_dir():
             continue
         native_cai = export_to_cai(agents_dir, fw)
         canonical_cai = load_canonical(canonical_dir)
@@ -905,7 +916,7 @@ def run_sync(
             canonical_dir=str(canonical_dir), native_dir=str(agents_dir), framework=fw,
         )
         canonical_cai, conflicts, applied = _reconcile(
-            canonical_cai, report, framework=fw, is_pin=(fw == pin),
+            canonical_cai, report, framework=fw, is_pin=(fw == pin), committed=(fw in changed),
         )
         all_conflicts.extend(conflicts)
         applied_total += applied

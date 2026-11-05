@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   framework's `.agentteams-backups` keeps it). To spread a peer edit, make it in the pin, or restore it and adopt it
   with `--absorb-from`. Every framework is now classified once a pass runs, so an uncommitted peer edit is logged
   rather than lost silently, and a peer's edit inside an instruction fence is reported in the sync notices.
+  An uncommitted pin change still spreads (the pin wins), but each absorbed field is now logged for review.
 - **`--sync` and `--sync-init` refuse before writing when the pin's instruction file is unsafe:** missing or with no
   parseable fences while the hub has fences, or older than a fence another framework deploys. Previously the sync
   warned and continued, spreading stale values and giving a new `AGENTS.md` `constitutional_core` v=1. The error names
