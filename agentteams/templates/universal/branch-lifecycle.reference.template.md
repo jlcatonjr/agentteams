@@ -37,7 +37,7 @@ twin's state. Rules are evaluated in order, and the first match wins. *N* defaul
 | 7 | Merged-by-PR | a PR whose head repository is the push remote's (never a fork with the same name), whose base is the default branch, is merged, whose `head.sha` equals this ref's tip (every PR with that head is checked), and whose merge commit is reachable from the default branch | Delete, after confirming `refs/pull/<n>/head` equals the tip on the remote. |
 | 8 | Patch-equivalent | not rule 6 or 7, but `git cherry` shows 0 unique patches | **Not merged** (patch IDs ignore whitespace and skip merges). Ask the operator; archive-tag only on their answer. |
 | 9 | Active | last activity within *N* days (includes empty fresh branches) | Keep. |
-| 10 | Stale-unmerged | unique work, idle for more than *N* days | **Never auto-delete.** Offer the operator three choices: merge, rebase and continue, or archive then delete. |
+| 10 | Stale-unmerged | unique work, idle for more than *N* days | **Never auto-delete.** Offer the operator three choices: merge, rebase and continue, or archive then delete. |{BRANCH_MODEL_LIFECYCLE_ROWS}
 
 **Why squash merges need rule 7.** A squash or rebase merge rewrites the commits, so the branch tip
 is never an ancestor of the default branch. `git cherry` recognizes only a squash of a

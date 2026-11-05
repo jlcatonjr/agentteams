@@ -54,6 +54,9 @@ _UNEMITTED_ALLOWLIST: dict[str, str] = {
     "universal/adjacent-repos-changelog.csv.template": _CSV_TEMPLATES_ARE_KNOWN_DEAD,
     "universal/adjacent-repos-coordination-log.csv.template": _CSV_TEMPLATES_ARE_KNOWN_DEAD,
     "universal/security-decisions.log.csv.template": _CSV_TEMPLATES_ARE_KNOWN_DEAD,
+    "universal/integration-branch.reference.template.md": (
+        "emitted by analyze.build_manifest only for an integration-model brief (branch_model.REFERENCE_TEMPLATE); "
+        "_plan_output_files sees no brief, and tests/test_branch_model.py pins the emission"),
 }
 
 

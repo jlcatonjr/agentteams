@@ -61,6 +61,10 @@ def add_branch_arguments(parser: argparse.ArgumentParser) -> None:
                        help="The only remote branch modes act on (default: origin).")
     group.add_argument("--default-branch", metavar="NAME", dest="default_branch", default=None,
                        help="Default branch (default: the push remote's HEAD).")
+    group.add_argument("--integration-branch", metavar="NAME", dest="integration_branch", default=None,
+                       help="Integration branch of an integration-model project: never proposed for "
+                            "deletion, and branches merged only into it are kept as 'integrated' "
+                            "(default: the brief's git_workflow.integration_branch, if any).")
     group.add_argument("--stale-days", metavar="N", type=int, dest="stale_days", default=14,
                        help="Days without activity before unmerged work is stale (default: 14).")
     group.add_argument(
@@ -198,7 +202,7 @@ def run_branch_cli(args: argparse.Namespace) -> int:
     cfg = branch_inventory.InventoryConfig(
         repo=project, push_remote=args.push_remote, default_branch=args.default_branch,
         stale_days=args.stale_days, operator_emails=tuple(args.operator_emails),
-        use_api=not args.branch_no_api,
+        use_api=not args.branch_no_api, integration_branch=getattr(args, "integration_branch", None),
     )
     try:
         if args.branch_inventory:

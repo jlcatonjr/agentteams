@@ -16,6 +16,7 @@ from typing import Any
 # re-exported so analyze._plan_output_files resolves unchanged.
 from agentteams.write_policy import manifest_fields as _wp_manifest_fields
 from agentteams.write_policy import resolve as _wp_resolve
+from agentteams import branch_model as _branch_model
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
@@ -43,6 +44,7 @@ from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-expo
 from agentteams.manifest_format import (  # noqa: E402,F401 (carved CH-07; re-exported)
     _MANUAL_TOKEN_FULLMATCH_RE,
     _build_placeholder_map,
+    _wasm_sandbox_record,
     _collect_component_manual_required,
     _collect_manual_required,
     _collect_tool_metadata_manual_required,
@@ -215,25 +217,6 @@ ALWAYS_INCLUDED_DOMAIN_AGENTS = [
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
-
-def _wasm_sandbox_record(description: dict[str, Any], agent_slugs: list[str]) -> dict[str, Any]:
-    """Return the normalised ``wasm_sandbox`` record for the manifest (P01; fail closed).
-
-    The symlink check runs against ``existing_project_path`` when it names a directory (brief data: it can only
-    refuse more); the effective state repeats it under the CLI's real project root.
-
-    Raises:
-        ValueError: A malformed block (``wasm_config.normalize_wasm_sandbox``), naming the key path.
-    """
-    from agentteams.wasm_config import normalize_wasm_sandbox
-
-    raw = description["wasm_sandbox"]
-    if not isinstance(raw, dict):
-        raise ValueError(f"wasm_sandbox must be an object (got {type(raw).__name__})")
-    existing = description.get("existing_project_path")
-    root = Path(existing) if isinstance(existing, str) and existing and Path(existing).is_dir() else None
-    return normalize_wasm_sandbox(raw, agent_slugs=agent_slugs, project_root=root).to_record()
-
 
 #: Brief lists copied into the manifest as given, so later steps see them without the description re-attached:
 #: memory-index extra dirs/globs (W22) and named files (P7), exclusions (content moved to a private repo), extra
@@ -548,6 +531,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     auto_resolved["ADOPTED_AGENT_ROUTING_ROWS"] = ""
     # WASM plan P14: wasm_policy.populate_placeholders fills these once the switch is resolved ("" while off).
     auto_resolved[SECURITY_ROWS_PLACEHOLDER] = auto_resolved[ROUTING_ROWS_PLACEHOLDER] = ""
+    auto_resolved.update(_branch_model.default_placeholders())  # filled by branch_model at render time
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)
@@ -577,6 +561,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
 
     # Output file plan
     output_files = _plan_output_files(archetypes, tool_agents, reference_tools, components, framework)
+    git_workflow = _branch_model.plan_files(description, output_files)  # integration only; trunk: None
 
     manifest = {
         "schema_version": "1.0",
@@ -666,6 +651,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         components=[c["slug"] for c in components])
     if mcp_candidates:
         manifest["mcp_candidates"] = [c.to_manifest_entry() for c in mcp_candidates]
+    if git_workflow:
+        manifest["git_workflow"] = git_workflow
     if "wasm_sandbox" in description:  # P01: carried only when the brief has the block (else byte-identical)
         manifest["wasm_sandbox"] = _wasm_sandbox_record(description, all_slugs)
     if "wasm_runtime" in description:  # P08 (--framework wasm runtime.json): carried only when present

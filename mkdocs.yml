@@ -354,6 +354,7 @@ nav:
               - agent-doc-sync: api-reference/agent-doc-sync.md
               - learned-blocks: api-reference/learned-blocks.md
               - branch-inventory: api-reference/branch-inventory.md
+              - branch-model: api-reference/branch-model.md
               - project-notes: api-reference/project-notes.md
               - copilot-body-limit: api-reference/copilot-body-limit.md
               - bridge-refresh: api-reference/bridge-refresh.md
