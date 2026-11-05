@@ -1,0 +1,8 @@
+{
+  "patch_id": "3b29d30879d504c3cb5af5edb8b0e8a98be3fb8d",
+  "commit": "d801d80b22d6d811b7f1eda7b494f1b5318dd567",
+  "subject": "fix(sync): low-severity pinned-sync follow-ups (stage 3)",
+  "impact": "2 symbols added, 1 symbols changed",
+  "note": "Stage 3 sync follow-ups: new sync_roster.refuse_missing_pin (documented in docs_src/api-reference/sync-roster.md, exported in __all__); new private multi_sync._as_loaded; _agents_md_ownership.FRAMEWORK_OWNED_FENCE_IDS/strip_foreign_fences are internal. No caller of a changed public signature.",
+  "recorded_at": "2026-11-05T23:09:02Z"
+}
