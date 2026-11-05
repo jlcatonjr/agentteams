@@ -642,8 +642,9 @@ def import_from_cai(
             inst_dest = target_dir.parent.parent / instructions_name
         else:
             inst_dest = target_dir.parent / instructions_name
-        # A CAI is data: stacked/crafted ownership notices and Grok's block never reach a target (spoofing).
-        instructions_content = _strip_fence(_strip_all_ownership_notices(instructions_content), _GROK_FENCE_ID)
+        # A CAI is data: crafted ownership notices (spoofing) and other frameworks' owned fences never reach a target.
+        instructions_content = _strip_foreign_fences(_strip_all_ownership_notices(instructions_content),
+                                                     target_framework)
     if instructions_content and target_framework == "grok":
         _import_grok_instructions(adapter, instructions_content, inst_dest, target_dir, manifest, result,
                                   dry_run=dry_run, overwrite=overwrite, preserve_existing=preserve_existing)
@@ -943,9 +944,8 @@ def _frontmatter_value(content: str, key: str) -> str:
 
 # A.3/A.4 helpers extracted to interop_helpers.py (CH-07 module-size compliance)
 from agentteams.frameworks._agents_md_ownership import (  # noqa: E402
-    GROK_FENCE_ID as _GROK_FENCE_ID,
+    GROK_FENCE_ID as _GROK_FENCE_ID, strip_fence as _strip_fence, strip_foreign_fences as _strip_foreign_fences,
     strip_all_ownership_notices as _strip_all_ownership_notices,
-    strip_fence as _strip_fence,
 )
 from agentteams._interop_grok import (  # noqa: E402
     grok_capabilities as _grok_capabilities,

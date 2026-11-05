@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (pinned sync: low-severity follow-ups)
+
+- **A pin with no agents directory is refused by name.** `--sync-init --pin agents-md` with no `.agents`, and
+  `--sync` after the pin's directory was deleted, gave a `FileNotFoundError` traceback. Both now refuse
+  before writing and say how to recover.
+- **A dry `--sync` reports what a real one does.** It reloaded the unchanged hub for each framework, so the
+  peers were checked, and the projection built, without the pin's changes: a removed agent's peer copies
+  were missing from the report, and an added agent from the dry projection.
+- **A peer can't block every sync with a fence no release writes.** A higher `v=` on such a fence counted
+  as newer than the pin's, and `--sync` refused until the pin was "updated", which could never raise it. The
+  pin's copy now wins for those fences.
+- **A hub with no instruction fences refreshes from a fenced pin.** It could never be fence-merged, so it
+  stayed stale and the peers' instruction files were never updated. It is replaced by the pin's file.
+- **Goose's own fences stay in goose.** With goose as the pin, `goose_bridge_entry` reached `CLAUDE.md` and
+  `copilot-instructions.md`. An explicit list of framework-owned fences (`grok_runtime`,
+  `goose_bridge_entry`, `goose_bridge_hints`) is stripped from every other framework's instruction file.
+- **A removed agent's every copy goes, and the hub's is backed up.** Only one of two same-slug files in a
+  peer was deleted per pass, and the hub's deleted file had no backup. It now goes to
+  `.agentteams/canonical/agents/.agentteams-backups`.
+
 ### fix (pinned sync: the roster follows the pin; sandbox denies see every team)
 
 - **BEHAVIOUR CHANGE: `--sync` now carries the pin's roster.** An agent deleted from the pin came back on the

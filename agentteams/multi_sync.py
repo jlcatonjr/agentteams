@@ -32,6 +32,7 @@ import csv
 import json
 import shlex
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,7 +55,8 @@ from agentteams.interop_grant_check import ProjectionPolicy
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
 from agentteams.sync_hub_refresh import refresh_hub_for_projection, refuse_unsafe_pin_instructions
-from agentteams.sync_roster import apply_pin_roster, prune_hub_agents, refuse_empty_pin, remove_dropped_peer_agents
+from agentteams.sync_roster import (apply_pin_roster, prune_hub_agents, refuse_empty_pin, refuse_missing_pin,
+                                    remove_dropped_peer_agents)
 from agentteams.sync_pin import (
     DEFAULT_CANONICAL_REL,
     read_pin,
@@ -439,6 +441,13 @@ def _emit_privilege_artifacts(
 # git change detection
 # ---------------------------------------------------------------------------
 
+def _as_loaded(cai: dict[str, Any]) -> dict[str, Any]:
+    """*cai* as a real pass reloads it after writing (sorted agents, normalized values): a dry run's hub."""
+    with tempfile.TemporaryDirectory() as tmp:
+        materialize_canonical(cai, Path(tmp))
+        return load_canonical(Path(tmp))
+
+
 def _git(root: Path, *args: str) -> tuple[int, str]:
     """Run a git command under ``root``; return (exit_code, stdout)."""
     proc = run_git(root, *args)
@@ -797,7 +806,7 @@ def sync_init(
         ValueError: If ``pin`` is unregistered or absent from ``frameworks``,
             if two frameworks in ``frameworks`` resolve to the same
             physical agents directory (see :func:`_reject_directory_collisions`),
-            or if the pin's instruction file is unsafe to sync from
+            or if the pin has no agents directory or its instruction file is unsafe to sync from
             (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
@@ -810,6 +819,7 @@ def sync_init(
 
     canonical_dir = root / canonical_rel
     pin_dir = framework_agents_dir(root, pin)
+    refuse_missing_pin(pin_dir, pin)
     seed = export_to_cai(pin_dir, pin)
     refuse_unsafe_pin_instructions(root, {"pinned_framework": pin, "frameworks": fws}, seed)
     # C2: capture the pin's brief privilege posture into the team-level canonical block so it
@@ -871,7 +881,7 @@ def run_sync(
         ValueError: If the project is not pinned (run :func:`sync_init` first),
             if two frameworks in the pinned sync set resolve to the same
             physical agents directory (see :func:`_reject_directory_collisions`),
-            or if the pin's instruction file is unsafe to sync from
+            or if the pin has no agents directory or its instruction file is unsafe to sync from
             (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
@@ -890,6 +900,7 @@ def run_sync(
     if not changed:
         return SyncResult(note="no framework changed since last sync")
 
+    refuse_missing_pin(framework_agents_dir(root, pin), pin)
     refuse_unsafe_pin_instructions(root, pin_doc, load_canonical(canonical_dir))
 
     # Pin first (authoritative), then peers. Every framework, not only the changed ones: projection overwrites them
@@ -902,9 +913,12 @@ def run_sync(
     # Exported once up front: the loop writes only the hub, and the pin's roster needs the peers' agents.
     exports = {fw: export_to_cai(framework_agents_dir(root, fw), fw) for fw in ordered
                if fw == pin or framework_agents_dir(root, fw).is_dir()}
+    canonical_cai: dict[str, Any] | None = None
     for fw in (f for f in ordered if f in exports):
         agents_dir, native_cai = framework_agents_dir(root, fw), exports[fw]
-        canonical_cai = load_canonical(canonical_dir)
+        # A dry run writes no hub, so it carries the hub in memory (round-tripped like the real write, _as_loaded):
+        # reloading would classify the peers, and project, against the hub before the pin's changes.
+        canonical_cai = load_canonical(canonical_dir) if canonical_cai is None or not dry_run else canonical_cai
         baseline = load_baseline(canonical_dir, fw)
         if fw == pin:  # the pin's added and removed agents (sync_roster), before its fields are classified
             peers = [f for f in ordered if f != pin]  # "deleted everywhere" needs every peer present (review)
@@ -924,10 +938,9 @@ def run_sync(
         all_conflicts.extend(conflicts)
         applied_total += applied
         materialize_canonical(canonical_cai, canonical_dir, dry_run=dry_run)
+        canonical_cai = _as_loaded(canonical_cai) if dry_run else canonical_cai
 
-    final_canonical = load_canonical(canonical_dir)
-    if dry_run:  # the hub was not pruned: project what a real pass would, so the report agrees with itself
-        final_canonical["agents"] = [a for a in final_canonical["agents"] if a.get("slug") not in dropped]
+    final_canonical = canonical_cai if dry_run and canonical_cai is not None else load_canonical(canonical_dir)
     # C2: refresh the team-level privilege posture from the (current) brief so a changed
     # privilege_profile propagates, and re-persist it so team.cai.json stays authoritative.
     priv = _read_brief_privilege(root)
