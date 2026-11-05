@@ -539,6 +539,7 @@ With WASM on, a render whose agents dir is not the framework's canonical one (`.
 | `wasm_agent_entry(manifest, framework, slug, tools)` | Launch args for an eligible agent's own copy (claude, goose), recording it as wired and protected. |
 | `output_files(manifest, framework)` | The server, text bundle and inert example for `extra_output_files`. |
 | `codex_first_party_tables(manifest)` | The Codex `first_party_tables` argument. |
+| `grok_kept_tables(manifest)` | The Grok `keep_if_exact` argument: the inert example's `agentteams_wasm` table, computed (None when WASM is off). Creates no wiring row. |
 | `install_root(framework, path)` | The root the emit installed the server under (the grandparent of a canonical agents dir passed as `--output`). |
 | `agents_dir_problem(manifest, framework, team_dir)` | Why a non-canonical agents dir cannot carry the WASM wiring, or None. |
 | `install_binary(manifest, project_root)` | Writes the bundle's binary deny probe beside the server installed at `project_root`; refuses when it is not there (never searches a parent). |
