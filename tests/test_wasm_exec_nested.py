@@ -134,7 +134,7 @@ def test_nested_credential_store_unreadable(tmp_path: Path, monkeypatch: pytest.
             assert control.returncode == 0 and secret in control.stdout, control.stderr[-2000:]  # readable unhidden
             hidden = subprocess.run([*_bwrap(root), *cat, str(path)], capture_output=True, timeout=20)
             assert secret not in hidden.stdout + hidden.stderr  # tmpfs over the directory, /dev/null over the file
-        assert subprocess.run([*_bwrap(root), *cat, str(key)], capture_output=True).returncode != 0  # dir: gone
+        assert subprocess.run([*_bwrap(root), *cat, str(key)], capture_output=True, timeout=20).returncode != 0  # dir gone
         return
     if not os.path.isdir(os.path.expanduser("~/.ssh")):
         pytest.skip("needs an existing ~/.ssh under Seatbelt")
