@@ -217,8 +217,8 @@ jobs:
           [ "$got" = "bwrap" ]
 
       # The file list and the skip allowlists live in scripts/wasm_live_ci.py (LIVE_FILES, COMMON_ALLOW,
-      # SANDBOX_ALLOW), shared with the macos-seatbelt job. Narrowed Linux claim: the bwrap deny_reads /
-      # network-deny cases are a logged follow-up.
+      # SANDBOX_ALLOW), shared with the macos-seatbelt job. The nested network-deny and credential-deny cases run here
+      # under bwrap too, so the Linux claim covers R5 deny_reads and network deny, not only nesting.
       - name: Live WASM tests (nested under bwrap)
         id: live
         run: |
@@ -285,7 +285,7 @@ jobs:
           [ "$got" = "seatbelt" ]
 
       # ~/.ssh must exist, or test_nested_credential_store_unreadable skips. Same file list and common allowlist
-      # as the wasm-live job (scripts/wasm_live_ci.py); the Seatbelt-only cases must run here.
+      # as the wasm-live job (scripts/wasm_live_ci.py); the deny cases must run here too.
       - name: Live WASM tests (nested under Seatbelt)
         if: ${{ !cancelled() }}  # run even when the launcher gate above is red
         id: live

@@ -51,11 +51,10 @@ COMMON_ALLOW = (
     "tests/test_wasm_agent_e2e.py::test_arch_b_live_provider_opt_in",
 )
 
-#: Per-sandbox extras: the network-deny and credential-deny nested cases are Seatbelt-only (bwrap versions are a
-#: logged follow-up), so they may skip under bwrap and must run under Seatbelt.
-SANDBOX_ALLOW = {
-    "bwrap": ("tests/test_wasm_exec_nested.py::test_nested_network_denied",
-              "tests/test_wasm_exec_nested.py::test_nested_credential_store_unreadable"),
+#: Per-sandbox extras. Empty: the network-deny and credential-deny nested cases now run under both bwrap and
+#: Seatbelt (remediation row bwrap-nested-deny), so a skip of either fails both jobs.
+SANDBOX_ALLOW: dict[str, tuple[str, ...]] = {
+    "bwrap": (),
     "seatbelt": (),
 }
 

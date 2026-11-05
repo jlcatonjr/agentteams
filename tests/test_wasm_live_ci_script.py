@@ -72,13 +72,16 @@ def test_sandbox_allowlist_composes_common_and_per_sandbox_entries(mod, tmp_path
                      '<testcase classname="tests.test_wasm_exec_nested" name="test_nested_network_denied">'
                      '<skipped message="needs Seatbelt"/></testcase></testsuite></testsuites>')
     args = ["skips", str(junit), "--root", str(tmp_path)]
-    assert mod.main([*args, "--sandbox", "bwrap"]) == 0
-    assert mod.main([*args, "--sandbox", "seatbelt"]) == 1   # the Seatbelt-only case must run under Seatbelt
+    for sandbox in ("bwrap", "seatbelt"):  # the deny cases run under both now (row bwrap-nested-deny)
+        assert mod.main([*args, "--sandbox", sandbox]) == 1
+        assert mod.main([*args, "--sandbox", sandbox,
+                         "--allow", "tests/test_wasm_exec_nested.py::test_nested_network_denied"]) == 0
 
 
 def test_every_live_file_exists(mod):
     assert all((REPO_ROOT / f).is_file() for f in mod.LIVE_FILES)
-    assert all(n.split("::")[0] in mod.LIVE_FILES for n in (*mod.COMMON_ALLOW, *mod.SANDBOX_ALLOW["bwrap"]))
+    extras = [n for names in mod.SANDBOX_ALLOW.values() for n in names]
+    assert all(n.split("::")[0] in mod.LIVE_FILES for n in (*mod.COMMON_ALLOW, *extras))
 
 
 def test_env_lines_name_the_resolved_runtimes(mod, tmp_path, monkeypatch):
