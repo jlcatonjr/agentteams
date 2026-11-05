@@ -313,3 +313,27 @@ def test_grok_kept_tables_is_the_example_table_and_creates_no_wiring_row():
     example = dict(FRAMEWORKS["grok"]().extra_output_files(_manifest("grok")))[f"../../{ww.GROK_EXAMPLE}"]
     assert tables == {"mcp_servers.agentteams_wasm": tomllib.loads(example)["mcp_servers"]["agentteams_wasm"]}
     assert "grok" not in (manifest.get(ww.WIRING_KEY) or {}).get("frameworks", {})
+
+
+@pytest.mark.parametrize("tamper", [False, True])
+def test_the_cli_names_the_kept_or_replaced_wasm_table_with_the_right_remedy(tmp_path, capsys, tamper):
+    """Row wasm-hosts gap 2: the replaced-table warning no longer says "add it to mcp_servers[]" for agentteams_wasm."""
+    from agentteams.cli.artifacts import _emit_grok_config_if_enabled
+    from tests.test_grok_config_emit import _server
+
+    manifest = _manifest("grok")
+    example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
+    if tamper:
+        example = example.replace('"--agent", "_session"', '"--agent", "_session", "--read", "/"')
+    config, _ = _merged_grok_config(tmp_path, manifest, example + '\n[mcp_servers.mine]\ncommand = "x"\n')
+    manifest["host_features"] = ["grok:mcp"]
+    manifest["mcp_servers"] = [_server()]
+    _emit_grok_config_if_enabled(manifest, tmp_path)
+    out = capsys.readouterr().out
+    assert "replaced: mine (add them to mcp_servers[] to keep them)" in out  # other tables: unchanged message
+    if tamper:
+        assert "[mcp_servers.agentteams_wasm] in .grok/config.toml was replaced" in out
+        assert "Do not add agentteams_wasm to mcp_servers[]" in out and "Kept the merged" not in out
+    else:
+        assert f"Kept the merged [mcp_servers.*] agentteams_wasm in .grok/config.toml: it equals this render's " \
+               f"{ww.GROK_EXAMPLE}" in out and "was replaced: it does not equal" not in out

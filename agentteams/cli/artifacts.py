@@ -821,6 +821,7 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     """
     from agentteams.frameworks._wasm_wiring import GROK_EXAMPLE, grok_kept_tables
     from agentteams.grok_config_emit import emit_grok_config, grok_mcp_enabled, grok_sandbox_enabled
+    from agentteams.wasm_mcp import SERVER_NAME
 
     features = manifest.get("host_features", []) or []
     on = grok_sandbox_enabled(features) or (grok_mcp_enabled(features) and manifest.get("mcp_servers"))
@@ -830,7 +831,7 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     try:
         keep = grok_kept_tables(manifest)
     except ValueError as exc:  # no system python3, or a malformed WASM setting: fall back to replacing (reported)
-        print(f"  ⚠  Cannot compute the agentteams_wasm table to keep in .grok/config.toml: {exc}", file=sys.stderr)
+        print(f"  ⚠  Cannot compute the {SERVER_NAME} table to keep in .grok/config.toml: {exc}", file=sys.stderr)
         keep = None
     try:
         res = emit_grok_config(servers=manifest.get("mcp_servers", []) or [], features=features,
@@ -847,11 +848,11 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     if res.kept_unmanaged:
         print(f"  ✓  Kept the merged [mcp_servers.*] {', '.join(res.kept_unmanaged)} in .grok/config.toml: it equals "
               f"this render's {GROK_EXAMPLE}")
-    others = [sid for sid in res.dropped_unmanaged if sid != "agentteams_wasm"]
-    if "agentteams_wasm" in res.dropped_unmanaged:
-        print(f"  ⚠  The merged [mcp_servers.agentteams_wasm] in .grok/config.toml was replaced: it does not equal this "
+    others = [sid for sid in res.dropped_unmanaged if sid != SERVER_NAME]
+    if SERVER_NAME in res.dropped_unmanaged:
+        print(f"  ⚠  The merged [mcp_servers.{SERVER_NAME}] in .grok/config.toml was replaced: it does not equal this "
               f"render's {GROK_EXAMPLE} (or WASM is off). Check the example against a fresh render, then merge it "
-              "again outside the agentteams-managed block. Do not add agentteams_wasm to mcp_servers[].")
+              f"again outside the agentteams-managed block. Do not add {SERVER_NAME} to mcp_servers[].")
     if others:
         print(f"  ⚠  Pre-existing [mcp_servers.*] entries not declared to agentteams were replaced: "
               f"{', '.join(others)} (add them to mcp_servers[] to keep them)")
