@@ -19,14 +19,16 @@ hub still held it and projection wrote it out again, and an agent the pin added 
 | `--sync-init` over an existing hub | After a successful projection, the hub drops the agents the new pin lacks. Other frameworks keep their copies, because the earlier pin may have been a different framework. |
 
 A deletion is confirmed when the pin's agents directory is tracked by git and the agent's file is gone
-from `HEAD`, or when no other framework has the agent any more. Anything else fails closed: no
+from `HEAD`, or when every other framework in the sync set is present and none has the agent any more (a
+framework whose agents directory is missing, or a sync set of the pin alone, leaves only git). Anything
+else fails closed: no
 repository, no `HEAD`, a git error, an untracked or gitignored agents directory, or an uncommitted
 deletion. To remove an agent from a team whose pin directory git doesn't track, delete it from every
 framework, then sync.
 
 Each framework's `.agentteams-backups` keeps its deleted copy, so `--restore-backup` recovers it, but only
-the newest 10 backups are kept and every sync adds one. Git history keeps the hub's copy and, in a tracked
-pin directory, the pin's.
+the newest 10 backups are kept and every sync adds one. The hub's copy gets no backup: git history keeps
+it only if `.agentteams/canonical` is committed. In a tracked pin directory, git keeps the pin's.
 
 ## Public functions
 

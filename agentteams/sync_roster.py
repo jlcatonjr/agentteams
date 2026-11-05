@@ -7,7 +7,8 @@ projection rewrote it), and an agent the pin added never reached the hub or the 
 - **The pin adds an agent** the hub lacks: it joins the hub and projects to every framework.
 - **The pin removes an agent** it had at its last sync (its baseline lists it): it leaves the hub, and each
   peer's copy is deleted after the pre-projection backup. Only a confirmed deletion counts: the file is gone
-  from ``HEAD`` of a tracked agents directory, or no framework has the agent any more. Otherwise (uncommitted,
+  from ``HEAD`` of a tracked agents directory, or every other framework in the sync set is present and none
+  has the agent any more. Otherwise (uncommitted,
   or git can't tell) it is logged and projection restores the pin's file. A pin with no agents is refused.
   ``--sync-init`` over an existing hub removes the hub agents the new pin lacks, but no framework's copy.
 - **A peer's own roster change** is never absorbed. A peer-only agent stays where it is and is logged as a
@@ -49,8 +50,9 @@ def _deletion_is_committed(root: Path, agents_dir: Path, source_path: str) -> bo
         return False
     if not source_path or not file_rel.startswith(f"{dir_rel}/"):
         return False
-    proc = run_git(project, "ls-tree", "-r", "--name-only", "HEAD", "--", f"./{dir_rel}")
-    tracked = set(proc.stdout.splitlines()) if proc.returncode == 0 else set()
+    # -z: without it git quotes a path with non-ASCII bytes, `"` or `\`, which would never match file_rel.
+    proc = run_git(project, "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", f"./{dir_rel}")
+    tracked = {p for p in proc.stdout.split("\0") if p} if proc.returncode == 0 else set()
     return bool(tracked) and file_rel not in tracked
 
 
@@ -73,7 +75,7 @@ def apply_pin_roster(
     *,
     root: Path,
     pin_agents_dir: Path,
-    peer_slugs: set[str],
+    peer_slugs: set[str] | None,
 ) -> tuple[dict[str, Any], list[RosterRecord], list[str]]:
     """Carry the pin's added and removed agents into the hub's CAI dict (the caller writes it).
 
@@ -88,7 +90,8 @@ def apply_pin_roster(
         pin_baseline: The pin's baseline from its last sync, or ``None`` (then nothing is removed).
         root: The project root (for the git check on a deletion).
         pin_agents_dir: The pin's agents directory.
-        peer_slugs: Every agent slug some other framework still has.
+        peer_slugs: Every agent slug some other framework still has, or ``None`` when that can't be known (no
+            other framework, or one whose agents directory is missing); then only git confirms a deletion.
 
     Returns:
         ``(canonical_cai, records, removed)``: a record per agent added, removed, or kept for review, and the
@@ -103,7 +106,7 @@ def apply_pin_roster(
     added = [slug for slug in pin if slug not in hub]
     removed: list[str] = []
     for slug in (s for s in base if s not in pin):
-        if slug not in peer_slugs or _deletion_is_committed(root, pin_agents_dir,
+        if (peer_slugs is not None and slug not in peer_slugs) or _deletion_is_committed(root, pin_agents_dir,
                                                             str(base[slug].get("source_path") or "")):
             removed.append(slug)
         elif slug in hub:
@@ -118,7 +121,8 @@ def apply_pin_roster(
     records += [(slug, "applied (pin added agent)", "Projected to every framework.") for slug in added]
     records += [(slug, "applied (pin removed agent)",
                  "Removed from the hub and every framework; each framework's .agentteams-backups keeps its copy "
-                 "until pruned (newest 10), and git history keeps the hub's.") for slug in removed]
+                 "until pruned (newest 10); the hub's is in git history only if .agentteams/canonical is "
+                 "committed.") for slug in removed]
     return canonical_cai, records, removed
 
 

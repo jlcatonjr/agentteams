@@ -907,7 +907,9 @@ def run_sync(
         canonical_cai = load_canonical(canonical_dir)
         baseline = load_baseline(canonical_dir, fw)
         if fw == pin:  # the pin's added and removed agents (sync_roster), before its fields are classified
-            peer_slugs = {a.get("slug") for f, c in exports.items() if f != pin for a in c.get("agents") or []}
+            peers = [f for f in ordered if f != pin]  # "deleted everywhere" needs every peer present (review)
+            peer_slugs = ({a.get("slug") for f in peers for a in exports[f].get("agents") or []}
+                          if peers and all(f in exports for f in peers) else None)
             canonical_cai, roster, dropped = apply_pin_roster(canonical_cai, native_cai, baseline, root=root,
                                                               pin_agents_dir=agents_dir, peer_slugs=peer_slugs)
             all_conflicts += [ConflictRecord(fw, s, "__agent__", "roster", resolution=r, note=n) for s, r, n in roster]
@@ -924,6 +926,8 @@ def run_sync(
         materialize_canonical(canonical_cai, canonical_dir, dry_run=dry_run)
 
     final_canonical = load_canonical(canonical_dir)
+    if dry_run:  # the hub was not pruned: project what a real pass would, so the report agrees with itself
+        final_canonical["agents"] = [a for a in final_canonical["agents"] if a.get("slug") not in dropped]
     # C2: refresh the team-level privilege posture from the (current) brief so a changed
     # privilege_profile propagates, and re-persist it so team.cai.json stays authoritative.
     priv = _read_brief_privilege(root)

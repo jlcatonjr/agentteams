@@ -172,6 +172,18 @@ def test_an_untracked_pin_deletion_needs_every_framework_to_agree(tmp_path: Path
     assert any(c.agent == "helper" and c.resolution == "applied (pin removed agent)" for c in result.conflicts)
 
 
+def test_a_missing_peer_dir_never_confirms_a_deletion(tmp_path: Path) -> None:
+    """An absent peer is not "deleted everywhere" (re-review 2026-11-05): with git unable to confirm, keep it."""
+    _team(tmp_path)
+    _git(tmp_path, "rm", "-rq", "--cached", ".github/agents", ".claude/agents")
+    (tmp_path / ".gitignore").write_text(".github/agents/\n.claude/agents/\n", encoding="utf-8")
+    _commit(tmp_path)
+    shutil.rmtree(tmp_path / _PEER)  # a fresh clone, or git clean -X
+    (tmp_path / _PIN / "helper.agent.md").unlink()
+    run_sync(tmp_path, since="")
+    assert "helper" in _hub(tmp_path) and (tmp_path / _PIN / "helper.agent.md").is_file()
+
+
 def test_a_reinit_from_an_empty_pin_is_refused_before_writing(tmp_path: Path) -> None:
     _team(tmp_path)
     for path in (tmp_path / _PIN).glob("*.agent.md"):
@@ -189,7 +201,7 @@ def test_a_dry_run_reports_the_peer_removal_and_deletes_nothing(tmp_path: Path) 
     before = _tree(tmp_path)
     result = run_sync(tmp_path, dry_run=True)
     assert any("[claude] removed agent(s) the pin removed: helper" in n for n in result.notices)
-    assert _tree(tmp_path) == before
+    assert result.projected_frameworks and _tree(tmp_path) == before
 
 
 _GITHUB_LITERALS = [f'(literal (string-append (param "WORKSPACE_ROOT") "/{p}"))'
