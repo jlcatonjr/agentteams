@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the fix was just re-staged on. Its checks tested an old base, and auto-merge pins a PR's head to the commit the executor
   pushed, so nothing may update it in place. `open-pr` opens a current PR instead, and `close-superseded` retires the old
   one. The operator-actions script now runs `close-superseded` after every newly opened PR (it had never run: no ledger row).
+  `close-superseded` no longer counts the operator scripts' verdict relay comment (exactly that text, by the PR's own
+  author) as a person's touch, so a reviewed PR can still be retired; any other comment or review still keeps it.
 
 ### vulnscan: changing hosts (server-apply, runtime-patch)
 

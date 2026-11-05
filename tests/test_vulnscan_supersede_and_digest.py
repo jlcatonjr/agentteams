@@ -170,3 +170,23 @@ def test_close_superseded_alone_still_needs_a_repo_root(tmp_path: Path) -> None:
     with pytest.raises(grant.GrantError, match="close-superseded need at least one repo root"):
         grant.build(ops=["close-superseded"], repo_roots=[], hosts=[], days=1, max_uses=1, key_id="op",
                     governance_dir=str(tmp_path / "gov"))
+
+
+def test_only_the_verdict_relay_by_the_pr_author_is_not_a_touch():
+    # @security 2026-11-04 (Rule 12): the operator scripts post the orchestrator's verdict on every reviewed PR; if that
+    # counted as a person's touch, a PR superseded because it fell behind its base would never be closed
+    from agentteams.vulnscan.executor_supersede import touched_problem
+
+    idn = ("agentteams-vulnscan", "vulnscan@agentteams.invalid")
+    base = {"reviews": [], "author": {"login": "op"}, "commits": [{"authors": [{"name": idn[0], "email": idn[1]}]}]}
+    relay = ("Repository orchestrator review (vulnscan handoff 20261103902919): **approve-staged** — fine. "
+             "Merging stays with the operator.")
+    assert touched_problem({**base, "comments": [{"author": {"login": "op"}, "body": relay}]}, idn) == ""
+    for comments in ([{"author": {"login": "other"}, "body": relay}],          # someone else wrote it
+                     [{"author": {"login": "op"}, "body": relay + " but hold"}],  # more than the relay
+                     [{"author": {"login": "op"}, "body": "hold this one"}],  # a person's comment
+                     [{"author": {"login": "op"}, "body": relay}, {"author": {"login": "op"}, "body": "x"}]):
+        assert touched_problem({**base, "comments": comments}, idn) == "it has comments"
+    assert touched_problem({**base, "author": None, "comments": [{"author": {"login": "op"}, "body": relay}]},
+                           idn) == "it has comments"                        # no PR author: nothing is excused
+    assert touched_problem({**base, "comments": [], "reviews": [{"state": "COMMENTED"}]}, idn) == "it has reviews"

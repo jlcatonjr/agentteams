@@ -41,7 +41,7 @@ OP = "close-superseded"
 MAX_CANDIDATES = 20
 MAX_SAME_CHANGE = 3   # open, and closed, PRs open-pr examines for the same change (each match costs a fetch)
 SUPERSEDED_BY_EXECUTOR = "agentteams vulnscan executor (close-superseded)"   # in the comment close-superseded posts
-_VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits"
+_VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits,author"
 
 
 def ledger_prs(repo: str, rows: list[dict[str, Any]]) -> list[str]:
@@ -77,12 +77,27 @@ def head_problem(data: dict[str, Any]) -> str:
     return ""
 
 
+#: The verdict comment the operator scripts post on an executor PR (vulnscan-operator-actions.sh step 17). It relays the
+#: repository orchestrator's verdict; it is not a person's edit, so on its own it does not keep a superseded PR open.
+VERDICT_COMMENT_RE = re.compile(r"Repository orchestrator review \(vulnscan handoff \d{14}\): "
+                                r"\*\*(?:approve-staged|own-pr|defer|reject)\*\*(?: — [^\n]{0,600})?\. "
+                                r"Merging stays with the operator\.")
+
+
 def touched_problem(data: dict[str, Any], identity: tuple[str, str]) -> str:
-    """Return why a person has touched a PR (reviews, comments, or a commit by anyone else), or ""."""
+    """Return why a person has touched a PR (reviews, comments, or a commit by anyone else), or "".
+
+    A comment counts unless it is exactly the operator scripts' verdict relay (:data:`VERDICT_COMMENT_RE`) written by
+    the PR's own author (the account the executor opens PRs with): otherwise every reviewed PR would stay open beside
+    its replacement (Rule 12, @security 2026-11-04).
+    """
     if data.get("reviews"):
         return "it has reviews"
-    if data.get("comments"):
-        return "it has comments"
+    pr_author = ((data.get("author") or {}).get("login") if isinstance(data.get("author"), dict) else None)
+    for c in data.get("comments") or []:
+        if not (isinstance(c, dict) and pr_author and (c.get("author") or {}).get("login") == pr_author
+                and VERDICT_COMMENT_RE.fullmatch(str(c.get("body", "")))):
+            return "it has comments"
     return authored_problem(data, identity)
 
 

@@ -163,7 +163,7 @@
     "agentteams/vulnscan/executor_guard.py": "28464667b03ba38f337e12399783dc0bab0b1c5470961c0178f44303dbd15291",
     "agentteams/vulnscan/executor_pr.py": "2882a65966b4e5a730d3425642c1ac28df04a6c882967fb9bae0a6289873203f",
     "agentteams/vulnscan/executor_serve.py": "b138bb52933a57e93a0a2a02627b30f838ff1cfb8764c87defe25cdea2b95f2f",
-    "agentteams/vulnscan/executor_supersede.py": "f7272fb7724a0939250a9132f69286a110a9c9412abe1ef948cec3b99949603c",
+    "agentteams/vulnscan/executor_supersede.py": "f61fbc9d3eb92ad04f47b0d55f4192c6a6ae32145ec676633bf51b7ae3c159d7",
     "agentteams/vulnscan/fix.py": "4ab5585fa2b0ed7f0fba0dd9c64f824d331d9dd27c17ecff12a415b506949841",
     "agentteams/vulnscan/gateway.py": "516171a524a3765a0d6b28f73aaf58846f35f0a8396fe96792d4e48f4c01335f",
     "agentteams/vulnscan/gateway_context.py": "8a094853de594e52c430339f8b404783e447655b8c2693ca8d0117b33b1fbe13",
