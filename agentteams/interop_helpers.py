@@ -425,7 +425,7 @@ def raw_scopes(raw: str) -> list[str] | None:
             or capability_map.canonical_tools_for_claude(fm) or [])
 
 
-#: Opening words of the notice :func:`keep_newer_fences` emits; ``multi_sync`` keys its stale-hub hint on it.
+#: Opening words of the notice :func:`keep_newer_fences` emits.
 FENCE_DOWNGRADE_NOTICE = "kept newer fence"
 _VERSIONED_BEGIN_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN (?P<sid>[a-z][a-z0-9_]*) v=(?P<v>\d+) -->")
 

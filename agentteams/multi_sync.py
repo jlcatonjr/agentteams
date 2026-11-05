@@ -1,19 +1,18 @@
 """multi_sync.py — multi-framework pinned sync orchestrator.
 
-Implements the operator-locked model (2026-08-12):
+Implements the operator-locked model (2026-08-12, revised by operator ruling 2026-11-04):
 
-- **Model A + pin authority.** Frameworks are peers; a clean one-sided change
-  in any framework projects to all others through the canonical hub. On a
-  genuine ``both-moved-conflict`` the **bootstrap pin always wins** — even the
-  pin against itself — and every conflict is written to a durable log for
-  after-the-fact review.
+- **Pin authority.** Only the bootstrap pin's changes reach the canonical hub and
+  project to the other frameworks. A peer's difference is proposed for review and
+  never absorbed: a peer's render differs just by being written for that framework,
+  and absorbing that overwrote the pin's own agent files. Every conflict and
+  proposal is written to a durable log for after-the-fact review. A deliberate peer
+  edit moves through the pin, or through ``--absorb-from``.
 - **Reconciliation order:** the pin framework is processed first and
   authoritatively (its native-moved fields, including conflicts and
-  capabilities, are absorbed into canonical). Peers are processed next: clean
-  non-capability ``native-moved`` fields absorb; ``both-moved-conflict`` keeps
-  canonical (the pin's authority) and is logged; a peer *capability* change is
-  never silently fanned out — it is logged for review (the shipped
-  capability-safety invariant, preserved deliberately).
+  capabilities, are absorbed into canonical). Peers are processed next, and only
+  log: ``native-moved`` is proposed (a capability change is withheld), and
+  ``both-moved-conflict`` keeps canonical.
 - **Projection:** after reconciliation, canonical is projected to every
   framework, and every baseline is rewritten from the on-disk result so the
   next run does not re-absorb this run's own output (thrash guard).
@@ -38,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.git_exec import run_git
+from agentteams.backup import DEFAULT_BACKUP_KEEP_LAST
 from agentteams.canonical import load_canonical, materialize_canonical
 from agentteams.frameworks._sandbox_emit import (
     SIBLING_DENY_DIRS_KEY,
@@ -50,9 +50,9 @@ from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS, agents_dir_for
 from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.interop_grant_check import ProjectionPolicy
-from agentteams.interop_helpers import FENCE_DOWNGRADE_NOTICE
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
+from agentteams.sync_hub_refresh import refresh_hub_for_projection, refuse_unsafe_pin_instructions
 from agentteams.sync_pin import (
     DEFAULT_CANONICAL_REL,
     read_pin,
@@ -71,11 +71,6 @@ __all__ = [
 
 #: Durable, human-reviewable conflict log (append-only).
 CONFLICT_LOG_SUBPATH = ".agentteams/sync-conflicts.log.csv"
-
-#: Added once when a projection kept a deployed fence newer than the hub's (interop_helpers.keep_newer_fences).
-_STALE_HUB_HINT = ("the canonical hub's instruction fences are older than some deployed ones even after the "
-                   "automatic refresh from the pin (see the notices above); regenerate the pin natively "
-                   "(--update), or run --sync-refresh-instructions to take a peer's newer fences")
 
 _CONFLICT_LOG_HEADER = [
     "date", "framework", "agent", "field", "classification", "resolution", "note",
@@ -521,6 +516,7 @@ def _reconcile(
     *,
     framework: str,
     is_pin: bool,
+    committed: bool = True,
 ) -> tuple[dict[str, Any], list[ConflictRecord], int]:
     """Fold one framework's classified changes into canonical.
 
@@ -529,6 +525,8 @@ def _reconcile(
         report: The ``SyncReport`` from :func:`classify_sync`.
         framework: The framework being reconciled.
         is_pin: Whether ``framework`` is the bootstrap pin (authoritative).
+        committed: Whether ``framework`` has a committed change in this pass. An uncommitted pin change
+            still spreads (the pin wins), but each absorbed field is then logged for review.
 
     Returns:
         ``(updated_canonical_cai, conflicts, applied_field_count)``.
@@ -564,7 +562,14 @@ def _reconcile(
                 if cls in (Classification.NATIVE_MOVED, Classification.BOTH_MOVED_CONFLICT):
                     target[fname] = fr.native_value
                     applied += 1
-                    if cls == Classification.BOTH_MOVED_CONFLICT:
+                    if not committed:
+                        conflicts.append(ConflictRecord(
+                            framework, slug, fname, cls.value,
+                            resolution="applied (uncommitted pin change; review)",
+                            note="The pin's working tree differs from its last commit and wins; this spreads to "
+                                 "every framework. Commit it, or restore the pin and sync again.",
+                        ))
+                    elif cls == Classification.BOTH_MOVED_CONFLICT:
                         conflicts.append(ConflictRecord(
                             framework, slug, fname, cls.value,
                             resolution="pin-wins (pin is bootstrap authority)",
@@ -572,11 +577,14 @@ def _reconcile(
                         ))
                 continue
 
-            # Peer framework.
+            # Peer framework: the pin decides (operator ruling 2026-11-04). Nothing is absorbed.
             if fr.action == Action.APPLY:
-                # Clean, non-capability native-moved — safe to absorb + fan out.
-                target[fname] = fr.native_value
-                applied += 1
+                conflicts.append(ConflictRecord(
+                    framework, slug, fname, cls.value,
+                    resolution="proposed (peer change; not absorbed, make it in the pin)",
+                    note=("Projection replaces this copy. Recover it from this framework's .agentteams-backups "
+                          f"(newest {DEFAULT_BACKUP_KEEP_LAST} kept), then make the change in the pin."),
+                ))
             elif cls == Classification.BOTH_MOVED_CONFLICT:
                 conflicts.append(ConflictRecord(
                     framework, slug, fname, cls.value,
@@ -692,8 +700,6 @@ def _project_and_rebaseline(
                               preserve_existing=True, projection=policy)
         if notices is not None:
             notices.extend(f"[{fw}] {n}" for n in res.notices)
-            if any(FENCE_DOWNGRADE_NOTICE in n for n in res.notices) and _STALE_HUB_HINT not in notices:
-                notices.append(_STALE_HUB_HINT)
         # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege
         # block so a confined/exclusive pinned-sync team stays confined after projection.
         _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)
@@ -801,8 +807,10 @@ def sync_init(
 
     Raises:
         ValueError: If ``pin`` is unregistered or absent from ``frameworks``,
-            or if two frameworks in ``frameworks`` resolve to the same
-            physical agents directory (see :func:`_reject_directory_collisions`).
+            if two frameworks in ``frameworks`` resolve to the same
+            physical agents directory (see :func:`_reject_directory_collisions`),
+            or if the pin's instruction file is unsafe to sync from
+            (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
     fws = list(frameworks) if frameworks else list(FRAMEWORK_IDS)
@@ -815,6 +823,7 @@ def sync_init(
     canonical_dir = root / canonical_rel
     pin_dir = framework_agents_dir(root, pin)
     seed = export_to_cai(pin_dir, pin)
+    refuse_unsafe_pin_instructions(root, {"pinned_framework": pin, "frameworks": fws}, seed)
     # C2: capture the pin's brief privilege posture into the team-level canonical block so it
     # persists in team.cai.json and projection re-emits each framework's OS boundary.
     priv = _read_brief_privilege(root)
@@ -845,36 +854,6 @@ def sync_init(
     )
 
 
-def _refresh_hub_instructions(
-    root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], canonical_dir: Path, *,
-    dry_run: bool, notices: list[str],
-) -> None:
-    """Bring the hub's instruction fences up to the pin's deployed file before projecting (pin wins).
-
-    The hub's instruction content is seeded at ``--sync-init`` and otherwise never reconciled, so
-    without this a stale hub projected same-version stale fence bodies (src/, templates/, a dropped
-    Project Layout line) over current deployed files (remediation-log 2026-11-03, HIGH). When the
-    refresh cannot run (no pin instruction file, unparseable fences) the projection still never
-    lowers a fence version, and the notice says why. *hub* is refreshed in memory even under
-    *dry_run*, so the dry projection previews what a real run writes; only the save is skipped.
-    Peer frameworks' newer fences are reported, never taken (the pin wins).
-    """
-    from agentteams.sync_hub_refresh import refresh_hub_binding
-
-    try:
-        result = refresh_hub_binding(root, pin_doc, hub, take_peer_fences=False)
-    except ValueError as exc:
-        notices.append(f"hub instructions not refreshed from the pin: {exc}")
-        return
-    notices.extend(result.notices)
-    if not result.changed:
-        return
-    moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
-    notices.append(f"hub instruction fences {'would be ' if dry_run else ''}refreshed from the pin "
-                   f"({result.pin}): {moved}")
-    materialize_canonical(hub, canonical_dir, dry_run=dry_run)
-
-
 def run_sync(
     root: Path,
     *,
@@ -896,8 +875,10 @@ def run_sync(
 
     Raises:
         ValueError: If the project is not pinned (run :func:`sync_init` first),
-            or if two frameworks in the pinned sync set resolve to the same
-            physical agents directory (see :func:`_reject_directory_collisions`).
+            if two frameworks in the pinned sync set resolve to the same
+            physical agents directory (see :func:`_reject_directory_collisions`),
+            or if the pin's instruction file is unsafe to sync from
+            (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
     pin_doc = read_pin(root)
@@ -915,13 +896,18 @@ def run_sync(
     if not changed:
         return SyncResult(note="no framework changed since last sync")
 
-    # Process the pin first (authoritative), then peers.
-    ordered = ([pin] if pin in changed else []) + [f for f in changed if f != pin]
+    refuse_unsafe_pin_instructions(root, pin_doc, load_canonical(canonical_dir))
+
+    # Pin first (authoritative), then peers. Every framework, not only the changed ones: projection overwrites them
+    # all, so a peer edit that isn't committed would otherwise vanish with no proposal in the log.
+    ordered = [pin] + [f for f in fws if f != pin]
 
     all_conflicts: list[ConflictRecord] = []
     applied_total = 0
     for fw in ordered:
         agents_dir = framework_agents_dir(root, fw)
+        if fw != pin and not agents_dir.is_dir():
+            continue
         native_cai = export_to_cai(agents_dir, fw)
         canonical_cai = load_canonical(canonical_dir)
         baseline = load_baseline(canonical_dir, fw)
@@ -930,7 +916,7 @@ def run_sync(
             canonical_dir=str(canonical_dir), native_dir=str(agents_dir), framework=fw,
         )
         canonical_cai, conflicts, applied = _reconcile(
-            canonical_cai, report, framework=fw, is_pin=(fw == pin),
+            canonical_cai, report, framework=fw, is_pin=(fw == pin), committed=(fw in changed),
         )
         all_conflicts.extend(conflicts)
         applied_total += applied
@@ -945,7 +931,7 @@ def run_sync(
         final_canonical["privilege"] = priv
         materialize_canonical(final_canonical, canonical_dir, dry_run=dry_run)
     notices: list[str] = []
-    _refresh_hub_instructions(root, pin_doc, final_canonical, canonical_dir, dry_run=dry_run, notices=notices)
+    refresh_hub_for_projection(root, pin_doc, final_canonical, canonical_dir, dry_run=dry_run, notices=notices)
     projected = _project_and_rebaseline(
         root, canonical_dir, final_canonical, fws, dry_run=dry_run, notices=notices,
         accepted_write_roots=accepted_write_roots,
