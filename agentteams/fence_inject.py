@@ -82,6 +82,7 @@ def _wrap_body(content: str, fence_id: str) -> str:
 
     YAML front matter, if present, is kept above the BEGIN marker.
     """
+    # Bumping v= here needs a literal BEGIN marker too: interop_helpers.template_fence_versions can't see an f-string.
     begin = f"<!-- AGENTTEAMS:BEGIN {fence_id} v=1 -->\n"
     end = f"<!-- AGENTTEAMS:END {fence_id} -->\n"
     fm_match = _YAML_FM_RE.match(content)
