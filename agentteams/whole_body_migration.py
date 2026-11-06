@@ -256,6 +256,30 @@ def _corpus_match(chunk: list[str], heading: str, source: Any) -> bool:
     return False
 
 
+#: Punctuation that only separates words in a heading; anything else (``+``, ``#``, ``&``) is part of its identity.
+_SEPARATORS_RE = re.compile(r"[\s\-_()\[\]{}:;,.!?/'\"`*~|]+")
+
+
+def _hkey(heading: str) -> str:
+    """A heading's identity for matching: its level plus its words, case- and punctuation-insensitive.
+
+    ``## Disposition Prompt (end-of-task)`` and ``## Disposition prompt (end of task)`` are one section;
+    an exact-text match treated the old heading as a section the template lacks, so the migration carried
+    it out of the fence beside the template's renamed copy (pr-manager / pr-notifier, 2026-11-06).
+    Only separator punctuation folds (whitespace, ``-``, ``_``, brackets, ``:``, ``,``, ``.``, ``/``), so ``C++`` and
+    ``C#`` stay distinct, and ``casefold`` keeps non-ASCII words. A heading that folds to nothing (``## ---``) is
+    keyed by its exact text, so it matches only itself.
+    """
+    m = re.match(r"\s*(#+)", heading)
+    level = len(m.group(1)) if m else 0
+    words = _SEPARATORS_RE.sub(" ", heading.lstrip(" \t#").casefold()).strip()
+    return f"{level}:{words}" if words else f"{level}=" + heading.strip()
+
+
+#: The user-region headings by :func:`_hkey`: a case or punctuation variant is still the project's region.
+_USER_KEYS = frozenset(_hkey(h) for h in _USER_HEADINGS)
+
+
 def _heading_sites(text: str) -> list[tuple[str, int, str | None]]:
     """``(heading, level, fence sid or None)`` for every heading outside a code block, in order."""
     sites: list[tuple[str, int, str | None]] = []
@@ -465,24 +489,28 @@ def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str
         return text if text.endswith("\n") else text + "\n"
 
     fenced_r, unfenced_r = _headings(new_rendered)
+    fenced_k, unfenced_k = {_hkey(h) for h in fenced_r}, {_hkey(h) for h in unfenced_r}
     leftovers = [(key, lines) for key, lines in order if any(lines is c for c in pool.get(key, []))]
     # Coverage is judged against the result as the ordinary merge will leave it: the other fences carry the
     # render's bodies, not their old ones, so a line only an old fence body holds is not "kept".
     render_blocks = {key: lines for kind, key, lines in _units(r_lines) if kind == "fence"}
-    result_lines = _norm_lines([x for kind, key, lines in _units(assemble([]).splitlines(keepends=True))
-                                for x in (render_blocks.get(key, lines) if kind == "fence" else lines)])
+    result = [x for kind, key, lines in _units(assemble([]).splitlines(keepends=True))
+              for x in (render_blocks.get(key, lines) if kind == "fence" else lines)]
+    result_lines = _norm_lines(result)
+    result_heads = {_hkey(h) for h, _, _ in _heading_sites("".join(result))}
     carried: list[str] = []
     for key, lines in leftovers:
         label = key or "(text before the first heading)"
         if _covered(lines, result_lines):
             continue
-        user_region = key in _USER_HEADINGS or any(_USER_MARKER_RE.search(x) for x in lines)
+        user_region = (key in _USER_HEADINGS or (key and _hkey(key) in _USER_KEYS)
+                       or any(_USER_MARKER_RE.search(x) for x in lines))
         if _unsafe(lines):
             _withhold(mig, label, _unsafe(lines))
         elif user_region:
             carried += _trim_blank_end(lines) + ["\n"]
             mig.carried.append(label)
-        elif key in fenced_r:
+        elif key and _hkey(key) in fenced_k:
             # The template now fences this section: keeping the old copy recreates the duplicate, so it is
             # left out only when a backup holds it; otherwise it becomes a twin the twin pass flags.
             if _corpus_match(lines, key, twin_source):
@@ -494,11 +522,11 @@ def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str
                 mig.twins.append(label)
         elif key and _corpus_match(lines, key, twin_source):
             mig.retired.append(label)
-        elif key in unfenced_r and fence_twins.norm(key) in result_lines:
+        elif key and _hkey(key) in unfenced_k and _hkey(key) in result_heads:
             mig.unproven.append(label)      # the result already has this heading: a second copy would duplicate it
         else:
             carried += _trim_blank_end(lines) + ["\n"]
-            (mig.kept_deployed if key in unfenced_r else mig.carried).append(label)
+            (mig.kept_deployed if key and _hkey(key) in unfenced_k else mig.carried).append(label)
     if set(mig.unproven) - set(mig.tampered) and not allow_drop:
         # Something would live only in a sidecar this run will not write: keep the old fence instead. The
         # ordinary merge then reports the duplicates, and a run with a backup dir migrates.

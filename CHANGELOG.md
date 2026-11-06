@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (whole-body migration: heading variants no longer duplicate, and `--shrink-allow` can release the split)
+
+- **A legacy `content` fence whose section headings differ from the template's only in case or punctuation now
+  migrates cleanly.** `## Disposition Prompt (end-of-task)` and `## Disposition prompt (end of task)` are one section.
+  Before, the old copy was treated as a section the template lacks and carried out of the fence, beside the
+  template's fenced copy. On agentteams' own pr-manager that left a stale disposition table ("Commit + push to
+  main"). With a backup dir the old copy now goes to the `.lost` sidecar and is named in the notice, exactly as an
+  exact-heading match always did. Headings that differ in level or in words are unchanged.
+- **`--shrink-policy=halt` no longer pins a layout split with no way past it.** The migration notice now prints its
+  content-bound entry (`--shrink-allow FILE:content@<digest>`), and that entry releases it while the on-disk body
+  still hashes to the reviewed digest.
+
 ### fix (a grok:mcp render no longer strips the merged `agentteams_wasm` table; WASM follow-up row wasm-hosts, gap 2)
 
 - **The operator's merged `[mcp_servers.agentteams_wasm]` now survives a `grok:mcp` render**, if it equals that
