@@ -78,6 +78,8 @@ class _Server:
 
 @pytest.fixture()
 def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Server]:
+    # An earlier test's fake left on the shared opener would refuse every request here (Recorder leak).
+    assert "open" not in vars(_transport._LOOPBACK_OPENER), "a fake from an earlier test is still on the opener"
     real_open = urllib.request.OpenerDirector.open
 
     def loopback_only(self: Any, req: Any, *a: Any, **k: Any) -> Any:
