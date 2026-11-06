@@ -11,9 +11,10 @@ fence version (``interop_helpers.keep_newer_fences``), and ``run_sync`` refreshe
 The pin's deployed instruction file is the source (the pin wins, as everywhere in pinned sync).
 The operator-run ``--sync-refresh-instructions`` also takes a fence another framework in the sync set
 deploys at a higher ``v=`` (a pre-guard sync lowered the pin's own file too); ``--sync`` and
-``--sync-init`` refuse such a pin first (:func:`pin_instruction_problem`). Only fenced regions move; the hub's text outside fences is
-kept, and the same max(v=) rule applies, so the hub never takes an older fence than it has. A hub
-fence still below the newest template's version afterwards is reported: the copies it was refreshed
+``--sync-init`` refuse such a pin first (:func:`pin_instruction_problem`). Only fenced regions move;
+the hub's text outside fences is kept (a hub with no fences at all is replaced by the pin's file, since
+nothing in it could merge), and the same max(v=) rule applies, so the hub never takes an older fence
+than it has. A hub fence still below the newest template's version afterwards is reported: the copies it was refreshed
 from are stale too, and the pin needs a native ``--update`` before the refresh can help.
 """
 
@@ -153,7 +154,7 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
         ValueError: If the pin has no deployed instruction file, or either side's fences do not parse
             (*hub* is left unchanged).
     """
-    from agentteams.fences import _merge_fenced_content
+    from agentteams.fences import _extract_fenced_regions, _merge_fenced_content
 
     root = Path(root)
     pin = pin_doc["pinned_framework"]
@@ -161,6 +162,7 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
     if not deployed:
         raise ValueError(f"pin {pin!r} has no deployed instruction file to refresh the hub from")
     result = HubRefreshResult(pin=pin, dry_run=dry_run)
+    seed_note = "the hub had no instruction content; seeded from the pin"
     for fw in pin_doc.get("frameworks", []) if take_peer_fences else ():
         if fw != pin and (peer := _deployed_instructions(root, fw)):
             deployed, kept = keep_newer_fences(deployed, peer)  # a peer's higher fence beats the pin's
@@ -169,6 +171,12 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
                                "review its body" for m in map(_KEPT_RE.search, kept) if m]
     binding = hub.setdefault("instructions_binding", {})
     current = str(binding.get("content", ""))
+    pin_regions = _extract_fenced_regions(deployed)
+    if current and _extract_fenced_regions(current) == {} and isinstance(pin_regions, dict) and pin_regions:
+        # A fence-less hub can't be fence-merged, so it never refreshed and projected nothing (remediation-log
+        # 2026-11-04). Its text came from a pin at --sync-init; the pin decides, so it is replaced.
+        current, seed_note = "", ("the hub's instruction content had no AGENTTEAMS fences; replaced with the "
+                                  "pin's (the old text is in git history only if the hub is committed)")
     if current:
         incoming, hub_kept = keep_newer_fences(deployed, current)
         result.notices.extend(hub_kept)
@@ -180,8 +188,8 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
         new, result.refreshed, result.added = merge.merged_content, merge.sections_replaced, merge.sections_added
     else:
         new = deployed
-        result.notices.append("the hub had no instruction content; seeded from the pin")
-    result.changed = new != current
+        result.notices.append(seed_note)
+    result.changed = new != str(binding.get("content", ""))
     newest = template_fence_versions()
     for m in _VERSIONED_BEGIN_RE.finditer(new):
         if int(m["v"]) < newest.get(m["sid"], 0):

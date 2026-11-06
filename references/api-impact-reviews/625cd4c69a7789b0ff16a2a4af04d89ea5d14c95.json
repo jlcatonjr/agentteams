@@ -1,0 +1,8 @@
+{
+  "patch_id": "625cd4c69a7789b0ff16a2a4af04d89ea5d14c95",
+  "commit": "86e14e6865cfdb960379b8607c0a304f16dc60dd",
+  "subject": "fix(sync): an absent peer never confirms a pin deletion; ls-tree -z; dry-run projection agrees",
+  "impact": "1 symbols changed",
+  "note": "New module sync_roster (apply_pin_roster, prune_hub_agents, refuse_empty_pin, remove_dropped_peer_agents) documented in docs_src/api-reference/sync-roster.md, nav + index; only caller multi_sync. backup.backup_before_projection moved verbatim from multi_sync._backup_before_projection (private, no other callers). apply_pin_roster peer_slugs now Optional; sole caller updated. Adversarial review NO -> fixed -> re-review findings fixed.",
+  "recorded_at": "2026-11-05T19:22:05Z"
+}

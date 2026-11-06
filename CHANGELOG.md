@@ -30,6 +30,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PRs and automation PRs such as vulnscan fixes) and `release/**`. A new push to a PR cancels that PR's superseded run. macOS jobs run on PRs, tags and
   dispatch, not again on the merge push. `tests/test_branch_model.py` pins that no `push` trigger matches `dev`.
 
+### fix (pinned sync: low-severity follow-ups)
+
+- **A pin with no agents directory is refused by name.** `--sync-init --pin agents-md` with no `.agents`, and
+  `--sync` after the pin's directory was deleted, gave a `FileNotFoundError` traceback. Both now refuse
+  before writing and say how to recover.
+- **A dry `--sync` reports what a real one does.** It reloaded the unchanged hub for each framework, so the
+  peers were checked, and the projection built, without the pin's changes: a removed agent's peer copies
+  were missing from the report, and an added agent from the dry projection.
+- **A peer can't block every sync with a fence no release writes.** A higher `v=` on such a fence counted
+  as newer than the pin's, and `--sync` refused until the pin was "updated", which could never raise it. The
+  pin's copy now wins for those fences.
+- **A hub with no instruction fences refreshes from a fenced pin.** It could never be fence-merged, so it
+  stayed stale and the peers' instruction files were never updated. It is replaced by the pin's file.
+- **Goose's own fences stay in goose.** With goose as the pin, `goose_bridge_entry` reached `CLAUDE.md` and
+  `copilot-instructions.md`. An explicit list of framework-owned fences (`grok_runtime`,
+  `goose_bridge_entry`, `goose_bridge_hints`) is stripped from every other framework's instruction file.
+- **A removed agent's every copy goes, and the hub's is backed up.** Only one of two same-slug files in a
+  peer was deleted per pass, and the hub's deleted file had no backup. It now goes to
+  `.agentteams/canonical/agents/.agentteams-backups`.
+
+### fix (pinned sync: the roster follows the pin; sandbox denies see every team)
+
+- **BEHAVIOUR CHANGE: `--sync` now carries the pin's roster.** An agent deleted from the pin came back on the
+  next sync, and one added to the pin never reached the hub or the other frameworks. Now an added agent
+  projects everywhere, and a deleted one leaves the hub and every framework once the deletion is confirmed:
+  committed in a git-tracked pin directory, or deleted from every framework. Each framework's
+  `.agentteams-backups` keeps its copy (newest 10). Any other deletion, including one git can't confirm, is
+  logged and restored. A peer's own added agent stays in that peer and is proposed, and an agent a peer
+  deletes is restored. `--sync` and `--sync-init` refuse a pin with no agents while the hub has some.
+  `--sync-init` over an existing hub drops the hub agents the pin lacks but leaves other frameworks' files
+  alone. See `docs_src/api-reference/sync-roster.md`.
+- **The sandbox files are written after every framework is projected.** On a first `--sync-init` where goose
+  came before copilot in the framework list, `.goose/sandbox.sb` had none of the `.github` F-4 rename-deny
+  lines, and claude's `settings.hooks.example.json` missed later teams, until a later sync that did work.
+
 ### security (Rule S-10: build-system requirements pinned)
 
 - **`[build-system] requires` is pinned exactly: `setuptools==84.2.1`, and nothing else.** It was published on

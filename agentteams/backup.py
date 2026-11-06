@@ -25,7 +25,7 @@ __all__ = [
     "BackupResult", "PruneResult", "DEFAULT_BACKUP_KEEP_LAST",
     "BACKUP_MANIFEST_NAME", "BACKUP_MANIFEST_SCHEMA_VERSION",
     "backup_output_dir", "restore_backup", "list_backups", "verify_backup",
-    "prune_backups", "inert_backup_name",
+    "prune_backups", "inert_backup_name", "backup_before_projection",
 ]
 
 
@@ -666,3 +666,37 @@ def restore_backup(
                 candidate.unlink()
 
     return count
+
+
+def backup_before_projection(agents_dir: Path, framework: str) -> None:
+    """Snapshot a framework's agents dir, skills and instruction file before a pinned-sync projection overwrites.
+
+    Projection writes with ``overwrite=True`` into directories that are commonly gitignored, so
+    without this a bad projection is unrecoverable (incident 2026-09-29). Uses the standard
+    ``.agentteams-backups/<timestamp>/`` store, so ``--restore-backup`` applies, and prunes it to
+    :data:`DEFAULT_BACKUP_KEEP_LAST`. Moved here from ``multi_sync`` (2026-11-05).
+
+    Args:
+        agents_dir: The framework's agents directory (nothing is done when it is absent).
+        framework: The framework id (selects the skills and instruction-file locations).
+
+    Returns:
+        None.
+
+    Raises:
+        OSError: A backup copy failed (before projection writes anything).
+    """
+    from agentteams.frameworks.registry import FRAMEWORKS  # lazy: the registry imports adapters that import this
+
+    if not agents_dir.is_dir():
+        return
+    adapter = FRAMEWORKS[framework]()
+    files = [p for p in agents_dir.rglob("*")
+             if p.is_file() and BACKUP_DIR_NAME not in p.relative_to(agents_dir).parts]
+    skills = adapter.skills_dir(agents_dir)
+    if adapter.has_skill_concept() and skills.is_dir():
+        files += [p for p in skills.rglob("*") if p.is_file()]  # projection rewrites skills too
+    rels = [os.path.relpath(p, agents_dir) for p in files]
+    rels.append(adapter.finalize_output_path("../copilot-instructions.md", "instructions"))
+    backup_output_dir(agents_dir, files_to_backup=rels, reason="pre-sync-projection", framework=framework)
+    prune_backups(agents_dir)  # keep the default most-recent N; every --sync would add one
