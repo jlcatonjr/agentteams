@@ -16,6 +16,7 @@ hub still held it and projection wrote it out again, and an agent the pin added 
 | A peer adds an agent | Kept in that peer only, and logged as `proposed (peer-only agent ...)` on every pass. |
 | A peer deletes an agent | Projection restores it (`restored (peer removed agent ...)`). |
 | The pin has no agents and the hub has some | `--sync` and `--sync-init` refuse before writing. |
+| The pin has no agents directory | `--sync` and `--sync-init` refuse by name before writing (no traceback). |
 | `--sync-init` over an existing hub | After a successful projection, the hub drops the agents the new pin lacks. Other frameworks keep their copies, because the earlier pin may have been a different framework. |
 
 A deletion is confirmed when the pin's agents directory is tracked by git and the agent's file is gone
@@ -26,9 +27,14 @@ repository, no `HEAD`, a git error, an untracked or gitignored agents directory,
 deletion. To remove an agent from a team whose pin directory git doesn't track, delete it from every
 framework, then sync.
 
-Each framework's `.agentteams-backups` keeps its deleted copy, so `--restore-backup` recovers it, but only
-the newest 10 backups are kept and every sync adds one. The hub's copy gets no backup: git history keeps
-it only if `.agentteams/canonical` is committed. In a tracked pin directory, git keeps the pin's.
+Each framework's `.agentteams-backups` keeps its deleted copy, and the hub's goes to
+`.agentteams/canonical/agents/.agentteams-backups`, so `--restore-backup` recovers either. Only the newest
+10 backups are kept, and every sync adds one to each framework. In a tracked pin directory, git keeps the
+pin's. Every copy of a removed agent goes, including same-slug files in subdirectories.
+
+An agent moved into a subdirectory the pin doesn't export as agents (such as `references/`) is no longer
+one of the pin's agents, so a committed move removes it from the hub and the other frameworks; the moved
+file itself is left where it is.
 
 ## Public functions
 
@@ -43,6 +49,12 @@ fails after the hub changed still removes the peers' copies next time. Returns t
 `(slug, resolution, note)` record per change, and the removed slugs. Raises `ValueError` through
 `refuse_empty_pin` before changing anything.
 
+### `refuse_missing_pin`
+
+`refuse_missing_pin(pin_agents_dir, pin) -> None`
+
+Raises `ValueError` when the pin's agents directory does not exist (never generated, deleted, or a file).
+
 ### `refuse_empty_pin`
 
 `refuse_empty_pin(canonical_cai, pin_cai, pin_agents_dir) -> None`
@@ -54,7 +66,7 @@ hub has some.
 
 `prune_hub_agents(canonical_dir, canonical_cai, *, dry_run) -> list[str]`
 
-Deletes the hub's `agents/<slug>.md` files for agents no longer in `canonical_cai`. The hub's agent list
+Backs up, then deletes, the hub's `agents/<slug>.md` files for agents no longer in `canonical_cai`. The hub's agent list
 is rebuilt from those files (`canonical.load_canonical`), so dropping an agent from the dict alone does
 not remove it.
 

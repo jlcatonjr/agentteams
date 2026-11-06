@@ -432,13 +432,16 @@ _VERSIONED_BEGIN_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN (?P<sid>[a-z][a-z0-9_]*
 
 @functools.cache
 def template_fence_versions() -> dict[str, int]:
-    """The highest ``v=`` each fence id carries in the shipped templates (the newest version that exists).
+    """The highest ``v=`` each fence id carries in what a release writes (the newest version that exists).
 
     Returns:
-        section_id -> version, read from every file under ``agentteams/templates/``.
+        section_id -> version, read from every file under ``agentteams/templates/`` and from the package's
+        ``.py`` sources, which emit some fences themselves (``write_policy``, ``goose_operational_notes``,
+        codex ``content``): an id missing here is one no release writes.
     """
     versions: dict[str, int] = {}
-    for path in (Path(__file__).parent / "templates").rglob("*"):
+    package = Path(__file__).parent
+    for path in [*(package / "templates").rglob("*"), *package.rglob("*.py")]:
         if path.is_file():
             for m in _VERSIONED_BEGIN_RE.finditer(path.read_text(encoding="utf-8", errors="replace")):
                 versions[m["sid"]] = max(versions.get(m["sid"], 0), int(m["v"]))
@@ -452,6 +455,8 @@ def keep_newer_fences(rendered: str, existing: str) -> tuple[str, list[str]]:
     (constitutional_core v=3 -> v=1, remediation-log 2026-11-03): a fence version is never lowered.
     An *existing* version above the newest shipped template's (:func:`template_fence_versions`) is
     not kept — no release wrote it, and keeping it would pin that body against every later update.
+    Nor is a higher version of a fence no release writes: its versions are hand-written, so *rendered*
+    (the pin) decides, and a peer can't block every sync by raising one (remediation-log 2026-11-04).
     Fences only one side has, equal versions and unparseable input are left as *rendered* has them.
 
     Args:
@@ -474,9 +479,9 @@ def keep_newer_fences(rendered: str, existing: str) -> tuple[str, list[str]]:
         old_m, new_m = _VERSIONED_BEGIN_RE.search(old_block), _VERSIONED_BEGIN_RE.search(new_block or "")
         if new_block is None or old_m is None or new_m is None or int(old_m["v"]) <= int(new_m["v"]):
             continue
-        if sid in ceiling and int(old_m["v"]) > ceiling[sid]:
-            notices.append(f"fence '{sid}' v={old_m['v']} is above the newest template's v={ceiling[sid]}; "
-                           f"not kept (incoming v={new_m['v']} used)")
+        if int(old_m["v"]) > ceiling.get(sid, 0):  # an id no release writes: both versions are hand-written
+            limit = f"the newest template's v={ceiling[sid]}" if sid in ceiling else "any release (none writes it)"
+            notices.append(f"fence '{sid}' v={old_m['v']} is above {limit}; not kept (incoming v={new_m['v']} used)")
             continue
         # The BEGIN marker names a unique sid, so the first occurrence is the fence itself.
         rendered = rendered.replace(new_block, old_block, 1)

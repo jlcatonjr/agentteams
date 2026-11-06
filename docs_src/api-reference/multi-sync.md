@@ -74,7 +74,11 @@ fence version still spread; that can't be detected. `--sync` and `--sync-init` r
 the pin's instruction file is missing or unparseable while the hub has fences, or when another framework
 deploys a newer fence than both the pin and the hub (`sync_hub_refresh.pin_instruction_problem`). The
 fence-merge also never lowers an existing fence's version: a deployed fence with a higher `v=` is kept and
-reported.
+reported, except one no release writes (no template or emitter has it): its versions are hand-written, so
+the pin's copy wins and a peer can't block every sync by raising one. A hub with no fences is replaced by
+the pin's fenced file (it could never be fence-merged). Fences one framework owns (`grok_runtime`,
+`goose_bridge_entry`, `goose_bridge_hints`) are stripped from every other framework's instruction file. A
+dry `--sync` keeps the hub in memory between frameworks, so it reports what a real pass would.
 
 ## Public functions
 

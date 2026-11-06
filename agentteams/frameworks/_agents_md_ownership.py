@@ -258,6 +258,36 @@ def strip_fence(text: str, fence_id: str) -> str:
     return re.sub(rf"\n*{fence_pattern(fence_id).pattern}\n*", "\n\n", text, flags=re.DOTALL)
 
 
+#: Instruction fences one framework owns. Projection strips each from every other framework's instruction file,
+#: so a goose pin's bridge entry no longer reaches CLAUDE.md or copilot-instructions.md (remediation-log
+#: 2026-11-04; operator ruling 2026-11-05: an explicit list, not a name pattern). Grok's is stripped for grok too:
+#: its importer adds the block back itself.
+FRAMEWORK_OWNED_FENCE_IDS: dict[str, str] = {
+    GROK_FENCE_ID: "grok",
+    "goose_bridge_entry": "goose",
+    "goose_bridge_hints": "goose",
+}
+
+
+def strip_foreign_fences(text: str, framework: str) -> str:
+    """Remove the blocks another framework owns (:data:`FRAMEWORK_OWNED_FENCE_IDS`) from *framework*'s instructions.
+
+    Args:
+        text: The instructions text being projected.
+        framework: The target framework id.
+
+    Returns:
+        *text* without those blocks (:func:`strip_fence`).
+
+    Raises:
+        Nothing.
+    """
+    for fence_id, owner in FRAMEWORK_OWNED_FENCE_IDS.items():
+        if owner != framework or fence_id == GROK_FENCE_ID:
+            text = strip_fence(text, fence_id)
+    return text
+
+
 #: Goose's opt-in for an AGENTS.md it does not own: there is no adopt flag (a standing way to relax the guard,
 #: @security step-10 ruling), the operator removes the file and re-renders.
 _GOOSE_OPT_IN = "To hand it to goose, remove AGENTS.md and re-render."

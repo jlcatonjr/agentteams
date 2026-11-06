@@ -23,9 +23,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from agentteams.backup import backup_output_dir, prune_backups
 from agentteams.git_exec import run_git
 
-__all__ = ["RosterRecord", "apply_pin_roster", "prune_hub_agents", "refuse_empty_pin", "remove_dropped_peer_agents"]
+__all__ = ["RosterRecord", "apply_pin_roster", "prune_hub_agents", "refuse_empty_pin", "refuse_missing_pin",
+           "remove_dropped_peer_agents"]
 
 #: (agent slug, resolution, note): the caller turns each into a sync-conflict log row.
 RosterRecord = tuple[str, str, str]
@@ -54,6 +56,22 @@ def _deletion_is_committed(root: Path, agents_dir: Path, source_path: str) -> bo
     proc = run_git(project, "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", f"./{dir_rel}")
     tracked = {p for p in proc.stdout.split("\0") if p} if proc.returncode == 0 else set()
     return bool(tracked) and file_rel not in tracked
+
+
+def refuse_missing_pin(pin_agents_dir: Path, pin: str) -> None:
+    """Refuse a sync or init whose pin has no agents directory, with a named error rather than a traceback.
+
+    Args:
+        pin_agents_dir: The pin's agents directory.
+        pin: The pin framework.
+
+    Raises:
+        ValueError: ``pin_agents_dir`` is not a directory (never generated, deleted, or a file).
+    """
+    if not Path(pin_agents_dir).is_dir():
+        raise ValueError(f"sync refused, nothing was written: the pin ({pin}) has no agents directory at "
+                         f"{pin_agents_dir}. Restore it from git, or generate the {pin} team first "
+                         f"(--framework {pin}), then sync again.")
 
 
 def refuse_empty_pin(canonical_cai: dict[str, Any], pin_cai: dict[str, Any], pin_agents_dir: Path) -> None:
@@ -120,14 +138,15 @@ def apply_pin_roster(
     canonical_cai["agents"] = agents + [pin[slug] for slug in added]
     records += [(slug, "applied (pin added agent)", "Projected to every framework.") for slug in added]
     records += [(slug, "applied (pin removed agent)",
-                 "Removed from the hub and every framework; each framework's .agentteams-backups keeps its copy "
-                 "until pruned (newest 10); the hub's is in git history only if .agentteams/canonical is "
-                 "committed.") for slug in removed]
+                 "Removed from the hub and every framework; the hub's and each framework's .agentteams-backups "
+                 "keep their copy until pruned (newest 10).") for slug in removed]
     return canonical_cai, records, removed
 
 
 def prune_hub_agents(canonical_dir: Path, canonical_cai: dict[str, Any], *, dry_run: bool) -> list[str]:
-    """Delete the hub's ``agents/<slug>.md`` files for agents no longer in ``canonical_cai``.
+    """Delete the hub's ``agents/<slug>.md`` files for agents no longer in ``canonical_cai``, after a backup.
+
+    The backup goes to ``agents/.agentteams-backups/`` (newest 10 kept), so ``--restore-backup`` recovers it.
 
     Args:
         canonical_dir: The hub directory.
@@ -142,7 +161,10 @@ def prune_hub_agents(canonical_dir: Path, canonical_cai: dict[str, Any], *, dry_
     if not agents_dir.is_dir():
         return []
     gone = [p for p in sorted(agents_dir.glob("*.md")) if p.is_file() and not p.is_symlink() and p.stem not in keep]
-    if not dry_run:
+    if gone and not dry_run:
+        # The same store as the frameworks' (load_canonical reads only agents/*.md, so a backup is never an agent).
+        backup_output_dir(agents_dir, files_to_backup=[p.name for p in gone], reason="pre-sync-hub-prune")
+        prune_backups(agents_dir)
         for path in gone:
             path.unlink()
     return [p.stem for p in gone]
@@ -167,13 +189,14 @@ def remove_dropped_peer_agents(
     """
     root = Path(agents_dir).resolve()
     gone: list[str] = []
-    for slug, agent in _slugs(peer_cai).items():
-        if slug not in dropped:
+    # Every file, not one per slug: agents in subdirectories can share a slug, and each copy must go.
+    for agent in (a for a in (peer_cai.get("agents") or []) if isinstance(a, dict)):
+        if (slug := str(agent.get("slug") or "")) not in dropped:
             continue
         path = Path(agents_dir) / str(agent.get("source_path") or "")
         if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root):
             continue
-        gone.append(slug)
+        gone += [] if slug in gone else [slug]
         if not dry_run:
             path.unlink()
     return gone
