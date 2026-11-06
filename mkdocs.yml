@@ -97,6 +97,7 @@ nav:
           - Hardening and threat intelligence: security-hardening-guide.md
           - Runtime security for served apps: runtime-security-guide.md
           - Red-team scoring and attack generation: redteam-model-scoring-guide.md
+          - "Red-team results, August 2026": redteam-results-2026-08.md
           - Security workflow glossary: security-workflow-glossary.md
           - Vulnerability scanning and remediation: vulnerability-remediation-guide.md
           - Automated remediation setup, step by step: vulnscan-automation-walkthrough.md
