@@ -124,6 +124,46 @@ The `v=` attribute is a **per-section, author-maintained content-revision marker
 
 ---
 
+## Before You Add a Fence: fenceless templates are already fully owned
+
+**Adding the first fence to a fenceless template makes it weaker, not stronger.** This is the one
+counter-intuitive rule in this document, and it is easy to get backwards.
+
+`emit._normalize_generated_content` wraps a rendered markdown body in a single `content` fence
+**only when the file contains no fence at all**. So:
+
+| template | what the emitted file looks like | what `--update --merge` can restore |
+|---|---|---|
+| **zero fences** | whole body wrapped in one `content` fence | **everything** — 100% module-owned |
+| **one or more fences** | only those regions are fenced | **only the fenced regions**; the rest is preserved-forever but never restored |
+
+Partial fencing is therefore **strictly weaker than none**. A single fence suppresses the whole-body
+wrap and strands every line outside it.
+
+Measured 2026-10-08: a well-intentioned "harden this rule by fencing it" change to
+`domain/work-summarizer.template.md` — a fenceless template — moved the emitted agent file from a
+`content` fence spanning **lines 26–248** to one region at **89–120**. Everything else went from
+restorable to unreachable. Two further tests fired for the same root cause
+(`test_fence_coverage_policy`, because a newly-fenced template must then leave *zero* constraints
+outside a fence, and `test_fence_section_manifest`, because a fenced template needs a manifest).
+The fences were reverted.
+
+**So, before adding a fence, check whether the file has one already:**
+
+- **It does** → fence away. An unfenced constraint in that file genuinely is unreachable by a merge.
+- **It does not** → do **not** add a single fence. Either leave the content unfenced (it is already
+  module-owned and restored), or fence the file **completely** and accept the coverage-policy and
+  section-manifest obligations that come with it.
+
+`test_unfenced_constraint_ratchet.py` counts constraint-bearing lines outside a fence across the
+whole library, fenceless templates included. A rise there on a **fenceless** file is not
+automatically debt: the whole-body wrap is the durable enforcement. Raising such a baseline
+deliberately, with the reason recorded at the baseline, is an accepted outcome — see the
+`copilot-instructions.template.md` and `instruction-authority.reference.template.md` entries in that
+file. `test_fence_coverage_policy.py` exempts fenceless templates for exactly this reason.
+
+---
+
 ## What Is Not Fenced
 
 The following content categories must **never** be placed inside fence markers:
