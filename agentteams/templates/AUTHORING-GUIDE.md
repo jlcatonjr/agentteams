@@ -352,8 +352,8 @@ An opt-in feature that changes an agent's tools or adds instructions only when t
 `apply_instructions`) for `write_policy: "orchestrator-only"`, and `agentteams/wasm_policy.py` for the WASM
 sandbox. Each is the identity while its switch is off, so default teams stay byte-identical, and it appends its
 section in its own fence when the body already has fences. A template may carry only an empty-by-default
-placeholder at the end of an existing table row (`{ADOPTED_AGENT_ROUTING_ROWS}`, `{WASM_ROUTING_ROWS}`,
-`{WASM_SECURITY_TRIGGER_ROWS}`), not a conditional block. Text that names a tool must follow the module that
+placeholder at the end of an existing table row or list item (`{ADOPTED_AGENT_ROUTING_ROWS}`, `{WASM_ROUTING_ROWS}`,
+`{WASM_SECURITY_TRIGGER_ROWS}`, the `{BRANCH_MODEL_*}` rows of `agentteams/branch_model.py`), not a conditional block. Text that names a tool must follow the module that
 grants it (C-3): `wasm_policy` reads P01's `wasm_eligible` and P11's wiring record and refuses a render whose text
 and wiring disagree.
 

@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (opt-in integration-branch model, to cut GitHub Actions cost)
+
+- **New brief block `git_workflow`** (`branch_model`: `"trunk"` default | `"integration"`; `integration_branch`,
+  default `dev`; `release_cadence`). Under `"integration"`, feature branches merge locally into the integration
+  branch behind a local gate. The default branch advances only through a release PR (merged with a merge commit,
+  never squashed) or a hotfix PR, so cloud CI and deploys run once per release instead of once per feature.
+- **What an integration team gets:** `references/integration-branch.reference.md`, plus integration rows in the
+  merge-strategy matrix, `@git-operations` (a `Local gate` output-contract line; rule 7 reports
+  `N/A — integration branch`), `@pr-manager` (two disposition choices: merge locally into the integration branch,
+  or open the release PR) and the branch-lifecycle state table. The rows are `\n`-prefixed placeholders at line
+  ends (`agentteams/branch_model.py`), so **a trunk team renders byte-identically**. The team-builder intake asks
+  the question.
+- **Branch tools:** `--branch-inventory` / `--branch-post-merge` / `--branch-cleanup` take `--integration-branch`
+  (default: the brief's). Two new states: `integration` (never deleted) and `integrated` (merged only into the
+  integration branch, kept until a release). Without them, a release merge would make the integration branch an
+  ancestor of the default branch, and the tools would propose deleting it. The plan digest is unchanged.
+- **Vulnscan:** fix PRs target the integration branch when `vulnerability_scanning.base_branch` is unset.
+- **Every team's merge reference gains a CI Cost Checklist** (trigger filters, PR-only cancel-in-progress, expensive
+  runners, paths filters, `[skip ci]`, schedules, batching).
+- **This repository opts in** (`dev`, milestone releases; `docs_src/release-and-branching.md`,
+  `references/git-procedures.md` §G). `ci.yml` PR runs are filtered to `main`, `dev` (invited contributors' fork
+  PRs and automation PRs such as vulnscan fixes) and `release/**`. A new push to a PR cancels that PR's superseded run. macOS jobs run on PRs, tags and
+  dispatch, not again on the merge push. `tests/test_branch_model.py` pins that no `push` trigger matches `dev`.
+
 ### fix (pinned sync: low-severity follow-ups)
 
 - **A pin with no agents directory is refused by name.** `--sync-init --pin agents-md` with no `.agents`, and

@@ -1,0 +1,8 @@
+{
+  "patch_id": "2073dc5f29632623cda88df09aed4952d14eb079",
+  "commit": "cf74157883d614b14f8c3ed9b0f0032f10168f15",
+  "subject": "feat(git): opt-in integration-branch model to cut GitHub Actions cost",
+  "impact": "1 modules added, 8 symbols added, 1 cli added, 1 schemas changed, 1 structural added",
+  "note": "Reviewed 2026-11-05: branch_model module + 7 public symbols documented in docs_src/api-reference/branch-model.md (index + mkdocs nav); --integration-branch in cli-reference.md and agentteams.1; git_workflow schema block in DESCRIPTION-FORMAT.md; integration-branch.reference template registered TA-058 and emission-allowlisted (emitted for integration briefs only).",
+  "recorded_at": "2026-11-05T15:06:14Z"
+}

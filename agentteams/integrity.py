@@ -462,6 +462,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # a guard (lease, drift skip, refs/pull check, HALT check) into unreviewed ref deletion.
     "agentteams/branch_inventory.py",
     "agentteams/branch_cleanup.py",
+    # branch_model (2026-11-04): branch_inventory (pinned) asks it which branch to keep as the integration
+    # branch; an unpinned edit there could stop protecting it from deletion after a release merge.
+    "agentteams/branch_model.py",
     # Shrink-guard overrides (2026-10-04). fences.py (pinned) delegates the release decision to
     # shrink_allow.key/body_digest; an unpinned edit there could drop the reviewed-body digest
     # check and release sections nobody reviewed (security A4 re-verification, finding 1).

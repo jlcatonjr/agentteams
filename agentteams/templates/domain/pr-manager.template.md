@@ -40,7 +40,7 @@ You coordinate the GitHub pull-request lifecycle for {PROJECT_NAME}. Use these a
 
 - `references/github-workflows-merge.reference.md`
 - `references/branch-lifecycle.reference.md`
-- `.github/CODEOWNERS` and, when present, `references/pr-recipients.json` *(the only sources of recipients)*
+- `.github/CODEOWNERS` and, when present, `references/pr-recipients.json` *(the only sources of recipients)*{BRANCH_MODEL_PR_REFS}
 
 <!-- AGENTTEAMS:BEGIN invariant_core v=1 -->
 ## Invariant Core
@@ -87,7 +87,7 @@ when another agent spawned you, return the three choices and your recommendation
 |---|---|---|
 | Continue on the branch | no git operation | Session ends; the branch is left as it is. |
 | Commit and push to the default branch | `@git-operations` | No PR; only where the project allows direct pushes. |
-| Open a PR for review | `@git-operations` pushes the branch; you open the PR; `@pr-notifier` notifies | The PR awaits human review. |
+| Open a PR for review | `@git-operations` pushes the branch; you open the PR; `@pr-notifier` notifies | The PR awaits human review. |{BRANCH_MODEL_DISPOSITION_ROWS}
 <!-- AGENTTEAMS:END disposition_prompt -->
 
 <!-- AGENTTEAMS:BEGIN output_contract v=1 -->

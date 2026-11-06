@@ -279,6 +279,27 @@ See `docs_src/api-reference/proposal-runner.md` and `runner-mcp.md`.
 
 ---
 
+### `git_workflow`
+
+Optional. Chooses how work reaches the default branch. Leaving it out means `"trunk"`.
+
+```json
+"git_workflow": {"branch_model": "integration", "integration_branch": "dev", "release_cadence": "milestone"}
+```
+
+| Key | Values | Default |
+|---|---|---|
+| `branch_model` | `"trunk"`: feature branches merge to the default branch through PRs. `"integration"`: feature branches merge locally into `integration_branch` behind a local gate, and the default branch advances only through a release PR or a hotfix PR. | `"trunk"` |
+| `integration_branch` | Any valid branch name except `main` or `master` | `"dev"` |
+| `release_cadence` | `"milestone"`, `"weekly"`, `"on-demand"` | `"milestone"` |
+
+The integration model cuts GitHub Actions cost. CI and deploys run once per release instead of once per feature,
+because cost follows the number of trigger events. It adds `references/integration-branch.reference.md` and
+integration rows to `@git-operations`, `@pr-manager` and the merge and branch-lifecycle references.
+`--branch-inventory` and `--branch-post-merge` then never propose the integration branch for deletion.
+Vulnerability-fix PRs target it unless `vulnerability_scanning.base_branch` says otherwise. A trunk team renders
+byte-identically to one without the block. See [Branches, releases and contributions](release-and-branching.md).
+
 ### `reference_db_path`
 
 **Type:** string (path) or null  

@@ -438,9 +438,10 @@ Recovery procedure when destruction has occurred: see
 ## E. Branch Lifecycle (after a merge, and the weekly sweep)
 
 The full procedure is the emitted `.claude/agents/references/branch-lifecycle.reference.md` (the
-same file in `.github/agents/references/` and `.codex/agents/references/`). This repository
-squash-merges PRs, so most merged branches are **Merged-by-PR**, not ancestors of `main`. Use the
-tool rather than ancestry by hand:
+same file in `.github/agents/references/` and `.codex/agents/references/`). Since the move to `dev`
+(§G), feature branches merge locally with `--no-ff`, so they become ancestors of `main` at the next
+release (**Integrated** until then). Branches from the earlier squash-merged PRs are **Merged-by-PR**.
+Use the tool rather than ancestry by hand:
 
 ```bash
 agentteams --branch-inventory --branch-report tmp/by-week/<week>/branch-audit   # read-only
@@ -466,10 +467,9 @@ unrecorded agentteams code.
 
   ```bash
   git fetch origin
-  git worktree add ../agentteams-wt-<topic> -b <branch> origin/main
-  # ... work, commit, push, open the PR, merge ...
+  git worktree add ../agentteams-wt-<topic> -b <branch> origin/dev   # origin/main only for a hotfix (§G)
+  # ... work, commit, run the local gate, merge into dev (§G) ...
   git worktree remove ../agentteams-wt-<topic>
-  git branch -d <branch>
   ```
 
 - **Never run `git reset --hard`, `git checkout -- .` or `git clean -fd` in the shared checkout.** They discard
@@ -490,3 +490,39 @@ unrecorded agentteams code.
   and exit code. Unlocked runs are not listed: bridge, interop, convert, `--sync`, `--stale-remediate` and
   `--add-fence-markers` runs, and the other standalone commands listed on the `update_lock` API page
   (`docs_src/api-reference/update-lock.md`).
+
+## G. Integration Branch `dev` (operator decision, 2026-11-04)
+
+agentteams uses the **integration-branch model** (brief `git_workflow.branch_model: "integration"`; the generated
+`references/integration-branch.reference.md` is the team-wide procedure). GitHub Actions cost follows the number of
+CI runs, so `main` advances only at **release milestones**. Rationale and numbers:
+`references/plans/ci-cost-branching-strategy.report.md` (local).
+
+| Branch | Advances by | Cloud CI |
+|---|---|---|
+| `feat/*`, `fix/*`, `docs/*`, `chore/*` | your commits | none |
+| `dev` | local `--no-ff` merge after the local gate; invited contributors' fork PRs; automation PRs (vulnscan fixes) | none on push; PR CI for those PRs |
+| `main` | the release PR `dev` → `main` (merge commit), or a hotfix PR | full matrix on the PR; Linux-only re-run and deploy on the merge push |
+
+**Local gate** (before every merge into `dev`):
+
+```bash
+python -m pytest tests/ -q
+mkdocs build --strict --site-dir _site && python scripts/check_docs_site.py pages _site
+python -m agentteams.man | diff - agentteams.1
+bash scripts/check-durable-tmp-refs.sh
+```
+
+**Merge into `dev`:** a worktree on `dev` (`git worktree add ../agentteams-wt-dev dev` once), then
+`git pull --ff-only && git merge --no-ff <branch> && git push origin dev`. Never in the shared checkout, which stays on
+`main` so editable installs render released code.
+
+**Release** (at a milestone): open the PR `dev` → `main` with the first-parent merge list
+(`git log --first-parent --merges --format='- %s' origin/main..origin/dev`). Fix failures on `dev`. Merge with a
+**merge commit**, never squash or rebase. Verify CI and the Pages deploy, then `git merge --ff-only origin/main` on `dev`.
+
+**Hotfix:** `hotfix/<topic>` from `origin/main`, then a PR to `main`, then merge it. Straight after,
+`git switch dev && git merge origin/main && git push origin dev`.
+
+**Branch tools:** `agentteams --branch-inventory` reads `dev` from the brief: `dev` is *integration* (never deleted)
+and a branch merged only into `dev` is *integrated* (kept until the release).

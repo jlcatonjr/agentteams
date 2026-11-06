@@ -418,7 +418,7 @@ def refuse_by_brief(op: str, target: str) -> None:
 
 
 def brief_base_ref(repo: Path) -> str | None:
-    """Return ``origin/<base_branch>`` when the project's brief sets ``base_branch``, else None.
+    """Return ``origin/<base_branch>`` (else ``origin/<git_workflow.integration_branch>``) from the brief, else None.
 
     Call after fetching origin: the branch must exist there (its remote-tracking ref), or the fix is refused
     rather than staged on another base.
@@ -430,11 +430,19 @@ def brief_base_ref(repo: Path) -> str | None:
         The base ref, or None (the caller uses ``origin/HEAD``).
 
     Raises:
-        ExecError: The brief names a branch origin does not have.
+        ExecError: The brief names a branch origin does not have, or its ``git_workflow`` block is malformed.
     """
+    from agentteams import branch_model
     from agentteams.vulnscan import executor, project_policy
 
+    # base_branch wins; an integration-model project's fixes otherwise target its integration branch, so a
+    # fix PR rides the next release instead of running cloud CI against the default branch on its own.
     branch = project_policy.read_policy(repo).base_branch
+    if not branch:
+        try:
+            branch = branch_model.integration_branch_from_project(repo)
+        except ValueError as exc:
+            raise _exec_error(f"the brief's git_workflow block is malformed ({exc}); refusing") from exc
     if not branch:
         return None
     proc = executor.git_proc(repo, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}^{{commit}}",

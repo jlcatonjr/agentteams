@@ -17,7 +17,7 @@ the **Merged-by-PR** state, verified through the GitHub API.
 
 | Name | Purpose |
 |---|---|
-| `InventoryConfig` | Inputs: `repo`, `push_remote`, `default_branch`, `stale_days`, `release_pattern`, `maintained_patterns`, `operator_emails`, `use_api`, `fetch`, `cite_exclude`, `now` |
+| `InventoryConfig` | Inputs: `repo`, `push_remote`, `default_branch`, `stale_days`, `release_pattern`, `maintained_patterns`, `operator_emails`, `use_api`, `fetch`, `cite_exclude`, `integration_branch`, `now` |
 | `build_inventory(cfg, *, api=None, api_factory=None) -> dict` | `{"meta", "refs", "plan"}`. Runs only `git fetch --prune` and read commands; never writes a ref |
 | `deletion_plan(meta, refs) -> dict` | Plan items, each with `run` and `restore` commands, plus `sha256` over its binding fields |
 | `plan_digest(plan) -> str` | Recomputes the sha256 used to detect an edited plan and to bind a clearance |
@@ -26,12 +26,15 @@ the **Merged-by-PR** state, verified through the GitHub API.
 | `summary_line(inventory) -> str` | The Output Contract value (`clean` or `N merged-undeleted \| …`) |
 | `GitHubAPI(repo)` | Read-only REST client. It uses `GH_TOKEN`/`GITHUB_TOKEN` over urllib, otherwise the `gh` CLI. `get` returns `ok`, `notfound` or `unknown` |
 | `github_repo_of(url)` | `owner/name` for a github.com remote, else `None` |
-| `STATES`, `CSV_COLUMNS` | The ten states in evaluation order, and the CSV column order |
+| `STATES`, `CSV_COLUMNS` | The twelve states in evaluation order, and the CSV column order |
 
 ## State model
 
 States are evaluated in order, and the first match wins:
 1. **default**
+1a. **integration**: the integration branch of an integration-model project (`integration_branch`, else
+   the brief's `git_workflow.integration_branch`). Always kept: after a release merge it is an ancestor of
+   the default branch, and without this state it would be *merged*.
 2. **protected** (API)
 3. **evergreen**: a workflow `branch:`/`branch=` name. A templated name becomes a prefix pattern;
    a name that is variable from its first character is ignored.
@@ -44,6 +47,8 @@ States are evaluated in order, and the first match wins:
 7. **merged-by-pr**: the PR's head repository is the push remote's, its base is the default
    branch, it is merged, `head.sha` equals the tip, and its merge commit is reachable from the
    default branch.
+7a. **integrated**: not 6 or 7, and the tip is an ancestor of the integration branch (local or on the push
+   remote). Kept until a release carries it to the default branch, when it becomes *merged*.
 8. **patch-equivalent**
 9. **active**: last activity within *N* days. Activity is the tip's commit date or, for local
    refs, the reflog entry time.

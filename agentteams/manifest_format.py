@@ -7,6 +7,7 @@ these back; re-exported from analyze so external importers resolve them from age
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 
@@ -504,3 +505,22 @@ def _format_unresolved_tool_list(
             )
 
     return "\n".join(lines) if lines else "No tools with missing metadata."
+
+
+def _wasm_sandbox_record(description: dict[str, Any], agent_slugs: list[str]) -> dict[str, Any]:
+    """Return the normalised ``wasm_sandbox`` record for the manifest (P01; fail closed).
+
+    The symlink check runs against ``existing_project_path`` when it names a directory (brief data: it can only
+    refuse more); the effective state repeats it under the CLI's real project root.
+
+    Raises:
+        ValueError: A malformed block (``wasm_config.normalize_wasm_sandbox``), naming the key path.
+    """
+    from agentteams.wasm_config import normalize_wasm_sandbox
+
+    raw = description["wasm_sandbox"]
+    if not isinstance(raw, dict):
+        raise ValueError(f"wasm_sandbox must be an object (got {type(raw).__name__})")
+    existing = description.get("existing_project_path")
+    root = Path(existing) if isinstance(existing, str) and existing and Path(existing).is_dir() else None
+    return normalize_wasm_sandbox(raw, agent_slugs=agent_slugs, project_root=root).to_record()
