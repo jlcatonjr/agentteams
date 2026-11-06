@@ -56,7 +56,11 @@ class Recorder:
         self.requests: list[dict[str, Any]] = []
         self.headers = headers or {}
         for opener in (_transport._OPENER, _transport._LOOPBACK_OPENER):
-            monkeypatch.setattr(opener, "open", self._open)
+            # Patch the instance __dict__, not the attribute: the openers have no "open" of their own, so
+            # setattr would save the class's (possibly block_network's) bound method and restore it as an
+            # instance attribute at teardown, leaving the shared opener refusing every later test's request.
+            # setitem on a missing key deletes it at teardown instead.
+            monkeypatch.setitem(vars(opener), "open", self._open)
 
     def _open(self, req: urllib.request.Request, timeout: float | None = None) -> FakeResponse:
         self.requests.append({"url": req.full_url, "headers": {k.lower(): v for k, v in req.header_items()},
