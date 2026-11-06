@@ -291,5 +291,10 @@
   "vulnerability_scanning": {
     "level": "scan"
   },
-  "pr_management": true
+  "pr_management": true,
+  "git_workflow": {
+    "branch_model": "integration",
+    "integration_branch": "dev",
+    "release_cadence": "milestone"
+  }
 }

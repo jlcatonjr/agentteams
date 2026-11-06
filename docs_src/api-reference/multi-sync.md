@@ -5,8 +5,10 @@ Multi-framework **pinned sync** orchestrator (multi-framework-pinned-sync plan).
 > *Source: `agentteams/multi_sync.py`*
 
 Keeps every agentic interface in sync through the [canonical hub](canonical.md) under one locked model:
-frameworks are peers, a clean one-sided change in any framework projects to all others, and a
-genuine conflict is **always** decided in favor of the bootstrap pin (and logged for review).
+only the bootstrap pin's changes reach the hub and project to the other frameworks. A peer's
+difference is logged for review and never absorbed, and a conflict is decided in favor of the pin.
+(Operator ruling 2026-11-04. A peer's render differs just by being written for that framework, and
+absorbing that overwrote the pin's own agent files.)
 
 ## Sync topology at a glance
 
@@ -27,12 +29,20 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
 
 - **Pin first, authoritatively.** The pin framework's native-moved fields — including conflicts
   and capability fields — are absorbed into canonical (the pin is the trusted source of truth).
-- **Peers next.** Clean, non-capability `native-moved` fields absorb and fan out. A
-  `both-moved-conflict` keeps canonical (the pin's authority) and is logged. A peer *capability*
-  change is **never** silently fanned out — it is withheld and logged (the shipped
-  capability-safety invariant, preserved deliberately).
+- **Peers next, log only.** A peer's `native-moved` field is logged as a proposal, and a capability
+  change as withheld. A `both-moved-conflict` keeps canonical and is logged. Nothing is absorbed, and
+  projection then replaces the peer's copy; each framework's `.agentteams-backups` keeps it (newest 10).
+  Every framework is classified once a pass runs, including uncommitted edits. A peer's edit inside an
+  instruction fence is reported in `SyncResult.notices` rather than the log. To spread a peer edit, make it
+  in the pin, or restore it to the peer and adopt it with `--absorb-from` before the next sync.
+- **The roster follows the pin** ([`sync_roster`](sync-roster.md)). An agent the pin adds projects to every
+  framework, and one it deletes (confirmed by git, or gone from every framework) leaves the hub and every
+  framework, after the backup. A peer's
+  own added agent stays in that peer and is proposed; an agent a peer deletes is restored.
 - **Project + rebaseline.** Canonical is projected to every framework and every baseline is
-  rewritten from the on-disk result, so the next run never re-absorbs this run's own output.
+  rewritten from the on-disk result, so the next run never re-absorbs this run's own output. The
+  sandbox files are written only after every framework's team marker exists, so each framework's
+  sibling denies include a team created in the same pass.
 - **Change detection is commit-to-commit** (operator decision): a framework is "changed" when a
   path under its agents directory moved between the last synced commit and HEAD. A framework's
   own projected-but-uncommitted output therefore never re-triggers a sync.
@@ -58,10 +68,17 @@ Projection backs up each framework's agents dir, instruction file and skills to
 agents byte-for-byte and fence-merges existing instruction files (see `import_from_cai`'s
 `preserve_existing`). Before projecting, `run_sync` refreshes the hub's instruction fences from
 the pin's deployed instruction file through [`sync_hub_refresh`](sync-hub-refresh.md)
-(`refresh_hub_binding`; reported in `SyncResult.notices`, preview-only under `dry_run`), so a hub
-seeded long ago never projects stale fence bodies. The fence-merge also never lowers a fence version:
-a deployed fence with a higher `v=` than the hub's is kept and reported, with a hint to run
-`--sync-refresh-instructions` when the refresh could not run.
+(`refresh_hub_binding`; reported in `SyncResult.notices`, preview-only under `dry_run`), so an old hub
+doesn't project its own stale fence bodies. The pin wins, so stale values in the pin's file at the same
+fence version still spread; that can't be detected. `--sync` and `--sync-init` refuse before writing when
+the pin's instruction file is missing or unparseable while the hub has fences, or when another framework
+deploys a newer fence than both the pin and the hub (`sync_hub_refresh.pin_instruction_problem`). The
+fence-merge also never lowers an existing fence's version: a deployed fence with a higher `v=` is kept and
+reported, except one no release writes (no template or emitter has it): its versions are hand-written, so
+the pin's copy wins and a peer can't block every sync by raising one. A hub with no fences is replaced by
+the pin's fenced file (it could never be fence-merged). Fences one framework owns (`grok_runtime`,
+`goose_bridge_entry`, `goose_bridge_hints`) are stripped from every other framework's instruction file. A
+dry `--sync` keeps the hub in memory between frameworks, so it reports what a real pass would.
 
 ## Public functions
 

@@ -42,15 +42,15 @@ def _body_of(cai):
 # Reconciliation policy
 # ---------------------------------------------------------------------------
 
-def test_peer_clean_change_is_absorbed():
+def test_peer_clean_change_is_proposed_not_absorbed():
     baseline = _cai(body="orig")
     canonical = copy.deepcopy(baseline)
     native = _cai(body="peer-edited")  # peer moved; canonical unchanged
     report = _report(canonical, native, baseline, "claude")
     out, conflicts, applied = ms._reconcile(canonical, report, framework="claude", is_pin=False)
-    assert _body_of(out) == "peer-edited"
-    assert applied == 1
-    assert conflicts == []
+    assert _body_of(out) == "orig"  # the pin decides (operator ruling 2026-11-04)
+    assert applied == 0
+    assert [c.resolution for c in conflicts] == ["proposed (peer change; not absorbed, make it in the pin)"]
 
 
 def test_pin_wins_both_moved_conflict():

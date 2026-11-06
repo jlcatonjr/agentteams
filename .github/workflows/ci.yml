@@ -7,7 +7,13 @@ on:
       - "release/**"
     tags:
       - "v*"
+  # CI-cost plan (2026-11-04, references/plans/ci-cost-branching-strategy.report.md): PR CI runs for PRs into
+  # main and release lines (the dev → main release PR, hotfixes, backports) and into `dev`, which only invited
+  # contributors' fork PRs and automation PRs (vulnscan fixes) target. The maintainer's own feature work merges locally into `dev` behind the local
+  # gate, with no PR, so it triggers nothing. Never add `dev` to `push`, and never a '**' trigger (pinned by
+  # tests/test_branch_model.py).
   pull_request:
+    branches: [main, dev, "release/**"]
   # rc.5: workflow_dispatch is exempt from the GITHUB_TOKEN infinite-loop
   # safeguard, so framework-auto-update.yml can dispatch CI on the
   # auto-merge commit and restore the rc.4 post-merge safety-net claim.
@@ -16,6 +22,14 @@ on:
 # Least privilege for every job (follow-up #5, @security C7): no job needs to write.
 permissions:
   contents: read
+
+# A new push to a PR cancels that PR's superseded run (it would only be billed and discarded). Every other event
+# gets a group of its own (the run id): GitHub also cancels a *pending* run when a newer one joins its group, so
+# a shared group would drop verdicts on main, release lines and tags. The watcher workflows keep their own
+# "no cancel-in-progress" rule; this applies to ci.yml only.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -26,7 +40,9 @@ jobs:
         # ubuntu-24.04, not ubuntu-latest: GitHub moved ubuntu-latest to Ubuntu 26 from 2026-10-19, where the
         # confinement tests' expectations (EPERM wording, survivor reporting, GNU coreutils) don't hold yet.
         # Ubuntu 26 support is a 1.0.2 must-fix; move back to ubuntu-latest with it.
-        os: [ubuntu-24.04, macos-latest]
+        # macOS runs where it decides a merge (the PR, a tag, a manual dispatch), not again on the push that
+        # merges an already-tested PR: macOS minutes bill at a multiple of Linux minutes on private repos.
+        os: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest"]') }}
         python-version: ["3.11", "3.12"]
 
     steps:
@@ -241,6 +257,8 @@ jobs:
   # nests under Seatbelt (nested:seatbelt), with the same skip guard as the wasm-live job.
   macos-seatbelt:
     runs-on: macos-latest
+    # Same macOS rule as the test matrix: skipped on a branch push (the merged PR already ran it).
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/')
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7

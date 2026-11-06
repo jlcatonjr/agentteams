@@ -346,6 +346,7 @@ nav:
           - Multi-framework pinned sync:
               - multi-sync: api-reference/multi-sync.md
               - sync-hub-refresh: api-reference/sync-hub-refresh.md
+              - sync-roster: api-reference/sync-roster.md
               - sync-pin: api-reference/sync-pin.md
               - sync-baseline: api-reference/sync-baseline.md
               - sync-classifier: api-reference/sync-classifier.md
@@ -354,6 +355,7 @@ nav:
               - agent-doc-sync: api-reference/agent-doc-sync.md
               - learned-blocks: api-reference/learned-blocks.md
               - branch-inventory: api-reference/branch-inventory.md
+              - branch-model: api-reference/branch-model.md
               - project-notes: api-reference/project-notes.md
               - copilot-body-limit: api-reference/copilot-body-limit.md
               - bridge-refresh: api-reference/bridge-refresh.md

@@ -221,11 +221,11 @@ fuel / memory / timeout limits. When an OS sandbox is available the host process
   `/project/<path>`; `scratch: true` gives one private writable `/scratch` at `.agentteams/wasm/scratch/<agent>/`
   (agentteams picks the location). A grant reaches an agent only through its `agentteams_wasm` copy. On Claude and
   on Goose under `goose_tool_scoping: grant`, only a WASM-eligible agent (one holding an execute-class tool) gets
-  one; Goose under legacy scoping, Grok and AGENTS.md wire none. A grant that reaches no copy has no effect, and the
+  one; Goose under legacy scoping and AGENTS.md wire none. A grant that reaches no copy has no effect, and the
   render prints a `NOTE (WASM): ... has no effect on <framework>` line and records a `wasm-grant-no-effect`
-  advisory. Codex and Copilot (VS Code, CLI) take one shared compute-only copy, so a widened grant there is refused
-  and the render stops. `--framework wasm` honours grants in its own runtime. Read paths may not be absolute or `~`,
-  contain `..`, name the whole project, reach
+  advisory. Codex, Copilot (VS Code, CLI) and Grok take one shared compute-only copy, so a widened grant there is
+  refused and the render stops. `--framework wasm` honours grants in its own runtime. Read paths may not be
+  absolute or `~`, contain `..`, name the whole project, reach
   the control plane (`.git`, `.agentteams`, `.claude`, `.goose`, `.codex`, `.grok`, `.github/agents`,
   `.github/hooks`, `sandbox`, or an ancestor of one), credential material (`.env*`, `*.pem`, `*.key`, `id_*`, ...), a
   governance / trust root, or anything that resolves through a symlink. A read directory that holds credential-named
@@ -278,6 +278,27 @@ deliberately in the git-tracked registry, or drop one of the two (`native_exec_k
 See `docs_src/api-reference/proposal-runner.md` and `runner-mcp.md`.
 
 ---
+
+### `git_workflow`
+
+Optional. Chooses how work reaches the default branch. Leaving it out means `"trunk"`.
+
+```json
+"git_workflow": {"branch_model": "integration", "integration_branch": "dev", "release_cadence": "milestone"}
+```
+
+| Key | Values | Default |
+|---|---|---|
+| `branch_model` | `"trunk"`: feature branches merge to the default branch through PRs. `"integration"`: feature branches merge locally into `integration_branch` behind a local gate, and the default branch advances only through a release PR or a hotfix PR. | `"trunk"` |
+| `integration_branch` | Any valid branch name except `main` or `master` | `"dev"` |
+| `release_cadence` | `"milestone"`, `"weekly"`, `"on-demand"` | `"milestone"` |
+
+The integration model cuts GitHub Actions cost. CI and deploys run once per release instead of once per feature,
+because cost follows the number of trigger events. It adds `references/integration-branch.reference.md` and
+integration rows to `@git-operations`, `@pr-manager` and the merge and branch-lifecycle references.
+`--branch-inventory` and `--branch-post-merge` then never propose the integration branch for deletion.
+Vulnerability-fix PRs target it unless `vulnerability_scanning.base_branch` says otherwise. A trunk team renders
+byte-identically to one without the block. See [Branches, releases and contributions](release-and-branching.md).
 
 ### `reference_db_path`
 
@@ -391,7 +412,7 @@ Fields:
 |---|---|---|
 | `layer2_profile` | string (lowercase slug) | The Layer-2 profile the project was scaffolded with, e.g. `"scholarly"`. |
 | `frozen_surfaces` | array of framework ids (`codex`, `goose`, `agents-md`, `claude`, `copilot-vscode`, `copilot-cli`, `grok`), unique | Rule 15: the agent surfaces the project keeps frozen. A render never writes a path a frozen surface owns: rendering a frozen framework is refused, and another surface's file in a frozen path (the shared `AGENTS.md` under a Codex freeze, for one) is skipped with a notice. The effect classifier reads the recorded freeze state, not the working brief. |
-| `s10_cooldown_exempt_repos` | array of `owner/name` repository identifiers, unique | Rule S-10's local-repository carve-out (an operator ruling): the project's own interdependent repositories, whose releases may be adopted inside the 14-day cooldown. The vulnerability search, Rule S-9's signed-tag check and the latest-stable rule still apply. In a governed workspace a repository renders only with the operator's Ed25519-signed decision for `s10-cooldown-exempt:<owner/name>` (`cli/s10_exempt_gate`); otherwise it is left out with a notice. |
+| `s10_cooldown_exempt_repos` | array of `owner/name` repository identifiers, unique | Rule S-10's local-repository carve-out (an operator ruling): the project's own interdependent repositories, whose releases may be adopted inside the 14-day cooldown. The vulnerability search, Rule S-9's signed-tag check and the latest-stable rule still apply. In a governed workspace a repository renders only with the operator's Ed25519-signed decision for `s10-cooldown-exempt:<owner/name>` (`cli/s10_exempt_gate`); otherwise it is left out with a notice. Sign it into `.github/agents`: every surface of the project (`.claude`, `.goose`, `.codex`, …) authorizes against that log and its exception registry, so one row exempts the repository on all of them, while a HALT in any surface's own log still removes it there. |
 | `researchteam_notes` | object; `exclude`: array of agent slugs | researchteam notes agents this project does not take. |
 | `governance_agents` | array of agent slugs, unique | The governance roster the Layer-2 tooling expects. Informational: agentteams still derives the generated roster itself. |
 | `license` | string (1–200 characters) | The project's licence, preferably an SPDX expression such as `"Apache-2.0"`. |

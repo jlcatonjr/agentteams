@@ -180,6 +180,9 @@ def _build_final_rendered(
     _wasm_enforcement.begin(manifest)  # WASM plan P13: this render's native-exec action record starts empty
     _wasm_policy.begin(manifest)  # WASM plan P14: this render's run_wasm text record starts empty
     _wasm_policy.populate_placeholders(manifest)  # the two WASM rows; "" while WASM is off (byte-identical)
+    from agentteams import branch_model as _branch_model
+
+    _branch_model.populate_placeholders(manifest)  # integration-model rows; "" for a trunk team (byte-identical)
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
     final: list[tuple[str, str]] = []
     runtime_handoff_agents: list[dict[str, object]] = []

@@ -677,6 +677,7 @@ def codex_write_policy_block(rendered: str) -> str | None:
     if WRITE_POLICY_INSTRUCTIONS_HEADING not in inner:
         return None
     sid = CODEX_WRITE_POLICY_FENCE_ID
+    # Bumping v= here needs a literal BEGIN marker too: interop_helpers.template_fence_versions can't see an f-string.
     return f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n{inner.strip()}\n<!-- AGENTTEAMS:END {sid} -->"
 
 

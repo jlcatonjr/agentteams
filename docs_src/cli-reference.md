@@ -1668,10 +1668,10 @@ silently clobbering the first.
 
 ## Multi-Framework Pinned Sync
 
-Keep every agentic interface in sync through the canonical hub under one model: frameworks are
-peers, a clean one-sided change in any framework projects to all others, and a genuine conflict
-is **always** decided in favor of the bootstrap pin (and logged to
-`.agentteams/sync-conflicts.log.csv` for after-the-fact review). Change detection is
+Keep every agentic interface in sync through the canonical hub under one model: only the bootstrap
+pin's changes reach the hub and project to the others. Another framework's difference is logged to
+`.agentteams/sync-conflicts.log.csv` for review and never absorbed, and a conflict is decided in favor
+of the pin. Change detection is
 commit-to-commit. See [`multi_sync`](api-reference/multi-sync.md) and
 [`sync_pin`](api-reference/sync-pin.md).
 
@@ -1701,9 +1701,11 @@ has no separate `--frameworks` flag of its own.
 ### `--sync`
 
 Run one on-demand sync pass: detect the frameworks changed since the last synced commit,
-reconcile each into canonical (pin first, authoritatively; peers absorb clean non-capability
-changes), project canonical to every framework, log conflicts, and advance the sync anchor. A
-no-op when nothing changed.
+reconcile the pin into canonical (peers' differences are logged for review, never absorbed), project
+canonical to every framework, log conflicts and proposals, and advance the sync anchor. A no-op when
+nothing changed. Refuses before writing when the pin's instruction file is missing or unparseable, or
+older than another framework's copy; the error names the remedy (`--update --merge` can't repair a missing
+or unparseable file, so restore it from git or a backup, or repair its fence markers).
 
 ### `--sync-since COMMIT`
 
@@ -1712,8 +1714,9 @@ Override the change-detection anchor (default: the pin's recorded `last_synced_c
 ### `--sync-refresh-instructions`
 
 Refresh the canonical hub's instruction-file fences from the pin's deployed instruction file,
-without syncing. `--sync` runs the same refresh before every projection, so this is for refreshing
-(or previewing, with `--dry-run`) the hub on its own.
+without syncing. `--sync` runs the same refresh before every projection, from the pin only; this command
+also takes a newer fence from another framework, which clears the refusal described under `--sync`. Only the
+fence's version number says it is newer, so review each fence it reports taking.
 Only fenced regions move, and a fence version is never lowered (in the hub or, during `--sync`,
 in any deployed instruction file). Honors `--dry-run`. A fence another framework in the sync set
 deploys at a higher version is taken from that framework; a fence still below the newest template's
@@ -1861,6 +1864,13 @@ is refused. With no usable grant it exits `3`; use `--branch-cleanup` under a cl
 - `--default-branch`: the default branch (default: the push remote's `HEAD`).
 - `--stale-days`: the inactivity threshold that separates *active* from *stale-unmerged*
   (default 14).
+
+### `--integration-branch NAME`
+
+The integration branch of an integration-model project (brief `git_workflow.branch_model: "integration"`). It is
+never proposed for deletion, and a branch merged only into it is kept as *integrated* until a release. Default:
+the brief's `git_workflow.integration_branch` (found as `.agentteams/brief.json`, `brief.json`, then
+`.github/agents/_build-description.json`), else none.
 
 ### `--operator-email EMAIL`
 

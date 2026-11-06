@@ -17,9 +17,20 @@ Each listed repository is the action ``s10-cooldown-exempt:<owner/name>``, a con
   rendered rule, with a notice naming the row to record; the render itself goes ahead (fail-closed for the
   relaxation, never for the team).
 * **Ungoverned workspace:** every valid listed repository renders, with a notice, as sandbox relaxations do there.
+* **Native surfaces** (``.claude/agents``, ``.goose/recipes``, ``.codex/agents``, ...): the carve-out is a project-wide
+  policy, so a surface authorizes against the project's canonical ``.github/agents`` (:func:`governance_team_dir`)
+  when that is governed. All surfaces then share one decision row, one consumption and one registered exception.
+  A HALT in the surface's own log still removes the repository there (C-2: HALTs are a union). The surfaces share
+  the canonical registry; their renders are serialized by the per-checkout update lock (:mod:`agentteams.update_lock`,
+  which ``generate`` holds around this gate), outside that lock's documented fail-open cases. That lock is keyed on
+  the run's project root, this gate's root on the output path: a custom ``--output`` into another checkout takes a
+  different lock (a concurrent-write window, not a bypass: every write still passes every check).
 
 Rule 12, named: the ungoverned case trusts the brief, as every ungoverned relaxation does; and a refusal drops the
 repository silently from the rule's text except for the notice, so the cooldown then applies to it (over-tightening).
+The canonical redirect is derived from the output path alone (never a brief field such as ``existing_project_path``),
+is taken only when the canonical dir is a real directory inside the project and is governed, and never drops a HALT
+recorded in the surface's own log.
 
 Stdlib only.
 """
@@ -42,13 +53,61 @@ from agentteams.cli.exception_registry import (
     retire_exception,
 )
 from agentteams.cli.sandbox_relaxation_gate import _decision_binding, _split, _unbound_reason
+from agentteams.frameworks._sandbox_emit import team_agents_dir
 from agentteams.manifest_format import _REPO_ID_RE
+from agentteams.prompt_roots import team_project_root
 
 #: The action family; an action id is ``s10-cooldown-exempt:<owner/name>`` (lowercased).
 S10_EXEMPT_KIND = "s10-cooldown-exempt"
 
 #: The sunset of a registered exemption (Rule 15(d)); a later render re-checks it and drops it once it lapses.
 S10_EXEMPT_TTL_DAYS = 90
+
+#: The project's canonical team dir, whose decisions log holds the operator's signed policy rows.
+CANONICAL_TEAM_DIR = team_agents_dir("copilot")
+
+#: Team dirs outside :data:`~agentteams.prompt_roots.TEAM_AGENT_GLOBS` (not prompt roots): agents-md, wasm.
+_OTHER_TEAM_DIRS: tuple[str, ...] = (".agents", ".agentteams-wasm/agents")
+
+
+def _project_root_of(team_dir: Path) -> Path | None:
+    """The project root *team_dir* sits in, from its own path alone (None for a non-default layout)."""
+    split = team_project_root(team_dir)
+    if split is not None:
+        return split[0].resolve()
+    resolved = team_dir.resolve()
+    for sub in _OTHER_TEAM_DIRS:
+        if resolved.as_posix().endswith("/" + sub):
+            return resolved.parents[sub.count("/")]
+    return None
+
+
+def governance_team_dir(team_dir: Path) -> Path:
+    """The team dir whose decisions log and registry authorize the carve-out for *team_dir*.
+
+    A native surface's own log carries none of the signed policy rows (their lineage lives in the canonical log), so
+    it authorizes against ``<project>/.github/agents`` when that dir is a real directory inside the project and is
+    governed (with or without a log yet: a governed canonical dir with no row authorizes nothing, fail-closed). The
+    project root comes from *team_dir*'s own path, never from the brief.
+
+    Args:
+        team_dir: This run's agents dir.
+
+    Returns:
+        The canonical team dir, or *team_dir* itself (non-default layout, the canonical dir, or no governed one).
+
+    Raises:
+        RuntimeError: The canonical dir's signing switch can't be read (fail-closed).
+    """
+    root = _project_root_of(team_dir)
+    if root is None:
+        return team_dir
+    canonical = root / CANONICAL_TEAM_DIR
+    if canonical.resolve() == team_dir.resolve() or not canonical.is_dir():
+        return team_dir
+    if any(p.is_symlink() for p in (root / ".github", canonical)) or not canonical.resolve().is_relative_to(root):
+        return team_dir
+    return canonical if _enforce_decision_signing(canonical) else team_dir
 
 
 def action_for(repo: str) -> str:
@@ -85,13 +144,18 @@ def _check_new(team_dir: Path, action: str) -> dict[str, str]:
     return row
 
 
-def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime) -> None:
-    """Authorize *repo* or raise (RuntimeError, ExceptionRegistryError, OSError or ValueError)."""
+def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime,
+                   halt_dirs: tuple[Path, ...] = ()) -> None:
+    """Authorize *repo* or raise (RuntimeError, ExceptionRegistryError, OSError or ValueError).
+
+    *halt_dirs* are further team dirs whose HALTs also bind (the surface's own dir when *team_dir* is canonical).
+    """
     action = action_for(repo)
     exempt_action, exempt_family = action, S10_EXEMPT_KIND
     # C-2 first, before any carry-over: a HALT recorded after registration removes the repository at once.
-    security_gate._assert_no_unretracted_halt(team_dir, action=exempt_family)
-    security_gate._assert_no_unretracted_halt(team_dir, action=exempt_action)
+    for halt_dir in (team_dir, *halt_dirs):
+        security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
+        security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
     entries = entries_for(team_dir, action)
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
     if any(_unbound_reason(team_dir, e) is None for e in active):
@@ -121,7 +185,8 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
     """Return the listed repositories the carve-out may name, printing a notice for each one left out.
 
     Args:
-        team_dir: The team directory (decisions log, exception registry, signing switch).
+        team_dir: This run's team directory. A native surface authorizes against :func:`governance_team_dir`
+            (decisions log, exception registry, signing switch); its own HALTs still bind.
         repos: The brief's ``s10_cooldown_exempt_repos`` value.
         consume: True to consume a new decision row and register its exception; False (dry run, ``--check``)
             checks only and writes nothing.
@@ -132,8 +197,9 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
         entries are dropped.
 
     Raises:
-        RuntimeError: The signing switch can't be read (fail-closed). A per-repository refusal or an unreadable log
-            raises nothing: it leaves that repository out (the cooldown applies to it).
+        RuntimeError: This run's own signing switch can't be read (fail-closed). An unreadable canonical switch, a
+            per-repository refusal or an unreadable log raises nothing: it leaves the repositories out (the
+            cooldown applies to them).
     """
     by_key: dict[str, str] = {}  # case-folded: GitHub treats Foo/Bar and foo/bar as one repository
     for r in repos if isinstance(repos, list) else []:
@@ -142,6 +208,13 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
     valid = list(by_key.values())
     if not valid:
         return []
+    try:
+        own, team_dir = team_dir, governance_team_dir(team_dir)
+    except RuntimeError as exc:  # the canonical switch: not exempted, and the render goes on (never a brief-alone pass)
+        print(f"  ✗  S-10 carve-out: {', '.join(valid)} NOT exempted from the cooldown (the canonical "
+              f"{CANONICAL_TEAM_DIR} signing switch can't be read: {exc}).", file=sys.stderr)
+        return []
+    halt_dirs = (own,) if team_dir != own else ()
     if not _enforce_decision_signing(team_dir):
         print(f"  !  S-10 COOLDOWN CARVE-OUT: {', '.join(valid)} exempted from the release cooldown by the brief alone "
               "(this workspace is not governed, so no signed decision is required).", file=sys.stderr)
@@ -150,7 +223,7 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
     kept: list[str] = []
     for repo in valid:
         try:
-            _authorize_one(team_dir, repo, consume=consume, now=when)
+            _authorize_one(team_dir, repo, consume=consume, now=when, halt_dirs=halt_dirs)
             kept.append(repo)
         except (RuntimeError, ExceptionRegistryError, OSError, ValueError) as exc:
             print(f"  ✗  S-10 carve-out: {repo} is NOT exempted from the cooldown ({exc}); {_shape(action_for(repo))}",
@@ -176,4 +249,5 @@ def authorize_into(manifest: dict, team_dir: Path, *, consume: bool) -> None:
         team_dir, manifest.get("s10_cooldown_exempt_repos"), consume=consume)
 
 
-__all__ = ["S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorize_into", "authorized_exempt_repos"]
+__all__ = ["CANONICAL_TEAM_DIR", "S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorize_into",
+           "authorized_exempt_repos", "governance_team_dir"]

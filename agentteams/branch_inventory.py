@@ -35,8 +35,8 @@ from typing import Any, Callable
 
 #: States, in evaluation order (first match wins). Names are the reference's.
 STATES: tuple[str, ...] = (
-    "default", "protected", "evergreen", "release-maintained", "release-finished",
-    "merged", "merged-by-pr", "patch-equivalent", "active", "stale-unmerged",
+    "default", "integration", "protected", "evergreen", "release-maintained", "release-finished",
+    "merged", "merged-by-pr", "integrated", "patch-equivalent", "active", "stale-unmerged",
 )
 
 #: States whose proposed action a hold overrides.
@@ -88,6 +88,9 @@ class InventoryConfig:
         use_api: Query GitHub for open PRs, merged PRs and protection.
         fetch: Run ``git fetch --prune <push_remote>`` first.
         cite_exclude: Pathspecs excluded from the informational ``cited_by`` column.
+        integration_branch: The integration branch of an integration-model project (never deleted;
+            branches merged only into it are kept as ``integrated``). Read from the brief when None
+            (:func:`agentteams.branch_model.integration_branch_from_project`); ``""`` means none.
         now: Reference time (tests).
     """
 
@@ -101,6 +104,7 @@ class InventoryConfig:
     use_api: bool = True
     fetch: bool = True
     cite_exclude: tuple[str, ...] = ("workSummaries",)
+    integration_branch: str | None = None
     now: datetime | None = None
 
 
@@ -503,10 +507,12 @@ def pr_ref_matches(repo: Path, remote: str, number: int | str, tip: str) -> bool
 
 
 def _classify(rec: RefRecord, cfg: InventoryConfig, *, evergreen: list[re.Pattern[str]],
-              age_days: float) -> str:
+              age_days: float, integrated: bool = False) -> str:
     name = rec.branch
     if name == cfg.default_branch:
         return "default"
+    if cfg.integration_branch and name == cfg.integration_branch:
+        return "integration"
     if rec.protected == "yes":
         return "protected"
     if any(p.match(name) for p in evergreen):
@@ -521,6 +527,8 @@ def _classify(rec: RefRecord, cfg: InventoryConfig, *, evergreen: list[re.Patter
         return "merged"
     if by_pr:
         return "merged-by-pr"
+    if integrated:
+        return "integrated"
     if not rec.ancestor and rec.unique_patches == 0:
         return "patch-equivalent"
     if age_days <= cfg.stale_days:
@@ -593,6 +601,16 @@ def build_inventory(cfg: InventoryConfig, *, api: GitHubAPI | None = None,
     default_ref = f"refs/remotes/{cfg.push_remote}/{cfg.default_branch}"
     default_tip = git(repo, "rev-parse", default_ref)
     now = cfg.now or datetime.now(timezone.utc)
+    if cfg.integration_branch is None:
+        from agentteams.branch_model import integration_branch_from_project
+
+        try:
+            cfg.integration_branch = integration_branch_from_project(repo) or ""
+        except ValueError as exc:
+            raise InventoryError(f"cannot tell which branch is the integration branch: {exc}") from exc
+    integration_refs = [ref for ref in (f"refs/heads/{cfg.integration_branch}",
+                                        f"refs/remotes/{cfg.push_remote}/{cfg.integration_branch}")
+                        if cfg.integration_branch and git_ok(repo, "rev-parse", "--verify", "--quiet", ref)]
 
     gh_repo = github_repo_of(remote_url)
     if api is None and cfg.use_api and gh_repo:
@@ -667,7 +685,10 @@ def build_inventory(cfg: InventoryConfig, *, api: GitHubAPI | None = None,
                 elif number is not None:
                     rec.merged_pr = str(number)
                     rec.pr_ref_ok = pr_ref_matches(repo, cfg.push_remote, number, rec.tip)
-        rec.state = _classify(rec, cfg, evergreen=evergreen, age_days=age_days)
+        integrated = (not rec.ancestor and rec.branch != cfg.integration_branch
+                      and any(git_ok(repo, "merge-base", "--is-ancestor", rec.tip, ref)
+                              for ref in integration_refs))
+        rec.state = _classify(rec, cfg, evergreen=evergreen, age_days=age_days, integrated=integrated)
         rec.holds = [*rec.holds, *_holds(rec, operators=operators, api=api_facts,
                                          worktrees=worktrees, pinned=pinned, linked=linked)]
 
@@ -680,6 +701,7 @@ def build_inventory(cfg: InventoryConfig, *, api: GitHubAPI | None = None,
     meta = {
         "repo": str(repo), "push_remote": cfg.push_remote, "github_repo": gh_repo or "",
         "default_branch": cfg.default_branch, "default_tip": default_tip,
+        "integration_branch": cfg.integration_branch or "",
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "stale_days": cfg.stale_days,
         "api_status": api_facts.status, "notes": api_facts.notes,
         "operators": sorted(operators),

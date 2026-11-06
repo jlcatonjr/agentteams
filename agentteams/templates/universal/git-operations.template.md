@@ -29,7 +29,7 @@ You execute and govern Git and GitHub workflows for {PROJECT_NAME}. Use these re
 
 - `references/github-workflows-merge.reference.md`
 - `references/branch-lifecycle.reference.md` *(branch states, holds, deletion guards, authorization)*
-- `references/sandbox-handoff.reference.md` *(operations the agent sandbox refuses)*
+- `references/sandbox-handoff.reference.md` *(operations the agent sandbox refuses)*{BRANCH_MODEL_GITOPS_REFS}
 
 ## Invariant Core
 
@@ -90,4 +90,4 @@ After each operation, report:
 - Docs/API evaluation status (`REQUIRED`, `REVIEW`, `NONE`, or `pending @agent-updater`)
 - Branch disposition — `deleted (local and remote, old SHA)` | `kept — hold: <reason>` | `N/A — no merge`
 - Branch inventory — `clean` | `N merged-undeleted | N patch-equivalent | N stale-unmerged` (when the session merged or pushed)
-- Sandbox handoff — script path + `status` (`ok` / `failed` / `not-run`), or `N/A — no refused operation`
+- Sandbox handoff — script path + `status` (`ok` / `failed` / `not-run`), or `N/A — no refused operation`{BRANCH_MODEL_GITOPS_CONTRACT}

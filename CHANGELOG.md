@@ -6,6 +6,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (opt-in integration-branch model, to cut GitHub Actions cost)
+
+- **New brief block `git_workflow`** (`branch_model`: `"trunk"` default | `"integration"`; `integration_branch`,
+  default `dev`; `release_cadence`). Under `"integration"`, feature branches merge locally into the integration
+  branch behind a local gate. The default branch advances only through a release PR (merged with a merge commit,
+  never squashed) or a hotfix PR, so cloud CI and deploys run once per release instead of once per feature.
+- **What an integration team gets:** `references/integration-branch.reference.md`, plus integration rows in the
+  merge-strategy matrix, `@git-operations` (a `Local gate` output-contract line; rule 7 reports
+  `N/A — integration branch`), `@pr-manager` (two disposition choices: merge locally into the integration branch,
+  or open the release PR) and the branch-lifecycle state table. The rows are `\n`-prefixed placeholders at line
+  ends (`agentteams/branch_model.py`), so **a trunk team renders byte-identically**. The team-builder intake asks
+  the question.
+- **Branch tools:** `--branch-inventory` / `--branch-post-merge` / `--branch-cleanup` take `--integration-branch`
+  (default: the brief's). Two new states: `integration` (never deleted) and `integrated` (merged only into the
+  integration branch, kept until a release). Without them, a release merge would make the integration branch an
+  ancestor of the default branch, and the tools would propose deleting it. The plan digest is unchanged.
+- **Vulnscan:** fix PRs target the integration branch when `vulnerability_scanning.base_branch` is unset.
+- **Every team's merge reference gains a CI Cost Checklist** (trigger filters, PR-only cancel-in-progress, expensive
+  runners, paths filters, `[skip ci]`, schedules, batching).
+- **This repository opts in** (`dev`, milestone releases; `docs_src/release-and-branching.md`,
+  `references/git-procedures.md` §G). `ci.yml` PR runs are filtered to `main`, `dev` (invited contributors' fork
+  PRs and automation PRs such as vulnscan fixes) and `release/**`. A new push to a PR cancels that PR's superseded run. macOS jobs run on PRs, tags and
+  dispatch, not again on the merge push. `tests/test_branch_model.py` pins that no `push` trigger matches `dev`.
+
+### fix (pinned sync: low-severity follow-ups)
+
+- **A pin with no agents directory is refused by name.** `--sync-init --pin agents-md` with no `.agents`, and
+  `--sync` after the pin's directory was deleted, gave a `FileNotFoundError` traceback. Both now refuse
+  before writing and say how to recover.
+- **A dry `--sync` reports what a real one does.** It reloaded the unchanged hub for each framework, so the
+  peers were checked, and the projection built, without the pin's changes: a removed agent's peer copies
+  were missing from the report, and an added agent from the dry projection.
+- **A peer can't block every sync with a fence no release writes.** A higher `v=` on such a fence counted
+  as newer than the pin's, and `--sync` refused until the pin was "updated", which could never raise it. The
+  pin's copy now wins for those fences.
+- **A hub with no instruction fences refreshes from a fenced pin.** It could never be fence-merged, so it
+  stayed stale and the peers' instruction files were never updated. It is replaced by the pin's file.
+- **Goose's own fences stay in goose.** With goose as the pin, `goose_bridge_entry` reached `CLAUDE.md` and
+  `copilot-instructions.md`. An explicit list of framework-owned fences (`grok_runtime`,
+  `goose_bridge_entry`, `goose_bridge_hints`) is stripped from every other framework's instruction file.
+- **A removed agent's every copy goes, and the hub's is backed up.** Only one of two same-slug files in a
+  peer was deleted per pass, and the hub's deleted file had no backup. It now goes to
+  `.agentteams/canonical/agents/.agentteams-backups`.
+
+### fix (pinned sync: the roster follows the pin; sandbox denies see every team)
+
+- **BEHAVIOUR CHANGE: `--sync` now carries the pin's roster.** An agent deleted from the pin came back on the
+  next sync, and one added to the pin never reached the hub or the other frameworks. Now an added agent
+  projects everywhere, and a deleted one leaves the hub and every framework once the deletion is confirmed:
+  committed in a git-tracked pin directory, or deleted from every framework. Each framework's
+  `.agentteams-backups` keeps its copy (newest 10). Any other deletion, including one git can't confirm, is
+  logged and restored. A peer's own added agent stays in that peer and is proposed, and an agent a peer
+  deletes is restored. `--sync` and `--sync-init` refuse a pin with no agents while the hub has some.
+  `--sync-init` over an existing hub drops the hub agents the pin lacks but leaves other frameworks' files
+  alone. See `docs_src/api-reference/sync-roster.md`.
+- **The sandbox files are written after every framework is projected.** On a first `--sync-init` where goose
+  came before copilot in the framework list, `.goose/sandbox.sb` had none of the `.github` F-4 rename-deny
+  lines, and claude's `settings.hooks.example.json` missed later teams, until a later sync that did work.
+
+### security (Rule S-10: build-system requirements pinned)
+
+- **`[build-system] requires` is pinned exactly: `setuptools==84.2.1`, and nothing else.** It was published on
+  2026-10-20 (past the 14-day cooldown) and has no OSV advisory. Before this, an isolated build of an agentteams pin installed the newest setuptools and
+  wheel, with nothing holding them to the release cooldown (reported by mathAgents through researchteam).
+  `wheel` is dropped from the build requirements: setuptools has built wheels itself since 70.1, and
+  `wheel` 0.48 would have pulled in an unpinned `packaging`. setuptools has no required dependencies, so the
+  isolated build environment is exactly one pinned package. Verified by building the wheel offline with only
+  hash-checked setuptools 84.2.1 installed; the JSON schemas still ship.
+
+### docs (release branches are not merged back into `main`)
+
+- `release-and-branching.md` no longer says a release branch is merged forward into `main` after each tag. Every fix
+  lands on `main` first and is copied out with `git cherry-pick -x`, so `main` already has it. The status line now
+  names `v1.0.7` and `v1.1.0-rc.16`.
+
+### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
+
+- **BEHAVIOUR CHANGE: `--sync` no longer absorbs a peer framework's changes.** Previously a clean difference in any
+  framework was absorbed into the hub and projected to the rest. A peer's render differs just by being written for
+  that framework, so this overwrote the pin's own agent files: a real sync changed `team-builder`'s description from
+  "VS Code Copilot project" to "Claude project" and dropped front matter from `test-suite-expert`. A peer's difference
+  is now logged as `proposed` in `.agentteams/sync-conflicts.log.csv`, and projection replaces the peer's copy (each
+  framework's `.agentteams-backups` keeps it). To spread a peer edit, make it in the pin, or restore it and adopt it
+  with `--absorb-from`. Every framework is now classified once a pass runs, so an uncommitted peer edit is logged
+  rather than lost silently, and a peer's edit inside an instruction fence is reported in the sync notices.
+  An uncommitted pin change still spreads (the pin wins), but each absorbed field is now logged for review.
+- **`--sync` and `--sync-init` refuse before writing when the pin's instruction file is unsafe:** missing or with no
+  parseable fences while the hub has fences, or older than a fence another framework deploys. Previously the sync
+  warned and continued, spreading stale values and giving a new `AGENTS.md` `constitutional_core` v=1. The error names
+  the remedy. Stale values at the same fence version can't be detected and still follow the pin.
+
+### changed (Grok gets an inert `run_wasm` example; WASM follow-up F3, operator spike 07)
+
+- **Grok is `example-only`, no longer `unverified-format`.** With WASM on, a grok render now installs the
+  `agentteams_wasm` server bundle and writes an inert `.grok/mcp.agentteams-wasm.example.toml`
+  (`[mcp_servers.agentteams_wasm]`, `command`/`args`, one compute-only `--agent _session` copy). The operator merges
+  that table into `.grok/config.toml` outside the agentteams-managed block; agentteams never writes it there itself.
+  The example is in `protected_config_paths` and is found by the launching-config scan (`.grok/mcp*.toml`), but
+  Grok itself enforces no write-protection for it (the other surfaces' denies do).
+  Operator spike 07 (grok 1.0.52, wasmtime 36.0.20, macOS) loaded exactly this table and returned `print(42)` from
+  `grok -p --always-approve`: `nested` (Seatbelt) under `--sandbox off`, `none` (`unavailable:darwin`) under
+  `--sandbox workspace`. Custom agents keep `mcpInheritance: none`; whether they see the server is untested. A
+  render where `grok:mcp` wires any server replaces the merged table (reported as replaced); merge it again after
+  such a render.
+- **Behaviour change:** Grok is now a shared-copy host, so a `wasm_sandbox.agents` grant that widens an agent (read
+  paths, scratch) refuses a grok render (I3), as on Codex and Copilot. Before, the render succeeded and the grant
+  had no effect.
+- **Wiring reasons now carry the spike results** for Copilot CLI (`--sandbox` runs the server inside the host's
+  Seatbelt: `none`) and Copilot VS Code (`nested`, after an approval prompt). `docs_src/api-reference/frameworks.md`
+  has the per-host table, including Codex: `codex exec` under `workspace-write` blocks the call on its `prompt`
+  approval.
+
+### fix (Rule S-10 carve-out: every surface authorizes against the canonical `.github/agents`)
+
+- **One signed row now exempts a repository on every surface** (reported from researchteam #139). On a multi-surface
+  repo the Rule 15 gate read each surface's own decisions log. Those logs hold none of the operator's signed policy
+  rows, so only copilot-vscode could exempt a repository, and claude, goose and codex over-tightened. In a governed
+  project, every native surface (`.claude`, `.goose`, `.codex`, `.grok`, agents-md, wasm) now authorizes against
+  `<project>/.github/agents`: one decision row, one consumption, one registered exception under the cap and sunset.
+- The project root is derived from the output path only, never from the brief. A symlinked `.github` or
+  `.github/agents` is never followed, and a HALT in a surface's own log still removes the repository there. An
+  unreadable canonical signing switch exempts nothing, and the render goes on.
+- The sandbox-relaxation, WASM-widen and adopt-merge gates stay per-surface: their action ids name the framework.
+
 ### fixed (pinned --sync lowered instruction-fence versions; remediation row 2026-11-03 HIGH)
 
 - **A projection never lowers a fence version.** `interop_helpers.merge_instruction_file` (every `preserve_existing`
@@ -22,10 +146,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--sync` refreshes the hub's instruction fences from the pin before projecting** (`sync_hub_refresh.refresh_hub_binding`),
   so same-version stale values (`src/`, `templates/`, a dropped Project Layout line) no longer reach the deployed
   files, which the version guard alone cannot catch. The refresh is reported in the sync notices (`--dry-run`
-  previews the projection from the refreshed hub without writing it); when it cannot run (no pin instruction file,
-  unparseable fences) the notice says why and the version guard still applies. The automatic refresh takes the
-  pin's fences only: a newer fence another framework deploys is reported, never taken, so an edited peer file
-  cannot spread its body to every framework (the operator-run `--sync-refresh-instructions` still takes it).
+  previews the projection from the refreshed hub without writing it). The automatic refresh takes the pin's fences
+  only, so an edited peer file cannot spread its body to every framework (the operator-run
+  `--sync-refresh-instructions` still takes a newer peer fence).
 - A deployed `v=` above the newest shipped template's version is not kept by the guard (no release wrote it).
 
 ### security (Rule S-10: local interdependent-repository carve-out; operator ruling 2026-11-03)

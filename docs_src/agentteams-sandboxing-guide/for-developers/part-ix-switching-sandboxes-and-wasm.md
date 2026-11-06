@@ -35,8 +35,8 @@ environment, no network, limits 10^10 fuel / 64 MiB / 120 s. Widen one agent at 
 
 - **Claude, Goose (`goose_tool_scoping: grant`):** widen a WASM-eligible agent (one that holds an execute
   tool). Any other agent gets no copy, so its grant has no effect.
-- **Goose legacy scoping, Grok, AGENTS.md:** no agent gets a copy, so no grant has an effect.
-- **Codex, Copilot VS Code / CLI:** one shared compute-only copy; a widened grant is refused and the render
+- **Goose legacy scoping, AGENTS.md:** no agent gets a copy, so no grant has an effect.
+- **Codex, Copilot VS Code / CLI, Grok:** one shared compute-only copy; a widened grant is refused and the render
   stops.
 
 Where a grant has no effect, the render prints `NOTE (WASM): ... has no effect on <framework>` and records a
@@ -105,7 +105,7 @@ Read the verdict the render prints as `[WASM-ENFORCEMENT]` (also in the manifest
 | claude | `enforced` | OS sandbox on **and** you merged the emitted settings into the live config, including the `.agentteams` denyWrite, the `.claude` / `.claude/agents` deny and the deny on every config that launches the server; and no narrowed agent file grants a shell. Until you merge: `advisory`. |
 | goose | `enforced` for a direct `goose run --recipe` | OS sandbox on, `.goose/sandbox.sb` carries the rules, **and** `GOOSE_SANDBOX` is on in your live Goose config (`~/.config/goose/config.yaml`; merge `config.yaml.agentteams.example`). Without it: `advisory`, "Seatbelt profile not wired" (launching under `sandbox-exec` yourself is not checkable at render, so it does not count). Delegates: always `advisory`. Legacy scoping: `advisory`. |
 | codex | `conditional` | launched through the confined launcher (its role gate runs in WASM mode); otherwise `declared` |
-| grok | `declared` | `native_exec: deny`; under `replace` it is `advisory` (no `run_wasm` yet) |
+| grok | `declared` | `native_exec: deny`; under `replace` it is `advisory` (no `run_wasm` in agent tools) |
 | copilot-vscode, copilot-cli | `advisory` | always (only an inert MCP example is emitted) |
 | agents-md | `advisory` | always |
 | any top-level session | `advisory` | always |
