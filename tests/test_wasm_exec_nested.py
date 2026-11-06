@@ -3,7 +3,9 @@
 These need a host where ``_sandbox_profiles.available()`` succeeds. Inside a sandboxed session (this repository's
 Claude Code sessions) Seatbelt cannot nest (``sandbox_apply: Operation not permitted``), so every test here SKIPS with
 that reason rather than passing on an un-nested run. Operator merge gate (P02 CSV step 11): run this file on an
-unsandboxed macOS host and on Linux with bwrap.
+unsandboxed macOS host and on Linux with bwrap. CI runs it in both jobs (``macos-seatbelt``, ``wasm-live``); the
+network-deny and credential-deny cases have a Seatbelt and a bwrap branch under the same nodeid, so neither job
+may skip them (``scripts/wasm_live_ci.py`` SANDBOX_ALLOW).
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import os
 import socket
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -76,26 +79,65 @@ def _profile(root: Path, *, late: list[str] = (), exec_paths: list[str], deny_ne
                                late_write_allows=late, deny_reads=W.NEST_DENY_READS, deny_network=deny_network)
 
 
+def _bwrap(root: Path, *, deny_network: bool = True, deny_reads: tuple[str, ...] = W.NEST_DENY_READS) -> list[str]:
+    """The bwrap prefix the nested run builds (``wasm_exec`` passes these same NEST_* values), ending in ``--``."""
+    tmp = root / ".agentteams" / "tmp"
+    tmp.mkdir(parents=True, exist_ok=True)
+    return [*SP.bwrap_argv(root=root, write_roots=[], tmp_dir=tmp, cwd=root, protected_rel=W.NEST_PROTECTED_REL,
+                           key_dir=W.NEST_KEY_DIR, deny_reads=deny_reads, deny_network=deny_network), "--"]
+
+
+_CONNECT = ("import socket, sys\n"
+            "s = socket.socket(); s.settimeout(3)\n"
+            "try:\n    s.connect(('127.0.0.1', int(sys.argv[1])))\n"
+            "except OSError as exc:\n    sys.exit(f'refused: {exc}')\n")
+
+
 def test_nested_network_denied(tmp_path: Path) -> None:
-    if _KIND != "seatbelt" or not os.path.exists("/usr/bin/nc"):
-        pytest.skip("needs Seatbelt and /usr/bin/nc")
+    if _KIND == "seatbelt" and not os.path.exists("/usr/bin/nc"):
+        pytest.skip("needs /usr/bin/nc under Seatbelt")
     srv = socket.socket()
     srv.bind(("127.0.0.1", 0))
     srv.listen(4)
     port = str(srv.getsockname()[1])
     try:
-        for deny, want_ok in ((False, True), (True, False)):
-            prof = _profile(project(tmp_path / str(deny)), exec_paths=["/usr/bin/nc"], deny_network=deny)
-            rc = subprocess.run(["/usr/bin/sandbox-exec", "-p", prof, "/usr/bin/nc", "-z", "-w", "2", "127.0.0.1",
-                                 port], capture_output=True, timeout=20).returncode
-            assert (rc == 0) is want_ok
+        for deny, want_ok in ((False, True), (True, False)):  # the control proves the listener is reachable
+            root = project(tmp_path / str(deny))
+            if _KIND == "seatbelt":
+                prof = _profile(root, exec_paths=["/usr/bin/nc"], deny_network=deny)
+                cmd = ["/usr/bin/sandbox-exec", "-p", prof, "/usr/bin/nc", "-z", "-w", "2", "127.0.0.1", port]
+            else:  # bwrap: --unshare-net gives the run its own namespace, so the host's loopback is out of reach
+                cmd = [*_bwrap(root, deny_network=deny), sys.executable, "-I", "-c", _CONNECT, port]
+            res = subprocess.run(cmd, capture_output=True, timeout=20)
+            assert (res.returncode == 0) is want_ok, res.stderr[-2000:]
     finally:
         srv.close()
 
 
-def test_nested_credential_store_unreadable(tmp_path: Path) -> None:
-    if _KIND != "seatbelt" or not os.path.isdir(os.path.expanduser("~/.ssh")):
-        pytest.skip("needs Seatbelt and an existing ~/.ssh")
+def _fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """A HOME holding a credential directory (``~/.ssh``) and a credential file (``~/.netrc``), both NEST_DENY_READS."""
+    home = Path(os.path.realpath(tmp_path)) / "home"
+    (home / ".ssh").mkdir(parents=True)
+    (home / ".ssh" / "id_test").write_text("SECRET-KEY\n")
+    (home / ".netrc").write_text("machine x login y password SECRET-NETRC\n")
+    monkeypatch.setenv("HOME", str(home))  # bwrap_argv expands ~ when called
+    return home / ".ssh" / "id_test", home / ".netrc"
+
+
+def test_nested_credential_store_unreadable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    if _KIND == "bwrap":
+        key, netrc = _fake_home(tmp_path, monkeypatch)
+        root = project(tmp_path)
+        cat = [sys.executable, "-I", "-c", "import sys; sys.stdout.write(open(sys.argv[1]).read())"]
+        for path, secret in ((key, b"SECRET-KEY"), (netrc, b"SECRET-NETRC")):
+            control = subprocess.run([*_bwrap(root, deny_reads=()), *cat, str(path)], capture_output=True, timeout=20)
+            assert control.returncode == 0 and secret in control.stdout, control.stderr[-2000:]  # readable unhidden
+            hidden = subprocess.run([*_bwrap(root), *cat, str(path)], capture_output=True, timeout=20)
+            assert secret not in hidden.stdout + hidden.stderr  # tmpfs over the directory, /dev/null over the file
+        assert subprocess.run([*_bwrap(root), *cat, str(key)], capture_output=True, timeout=20).returncode != 0  # dir gone
+        return
+    if not os.path.isdir(os.path.expanduser("~/.ssh")):
+        pytest.skip("needs an existing ~/.ssh under Seatbelt")
     prof = SP.seatbelt_profile(root=tmp_path, exec_paths=["/bin/ls"], write_roots=[], tmp_dir=tmp_path,
                                protected_rel=W.NEST_PROTECTED_REL, key_dir=W.NEST_KEY_DIR,
                                dev_writes=W.NEST_DEV_WRITES, deny_reads=W.NEST_DENY_READS, deny_network=True)
