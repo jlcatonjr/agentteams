@@ -1,0 +1,8 @@
+{
+  "patch_id": "47eefd6cd0470cd9002558bbf9edd5f3152bb2b8",
+  "commit": "bb534e789ad06226fea28a94b88b232490053fb0",
+  "subject": "fix(vulnscan): a host back after an unscanned run is compared with its last scan",
+  "impact": "1 symbols added",
+  "note": "effectiveness.fill_baseline: new public helper, documented in docs_src/api-reference/vulnscan.md (fill_baseline entry; section carried row); api doc parity/signature tests pass",
+  "recorded_at": "2026-11-06T18:12:55Z"
+}
