@@ -485,6 +485,10 @@ def test_l6_never_runs_the_apps_interpreter_as_root(tmp_path: Path) -> None:
 
 def test_l6_refuses_without_a_package_manager_for_its_distro_package(tmp_path: Path) -> None:
     args, env, venv = _l6(tmp_path)
+    # a Linux host (the ubuntu CI runner) has a real package manager, which L6 would run: this case needs one without
+    found = [pm for pm in ("apt-get", "dnf", "yum") if shutil.which(pm, path=env.get("PATH"))]
+    if found:
+        pytest.skip(f"this host has {found[0]}: the no-package-manager refusal is tested where there is none (macOS)")
     args = [*args, "--distro-pkg", "python3.11"]
     plan = subprocess.run(args, capture_output=True, text=True, env=env, timeout=60, check=False)
     assert "PLAN\tvenv\ta.service\tdistro\tpython3.11\tinstall" in plan.stdout, plan.stdout
