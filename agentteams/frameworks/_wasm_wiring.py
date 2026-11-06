@@ -276,8 +276,8 @@ def _example(target: str, key: str, entry: dict[str, Any]) -> str:
 def _toml_example(target: str, entry: Mapping[str, Any]) -> str:
     note = _MERGE_NOTE.format(target=target)
     table = "".join(f"{key} = {json.dumps(value, ensure_ascii=False)}\n" for key, value in entry.items())  # valid TOML
-    caveat = ("A render with grok:mcp wiring any server owns [mcp_servers] and replaces this table (it says so); "
-              "merge it again after such a render.")
+    caveat = ("A render with grok:mcp wiring any server owns [mcp_servers]: it keeps this table only while it equals "
+              "this example exactly, and otherwise replaces it (it says so); merge it again after such a render.")
     verify = ("Grok does not write-protect this file: before merging, check it matches a fresh render (the "
               "--agent value must be _session).")
     return f"# {note}\n# {caveat}\n# {verify}\n[mcp_servers.agentteams_wasm]\n{table}"
@@ -348,6 +348,32 @@ def codex_first_party_tables(manifest: dict[str, Any]) -> dict[str, dict[str, An
         return None
     entry = wasm_mcp.table_entry(args, wasm_mcp.interpreter())
     return {f"mcp_servers.{wasm_mcp.SERVER_NAME}": {**entry, "default_tools_approval_mode": "prompt"}}
+
+
+def grok_kept_tables(manifest: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
+    """The ``keep_if_exact`` argument for ``grok_config_emit.emit_grok_config``: the inert example's table.
+
+    The Grok config splice is host-scoped (any ``--framework`` with ``grok:mcp``), so this does not require a grok
+    render, and it reads the manifest without creating a wiring row. agentteams never writes the table; it only
+    stops a ``grok:mcp`` render from stripping an operator-merged copy that equals it.
+
+    Args:
+        manifest: The team manifest (read only).
+
+    Returns:
+        ``{"mcp_servers.agentteams_wasm": {command, args}}``, or None when WASM is off.
+
+    Raises:
+        ValueError: As :func:`wasm_on`, or no system python3 exists.
+    """
+    if not wasm_on(manifest):
+        return None
+    from agentteams import wasm_mcp
+
+    args = _session_args(manifest)
+    if args is None:
+        return None
+    return {f"mcp_servers.{wasm_mcp.SERVER_NAME}": wasm_mcp.table_entry(args, wasm_mcp.interpreter())}
 
 
 def install_root(framework: str, path: str | Path) -> Path:
@@ -843,6 +869,7 @@ __all__ = [
     "agents_dir_problem",
     "check_wiring_problems",
     "codex_first_party_tables",
+    "grok_kept_tables",
     "covered",
     "install_binary",
     "inert_grants",

@@ -37,6 +37,22 @@ Grok expands `${VAR}` in `url`, `command`, `args`, `env` and `headers` at load t
 Default catalogue servers are withheld unless opted in, as for Codex: Grok applies project MCP servers to the
 session, and generated subagents carry `mcpInheritance: none`.
 
+### Other `[mcp_servers.*]` tables outside the block
+
+With `grok:mcp` on, the block owns `[mcp_servers]`. A render replaces other `[mcp_servers.<id>]` tables outside it
+and reports them in `dropped_unmanaged`. The one exception is the `agentteams_wasm` table, which the operator
+merges from the inert `.grok/mcp.agentteams-wasm.example.toml` (Grok is example-only, so agentteams never writes
+it). It survives only while it equals the table this render computes (`keep_if_exact`, from
+`_wasm_wiring.grok_kept_tables`), and is then listed in `kept_unmanaged`:
+
+- The comparison source is computed, never the example on disk, which Grok does not write-protect.
+- `keep_if_exact` is bounded: only `mcp_servers.agentteams_wasm`, keys exactly `command`/`args`, the command one of
+  `runner_mcp.SYSTEM_PYTHONS`, and args exactly a compute-only `--agent _session` launch, rebuilt with
+  `wasm_mcp.launch_args`. Anything else raises `ValueError`.
+- A copy that differs (a widened grant, an extra key, a quoted header, or WASM off) is replaced and reported.
+- A table whose header the strip does not match, such as `[ mcp_servers.x ]`, would survive outside the owning
+  block, so the write is refused instead.
+
 ## `[permission]` (host feature `grok:sandbox`)
 
 `grok_permission_table(wired_ids)` builds the table:
@@ -64,7 +80,7 @@ does not write-protect inside the workspace.
 
 | Name | Purpose |
 |---|---|
-| `emit_grok_config(*, servers, features, output_root, dry_run=False) -> GrokConfigResult` | Write the block. Result fields: `written`, `errors` (non-empty means refused), `notices`, `wired`, `not_wired`, `dropped_unmanaged`, `permission_written` |
+| `emit_grok_config(*, servers, features, output_root, dry_run=False, keep_if_exact=None) -> GrokConfigResult` | Write the block. Result fields: `written`, `errors` (non-empty means refused), `notices`, `wired`, `not_wired`, `dropped_unmanaged`, `kept_unmanaged`, `permission_written` |
 | `grok_mcp_entry(server)` | One server → `(fields, None)`, or `(None, reason)` |
 | `grok_permission_table(wired_ids)` | The `[permission]` table |
 | `grok_mcp_enabled(features)`, `grok_sandbox_enabled(features)` | Feature-token gates |

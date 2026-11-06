@@ -819,7 +819,9 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     carries wired ``[mcp_servers.*]`` (``grok:mcp``) and the control-plane ``[permission]`` deny rules
     (``grok:sandbox``); see ``agentteams/grok_config_emit.py``.
     """
+    from agentteams.frameworks._wasm_wiring import GROK_EXAMPLE, grok_kept_tables
     from agentteams.grok_config_emit import emit_grok_config, grok_mcp_enabled, grok_sandbox_enabled
+    from agentteams.wasm_mcp import SERVER_NAME
 
     features = manifest.get("host_features", []) or []
     on = grok_sandbox_enabled(features) or (grok_mcp_enabled(features) and manifest.get("mcp_servers"))
@@ -827,8 +829,13 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     if not on and not (project_root / ".grok" / "config.toml").is_file():
         return
     try:
+        keep = grok_kept_tables(manifest)
+    except ValueError as exc:  # no system python3, or a malformed WASM setting: fall back to replacing (reported)
+        print(f"  ⚠  Cannot compute the {SERVER_NAME} table to keep in .grok/config.toml: {exc}", file=sys.stderr)
+        keep = None
+    try:
         res = emit_grok_config(servers=manifest.get("mcp_servers", []) or [], features=features,
-                               output_root=project_root)
+                               output_root=project_root, keep_if_exact=keep)
     except OSError as exc:
         print(f"  !  Grok config write failed: {exc}", file=sys.stderr)
         return
@@ -838,9 +845,17 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     if res.not_wired:
         blocked = ", ".join(f"{sid} ({reason})" for sid, reason in res.not_wired.items())
         print(f"  ⚠  MCP servers not auto-wired into .grok/config.toml: {blocked}")
-    if res.dropped_unmanaged:
+    if res.kept_unmanaged:
+        print(f"  ✓  Kept the merged [mcp_servers.*] {', '.join(res.kept_unmanaged)} in .grok/config.toml: it equals "
+              f"this render's {GROK_EXAMPLE}")
+    others = [sid for sid in res.dropped_unmanaged if sid != SERVER_NAME]
+    if SERVER_NAME in res.dropped_unmanaged:
+        print(f"  ⚠  The merged [mcp_servers.{SERVER_NAME}] in .grok/config.toml was replaced: it does not equal this "
+              f"render's {GROK_EXAMPLE} (or WASM is off). Check the example against a fresh render, then merge it "
+              f"again outside the agentteams-managed block. Do not add {SERVER_NAME} to mcp_servers[].")
+    if others:
         print(f"  ⚠  Pre-existing [mcp_servers.*] entries not declared to agentteams were replaced: "
-              f"{', '.join(res.dropped_unmanaged)} (add them to mcp_servers[] to keep them)")
+              f"{', '.join(others)} (add them to mcp_servers[] to keep them)")
     for note in res.notices:
         print(f"  ⚠  {note}")
     for err in res.errors:

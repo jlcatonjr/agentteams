@@ -107,6 +107,14 @@ Non-conforming entries (schema validation, via [`mcp_emit._inert_problems`](mcp-
 are routed to `result.errors`. An existing file that fails to parse as TOML refuses
 the splice entirely (`result.errors`, file untouched) rather than guessing.
 
+```python
+strip_unmanaged_mcp_tables(text: str, keep: Collection[str] = ()) -> str
+```
+Remove every `[mcp_servers.*]` table block left outside a managed block, so a re-run replaces rather than
+duplicates them. `keep` names server ids whose block survives, matched only on a bare `[mcp_servers.<id>]` header
+line. A quoted or spaced spelling is still not matched, so callers re-check the result. The Grok emitter passes
+`agentteams_wasm` here; Codex passes nothing. See [`grok_config_emit`](grok-config-emit.md).
+
 ## Pipeline wiring
 
 `cli.artifacts._emit_codex_mcp_if_enabled` mirrors `_emit_mcp_servers_if_enabled`'s
