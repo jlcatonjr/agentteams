@@ -836,7 +836,7 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     try:
         res = emit_grok_config(servers=manifest.get("mcp_servers", []) or [], features=features,
                                output_root=project_root, keep_if_exact=keep)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:  # ValueError: the existing managed block does not parse
         print(f"  !  Grok config write failed: {exc}", file=sys.stderr)
         return
     for path in res.written:

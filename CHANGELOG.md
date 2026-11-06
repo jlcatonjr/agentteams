@@ -35,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`wasm-live` (Linux, bwrap) and `macos-seatbelt` are no longer advisory.** Both drop `continue-on-error`, so a
   failing live WASM test, an unexpected skip, or a goose Seatbelt failure now fails the CI run. Both were green on
-  #367, #381 and the last two `main` runs. Marking them required in branch protection is a separate repository setting.
+  #367, #381 and the last two `main` runs. Both are required status checks in branch protection (set 2026-11-05);
+  `macos-seatbelt` is skipped on a branch push and runs on PRs, tags and manual dispatch.
   Supersedes the F2 entry's "advisory" wording below.
 - **Test fix:** `test_the_unix_listener_admits_only_the_allowed_uid` raced on macOS. When the gateway closed a refused
   connection before the client's write, `sendall` raised `BrokenPipeError`. That case is now treated as a refusal,

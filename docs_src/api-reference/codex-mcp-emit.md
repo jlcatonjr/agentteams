@@ -112,7 +112,8 @@ strip_unmanaged_mcp_tables(text: str, keep: Collection[str] = ()) -> str
 ```
 Remove every `[mcp_servers.*]` table block left outside a managed block, so a re-run replaces rather than
 duplicates them. `keep` names server ids whose block survives, matched only on a bare `[mcp_servers.<id>]` header
-line. A quoted or spaced spelling is still not matched, so callers re-check the result. The Grok emitter passes
+line. A quoted or sub-table spelling of a kept id is not recognized and is still stripped, so callers re-check the
+result. The Grok emitter passes
 `agentteams_wasm` here; Codex passes nothing. See [`grok_config_emit`](grok-config-emit.md).
 
 ## Pipeline wiring

@@ -277,7 +277,8 @@ def emit_grok_config(
 
     Raises:
         OSError: The config cannot be read or written.
-        ValueError: A ``keep_if_exact`` entry that is not the canonical compute-only ``agentteams_wasm`` table.
+        ValueError: A ``keep_if_exact`` entry that is not the canonical compute-only ``agentteams_wasm`` table, or
+            an existing agentteams-managed block that does not parse as TOML.
     """
     keep = dict(keep_if_exact or {})
     problems = _keep_problems(keep)

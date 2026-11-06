@@ -337,3 +337,22 @@ def test_the_cli_names_the_kept_or_replaced_wasm_table_with_the_right_remedy(tmp
     else:
         assert f"Kept the merged [mcp_servers.*] agentteams_wasm in .grok/config.toml: it equals this render's " \
                f"{ww.GROK_EXAMPLE}" in out and "was replaced: it does not equal" not in out
+
+
+def test_the_cli_reports_an_unparseable_managed_grok_block_instead_of_aborting(tmp_path, capsys):
+    """A managed block that no longer parses as TOML is reported on stderr; the render carries on."""
+    from agentteams.cli.artifacts import _emit_grok_config_if_enabled
+    from agentteams.grok_config_emit import _MANAGED_FOOTER, _MANAGED_HEADER
+    from tests.test_grok_config_emit import _server
+
+    config = tmp_path / ".grok" / "config.toml"
+    config.parent.mkdir(parents=True)
+    broken = _MANAGED_HEADER + "[mcp_servers.x\n" + _MANAGED_FOOTER
+    config.write_text(broken, encoding="utf-8")
+    manifest = _manifest("grok")
+    manifest["host_features"] = ["grok:mcp"]
+    manifest["mcp_servers"] = [_server()]
+    _emit_grok_config_if_enabled(manifest, tmp_path)
+    err = capsys.readouterr().err
+    assert "Grok config write failed" in err and "does not parse" in err
+    assert config.read_text(encoding="utf-8") == broken  # nothing written over the operator's file
