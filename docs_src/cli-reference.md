@@ -351,7 +351,7 @@ exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orpha
 - **The `agents:` list.** Where the orchestrator's front matter has one (Copilot), it is extended with exactly the
   named slugs it lacks, through the same `adopt-orphans-merge` gate as `--update --adopt-orphans`: a
   signing-governed workspace, an Ed25519-signed decision with `scope=adopt-orphans-merge` and `effect_grants`
-  exactly `agents:<slug>` for those slugs (a superset or subset refuses), the Rule 15(d) cap, the
+  exactly `agents:<slug>` for those slugs (a superset or subset refuses), the aggregate cap (constraint-relaxing-authorizations rule, clause d), the
   `references/adopt-orphans-merge.log.csv` record and a backup. Where there is none (Claude), only the rows
   change and no decision is needed.
 - **Write set.** The orchestrator file and its backup under the agents directory's `.agentteams-backups/`
@@ -671,7 +671,7 @@ the Grok profile, and the neutral launcher `sandbox/confine-run.sh`); everything
 stays as it is. `on` emits the boundary even under `cooperative`, and counts as the explicit opt-in that makes the
 Claude gate hook fail closed.
 
-Turning the OS sandbox off is constraint-relaxing (Rule 15). In a governed workspace (strict decision signing, on by
+Turning the OS sandbox off is constraint-relaxing (see the constraint-relaxing-authorizations rule). In a governed workspace (strict decision signing, on by
 default) it needs an operator Ed25519-signed decision for `sandbox-os-off:<framework>`; elsewhere generation prints a
 `SANDBOX RELAXATION` notice and records it. It is refused with `write_policy: orchestrator-only`, and together with
 an explicit `--target-host-features <fw>:sandbox`. It never changes live settings, the launcher, or the runner's
@@ -682,7 +682,7 @@ an explicit `--target-host-features <fw>:sandbox`. It never changes live setting
 Overrides the brief's `wasm_sandbox.enabled` for this run (WASM confinement is opt-in: off unless the brief or this
 flag turns it on). `on` uses the brief's `languages`, `limits` and per-agent grants, or the compute-only defaults
 when the block is absent, and write-protects the `.agentteams` control plane in the emitted session sandbox
-(METAPLAN R1). `off` after WASM was on is constraint-relaxing (Rule 15): in a governed workspace it needs an operator
+(METAPLAN R1). `off` after WASM was on is constraint-relaxing (see the constraint-relaxing-authorizations rule): in a governed workspace it needs an operator
 Ed25519-signed decision for `sandbox-wasm-off:<framework>`; elsewhere generation prints a `SANDBOX RELAXATION` notice.
 Grants, native-exec exceptions and network are never set from argv. With WASM on, generation also prints the D6
 composition notes (`wasm-without-os-sandbox` when the OS sandbox is off, `wasm-only-host` on a host with no OS
@@ -698,7 +698,7 @@ to consumers that run model code (for example baseAgent's battery) in `.agenttea
 refuse rather than fall back to native or to an unenforced runner; `off` means native substrates by default. The file
 is written only when the brief or this flag sets the switch, and it is a floor, never a ceiling: the consumer enforces
 it (agentteams never runs or confines model code). The switch is independent of `--wasm-sandbox`, which confines agent
-code. `off` after `on` is constraint-relaxing (Rule 15): in a governed workspace it needs an operator Ed25519-signed
+code. `off` after `on` is constraint-relaxing (see the constraint-relaxing-authorizations rule): in a governed workspace it needs an operator Ed25519-signed
 decision for `sandbox-wasm-off:model-substrate`; elsewhere generation prints a `SANDBOX RELAXATION` notice. A foreign
 file (`producer` other than `agentteams`) is never rewritten. `--check-wiring --wasm-substrate on` reports whether the
 file exists, parses and matches; `--verify-integrity` exits 1 when the file projects a lower floor than the last render

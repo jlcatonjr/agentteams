@@ -83,7 +83,7 @@ in place as the floor. See [`sandbox_projection`](../../api-reference/sandbox-pr
 
 ## SB26 — Turning a sandbox off is governed (D7)  ✅
 
-Five transitions are **constraint-relaxing** (Rule 15). Each has a gate action id:
+Five transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule). Each has a gate action id:
 
 | Effect kind | When | Action id |
 |---|---|---|

@@ -67,7 +67,7 @@ Line numbers are as of `origin/main` after the `fix/convert-bridge-write-policy`
 | Deny list on requested AND resolved path | `agentteams/data/agentteams-runner-mcp.py:56-62`, `:261-269` |
 | Generated agents launch the server `staged` | `agentteams/frameworks/claude.py:151-155`; `agentteams/frameworks/goose.py:280-286` |
 | `mcp_grants` validation; unsigned `direct` acts as staged | `agentteams/proposal_policy.py:220-245` |
-| Ed25519 operator grants (a Rule 15 constraint-relaxing change): binding, ≤30 days, ≤500 writes, ≤3 active, operator-owned file | `agentteams/mcp_direct_grants.py:1-18`, `:37-48`, `:174-221` `verify`, `:224-259` `active_grants` |
+| Ed25519 operator grants (a constraint-relaxing change): binding, ≤30 days, ≤500 writes, ≤3 active, operator-owned file | `agentteams/mcp_direct_grants.py:1-18`, `:37-48`, `:174-221` `verify`, `:224-259` `active_grants` |
 | `AR_WRITE_POLICY` shares the generator's token set | `agentteams/audit_agent_contract.py:33-34`, `:778` `_check_write_policy` |
 | `--check-wiring` runs `runner_mcp.wiring_problems` (configuration checks) | `agentteams/cli/standalone_modes.py:204-261`; `agentteams/runner_mcp.py:171-296` |
 | Interop carries the policy (claude/goose only) and installs the server (PR #174) | `agentteams/interop_write_policy.py:1-55`, `:192` `install_server`; `agentteams/cli/app.py:494` |

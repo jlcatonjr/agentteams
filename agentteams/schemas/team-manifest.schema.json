@@ -979,7 +979,7 @@
     },
     "sandbox_state": {
       "type": "object",
-      "description": "P15 (METAPLAN 2.1): the render's effective sandbox state (SandboxState.to_record). Project-relative only; recorded in references/build-log.json so the next render can tell an OS/WASM 'off' that was on (a constraint-relaxing effect, Rule 15) from one that never was.",
+      "description": "P15 (METAPLAN 2.1): the render's effective sandbox state (SandboxState.to_record). Project-relative only; recorded in references/build-log.json so the next render can tell an OS/WASM 'off' that was on (a constraint-relaxing effect; see the constraint-relaxing-authorizations rule) from one that never was.",
       "additionalProperties": false,
       "required": [
         "os",

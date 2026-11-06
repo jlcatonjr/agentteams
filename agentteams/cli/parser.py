@@ -1122,7 +1122,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Override the brief's os_sandbox for this run (on|off). \"off\" suppresses every "
             "OS boundary agentteams emits for the selected framework; it is refused with "
             "write_policy orchestrator-only and, in a governed workspace, needs an operator "
-            "Ed25519-signed decision sandbox-os-off:<framework> (Rule 15). Does not change live "
+            "Ed25519-signed decision sandbox-os-off:<framework> (constraint-relaxing-authorizations rule). Does not change live "
             "settings, the launcher, or the runner's confined_programs sandbox. Conflicts with "
             "an explicit --target-host-features <fw>:sandbox."
         ),
@@ -1137,7 +1137,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "languages, limits and per-agent grants (compute-only defaults when the block is absent) and "
             "write-protects the .agentteams control plane. \"off\" after WASM was on is constraint-relaxing: "
             "in a governed workspace it needs an operator Ed25519-signed decision "
-            "sandbox-wasm-off:<framework> (Rule 15). Grants, native-exec exceptions and network are never "
+            "sandbox-wasm-off:<framework> (constraint-relaxing-authorizations rule). Grants, native-exec exceptions and network are never "
             "set from argv. Native Windows: not supported for now (use WSL, Linux or macOS)."
         ),
     )
@@ -1152,7 +1152,7 @@ def _build_parser() -> argparse.ArgumentParser:
             ".agentteams/sandbox-state.json. \"on\": the consumer must run model code WASM-confined under an "
             "enforcing runner and refuse rather than fall back. Independent of --wasm-sandbox (agent code). "
             "\"off\" after on is constraint-relaxing: in a governed workspace it needs an operator Ed25519-signed "
-            "decision sandbox-wasm-off:model-substrate (Rule 15). agentteams never runs or confines model code."
+            "decision sandbox-wasm-off:model-substrate (constraint-relaxing-authorizations rule). agentteams never runs or confines model code."
         ),
     )
     parser.add_argument(
