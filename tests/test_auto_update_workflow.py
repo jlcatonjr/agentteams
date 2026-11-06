@@ -124,8 +124,9 @@ def test_ci_workflow_accepts_dispatch():
         "ci.yml must include workflow_dispatch under on:"
 
 
-def test_workflow_targets_only_main_via_pr():
+def test_workflow_targets_only_the_integration_branch_via_pr():
+    """Drift PRs go to ``dev`` (integration-branch model, 2026-11-04) and reach main with the release PR."""
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "--base main" in text
-    assert "ref: main" in text
+    assert "--base dev" in text and "--base main" not in text
+    assert "ref: dev" in text
     assert "git push --set-upstream origin \"$BRANCH\"" in text

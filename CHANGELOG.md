@@ -92,6 +92,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the package's first `writer-hold` ledger row in the repository: a new PR never renews it). The plan says "held by #N" with the expiry; any gh failure holds nothing.
   `fix._leave_to_prs` moved to `writer_prs.leave_to_prs`; the unused `open_prs.staging_claims` is gone
   (`writer_prs.staging_claims` replaces it).
+### feat (opt-in integration-branch model, to cut GitHub Actions cost)
+
+- **New brief block `git_workflow`** (`branch_model`: `"trunk"` default | `"integration"`; `integration_branch`,
+  default `dev`; `release_cadence`). Under `"integration"`, feature branches merge locally into the integration
+  branch behind a local gate. The default branch advances only through a release PR (merged with a merge commit,
+  never squashed) or a hotfix PR, so cloud CI and deploys run once per release instead of once per feature.
+- **What an integration team gets:** `references/integration-branch.reference.md`, plus integration rows in the
+  merge-strategy matrix, `@git-operations` (a `Local gate` output-contract line; rule 7 reports
+  `N/A — integration branch`), `@pr-manager` (two disposition choices: merge locally into the integration branch,
+  or open the release PR) and the branch-lifecycle state table. The rows are `\n`-prefixed placeholders at line
+  ends (`agentteams/branch_model.py`), so **a trunk team renders byte-identically**. The team-builder intake asks
+  the question.
+- **Branch tools:** `--branch-inventory` / `--branch-post-merge` / `--branch-cleanup` take `--integration-branch`
+  (default: the brief's). Two new states: `integration` (never deleted) and `integrated` (merged only into the
+  integration branch, kept until a release). Without them, a release merge would make the integration branch an
+  ancestor of the default branch, and the tools would propose deleting it. The plan digest is unchanged.
+- **Vulnscan:** fix PRs target the integration branch when `vulnerability_scanning.base_branch` is unset.
+- **Every team's merge reference gains a CI Cost Checklist** (trigger filters, PR-only cancel-in-progress, expensive
+  runners, paths filters, `[skip ci]`, schedules, batching).
+- **This repository opts in** (`dev`, milestone releases; `docs_src/release-and-branching.md`,
+  `references/git-procedures.md` §G). `ci.yml` PR runs are filtered to `main`, `dev` (invited contributors' fork
+  PRs and automation PRs such as vulnscan fixes) and `release/**`. A new push to a PR cancels that PR's superseded run. macOS jobs run on PRs, tags and
+  dispatch, not again on the merge push. `tests/test_branch_model.py` pins that no `push` trigger matches `dev`.
+
+### fix (pinned sync: low-severity follow-ups)
+
+- **A pin with no agents directory is refused by name.** `--sync-init --pin agents-md` with no `.agents`, and
+  `--sync` after the pin's directory was deleted, gave a `FileNotFoundError` traceback. Both now refuse
+  before writing and say how to recover.
+- **A dry `--sync` reports what a real one does.** It reloaded the unchanged hub for each framework, so the
+  peers were checked, and the projection built, without the pin's changes: a removed agent's peer copies
+  were missing from the report, and an added agent from the dry projection.
+- **A peer can't block every sync with a fence no release writes.** A higher `v=` on such a fence counted
+  as newer than the pin's, and `--sync` refused until the pin was "updated", which could never raise it. The
+  pin's copy now wins for those fences.
+- **A hub with no instruction fences refreshes from a fenced pin.** It could never be fence-merged, so it
+  stayed stale and the peers' instruction files were never updated. It is replaced by the pin's file.
+- **Goose's own fences stay in goose.** With goose as the pin, `goose_bridge_entry` reached `CLAUDE.md` and
+  `copilot-instructions.md`. An explicit list of framework-owned fences (`grok_runtime`,
+  `goose_bridge_entry`, `goose_bridge_hints`) is stripped from every other framework's instruction file.
+- **A removed agent's every copy goes, and the hub's is backed up.** Only one of two same-slug files in a
+  peer was deleted per pass, and the hub's deleted file had no backup. It now goes to
+  `.agentteams/canonical/agents/.agentteams-backups`.
+
+### fix (pinned sync: the roster follows the pin; sandbox denies see every team)
+
+- **BEHAVIOUR CHANGE: `--sync` now carries the pin's roster.** An agent deleted from the pin came back on the
+  next sync, and one added to the pin never reached the hub or the other frameworks. Now an added agent
+  projects everywhere, and a deleted one leaves the hub and every framework once the deletion is confirmed:
+  committed in a git-tracked pin directory, or deleted from every framework. Each framework's
+  `.agentteams-backups` keeps its copy (newest 10). Any other deletion, including one git can't confirm, is
+  logged and restored. A peer's own added agent stays in that peer and is proposed, and an agent a peer
+  deletes is restored. `--sync` and `--sync-init` refuse a pin with no agents while the hub has some.
+  `--sync-init` over an existing hub drops the hub agents the pin lacks but leaves other frameworks' files
+  alone. See `docs_src/api-reference/sync-roster.md`.
+- **The sandbox files are written after every framework is projected.** On a first `--sync-init` where goose
+  came before copilot in the framework list, `.goose/sandbox.sb` had none of the `.github` F-4 rename-deny
+  lines, and claude's `settings.hooks.example.json` missed later teams, until a later sync that did work.
+
+### security (Rule S-10: build-system requirements pinned)
+
+- **`[build-system] requires` is pinned exactly: `setuptools==84.2.1`, and nothing else.** It was published on
+  2026-10-20 (past the 14-day cooldown) and has no OSV advisory. Before this, an isolated build of an agentteams pin installed the newest setuptools and
+  wheel, with nothing holding them to the release cooldown (reported by mathAgents through researchteam).
+  `wheel` is dropped from the build requirements: setuptools has built wheels itself since 70.1, and
+  `wheel` 0.48 would have pulled in an unpinned `packaging`. setuptools has no required dependencies, so the
+  isolated build environment is exactly one pinned package. Verified by building the wheel offline with only
+  hash-checked setuptools 84.2.1 installed; the JSON schemas still ship.
+
+### docs (release branches are not merged back into `main`)
+
+- `release-and-branching.md` no longer says a release branch is merged forward into `main` after each tag. Every fix
+  lands on `main` first and is copied out with `git cherry-pick -x`, so `main` already has it. The status line now
+  names `v1.0.7` and `v1.1.0-rc.16`.
+
 ### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
 
 - **BEHAVIOUR CHANGE: `--sync` no longer absorbs a peer framework's changes.** Previously a clean difference in any

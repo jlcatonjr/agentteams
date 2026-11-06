@@ -9,25 +9,35 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 
 ## The model in brief
 
-- **`main`** is where development happens. Every change, fixes included, lands there first, through a pull request.
+- **`dev`** is where development happens. Every change except an urgent hotfix lands there first: contributors through a
+  pull request into `dev`, Jim by merging locally. `dev` triggers no CI on push.
+- **`main`** advances only at release milestones, through one **release pull request** from `dev` (merged with a
+  merge commit, never squashed). It is the one point where the full cloud CI runs and the docs site deploys. Urgent
+  fixes reach `main` by a hotfix pull request, and `main` is merged back into `dev` straight after. agentteams
+  adopted this **integration-branch model** on 2026-11-04 to cut GitHub Actions cost, which follows the number of
+  CI runs, not their size. The other three repositories have not adopted it yet (see below).
 - **Releases are signed tags,** `v1.0.0`, `v1.0.1`, …, and they are what users install and pin.
 - **`release/1.0`** collects the reviewed fixes for the next patch release. It changes only when Jim copies in a fix
-  that is already on `main` (a *backport*). Between tags its commits are unsigned, so it is not for installing or
+  that is already on `dev` or `main` (a *backport*). Between tags its commits are unsigned, so it is not for installing or
   pinning.
-- **Each tag is cut on `release/1.0`** and signed by Jim. After each tag, `release/1.0` is merged back into `main`.
-- **The next minor version gets its own branch.** `release/1.1` will be cut from `main` at its first release
+- **Each tag is cut on its release branch** and signed by Jim. Release branches are not merged back into `main` or `dev`:
+  every fix landed on `dev` (or, for a hotfix, `main`) first and was copied out with `git cherry-pick -x`, so it
+  reaches `main` with the next release.
+- **The next minor version gets its own branch.** `release/1.1` was cut from `main` at its first release
   candidate.
 
 ## Branches and tags
 
 | Ref | What it is | Who changes it |
 |---|---|---|
-| `main` | Development, the next minor version | Invited contributors, through a pull request |
-| `release/1.0` | Reviewed fixes queued for the next patch release; unsigned between tags; not for pinning | Jim only, by backport |
+| `dev` | Development, the next minor version | Invited contributors, through a pull request; Jim, by local merge |
+| `main` | The last released state of development; advances at release milestones | Jim only, by the release pull request (`dev` → `main`) or a hotfix pull request |
+| `release/1.0` | Reviewed fixes queued for the next patch release; unsigned between tags; not for pinning | Jim only, by backport (from `dev` or `main`) |
+| `release/1.1` | Release candidates for `1.1.0` (`v1.1.0-rc.N`); unsigned between tags; not for pinning | Jim only, by backport (from `dev` or `main`) |
 | `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved; what you install and pin | Jim only |
 | Your work branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`) | One change, deleted after merge | Its author |
 
-`main` is `1.1.0.dev0`. `release/1.0` is at `1.0.1`, which is tagged `v1.0.1` (the first patch release; `v1.0.0` is the first 1.0 release).
+`main` is `1.1.0.dev0`. `release/1.0` is tagged `v1.0.7`, and `release/1.1` is tagged `v1.1.0-rc.16`. `v1.0.0` is the first 1.0 release.
 
 **Older lines:** none. The 1.0 line is the first maintained line. RCs 1–9 were tags on `main`.
 
@@ -35,21 +45,21 @@ The name `release/<X.Y>` is reserved for maintained lines. Never create a `relea
 
 ## Using agentteams
 
-Install the latest signed release tag on the 1.0 line: today `v1.0.1`.
+Install the latest signed release tag on the 1.0 line: today `v1.0.7`.
 
 ```bash
-pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.1"
+pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.7"
 ```
 
 **Verified install,** for a governed team, an experiment or a paper. Clone the tag into a directory of its own, check its signature with repository config neutralised, then install from that checkout:
 
 ```bash
-git clone --branch v1.0.1 https://github.com/jlcatonjr/agentteams.git agentteams-v1.0.1
-cd agentteams-v1.0.1
+git clone --branch v1.0.7 https://github.com/jlcatonjr/agentteams.git agentteams-v1.0.7
+cd agentteams-v1.0.7
 git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
     -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
     -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-    tag -v v1.0.1 && pip install .
+    tag -v v1.0.7 && pip install .
 ```
 
 The `&&` stops the install if the signature check fails. The output must also show the release key's full fingerprint, which begins `SHA256:IPdnLwlF`, not just "Good signature"; if it doesn't, stop and uninstall. "Verifying a release" below explains how to set up `allowed_signers` once. For a patch release, repeat this with the new tag in a new directory.
@@ -58,7 +68,7 @@ To sign decisions or grants, follow `SECURITY.md` ("Signing from a trusted insta
 
 **`release/1.0` is not an install source.** It holds reviewed fixes queued for the next patch release. Those commits are unsigned between tags, so don't install from the branch or pin it.
 
-**For development,** work on `main` in a clone of your fork, and install it with `pip install -e .`. "Contributing a change" below covers setting up the fork.
+**For development,** work on `dev` in a clone of your fork, and install it with `pip install -e .`. "Contributing a change" below covers setting up the fork.
 
 **Pins between repositories** (`toolchain.lock`, pinned extras) always name the commit of a verified signed tag, never
 a branch.
@@ -74,27 +84,30 @@ agentteams is public, and you have read access only. Pull requests are currently
    git remote add upstream https://github.com/jlcatonjr/agentteams.git
    ```
 
-2. **Start each change from an up-to-date `main`:**
+2. **Start each change from an up-to-date `dev`:**
 
    ```bash
-   git switch main && git pull --ff-only upstream main
+   git fetch upstream
+   git switch dev 2>/dev/null || git switch -c dev --track upstream/dev   # the first time
+   git pull --ff-only upstream dev
    ```
 
-3. **Branch:** `git switch -c fix/<short-topic>`. Use `feat/`, `fix/`, `docs/` or `chore/`. Keep one change per
+3. **Branch from `dev`:** `git switch -c fix/<short-topic> dev`. Use `feat/`, `fix/`, `docs/` or `chore/`. Keep one change per
    branch.
-4. **Push to your fork and open a pull request** against `jlcatonjr/agentteams` `main`:
+4. **Push to your fork and open a pull request** against `jlcatonjr/agentteams` `dev` (not `main`):
 
    ```bash
    git push -u origin fix/<short-topic>
    ```
 
-5. **CI.** `ci.yml` runs on every pull request and must pass. Before you push, run `python -m pytest tests/ -q`. If you changed a CLI flag or help text, also regenerate the man page with `python -m agentteams.man > agentteams.1` ([What your pull request needs](contribute/what-your-pr-needs.md#if-you-change-the-public-api-or-cli)).
+5. **CI.** `ci.yml` runs on every pull request into `dev`, `main` or a `release/*` line and must pass. macOS jobs run on pull
+   requests, not again on the push that merges one. Before you push, run `python -m pytest tests/ -q`. If you changed a CLI flag or help text, also regenerate the man page with `python -m agentteams.man > agentteams.1` ([What your pull request needs](contribute/what-your-pr-needs.md#if-you-change-the-public-api-or-cli)).
 6. **Merge.** Jim reviews and merges. You can't merge into this repository.
 7. **Delete your branch after it merges.**
 
 ## Getting a fix into a release
 
-1. **Land the fix on `main` first,** as above.
+1. **Land the fix on `dev` first,** as above. It reaches `main` with the next release.
 2. **Ask for a backport.** On the merged pull request, add the label `needs-backport-1.0`. If you can't add labels,
    leave a comment instead: "please backport to 1.0". Either way, say why. Only these qualify:
    - security fixes;
@@ -121,7 +134,8 @@ before any of these actions. In your own session, they are asking *you*: answer 
 
 ## Please don't
 
-- Commit straight to `main` or `release/*`. Use a branch and a pull request.
+- Commit straight to `dev`, `main` or `release/*`. Use a branch and a pull request into `dev`.
+- Open a pull request into `main`. Only the release and hotfix pull requests go there.
 - Force-push `main` or `release/*`, or delete or move a tag. A defect is fixed forward, in a new patch release.
 - Put a branch name into `toolchain.lock` or a pinned extra.
 
@@ -137,12 +151,13 @@ GitHub enforces the release rules here. Four active rulesets cover them:
 
 You only need this for context:
 
-1. **Fixes accumulate.** They land on `main`, and the ones requested for backport are copied to `release/1.0`.
-2. **Jim releases.** He bumps the version on `release/1.0` in a pull request, signs `vX.Y.Z` from his own terminal, publishes the GitHub release, and merges `release/1.0` forward into `main`.
-3. **Repositories release in order:** agentteams → researchteam → mathAgents → baseAgent. Each one moves its pins only
+1. **Fixes accumulate.** They land on `dev`, and the ones requested for backport are copied to the release branch with `git cherry-pick -x`.
+2. **`dev` is released to `main`** at a milestone, by the release pull request (merge commit).
+3. **Jim releases.** He bumps the version on the release branch in a pull request, signs `vX.Y.Z` from his own terminal, and publishes the GitHub release. The release branch is not merged back into `main` or `dev`.
+4. **Repositories release in order:** agentteams → researchteam → mathAgents → baseAgent. Each one moves its pins only
    after verifying the upstream tag's signature.
-4. **Next minor.** When `1.1` reaches its first release candidate, Jim cuts `release/1.1` from `main`. From then on,
-   `release/1.0` takes fixes only on request, and installs move to the `v1.1.N` tags.
+5. **Next minor.** At `1.1`'s first release candidate, Jim cut `release/1.1` from `main`. From then on,
+   `release/1.0` takes fixes only on request, and installs move to the `v1.1.N` tags once `1.1.0` is final.
 
 ## Verifying a release
 
@@ -158,14 +173,16 @@ copy inside the repository you are checking, or confirm the fingerprint with Jim
    git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
        -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
        -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-       tag -v v1.0.1
+       tag -v v1.0.7
    ```
 
 3. Check that the output shows the full fingerprint from `SECURITY.md`, not just "Good signature".
 
 ## Notes for agentteams
 
-- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version. For the 1.0 documentation, browse the `docs_src/` folder at the latest `v1.0.N` tag (today `v1.0.1`).
+- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version as of the last release milestone (`dev` may be ahead). For the 1.0 documentation, browse the `docs_src/` folder at the latest `v1.0.N` tag (today `v1.0.7`).
+- **Only agentteams uses `dev` so far.** researchteam, mathAgents and baseAgent still develop on `main`. Each can opt in
+  through its brief (`git_workflow.branch_model: "integration"`), which ships the same model to its agent team.
 - **Downstream repositories** (researchteam, mathAgents, baseAgent) pin agentteams in their `toolchain.lock` to the commit of a verified tag, never to a branch. A downstream repository may tighten these rules, never weaken them.
 
 ## Questions

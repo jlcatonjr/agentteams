@@ -83,6 +83,22 @@ Explain before they answer: the operator's daily scan (`python -m agentteams.vul
 
 Record the answer in the brief as `"vulnerability_scanning": {"level": "<answer>"}`, adding `private_packages` or `exclude_paths` (repository-relative) if the user names any. Keep host names, IP addresses, URLs and absolute paths out of this block. The build does not enrol the project: the operator does, with `python -m agentteams.vulnscan enroll <project dir>`.
 
+
+### Branch Model (CI cost)
+Ask, after the questions above (recommended answer: `integration` when the project runs GitHub Actions CI or
+deploys on merge; `trunk` otherwise):
+> "Should feature branches merge to the default branch through pull requests (`trunk`)? Or should they merge locally into an integration branch (`dev`), with the default branch advancing only through a release pull request (`integration`)?"
+
+Explain before they answer: GitHub Actions cost follows the number of CI runs. Every pull-request push and every
+merge to the default branch runs the whole workflow. Under `integration`, feature work merges into `dev` behind a
+local gate and triggers no cloud CI. One release pull request (`dev` to the default branch, merged with a merge
+commit) runs CI and deploys once per release. Urgent fixes go to the default branch by a hotfix pull request and
+are merged back into `dev`. The trade-off: checks that only cloud CI runs (other operating systems, containers)
+are first exercised at the release.
+
+For `integration`, record `"git_workflow": {"branch_model": "integration", "integration_branch": "dev", "release_cadence": "<milestone|weekly|on-demand>"}`
+(ask for a different branch name or cadence only if the user wants one). For `trunk`, leave the block out.
+
 ---
 
 ## After Intake

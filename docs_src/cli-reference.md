@@ -1865,6 +1865,13 @@ is refused. With no usable grant it exits `3`; use `--branch-cleanup` under a cl
 - `--stale-days`: the inactivity threshold that separates *active* from *stale-unmerged*
   (default 14).
 
+### `--integration-branch NAME`
+
+The integration branch of an integration-model project (brief `git_workflow.branch_model: "integration"`). It is
+never proposed for deletion, and a branch merged only into it is kept as *integrated* until a release. Default:
+the brief's `git_workflow.integration_branch` (found as `.agentteams/brief.json`, `brief.json`, then
+`.github/agents/_build-description.json`), else none.
+
 ### `--operator-email EMAIL`
 
 Repeatable. Author emails treated as the operator. `git config user.email` is always included, and

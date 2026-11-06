@@ -12,7 +12,8 @@ Implements the operator-locked model (2026-08-12, revised by operator ruling 202
   authoritatively (its native-moved fields, including conflicts and
   capabilities, are absorbed into canonical). Peers are processed next, and only
   log: ``native-moved`` is proposed (a capability change is withheld), and
-  ``both-moved-conflict`` keeps canonical.
+  ``both-moved-conflict`` keeps canonical. The pin's roster changes are carried too
+  (:mod:`agentteams.sync_roster`); a peer's are not.
 - **Projection:** after reconciliation, canonical is projected to every
   framework, and every baseline is rewritten from the on-disk result so the
   next run does not re-absorb this run's own output (thrash guard).
@@ -31,13 +32,14 @@ import csv
 import json
 import shlex
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from agentteams.git_exec import run_git
-from agentteams.backup import DEFAULT_BACKUP_KEEP_LAST
+from agentteams.backup import DEFAULT_BACKUP_KEEP_LAST, backup_before_projection
 from agentteams.canonical import load_canonical, materialize_canonical
 from agentteams.frameworks._sandbox_emit import (
     SIBLING_DENY_DIRS_KEY,
@@ -53,6 +55,8 @@ from agentteams.interop_grant_check import ProjectionPolicy
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
 from agentteams.sync_hub_refresh import refresh_hub_for_projection, refuse_unsafe_pin_instructions
+from agentteams.sync_roster import (apply_pin_roster, prune_hub_agents, refuse_empty_pin, refuse_missing_pin,
+                                    remove_dropped_peer_agents)
 from agentteams.sync_pin import (
     DEFAULT_CANONICAL_REL,
     read_pin,
@@ -437,6 +441,13 @@ def _emit_privilege_artifacts(
 # git change detection
 # ---------------------------------------------------------------------------
 
+def _as_loaded(cai: dict[str, Any]) -> dict[str, Any]:
+    """*cai* as a real pass reloads it after writing (sorted agents, normalized values): a dry run's hub."""
+    with tempfile.TemporaryDirectory() as tmp:
+        materialize_canonical(cai, Path(tmp))
+        return load_canonical(Path(tmp))
+
+
 def _git(root: Path, *args: str) -> tuple[int, str]:
     """Run a git command under ``root``; return (exit_code, stdout)."""
     proc = run_git(root, *args)
@@ -517,6 +528,7 @@ def _reconcile(
     framework: str,
     is_pin: bool,
     committed: bool = True,
+    dropped: list[str] | None = None,
 ) -> tuple[dict[str, Any], list[ConflictRecord], int]:
     """Fold one framework's classified changes into canonical.
 
@@ -527,6 +539,7 @@ def _reconcile(
         is_pin: Whether ``framework`` is the bootstrap pin (authoritative).
         committed: Whether ``framework`` has a committed change in this pass. An uncommitted pin change
             still spreads (the pin wins), but each absorbed field is then logged for review.
+        dropped: The agents the pin removed in this pass (``sync_roster.apply_pin_roster``).
 
     Returns:
         ``(updated_canonical_cai, conflicts, applied_field_count)``.
@@ -543,14 +556,16 @@ def _reconcile(
             cls = fr.classification
 
             if fname == "__agent__":
-                # Roster divergence (agent added/removed on one side). v1 logs
-                # it for review rather than auto-adding/removing agents — a
-                # roster change is higher-blast-radius than a field edit.
-                conflicts.append(ConflictRecord(
-                    framework, slug, fname, cls.value,
-                    resolution="logged (roster change — review; not auto-applied in v1)",
-                    note=fr.notice,
-                ))
+                # The pin's roster is carried by sync_roster.apply_pin_roster before this runs. A peer's never is.
+                if not is_pin:
+                    gone = cls == Classification.CANONICAL_MOVED
+                    if gone and fr.baseline_value is None:
+                        continue  # never in this peer: an agent the pin added, which projection writes
+                    resolution = ("restored (peer removed agent; the pin decides)" if gone
+                                  else "removed (the pin removed this agent)" if slug in (dropped or ())
+                                  else "proposed (peer-only agent; not added, add it in the pin)")
+                    conflicts.append(ConflictRecord(framework, slug, fname, cls.value, resolution=resolution,
+                                                    note=fr.notice))
                 continue
 
             if target is None:
@@ -661,8 +676,9 @@ def _project_and_rebaseline(
     dry_run: bool,
     notices: list[str] | None = None,
     accepted_write_roots: list[str] | None = None,
+    dropped: list[str] | None = None,
 ) -> list[str]:
-    """Project canonical to every framework and rewrite each baseline.
+    """Project canonical to every framework (deleting each one's copy of a ``dropped`` agent) and rebaseline.
 
     Interop notices (e.g. an instruction file with no mergeable fences, left untouched) are
     appended to *notices* so the operator sees every place the projection did not land.
@@ -692,7 +708,11 @@ def _project_and_rebaseline(
     for fw in frameworks:
         agents_dir = framework_agents_dir(root, fw)
         if not dry_run:
-            _backup_before_projection(agents_dir, fw)
+            backup_before_projection(agents_dir, fw)
+        if dropped and agents_dir.is_dir():  # an agent the pin removed leaves every framework (after the backup)
+            gone = remove_dropped_peer_agents(agents_dir, export_to_cai(agents_dir, fw), dropped, dry_run=dry_run)
+            if gone and notices is not None:
+                notices.append(f"[{fw}] removed agent(s) the pin removed: {', '.join(gone)}")
         # preserve_existing (item 3, 2026-09-29): unchanged agents keep their exact bytes
         # (bespoke front matter survives) and an existing instruction file is fence-merged,
         # never replaced by another framework's instructions.
@@ -700,15 +720,17 @@ def _project_and_rebaseline(
                               preserve_existing=True, projection=policy)
         if notices is not None:
             notices.extend(f"[{fw}] {n}" for n in res.notices)
-        # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege
-        # block so a confined/exclusive pinned-sync team stays confined after projection.
-        _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)
         if not dry_run:
             _mark_projected_team(agents_dir, fw, canonical_dir, canonical_cai, res.converted, notices)
         projected.append(fw)
+    # C2: re-emit each framework's OS-boundary artifacts from the team-level privilege block, so a confined
+    # pinned-sync team stays confined. Only once every team is marked: the sibling denies are computed from the
+    # markers present, and a team marked later in the same pass was missed (remediation-log 2026-11-04).
+    for fw in frameworks:
+        agents_dir = framework_agents_dir(root, fw)
+        _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)
         if not dry_run:
-            native_cai = export_to_cai(agents_dir, fw)
-            write_baseline(canonical_dir, fw, native_cai, native_source_dir=str(agents_dir))
+            write_baseline(canonical_dir, fw, export_to_cai(agents_dir, fw), native_source_dir=str(agents_dir))
     return projected
 
 
@@ -733,31 +755,6 @@ def _mark_projected_team(
         notices.extend(outcome.notices)  # switch relaxed / kept (signing_switch)
     if outcome.error and notices is not None:
         notices.append(f"[{framework}] {outcome.error}; NO team marker was written")
-
-
-def _backup_before_projection(agents_dir: Path, framework: str) -> None:
-    """Snapshot a framework's agents dir and its instruction file before projection overwrites.
-
-    Projection writes with ``overwrite=True`` into directories that are commonly gitignored, so
-    without this a bad projection is unrecoverable (incident 2026-09-29). Uses the standard
-    ``.agentteams-backups/<timestamp>/`` store, so ``--restore-backup`` applies.
-    """
-    import os
-
-    from agentteams.backup import BACKUP_DIR_NAME, backup_output_dir, prune_backups
-
-    if not agents_dir.is_dir():
-        return
-    adapter = FRAMEWORKS[framework]()
-    files = [p for p in agents_dir.rglob("*")
-             if p.is_file() and BACKUP_DIR_NAME not in p.relative_to(agents_dir).parts]
-    skills = adapter.skills_dir(agents_dir)
-    if adapter.has_skill_concept() and skills.is_dir():
-        files += [p for p in skills.rglob("*") if p.is_file()]  # projection rewrites skills too
-    rels = [os.path.relpath(p, agents_dir) for p in files]
-    rels.append(adapter.finalize_output_path("../copilot-instructions.md", "instructions"))
-    backup_output_dir(agents_dir, files_to_backup=rels, reason="pre-sync-projection", framework=framework)
-    prune_backups(agents_dir)  # keep the default most-recent N; every --sync would add one
 
 
 def _append_conflict_log(root: Path, records: list[ConflictRecord]) -> None:
@@ -809,7 +806,7 @@ def sync_init(
         ValueError: If ``pin`` is unregistered or absent from ``frameworks``,
             if two frameworks in ``frameworks`` resolve to the same
             physical agents directory (see :func:`_reject_directory_collisions`),
-            or if the pin's instruction file is unsafe to sync from
+            or if the pin has no agents directory or its instruction file is unsafe to sync from
             (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
@@ -822,6 +819,7 @@ def sync_init(
 
     canonical_dir = root / canonical_rel
     pin_dir = framework_agents_dir(root, pin)
+    refuse_missing_pin(pin_dir, pin)
     seed = export_to_cai(pin_dir, pin)
     refuse_unsafe_pin_instructions(root, {"pinned_framework": pin, "frameworks": fws}, seed)
     # C2: capture the pin's brief privilege posture into the team-level canonical block so it
@@ -830,13 +828,19 @@ def sync_init(
     if priv:
         _check_projected_write_roots(root, priv, fws, accepted_write_roots)  # before any write
         seed["privilege"] = priv
+    if (canonical_dir / "agents").is_dir():
+        refuse_empty_pin(load_canonical(canonical_dir), seed, pin_dir)  # a re-init from an empty or wrong pin
     materialize_canonical(seed, canonical_dir, dry_run=dry_run)
-
     notices: list[str] = []
     projected = _project_and_rebaseline(
         root, canonical_dir, seed, fws, dry_run=dry_run, notices=notices,
         accepted_write_roots=accepted_write_roots,
     )
+    # A re-init keeps no hub agent the pin lacks, but deletes no framework's copy (the earlier pin may differ).
+    # After the projection, so a refusal there leaves the hub's agents alone.
+    pruned = prune_hub_agents(canonical_dir, seed, dry_run=dry_run)
+    if pruned:
+        notices.append(f"hub: removed agent(s) the pin lacks: {', '.join(pruned)} (other frameworks keep theirs)")
     if not dry_run:
         save_pin(
             root,
@@ -877,7 +881,7 @@ def run_sync(
         ValueError: If the project is not pinned (run :func:`sync_init` first),
             if two frameworks in the pinned sync set resolve to the same
             physical agents directory (see :func:`_reject_directory_collisions`),
-            or if the pin's instruction file is unsafe to sync from
+            or if the pin has no agents directory or its instruction file is unsafe to sync from
             (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
@@ -896,6 +900,7 @@ def run_sync(
     if not changed:
         return SyncResult(note="no framework changed since last sync")
 
+    refuse_missing_pin(framework_agents_dir(root, pin), pin)
     refuse_unsafe_pin_instructions(root, pin_doc, load_canonical(canonical_dir))
 
     # Pin first (authoritative), then peers. Every framework, not only the changed ones: projection overwrites them
@@ -904,25 +909,38 @@ def run_sync(
 
     all_conflicts: list[ConflictRecord] = []
     applied_total = 0
-    for fw in ordered:
-        agents_dir = framework_agents_dir(root, fw)
-        if fw != pin and not agents_dir.is_dir():
-            continue
-        native_cai = export_to_cai(agents_dir, fw)
-        canonical_cai = load_canonical(canonical_dir)
+    dropped: list[str] = []  # the agents the pin removed (sync_roster), set while the pin is reconciled
+    # Exported once up front: the loop writes only the hub, and the pin's roster needs the peers' agents.
+    exports = {fw: export_to_cai(framework_agents_dir(root, fw), fw) for fw in ordered
+               if fw == pin or framework_agents_dir(root, fw).is_dir()}
+    canonical_cai: dict[str, Any] | None = None
+    for fw in (f for f in ordered if f in exports):
+        agents_dir, native_cai = framework_agents_dir(root, fw), exports[fw]
+        # A dry run writes no hub, so it carries the hub in memory (round-tripped like the real write, _as_loaded):
+        # reloading would classify the peers, and project, against the hub before the pin's changes.
+        canonical_cai = load_canonical(canonical_dir) if canonical_cai is None or not dry_run else canonical_cai
         baseline = load_baseline(canonical_dir, fw)
+        if fw == pin:  # the pin's added and removed agents (sync_roster), before its fields are classified
+            peers = [f for f in ordered if f != pin]  # "deleted everywhere" needs every peer present (review)
+            peer_slugs = ({a.get("slug") for f in peers for a in exports[f].get("agents") or []}
+                          if peers and all(exports.get(f, {}).get("agents") for f in peers) else None)
+            canonical_cai, roster, dropped = apply_pin_roster(canonical_cai, native_cai, baseline, root=root,
+                                                              pin_agents_dir=agents_dir, peer_slugs=peer_slugs)
+            all_conflicts += [ConflictRecord(fw, s, "__agent__", "roster", resolution=r, note=n) for s, r, n in roster]
+            prune_hub_agents(canonical_dir, canonical_cai, dry_run=dry_run)
         report = classify_sync(
             canonical_cai, native_cai, baseline,
             canonical_dir=str(canonical_dir), native_dir=str(agents_dir), framework=fw,
         )
         canonical_cai, conflicts, applied = _reconcile(
-            canonical_cai, report, framework=fw, is_pin=(fw == pin), committed=(fw in changed),
+            canonical_cai, report, framework=fw, is_pin=(fw == pin), committed=(fw in changed), dropped=dropped,
         )
         all_conflicts.extend(conflicts)
         applied_total += applied
         materialize_canonical(canonical_cai, canonical_dir, dry_run=dry_run)
+        canonical_cai = _as_loaded(canonical_cai) if dry_run else canonical_cai
 
-    final_canonical = load_canonical(canonical_dir)
+    final_canonical = canonical_cai if dry_run and canonical_cai is not None else load_canonical(canonical_dir)
     # C2: refresh the team-level privilege posture from the (current) brief so a changed
     # privilege_profile propagates, and re-persist it so team.cai.json stays authoritative.
     priv = _read_brief_privilege(root)
@@ -934,7 +952,7 @@ def run_sync(
     refresh_hub_for_projection(root, pin_doc, final_canonical, canonical_dir, dry_run=dry_run, notices=notices)
     projected = _project_and_rebaseline(
         root, canonical_dir, final_canonical, fws, dry_run=dry_run, notices=notices,
-        accepted_write_roots=accepted_write_roots,
+        accepted_write_roots=accepted_write_roots, dropped=dropped,
     )
     if not dry_run:
         _append_conflict_log(root, all_conflicts)
