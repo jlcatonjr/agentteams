@@ -210,7 +210,9 @@ def _get_healthz(path: Path) -> bytes:
         while chunk := c.recv(65536):
             data += chunk
         return bytes(data)
-    except ConnectionResetError:
+    except (BrokenPipeError, ConnectionResetError):
+        # A refused connection is closed in verify_request (after on_deny), which can race the client: the close
+        # surfaces as a reset on recv, or as a broken pipe on sendall when it lands first (macOS CI, PR #381).
         return b""
     finally:
         c.close()

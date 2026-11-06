@@ -35,7 +35,8 @@ There is no separate lint or formatting command. Match the style of the surround
 |---|---|---|
 | Tests (Ubuntu and macOS, Python 3.11 and 3.12) | `ci.yml`, job `test` | the environment check fails, any test fails, the wheel is missing its schemas, `agentteams.1` is out of date, or a durable file cites a gitignored `tmp/` path |
 | Template lineage | `ci.yml`, job `template-lineage` | a recorded history of template sections disagrees with Git; you rarely touch this, so ask on the pull request if it fails |
-| macOS Seatbelt | `ci.yml`, job `macos-seatbelt` | advisory: shown, but does not block |
+| macOS Seatbelt | `ci.yml`, job `macos-seatbelt` | the goose Seatbelt profile or the macOS launcher gate fails under the real `sandbox-exec`, or a live WASM test fails or skips outside its allowlist |
+| Live WASM on Linux | `ci.yml`, job `wasm-live` | a live WASM test nested under bubblewrap fails, or skips outside its allowlist |
 | Docs build | `ci.yml`, job `docs-build` | the strict build warns, a page check fails, a cited URL no longer resolves, or a published URL disappears |
 | Changelog | `changelog-link.yml` | `agentteams/**/*.py` changed without a `CHANGELOG.md` entry |
 | vulnscan Linux containers | `vulnscan-linux-containers.yml` | only when vulnscan code, its images or `pyproject.toml` change: the tools and agent container images fail to build or their self-tests fail on Linux Docker |

@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (live WASM CI jobs now block merges; WASM follow-up rows wasm-live-job-required, macos-seatbelt-job-required)
+
+- **`wasm-live` (Linux, bwrap) and `macos-seatbelt` are no longer advisory.** Both drop `continue-on-error`, so a
+  failing live WASM test, an unexpected skip, or a goose Seatbelt failure now fails the CI run. Both were green on
+  #367, #381 and the last two `main` runs. Marking them required in branch protection is a separate repository setting.
+  Supersedes the F2 entry's "advisory" wording below.
+- **Test fix:** `test_the_unix_listener_admits_only_the_allowed_uid` raced on macOS. When the gateway closed a refused
+  connection before the client's write, `sendall` raised `BrokenPipeError`. That case is now treated as a refusal,
+  like `ConnectionResetError`.
+
 ### feat (opt-in integration-branch model, to cut GitHub Actions cost)
 
 - **New brief block `git_workflow`** (`branch_model`: `"trunk"` default | `"integration"`; `integration_branch`,
