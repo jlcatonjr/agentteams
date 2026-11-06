@@ -531,6 +531,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   complete (ssh exit 255, a proxy 502) had all its previous findings counted as fixed. Those findings are carried on
   a line of their own ("Previous findings on targets this run did not scan"). Without a scan record set (callers
   that pass none) the counts are unchanged.
+- **A host back after an unscanned run is not all-new (the mirror case).** When the previous run has no complete
+  scan record for a target, the daily run compares that target with the newest earlier run that has one
+  (`effectiveness.fill_baseline`, up to 7 runs back), for the NEW marks, the heartbeat's `new` and the
+  effectiveness counts alike, and each substitution gets a note. A run's own feed errors override a scan record
+  left behind by an earlier run that day, and a target no run in range scanned keeps the previous run's partial
+  findings. "Fixed since the previous run" can therefore cover more than one day for such a target (the note says
+  so). On the 2026-11-05 → 11-06 runs this turns 42 "new" (two hosts unreachable on 11-05) into the 1 that is.
 - **Same-day verification (V1).** New command `verify` (module `agentteams.vulnscan.verify`) and job
   `io.agentteams.vulnscan-verify`, which `vulnscan-remediate-auto.sh --install` loads (17:15 and 18:45,
   `VULNSCAN_VERIFY_TIMES`). Its entry point is `vulnscan-daily-wrapped.sh --verify`: the install guard, the wrapper

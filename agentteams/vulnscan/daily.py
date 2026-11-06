@@ -419,11 +419,11 @@ def catch_up(cfg: dict) -> tuple[Report, int, Path] | None:
     return run_daily(cfg)
 
 
-def _previous_summary(state: Path, today: str) -> tuple[Report | None, list[str]]:
-    """Return the newest readable earlier summary and a note for each unreadable one skipped.
+def _previous_summary(state: Path, today: str) -> tuple[Report | None, list[str], Path | None]:
+    """Return the newest readable earlier summary, a note for each unreadable one skipped, and its run directory.
 
     Returns:
-        (report or None when no earlier run is readable, notes for the summary).
+        (report or None when no earlier run is readable, notes for the summary, its run directory or None).
     """
     notes: list[str] = []
     for run in reversed([d for d in paths.run_dirs(state) if d.name < today]):
@@ -438,10 +438,10 @@ def _previous_summary(state: Path, today: str) -> tuple[Report | None, list[str]
             continue
         if notes:
             notes.append(f"NEW marks compare with the {run.name} run")
-        return rep, notes
+        return rep, notes, run
     if notes:
         notes.append("no earlier summary is readable, so every finding is marked NEW")
-    return None, notes
+    return None, notes, None
 
 
 def _git(repo: Path, *args: str, timeout: int = _GIT_TIMEOUT, push: bool = False) -> subprocess.CompletedProcess:
@@ -899,7 +899,10 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     (exit 3, unless it found compromise indicators, exit 4), the reason goes to stderr and the
     notification is still attempted.
     """
-    previous, notes = _previous_summary(state, today)
+    previous, notes, previous_dir = _previous_summary(state, today)
+    if previous is not None and previous_dir is not None:   # a target the previous run missed: its last scan
+        previous, filled = effectiveness.fill_baseline(previous, previous_dir, {f.target for f in total.findings})
+        notes += filled
     new = new_finding_keys(total, previous)
     total.apply_unscored(str(cfg.get("unscored_as", "high")))
     known_report.apply(total)   # K1: signed known entries leave the exit code, never the report (void => HIGH integrity)

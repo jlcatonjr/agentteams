@@ -132,5 +132,5 @@ def test_previous_summary_reads_only_summary_json(tmp_path: Path, monkeypatch: p
     old.mkdir(parents=True)
     (old / "summary.json").write_text(json.dumps(Report(target="daily").to_dict()))
     (old / "summary.235959.json").write_text("{not json")   # an archive is never read
-    rep, notes = daily._previous_summary(paths.state_dir(), "2026-10-29")
-    assert rep is not None and notes == []
+    rep, notes, run = daily._previous_summary(paths.state_dir(), "2026-10-29")
+    assert rep is not None and notes == [] and run == old

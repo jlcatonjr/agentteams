@@ -594,6 +594,66 @@ def load_run(run_dir: Path) -> Report:
         raise ValueError(f"{run_dir / 'summary.json'} is not a report: {type(exc).__name__}: {exc}") from exc
 
 
+BASELINE_LOOKBACK = 7   # earlier runs searched for a target the previous run did not scan
+
+
+def fill_baseline(previous: Report, previous_dir: Path, targets: Iterable[str], *,
+                  lookback: int = BASELINE_LOOKBACK) -> tuple[Report, list[str]]:
+    """Return ``previous`` with each target it did not scan taken from the newest earlier run that did.
+
+    The mirror of leaving an unscanned target out of this run's counts: a host the previous run could not reach
+    (an audit that did not complete) has no findings there, so without this every finding it has today would read
+    as new. Each such target's findings come instead from the newest earlier run (up to ``lookback`` runs back)
+    with a complete scan record for it (a run's own feed errors naming the target override a scan record left
+    behind). A target no run in that range scanned keeps the previous run's partial findings, with a note when it
+    had any; each substitution gets a note too.
+
+    Args:
+        previous: The previous run's report.
+        previous_dir: Its run directory.
+        targets: This run's finding targets.
+        lookback: How many earlier runs to search.
+
+    Returns:
+        (the baseline report, notes for the summary). ``previous`` itself is not changed.
+    """
+    need = set(targets) - _covered(previous_dir, previous, targets)
+    if not need:
+        return previous, []
+    base = Report(target=previous.target)
+    base.findings = [f for f in previous.findings if f.target not in need]
+    notes: list[str] = []
+    earlier = [d for d in paths.run_dirs(previous_dir.parent) if d.name < previous_dir.name][-lookback:]
+    for run in reversed(earlier):
+        if not need:
+            break
+        try:
+            rep = load_run(run)
+        except (OSError, ValueError) as exc:
+            notes.append(f"the {run.name} run is unreadable ({type(exc).__name__}); not used as a baseline")
+            continue
+        got = _covered(run, rep, need)
+        if got:
+            base.findings += [f for f in rep.findings if f.target in got]
+            notes += [f"{t}: the {previous_dir.name} run did not scan it; compared with the {run.name} run"
+                      for t in sorted(got)]
+            need -= got
+    # No earlier scan either: keep whatever the previous run did record for it (partial beats nothing)
+    base.findings += [f for f in previous.findings if f.target in need]
+    partial = {f.target for f in previous.findings} & need
+    notes += [f"{t}: no complete scan in the last {lookback} runs; compared with the {previous_dir.name} run's "
+              "partial findings" for t in sorted(partial)]
+    return base, notes
+
+
+def _covered(run_dir: Path, rep: Report, targets: Iterable[str]) -> set[str]:
+    """Return the ``targets`` a run covered: a scan record (:func:`scanned_targets`), and not named by the run's own
+    feed errors (``"<target>: audit did not complete …"``), so a record an earlier run of that day left behind cannot
+    stand in for a scan the summary itself says failed."""
+    failed = {e.split(":", 1)[0].strip() for e in rep.feed_errors if ":" in e}
+    return assessed(targets, scanned_targets(run_dir)) - failed
+
+
 def outcome_rows(cmp: Comparison) -> list[dict[str, Any]]:
     """Return one plain row per baseline finding (status, note and the finding's identity), for CSV or JSON.
 

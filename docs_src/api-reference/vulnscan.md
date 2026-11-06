@@ -87,6 +87,9 @@ section and the agent phase use that record instead of probing again, and `summa
 2. **Summarise:** write `summary.md`, `summary.json` and the heartbeat (atomically); send `run-done`
    when the run exits non-zero or finds new findings (`daily._finish`). NEW marks compare with the
    newest readable earlier `summary.json`; an unreadable one is skipped with a note in `summary.md`.
+   A target that run has no complete scan record for is compared with the newest earlier run (up to 7
+   back) that has one ([`effectiveness.fill_baseline`](#fill_baselineprevious-previous_dir-targets-lookback7)),
+   so a host back after an unreachable day does not read as all-new.
    A write that fails (disk full) makes the run exit 3 (4 on compromise indicators), and `run-done`
    is still sent. `summary.md` ends with a **Remediation effectiveness** section
    (`effectiveness.section`, counts only, since the summary is published): findings fixed and new since
@@ -3508,7 +3511,17 @@ only, and passed through `publish.rewrite_paths`: no repository, PR, host or pat
 daily run passes `scanned_targets(run_dir)`) and a previous run, it adds one row per outcome of `compare`: the
 previous run's findings remediated, partly remediated, open, moved (not remediated), present elsewhere (not
 remediated) and not assessed. Without it
-those rows are left out, so an unscanned target never reads as remediated.
+those rows are left out, so an unscanned target never reads as remediated. With `scanned`, fixed, new and net
+also count only targets this run covered, on both sides; the previous run's findings on any other target are
+carried on a row of their own ("Previous findings on targets this run did not scan").
+
+#### `fill_baseline(previous, previous_dir, targets, *, lookback=7)`
+
+Returns `(baseline, notes)`: `previous` with each of `targets` it has no complete scan record for (or that its own
+feed errors name) replaced by that target's findings from the newest earlier run, up to `lookback` back, that
+scanned it. A target no run in range scanned keeps the previous run's partial findings. `previous` is not changed;
+each substitution gets a note for the summary. The daily run uses the baseline for the NEW marks, the heartbeat's
+`new` and `section`.
 
 #### `compare(baseline, later, *, scanned=None, aliases=None, path_aliases=None)`
 
