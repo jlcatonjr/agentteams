@@ -12,7 +12,7 @@ not start with ``vulnscan/`` (the executor's own PRs are handled by ``close-supe
 
 Names compare in :func:`normalize`'s form (lower case, runs of ``_``, ``-``, ``.`` as one ``-``: PEP 503, which also
 leaves npm names comparable). Staging does not wait on gh: a failed listing stages as before (the change is
-checked again at ``open-pr``). ``open-pr`` fails closed: no listing, no PR.
+checked again at ``open-pr``; :func:`.writer_prs.staging_claims`). ``open-pr`` fails closed: no listing, no PR.
 
 Imports only the standard library and :mod:`.executor_env`.
 """
@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from collections.abc import Callable
 from typing import Any
 
 from agentteams.vulnscan.executor_env import ExecError, gh_cwd, gh_push_env
@@ -146,21 +145,33 @@ def duplicate_detail(left: dict[str, list[int]]) -> str:
             "not duplicated")
 
 
-def staging_claims(target_repo: Callable[[], str]) -> dict[str, list[int]]:
-    """Return :func:`claimed` for staging: on any failure (gh, or an origin gh cannot target) ``{}``, never a refusal.
+def owner_prs(prs: list[dict[str, Any]], packages: list[str]) -> list[int]:
+    """Return the open PRs that may be the repository owner's own fix for ``packages`` (the ``own-pr`` lapse).
 
-    Staging does not wait on gh; ``open-pr`` lists the PRs again and fails closed (:func:`refuse_duplicate`).
+    Unlike :func:`packages_of` any author counts (an orchestrator's PR is the operator's), because finding one only
+    keeps the executor deferring, never lets it act. A PR counts when it is not the executor's (``vulnscan/*``), not
+    from a fork, and its title or head branch names one of ``packages`` as a whole word (:func:`normalize`'s form).
 
     Args:
-        target_repo: Returns ``HOST/OWNER/REPO`` (``executor._origin_repo``); it may raise :class:`ExecError`.
+        prs: :func:`list_open`'s result.
+        packages: The package names the staged change updates.
 
     Returns:
-        ``{normalized package: [PR numbers]}``.
+        PR numbers, ascending.
     """
-    try:
-        return claimed(list_open(target_repo()))
-    except ExecError:   # not blocking: the same check runs again, fail-closed, at open-pr
-        return {}
+    names = {normalize(p) for p in packages if isinstance(p, str) and p}
+    out: set[int] = set()
+    for pr in prs:
+        num, branch, title = pr.get("number"), pr.get("headRefName"), pr.get("title")
+        if not isinstance(num, int) or isinstance(num, bool) or pr.get("isCrossRepository") is not False:
+            continue
+        branch = branch if isinstance(branch, str) else ""
+        if branch.startswith("vulnscan/"):
+            continue
+        text = normalize(f"{title if isinstance(title, str) else ''} {branch}")
+        if any(re.search(rf"(?<![a-z0-9@]){re.escape(n)}(?![a-z0-9])", text) for n in names):
+            out.add(num)
+    return sorted(out)
 
 
 def left_to_prs(changes: list[Any], claims: dict[str, list[int]]) -> dict[str, list[int]]:
@@ -168,12 +179,13 @@ def left_to_prs(changes: list[Any], claims: dict[str, list[int]]) -> dict[str, l
 
     Args:
         changes: :attr:`.fix.FixResult.changes`.
-        claims: :func:`claimed`'s map the fix was given.
+        claims: :func:`claimed`'s map the fix was given (a :class:`.writer_prs.Claims` adds its ``held`` PRs).
 
     Returns:
         The map, by each row's own package name.
     """
-    return {c.name: claims.get(normalize(c.name), []) for c in changes if c.action == "pr-held"}
+    held = getattr(claims, "held", {})   # writer_prs.Claims: the writer PRs each row was held for (D6)
+    return {c.name: claims.get(normalize(c.name)) or held.get(c.name, []) for c in changes if c.action == "pr-held"}
 
 
 def refuse_duplicate(target_repo: str, packages: list[str]) -> str:

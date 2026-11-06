@@ -1,0 +1,8 @@
+{
+  "patch_id": "05322dbbea6065bdf6ea007dcef9b9c656dc624f",
+  "commit": "49784974c73a2b726106c91434399c65ef0fd78f",
+  "subject": "fix(vulnscan): review fixes for vfr-b B2/B1b (@security 1-4, @code-hygiene a, b, d-h)",
+  "impact": "8 symbols added, 1 symbols removed, 4 symbols changed",
+  "note": "review fixes: lane_fields/open_pr_url (executor_pr), read_staged/origin_repo public (executor), read_json_object (executor_env), handoff_lapse ledger clock + gate/log/due/lapse_detail; lapsed/pending_detail/packet_ask signatures changed (module new in this branch)",
+  "recorded_at": "2026-11-02T22:45:08Z"
+}

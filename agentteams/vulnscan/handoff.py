@@ -16,11 +16,14 @@ container never mounts.
 A *home* is the checkout itself or one of its linked worktrees under ``<repo>.worktrees/<name>/`` (where an
 operator can render the repository's goose team without touching the checkout). Every home's handoff directory is
 read (:func:`handoff_dirs`). agentteams ships the reading side only: writing packets and issuing the directive is
-operator tooling, outside this package.
+operator tooling, outside this package. ``handoff verify-directive`` gives that tooling a structured verdict on the one
+directive it issued (:func:`verify_directive`), so expired history rows no longer read as a failed ledger.
 
 A verdict applies to a staged fix by its **content digest**, the suffix of the branch name
 ``vulnscan/<YYYYMMDD>-<digest>``: a fix re-staged on a later day is the same change under a new branch name. The
-newest row for a digest wins, so a later ``reject`` or ``defer`` withdraws an earlier approval.
+newest row for a digest wins, so a later ``reject`` or ``defer`` withdraws an earlier approval. An ``own-pr`` verdict
+lapses after seven days without an owner PR (:mod:`.handoff_lapse`, OD10); until then each record names the lapse date
+and the request the next packet carries.
 
 Delivery is ``handoff`` when the project's brief says ``vulnerability_scanning.delivery: handoff``, or for every
 repository when the operator's ``vulnscan.json`` sets ``"handoff_required": true`` (:func:`required`).
@@ -88,6 +91,11 @@ class RepoHandoff:
     launcher: str = ""               # the sandbox/confine-run.sh the handoff's goose session would run under, or ""
     launcher_state: str = ""         # agentteams.launcher_lineage state, or "unknown" (lineage unreadable)
     launcher_detail: str = ""
+    lapses: str = ""                 # own-pr: the date it lapses (handoff_lapse, OD10), or ""
+    ask: str = ""                    # own-pr: the request the next handoff packet carries (handoff_lapse.packet_ask)
+    lapsed: bool = False             # own-pr: its LAPSE_DAYS have run (open-pr opens the PR unless owner_prs)
+    owner_prs: list[int] = field(default_factory=list)   # own-pr, due: the open owner PRs that keep it deferring
+    needs_you: str = ""              # reject, stale and unanswered: the operator's line (handoff_stale, C4), or ""
 
     @property
     def launcher_warning(self) -> str:
@@ -116,7 +124,9 @@ class RepoHandoff:
         return {"repo": self.repo, "required": self.required, "state": self.state, "staged_branch": self.staged_branch,
                 "verdict": self.verdict, "verdict_handoff": self.verdict_handoff, "homes": self.homes,
                 "pending": self.pending, "problems": self.problems, "launcher": self.launcher,
-                "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail}
+                "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail,
+                "lapses": self.lapses, "lapsed": self.lapsed, "ask": self.ask, "owner_prs": self.owner_prs,
+                "needs_you": self.needs_you}
 
 
 def digest_of(branch: str) -> str:
@@ -335,11 +345,7 @@ def staged_branch(repo: Path) -> str:
     """
     from agentteams.vulnscan import executor   # lazy: executor imports this module
 
-    try:
-        data = json.loads(executor.staged_file(repo).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ""
-    branch = data.get("branch") if isinstance(data, dict) else None
+    branch = executor.read_staged(repo).get("branch")
     return branch if isinstance(branch, str) and digest_of(branch) else ""
 
 
@@ -425,8 +431,29 @@ def status(cfg: dict[str, Any] | None, repos: list[Path], *, fallback: Path | No
             found, rec.problems = latest_verdict(repo, rec.staged_branch)
             if found is not None:
                 rec.verdict, rec.verdict_handoff = found.verdict, found.handoff_id
+            if rec.staged_branch and rec.required:   # the lapse applies only where open-pr waits for a verdict
+                _lapse_fields(rec, repo)
         out.append(rec)
     return out
+
+
+def _lapse_fields(rec: RepoHandoff, repo: Path) -> None:
+    """Fill ``rec``'s own-pr lapse fields and its stale-reject line; start or stop both clocks at this sight of the
+    verdict (B1b, OD10; C4)."""
+    from agentteams.vulnscan import handoff_lapse, handoff_stale, ledger   # lazy: they import this module
+
+    try:
+        with ledger.locked():
+            clock = handoff_lapse.clock(repo, rec.staged_branch)
+            rec.needs_you = handoff_stale.needs_you(repo, handoff_stale.clock(repo, rec.staged_branch))
+    except (OSError, ValueError) as exc:   # no lock, or an untrusted ledger: show nothing rather than guess
+        rec.problems.append(f"handoff clocks unreadable: {exc}")
+        return
+    rec.lapses = clock["lapses"] if clock else ""
+    rec.ask = handoff_lapse.packet_ask(repo, rec.staged_branch, clock)
+    rec.lapsed = handoff_lapse.due(clock)
+    if rec.lapsed:
+        rec.owner_prs = handoff_lapse.owner_pr(repo) or []
 
 
 def repos_with_staged_fixes() -> list[Path]:
@@ -460,45 +487,127 @@ def markdown(records: list[RepoHandoff]) -> str:
             bits.append(f"staged {r.staged_branch}")
         if r.pending:
             bits.append(f"{len(r.pending)} packet(s) awaiting a verdict")
+        if r.lapses and r.owner_prs:
+            bits.append(f"own-pr kept: owner PR {', '.join(f'#{n}' for n in r.owner_prs)} open (lapse date {r.lapses})")
+        elif r.lapses:
+            bits.append(f"own-pr {'lapsed' if r.lapsed else 'lapses'} {r.lapses}"
+                        + (" (the executor opens its PR unless an owner PR updates the packages)" if r.lapsed else ""))
         if r.launcher_state and r.launcher_state != "current":
             bits.append(f"launcher {r.launcher_state}")
         lines.append(f"- {Path(r.repo).name} ({mode}): " + "; ".join(bits))
+        if r.needs_you:
+            lines.append(f"  - **Needs you:** {r.needs_you}")
     lines.append("- details: `python -m agentteams.vulnscan handoff status`")
     return "\n".join(lines) + "\n"
 
 
-# ---------------------------------------------------------------- CLI: handoff status
+# ---------------------------------------------------------------- CLI: handoff status / verify-directive
 
 COMMANDS = ("handoff",)
+#: The exact management-directive scope a handoff's review directive carries.
+DIRECTIVE_SCOPE_PREFIX = "review-vulnscan-handoff-"
 
 
 def register(sub: Any) -> None:
-    """Add ``handoff status [--repo PATH ...] [--json]`` to the vulnscan parser.
+    """Add ``handoff status``, ``handoff verify-directive`` and ``handoff answer`` (C4) to the vulnscan parser.
 
     Args:
         sub: The parser's subparsers action.
     """
     sp = sub.add_parser("handoff", help="remediation handoffs to each repository's own orchestrator")
-    sp.add_argument("action", choices=("status",))
+    sp.add_argument("action", choices=("status", "verify-directive", "answer"))
     sp.add_argument("--repo", action="append", default=[], type=Path,
-                    help="a repository (default: every repository with a staged fix)")
-    sp.add_argument("--json", action="store_true", help="one JSON object per repository")
+                    help="status: a repository (default: every repository with a staged fix)")
+    sp.add_argument("--json", action="store_true", help="JSON output (status: one object per repository)")
+    sp.add_argument("--team-dir", type=Path, default=None,
+                    help="verify-directive: the managed team directory holding the directive ledger")
+    sp.add_argument("--handoff-id", default="",
+                    help=f"verify-directive: the handoff id (scope {DIRECTIVE_SCOPE_PREFIX}<id>)")
+    sp.add_argument("--directive-id", default="",
+                    help="verify-directive: the directive id just issued (omit on a resume)")
+    sp.add_argument("--answer", default="", help="answer: your answer to a stale reject (keep-rejected, ask-again)")
+    sp.add_argument("--note", default="", help="answer: a note kept with it")
+
+
+def verify_directive(team_dir: Path, handoff_id: str, directive_id: str = "") -> dict[str, Any]:
+    """Return the structured verdict for one handoff's review directive.
+
+    Wraps :func:`agentteams.cli.management_directives.verify_handoff_directive` with the handoff's
+    exact scope (``review-vulnscan-handoff-<id>``): verified only when that one row is valid, the
+    ledger's chain is intact, and every other row is valid or merely expired. The operator's
+    handoff tooling branches on the returned ``verified``/``reason`` (exit code of the CLI), never
+    on printed text. The directive is reporting-only: verifying it authorizes nothing.
+
+    Args:
+        team_dir: The managed team directory (holds ``references/management-directives.log.csv``
+            and the authorized-managers roster).
+        handoff_id: The handoff id.
+        directive_id: The directive id just issued, or "" when it is not known.
+
+    Returns:
+        The verdict as a dict (see ``HandoffDirectiveVerdict.to_dict``).
+
+    Raises:
+        ValueError: ``handoff_id`` is not a handoff id.
+    """
+    from agentteams.cli import management_directives as mgmt
+
+    if not _HANDOFF_ID.match(handoff_id or ""):
+        raise ValueError(f"not a handoff id: {handoff_id!r}")
+    verdict = mgmt.verify_handoff_directive(
+        team_dir, task_scope=DIRECTIVE_SCOPE_PREFIX + handoff_id, directive_id=directive_id,
+    )
+    return verdict.to_dict()
+
+
+def _dispatch_verify_directive(args: argparse.Namespace) -> int:
+    """Run ``handoff verify-directive``: one status line (or JSON) and an exit code.
+
+    Args:
+        args: Parsed arguments (``team_dir``, ``handoff_id``, ``directive_id``, ``json``).
+
+    Returns:
+        0 verified, 1 unverified, 2 bad arguments.
+    """
+    if args.team_dir is None:
+        print("verify-directive needs --team-dir", file=sys.stderr)
+        return 2
+    try:
+        verdict = verify_directive(Path(args.team_dir).expanduser(), args.handoff_id, args.directive_id)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(verdict))
+    elif verdict["verified"]:
+        print(verdict["detail"])
+    else:
+        print(f"unverified ({verdict['reason']}): {verdict['detail']}")
+    return 0 if verdict["verified"] else 1
 
 
 def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -> int:
-    """Run ``handoff status``.
+    """Run ``handoff status`` (or ``handoff verify-directive``, :func:`_dispatch_verify_directive`; or ``handoff
+    answer``, :func:`.handoff_stale.cmd_answer`).
 
-    Each repository shows its delivery (handoff or direct), the staged branch, the newest verdict for that fix
-    (``approved`` means ``open-pr`` may push it) and the packets no verdict answers yet.
+    ``status``: each repository shows its delivery (handoff or direct), the staged branch, the newest verdict for
+    that fix (``approved`` means ``open-pr`` may push it) and the packets no verdict answers yet.
+    ``verify-directive`` never loads the config.
 
     Args:
-        args: Parsed arguments (``repo``, ``json``).
+        args: Parsed arguments (``action``, ``json``; ``repo`` for status; ``team_dir``, ``handoff_id`` and
+            ``directive_id`` for verify-directive).
         load_cfg: Loads the daily config.
 
     Returns:
-        0 printed, 2 an unusable config.
+        0 printed, 2 an unusable config (verify-directive: 0 verified, 1 unverified, 2 bad arguments).
     """
-    from agentteams.vulnscan import paths
+    from agentteams.vulnscan import handoff_stale, paths
+
+    if args.action == "verify-directive":
+        return _dispatch_verify_directive(args)
+    if args.action == "answer":
+        return handoff_stale.cmd_answer(args)
 
     try:
         cfg = load_cfg() if paths.config_file().exists() else {}
@@ -522,6 +631,13 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
             print(f"  verdict: {rec.verdict} (handoff {rec.verdict_handoff})")
         if rec.pending:
             print(f"  packets awaiting a verdict: {', '.join(rec.pending)}")
+        if rec.lapses:
+            print(f"  own-pr lapses: {rec.lapses}")
+            if rec.owner_prs:
+                print(f"  owner PR(s) keeping it deferred: {', '.join(f'#{n}' for n in rec.owner_prs)}")
+            print(f"  ask (for the next handoff packet): {rec.ask}")
+        if rec.needs_you:
+            print(f"  NEEDS YOU: {rec.needs_you}")
         print(f"  launcher: {rec.launcher or '—'} ({rec.launcher_state}: {rec.launcher_detail})")
         if rec.launcher_warning:
             print(f"  warning: {rec.launcher_warning}")

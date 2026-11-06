@@ -5,7 +5,9 @@ upgrade stays ``major-held`` under ``stage-fix``. Under ``stage-major`` (a grant
 :func:`agentteams.vulnscan.fix.fix_path` takes such a package when it is a **direct** dependency: its spec in
 ``package.json`` (``dependencies`` or ``devDependencies``, wherever it already is) becomes ``^<fixed version>`` and
 npm re-resolves the lockfile with ``npm install --package-lock-only --ignore-scripts``. A package that is only a
-transitive dependency stays held (its parent must move first, a person's change), and npm workspaces stay refused.
+transitive dependency is never raised itself: when a raised direct parent installed it and the re-resolved lockfile
+no longer holds the vulnerable copy, the plan reports it ``moves-with`` that parent (:data:`.fix.MOVES_WITH`, vfr-b.B3);
+otherwise it stays held (its parent must move first, a person's change). npm workspaces stay refused.
 
 This module holds the pure text side: a formatting-preserving spec rewrite (:func:`rewrite_specs`) and the
 executor's check of the result (:func:`check_package_json_edit`, called by ``executor.validate_diff``). It never

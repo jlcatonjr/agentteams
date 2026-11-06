@@ -175,6 +175,37 @@ _NO_FEED = "no upstream security-release feed; judged on end-of-life and latest 
 _CACHE: dict[str, object] = {}
 
 
+def patch_release_date(kind: str, version: str) -> _dt.date | None:
+    """Return the release date of ``version`` when it is its release line's latest patch, else None.
+
+    endoflife.date dates only each line's latest release, so an older patch (or a line, feed or date it does not
+    give) has no known date: callers applying S-10's release cooldown treat None as "not old enough".
+
+    Args:
+        kind: A :data:`PRODUCTS` key.
+        version: Upstream version (``22.12.0``).
+
+    Returns:
+        The date, or None.
+
+    Raises:
+        KeyError: ``kind`` is not in :data:`PRODUCTS`.
+    """
+    product = PRODUCTS[kind]
+    try:
+        cycles = _eol_cycles(product.eol)
+    except _http.FeedError:
+        return None
+    line = cycle_of(kind, version)
+    for c in cycles:
+        if c["cycle"] == line and c.get("latest") == version:
+            try:
+                return _dt.date.fromisoformat(str(c.get("latest_date") or "")[:10])
+            except ValueError:
+                return None
+    return None
+
+
 @dataclass(frozen=True)
 class RuntimeFinding:
     """Verdict on one runtime installation."""
@@ -247,12 +278,14 @@ def _fetch_cycles(product: str) -> list[dict]:
                  "is_eol": bool(r.get("isEol")),
                  "eoes": r.get("eoesFrom"), "is_eoes": r.get("isEoes"),
                  "latest": str(((r.get("latest") or {}).get("name")) or ""),
+                 "latest_date": str(((r.get("latest") or {}).get("date")) or ""),
                  "release": str(r.get("releaseDate") or "")} for r in rels]
     except _http.FeedError:
         data = _http.fetch_json(f"https://endoflife.date/api/{product}.json")
         return [{"cycle": str(r.get("cycle")), "eol": r.get("eol"), "is_eol": None,
                  "eoes": r.get("extendedSupport"), "is_eoes": None,
-                 "latest": str(r.get("latest") or ""), "release": str(r.get("releaseDate") or "")} for r in (data or [])]
+                 "latest": str(r.get("latest") or ""), "latest_date": str(r.get("latestReleaseDate") or ""),
+                 "release": str(r.get("releaseDate") or "")} for r in (data or [])]
 
 
 def _is_eol(cycle: dict, today: _dt.date) -> bool:

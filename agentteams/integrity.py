@@ -218,6 +218,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/effectiveness.py",    # what the published summary says about remediation (counts only)
     "agentteams/vulnscan/executor_supersede.py",   # close-superseded: the executor's only PR-closing code
     "agentteams/vulnscan/scan_mirror.py",      # which tree the daily scan reads (mirror or checkout) and its naming
+    "agentteams/vulnscan/verify.py",           # same-day verification: runs the operator's mirror refresh, re-scans
     "agentteams/vulnscan/executor_env.py",     # ExecError, the executor's git identity and hardened git/gh envs
     "agentteams/vulnscan/executor_pr.py",
     "agentteams/vulnscan/open_prs.py",         # D1: packages another open PR updates are left to it      # stage-*'s commit and open-pr's PR text, label and gh pr create
@@ -226,8 +227,19 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/npm_ops.py",          # stage-fix: npm_ops.npm_moves runs those moves (fail-closed checks)
     "agentteams/vulnscan/image_fix.py",        # stage-image: the FROM tag planner and validate_diff's check of it
     "agentteams/vulnscan/ops.py",              # REPO_OPS: which ops get executor_guard and a repo-root grant
+    # vfr-s / vfr-d.D4 (2026-11-02, @security Phase 2 design row): the host-changing ops and the v2 grant that bounds them
+    "agentteams/vulnscan/grant_v2.py",         # v2 grant fields: host x level pairs, restart units/window, paths, runtimes
+    "agentteams/vulnscan/server_apply.py",     # server-apply: digests, escalations, the per-path C-5 gate, quarantine
+    "agentteams/vulnscan/runtime_patch.py",    # runtime-patch: one homebrew/core bottle, same major, no sudo
+    "agentteams/vulnscan/host_change.py",      # the operator's preview-then-confirm for both
+    "agentteams/vulnscan/host_plan.py",        # the confirmed plan's digest (twin of the kit's plan_digest)
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
+    "agentteams/vulnscan/handoff_lapse.py",    # B1b/OD10: when an own-pr verdict stops deferring open-pr
+    "agentteams/vulnscan/handoff_stale.py",    # C4: a stale reject becomes Needs you; only a person clears it
+    "agentteams/vulnscan/npm_kept.py",         # C2: stage-major's kept off-registry entries, byte-identical after
+    "agentteams/vulnscan/writer_prs.py",       # D6: a writer's open PR holds its packages until the S-VM deadline
+    "agentteams/vulnscan/cargo_fix.py",        # D3: stage-cargo's in-major cargo update and its Cargo.lock check
     "agentteams/vulnscan/remediation_status.py",  # what blocks the executor (summary + notifications)
     "agentteams/vulnscan/remediation_report.py",  # infra (retried) vs policy (final): the anchored classification
     "agentteams/vulnscan/server_fixplan.py",   # per-host server fix plans (read-only)
@@ -248,6 +260,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/publish.py",
     "agentteams/vulnscan/operator_cli.py",
     "agentteams/vulnscan/notes.py",
+    # vfr-k K1/K3 (2026-11-02, @security K2 conditions): known.py verifies the operator-signed known-finding
+    # entries that take findings out of the exit code (Rule 15: purpose tag, 90-day cap, committed index, cap,
+    # HALT scan, voids); known_cli.py's propose never signs and its sign drives the operator flow.
+    "agentteams/vulnscan/known.py",
+    "agentteams/vulnscan/known_report.py",
+    "agentteams/vulnscan/known_cli.py",
     "agentteams/vulnscan/report_store.py",
     "agentteams/vulnscan/notify.py",
     "agentteams/vulnscan/review.py",
@@ -271,8 +289,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/engine.py",
     "agentteams/vulnscan/versions.py",
     "agentteams/vulnscan/specifiers.py",   # 2026-10-30 (N6a): judges unpinned requirement ranges
+    "agentteams/vulnscan/offnpm_sources.py",   # 2026-11-02 (vfr-e.E3): which non-npm hosts are graded on ranges
     "agentteams/vulnscan/runtimes.py",
     "agentteams/vulnscan/images.py",          # 2026-10-30 (N2): which base images count as end-of-life
+    "agentteams/vulnscan/distro_verdict.py",  # 2026-11-02 (vfr-a A2): whether a distro package carries the fix
     "agentteams/vulnscan/fix.py",
     "agentteams/vulnscan/schedule.py",
     "agentteams/vulnscan/report.py",
@@ -287,6 +307,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/data/server_kit/L3-node-runtime.sh",
     "agentteams/data/server_kit/L4-python-app.sh",
     "agentteams/data/server_kit/L5-containers.sh",
+    "agentteams/data/server_kit/L6-py-venv.sh",       # server-apply py-venv (vfr-s S2): venv beside, switch, revert
+    "agentteams/data/server_kit/L7-remove-path.sh",   # server-apply remove-path: quarantine only, never delete
     # M1: remote.sh embeds the IOC lists into the root-run payload; an emptied list silently stops detection.
     "agentteams/data/server_kit/ioc-2026-10-litellm-1.107.0.txt",
     "agentteams/data/vulnscan_agent/Dockerfile",

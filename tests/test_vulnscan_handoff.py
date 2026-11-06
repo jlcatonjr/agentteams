@@ -214,3 +214,43 @@ def test_status_reports_the_launcher_the_handoff_would_use(env: dict, capsys: py
     assert main(["handoff", "status", "--repo", str(repo)]) == 0
     out = capsys.readouterr().out
     assert "  launcher: " in out and "  warning: the launcher matches no released version" in out
+
+
+# ---------------------------------------------------------------- handoff verify-directive (vfr X1)
+
+_MGMT_KEY = "test-management-key-0123456789ab"
+
+
+def _directive(team: Path, did: str, scope: str, expires_at: str) -> None:
+    from agentteams.cli import management_directives as md
+
+    refs = team / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "authorized-managers.txt").write_text("ops-team\n", encoding="utf-8")
+    md.issue_directive(team, manager_team="ops-team", managed_team="svc", task_scope=scope,
+                       expires_at=expires_at, max_uses=3, approver="operator:test", directive_id=did,
+                       timestamp="2026-11-01T00:00:00Z", key=_MGMT_KEY)
+
+
+def test_verify_directive_cli_exit_codes(env: dict, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    """0 verified with expired history noted; 1 unverified with a reason code; 2 bad arguments."""
+    from agentteams.vulnscan.__main__ import main
+
+    monkeypatch.setenv("AGENTTEAMS_MANAGEMENT_SIGNING_KEY", _MGMT_KEY)
+    team = tmp_path / "team"
+    _directive(team, "directive-old", "review-vulnscan-handoff-20261101000001", "2000-01-01T00:00:00Z")
+    _directive(team, "directive-new", "review-vulnscan-handoff-20261102000001", "2099-01-01T00:00:00Z")
+    args = ["handoff", "verify-directive", "--team-dir", str(team), "--handoff-id", "20261102000001"]
+    assert main([*args, "--directive-id", "directive-new"]) == 0
+    assert "1 earlier directive(s) expired (normal)" in capsys.readouterr().out
+    assert main([*args, "--json"]) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert got["verified"] and got["directive_id"] == "directive-new" and got["expired_history"] == 1
+    # The expired history row's handoff, verified as current: the carve-out is history-only.
+    assert main(["handoff", "verify-directive", "--team-dir", str(team), "--handoff-id", "20261101000001"]) == 1
+    assert capsys.readouterr().out.startswith("unverified (current-invalid)")
+    assert main([*args, "--directive-id", "directive-old"]) == 1
+    assert main(["handoff", "verify-directive", "--team-dir", str(team), "--handoff-id", "../x"]) == 2
+    assert main(["handoff", "verify-directive", "--handoff-id", "20261102000001"]) == 2
+    assert handoff.verify_directive(team, "20261102000001")["reason"] == "verified"

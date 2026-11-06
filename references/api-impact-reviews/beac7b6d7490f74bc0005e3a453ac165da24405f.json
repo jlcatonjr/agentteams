@@ -1,0 +1,8 @@
+{
+  "patch_id": "beac7b6d7490f74bc0005e3a453ac165da24405f",
+  "commit": "0246218ad7e6bb523360d0a2cb02d887ea995659",
+  "subject": "feat(vulnscan): stage-major beside a fix PR, moves-with transitive rows, own-pr lapse (vfr-b.B2, B3, B1b)",
+  "impact": "1 modules added, 9 symbols added, 1 symbols changed",
+  "note": "vfr-b B2/B3/B1b: additive vulnscan API (handoff_lapse, carried_by, installed, owner_prs, major_beside_since; stage_major_packages gains keyword beside=False); documented in docs_src/api-reference/vulnscan.md (vulnscan modules have no per-module page)",
+  "recorded_at": "2026-11-02T21:08:54Z"
+}

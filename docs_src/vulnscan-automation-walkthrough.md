@@ -643,7 +643,8 @@ the newest is open (only untouched PRs it opened itself; never a merge). After e
 when you want to merge.
 
 Add `--op server-audit --op server-dryrun --host web1` to let the agents audit and dry-run servers.
-`merge` and `server-apply` are refused: no grant can cover them. At most two grants may be valid at
+`merge` is refused: no grant can cover it. `server-apply` and `runtime-patch` change hosts; only a v2 grant covers
+them, and only you run them ([Changing a host](#changing-a-host-server-apply-and-runtime-patch)). At most two grants may be valid at
 once: with three, vulnscan refuses all of them, so `grant sign` refuses to sign a third
 (`refused: 2 valid grant(s) already …`). Revoke the first one once the new grant is installed. `grant list` prints each valid
 grant as JSON; take the first grant's `grant_id` from it:
@@ -808,6 +809,212 @@ python -m agentteams.vulnscan say --list
   `debrief refused: agent.debrief_budget_usd must be …` (or the key at fault) before starting
   anything.
 
+### Accepting a finding for a while (known entries)
+
+A note never suppresses anything. When you decide to live with a finding (an nginx deny in front of files you
+keep, a dependency with no fixed release yet), record a **known entry**: a signed, expiring decision. While it
+is valid the finding is graded `known until <date>` and leaves the exit code. It stays in the report, and the
+summary's *Known findings* section lists every entry with its reason, expiry, key id, decision reference and
+renewal count.
+
+1. **Record the decision.** A `@security` row in your governance dir's decision log clears this entry
+   (its `plan_slug` and `step` are the entry's decision reference).
+2. **Propose it** (an agent may do this; it never signs and never reads a key). Name each finding by its
+   key, as the run's `summary.json` gives it; several keys make one group entry that signs every member:
+
+   ```bash
+   python -m agentteams.vulnscan known propose --run 2026-11-02 \
+     --finding 'webapp|package|npm|xlsx|0.18.5|GHSA-…' \
+     --reason "no fixed release on npm; input is first-party only" \
+     --decision-plan vfr-k-known --decision-step "K4 xlsx" \
+     --days 60 --key-id <your key id> --governance-dir ~/team
+   ```
+
+   It writes an unsigned proposal and prints the command for the next step. `--from-note <note id>` takes the
+   reason from an operator note; `--renews <entry id>` proposes a renewal (a new id that names the old one).
+3. **Sign it yourself, outside any agent session.** This shows every member, asks for the review digest and
+   reads your key once. It installs the entry and appends its row to `references/vulnscan-known-index.csv`:
+
+   ```bash
+   python -m agentteams.vulnscan known sign ~/.local/state/agentteams/vulnscan/known-proposals/vk-….json
+   git -C ~/team commit -m "known: vk-…" references/vulnscan-known-index.csv
+   ```
+
+   The entry is in force only once that row is committed. `known list` shows every entry and its status;
+   `known remove <entry id>` withdraws one.
+
+Limits: at most 90 days per entry, at most 30 entries in force (a new one over the cap is refused; the
+existing ones stay). Never known, even when signed: malicious packages and `MAL-*` advisories, compromise
+indicators, requirement ranges, integrity findings, trust-root targets (keys, rosters, secrets, the
+integrity manifest, the constitution, grants and ledger, the known index, the decisions log, the vulnscan
+install), CRITICAL findings (vulnscan reads no CISA KEV catalog yet, so whether one is exploited is unknown),
+and host checks other than the web-root exposure check and the OS release check.
+
+A web-root entry keys on one digest that `L1-audit.sh` prints as a `HOSTEVIDENCE` line: a sha256 over each
+file's HMAC and the nginx `deny` rules. The HMAC key is random per host, created on the first audit at
+`/var/lib/agentteams-server-kit/l1-evidence.key` (owned by root, mode 600, in a mode-700 directory). It is
+never printed and never leaves the host, so the audit output never holds a plain hash of a secret-looking file.
+Deleting or rotating that key changes the digest, which voids that host's entries: re-propose and re-sign them.
+
+The decision row must be cleared. A `CLEARED-WITH-CONDITIONS` or `CONDITIONAL` row counts only once its
+`conditions_verified` column reads `verified`; until then it blocks the entry, as a HALT would.
+
+An entry voids itself when the installed version changes, a new advisory id appears, a fixed release appears
+that it did not record, the severity rises or the finding reaches CISA KEV, the evidence changes, it expires,
+its decision row is HALTed or retracted, or its index row is missing or does not match. HALTs:
+
+- a HALT on the bare entry id (`vk-…`), or on the id of an entry it renews, voids that entry;
+- a HALT on `vulnscan-known`, or on `vulnscan-known:<anything>` (it matches the same action), voids **every**
+  entry.
+
+A void entry hides nothing: the finding is graded normally and the report gains a HIGH integrity finding saying why.
+
+Entries apply to the `daily` run only. An ad-hoc `scan` or `inventory` ignores them, so its exit code can be 1
+where the daily run's is 0 for the same findings.
+
+### Changing a host: server-apply and runtime-patch
+
+Two operations change a machine rather than a repository. Agents never request them, and a spooled request for
+either is refused. You run each one with `vulnscan act`:
+
+- `server-apply HOST:LEVEL` applies one level to one server.
+- `runtime-patch FORMULA` upgrades one Homebrew runtime on this Mac.
+
+| Level | What it changes | Restarts |
+|---|---|---|
+| `l2-security` | Distro security updates only, each at the version the plan shows. It uses the cached package lists. It never reboots and never installs non-security updates. needrestart's apt hook is suspended. | Only the units the grant lists, and only if they still use replaced libraries. It runs only inside the restart window, because an rpm package's own scriptlets can restart a service |
+| `l4-pins` | The `apps.conf` pins for the host. A pin that crosses a major version runs only if the grant allows it for that unit. | The entry's own unit |
+| `py-venv` | An `apps.conf` entry whose flags include `--venv-base`. A new venv is built beside the old one, holding the old venv's packages with the pins applied, then switched in. The old venv is kept. | The entry's own unit |
+| `remove-path` | One exact path, which is **quarantined, never deleted**. A tarball is written first. The path is then renamed into `/var/backups/agentteams/quarantine/<name>-<time>/` with a `RESTORE.manifest`. The path must be on the same filesystem as the quarantine (no copy and delete), every ancestor up to `/` must be root-owned and not group- or world-writable, and the checks run again immediately before the move. | None |
+
+#### Re-issue the server grant (once)
+
+A v2 grant signs more than a v1 grant:
+
+- the host×level pairs;
+- the units `l2-security` may restart;
+- the restart window (UTC), outside which no level that restarts a service runs;
+- the sha256 of the `apps.conf` you reviewed;
+- the units whose pins may cross a major version;
+- the exact paths `remove-path` may quarantine.
+
+A server grant that names `server-apply` holds server operations only and lasts at most 30 days. Its
+`--max-uses` (at most 20) counts `server-apply` uses only. Its `server-audit` / `server-dryrun` uses count against a
+separate signed `--max-read-uses` (at most 500), so the daily audits never use up the apply cap. Two grants are
+already in force, so a third would make vulnscan refuse all of them. The server grant is therefore **re-issued**:
+
+1. Validate the new record with `grant sign … --check-only`. The old grant stays in force if it is refused.
+2. Revoke the old grant. `grant revoke` moves the record to `<config>/vulnscan-grants-revoked/`.
+3. Sign the new grant with `--ancestor <old id>`.
+
+`grant sign` refuses an ancestor that is still installed, and one that is not that grant, validly signed and
+archived. The lineage is checked again every time grants are loaded: moving the old file back un-revokes nothing,
+and both grants are refused.
+
+```bash
+python -m agentteams.vulnscan grant revoke --grant-id <old server grant id>
+AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
+python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 30 --max-uses 20 --max-read-uses 500 \
+    --governance-dir <the old grant's governance_dir> --ancestor <old server grant id> \
+    --op server-audit --op server-dryrun --op server-apply --host web1 \
+    --level web1:l2-security --level web1:l4-pins --level web1:remove-path \
+    --restart-unit web1:nginx.service --restart-window 08:00-11:00 --apps-conf-sha256 auto \
+    --remove-path web1:/opt/old-app.disabled-20261101
+```
+
+`--apps-conf-sha256 auto` signs the sha256 of the current `apps.conf`, so review that file first. If you change
+`apps.conf` later, `l4-pins` and `py-venv` are refused until you sign again. The per-operator script
+`tmp/by-week/2026-W45/vfr-s3-grant-reissue.sh` walks you through this re-issue, asking before each step.
+
+#### Record a remove-path clearance (C-5, once per path)
+
+`remove-path` runs only after `@security` has recorded a clearance for that exact host and path. The clearance goes
+in the decision log of the grant's governance directory, `references/security-decisions.log.csv`. The row's
+`decision` column is the action id; nothing may be added after it, because a suffixed id never clears the bare path:
+
+```text
+server-apply:remove-path:<host>:<exact path>
+```
+
+The other columns:
+
+- `status`: `PASS` or `CONDITIONAL PASS`.
+- `conditions_verified`: `verified`. This is required even for a PASS.
+- `owner`: an approved security author.
+- `signature`: the row must be signed when the log signs rows.
+
+The executor reads the row read-only and refuses on any of these:
+
+- an unretracted HALT on that id;
+- a missing row;
+- a row that is pending;
+- a row whose id is decorated (has a suffix).
+
+A path named `<name>.disabled-YYYYMMDD` is also refused unless the fresh L1 audit at the start of the op labels that
+exact path `SCOPE <path> disabled`, which confirms the tree is inert. The clearance is read, not consumed, so the
+ledger refuses any later attempt on the same host and path: after a quarantine, after a failed attempt, and after an
+attempt that never finished (a `begun` row with no `done` or `failed`). Retrying, restoring and emptying the
+quarantine are your decisions; nothing in agentteams deletes it.
+
+#### Run a level
+
+```bash
+python -m agentteams.vulnscan act server-apply web1:l2-security
+python -m agentteams.vulnscan act server-apply web1:remove-path:/opt/old-app.disabled-20261101
+```
+
+`act` runs only on a terminal (stdin and stdout). This keeps an unattended job or an agent's shell from confirming;
+it is not an identity check. It first shows the plan: the PLAN lines and their sha256. Nothing changes and no grant
+use is reserved at this stage. It then asks `Apply exactly this plan?`. `--confirm-plan-sha256 <digest>` additionally
+requires the plan to have that digest; it never replaces the question. If you confirm, the executor does the
+following:
+
+1. Writes the `begun` row.
+2. Runs a fresh L1 audit.
+3. Runs the plan again. It must still have the digest you confirmed.
+4. Records the pre-state in a ledger `note` row, with the file's sha256. The pre-state is `dpkg -l` / `rpm -qa`,
+   `pip freeze`, or the path's listing.
+5. Runs `run-host.sh HOST --level L --apply --expect-digest <digest>`. `run-host.sh` and the level script compute
+   the plan once more on the host just before they change anything, and abort with exit 5 if it differs.
+6. Runs a post-change L1 audit.
+
+The executor stops on any of these results:
+
+- **Exit 4 anywhere (compromise indicators), the preview included:** it opens an escalation that blocks every
+  operation.
+- **Once the apply has started, any failure:** it opens an escalation that stops that host. That covers:
+  - a failed step;
+  - a failed health check (exit 6: the pins or venv were restored; exit 7: they were not);
+  - a later step refused or finding its plan changed after an earlier step applied (a partial apply);
+  - an incomplete or worse post-audit;
+  - a timeout;
+  - output that is not UTF-8.
+
+  Only a refusal or a changed plan before any step applied is a plain failure with nothing changed.
+
+The executor never passes `--reboot`, `--all-updates`, `--node-major`, `--allow-fresh` or `--restart-services`, and a
+level never runs L3 or L5.
+
+The health check after a restart uses the `apps.conf` health URL. Without one, it checks that the unit stays active
+and listens on the same TCP ports again.
+
+#### runtime-patch
+
+The repository grant must carry `--op runtime-patch --runtime <formula>`. Re-issue it the same way, with
+`--ancestor`. Then:
+
+```bash
+python -m agentteams.vulnscan act runtime-patch node@22
+```
+
+The latest completed scan must have flagged that formula as a this-machine runtime. The dry run must upgrade exactly
+that formula, at the same major version, to its release line's latest patch released at least 14 days ago (S-10;
+an unknown release date refuses). The formula must come from `homebrew/core`, be installed and linked, not be pinned,
+and have a bottle for this Mac. Nothing is built from source, no tap is added and sudo is never used. `python*`,
+`git`, `gh`, `openssh` and `gnupg` are refused, as is any formula that holds the executor's own interpreter or tools,
+or that they depend on (`openssl@3`, `ca-certificates`, …). After the upgrade, the formula's linked version must be the
+planned one, poured from a bottle; otherwise the executor opens an escalation.
+
 ### Reports, and publishing them (optional)
 
 The agent submits a report at the end of each run; the executor stores it, fenced, under
@@ -863,13 +1070,14 @@ prints the result (`publish.publish`) and exits 0 only on `done`:*
 On macOS, `scripts/vulnscan-remediation/` runs the remediation loop after each daily scan without you.
 `vulnscan-remediate-auto.sh --install` copies the scripts to `~/.config/agentteams/vulnscan-remediation/`
 and loads a launchd job that runs every 30 minutes. Installing it is your standing authorization for auto
-mode, and it is recorded in `operator-clearances.log`.
+mode, and it is recorded in `operator-clearances.log`. It also loads the same-day verification job
+`io.agentteams.vulnscan-verify` ([Same-day verification](#same-day-verification)).
 
 | Script | What it does |
 |---|---|
 | `vulnscan-remediate-auto.sh` | Once per scan: preflight (goose, route proxy, grants, `halts`, Docker), then target setup and the handoff steps, then `remediation.md` and a notification |
 | `vulnscan-ensure-docker.sh` | Starts Docker Desktop if needed and checks the tools and agent images and their self-test records. It prints `READY …` or a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). `--no-start` only checks |
-| `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
+| `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date. `--verify` is the verification job's entry: Docker, then `verify` |
 | `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster. Both are operator-only: in auto mode it only reports what is missing, because a roster is a trust root and the brief is drafted from README text |
 | `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
 | `vulnscan-install-guard.sh` | Sourced first by the daily wrapper and the remediation runner: refuses a venv without `agentteams.vulnscan` or not installed from the commit `vulnscan-deploy.sh` recorded (exit 4, a notification at most every 6 hours) |
@@ -913,6 +1121,40 @@ its recorded pid runs and removed once that owner is gone.
 Never done unattended: grant signing, destructive deletes, server `--apply`, merging, and pushing a
 team's own branch.
 
+### Same-day verification
+
+The daily scan runs once in the morning, so a fix merged by the 11:30 or 16:30 auto-merge job, or a host
+changed after an executor op, stays invisible until the next morning. The verification job measures it the
+same day. `vulnscan-remediate-auto.sh --install` loads `io.agentteams.vulnscan-verify`, which runs
+`vulnscan-daily-wrapped.sh --verify` at 17:15 and 18:45 (`VULNSCAN_VERIFY_TIMES`, space-separated `HH:MM`
+values, read at install time). That is after the last auto-merge and after the remediation runner's
+`GIVE_UP_HOUR`. The second run does nothing once the first has completed.
+
+Each run passes the same install guard as the daily job, waits for the wrapper lock like it, and then runs
+`python -m agentteams.vulnscan verify`:
+
+1. It takes `remediate.flock` and `daily.lock` without waiting. While a remediation attempt, a deploy or a
+   daily run holds either one, it writes nothing and exits 3. The 18:45 run then tries again.
+2. It runs your scan-mirror refresh job, `bash SCRIPT refresh` (`VULNSCAN_MIRROR_REFRESH`, by default
+   `~/.local/share/agentteams/vauto/vauto-a-mirrors.sh`; skipped when no file is there). Then it re-scans
+   each repository whose mirror moved to a new commit since the morning: one whose default branch moved today.
+3. It re-runs the read-only L1 audit on each configured server that an executor `server-*` op ran against
+   today.
+4. It writes `<run>/verify.json`, with each of the morning's findings for those repositories and hosts:
+   `remediated`, `partly remediated`, `open`, `moved (not remediated)` or `present elsewhere (not
+   remediated)`. A move is a tree renamed on disk; "present elsewhere" is the same package found at another
+   place (another tree or lockfile). Neither is a remediation.
+
+It stages nothing, writes no fix plan, opens no PR, starts no agent and sends no notification (under
+`--verify` the wrapper's Docker check does not notify either; it only logs). The refresh script must be yours
+and not writable by anyone else, and so must every folder above it up to your home folder, or it is not run. The
+morning's
+`summary.*` stays as it was. `verify.json` names your repositories and hosts, so it is never published.
+
+To compare any two runs finding by finding, run
+`python -m agentteams.vulnscan effectiveness BASE LATER --csv rows.csv`, where `BASE` and `LATER` are run
+folders. Add `--alias OLD=NEW` for a renamed host and `--path-alias OLD=NEW` for a tree you renamed on purpose.
+
 ### Deploying a new version
 
 `scripts/vulnscan-remediation/vulnscan-deploy.sh [REF]` (default `origin/main`) reinstalls the package
@@ -931,7 +1173,8 @@ sign, merge or push.
    `schedule status`.
 
 `--with-scripts` also re-runs `vulnscan-remediate-auto.sh --install` from the same commit, so the
-installed scripts match the package. Deploy outside the daily job's window.
+installed scripts match the package and the launchd jobs it installs (the remediation runner and the
+verification job) are loaded. Deploy outside the daily job's window.
 
 **The deployed commit is the only one the jobs run.** The deploy records its commit in
 `<state>/deployed.json`. Before each run, the daily job and the remediation runner check that the venv

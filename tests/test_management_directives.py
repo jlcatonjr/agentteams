@@ -331,3 +331,228 @@ def test_every_sandbox_relaxation_spelling_is_refused():
         assert not md.scope_is_allowed(token), token
         assert not md.scope_is_allowed(f"run tests with {token.upper()}:claude"), token
     assert md.scope_is_allowed("format the sandbox docs")
+
+
+# --------------------------------------------------------------------------
+# verify_handoff_directive: one current row against the whole ledger (vfr X1)
+# --------------------------------------------------------------------------
+
+_PAST = "2000-01-01T00:00:00Z"
+_SCOPE = "review-vulnscan-handoff-20261102010101"
+
+
+def _ledger(root: Path) -> Path:
+    return root / md.MGMT_DIRECTIVES_LOG_REL
+
+
+def _rewrite(root: Path, rows: list[dict[str, str]], columns=md.MGMT_DIRECTIVE_COLUMNS) -> None:
+    with _ledger(root).open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(columns), extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _rows(root: Path) -> list[dict[str, str]]:
+    with _ledger(root).open(encoding="utf-8", newline="") as fh:
+        return list(csv.DictReader(fh))
+
+
+def _history_then_current(root: Path, **history) -> None:
+    """An expired earlier-day directive, then today's directive for _SCOPE (id d-now)."""
+    _issue(root, directive_id="d-old", task_scope="review-vulnscan-handoff-20261101010101",
+           expires_at=_PAST, **history)
+    _issue(root, directive_id="d-now", task_scope=_SCOPE)
+
+
+def _verdict(root: Path, **over) -> md.HandoffDirectiveVerdict:
+    kw = dict(task_scope=_SCOPE, directive_id="d-now", key=_KEY)
+    kw.update(over)
+    return md.verify_handoff_directive(root, **kw)
+
+
+def test_handoff_verdict_tolerates_expired_history(tmp_path):
+    """The 2026-11-02 false negative: an earlier day's expired directive no longer fails today's."""
+    _history_then_current(tmp_path)
+    assert md.verify_directives(tmp_path, key=_KEY)  # the whole-ledger check still reports it
+    v = _verdict(tmp_path)
+    assert v.verified and v.reason == md.VERDICT_VERIFIED, v.detail
+    assert v.directive_id == "d-now" and v.expired_history == 1
+    assert "1 earlier directive(s) expired (normal)" in v.detail
+    assert [(d, c) for d, c, _ in v.problems] == [("d-old", md.ROW_EXPIRED)]
+
+
+def test_handoff_verdict_without_directive_id_finds_the_scope_row(tmp_path):
+    """A resume does not know the id: the single row carrying the exact scope is the current row."""
+    _history_then_current(tmp_path)
+    v = _verdict(tmp_path, directive_id="")
+    assert v.verified and v.directive_id == "d-now"
+
+
+def test_handoff_verdict_expired_history_with_bad_signature_is_unverified(tmp_path):
+    """@security X1 (1) + Rule 12: the expiry carve-out never masks a bad signature on that row."""
+    _history_then_current(tmp_path)
+    rows = _rows(tmp_path)
+    rows[0]["signature"] = "0" * 64   # unsigned column: the chain stays intact, only the sig fails
+    _rewrite(tmp_path, rows)
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_HISTORY_INVALID
+    codes = {c for d, c, _ in v.problems if d == "d-old"}
+    assert codes == {md.ROW_BAD_SIGNATURE, md.ROW_EXPIRED}
+    assert v.expired_history == 0
+
+
+def test_handoff_verdict_expired_history_off_roster_is_unverified(tmp_path):
+    """Rule 12: expired AND off-roster history is not 'expired (normal)'."""
+    _history_then_current(tmp_path, manager_team="team-retired")
+    _write_roster(tmp_path, "team-manager")   # team-retired removed from the roster
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_HISTORY_INVALID
+    assert {c for d, c, _ in v.problems if d == "d-old"} == {md.ROW_EXPIRED, md.ROW_OFF_ROSTER}
+
+
+def test_handoff_verdict_unexpired_history_failure_is_unverified(tmp_path):
+    """Any non-expiry failure on ANY row (here exhausted history, re-signed so only uses fail)."""
+    _issue(tmp_path, directive_id="d-old", task_scope="draft-weekly-report", max_uses=1)
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    rows = _rows(tmp_path)
+    rows[0]["uses"] = "1"
+    rows[0]["signature"] = md.sign_directive(rows[0], key=_KEY)
+    rows[1]["prev_digest"] = md._directive_chain_digest(rows[0])
+    rows[1]["signature"] = md.sign_directive(rows[1], key=_KEY)
+    _rewrite(tmp_path, rows)
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_HISTORY_INVALID
+    assert [c for d, c, _ in v.problems] == [md.ROW_EXHAUSTED]
+
+
+def test_handoff_verdict_malformed_history_expiry_is_unverified(tmp_path):
+    """A malformed date is never read as 'expired'."""
+    _history_then_current(tmp_path)
+    rows = _rows(tmp_path)
+    rows[0]["expires_at"] = "not-a-date"
+    rows[0]["signature"] = md.sign_directive(rows[0], key=_KEY)
+    rows[1]["prev_digest"] = md._directive_chain_digest(rows[0])
+    rows[1]["signature"] = md.sign_directive(rows[1], key=_KEY)
+    _rewrite(tmp_path, rows)
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_HISTORY_INVALID
+    assert [c for d, c, _ in v.problems] == [md.ROW_MALFORMED_EXPIRY]
+
+
+def test_handoff_verdict_expired_current_row_is_unverified(tmp_path):
+    """@security X1 (2): the carve-out is history-only; an expired CURRENT row never verifies."""
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE, expires_at=_PAST)
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_CURRENT_INVALID
+    assert v.expired_history == 0
+
+
+def test_handoff_verdict_replayed_scope_is_unverified(tmp_path):
+    """@security X1 (2): a second validly-signed, chained row for the same scope (a replay)."""
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    _issue(tmp_path, directive_id="d-replay", task_scope=_SCOPE)
+    for did in ("d-now", "d-replay", ""):
+        v = _verdict(tmp_path, directive_id=did)
+        assert not v.verified and v.reason == md.VERDICT_CURRENT_DUPLICATE, did
+
+
+def test_handoff_verdict_duplicated_directive_id_is_unverified(tmp_path):
+    """@security X1 (2): the id just issued occurs on another row too."""
+    _issue(tmp_path, directive_id="d-now", task_scope="draft-weekly-report")
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_CURRENT_DUPLICATE
+
+
+def test_handoff_verdict_missing_or_mismatched_current_row_is_unverified(tmp_path):
+    """@security X1 (2): no row for the scope, or the scope's row is not the id just issued."""
+    _history_then_current(tmp_path)
+    assert _verdict(tmp_path, task_scope=_SCOPE + "9").reason == md.VERDICT_CURRENT_MISSING
+    assert _verdict(tmp_path, directive_id="d-other").reason == md.VERDICT_CURRENT_MISSING
+    assert _verdict(tmp_path, directive_id="d-old").reason == md.VERDICT_CURRENT_MISSING
+    assert _verdict(tmp_path, task_scope="").reason == md.VERDICT_CURRENT_MISSING
+
+
+def test_handoff_verdict_broken_chain_is_unverified(tmp_path):
+    """@security X1 (1): a removed row breaks the chain; the verdict fails before reading rows."""
+    _issue(tmp_path, directive_id="d-a", task_scope="draft-weekly-report", expires_at=_PAST)
+    _issue(tmp_path, directive_id="d-b", task_scope="draft-monthly-report", expires_at=_PAST)
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    rows = _rows(tmp_path)
+    _rewrite(tmp_path, [rows[0], rows[2]])   # d-b deleted
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_CHAIN_BROKEN
+
+
+def test_handoff_verdict_unchained_ledger_is_unverified(tmp_path):
+    """@security X1 (3): a ledger with no prev_digest column is never treated as passed."""
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    rows = _rows(tmp_path)
+    _rewrite(tmp_path, rows, columns=[c for c in md.MGMT_DIRECTIVE_COLUMNS if c != "prev_digest"])
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_UNCHAINED
+
+
+def test_handoff_verdict_no_ledger_or_no_key_is_unverified(tmp_path, monkeypatch):
+    assert _verdict(tmp_path).reason == md.VERDICT_NO_LEDGER
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    monkeypatch.delenv(md.MGMT_KEY_ENV, raising=False)
+    v = md.verify_handoff_directive(tmp_path, task_scope=_SCOPE, directive_id="d-now")
+    assert not v.verified and v.reason == md.VERDICT_CURRENT_INVALID
+    assert [c for _, c, _ in v.problems] == [md.ROW_NO_KEY]
+    v = _verdict(tmp_path, key="the-wrong-management-key-0123456789")
+    assert not v.verified and [c for _, c, _ in v.problems] == [md.ROW_BAD_SIGNATURE]
+
+
+def test_directive_row_failures_reports_every_check(tmp_path):
+    """Every failed check is reported, so callers never infer 'signature passed' from order."""
+    rec = _issue(tmp_path, expires_at=_PAST)
+    rec["signature"] = "0" * 64
+    codes = [c for c, _ in md.directive_row_failures(rec, tmp_path, key=_KEY)]
+    assert codes == [md.ROW_BAD_SIGNATURE, md.ROW_EXPIRED]
+    ok, reason = md.validate_directive(rec, tmp_path, key=_KEY)
+    assert not ok and "invalid signature" in reason   # first failure, unchanged
+
+
+def test_handoff_verdict_unreadable_ledger_is_unverified(tmp_path):
+    """A ledger that is not UTF-8 is reported (VERDICT_UNREADABLE), never an escaping decode error."""
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    _ledger(tmp_path).write_bytes(_ledger(tmp_path).read_bytes() + b"\xff\xfe\x00bad\n")
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_UNREADABLE
+    with pytest.raises(md.MgmtDirectiveError, match="unable to read"):
+        md._read_directive_rows(tmp_path)
+
+
+def test_handoff_verdict_malformed_header_is_unverified(tmp_path):
+    """A chained ledger missing another required column (here signature) is VERDICT_MALFORMED."""
+    _issue(tmp_path, directive_id="d-now", task_scope=_SCOPE)
+    rows = _rows(tmp_path)
+    _rewrite(tmp_path, rows, columns=[c for c in md.MGMT_DIRECTIVE_COLUMNS if c != "signature"])
+    v = _verdict(tmp_path)
+    assert not v.verified and v.reason == md.VERDICT_MALFORMED
+
+
+def test_issue_directive_cli_prints_the_id_line_the_handoff_tooling_parses(tmp_path, capsys, monkeypatch):
+    """Pins the ``--issue-directive`` stdout line the operator's handoff tooling reads the new id from.
+
+    The site-local vulnscan-operator-actions.sh extracts the id with
+    ``sed -nE 's/^Issued management directive (directive-[0-9a-f]{16}): .*/\\1/p'``; a changed line means every
+    handoff reads unverified (fail-closed), so a format change must update that script too.
+    """
+    import re
+
+    from build_team import main
+
+    _write_roster(tmp_path, "ops-team")
+    monkeypatch.setenv(md.MGMT_KEY_ENV, _KEY)
+    rc = main(["--issue-directive", "--output", str(tmp_path), "--manager-team", "ops-team",
+               "--managed-team", "svc", "--task-scope", _SCOPE, "--expires-at", _FAR_FUTURE,
+               "--max-uses", "3", "--approver", "operator:test"])
+    assert rc == 0
+    lines = capsys.readouterr().out.splitlines()
+    ids = [m.group(1) for ln in lines
+           if (m := re.match(r"^Issued management directive (directive-[0-9a-f]{16}): ", ln))]
+    assert len(ids) == 1, lines
+    assert _rows(tmp_path)[-1]["directive_id"] == ids[0]
+    assert md.verify_handoff_directive(tmp_path, task_scope=_SCOPE, directive_id=ids[0], key=_KEY).verified

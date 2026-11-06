@@ -1,0 +1,8 @@
+{
+  "patch_id": "806e1fd8cc3436affcadf3ac4d8763599873ea7e",
+  "commit": "615894d202812138cef8ebcdb18cdf0acfecc6a3",
+  "subject": "docs: outbound request to collector-management: CI on pull requests so vulnscan remediation PRs auto-merge",
+  "impact": "1 structural added",
+  "note": "docs only: tracked copy of the outbound cross-orchestrator request (CI for vulnscan PR auto-merge); no code or API change",
+  "recorded_at": "2026-11-03T16:31:31Z"
+}

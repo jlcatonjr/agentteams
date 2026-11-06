@@ -1,0 +1,8 @@
+{
+  "patch_id": "4a91557589388a950e6cf1aae40bf1e5e5ca3360",
+  "commit": "7a84684b11e87f0880021799af78d35306a213e5",
+  "subject": "feat(vulnscan): server-apply levels and runtime-patch under v2 grants (vfr-s S1 S2, vfr-d D4)",
+  "impact": "4 modules added, 37 symbols added, 1 symbols changed, 1 cli added, 2 structural added",
+  "note": "P8 server-apply (vfr-s S1 S2, S3 tooling) and runtime-patch (vfr-d D4): new modules grant_v2, server_apply, runtime_patch, host_change; grant.OPS_V1 gains server-apply/runtime-patch (merge stays reserved); grant.build(**v2), grant.revoked_dir, grant.revoke archives; ops.OPERATOR_ONLY_OPS; executor._granted/_granted_op take payload; CLI act --confirm-plan-sha256 and grant sign v2 options; kit run-host.sh --level, L2/L4 level mode, new L6-py-venv.sh and L7-remove-path.sh. Unreviewed: needs @code-hygiene and @security.",
+  "recorded_at": "2026-11-03T03:05:20Z"
+}

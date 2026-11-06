@@ -6,6 +6,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (vulnscan: a remediation PR behind its base is superseded, not claimed; operator decision 2026-11-04)
+
+- `open-pr` no longer claims an earlier day's executor PR carrying the same change when that PR does not contain the base
+  the fix was just re-staged on. Its checks tested an old base, and auto-merge pins a PR's head to the commit the executor
+  pushed, so nothing may update it in place. `open-pr` opens a current PR instead, and `close-superseded` retires the old
+  one. The operator-actions script now runs `close-superseded` after every newly opened PR (it had never run: no ledger row).
+  `close-superseded` no longer counts the operator scripts' verdict relay comment (exactly that text, by the PR's own
+  author) as a person's touch, so a reviewed PR can still be retired; any other comment or review still keeps it.
+
+### vulnscan: changing hosts (server-apply, runtime-patch)
+
+- **`server-apply HOST:LEVEL` is no longer reserved.** It applies one signed level to one signed host. The levels
+  are `l2-security`, `l4-pins`, `py-venv` and `remove-path`. Only the operator runs it, with `vulnscan act`, which
+  shows the dry-run plan and its sha256 and asks first. A spooled agent request for it is refused, and the MCP
+  server never offers it. The executor's sequence: the `begun` row, a pre-audit, the plan, which must still have
+  the confirmed digest, a pre-state `note` row (`dpkg -l` / `pip freeze` / the path), `run-host.sh --level L
+  --apply --expect-digest D`, then a post-audit. `run-host.sh` and each level script compute the plan again on the
+  host just before changing anything (exit 5 on a mismatch, nothing changed). The executor never passes
+  `--reboot`, `--all-updates`, `--node-major`, `--allow-fresh` or `--restart-services`, and a level never runs L3 or
+  L5. Exit 4 anywhere, the preview included, opens an escalation that blocks everything. Once the apply has
+  started, any failure opens one that stops the host: a failed step, a failed health check (6: the pins or venv
+  restored, 7: not restored), a partial apply, an incomplete or worse post-audit, a timeout, or output that is not
+  UTF-8. `l2-security` always runs inside the signed restart window, with needrestart's apt hook suspended. `py-venv`
+  never runs the app's interpreter as root. `act` needs a terminal; this is not an identity check.
+- **`remove-path` only quarantines.** It writes a tarball, moves the path to
+  `/var/backups/agentteams/quarantine/<name>-<time>/payload` and leaves a `RESTORE.manifest`. Emptying the
+  quarantine is never automated. Each path must be signed exactly into the grant. Refused, again immediately before
+  the move: symlinks and symlinked ancestors, any ancestor a non-root user could write, mount points (or a mounts
+  table that cannot be read), a move across filesystems, and trust roots (`/usr/local/{bin,sbin,lib,etc,libexec}` and
+  `/home/*/.config/agentteams` among them). Any earlier failed or unfinished attempt on the same path refuses too. The decision row `server-apply:remove-path:<host>:<path>` must be
+  cleared with `conditions_verified=verified`; a suffixed id never counts. A `<name>.disabled-YYYYMMDD` tree also
+  needs the fresh L1 audit's `SCOPE <path> disabled` line.
+- **`runtime-patch FORMULA`** (vfr-d.D4) upgrades one signed Homebrew formula on this Mac. The formula must be
+  from `homebrew/core`, upgraded within the same major, and installed from a bottle. The dry run must name only
+  that formula. The latest scan must have flagged it, and the target version must be at least 14 days old (S-10). The
+  installed version must be poured from a bottle. No sudo, no source build, no tap. The executor's own python, git,
+  gh, openssh and gnupg, and the formulae they depend on, are refused.
+- **v2 grants** (`grant_v2`, purpose tag `...-grant-v2`) are the only grants that cover the two ops. They sign:
+  - the host×level pairs;
+  - the restart units and the restart window (UTC);
+  - the `apps.conf` sha256;
+  - the major-allowed units;
+  - the exact quarantine paths;
+  - the runtimes;
+  - the `ancestor` they re-issue.
+
+  A grant naming `server-apply` holds server ops only. Its `max_uses` (at most 20) counts `server-apply` uses only,
+  and a signed `max_read_uses` (at most 500) caps its audits and dry runs. `grant revoke` now archives the record in
+  `<config>/vulnscan-grants-revoked/`. A re-issue's ancestor must be revoked and archived first, which is checked at
+  every load as well. A revoked grant moved back is never honoured. `grant sign --check-only` validates a record
+  before the revoke.
+  `grant sign` takes `--level`, `--restart-unit`, `--restart-window`, `--apps-conf-sha256`, `--major-allowed`,
+  `--remove-path`, `--runtime`, `--ancestor`, `--max-read-uses` and `--check-only`. `merge` stays reserved.
+
+### added (vulnscan: repository levers C2, C4, D3, D6; @security design review 2026-11-02)
+
+- **vfr-c.C2: `stage-major` keeps an off-registry entry byte for byte.** `stage-major` used to refuse any base with an
+  off-registry source (`stage-major-offregistry-base`), so portal (SheetJS `xlsx` from `cdn.sheetjs.com`) never got a
+  major upgrade. New `agentteams.vulnscan.npm_kept`: before `npm install` an off-registry entry passes only as a
+  top-level `https` entry with a `sha512` integrity that `package.json` names by that exact URL; after it, every
+  off-registry entry must be byte-identical (version, resolved, integrity, dependencies, every field) and none may
+  be added, moved or removed, or nothing is staged. npm stays `--package-lock-only --ignore-scripts`, in the tools
+  container, with registry-only egress.
+- **vfr-c.C4: a stale `reject` needs you.** New `agentteams.vulnscan.handoff_stale`: a `reject` on an unchanged fix
+  digest for 14 days (a `handoff-reject-clock` ledger row) becomes a *Needs you* line in the summary and in
+  `handoff status`. A reject in between other verdicts never restarts the 14 days. Nothing re-asks the orchestrator.
+  Only a person's answer (`handoff answer --repo PATH --answer
+  keep-rejected|ask-again`, interactive, a `handoff-answer` ledger row) or a new digest clears it; an answer
+  authorizes nothing.
+- **vfr-d.D3: `stage-cargo`.** A new grantable op (Rule 15; a grant must name it, `stage-fix` never implies it) runs
+  in-major `cargo update -p <crate>@<ver> --precise <fix>` (new `agentteams.vulnscan.cargo_fix`). The target is the
+  smallest advisory-named fixed version in the installed caret line that passes the S-10 search (OSV on the exact
+  release), never a yanked one (the sparse index is read first, inside the container; unreadable refuses). crates.io
+  only (git or alternate-registry packages refuse), on a scratch copy with only `Cargo.toml`
+  files, the lockfile and empty `.rs` stubs, in the tools container (cargo egress `index.crates.io:443`); only
+  `Cargo.lock` comes back, and only the planned packages' `version`/`checksum` lines may change (no new
+  `[[package]]`, `Cargo.toml` unchanged). The fix plan marks such rows `stage-cargo`. The tools image gains
+  Debian's `cargo` (rebuild it); its build fails below cargo 1.78 (Cargo.lock v4: use a trixie-based
+  `PYTHON_IMAGE`).
+- **vfr-d D6: a writer's open PR holds its packages back.** New `agentteams.vulnscan.writer_prs`: a same-repository
+  PR by an author with live write permission (collaborator-permission API) holds a row's package when its diff
+  (parsed as data, capped at `MAX_NAMES` names and `MAX_DIFF_BYTES`) moves it in the same file to the fixed
+  version or later, until the Rule S-VM deadline (24 h critical, 7 days high or unscored, 30 days moderate or low,
+  from the package's first `writer-hold` ledger row in the repository: a new PR never renews it). The plan says "held by #N" with the expiry; any gh failure holds nothing.
+  `fix._leave_to_prs` moved to `writer_prs.leave_to_prs`; the unused `open_prs.staging_claims` is gone
+  (`writer_prs.staging_claims` replaces it).
 ### feat (opt-in integration-branch model, to cut GitHub Actions cost)
 
 - **New brief block `git_workflow`** (`branch_model`: `"trunk"` default | `"integration"`; `integration_branch`,
@@ -398,6 +484,208 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GOOSE_SANDBOX` precondition, and note that the `DESCRIPTION-FORMAT.md` `wasm_sandbox` example needs two standing
   exceptions, over the registry's default cap of one.
 
+### added (vulnscan: distro verdicts for OS-packaged Python; plan vfr-a A2)
+
+- **OS-managed Python findings get a distro verdict beside the upstream grade.** For a package in
+  `/usr/lib*/python3*/{dist,site}-packages` whose `DISTROPKG` line names an allowlisted-archive owner, each upstream
+  advisory is joined on its CVE ids to the distribution: `fixed-in-installed`, `fix-available-not-installed`,
+  `esm-only` or `no-distro-fix` (the worst across advisories). The row, severity, key and exit code are unchanged.
+  - Ubuntu: OSV's `Ubuntu:<release>[:LTS]` and `Ubuntu:Pro:…` records by **source** package and the installed
+    version (OSV decides whether that version is affected). An ESM-only fix counts as available when the `ESM` line
+    shows the needed service enabled (plan step A5).
+  - Amazon Linux 2023: the host's own updateinfo; no network source is used for ALAS. `L1-audit.sh` (dnf hosts)
+    prints `UPDATEINFO` lines from `dnf -C -q updateinfo list --security --installed|--available --with-cve`
+    (cache only, under the kit timeout) and an `UPDATEINFOREAD ok|failed` line per pass. That listing's format is
+    unverified on AL2023, so it is read strictly: a dnf failure, or any line other than
+    `[i] <CVE> <severity>/Sec. <NEVRA>`, marks the pass `failed` and prints no records. A failed pass gives that
+    host's findings no distro verdict (never "not affected"; the upstream grade stands), a LOW `distro-updateinfo`
+    host check and a note in *Distro verdicts*. It is not a feed error, so a format mismatch cannot make the host's
+    scan exit 3 every day. Check the first vk-bastion run (plan step A3).
+- `summary.md` gains *Distro verdicts*: per host, the count of each verdict and **the `esm-only` count** (operator
+  decision OD1). `Finding.distro_verdict` / `distro_note` are in `summary.json`; an older report loads with `""`.
+- **Unowned or third-party files in OS paths are judged upstream.** A finding with any location `unowned` or
+  `repo:…` gets no verdict and loses `distro`, so it now counts toward `--fail-on` (it was excluded as OS-managed).
+  A PyPI version that is not the owning package's upstream version gets no verdict either.
+- A failed Ubuntu query, an unreadable Ubuntu record, or an advisory record the CVE join cannot read (either
+  distro) is a feed error (exit 3), never a verdict. Package names in feed-error text are capped code spans.
+
+### added (vulnscan server kit: distro sources, not-live labels, held interpreters; plans vfr-a A1, vfr-e E1/E2b, vfr-r R4)
+
+- **`L1-audit.sh` reports where OS-packaged Python comes from (A1).** For each package in an OS-managed path
+  (`/usr/lib*/python3*/{dist,site}-packages`), a `DISTROPKG` line gives the owning dpkg/rpm package, its source
+  package (`${source:Package}`, or the SRPM name), that package's version and its origin (`pkg:`/`repo:`, or
+  `unowned`). `AUTOUPD` lines give unattended-upgrades' allowed origins and `APT::Periodic` values, or
+  dnf-automatic's `apply_updates` / `upgrade_type` and enabled timers, and the package lists' or dnf metadata's age.
+  Nothing reads these yet: the distro verdict is A2.
+- **A renamed, unused tree is labelled, never excluded (E1).** A directory named `<name>.disabled-YYYYMMDD` gets a
+  `SCOPE … disabled` line only when nothing outside it names it: units (with `Environment=`/`EnvironmentFile=`),
+  cron, profiles, loader and web-server configuration (`nginx -T` too), users' dotfiles, `.pth` files, symlinks, or
+  a running process's binary, working directory or mapped files. A source it cannot read leaves it unlabelled. The
+  label is per location and covers every find (packages, runtimes, npm/composer manifests, indicator hits).
+- **node_modules nginx refuses is labelled `on-disk-not-served` (E2b)**, with the rule as evidence, only when every
+  server whose root holds it selects a `deny all` / `return 403|404` location for each probe URI. Apache, a relative
+  root, an alias reaching it, an `allow`, an earlier serving regex or a longer `^~` prefix leave it unlabelled.
+- Review fixes (security, code hygiene): E1 also reads `/etc/ld.so.preload`, `/etc/pam.d`, `/etc/default`,
+  `/etc/logrotate.d`, `/etc/php*`, `at` spools, generated and `/usr/local/lib` units, pm2 dumps, process
+  `mountinfo` and container mounts. Secret-store dotfiles (`.env`, `.npmrc`, `.pypirc`, `.vault-token`, `.s3cfg`,
+  `.boto`) and `EnvironmentFile=` files are matched with `grep -lF` only. An unresolvable `EnvironmentFile=` (a
+  missing optional `-` file is ignored, as systemd does) or a failed container query (docker only when a socket or
+  `dockerd` exists) leaves the tree unlabelled. E2b refuses to
+  label when a server holds an `include`, a location sits outside every server, or a regex location exists and the
+  refusal is not `^~`/`=` (the note names the fix). `nginx -T` runs once (under the 10 s limit) into a mktemp file an EXIT trap removes;
+  the header says it may create its error-log and temp paths as root. One PyPI JSON URL (`_http.PYPI_JSON`).
+- The engine copies labels to `Finding.location_labels` and the report groups fully labelled findings under *On
+  disk, not the live system*. **Grading is unchanged:** every finding keeps its row, severity, key and exit code; a
+  finding also at a live location is named apart, never grouped.
+- **An end-of-life interpreter that holds packages below their fix is its own finding (R4).** `PYSITE` lines name a
+  site-packages directory's Python line; for a non-OS location on an end-of-life line, packages whose fix release's
+  `requires_python` (read from PyPI) allows no release of that line give one HIGH `runtime` finding naming them.
+  An unread `requires_python` is a feed error.
+- Deploy: the daily run streams the packaged kit, so deploying this commit (`vulnscan-deploy.sh`) is enough; the next
+  audit runs the new `L1-audit.sh`. A hand-run `remote.sh` copy needs `vulnscan server-kit` again.
+
+### fixed (vulnscan: majors beside a fix PR, transitive rows that move with their parent, the own-pr lapse)
+
+- **vfr-b.B2: major upgrades are requested beside a fix PR.** A plan with both `fix` and `major-held` rows never
+  had its majors requested: its `stage-fix` succeeds, so it is never held (traffic-file-enrichment-app: a `qs` fix
+  PR, eight major rows). `executor_guard.write_plan_levels` now also marks such a plan in `major_next` with
+  `"after": "fix-pr"` once its last non-major PR was opened at the current plan and no `stage-major` followed
+  (`retry_guard.major_beside_since`), and `get_fix_plans` tells the agent to request `stage-major` now, as a
+  second branch. A `stage-major` PR now has its own `close-superseded` lane (`ops.lane_of`: `major`), so the MAJOR
+  PR never closes the fix PR beside it, nor the reverse; every `open-pr` result, a claimed existing PR included,
+  carries its lane (`executor_pr.lane_fields`). `authorize` refuses
+  `stage-major` (before a grant use) while a fix is staged with no PR, which it would otherwise replace. The task
+  text, the `request` tool description and the recipe's `daily_remediation` fence (v=9) allow it.
+- **vfr-b.B3: transitive rows that move with their parent are reported so.** After `stage-major` raises a direct
+  dependency, `fix.npm_majors` re-reads the re-resolved lockfile: a transitive `major-held` row the raised parent
+  installed and that is gone now becomes `moves-with` (`fix.MOVES_WITH`, naming the parent), not "stays held". A
+  dry-run plan notes on such rows `transitive: moves with <parent> when stage-major raises it` (this changes those
+  plans' digests once, so a `held:` mark lifts once). New `npm_groups.LockGraph.carried_by` and
+  `npm_groups.installed`.
+- **vfr-b.B1b: an `own-pr` verdict lapses after seven days (OD10).** New `agentteams.vulnscan.handoff_lapse`: the
+  clock starts at the first sight of `own-pr` for a staged fix, as a `handoff-clock` row in the MAC-chained ledger
+  (a new digest, fix plan or verdict id restarts it; any other verdict stops it).
+  Until it runs out `open-pr` stays refused, naming the lapse date, and `handoff status` / the summary show the date
+  and the `ask` text the handoff packet should carry. After it, with no open owner PR updating the staged packages
+  (`open_prs.owner_prs`; the summary names any that keep it deferring), `open-pr` proceeds under the existing grant
+  and a `handoff-lapsed` ledger row is logged once a grant covers it.
+  No new op or capability.
+
+### added (vulnscan: allowlisted non-npm sources are graded on advisory ranges, vfr-e.E3)
+
+- **An npm package installed from its publisher's own host is graded, not mis-read.** SheetJS publishes `xlsx`
+  after 0.18.5 only on `cdn.sheetjs.com`, and the GHSA records for npm `xlsx` name no fixed npm version, so the
+  exact-version OSV query marked every CDN release affected with no fix, the fixed ones included.
+- New `agentteams/vulnscan/offnpm_sources.py`: a data table of allowlisted sources (one row: SheetJS's CDN, tarball
+  path, publisher, evidence) and `judge()`, which grades one advisory on its affected ranges. `scan_path` sends an
+  npm lockfile entry (v1–v3) whose `resolved` URL matches a row exactly to the new `engine.analyze_sources`: the
+  name is queried without a version and each advisory is judged locally. The grade is `fixed` (no range holds
+  the version: no finding), `vulnerable` (a closed range holds it, or an open-ended one with nothing bounding it)
+  or `unknown` (an open-ended range whose `last_known_affected_version_range` ends below the version, a range with
+  a bound that is not a version or a start above its end, or a record that cannot be judged). `unknown` is never clean: the finding keeps the advisory's severity. Every graded entry
+  is listed in the new `Report.sources` (JSON `sources`, and a `summary.md` section), whatever its grade.
+- No general CDN trust: any other off-registry URL (another host, a port, user info, a query, another path, or a
+  name or version that differs from the lockfile's) is queried by exact version, as before. `Dep` gains
+  `resolved`. With records shaped as GitHub publishes them (an open `introduced: 0` range and a last known affected
+  range below 0.20.3), portal's `xlsx` 0.20.3 reads `unknown`, not "2 advisories without a fix". The signed known entry that settles it (vfr-k) is a separate change.
+
+### added (vulnscan: same-day verification and per-finding effectiveness, vfr-v V1 + V2)
+
+- **Per finding, not only counts (V2).** `effectiveness.compare` says, for each finding of a baseline run, whether
+  a later run shows it remediated: `remediated`, `partly remediated`, `open`, `moved (not remediated)`, `present
+  elsewhere (not remediated)` (its package found at another place, e.g. `/opt/anaconda3`) or `not assessed`. Each later finding pairs with one baseline finding of its key at the same place, so two version lines
+  of one package never match each other. `effectiveness.detect_moves` finds a tree renamed on disk
+  (`/root/anaconda3` → `/root/anaconda3.disabled-20261101`) without being told: a finding still in the renamed tree
+  is "moved", never "remediated". On the 2026-10-31 → 2026-11-02 runs the comparison matches the 9f audit script
+  (`vfu-m7-audit.py` r2) row for row, and the detector turns the 56 rows the rename made look remediated into
+  `moved (not remediated)`. The daily summary's effectiveness section adds the previous run's findings per outcome
+  (counts only). Only targets the run has a scan record for are assessed. New command `effectiveness BASE LATER
+  [--alias] [--path-alias] [--csv] [--out]`, which replaces the audit script.
+- **Unknown is not fixed (headline counts).** "Findings fixed / new since the previous run" and the net change now
+  leave out every target the run has no complete scan record for, on both sides: before, a host whose audit did not
+  complete (ssh exit 255, a proxy 502) had all its previous findings counted as fixed. Those findings are carried on
+  a line of their own ("Previous findings on targets this run did not scan"). Without a scan record set (callers
+  that pass none) the counts are unchanged.
+- **A host back after an unscanned run is not all-new (the mirror case).** When the previous run has no complete
+  scan record for a target, the daily run compares that target with the newest earlier run that has one
+  (`effectiveness.fill_baseline`, up to 7 runs back), for the NEW marks, the heartbeat's `new` and the
+  effectiveness counts alike, and each substitution gets a note. A run's own feed errors override a scan record
+  left behind by an earlier run that day, and a target no run in range scanned keeps the previous run's partial
+  findings. "Fixed since the previous run" can therefore cover more than one day for such a target (the note says
+  so). On the 2026-11-05 → 11-06 runs this turns 42 "new" (two hosts unreachable on 11-05) into the 1 that is.
+- **Same-day verification (V1).** New command `verify` (module `agentteams.vulnscan.verify`) and job
+  `io.agentteams.vulnscan-verify`, which `vulnscan-remediate-auto.sh --install` loads (17:15 and 18:45,
+  `VULNSCAN_VERIFY_TIMES`). Its entry point is `vulnscan-daily-wrapped.sh --verify`: the install guard, the wrapper
+  lock, Docker. It takes `remediate.flock` and `daily.lock` without waiting and runs the operator's scan-mirror
+  refresh (`VULNSCAN_MIRROR_REFRESH`). It then re-scans each root whose mirror moved since the morning, re-audits
+  each configured server an executor `server-*` op ran against today, and writes `<run>/verify.json`. It stages
+  nothing, opens no PR and sends no notification. The refresh script is opened with `O_NOFOLLOW`, checked on its
+  descriptor (and its folders up to `$HOME`), and run as `bash /dev/fd/N`, so a file swapped in after the check
+  is never run. `scan_mirror.scan_root` is split out of the daily scan, so both scan a root the same way;
+  `daily.scan_server`, `write_atomic`, `ITEM_ERRORS` and `remediation_lock_path` are public, and
+  `under_root` / `drop_excluded` moved to `coverage`.
+  Deploy with `vulnscan-deploy.sh --with-scripts` to install the job.
+
+### fixed (vulnscan: a handoff's review directive is verified by itself, not by the whole ledger)
+
+- **Expired history no longer marks every handoff unverified.** The site-local operator tooling decided a handoff's
+  directive was verified only when `--verify-directives` passed the repository's whole directive ledger, and that
+  fails every row whose expiry has passed. From a repository's second day on, every handoff read "issued, but the
+  ledger did not verify cleanly" (all four such lines on 2026-11-02 were earlier days' expired directives).
+- New `management_directives.verify_handoff_directive` and `python -m agentteams.vulnscan handoff verify-directive
+  --team-dir DIR --handoff-id ID [--directive-id ID] [--json]` return a structured verdict with reason codes (exit 0
+  verified, 1 not). Verified needs: a ledger with an intact `prev_digest` chain (an unchained ledger is never
+  passed); exactly one row with the scope `review-vulnscan-handoff-<id>` (and the issued id, when given); that row
+  valid on every check, expiry included; every other row valid or failing only on expiry. A bad signature,
+  exhaustion, an off-roster manager or a malformed date on any row still fails, even on an expired row:
+  `directive_row_failures` reports every failed check by reason code, so the carve-out never relies on check order.
+  `validate_directive` and `--verify-directives` are unchanged. The directive stays reporting-only.
+
+### changed (vulnscan: no more "fix by hand" in fix plans and notes)
+
+- Rows no executor op can stage now say where they go: "left to the repository's own PR" (`fix.OWN_PR`) for npm
+  workspaces, unusual crate or package forms, held majors, an unrewritable `package.json` and lockfiles that list
+  private packages; skipped `npm update` moves name the tools container or the repository's own PR; the agent prompt
+  reports plan-only commands as left to the repository's own PR; server fix plans call host checks and unlisted
+  Python packages operator decisions. The git-config refusals (environment faults) still say "fix it by hand".
+- The same wording now reaches the agent from every side: the Cargo.lock, base-image and lockfile plan notes, the
+  `stage-image` hold reasons, the plan-only refusal of `stage-fix` and the `repo-held` notice ("sign a grant naming
+  stage-major for it, or leave the upgrade to the repository's own PR"). `OWN_PR` lives in `npm_ops` and is
+  re-exported by `fix`. A directive ledger that is not UTF-8 now fails closed as unreadable instead of raising.
+
+### added (vulnscan: signed, expiring known-finding entries; `known propose` for agents, `known sign` for the operator)
+
+- **A deliberate decision to accept a finding is now recorded, and reads differently from an unfixed one**
+  (vfr-k K1/K3, under @security's K2 conditions). A *known entry* is the operator's Ed25519 signature (own purpose
+  tag `agentteams-vulnscan-known-v1`, through `grant.operator_sign`) over a finding's key: target, ecosystem,
+  package, installed version, advisory ids, and the fix state and severity at signing. A group entry signs its full
+  member list (2–40), never a path prefix. The web-root host check keys on one `HOSTEVIDENCE` digest that
+  `L1-audit.sh` now prints: a sha256 over each file's HMAC and the nginx `deny` rules. The HMAC key is random per host,
+  created on first use at `/var/lib/agentteams-server-kit/l1-evidence.key` (mode 600) and never printed; no per-file
+  value is printed. Rotating the key voids the host's entries. CRITICAL findings are refused until vulnscan reads the
+  CISA KEV catalog.
+- While an entry is valid, `daily` grades its findings `known until <date>` and leaves them out of the exit code. They
+  stay in the report, and `summary.md` lists every entry under *Known findings*: reason (fenced as data, capped),
+  expiry, key id, decision reference, renewal count. Void entries are listed too, with the reason.
+- Every load re-checks the signature, purpose and the 90-day limit, then the decision log: a HALT on `vulnscan-known`
+  voids every entry (so does `vulnscan-known:<anything>`), and a HALT on the bare entry id `vk-…` or a lineage id
+  voids that entry. The decision reference must name a cleared row (a conditional one only once
+  `conditions_verified` is `verified`), and a HALT or retraction of that row voids the entry. Entries apply to `daily`
+  only; ad-hoc `scan`/`inventory` exit codes can differ. The entry's sha256 must also be in the committed
+  `references/vulnscan-known-index.csv` (added here, empty). At most 30 entries are in force; over the cap the newest
+  is refused and the existing ones stay valid. The class is derived by `effect_classifier`. Trust-root targets,
+  `MAL-*` and malicious findings, compromise indicators, ranges, integrity findings and the other host checks are
+  refused even when signed.
+- An entry voids itself on a version change, a new advisory id, a fix it did not record, a severity rise or KEV, an
+  evidence change, expiry, a missing or mismatched index row, or a bad signature. A void entry covers nothing, and
+  the report gains a HIGH `integrity` finding naming it.
+- `known propose` writes an unsigned proposal from a run's findings and prints the signing command. It never signs
+  and never reads key material. `--from-note` migrates an operator note's text, which is how the 2026-11-01 zstd
+  note becomes an entry. `--renews` keeps the lineage. The operator runs `known sign` outside agent sessions, then
+  commits the index row. `known list` and `known remove` also exist. Code: `vulnscan/known.py` (format, refusals,
+  signing, verification), `known_report.py` (loading, voids, grading), `known_cli.py`; `vulnscan-known` joins
+  `action_ids.GATE_ACTIONS`. No entry is created by this change (K4 is not
+  cleared).
 ### changed (WASM: native Windows is not supported for now)
 
 - **Native Windows is not supported for WASM for now.** With WASM on, a render on native Windows now also prints and
@@ -1556,6 +1844,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `STABILITY.md`.
   - `references/git-procedures.md` documented `mkdocs build --clean` into `docs/`. It now gives the strict
     `_site` build CI uses.
+
 ### Fixed
 
 - **sandbox (macOS): gate 8 no longer scores a declined `rm` prompt as an escape.** `mac-escape-tests.sh` tried to

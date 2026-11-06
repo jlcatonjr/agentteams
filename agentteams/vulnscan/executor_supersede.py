@@ -9,8 +9,8 @@ that names the op (``open-pr`` never implies it):
   MAC-chained ledger, and GitHub must report it open, with a ``vulnscan/*`` head in the same repository.
 - **Only the executor's own PRs are candidates:** URLs from earlier successful ``open-pr`` rows for the same
   repository, in the same GitHub repository as the replacement (at most :data:`MAX_CANDIDATES`, newest), and in the
-  replacement's **lane** (:func:`.ops.lane_of`): a ``stage-image`` (base image) PR and a dependency PR are disjoint
-  changes, so neither ever supersedes the other.
+  replacement's **lane** (:func:`.ops.lane_of`): a ``stage-image`` (base image) PR, a ``stage-major`` PR and a
+  dependency PR are separate changes, so none ever supersedes another.
 - **Untouched by people.** A candidate is closed only when it is open, its head is a ``vulnscan/*`` branch in
   the same repository (not a fork), and it has no reviews, no comments and no commit whose author is not
   the executor's git identity. Anything else is kept and reported with the reason.
@@ -41,7 +41,7 @@ OP = "close-superseded"
 MAX_CANDIDATES = 20
 MAX_SAME_CHANGE = 3   # open, and closed, PRs open-pr examines for the same change (each match costs a fetch)
 SUPERSEDED_BY_EXECUTOR = "agentteams vulnscan executor (close-superseded)"   # in the comment close-superseded posts
-_VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits"
+_VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits,author"
 
 
 def ledger_prs(repo: str, rows: list[dict[str, Any]]) -> list[str]:
@@ -77,12 +77,27 @@ def head_problem(data: dict[str, Any]) -> str:
     return ""
 
 
+#: The verdict comment the operator scripts post on an executor PR (vulnscan-operator-actions.sh step 17). It relays the
+#: repository orchestrator's verdict; it is not a person's edit, so on its own it does not keep a superseded PR open.
+VERDICT_COMMENT_RE = re.compile(r"Repository orchestrator review \(vulnscan handoff \d{14}\): "
+                                r"\*\*(?:approve-staged|own-pr|defer|reject)\*\*(?: — [^\n]{0,600})?\. "
+                                r"Merging stays with the operator\.")
+
+
 def touched_problem(data: dict[str, Any], identity: tuple[str, str]) -> str:
-    """Return why a person has touched a PR (reviews, comments, or a commit by anyone else), or ""."""
+    """Return why a person has touched a PR (reviews, comments, or a commit by anyone else), or "".
+
+    A comment counts unless it is exactly the operator scripts' verdict relay (:data:`VERDICT_COMMENT_RE`) written by
+    the PR's own author (the account the executor opens PRs with): otherwise every reviewed PR would stay open beside
+    its replacement (Rule 12, @security 2026-11-04).
+    """
     if data.get("reviews"):
         return "it has reviews"
-    if data.get("comments"):
-        return "it has comments"
+    pr_author = ((data.get("author") or {}).get("login") if isinstance(data.get("author"), dict) else None)
+    for c in data.get("comments") or []:
+        if not (isinstance(c, dict) and pr_author and (c.get("author") or {}).get("login") == pr_author
+                and VERDICT_COMMENT_RE.fullmatch(str(c.get("body", "")))):
+            return "it has comments"
     return authored_problem(data, identity)
 
 
@@ -197,7 +212,8 @@ def open_pr_with_same_change(wt: Path, target_repo: str, branch: str, base: str)
     long); one is claimed only if every commit on it is the executor's (:func:`authored_problem`) and its whole change,
     ``git diff <merge-base with base> <its head>``, equals the staged change ``git diff <base> HEAD`` byte for byte
     (:func:`.executor.change_diff`). Reviews and comments do not stop a claim: they leave the content as it is, and
-    the operator scripts comment the orchestrator's verdict on the PR. Best effort: when gh or git fails or times out
+    the operator scripts comment the orchestrator's verdict on the PR. A PR behind ``base`` is not claimed (it is
+    superseded by the current one). Best effort: when gh or git fails or times out
     there is no claim, and open-pr then opens a PR as it did before this check existed.
 
     Args:
@@ -225,7 +241,7 @@ def open_pr_with_same_change(wt: Path, target_repo: str, branch: str, base: str)
         view = _gh_json("pr", "view", url, "--json", _VIEW_FIELDS)
         if not isinstance(view, dict) or authored_problem(view, ex.GIT_IDENTITY):
             continue
-        if _holds_change(wt, f"refs/heads/{head}", base, staged):
+        if _holds_change(wt, f"refs/heads/{head}", base, staged, require_current=True):
             return head, url
     return None
 
@@ -275,14 +291,21 @@ def closed_pr_for_change(wt: Path, target_repo: str, branch: str, base: str) -> 
     return ""
 
 
-def _holds_change(wt: Path, ref: str, base: str, staged: str) -> bool:
-    """Return whether origin's ``ref`` carries exactly the ``staged`` change (``git diff <merge-base> <its tip>``)."""
+def _holds_change(wt: Path, ref: str, base: str, staged: str, *, require_current: bool = False) -> bool:
+    """Return whether origin's ``ref`` carries exactly the ``staged`` change (``git diff <merge-base> <its tip>``).
+
+    With ``require_current`` the tip must also contain ``base``: a PR behind the base its fix was just re-staged on
+    is never claimed, so open-pr opens a current PR and ``close-superseded`` retires the old one (operator decision
+    2026-11-04: its checks tested an old base, and auto-merge pins the head, so nothing may update it in place).
+    """
     from agentteams.vulnscan import executor as ex
 
     if not staged or ex.git_proc(wt, "fetch", "--no-tags", "origin", ref, push=True).returncode:
         return False
     tip = ex.git(wt, "rev-parse", "FETCH_HEAD", check=False).strip()
     mb = ex.git(wt, "merge-base", tip, base, check=False).strip() if tip else ""
+    if require_current and mb != ex.git(wt, "rev-parse", base, check=False).strip():
+        return False   # the tip does not contain base: behind
     return bool(mb) and ex.change_diff(wt, mb, tip, check=False) == staged
 
 

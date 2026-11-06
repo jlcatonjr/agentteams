@@ -34,12 +34,14 @@ from typing import Any
 from agentteams.vulnscan import (
     escalations,
     grant,
+    grant_v2,
     ledger,
     notify,
     retry_guard,
     subproc_confine,
 )
 from agentteams.vulnscan import executor as ex
+from agentteams.vulnscan.ops import OPERATOR_ONLY_OPS
 
 NOT_ATTEMPTED = "not attempted: "
 STAGED_INDEX = "staged-fixes.json"   # read by the MCP server (mcp.STAGED_FILE)
@@ -85,7 +87,7 @@ def batch_block(cfg: dict[str, Any], op: str) -> str:
         rows = ledger.read()
     except ValueError:
         return ""   # act refuses everything on an untrusted ledger, with its own reason
-    if any(op in g.get("ops", ()) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"]) for g in grants):
+    if any(op in g.get("ops", ()) and grant_v2.uses_left(g, op, rows) for g in grants):
         return ""
     return f"no valid grant with uses left allows {op}" + (f" ({'; '.join(problems)})"[:600] if problems else "")
 
@@ -118,6 +120,8 @@ def _read_request(path: Path) -> dict[str, Any]:
 def _check_payload(req: dict[str, Any]) -> None:
     """Validate the per-op payload: required for and only allowed with internal ops."""
     op, payload = req["op"], req.get("payload")
+    if op in OPERATOR_ONLY_OPS:   # host changes run only from the operator's confirmed `vulnscan act`
+        raise ex.ExecError(f"{op} is operator-run only (vulnscan act), never a spooled request")
     if op not in ex.INTERNAL_OPS:
         if payload is not None:
             raise ex.ExecError("payload is only allowed with internal ops")

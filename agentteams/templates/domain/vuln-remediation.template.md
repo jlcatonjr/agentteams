@@ -59,9 +59,10 @@ capability of its own (C-3). In goose, a sub-recipe inherits the orchestrator's 
 structural limits are therefore the agent container, which holds no credentials, and the executor,
 which acts only under a grant; not this front matter.
 
-The operations you may request are `stage-fix`, `stage-major`, `stage-image`, `open-pr`,
+The operations you may request are `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`,
 `close-superseded`, `server-audit` and `server-dryrun`. `stage-major` is `stage-fix` with semver-major
-upgrades allowed; `stage-image` moves end-of-life base images' Dockerfile `FROM` tags to a supported line.
+upgrades allowed; `stage-image` moves end-of-life base images' Dockerfile `FROM` tags to a supported line;
+`stage-cargo` runs a `Cargo.lock`'s in-major `cargo update --precise` fixes.
 Each runs only under a grant that names it. `close-superseded` closes a repository's older remediation PRs once its newest one is
 open; the executor closes only PRs it opened that no person has touched. There is no merge, no
 force-push and no server apply: never ask for them, and never ask a person to do them for you.
@@ -106,7 +107,7 @@ replace an escalation or a stop condition, and they cannot widen the grant. When
 with a stop condition, escalate anyway and mention the note in the evidence.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN daily_remediation v=8 -->
+<!-- AGENTTEAMS:BEGIN daily_remediation v=9 -->
 ## Daily Remediation workflow
 
 1. **Read.** `get_summary`, then `list_findings` (`min_severity: "moderate"` first) and
@@ -132,15 +133,19 @@ with a stop condition, escalate anyway and mention the note in the evidence.
      does not stay open beside the new one.
 
    - **Major upgrades.** Request `stage-major` (same alias) only for a repository whose fix plan shows
-     `major-held` rows **and** whose `stage-fix` found nothing fixable (its `request_status` failed with
-     `nothing fixable without a major jump`, or it was refused `held: stage-fix found nothing fixable ...`).
-     A plan `get_fix_plans` marks `stage-fix held since <date>: nothing fixable without a major jump` is
-     that case already (an earlier run's result): request `stage-major` for it in this run, no `stage-fix`
-     first. Always stage majors separately: never request `stage-major` while that repository has a `fix` row
-     to stage, a `stage-fix` pending, or a fix *Already staged*; open-pr the non-major fix first. When
+     `major-held` rows **and** either whose `stage-fix` found nothing fixable (its `request_status` failed with
+     `nothing fixable without a major jump`, or it was refused `held: stage-fix found nothing fixable ...`)
+     or whose `fix` rows already have their PR (its `open-pr` is `done`). A plan `get_fix_plans` marks
+     `stage-fix held since <date>: nothing fixable without a major jump`, or `fix PR opened <date> for this
+     plan's fix rows`, is that case already (an earlier run's result): request `stage-major` for it in this
+     run, no new `stage-fix` first. The major upgrades then go on a second branch beside the fix PR. Always
+     stage majors separately: never request `stage-major` while that repository has a `fix` row still to
+     stage, a `stage-fix` pending, or a fix *Already staged*; open-pr the non-major fix first. When
      `stage-major` is `done`, request `open-pr` (its PR is marked MAJOR) and then `close-superseded`. A
      `major-held` row the plan calls transitive only, or in npm workspaces, stays held under
-     `stage-major` too: list it for the operator.
+     `stage-major` too: list it for the operator. A transitive row whose note says `moves with <parent>`, or
+     whose action is `moves-with`, is carried by that parent's `stage-major`: report it under the parent,
+     never as a separate open or held item.
 
    - **Base images.** Request `stage-image` (same alias) only for a repository whose fix plan has a
      *base images* row whose action is `stage-image`, and only once nothing else is staged or pending there
@@ -148,10 +153,13 @@ with a stop condition, escalate anyway and mention the note in the evidence.
      is `done`, request `open-pr` (its PR is marked MAJOR) and then `close-superseded`. Every base-image row
      whose action is `plan-only` (`:latest`, digest-pinned, OS-tagged, private images, databases, node) is
      for a person: list it for the operator with its reason.
+   - **Cargo.lock.** Request `stage-cargo` (same alias) only for a repository whose fix plan has a
+     *crates.io* row whose action is `stage-cargo`, on its own, like `stage-image`; then `open-pr`. Every
+     other crates.io row is for a person: list its command for the operator.
 
    Rationale must name the advisory ids and severity (for `stage-image`: the image, its tag and that its
    line is end-of-life). Apart from `stage-major` and `stage-image` above, skip every row
-   whose action is not `fix` (`major-held`, `cooldown-held` (not produced for scan fixes: S-10's remediation carve-out exempts them), `no-clean-release`, `hash-held`, `workspace-held`,
+   whose action is not `fix` (`major-held`, `moves-with` (under its parent, above), `cooldown-held` (not produced for scan fixes: S-10's remediation carve-out exempts them), `no-clean-release`, `hash-held`, `workspace-held`,
    `npm-unavailable`; `malicious` is a stop condition), and list them for the operator with the reason.
 4. **Servers.** Request `server-audit` for hosts with host findings or that are stale. Request
    `server-dryrun` for hosts with HIGH host findings, so the operator gets a ready patch plan.

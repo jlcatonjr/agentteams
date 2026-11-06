@@ -1,0 +1,8 @@
+{
+  "patch_id": "ed9a08f09541733c7bd88ebed4ace5523e61cc51",
+  "commit": "44c12427e037825f703e1678ed6698dbfb59c7cd",
+  "subject": "fix(vulnscan): known entries review round 1 (@security R1-R3, @code-hygiene nits)",
+  "impact": "2 symbols added, 1 symbols changed",
+  "note": "vfr-k review round 1: known.utc_now/is_trust_root made public (hygiene 5); engine.host_evidence now takes the single HOSTEVIDENCE line (digest, files, deny) instead of per-file lines (@security R1); documented in docs_src/api-reference/vulnscan.md",
+  "recorded_at": "2026-11-02T22:11:29Z"
+}

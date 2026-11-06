@@ -47,7 +47,7 @@ def _freshness(root: Path, rep: Report) -> list[dict[str, Any]]:
         repo = root if rel == "." else root / rel
         try:
             row = _repo_freshness(repo, [f for f in rep.findings if f.kind == "package" and f.target == rel], root)
-        except daily._ITEM_ERRORS as exc:   # a hung or broken git: no label, and the row says so
+        except daily.ITEM_ERRORS as exc:   # a hung or broken git: no label, and the row says so
             row = {"branch": "?", "behind": None, "fetch_age_h": None, "fixed_upstream": 0,
                    "error": f"git query failed ({type(exc).__name__})"}
         if row is not None:

@@ -1,0 +1,8 @@
+{
+  "patch_id": "9e49eb727f3c55c6df6fa05c5d93e14d65b2bfd4",
+  "commit": "52b0b22881a6ca2a330bc05f90a635ecdb7292f0",
+  "subject": "fix(vulnscan): vfr-v review: @security conditions 1-3 and @code-hygiene nits a-f",
+  "impact": "8 symbols added, 1 symbols removed, 1 symbols changed",
+  "note": "vfr-v review: verify.remediation_lock_path removed (moved to daily.remediation_lock_path; verify unreleased, no caller outside this branch); added verify.open_refresh, verify.RefreshRefused, scan_mirror.read_stamp, daily.remediation_lock_path, coverage.under_root, coverage.drop_excluded, effectiveness.ELSEWHERE; daily._scan_server/_write_atomic/_ITEM_ERRORS made public (scan_server/write_atomic/ITEM_ERRORS, private names gone: internal callers and tests updated); effectiveness.compare behaviour: new status 'present elsewhere (not remediated)' and Comparison.new now lists every unpaired later finding; verify.dispatch load_cfg typed Callable.",
+  "recorded_at": "2026-11-02T23:04:26Z"
+}

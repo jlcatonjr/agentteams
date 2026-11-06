@@ -13,13 +13,17 @@ Tools:
 - ``get_fix_plans``: the deterministic fix plans, one per git repository, each headed by the
   repository alias that ``stage-fix`` takes as its target. A plan for a repository enrolled below
   ``remediate`` is headed "scan only" instead (the executor refuses ``stage-fix``/``open-pr`` there). A plan
-  whose ``stage-fix`` is held for "nothing fixable without a major jump" says ``stage-major`` is next.
+  whose ``stage-fix`` is held for "nothing fixable without a major jump", or whose ``fix`` rows already have their
+  PR while ``major-held`` rows remain, says ``stage-major`` is next.
 - ``request``: queue ``stage-fix`` / ``stage-major`` / ``stage-image`` / ``open-pr`` / ``close-superseded`` /
   ``server-audit`` / ``server-dryrun`` on a target, with a rationale. ``stage-major`` is ``stage-fix`` with
   semver-major upgrades allowed (only a grant naming it covers it): for a repository whose plan shows ``major-held``
-  rows once ``stage-fix`` found nothing fixable, staged on its own, never mixed with a non-major fix.
+  rows once ``stage-fix`` found nothing fixable, or once its ``fix`` rows have their PR (vfr-b.B2), staged on its
+  own, never mixed with a non-major fix.
   ``stage-image`` (only a grant naming it covers it) moves end-of-life base images' Dockerfile ``FROM`` tags: for a
   repository whose plan has base-image rows with action ``stage-image``, staged on its own.
+  ``stage-cargo`` (only a grant naming it covers it) runs in-major ``cargo update --precise`` fixes on a
+  ``Cargo.lock``: for a repository whose plan has crates.io rows with action ``stage-cargo``, staged on its own.
 - ``request_status`` / ``list_requests``: the executor's results. A pending request gets an instruction not to
   poll (the executor serves requests on its own schedule); after :data:`MAX_PENDING_POLLS` pending answers for
   one id, further polls of it are refused, so a polling loop cannot burn the run's token cap.
@@ -103,10 +107,14 @@ SCHEMAS: dict[str, dict[str, Any]] = {
                                 "then check request_status once near the end of the run. stage-fix stages the "
                                 "plan's `fix` rows (never a semver-major jump); stage-major is stage-fix with "
                                 "major upgrades allowed: request it only for a repository whose plan has "
-                                "major-held rows and whose stage-fix found nothing fixable (held), on its own. "
+                                "major-held rows and either whose stage-fix found nothing fixable (held) or whose "
+                                "fix rows already have their PR (get_fix_plans says so), on its own, never while "
+                                "a stage-fix is pending or staged there. "
                                 "stage-image moves end-of-life base images' Dockerfile FROM tags to a supported "
                                 "line: request it only for a repository whose plan has base-image rows with action "
-                                "stage-image, on its own (never while another fix is staged)."),
+                                "stage-image, on its own (never while another fix is staged). "
+                                "stage-cargo runs the plan's in-major Cargo.lock fixes: request it only for a "
+                                "repository whose plan has crates.io rows with action stage-cargo, on its own."),
                 "inputSchema": {"type": "object", "required": ["op", "target", "rationale"], "properties": {
                     "op": {"type": "string", "enum": list(OPS)},
                     "target": {"type": "string", "description": ("repository alias from get_fix_plans or "
@@ -268,7 +276,9 @@ class Server:
         the registry) is headed "scan only" instead, without a target: the executor refuses it. A plan the host
         listed under ``major_next`` (:func:`agentteams.vulnscan.executor_guard.write_plan_levels`) and with no
         staged fix gets a line saying ``stage-major`` is its next step: the agent never sees, in its own run, the
-        held ``stage-fix`` that says so. The executor re-checks every precondition when it stages.
+        held ``stage-fix`` that says so. A mark with ``after: "fix-pr"`` (vfr-b.B2) says instead that the plan's
+        ``fix`` rows already have their PR, so the majors go beside it. The executor re-checks every precondition
+        when it stages.
         """
         text = self._read(path)
         lines = text.splitlines()   # the target line is the plan's third line; nothing further down counts
@@ -285,7 +295,13 @@ class Server:
         names = [n for n in mark.get("packages", [])[:50] if package_name_ok(n)] \
             if isinstance(mark, dict) and isinstance(mark.get("packages"), list) else []
         since = str(mark.get("since", "")) if isinstance(mark, dict) else ""
-        if names and _DAY.fullmatch(since):   # host-authored text: only a date and package names go in (C-4)
+        beside = isinstance(mark, dict) and mark.get("after") == "fix-pr"
+        if names and _DAY.fullmatch(since) and beside:   # vfr-b.B2: the fix rows have their PR
+            head += (f"**fix PR opened {since} for this plan's `fix` rows; its major-held rows remain "
+                     f"→ request `stage-major` for this repository now** (no new `stage-fix`: it stages the major "
+                     f"upgrades as a second branch beside that PR; major-held rows stage-major can take: "
+                     f"{', '.join(names)})\n\n")
+        elif names and _DAY.fullmatch(since):   # host-authored text: only a date and package names go in (C-4)
             head += (f"**stage-fix held since {since}: nothing fixable without a major jump "
                      f"→ request `stage-major` for this repository now** (no `stage-fix` first; major-held rows "
                      f"stage-major can take: {', '.join(names)})\n\n")

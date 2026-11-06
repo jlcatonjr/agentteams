@@ -11,7 +11,7 @@
 | ``schedule install\\|remove\\|status [--apply]`` | Manage the daily job |
 | ``server-kit [DEST]`` | Export the Linux server scripts (keeps an existing ``hosts.conf`` / ``apps.conf``) |
 | ``grant sign\\|list\\|revoke`` | Operator-signed standing remediation grants (sign: operator only, outside agent sessions; ``--from-registry`` proposes enrolled ``remediate`` projects, reviewed per owner) |
-| ``act OP TARGET`` | Run one grant-covered action through the executor (ledgered) |
+| ``act OP TARGET`` | Run one grant-covered action through the executor (ledgered); ``server-apply``/``runtime-patch`` show the plan and ask first (:mod:`.host_change`) |
 | ``serve-requests`` | Execute the agents' spooled requests that a grant covers |
 | ``review [--ack]`` | After-action review of what unattended agents did; ``--ack`` records your review |
 | ``agent-image build`` | Build the credential-free agent container image (goose pinned by version + sha256) |
@@ -20,9 +20,12 @@
 | ``tools-image build`` / ``tools-selftest`` | Build the tools image git, npm and the server kit run in, and prove its isolation (:mod:`.tools_image`) |
 | ``enroll`` / ``roots`` / ``status --project DIR`` | Enrol projects (operator only), effective scan roots, one project's status (:mod:`.project_cli`) |
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
-| ``handoff status`` | Staged fixes, the repository orchestrators' verdicts and pending packets (:mod:`.handoff`) |
+| ``known propose\\|sign\\|list\\|remove`` | Known-finding entries: an unsigned proposal (anyone), signed by the operator only, outside agent sessions (:mod:`.known_cli`) |
+| ``handoff status`` / ``verify-directive`` | Staged fixes, verdicts and packets; one directive's verdict (:mod:`.handoff`) |
 | ``remediation-report LEDGER SINCE`` | One unattended remediation attempt's outcome (JSON) and ``remediation.md`` (:mod:`.remediation_report`) |
 | ``ready [--ensure] [--json]`` | Docker, the images and their self-tests, layer by layer with reason codes (:mod:`.docker_readiness`) |
+| ``verify [--mirror-refresh SCRIPT]`` | Same-day verification: re-scan what changed since the morning run, write ``verify.json`` (:mod:`.verify`) |
+| ``effectiveness BASE LATER`` | Per finding: was each finding of one run remediated by a later one (:mod:`.verify`) |
 
 Exit codes for ``scan``, ``inventory``, ``runtimes``, ``fix`` and ``daily``: 0 clean, 1 findings at
 or above ``--fail-on`` (``fix``: something held back or refused), 3 partially unscanned (a feed or host
@@ -52,6 +55,8 @@ from agentteams.vulnscan import (
     fix,
     grant,
     handoff,
+    host_change,
+    known_cli,
     operator_cli,
     paths,
     project_cli,
@@ -59,7 +64,9 @@ from agentteams.vulnscan import (
     review,
     schedule,
     tools_image,
+    verify,
 )
+from agentteams.vulnscan.ops import OPERATOR_ONLY_OPS
 from agentteams.vulnscan.report import Report
 
 KIT_CONFIGS = ("hosts.conf", "apps.conf")
@@ -193,10 +200,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--grant-id", default="")
     sp.add_argument("--confirm-review-sha256", default=None)
     sp.add_argument("--allow-checkout-signing", action="store_true")
+    host_change.add_grant_options(sp)
+    sp.add_argument("--check-only", action="store_true",
+                    help="sign: validate the whole record (bounds, v2 fields, the still-installed ancestor); sign nothing")
     sp = sub.add_parser("act", help="run one grant-covered action through the executor")
     sp.add_argument("op", choices=sorted(grant.OPS_V1))
     sp.add_argument("target")
     sp.add_argument("--rationale", default="operator-run")
+    sp.add_argument("--confirm-plan-sha256", default=None, help="server-apply/runtime-patch: the previewed plan's digest")
     sub.add_parser("serve-requests", help="execute spooled agent requests that a grant covers")
     sp = sub.add_parser("review", help="after-action review of unattended remediation")
     sp.add_argument("--since", default=None, type=operator_cli.iso_date,
@@ -216,11 +227,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("agent-selftest", help="prove the agent container's isolation")
     sub.add_parser("agent-run", help="run the agent team once on the latest scan")
     operator_cli.register(sub)
+    known_cli.register(sub)
     project_cli.register(sub)
     tools_image.register(sub)
     handoff.register(sub)
     remediation_report.register(sub)
     docker_readiness.register(sub)
+    verify.register(sub)
     return p
 
 
@@ -314,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "list":
             valid, problems = grant.load_active()
             for g in valid:
-                print(json.dumps({k: g[k] for k in grant.FIELDS}))
+                print(json.dumps({k: v for k, v in g.items() if k != "signature"}))
             for pr in problems:
                 print(f"INVALID {pr}", file=sys.stderr)
             return 0
@@ -322,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
             ok = grant.revoke(args.grant_id)
             print("revoked" if ok else "no such grant")
             return 0 if ok else 1
-        capped = grant.cap_problem()
+        capped = "" if args.check_only else grant.cap_problem()   # check-only runs before the revoke that frees one
         if capped:
             print(f"refused: {capped}", file=sys.stderr)
             return 2
@@ -334,10 +347,14 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         try:
             rec = grant.build(ops=args.op, repo_roots=roots, hosts=args.host, days=args.days,
-                              max_uses=args.max_uses, key_id=args.key_id, governance_dir=args.governance_dir)
+                              max_uses=args.max_uses, key_id=args.key_id, governance_dir=args.governance_dir,
+                              before_revoke=args.check_only, **host_change.grant_fields(args))
         except grant.GrantError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
+        if args.check_only:
+            print(f"check-only: the {'v2 ' if rec.get('version') == 2 else ''}grant record is valid; nothing signed")
+            return 0
         signed = grant.sign(rec, confirm_sha256=args.confirm_review_sha256, allow_checkout=args.allow_checkout_signing)
         if signed is None:
             return 1
@@ -353,7 +370,11 @@ def main(argv: list[str] | None = None) -> int:
         if cfg is None:
             return 2
         if args.cmd == "act":
-            res = executor.act(args.op, args.target, cfg, rationale=args.rationale)
+            if args.op in OPERATOR_ONLY_OPS:
+                res = host_change.operator_act(args.op, args.target, cfg, confirm_sha256=args.confirm_plan_sha256,
+                                               act=executor.act)
+            else:
+                res = executor.act(args.op, args.target, cfg, rationale=args.rationale)
             print(json.dumps(res, indent=2))
             return {"done": 0, "refused": 1}.get(res["status"], 3)
         import fcntl
@@ -409,6 +430,8 @@ def main(argv: list[str] | None = None) -> int:
         return project_cli.dispatch(args, daily.load_config)
     if args.cmd in operator_cli.COMMANDS:
         return operator_cli.dispatch(args, daily.load_config)
+    if args.cmd in known_cli.COMMANDS:
+        return known_cli.dispatch(args)
     if args.cmd in tools_image.COMMANDS:
         return tools_image.dispatch(args, daily.load_config)
     if args.cmd in handoff.COMMANDS:
@@ -417,6 +440,8 @@ def main(argv: list[str] | None = None) -> int:
         return remediation_report.dispatch(args)
     if args.cmd in docker_readiness.COMMANDS:
         return docker_readiness.dispatch(args, daily.load_config)
+    if args.cmd in verify.COMMANDS:
+        return verify.dispatch(args, daily.load_config)
     if args.cmd == "server-kit":
         dest = args.dest or paths.server_kit_dir()
         names = export_server_kit(dest)

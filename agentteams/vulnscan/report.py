@@ -8,6 +8,9 @@ Exit codes are shared by every subcommand:
 | ``1`` | Findings at or above ``--fail-on`` |
 | ``3`` | A feed failed, so part of the target is **unscanned** (never reported as clean) |
 | ``4`` | A malicious package version or a compromise indicator is present |
+
+A finding an operator-signed known entry covers (:mod:`.known`) stays in the report, graded ``known until
+<date>``, and does not count toward ``1``; it can never cover ``3`` or ``4``.
 """
 
 from __future__ import annotations
@@ -28,6 +31,11 @@ PARTIAL_RANGE_CAP = SEVERITY_RANK["MODERATE"]
 #: How the summary names a finding kind where it differs from the kind (``range``: an unpinned requirement
 #: range, :mod:`.specifiers`; ``image``: a container base image, :mod:`.images`).
 KIND_LABEL = {"range": "requirement range", "image": "base image"}
+#: Distro verdicts of an OS-managed package finding (:mod:`.distro_verdict`), best first.
+DISTRO_VERDICTS = ("fixed-in-installed", "fix-available-not-installed", "esm-only", "no-distro-fix")
+#: ``Finding.name`` of the LOW host check for an AL2023 updateinfo pass that was not read (:mod:`.distro_verdict`);
+#: the summary's distro-verdict section names it too.
+UPDATEINFO_CHECK = "distro-updateinfo"
 #: Heads the summary's list of lower-bound raises for range findings (never staged: ``stage-fix`` edits only
 #: ``==`` pins).
 RANGE_PLAN_NOTE = ("`stage-fix` never edits a requirement range (it changes only `==` pins), so these rows are for a "
@@ -60,6 +68,17 @@ class Finding:
     fixed_upstream: bool = False    # name==version is gone from the same file at origin/HEAD (the checkout is behind)
     spec: str = ""                  # range: the requirement's specifier set ("" = any version); version stays ""
     partial: bool = False           # range: only part of the allowed range is affected (capped at MODERATE)
+    # location -> {"label", "path", "evidence"}: a location that is not the live system (a ``SCOPE`` line: a disabled
+    # tree, or node_modules nginx refuses). Information only: the finding keeps its row and grade (Rule 12).
+    location_labels: dict[str, dict[str, str]] = field(default_factory=dict)
+    # OS-managed package (vfr-a A2, :mod:`.distro_verdict`): what the distribution says, beside the upstream grade
+    # (Rule 12): one of DISTRO_VERDICTS, or "" with distro_note saying why there is none.
+    distro_verdict: str = ""
+    distro_note: str = ""
+    evidence: str = ""              # host: "sha256:<hex>;files=N;deny=M" of the audit's HOSTEVIDENCE lines (.known)
+    kev: bool = False               # on CISA KEV, when a feed sets it (none does yet); voids a known entry
+    known: str = ""                 # the known entry (.known) that covers this finding ("" = none)
+    known_until: str = ""           # that entry's expiry date
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -95,7 +114,10 @@ class Report:
     excluded: list[str] = field(default_factory=list)    # "repo: path": manifests matching a brief's exclude_paths
     withheld: list[str] = field(default_factory=list)    # "repo: name (ecosystem)": private, not checked
     brief_off: list[str] = field(default_factory=list)   # repos whose brief says off, scanned by operator enrolment
+    sources: list[str] = field(default_factory=list)     # "repo: name version from host: grade (...)": allowlisted
+    #                                                       non-npm sources graded on advisory ranges (engine, E3)
     unscored_as: str = "high"                            # what an advisory without any severity counts as
+    known_entries: list[dict] = field(default_factory=list)   # every known entry and its status (.known_report.apply)
     generated_at: str = field(default_factory=lambda: _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat())
 
     def merge(self, other: Report) -> None:
@@ -112,6 +134,8 @@ class Report:
         self.excluded += other.excluded
         self.withheld += other.withheld
         self.brief_off += other.brief_off
+        self.sources += other.sources
+        self.known_entries += other.known_entries
 
     def apply_unscored(self, level: str) -> None:
         """Count every unscored advisory as ``level`` (the config's ``unscored_as``), never as harmless.
@@ -175,7 +199,7 @@ class Report:
         floor = 0 if fail_on == "any" else SEVERITY_RANK.get(fail_on.upper(), 3)
         for f in self.findings:
             counts_dev = include_dev if f.count_dev is None else f.count_dev
-            if f.distro or (f.scope == "dev" and not counts_dev):
+            if f.known or f.distro or (f.scope == "dev" and not counts_dev):
                 continue
             if f.severity >= floor:
                 return EXIT_FINDINGS
@@ -216,10 +240,88 @@ class Report:
         rep.unscannable = [(u["path"], u["reason"]) for u in data.get("unscannable", [])]
         rep.opted_out, rep.excluded, rep.withheld, rep.brief_off = (
             [str(i) for i in data.get(k, [])] for k in ("opted_out", "excluded", "withheld", "brief_off"))
+        rep.sources = [str(i) for i in data.get("sources", [])]
         known = Finding.__dataclass_fields__
         rep.findings = [Finding(**{"malformed": 0, "fix_hidden": 0, **{k: v for k, v in f.items() if k in known}})
                         for f in data.get("findings", [])]   # an older report counted neither (R8)
+        rep.known_entries = [dict(e) for e in data.get("known_entries", []) if isinstance(e, dict)]
         return rep
+
+    def _not_live_markdown(self) -> list[str]:
+        """The summary's groups of findings whose every location carries one label (vfr-e E1/E2b).
+
+        A finding also found at a live location, or labelled by more than one record, is named apart and never
+        grouped. Every grouped finding still has its own row in the tables above, with its grade.
+
+        Returns:
+            Markdown lines (none when no finding has a label).
+        """
+        groups: dict[tuple[str, str, str, str], list[Finding]] = {}
+        apart: dict[str, list[Finding]] = {}
+        for f in self.findings:
+            labs = f.location_labels or {}
+            if not labs:
+                continue
+            kinds = {(lab.get("label", ""), lab.get("path", ""), lab.get("evidence", "")) for lab in labs.values()}
+            if len(kinds) == 1 and all(loc in labs for loc in f.locations):
+                label, path, evidence = kinds.pop()
+                groups.setdefault((f.target, label, path, evidence), []).append(f)
+            else:
+                apart.setdefault(f.target, []).append(f)
+        if not groups and not apart:
+            return []
+        out = ["## On disk, not the live system (labelled, still graded)", "",
+               "Each finding below keeps its row and severity in the tables above; a label explains, it does not "
+               "exclude. Removing the tree, or the files, is what remediates them.", ""]
+        for (target, label, path, evidence), items in sorted(groups.items()):
+            worst = SEVERITY_NAME.get(max(f.severity for f in items), "?")
+            text = _label_text({"label": label, "path": path, "evidence": evidence})
+            out.append(f"- {_code(target)}: {_code(text)}: {len(items)} finding(s), worst {worst}")
+        for target, items in sorted(apart.items()):
+            names = ", ".join(sorted({f.name for f in items}, key=str.lower))
+            out.append(f"- {_code(target)}: {len(items)} finding(s) also at a live location (not grouped): {names}")
+        return out + [""]
+
+    def distro_verdict_counts(self) -> dict[str, dict[str, int]]:
+        """Return, per host, how many OS-managed package findings have each distro verdict (vfr-a A2).
+
+        Only hosts with at least one judged or noted finding appear. ``none`` counts findings with a note but no
+        verdict (unowned, a non-allowlisted origin, a feed error, no feed for the release).
+
+        Returns:
+            ``{host: {verdict: n, ..., "none": n}}``, every verdict present (0 when none), sorted by host.
+        """
+        out: dict[str, dict[str, int]] = {}
+        for f in self.findings:
+            if f.kind != "package" or not (f.distro_verdict or f.distro_note):
+                continue
+            row = out.setdefault(f.target, {**{v: 0 for v in DISTRO_VERDICTS}, "none": 0})
+            row[f.distro_verdict if f.distro_verdict in DISTRO_VERDICTS else "none"] += 1
+        return dict(sorted(out.items()))
+
+    def _distro_markdown(self) -> list[str]:
+        """The summary's distro-verdict section: per host, the count of each verdict and the esm-only count (OD1).
+
+        Returns:
+            Markdown lines (none when no finding has a distro verdict or note).
+        """
+        counts = self.distro_verdict_counts()
+        unread = [f for f in self.findings if f.kind == "host" and f.name == UPDATEINFO_CHECK]
+        if not counts and not unread:
+            return []
+        out = ["## Distro verdicts (OS-managed Python packages; upstream grade unchanged)", "",
+               "Each finding keeps its upstream row and severity above; the distro verdict says whether the "
+               "distribution's own package carries the fix (Ubuntu: OSV by source package; Amazon Linux 2023: the "
+               "host's updateinfo). Unowned files and packages from other origins get none and are graded upstream.",
+               "", "| Host | " + " | ".join(DISTRO_VERDICTS) + " | no verdict |",
+               "|---|" + "---|" * (len(DISTRO_VERDICTS) + 1)]
+        for host, row in counts.items():
+            out.append(f"| {_code(host)} | " + " | ".join(str(row[v]) for v in (*DISTRO_VERDICTS, "none")) + " |")
+        esm = ", ".join(f"{_code(host)} {row['esm-only']}" for host, row in counts.items())
+        out += ["", f"**esm-only per host** (the only fix is Ubuntu Pro ESM, not enabled; operator decision OD1): "
+                    f"{esm or 'none'}", ""]
+        out += [f"> **{_code(f.target)}: no AL2023 distro verdicts.** {_code(f.detail)}" for f in unread]
+        return out + ([""] if unread else [])
 
     def markdown(self, new_keys: set[str] | None = None) -> str:
         """Render the report for people.
@@ -258,15 +360,23 @@ class Report:
                 sev = "**MALICIOUS**" if f.malicious else (
                     f"UNSCORED (as {SEVERITY_NAME.get(f.severity, '?')})" if f.shows_unscored()
                     else SEVERITY_NAME.get(f.severity, "?"))
+                if f.known and not f.malicious:
+                    sev = f"known until {_code(f.known_until)} ({sev})"
                 item = f"{f.name} ({f.ecosystem})" if f.ecosystem else f.name
                 if f.kind == "range":
                     item = f"{f.name} `{f.spec or 'any version'}` ({f.ecosystem})"
                 notes = []
+                if f.known:
+                    notes.append(f"known entry {_code(f.known)} (see *Known findings*)")
                 if f.scope == "dev":
                     notes.append("dev-only" + {True: " (counted: project brief)",
                                                False: " (not counted: project brief)"}.get(f.count_dev, ""))
                 if f.distro:
                     notes.append("OS-managed: apply OS security updates")
+                if f.distro_verdict:
+                    notes.append(f"distro: {f.distro_verdict} ({_code(f.distro_note)})")
+                elif f.distro_note:
+                    notes.append(_code(f.distro_note))
                 if f.unfixed - (f.fix_hidden or 0) > 0:
                     notes.append(f"{f.unfixed - (f.fix_hidden or 0)} advisory(ies) without a fix")
                 if f.fix_hidden:
@@ -281,12 +391,19 @@ class Report:
                     notes.append(f.detail)
                 if f.locations:
                     notes.append("at " + ", ".join(f"`{loc}`" for loc in f.locations[:2]))
+                live = [loc for loc in f.locations if loc not in (f.location_labels or {})]
+                for loc, lab in sorted((f.location_labels or {}).items()):
+                    notes.append(f"not live: {_code(loc)} {_code(_label_text(lab))}")
+                if f.location_labels and live:
+                    notes.append(f"also at {len(live)} live location(s)")
                 if f.fixed_upstream:   # last, so the existing notes keep their place
                     notes.append("fixed upstream (checkout behind)")
                 fix = f">={f.fix}" if f.kind == "range" and f.fix else _fix_cell(f.fix)
                 out.append(f"| {mark} | {sev} | {KIND_LABEL.get(f.kind, f.kind)} | {item} | {f.version} | {fix} "
                            f"| {'; '.join(notes)} |")
             out.append("")
+        out += self._not_live_markdown()
+        out += self._distro_markdown()
         raises = [f for f in self.findings if f.kind == "range" and f.fix and f.locations]
         if raises:
             out += ["## Requirement ranges — plan-only (no staged edit)", "", RANGE_PLAN_NOTE, ""]
@@ -297,6 +414,11 @@ class Report:
                     f"Counted as {self.unscored_as.upper()} toward the exit threshold (`unscored_as`); "
                     "read the advisory to rate it.", ""]
             out += [f"- `{f.target}`: {f.name} {f.version} — {', '.join(f.ids[:5])}" for f in unscored] + [""]
+        if self.sources:
+            out += ["## Allowlisted non-npm sources (graded on advisory ranges)", "",
+                    "Installed from a publisher's own host, not the npm registry: each is graded fixed, vulnerable or "
+                    "unknown against the npm advisories' affected ranges; unknown is never clean.", ""]
+            out += [f"- {_code(s)}" for s in self.sources] + [""]
         if self.unscannable:
             out += ["## Not scannable (no exact versions)", ""]
             out += [f"- `{p}` — {r}" for p, r in self.unscannable] + [""]
@@ -310,6 +432,14 @@ class Report:
             if items:
                 out += [f"## {title}", ""] + [f"- {i}" for i in items] + [""]
         return "\n".join(out)
+
+
+def _label_text(lab: dict[str, str]) -> str:
+    """One location label as text: ``disabled tree <path>, inert since <date>`` or ``<label> (<evidence>)``."""
+    label, path, evidence = (str(lab.get(k, "")) for k in ("label", "path", "evidence"))
+    if label == "disabled":
+        return f"disabled tree {path}, {evidence}"
+    return f"{label} ({evidence})" if evidence else label
 
 
 def _code(text: object) -> str:

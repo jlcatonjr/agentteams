@@ -1,0 +1,8 @@
+{
+  "patch_id": "e0e5956d15e84159fdce0da04a296278545faa4d",
+  "commit": "f64961c9a08e8865715a4c3a919133191190f94d",
+  "subject": "feat(vulnscan): same-day verification and per-finding effectiveness (vfr-v V1 + V2)",
+  "impact": "1 modules added, 17 symbols added, 1 symbols changed, 9 cli added",
+  "note": "vfr-v V1+V2: new module agentteams.vulnscan.verify (run_verify, audited_hosts, refresh_problem, remediation_lock_path, comparison_markdown, register/dispatch) and CLI commands verify + effectiveness; effectiveness gains compare/detect_moves/scanned_targets/assessed/load_run/outcome_rows/Comparison/FindingOutcome/OUTCOMES (additive); effectiveness.section gains optional keyword scanned (default None keeps old output); new scan_mirror.scan_root (extracted from daily._collect's closure; daily._finish gains private kw started). No existing public signature changed incompatibly.",
+  "recorded_at": "2026-11-02T21:57:16Z"
+}
