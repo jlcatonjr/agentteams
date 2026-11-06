@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### tests (the nested network-deny and credential-deny WASM tests run under bwrap too; WASM follow-up, bwrap deny-test row)
+
+- `test_nested_network_denied` and `test_nested_credential_store_unreadable` now have a bwrap branch next to the
+  Seatbelt one. Each builds the same `bwrap_argv` that a nested run uses, and checks a control first: the host's
+  loopback listener is reachable without `--unshare-net` and unreachable with it, and a credential directory
+  (`~/.ssh`) and file (`~/.netrc`) in a temporary `HOME` are readable unhidden and unreadable with `NEST_DENY_READS`.
+  Their `SANDBOX_ALLOW["bwrap"]` entries are gone, so the `wasm-live` skip guard fails if either skips. The Linux
+  claim now covers R5 deny_reads and network deny, not only nesting. Supersedes the F2 entry's "Seatbelt-only"
+  note below.
+
 ### fix (pinned sync: low-severity follow-ups)
 
 - **A pin with no agents directory is refused by name.** `--sync-init --pin agents-md` with no `.agents`, and
