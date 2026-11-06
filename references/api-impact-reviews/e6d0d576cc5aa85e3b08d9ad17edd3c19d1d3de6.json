@@ -1,0 +1,8 @@
+{
+  "patch_id": "e6d0d576cc5aa85e3b08d9ad17edd3c19d1d3de6",
+  "commit": "5ec6087cf80628b83a4a7912868c0337a2f43da7",
+  "subject": "fix(grok): keep the operator-merged agentteams_wasm table on a grok:mcp render",
+  "impact": "1 symbols added, 3 symbols changed",
+  "note": "5ec6087c grok keep table: @technical-validator checked grok_kept_tables, strip_unmanaged_mcp_tables(keep), emit_grok_config against frameworks.md, grok-config-emit.md, codex-mcp-emit.md and CHANGELOG (no signature mismatches); @conflict-auditor found no contradicting agent docs/references. Fixed in 666b2b80: uncaught ValueError on an unparseable managed block, Raises entry, codex-mcp-emit.md keep wording.",
+  "recorded_at": "2026-11-06T16:34:16Z"
+}
