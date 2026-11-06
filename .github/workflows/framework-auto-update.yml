@@ -22,10 +22,10 @@ jobs:
   propose-and-pr:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main
+      - name: Checkout dev (integration branch; git-procedures.md §G)
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: dev
           fetch-depth: 0
 
       - name: Setup Python
@@ -183,8 +183,10 @@ jobs:
           # actually changes. No post-merge CI dispatch is needed here — the
           # maintainer's manual merge is a normal push to main and triggers CI
           # the usual way.
+          # Integration-branch model (2026-11-04, git-procedures.md §G): drift PRs target dev and ride the next
+          # release PR to main, so each observation costs no separate main-branch CI run or deploy.
           pr_url=$(gh pr create \
-            --base main \
+            --base dev \
             --head "$BRANCH" \
             --title "auto: framework upstream-token observation ($PHASH)" \
             --body-file "$body_file" \
