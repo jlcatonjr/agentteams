@@ -17,6 +17,7 @@ from typing import Any
 
 from agentteams.vulnscan import registry
 from agentteams.vulnscan.manifests import discover, unsupported_ecosystem
+from agentteams.vulnscan.report import Report
 
 #: Coverage states, in display order. ``not enrolled`` is only reported by ``vulnscan status --project``
 #: (:func:`project_state`): the coverage section lists registry entries, which are enrolled by definition.
@@ -421,3 +422,44 @@ def project_state(cfg: dict[str, Any] | None, entry: registry.Entry | None, path
     if not any(within(path, r.path) for r in roots):
         return "not enrolled"
     return "fixable" if _grant_covers(grants, str(path)) else "scan-only"
+
+
+def under_root(root_s: str, target: str) -> str:
+    """Return a scan target (relative to its root, ``"."`` for the root) named under the root's label.
+
+    Args:
+        root_s: The root's label (:attr:`coverage.Root.label`).
+        target: The target as :func:`engine.scan_path` names it.
+
+    Returns:
+        ``<root_s>/<target>``, or ``root_s`` for ``"."``.
+    """
+    return f"{root_s}/{target}" if target != "." else root_s
+
+
+def drop_excluded(cfg: dict[str, Any], root: Path, rep: Report) -> None:
+    """Drop whatever of a scanned ``root`` lies inside an ``exclude`` path (defence in depth: ``scan_path`` skips them).
+
+    Findings, unscannable files, the brief lists (``opted_out``, ``brief_off``, ``excluded``, ``withheld``) and
+    ``sources``.
+
+    Args:
+        cfg: Daily config (``exclude``).
+        root: The scanned checkout.
+        rep: Its report, changed in place.
+    """
+    inner = excluded_inside(cfg, root)
+    if not inner:
+        return
+    base = root.resolve()
+
+    def kept(rel: str) -> bool:
+        return not any(x == base / rel or x in (base / rel).parents for x in inner)
+
+    rep.findings = [f for f in rep.findings if kept(f.target) and (not f.locations or any(map(kept, f.locations)))]
+    rep.unscannable = [u for u in rep.unscannable if kept(u[0])]
+    rep.opted_out = [t for t in rep.opted_out if kept(t)]
+    rep.brief_off = [t for t in rep.brief_off if kept(t)]
+    rep.excluded = [x for x in rep.excluded if kept(x.partition(": ")[0]) and kept("/".join(x.split(": ", 1)))]
+    rep.withheld = [x for x in rep.withheld if kept(x.partition(": ")[0])]
+    rep.sources = [x for x in rep.sources if kept(x.partition(": ")[0])]

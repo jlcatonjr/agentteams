@@ -691,3 +691,129 @@ def test_list_open_runs_a_read_only_gh_query(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(open_prs.subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(argv, 1, "", "boom"))
     with pytest.raises(executor.ExecError, match="boom"):
         open_prs.list_open("github.com/o/svc")
+
+
+# ---------------------------------------------------------------- vfr-b.B2: never over a fix staged without a PR
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_stage_major_is_refused_while_a_fix_is_staged_without_a_pr(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-fix", "stage-major"], hosts=[])
+    staged = executor.staged_file(repo.resolve())
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text(json.dumps({"repo": str(repo.resolve()), "branch": "vulnscan/20261031-abcdef0123"}))
+    called: list = []
+    monkeypatch.setattr(fix, "fix_path", lambda *a, **k: called.append(k))
+    res = executor.act("stage-major", str(repo), env["cfg"], request_id="7" * 32)
+    assert res["status"] == "refused" and "request open-pr for it first" in res["detail"] and called == []
+    assert not [r for r in ledger.read() if r.get("kind") == "begun"]   # refused before a grant use is spent
+    staged.unlink()
+    monkeypatch.setattr(fix, "fix_path", _pip_major)
+    assert executor.act("stage-major", str(repo), env["cfg"])["status"] == "done"
+
+
+# ---------------------------------------------------------------- vfr-b.B3: transitive rows move with their parent
+
+def _carried_world(tmp: Path, monkeypatch: pytest.MonkeyPatch, *, keep_qs: bool = False) -> list:
+    """express 4.17.1 (direct, needs 5) installs qs 6.5.0 (transitive, needs 7); npm install moves both."""
+    lock = json.loads(_lock("4.17.1"))
+    lock["packages"]["node_modules/express"]["dependencies"] = {"qs": "^6.5.0"}
+    lock["packages"]["node_modules/qs"] = {"version": "6.5.0",
+                                           "resolved": "https://registry.npmjs.org/qs/-/qs-6.5.0.tgz"}
+    calls = _npm_world(tmp, monkeypatch, lock=lock)
+    inner = fix.subproc_confine.run_npm
+
+    def run_npm(args: list, *, workdir: Path, **kw: object) -> object:
+        res = inner(args, workdir=workdir, **kw)
+        if args[0] == "install":
+            new = json.loads((workdir / "package-lock.json").read_text())
+            new["packages"]["node_modules/express"]["dependencies"] = {"qs": "^7.0.0"}
+            new["packages"]["node_modules/qs"] = {"version": "7.0.0",
+                                                  "resolved": "https://registry.npmjs.org/qs/-/qs-7.0.0.tgz"}
+            if keep_qs:   # another dependent still holds the old copy
+                new["packages"]["node_modules/other/node_modules/qs"] = lock["packages"]["node_modules/qs"]
+            (workdir / "package-lock.json").write_text(json.dumps(new, indent=2) + "\n")
+        return res
+
+    monkeypatch.setattr(fix.subproc_confine, "run_npm", run_npm)
+    return calls
+
+
+def test_a_dry_run_names_the_parent_a_transitive_major_moves_with(tmp_path: Path,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    _carried_world(tmp_path, monkeypatch)
+    rows, _ = fix.plan_npm_lock(tmp_path / "package-lock.json")
+    by = {c.name: c for c in rows}
+    assert by["qs"].action == "major-held" and "transitive: moves with express when stage-major raises it" in by["qs"].note
+    assert "moves with" not in by["express"].note
+
+
+def test_after_stage_major_a_carried_transitive_row_is_reported_moves_with(tmp_path: Path,
+                                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    _carried_world(tmp_path, monkeypatch)
+    res = fix.fix_path(tmp_path, apply=True, allow_major=True, allow_dirty=True)
+    rows = {c.name: c for c in res.changes}
+    assert rows["express"].action == "fix" and rows["express"].major
+    qs = rows["qs"]
+    assert (qs.action, qs.major) == (fix.MOVES_WITH, False) and qs.note.startswith("moves with express: transitive")
+    assert "stays held" not in qs.note and "when stage-major raises it" not in qs.note
+    assert executor_pr.major_changes(res.changes) == [rows["express"]]   # never counted as its own fix
+    assert "| qs | 6.5.0 |" in res.markdown() or "moves-with" in res.markdown()
+
+
+def test_a_transitive_copy_still_installed_after_its_parent_moved_stays_held(tmp_path: Path,
+                                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    _carried_world(tmp_path, monkeypatch, keep_qs=True)
+    res = fix.fix_path(tmp_path, apply=True, allow_major=True, allow_dirty=True)
+    qs = {c.name: c for c in res.changes}["qs"]
+    assert qs.action == "major-held" and "its parent express moved but qs 6.5.0 is still installed" in qs.note
+
+
+def test_carried_by_and_installed() -> None:
+    from agentteams.vulnscan import npm_groups
+    packages = {"": {"dependencies": {"vitest": "^3"}}, "node_modules/vitest": {"version": "3.2.4",
+                "dependencies": {"tinypool": "^1"}}, "node_modules/tinypool": {"version": "1.1.1"}}
+    graph = npm_groups.LockGraph(packages)
+    assert graph.carried_by("tinypool", "1.1.1", ["vitest"]) == ["vitest"]
+    assert graph.carried_by("tinypool", "1.1.1", ["vite"]) == []
+    assert graph.carried_by("vitest", "3.2.4", ["vitest"]) == []   # a direct dependency is never "carried"
+    assert npm_groups.installed(packages, "tinypool", "1.1.1") and not npm_groups.installed(packages, "tinypool", "2")
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_a_claimed_major_pr_records_major_and_never_closes_the_fix_pr(env: dict,
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    """vfr-b.B2 (@security): every claim-existing open-pr result carries the lane, or close-superseded would read a
+    claimed MAJOR PR as the deps lane and close the fix PR beside it."""
+    from agentteams.vulnscan import executor_supersede
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-major", "open-pr"], hosts=[], max_uses=20)
+    monkeypatch.setattr(fix, "fix_path", _pip_major)
+    executor.act("stage-major", str(repo), env["cfg"])
+    bindir = _gh(env, monkeypatch)
+    (bindir / "gh").write_text(_GH_LABEL_AFTER_CREATE)
+    (bindir / "fail502").write_text("")
+    assert executor.act("open-pr", str(repo), env["cfg"])["status"] == "failed"   # the PR exists, the run failed
+    (bindir / "fail502").unlink()
+    claimed = executor.act("open-pr", str(repo), env["cfg"])   # the pushed branch's open PR is claimed
+    assert claimed["status"] == "done" and claimed["existing"] is True and claimed["major"] is True, claimed
+    fix_pr = claimed["pr"].rsplit("/", 1)[0] + "/29"   # the same GitHub repository: only the lane keeps it open
+    rows = [{"op": "open-pr", "kind": "done", "target": str(repo), "detail": json.dumps({"pr": fix_pr})},
+            {"op": "open-pr", "kind": "done", "target": str(repo), "detail": json.dumps(
+                {k: v for k, v in claimed.items() if k != "status"})}]
+    me = {"name": executor.GIT_IDENTITY[0], "email": executor.GIT_IDENTITY[1]}
+    view = {"state": "OPEN", "headRefName": "vulnscan/20261031-abc", "isCrossRepository": False, "reviews": [],
+            "comments": [], "commits": [{"authors": [me]}]}
+    closed: list[str] = []
+    out = executor_supersede.close_superseded(repo, rows, view=lambda url: view, close=lambda url, c: closed.append(url))
+    assert out["replacement"] == claimed["pr"] and closed == []   # the fix PR stays open
+    rows[1]["detail"] = json.dumps({"pr": claimed["pr"], "existing": True})   # control: a claim without the lane
+    executor_supersede.close_superseded(repo, rows, view=lambda url: view, close=lambda url, c: closed.append(url))
+    assert closed == [fix_pr]
+
+
+def test_lane_fields_mark_every_mode_and_refuse_both() -> None:
+    assert executor_pr.lane_fields({"major": True}) == {"major": True}
+    assert executor_pr.lane_fields({"image": True}) == {"image": True} and executor_pr.lane_fields({}) == {}
+    with pytest.raises(executor.ExecError, match="both major and image"):
+        executor_pr.lane_fields({"major": True, "image": True})

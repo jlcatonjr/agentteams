@@ -11,11 +11,16 @@ import re
 from typing import Any
 
 #: Operations whose target is an absolute repository path (the executor guards and the MCP server check it).
-REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "open-pr", "close-superseded")
+REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "stage-cargo", "open-pr", "close-superseded")
 #: The ops that stage a fix (``stage-major`` is ``stage-fix`` with semver-major upgrades allowed; ``stage-image``
-#: moves an end-of-life official runtime image's Dockerfile ``FROM`` tag, :mod:`.image_fix`). One staged fix per
-#: repository at a time, whichever op staged it.
-STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image")
+#: moves an end-of-life official runtime image's Dockerfile ``FROM`` tag, :mod:`.image_fix`; ``stage-cargo`` runs
+#: in-major ``cargo update --precise`` fixes on a ``Cargo.lock``, :mod:`.cargo_fix`). One staged fix per repository
+#: at a time, whichever op staged it.
+STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "stage-image", "stage-cargo")
+#: Host-changing ops (vfr-s ``server-apply``, vfr-d.D4 ``runtime-patch``): the operator runs them with ``vulnscan act``
+#: after confirming the dry-run plan's digest. A spooled (agent) request for one is refused, and the MCP server never
+#: offers them.
+OPERATOR_ONLY_OPS: tuple[str, ...] = ("server-apply", "runtime-patch")
 
 #: A PR URL the executor records for ``open-pr``: ``https://HOST/OWNER/REPO/pull/N`` (groups: host, owner, repo, n).
 PR_URL = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")
@@ -33,19 +38,25 @@ def pr_of(row: dict[str, Any]) -> str:
 
 
 def lane_of(row: dict[str, Any]) -> str:
-    """Return the PR lane of a successful ``open-pr`` ledger row: ``"image"`` (a ``stage-image`` PR) or ``"deps"``.
+    """Return the PR lane of a successful ``open-pr`` ledger row: ``"image"``, ``"major"`` or ``"deps"``.
+
+    A ``stage-major`` PR has its own lane (vfr-b.B2): it is staged beside the repository's fix PR, so its
+    ``close-superseded`` must never close that fix PR, nor a later fix PR the MAJOR one.
 
     Args:
         row: A ledger row.
 
     Returns:
-        ``"image"`` when the row's JSON detail records ``"image": true``, else ``"deps"`` (older rows included).
+        ``"image"`` when the row's JSON detail records ``"image": true``, ``"major"`` when it records
+        ``"major": true``, else ``"deps"`` (older rows included).
     """
     try:
         detail = json.loads(str(row.get("detail") or "{}"))
     except ValueError:
         return "deps"
-    return "image" if isinstance(detail, dict) and detail.get("image") is True else "deps"
+    if not isinstance(detail, dict):
+        return "deps"
+    return "image" if detail.get("image") is True else "major" if detail.get("major") is True else "deps"
 
 
 def repo_of(url: str) -> str:

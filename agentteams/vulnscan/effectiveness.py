@@ -15,6 +15,19 @@ repository, PR, host or path; :func:`section` passes its text through the publis
 state comes from read-only ``gh pr view`` calls on the PR URLs recorded in the executor's ledger (at most
 :data:`MAX_PR_LOOKUPS` of the newest, each with a timeout); a lookup that fails is counted as unknown,
 never guessed.
+
+**Per finding** (:func:`compare`, vfr-v V2): was each finding of a baseline run remediated by a later run? A finding
+is keyed by target, kind, ecosystem and package name (and, for runtime and host findings, the detail); each later
+finding is paired with one baseline finding of its key at the same place, the one whose version is the highest at or
+below it (else the lowest), so two version lines of one package never match each other. Two things are not
+remediations and are never counted as one: a target renamed between the runs (``aliases``, e.g. a server alias), and
+a tree renamed on disk. The second is found without being told (:func:`detect_moves`): a location that vanished
+while a same-named tree carrying the same finding at the same version appeared (``/root/anaconda3`` →
+``/root/anaconda3.disabled-20261101``) is a move, and a finding that is still there is reported as "moved (not
+remediated)". A package found again anywhere else (another tree, another lockfile) is "present elsewhere", and is
+never counted as remediated either. ``path_aliases`` names such a rename explicitly. The daily section adds these
+per-finding counts (counts only, like the rest); the ``effectiveness`` command (:mod:`.verify`) writes the
+per-finding rows, machine-local.
 """
 
 from __future__ import annotations
@@ -22,13 +35,15 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import ledger, merge_digest, ops, paths, retry_guard
-from agentteams.vulnscan.report import Report
+from agentteams.vulnscan.report import Finding, Report
 
 STALE_DAYS = 3
 MERGED_WINDOW_DAYS = 7
@@ -62,7 +77,6 @@ def pr_urls(rows: list[dict[str, Any]]) -> list[str]:
         if url:
             seen.setdefault(url, None)
     return list(seen)
-
 
 
 def _gh_view(url: str) -> dict[str, Any] | None:
@@ -146,13 +160,17 @@ def staged_without_pr() -> int:
     return len(list(staged.glob("*.json"))) if staged.is_dir() else 0
 
 
-def section(total: Report, previous: Report | None, *, stats: PrStats | None = None) -> tuple[str, PrStats]:
+def section(total: Report, previous: Report | None, *, stats: PrStats | None = None,
+            scanned: set[str] | None = None) -> tuple[str, PrStats]:
     """Return the summary's **Remediation effectiveness** section (counts only) and the PR counts behind it.
 
     Args:
         total: This run's report.
         previous: The previous run's report, or None (then nothing counts as fixed).
         stats: Pre-computed PR counts (tests); default: looked up from the ledger's PR URLs.
+        scanned: The targets this run has a scan record for (:func:`scanned_targets`). When given with a previous
+            run, the section adds the previous run's findings per outcome (:func:`compare`); None leaves them out
+            (an unscanned target must never read as remediated).
 
     Returns:
         (markdown, PR counts).
@@ -165,8 +183,19 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         stats = pr_stats(pr_urls(rows))
     # Range findings (unpinned requirements) are not counted: switching ``unpinned_ranges`` off, or a cap, would
     # "fix" them without any change to a repository. They have a line of their own.
-    now_keys = {f.key() for f in total.findings if f.kind != "range"}
-    before = {f.key() for f in previous.findings if f.kind != "range"} if previous else set()
+    # Unknown is not clean: with ``scanned`` known, a target this run did not cover (an audit that did not complete,
+    # an unreachable host, a missing root) is left out of fixed, new and net on both sides; its previous findings
+    # are carried and counted on a line of their own, so an outage never reads as remediation.
+    covered = (assessed({f.target for f in [*total.findings, *(previous.findings if previous else [])]}, scanned)
+               if scanned is not None else None)
+
+    def counted(f: Finding) -> bool:
+        return f.kind != "range" and (covered is None or f.target in covered)
+
+    now_keys = {f.key() for f in total.findings if counted(f)}
+    before = {f.key() for f in previous.findings if counted(f)} if previous else set()
+    carried = (sum(1 for f in previous.findings if f.kind != "range" and f.target not in covered)
+               if previous and covered is not None else 0)
     ranges = sum(1 for f in total.findings if f.kind == "range")
     fixed = len(before - now_keys) if previous else 0
     new = len(now_keys - before) if previous else len(now_keys)
@@ -191,8 +220,15 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         f"| PRs ready to merge (open, mergeable, every check passed) | {len(stats.green)} |",
         f"| Repositories held at scan time (nothing stageable; see the held reasons) | {retry_guard.held_count()} |",
     ]
+    if carried:
+        lines.insert(lines.index(next(x for x in lines if x.startswith("| Findings already fixed upstream"))),
+                     f"| Previous findings on targets this run did not scan (carried, not counted above) | {carried} |")
     if stats.unknown:
         lines.append(f"| PR lookups that failed (state unknown) | {stats.unknown} |")
+    if previous is not None and scanned is not None:
+        prev_targets = {f.target for f in previous.findings}
+        per = compare(previous, total, scanned=assessed(prev_targets, scanned)).counts()
+        lines += [f"| Previous run's findings, per finding: {s} | {per[s]} |" for s in OUTCOMES]
     lines.append("")
     lines += [f"- {n}" for n in stats.notes]
     lines.append("Merging stays with the operator: this run's directory holds `merge-digest.sh`, which asks before "
@@ -247,3 +283,394 @@ def agent_alert(cfg: dict[str, Any], state: Path, today: str, current: str) -> b
     from agentteams.vulnscan import notify
 
     return notify.send(cfg, "agent-down", count=streak)
+
+
+# ------------------------------------------------------------------ per finding (vfr-v V2)
+
+REMEDIATED, PARTLY, OPEN, MOVED, ELSEWHERE, NOT_ASSESSED = (
+    "remediated", "partly remediated", "open", "moved (not remediated)", "present elsewhere (not remediated)",
+    "not assessed")
+#: Every per-finding status, in report order. Only :data:`REMEDIATED` is a remediation.
+OUTCOMES: tuple[str, ...] = (REMEDIATED, PARTLY, OPEN, MOVED, ELSEWHERE, NOT_ASSESSED)
+#: A renamed tree keeps its name and adds a suffix after one of these (``anaconda3`` → ``anaconda3.disabled-1101``).
+_RENAME_SEPARATORS = ".-_~+"
+_MIRROR_TARGET = re.compile(r"\.worktrees/[^/]+$")
+_AUDIT_DONE = re.compile(r"^RESULT (clean|action-needed|COMPROMISE)", re.M)
+
+
+@dataclass
+class FindingOutcome:
+    """What became of one baseline finding in a later run."""
+
+    finding: Finding
+    status: str
+    note: str = ""
+
+
+@dataclass
+class Comparison:
+    """A baseline run's findings, each with its outcome in a later run (:func:`compare`)."""
+
+    outcomes: list[FindingOutcome] = field(default_factory=list)
+    new: list[Finding] = field(default_factory=list)   # later findings paired with none: a new key, or a new place
+    moves: dict[str, dict[str, str]] = field(default_factory=dict)      # target -> {new prefix: old prefix}
+
+    def counts(self) -> dict[str, int]:
+        """Return the number of baseline findings per status (every status of :data:`OUTCOMES`, zeros included)."""
+        out = dict.fromkeys(OUTCOMES, 0)
+        for o in self.outcomes:
+            out[o.status] += 1
+        return out
+
+
+def _vkey(version: str) -> tuple[int, ...] | None:
+    parts = re.findall(r"\d+", (version or "").split("+")[0])
+    return tuple(int(p) for p in parts) if parts else None
+
+
+def _at_or_below(later: str, base: str) -> bool:
+    a, b = _vkey(later), _vkey(base)
+    return later == base if a is None or b is None else a <= b
+
+
+def _target(f: Finding, aliases: dict[str, str]) -> str:
+    return aliases.get(f.target, f.target)
+
+
+def _key(f: Finding, aliases: dict[str, str]) -> tuple[str, ...]:
+    k = (_target(f, aliases), f.kind, f.ecosystem or "", f.name.lower())
+    return k + (f.detail or "",) if f.kind in ("runtime", "host") else k
+
+
+def _unalias(loc: str, prefixes: dict[str, str]) -> tuple[str, bool]:
+    """Map a later location's renamed prefix back to the baseline's: (location, whether a prefix was mapped)."""
+    for new, old in prefixes.items():
+        if loc == new or loc.startswith(new + "/"):
+            return old + loc[len(new):], True
+    return loc, False
+
+
+def _renamed(old: str, new: str) -> tuple[str, str] | None:
+    """Return ``(old prefix, new prefix)`` when ``new`` is ``old`` with one path component renamed in place.
+
+    The component keeps its name and gains (or loses) a suffix after a separator, and nothing else differs:
+    ``/root/anaconda3/lib`` → ``/root/anaconda3.disabled-20261101/lib``. ``python3.10`` → ``python3.12`` is not one.
+    """
+    a, b = old.split("/"), new.split("/")
+    if len(a) != len(b):
+        return None
+    diff = [i for i, (x, y) in enumerate(zip(a, b, strict=True)) if x != y]
+    if len(diff) != 1:
+        return None
+    i = diff[0]
+    short, long_ = sorted((a[i], b[i]), key=len)
+    if not short or not long_.startswith(short) or long_[len(short)] not in _RENAME_SEPARATORS:
+        return None
+    return "/".join(a[:i + 1]), "/".join(b[:i + 1])
+
+
+def _has_prefix(loc: str, prefix: str) -> bool:
+    return loc == prefix or loc.startswith(prefix + "/")
+
+
+def detect_moves(baseline: Iterable[Finding], later: Iterable[Finding], *, aliases: dict[str, str] | None = None,
+                 path_aliases: dict[str, str] | None = None) -> dict[str, dict[str, str]]:
+    """Find trees renamed on disk between two runs (a rename is not a remediation, Rule 12).
+
+    For each target, a location of the baseline that the later run no longer has, and a location the later run
+    has and the baseline did not, are a candidate move when one path component was renamed in place
+    (:func:`_renamed`). The move is accepted when the renamed tree carries at least one of the old tree's findings
+    unchanged (same kind, ecosystem, package and version). That is deliberately weaker than "the same package
+    set": a rename combined with one upgrade must still read as a move, not as a remediation of everything else.
+
+    Args:
+        baseline: The baseline run's findings.
+        later: The later run's findings.
+        aliases: Later target name -> baseline target name (a renamed host).
+        path_aliases: Later location prefix -> baseline prefix, already known (applied first; never re-detected).
+
+    Returns:
+        ``{baseline target: {new prefix: old prefix}}``, only targets with a move.
+    """
+    aliases, path_aliases = aliases or {}, path_aliases or {}
+    base_locs: dict[str, set[str]] = defaultdict(set)
+    later_locs: dict[str, set[str]] = defaultdict(set)
+    base_items: dict[str, list[tuple[tuple[str, ...], set[str]]]] = defaultdict(list)
+    later_items: dict[str, list[tuple[tuple[str, ...], set[str]]]] = defaultdict(list)
+    for f in baseline:
+        t = _target(f, aliases)
+        base_locs[t] |= set(f.locations)
+        base_items[t].append(((f.kind, f.ecosystem, f.name.lower(), f.version), set(f.locations)))
+    for g in later:
+        t = _target(g, aliases)
+        locs = {_unalias(loc, path_aliases)[0] for loc in g.locations}
+        later_locs[t] |= locs
+        later_items[t].append(((g.kind, g.ecosystem, g.name.lower(), g.version), locs))
+    moves: dict[str, dict[str, str]] = {}
+    for t, before in base_locs.items():
+        gone, came = before - later_locs.get(t, set()), later_locs.get(t, set()) - before
+        pairs = {p for v in gone for a in came if (p := _renamed(v, a))}
+        for old, new in sorted(pairs):
+            had = {k for k, locs in base_items[t] if any(_has_prefix(loc, old) for loc in locs)}
+            has = {k for k, locs in later_items[t] if any(_has_prefix(loc, new) for loc in locs)}
+            if had & has and new not in moves.get(t, {}):
+                moves.setdefault(t, {})[new] = old
+    return moves
+
+
+def compare(baseline: Report, later: Report, *, scanned: set[str] | None = None,
+            aliases: dict[str, str] | None = None, path_aliases: dict[str, str] | None = None) -> Comparison:
+    """Return, for each finding of ``baseline``, whether ``later`` shows it remediated.
+
+    Requirement-range findings are left out (they have no installed version; switching ``unpinned_ranges`` off
+    would "fix" them). Statuses: :data:`REMEDIATED` (no finding of its key at its place at or below its version),
+    :data:`PARTLY` (some of its advisories are gone, or it is now at a higher, still vulnerable, version),
+    :data:`OPEN`, :data:`MOVED` (still there, but only under a tree :func:`detect_moves` found renamed),
+    :data:`ELSEWHERE` (nothing at its place, but the later run has its key at a place no baseline finding of that
+    key had: ``/root/anaconda3`` → ``/opt/anaconda3``, or a package moved to another lockfile; never remediated)
+    and :data:`NOT_ASSESSED` (its target is not in ``scanned``).
+
+    Args:
+        baseline: The earlier run.
+        later: The later run.
+        scanned: Targets (baseline names) the later run scanned (:func:`scanned_targets`); None = every target.
+        aliases: Later target name -> baseline target name (e.g. ``{"jlc-prod": "vk-prod"}``).
+        path_aliases: Later location prefix -> baseline prefix, an explicit rename (still reported as open).
+
+    Returns:
+        The outcomes, the later findings paired with no baseline finding (``new``: a new key, or a key at a new
+        place) and the moves detected.
+    """
+    aliases, explicit = aliases or {}, path_aliases or {}
+    base = [f for f in baseline.findings if f.kind != "range"]
+    after = [g for g in later.findings if g.kind != "range"]
+    moves = detect_moves(base, after, aliases=aliases, path_aliases=explicit)
+    by_key: dict[tuple[str, ...], list[Finding]] = defaultdict(list)
+    for f in base:
+        by_key[_key(f, aliases)].append(f)
+    paired: dict[int, list[tuple[Finding, str]]] = defaultdict(list)   # id(baseline finding) -> [(later, moved to)]
+    unpaired: dict[tuple[str, ...], list[Finding]] = defaultdict(list)   # later findings at no baseline place
+    for g in after:
+        k = _key(g, aliases)
+        plain = {_unalias(loc, explicit)[0] for loc in g.locations}
+        moved_to = ""
+        mapped = set()
+        for loc in plain:
+            back, hit = _unalias(loc, moves.get(k[0], {}))
+            mapped.add(back)
+            if hit:
+                moved_to = moved_to or next(n for n in moves[k[0]] if _has_prefix(loc, n))
+        peers = []
+        for f in by_key.get(k, []):
+            locs = set(f.locations)
+            if not locs or not plain or locs & plain:
+                peers.append((f, ""))
+            elif locs & mapped:
+                peers.append((f, moved_to))
+        if not peers:
+            unpaired[k].append(g)
+            continue
+        below = [p for p in peers if _at_or_below(p[0].version, g.version)]
+        pick = (max(below, key=lambda p: _vkey(p[0].version) or ()) if below
+                else min(peers, key=lambda p: _vkey(p[0].version) or ()))
+        paired[id(pick[0])].append((g, pick[1]))
+    out = Comparison(moves=moves)
+    for f in base:
+        ids = set(f.ids)
+        if scanned is not None and _target(f, aliases) not in scanned:
+            out.outcomes.append(FindingOutcome(f, NOT_ASSESSED, "target has no scan record in the later run"))
+            continue
+        cands = paired.get(id(f), [])
+        still = [(g, m) for g, m in cands if _at_or_below(g.version, f.version) and (not ids or ids & set(g.ids))]
+        kept = {id(g) for g, _ in still}
+        higher = [(g, m) for g, m in cands if id(g) not in kept]
+        if still:
+            gone = ids - set().union(*(set(g.ids) for g, _ in still)) if ids else set()
+            where = sorted({m for _, m in still if m})
+            if all(m for _, m in still):
+                status, note = MOVED, f"moved to {', '.join(where)}; still at {still[0][0].version}"
+            elif gone:
+                status, note = PARTLY, f"{len(gone)} of {len(ids)} advisories gone"
+            else:
+                status, note = OPEN, f"still at {still[0][0].version}"
+        elif higher:
+            where = sorted({m for _, m in higher if m})
+            status = PARTLY
+            note = "moved to " + ", ".join(sorted({g.version for g, _ in higher}))
+            note += f" (under {', '.join(where)})" if where else ""
+        elif elsewhere := unpaired.get(_key(f, aliases)):
+            places = sorted({loc for g in elsewhere for loc in g.locations} or {"(no location)"})
+            status = ELSEWHERE
+            note = (f"found at {', '.join(places[:3])}{' …' if len(places) > 3 else ''} "
+                    f"({', '.join(sorted({g.version for g in elsewhere}))})")
+        else:
+            status, note = REMEDIATED, ""
+        out.outcomes.append(FindingOutcome(f, status, note))
+    out.new = [g for gs in unpaired.values() for g in gs]
+    return out
+
+
+def scanned_targets(run_dir: Path, *, since: float | None = None) -> set[str]:
+    """Return the targets a run directory has a complete scan record for.
+
+    Each ``repos-*.json`` names its root (a scan mirror's ``<repo>.worktrees/<name>`` is filed under its checkout;
+    a root under the home directory is also named ``~/...``),
+    each ``server-<host>.log`` holding the audit's ``RESULT`` line names its host, and this machine is always scanned.
+    A run's findings of a target under a scanned root are assessed too (see :func:`assessed`).
+
+    Args:
+        run_dir: A run directory (``<state>/<date>``, or a verification run's subdirectory).
+        since: Ignore records last written before this time (epoch seconds): the daily run passes its own start,
+            so a record an earlier run of the same day left behind (a host since removed from ``servers``) is
+            never read as this run's scan.
+
+    Returns:
+        The target names.
+    """
+    from agentteams.vulnscan import engine   # lazy: engine is heavy and only its target name is needed
+
+    out = {engine.LOCAL_TARGET}
+    home = str(Path.home())
+
+    def fresh(p: Path) -> bool:
+        try:
+            return since is None or p.stat().st_mtime >= since
+        except OSError:
+            return False
+
+    def text(p: Path) -> str:   # "" for a record that cannot be read: it names nothing
+        try:
+            return p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+
+    for p in filter(fresh, run_dir.glob("repos-*.json")):
+        try:
+            root = _MIRROR_TARGET.sub("", str(json.loads(text(p))["target"]))
+        except (ValueError, KeyError, TypeError):
+            root = ""
+        if root:
+            out.add(root)
+        if root.startswith(home + "/"):   # a repo_roots entry written as ~/... labels its findings that way
+            out.add("~" + root[len(home):])
+    out |= {p.stem.removeprefix("server-") for p in filter(fresh, run_dir.glob("server-*.log"))
+            if _AUDIT_DONE.search(text(p))}
+    return out
+
+
+def assessed(targets: Iterable[str], scanned: set[str]) -> set[str]:
+    """Return the ``targets`` a scan covered: those in ``scanned`` and those inside a scanned root.
+
+    Args:
+        targets: Finding targets (``<root>/<repo>`` for a repository inside a scanned folder).
+        scanned: Scanned roots and hosts (:func:`scanned_targets`).
+
+    Returns:
+        The covered targets.
+    """
+    roots = tuple(s.rstrip("/") + "/" for s in scanned)
+    return {t for t in targets if t in scanned or t.startswith(roots)}
+
+
+def load_run(run_dir: Path) -> Report:
+    """Read a run's ``summary.json`` as a report.
+
+    Args:
+        run_dir: The run directory.
+
+    Returns:
+        The run's aggregate report.
+
+    Raises:
+        OSError: No readable ``summary.json``.
+        ValueError: It is not a JSON object of the report's shape.
+    """
+    data = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{run_dir / 'summary.json'} is not a JSON object")
+    try:
+        return Report.from_dict(data)
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"{run_dir / 'summary.json'} is not a report: {type(exc).__name__}: {exc}") from exc
+
+
+BASELINE_LOOKBACK = 7   # earlier runs searched for a target the previous run did not scan
+
+
+def fill_baseline(previous: Report, previous_dir: Path, targets: Iterable[str], *,
+                  lookback: int = BASELINE_LOOKBACK) -> tuple[Report, list[str]]:
+    """Return ``previous`` with each target it did not scan taken from the newest earlier run that did.
+
+    The mirror of leaving an unscanned target out of this run's counts: a host the previous run could not reach
+    (an audit that did not complete) has no findings there, so without this every finding it has today would read
+    as new. Each such target's findings come instead from the newest earlier run (up to ``lookback`` runs back)
+    with a complete scan record for it (a run's own feed errors naming the target override a scan record left
+    behind). A target no run in that range scanned keeps the previous run's partial findings, with a note when it
+    had any; each substitution gets a note too.
+
+    Args:
+        previous: The previous run's report.
+        previous_dir: Its run directory.
+        targets: This run's finding targets.
+        lookback: How many earlier runs to search.
+
+    Returns:
+        (the baseline report, notes for the summary). ``previous`` itself is not changed.
+    """
+    need = set(targets) - _covered(previous_dir, previous, targets)
+    if not need:
+        return previous, []
+    base = Report(target=previous.target)
+    base.findings = [f for f in previous.findings if f.target not in need]
+    notes: list[str] = []
+    earlier = [d for d in paths.run_dirs(previous_dir.parent) if d.name < previous_dir.name][-lookback:]
+    for run in reversed(earlier):
+        if not need:
+            break
+        try:
+            rep = load_run(run)
+        except (OSError, ValueError) as exc:
+            notes.append(f"the {run.name} run is unreadable ({type(exc).__name__}); not used as a baseline")
+            continue
+        got = _covered(run, rep, need)
+        if got:
+            base.findings += [f for f in rep.findings if f.target in got]
+            notes += [f"{t}: the {previous_dir.name} run did not scan it; compared with the {run.name} run"
+                      for t in sorted(got)]
+            need -= got
+    # No earlier scan either: keep whatever the previous run did record for it (partial beats nothing)
+    base.findings += [f for f in previous.findings if f.target in need]
+    partial = {f.target for f in previous.findings} & need
+    notes += [f"{t}: no complete scan in the last {lookback} runs; compared with the {previous_dir.name} run's "
+              "partial findings" for t in sorted(partial)]
+    return base, notes
+
+
+def _covered(run_dir: Path, rep: Report, targets: Iterable[str]) -> set[str]:
+    """Return the ``targets`` a run covered: a scan record (:func:`scanned_targets`), and not named by the run's own
+    feed errors (``"<target>: audit did not complete …"``), so a record an earlier run of that day left behind cannot
+    stand in for a scan the summary itself says failed."""
+    failed = {e.split(":", 1)[0].strip() for e in rep.feed_errors if ":" in e}
+    return assessed(targets, scanned_targets(run_dir)) - failed
+
+
+def outcome_rows(cmp: Comparison) -> list[dict[str, Any]]:
+    """Return one plain row per baseline finding (status, note and the finding's identity), for CSV or JSON.
+
+    Args:
+        cmp: A :func:`compare` result.
+
+    Returns:
+        Rows with ``status, severity, target, kind, ecosystem, name, version, fix, fixed_upstream, note``.
+    """
+    from agentteams.vulnscan.osv import SEVERITY_NAME
+
+    rows = []
+    for o in cmp.outcomes:
+        f = o.finding
+        name = SEVERITY_NAME.get(f.severity, "?")
+        sev = f"UNSCORED (as {name})" if f.unscored and not f.rated and not f.malicious else name
+        rows.append({"status": o.status, "severity": sev, "target": f.target, "kind": f.kind,
+                     "ecosystem": f.ecosystem, "name": f.name, "version": f.version, "fix": f.fix,
+                     "fixed_upstream": f.fixed_upstream, "note": o.note})
+    return rows

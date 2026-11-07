@@ -13,8 +13,8 @@
   only for a positive ``cooldown_days``). It touches the lockfile only and runs no install scripts. Semver-major fixes
   are never forced (no ``--force``); with ``allow_major`` (the executor's ``stage-major``) a ``major-held`` package that
   is a direct dependency has its ``package.json`` spec raised to ``^<fixed version>`` and the lockfile re-resolved with
-  ``npm install --package-lock-only --ignore-scripts`` first (:mod:`.npm_major`; transitive-only majors and npm
-  workspaces stay held). What the audit fix leaves vulnerable inside its range is retried by moving its exact-peer
+  ``npm install --package-lock-only --ignore-scripts`` first (:mod:`.npm_major`; npm workspaces stay held, and so does a
+  transitive-only major unless it moved with a raised parent: then it is reported :data:`MOVES_WITH`). What the audit fix leaves vulnerable inside its range is retried by moving its exact-peer
   group or direct parent (``npm update --no-save``, :func:`.npm_ops.npm_moves`). It runs on a
   scratch copy with the public registry and TLS verification fixed, never reading the
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
@@ -25,8 +25,8 @@
   to. Listed in a dry run only; never applied, and ``executor.validate_diff`` refuses a change to these files.
 - **Cargo.lock**: plan only (:func:`plan_cargo_lock`): each vulnerable crate with the smallest version the
   advisories call fixed and the command ``cargo update -p <name>@<installed> --precise <version>`` for a person
-  to run. It is never applied, and ``stage-fix`` cannot stage it (``executor.validate_diff`` refuses a
-  ``Cargo.lock`` change).
+  to run; ``stage-fix`` never stages it. An in-major fix whose target passes the S-10 search is a ``stage-cargo``
+  row instead (:mod:`.cargo_fix`, vfr-d.D3): only that op, when a grant names it, runs the command.
 - **go.mod, pnpm-lock.yaml, bun.lock, Gemfile.lock, gradle.lockfile, packages.lock.json**: plan only too
   (:func:`plan_lockfile`), with the command each tool takes (:data:`lockfiles.FORMATS`); ``executor.validate_diff``
   refuses a change to any of them.
@@ -54,26 +54,33 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, image_fix, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
+from agentteams.vulnscan import _http, cargo_fix, image_fix, images, lockfiles, npm_groups, npm_kept, npm_major
+from agentteams.vulnscan import npm_ops, osv, private_sources, project_policy, subproc_confine, writer_prs
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
-from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
+from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
+from agentteams.vulnscan.npm_ops import OWN_PR  # noqa: F401  (re-export: defined in the leaf npm_ops)
 from agentteams.vulnscan.npm_ops import semver_line as _semver_line
 from agentteams.vulnscan.versions import is_final, major, version_key
 
-PYPI = "https://pypi.org/pypi"
+PYPI = _http.PYPI_JSON
 NPM_REGISTRY = "https://registry.npmjs.org/"    # fixed: a repository .npmrc cannot redirect the unattended fix
 NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
+#: The action of a transitive row ``stage-major`` moved with its raised direct parent (vfr-b.B3): fixed by the
+#: parent's row, so it is never counted as held or open on its own.
+MOVES_WITH = npm_groups.MOVES_WITH
 #: Heads every Cargo.lock section of a fix plan (agents read it through ``get_fix_plans``).
-CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor refuses the change), so do not "
-              "request `stage-fix` for these rows; report them for a person to run the command shown, then "
-              "`cargo build` and the tests. \"→\" is the smallest version the advisories call fixed.")
+CARGO_NOTE = ("`stage-fix` and `stage-major` never edit a `Cargo.lock`, so do not request `stage-fix` for these rows. "
+              "A row whose action is `stage-cargo` (an in-major fix whose target passed the S-10 search) may be "
+              "staged with `stage-cargo` when the grant names it: it runs the command shown, \"→\" being the target. "
+              "Report every other row, with the command shown (then `cargo build` and the tests), as "
+              f"{OWN_PR} (\"→\": the smallest version the advisories call fixed).")
 #: Heads every base-image section of a fix plan.
 IMAGE_NOTE = ("Plan-only for `stage-fix` and `stage-major`: they never edit a Dockerfile or compose file, so do not "
               "request them for these rows. A row whose action is `stage-image` (an end-of-life official runtime "
               "image in a Dockerfile `FROM`) may be staged with `stage-image`, on its own, when the grant names it: "
-              "it moves the tag to the one under \"→\". Report every other row for a person to change `FROM <ref>` "
-              "(or `image:`) to a supported line, e.g. the tag under \"→\", then rebuild and run the tests. The "
-              "image contents are not scanned.")
+              "it moves the tag to the one under \"→\". Report every other row, with its change (`FROM <ref>` or "
+              "`image:` to a supported line, e.g. the tag under \"→\", then a rebuild and the tests), as "
+              f"{OWN_PR}. The image contents are not scanned.")
 #: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
 #: repository content: a name that could break the command or the table gets no command).
 _CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
@@ -89,8 +96,9 @@ def lockfile_note(name: str) -> str:
         The note.
     """
     return (f"Plan-only: `stage-fix` never edits a `{name}` (the executor refuses the change), so do not request "
-            "`stage-fix` for these rows; report them for a person to run the command shown, then "
-            f"{lockfiles.FORMATS[name].then}. \"→\" is the smallest version the advisories call fixed.")
+            "`stage-fix` for these rows; report each, with the command shown (then "
+            f"{lockfiles.FORMATS[name].then}), as {OWN_PR}. \"→\" is the smallest version the advisories call "
+            "fixed.")
 
 
 def _plain(text: str) -> str:
@@ -108,7 +116,8 @@ class PinChange:
     new: str = ""
     # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious | pr-held (an open PR that is
     # not the executor's already updates it, ``skip``); npm rows (plan_npm_lock)
-    # also workspace-held | npm-unavailable; Cargo.lock rows (plan_cargo_lock) plan-only | no-clean-release | malicious
+    # also workspace-held | npm-unavailable | moves-with (``stage-major`` moved it with its raised parent,
+    # MOVES_WITH); Cargo.lock rows (plan_cargo_lock) plan-only | stage-cargo | no-clean-release | malicious
     action: str = "fix"
     ids: list[str] = field(default_factory=list)
     note: str = ""
@@ -491,7 +500,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
             c.note = (f"{dev}semver-major {ver} → {c.new}: stage-fix leaves it; stage-major takes it when package.json "
                       "lists it directly")
         elif workspaces:
-            c.action, c.note = "workspace-held", f"{dev}npm workspaces: stage-fix fails closed here — fix by hand"
+            c.action, c.note = "workspace-held", f"{dev}npm workspaces: stage-fix fails closed here; " + OWN_PR
         elif not have_npm:
             c.action, c.note = "npm-unavailable", f"{dev}npm is not on PATH, so stage-fix cannot run it"
         elif unfixed:
@@ -503,6 +512,9 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
             "row's version or fix fewer rows. \"≥\" is the smallest version the advisories call fixed.")
     if workspaces:
         note += " This lockfile belongs to npm workspaces, which `stage-fix` refuses (fails closed)."
+    if len(held := [c for c in changes if c.action == "major-held"]) > 1:   # B3: name what a parent carries
+        direct, _, problem = npm_major.direct_majors(path, [c.name for c in held])
+        npm_groups.note_carried(path, held, {} if problem else direct)
     return changes, note + npm_groups.annotate_plan(path, changes)   # retried moves (and a new plan digest)
 
 
@@ -549,10 +561,11 @@ def plan_cargo_lock(path: Path, *, label: str = "", private: tuple[str, ...] = (
             c.action, c.note = "no-clean-release", f"{len(ids)} advisories; no advisory names a fixed version"
             continue
         if not (_CRATE_SPEC.fullmatch(name) and _CRATE_SPEC.fullmatch(ver)):
-            c.note = f"{len(ids)} advisories; the crate name or version has an unusual form: fix by hand"
+            c.note = f"{len(ids)} advisories; the crate name or version has an unusual form, so no command: {OWN_PR}"
             continue
         c.note = f"`cargo update -p {name}@{ver} --precise {c.new}` ({len(ids)} advisories"
         c.note += f", {unfixed} without a fix)" if unfixed else ")"
+    cargo_fix.annotate(path, changes)   # D3: the in-major, S-10-clean ones become stage-cargo rows
     return changes
 
 
@@ -570,8 +583,8 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
     ``bun update <name>@<ver>``, ``bundle update --conservative <name>``, a Gradle build-script change then
     ``./gradlew dependencies --write-locks``, ``dotnet add package <name> --version <ver>``); ``malicious``;
     ``no-clean-release``. A command is written only when the name, the installed and the fixed version are all of
-    the format's plain form (the lockfile and the feed are data), else the note says to fix it by hand. Nothing is
-    applied, and ``stage-fix`` cannot stage these files.
+    the format's plain form (the lockfile and the feed are data), else the note leaves it to the repository's own
+    PR (:data:`OWN_PR`). Nothing is applied, and ``stage-fix`` cannot stage these files.
 
     Args:
         path: The lockfile (``go.mod`` for Go).
@@ -609,7 +622,7 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
             c.action, c.note = "no-clean-release", f"{len(ids)} advisories; no advisory names a fixed version"
             continue
         if not (fmt.name.fullmatch(name) and fmt.version.fullmatch(ver) and fmt.version.fullmatch(c.new)):
-            c.note = f"{len(ids)} advisories; the name or a version has an unusual form: fix by hand"
+            c.note = f"{len(ids)} advisories; the name or a version has an unusual form, so no command: {OWN_PR}"
             continue
         c.note = f"{fmt.command(name, ver, c.new)} ({len(ids)} advisories"
         c.note += f", {unfixed} without a fix)" if unfixed else ")"
@@ -690,15 +703,6 @@ def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False, ins
     return (proc.stdout + proc.stderr) or f"npm exited {proc.returncode}"
 
 
-def _leave_to_prs(rows: list[PinChange], skip: dict[str, list[int]] | None) -> None:
-    """Mark each ``fix`` row whose package another open PR already updates as ``pr-held`` ("left to #N", D1)."""
-    for c in rows:
-        nums = (skip or {}).get(open_prs.normalize(c.name))
-        if nums and c.action in ("fix", "major-held"):
-            c.action, c.major = "pr-held", False
-            c.note = f"left to {', '.join(f'#{n}' for n in nums)} (an open PR already updates it; not duplicated)"
-
-
 def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: tuple[str, ...] = (),
                skip: dict[str, list[int]] | None = None) -> tuple[list[PinChange], str]:
     """Take ``lockfile``'s ``major-held`` packages that ``package.json`` lists directly (``stage-major``).
@@ -711,9 +715,9 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
 
     Fail closed (S1, H1): before anything is written, ``npm install`` is refused unless the tools container is
     active (:func:`subproc_confine.active`; never on the host, never when confinement is opted out) and the base
-    ``package.json`` and lockfile name only registry sources (:func:`manifests.npm_off_registry`). After it, a
-    reported npm error or an unchanged lockfile refuses the whole stage, so a raised spec is never committed
-    beside a stale lockfile.
+    names only registry sources apart from kept off-registry entries (:func:`npm_kept.base_problem`, C2). After it, a
+    reported npm error, an unchanged lockfile or a kept entry not byte-identical (:func:`npm_kept.after_problem`)
+    refuses the whole stage, so a raised spec is never committed beside a stale lockfile.
 
     Args:
         lockfile: package-lock.json or npm-shrinkwrap.json (``package.json`` beside it is never a symlink here).
@@ -723,7 +727,9 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
         skip: ``{normalized name: [PR numbers]}`` another open PR already updates: never raised (``pr-held``).
 
     Returns:
-        (the major rows: taken ones as ``fix`` with ``major`` set, held ones as ``major-held``; npm's output or "").
+        (the major rows: taken ones as ``fix`` with ``major`` set; a transitive one that a raised parent installed
+        and that the re-resolved lockfile no longer holds as :data:`MOVES_WITH`, naming the parent (B3); held ones
+        as ``major-held``; npm's output or "").
 
     Raises:
         FeedError: OSV could not be read.
@@ -732,15 +738,16 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
     """
     rows = [c for c in plan_npm_lock(lockfile, cooldown_days=cooldown_days, label=label, private=private)[0]
             if c.action == "major-held"]
-    _leave_to_prs(rows, skip)
+    writer_prs.leave_to_prs(rows, skip)
     if not [c for c in rows if c.action == "major-held"]:
         return rows, ""
     direct, text, problem = npm_major.direct_majors(lockfile, [c.name for c in rows if c.action == "major-held"])
     if problem:   # workspaces, or a package.json that cannot be read: nothing here is rewritten, and the rows say why
         for c in rows:
             c.note += ("; npm workspaces: stage-major fails closed here" if problem == npm_major.WORKSPACES
-                       else f"; {problem}: stays held — fix by hand")
+                       else f"; {problem}: stays held, {OWN_PR}")
         return rows, ""
+    graph = npm_groups.LockGraph(npm_groups.load(lockfile))   # the base lockfile: who installs each copy
     specs: dict[str, tuple[str, str]] = {}
     for c in sorted(rows, key=lambda r: _semver_line(r.new)):   # the highest fixed version of a name wins
         if c.action != "pr-held" and c.name in direct:
@@ -750,22 +757,22 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             new_text = npm_major.rewrite_specs(text, specs)
         except ValueError as exc:
             for c in rows:
-                c.note += f"; package.json not rewritten ({exc}): fix by hand"
+                c.note += f"; package.json not rewritten ({exc}): {OWN_PR}"
             return rows, ""
         if subproc_confine.active() is None:   # S1: npm install resolves every spec; only ever in the container
             raise ExecError(f"{label}: stage-major refuses npm install outside the tools container (confinement is "
                             "off or opted out)")
         lock_before = lockfile.read_bytes()
-        # S1 stays strict: an off-registry base is refused here even though stage-fix's validate_diff keeps an
-        # entry identical to the base (manifests._kept_off_registry, e.g. SheetJS's CDN-only xlsx), because npm
-        # install re-resolves every package.json spec. Tracked as agentteams-remediation-log:
-        # stage-major-offregistry-base; any relaxation needs its own @security review.
-        if problem := npm_off_registry(label, text, lock_before.decode("utf-8", "replace")):
+        # S1 + C2 (vfail F2's rule, @security 2026-11-02): a registry-only base, or one whose off-registry entries
+        # are of npm_kept's one shape; they must come out of the install byte-identical (checked below).
+        problem, kept = npm_kept.base_problem(label, text, lock_before.decode("utf-8", "replace"))
+        if problem:
             raise ExecError(f"stage-major refuses npm install: {problem}")
         pkg = lockfile.parent / "package.json"
         with open(os.open(pkg, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
             fh.write(new_text)
     pkg_label = str(Path(label).parent / "package.json")
+    transitive: dict[int, str] = {}   # id(row) -> its note before the "stays held" suffix
     for c in rows:
         if c.action == "pr-held":
             continue
@@ -774,7 +781,9 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             c.path, c.action, c.major = pkg_label, "fix", True
             c.note = f"MAJOR upgrade: package.json {section}.{c.name} → {spec} (lockfile re-resolved by npm install)"
         else:
-            c.note += "; transitive only (package.json does not list it): stays held — its parent must move first"
+            transitive[id(c)] = npm_groups.CARRIED_NOTE.sub("", c.note)   # the dry run's prediction: checked below
+            c.note = (transitive[id(c)] + "; transitive only (package.json does not list it): stays held — its "
+                      "parent must move first")
     if not specs:
         return rows, ""
     out = npm_fix(lockfile.parent, cooldown_days=cooldown_days, apply=True, install=True)
@@ -783,6 +792,10 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
         why = failed or (out.strip().splitlines() or ["no output"])[-1]
         raise ExecError(f"{label}: npm install did not re-resolve the lockfile after package.json was raised "
                         f"({why[:200]}); nothing is staged")
+    if why := npm_kept.after_problem(label, kept, lockfile.read_text(encoding="utf-8", errors="replace")):
+        raise ExecError(f"stage-major refuses the re-resolved lockfile: {why}")
+    npm_groups.mark_carried(graph, npm_groups.load(lockfile), [c for c in rows if id(c) in transitive],
+                            transitive, specs)   # re-plan (B3): which transitive rows moved with a raised parent
     return rows, out
 
 
@@ -869,7 +882,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         if private and path.name in NPM_LOCKFILES and any(project_policy.is_private(d.name, private, d.ecosystem)
                                                           for d in parse(path).deps):
             res.refused.append((rel, ("lists private packages (project brief): npm would send them to the registry "
-                                      "— fix this lockfile by hand")))
+                                      "— this lockfile is " + OWN_PR)))
             continue
         linked = [path] if REQ_NAME.match(path.name) else \
             [path.parent / n for n in ("package.json", *NPM_LOCKFILES)] if path.name in NPM_LOCKFILES else []
@@ -883,7 +896,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
                 continue
-            _leave_to_prs(changes, skip)
+            writer_prs.leave_to_prs(changes, skip)
             res.changes += changes
             if apply and any(c.action == "fix" for c in changes):
                 unsafe = git_config_problem(path.parent)

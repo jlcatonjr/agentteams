@@ -1,0 +1,8 @@
+{
+  "patch_id": "965c9639a9d97fe5465f9029ec1637b82d7168a3",
+  "commit": "c16d67794ad4ccd0ee95c8c461b2dd8f8d17a123",
+  "subject": "refactor(vulnscan): keep executor.py and fix.py clear of the CH-07 ceiling margin",
+  "impact": "4 symbols added",
+  "note": "CH-07 carve: B2/B3/B1b helpers moved to npm_groups, executor_guard, handoff_lapse; additive, no behaviour change",
+  "recorded_at": "2026-11-02T21:56:59Z"
+}

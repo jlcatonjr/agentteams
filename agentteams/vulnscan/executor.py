@@ -28,6 +28,8 @@ Operations (v1):
 - ``stage-image REPO``: moves end-of-life official runtime images' Dockerfile ``FROM`` tags (:mod:`.image_fix`; a
   grant must name it, Rule 15), never with a dependency file; MAJOR commit, title and label; ``"image": true`` marks
   its staged state and ``open-pr`` result (``close-superseded`` lane).
+- ``stage-cargo REPO``: in-major ``cargo update --precise`` on ``Cargo.lock`` (:mod:`.cargo_fix`; a grant must name
+  it, Rule 15): crates.io only, ``Cargo.toml`` unchanged, only planned ``version``/``checksum`` lines change.
 - ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
   ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
   removes the executor's worktree. It never merges.
@@ -41,6 +43,7 @@ Operations (v1):
   (:mod:`.executor_guard`). The PR body passes the publish scrubber (home paths, host name, private IPs).
 - ``server-audit HOST`` / ``server-dryrun HOST``: run the *packaged* server kit's read-only audit,
   or ``run-host.sh`` without ``--apply``, on an exact host named in the grant and in ``hosts.conf``.
+- ``server-apply HOST:LEVEL`` / ``runtime-patch FORMULA``: operator-confirmed host changes (:mod:`.server_apply`).
 
 git always runs with system/global config ignored, hooks and commit/tag signing disabled, a fixed ssh
 command and an explicit credential helper, so repository or user config cannot redirect what runs. Granted ops
@@ -63,14 +66,15 @@ from typing import Any, NamedTuple
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
 from agentteams.vulnscan import executor_pr, executor_supersede, image_fix, npm_major, open_prs, report_store
-from agentteams.vulnscan import repo_alias, retry_guard
-from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import grant_v2, handoff_lapse, repo_alias, retry_guard
+from agentteams.vulnscan import cargo_fix, subproc_confine, subproc_confine_ssh, writer_prs
 from agentteams.vulnscan.executor_env import (  # leaf: re-exported for callers and tests (H2)
     GIT_IDENTITY,
     ExecError,
     gh_cwd,
     gh_env,  # noqa: F401  (re-exported: publish, notes, effectiveness)
     gh_push_env,
+    read_json_object,
 )
 from agentteams.vulnscan.executor_env import clean_git_env as _clean_git_env
 from agentteams.vulnscan.executor_env import git_env as _git_env
@@ -243,13 +247,9 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
         executor_guard.refuse_repo_op(op, target, ALLOWED_CHANGED)   # enrolment, brief, plan-only manifests
         if why := retry_guard.futile_reason(op, target, rows):   # nothing fixable, plan unchanged since
             raise ExecError(why)
-    if op == "open-pr" and handoff.required(cfg, Path(target)):   # H3: the repository's orchestrator approves first
-        branch = handoff.staged_branch(Path(target))
-        problem = handoff.approval_problem(Path(target), branch) if branch else ""   # no staged fix: open_pr says so
-        if problem:
-            raise ExecError(problem)
+    lapse = handoff_lapse.gate(op, Path(target), cfg)   # H3: the orchestrator approves first (B1b: or own-pr lapsed)
     grants, problems = grant.load_active()
-    usable = [g for g in grants if grant.covers(g, op, target) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
+    usable = [g for g in grants if grant.covers(g, op, target) and grant_v2.uses_left(g, op, rows)]
     if not usable:
         why = "; ".join(problems) if problems else "no valid grant covers it, or its uses are exhausted"
         raise ExecError(f"not authorized: {op} {target}: {why}")
@@ -265,6 +265,7 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
     except RuntimeError as exc:
         raise ExecError(f"HALT in force: {exc}") from exc
     ledger.append("begun", grant_id=g["grant_id"], op=op, target=target, request_id=request_id)
+    handoff_lapse.log(lapse, target=target, request_id=request_id)   # only once a grant covers the open-pr
     return g
 
 
@@ -328,15 +329,19 @@ def staged_records() -> list[dict[str, Any]]:
     Returns:
         The records that parse as JSON objects; unreadable files are skipped.
     """
-    out = []
-    for f in sorted((spool_dir() / "staged").glob("*.json")):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except (OSError, ValueError):   # an unreadable record lists nothing
-            data = None
-        if isinstance(data, dict):
-            out.append(data)
-    return out
+    return [d for f in sorted((spool_dir() / "staged").glob("*.json")) if (d := read_json_object(f))]
+
+
+def read_staged(repo: Path) -> dict[str, Any]:
+    """Return the executor's staged-fix record for ``repo`` (:func:`staged_file`).
+
+    Args:
+        repo: Canonical repository path.
+
+    Returns:
+        The record; {} when it is absent, unreadable or not a JSON object.
+    """
+    return read_json_object(staged_file(repo))
 
 
 def _worktrees_dir() -> Path:
@@ -446,13 +451,14 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
     Content is judged byte for byte by :func:`manifests.check_pin_edit` and :func:`manifests.check_lock_edit`.
     With ``major`` (``stage-major``) a ``package.json`` may change too (:func:`npm_major.check_package_json_edit`),
     and its lockfile's root dependencies then only to mirror it. With mode ``image`` (``stage-image``) only Dockerfiles
-    may change, and only by :func:`image_fix.check_from_edit`'s ``FROM`` tag moves: never a dependency file too.
+    may change, and only by :func:`image_fix.check_from_edit`'s ``FROM`` tag moves; with ``cargo`` only ``Cargo.lock``
+    files, by :func:`cargo_fix.check_lock_edit`'s in-major version moves.
 
     Args:
         wt: Worktree.
         base: Base commit.
         major: Accept a ``stage-major`` change.
-        mode: :data:`executor_pr.MODES` (``"image"``: accept a ``stage-image`` change and nothing else).
+        mode: :data:`executor_pr.MODES` (``"image"`` / ``"cargo"``: only a ``stage-image`` / ``stage-cargo`` change).
 
     Returns:
         The changed paths, and one note per unchanged off-registry lockfile entry that was kept
@@ -462,7 +468,7 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
         ExecError: Any disallowed change.
     """
     mode = executor_pr.resolve_mode(major, mode)
-    major, image = mode == "major", mode == "image"
+    major, image, cargo = mode == "major", mode == "image", mode == "cargo"
     raw = git(wt, "diff", "--raw", "-z", "--no-renames", "--no-abbrev", base).split("\0")
     changed: list[str] = []
     kept: list[str] = []
@@ -479,7 +485,9 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
         if image:
             if not image_fix.is_dockerfile(rel):
                 raise ExecError(f"refusing change outside Dockerfile FROM tags (stage-image): {rel}")
-        elif not (ALLOWED_CHANGED.search(rel) or major and npm_major.PACKAGE_JSON.search(rel)):
+        elif cargo and Path(rel).name != cargo_fix.LOCK:
+            raise ExecError(f"refusing change outside Cargo.lock (stage-cargo): {rel}")
+        elif not cargo and not (ALLOWED_CHANGED.search(rel) or major and npm_major.PACKAGE_JSON.search(rel)):
             raise ExecError(f"refusing change outside dependency pins/lockfiles: {rel}")
         st = os.lstat(wt / rel)
         if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o111:
@@ -490,6 +498,8 @@ def validate_diff(wt: Path, base: str, *, major: bool = False, mode: str = "") -
         try:
             if image:
                 image_fix.check_from_edit(rel, old, new)
+            elif cargo:
+                cargo_fix.check_lock_edit(rel, old, new)
             elif REQ_NAME.search(Path(rel).name):
                 check_pin_edit(rel, old, new)
             elif npm_major.PACKAGE_JSON.search(rel):
@@ -545,8 +555,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False, mode: str
             raise ExecError(f"{repo}: in the executor's worktree, {unsafe}")
         git(wt, "reset", "-q", "--hard", base)
         cooldown = REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
-        claims = open_prs.staging_claims(lambda: _origin_repo(wt))   # D1: never duplicate another open PR
-        res = image_fix.fix_result(wt, claims) if image else \
+        claims = writer_prs.staging_claims(lambda: origin_repo(wt))   # D1/D6: never duplicate another open PR
+        res = image_fix.fix_result(wt, claims) if image else cargo_fix.fix_result(wt, claims) if mode == "cargo" else \
             fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown, skip=claims)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
@@ -618,12 +628,12 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     if not staged.is_file():
         raise ExecError("no staged fix for this repo — request stage-fix (or stage-major, stage-image) first")
     st = json.loads(staged.read_text(encoding="utf-8"))
-    lane = {"image": True} if st.get("image") is True else {}   # close-superseded's lane (ops.lane_of)
+    lane = executor_pr.lane_fields(st)   # close-superseded's lane (ops.lane_of), on every result; ExecError if both
     wt, branch = Path(st["worktree"]), st["branch"]
     if not branch.startswith("vulnscan/") or not wt.is_dir() or not wt.resolve().is_relative_to(
             _worktrees_dir().resolve()):
         raise ExecError("staged state is invalid or its worktree is gone")
-    target_repo = _origin_repo(wt)   # before anything is pushed; never let gh pick a base repo
+    target_repo = origin_repo(wt)   # before anything is pushed; never let gh pick a base repo
     if dup := open_prs.refuse_duplicate(target_repo, st.get("packages") or []):   # D1, fail closed on a gh failure
         _finish_open_pr(repo, wt, staged)   # retire the staged change: the next stage leaves those packages out
         raise ExecError(dup)
@@ -633,15 +643,15 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     remote_sha = next((ln.split("\t", 1)[0] for ln in git(wt, "ls-remote", "origin", ref, push=True).splitlines()
                        if ln.endswith(f"\t{ref}")), "")
     if remote_sha:
-        url = _open_pr_url(wt, target_repo, branch)
+        url = executor_pr.open_pr_url(target_repo, branch)
         if url:
             # The PR is ours only if its branch holds exactly the staged content (a re-staged fix is a new
             # commit with the same tree); anything else on the branch is someone else's change (C13).
             git(wt, "fetch", "--no-tags", "origin", ref, push=True)
             if git(wt, "rev-parse", f"{remote_sha}^{{tree}}").strip() != git(wt, "rev-parse", "HEAD^{tree}").strip():
                 raise ExecError(f"open PR {url} on {branch} does not hold the staged change — not claiming it")
-            _finish_open_pr(repo, wt, staged)
-            return {"repo": str(repo), "branch": branch, "pr": url, "existing": True, **lane}
+            _finish_open_pr(repo, wt, staged)   # head: the pushed commit auto-merge must still find (C1)
+            return {"repo": str(repo), "branch": branch, "pr": url, "existing": True, "head": remote_sha, **lane}
         if remote_sha != git(wt, "rev-parse", "HEAD").strip():
             raise ExecError(f"remote branch {branch} already exists at another commit and has no open PR "
                             "— not overwriting")
@@ -659,40 +669,15 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         return {"repo": str(repo), "branch": branch, "pr": "", "closed_unmerged": closed, "detail": "not re-opened"}
     if not remote_sha:
         git(wt, "push", "origin", f"HEAD:{ref}", push=True)
-    if st.get("major") is True and lane:
-        raise ExecError("staged state is invalid: both major and image")   # one mode, never both
-    mode = "image" if lane else "major" if st.get("major") is True else "fix"   # MAJOR title, body and label
-    major = mode == "major"
+    mode = "image" if lane.get("image") else "major" if lane.get("major") else "fix"   # MAJOR title, body and label
     body_file = wt.parent / f"{wt.name}.pr.md"
     body_file.write_text(executor_pr.body(st["plan"], rationale, mode=mode, left=st.get("left_to_prs"),
                                           kept=st.get("kept_off_registry")), encoding="utf-8")
     url = executor_pr.create(target_repo, base_branch, branch, body_file, mode=mode,
-                             open_url=lambda: _open_pr_url(wt, target_repo, branch))
+                             open_url=lambda: executor_pr.open_pr_url(target_repo, branch))
+    head = git(wt, "rev-parse", "HEAD").strip()   # the commit pushed (or already there, equal): ledgered for auto-merge
     _finish_open_pr(repo, wt, staged)
-    return {"repo": str(repo), "branch": branch, "pr": url, **({"major": True} if major else {}), **lane}
-
-
-def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
-    """Return the URL of an open PR whose head is ``branch`` in ``target_repo`` itself, or "".
-
-    ``--head`` matches a branch name in any fork, so a PR from a fork with the same branch name is
-    ignored (``isCrossRepository``): the executor always pushes to ``target_repo``.
-
-    Raises:
-        ExecError: gh failed or did not answer with a JSON list.
-    """
-    proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--head", branch, "--state", "open",
-                           "--json", "url,isCrossRepository"], cwd=gh_cwd(), capture_output=True, text=True, env=gh_push_env(), timeout=120,
-                          check=False)
-    if proc.returncode:
-        raise ExecError(f"gh pr list failed: {(proc.stderr or proc.stdout).strip()[:400]}")
-    try:
-        prs = json.loads(proc.stdout or "[]")
-    except json.JSONDecodeError as exc:
-        raise ExecError(f"gh pr list did not return JSON: {exc}") from exc
-    urls = [p.get("url") for p in prs if isinstance(p, dict) and p.get("isCrossRepository") is False] \
-        if isinstance(prs, list) else []
-    return next((u for u in urls if isinstance(u, str) and u.startswith("https://")), "")
+    return {"repo": str(repo), "branch": branch, "pr": url, "head": head, **lane}
 
 
 def _finish_open_pr(repo: Path, wt: Path, staged: Path) -> None:
@@ -701,8 +686,14 @@ def _finish_open_pr(repo: Path, wt: Path, staged: Path) -> None:
     staged.unlink(missing_ok=True)
 
 
-def _origin_repo(wt: Path) -> str:
+def origin_repo(wt: Path) -> str:
     """Return ``HOST/OWNER/REPO`` of ``origin``, the repository the branch was pushed to.
+
+    Args:
+        wt: A worktree (or checkout) of the repository.
+
+    Returns:
+        ``HOST/OWNER/REPO``.
 
     Raises:
         ExecError: ``origin`` is not a URL gh can target.
@@ -720,13 +711,8 @@ def _origin_repo(wt: Path) -> str:
 
 def _kit_hosts() -> set[str]:
     conf = paths.server_kit_dir() / "hosts.conf"
-    if not conf.is_file():
-        return set()
-    names = set()
-    for ln in conf.read_text(encoding="utf-8").splitlines():
-        if ln.strip() and not ln.lstrip().startswith("#"):
-            names.add(ln.split("|", 1)[0].strip())
-    return names
+    lines = conf.read_text(encoding="utf-8").splitlines() if conf.is_file() else []
+    return {ln.split("|", 1)[0].strip() for ln in lines if ln.strip() and not ln.lstrip().startswith("#")}
 
 
 def server_op(op: str, host: str) -> dict[str, Any]:
@@ -888,7 +874,7 @@ def act(op: str, target: str, cfg: dict[str, Any], *, rationale: str = "", reque
         if request_id in ledger.consumed_request_ids(rows):   # a concurrent server took it first
             return {"status": "refused", "detail": "request id already used (replay)"}
         if op not in INTERNAL_OPS:
-            return _granted(op, target, cfg, rationale=rationale, request_id=request_id)
+            return _granted(op, target, cfg, rationale=rationale, request_id=request_id, payload=payload)
         try:
             result = _internal(op, target, payload=payload or {}, request_id=request_id,
                                run_dir=run_dir, run_id=run_id)
@@ -901,7 +887,8 @@ def act(op: str, target: str, cfg: dict[str, Any], *, rationale: str = "", reque
     return {"status": "done", **result}
 
 
-def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str) -> dict[str, Any]:
+def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str,
+             payload: dict[str, Any] | None = None) -> dict[str, Any]:
     """Authorize and perform one granted op, its subprocesses confined (fail closed). Call inside ``ledger.locked()``."""
     try:
         confined = subproc_confine.scope(cfg, scratch=[_worktrees_dir()])
@@ -910,13 +897,18 @@ def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, reque
         ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000], **code)
         return {"status": "refused", "detail": str(exc), **code}
     with confined:
-        return _granted_op(op, target, cfg, rationale=rationale, request_id=request_id)
+        return _granted_op(op, target, cfg, rationale=rationale, request_id=request_id, payload=payload)
 
 
-def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str) -> dict[str, Any]:
+def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str,
+                payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from agentteams.vulnscan import runtime_patch, server_apply   # they import this module lazily too
+    change = {"server-apply": server_apply, "runtime-patch": runtime_patch}.get(op)   # OPERATOR_ONLY_OPS
     try:
         if op not in grant.OPS_V1:
             raise ExecError(f"unknown or non-v1 operation {op!r}")
+        if change is not None:   # host changes: grammar, host escalation, confirmed digest, before any use
+            change.precheck(target, payload)
         canonical = str(_repo_root(executor_guard.refuse_outside_grants(op, target))) if op in REPO_OPS else target
         g = authorize(op, canonical, request_id, cfg)
     except (ExecError, subprocess.SubprocessError) as exc:   # incl. subproc_confine.Unavailable and git timeouts
@@ -924,11 +916,14 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
         return {"status": "refused", "detail": str(exc)}
     try:
         if op in STAGE_OPS:
-            result = stage_fix(Path(canonical), cfg, mode={"stage-major": "major", "stage-image": "image"}.get(op, "fix"))
+            result = stage_fix(Path(canonical), cfg, mode={"stage-major": "major", "stage-image": "image",
+                                                                  "stage-cargo": "cargo"}.get(op, "fix"))
         elif op == "open-pr":
             result = open_pr(Path(canonical), rationale)
         elif op == "close-superseded":
             result = executor_supersede.close_superseded(Path(canonical))
+        elif change is not None:
+            result = change.run(canonical, g, request_id=request_id, payload=payload)
         else:
             result = server_op(op, canonical)
     except (ExecError, OSError, subprocess.SubprocessError, ValueError) as exc:

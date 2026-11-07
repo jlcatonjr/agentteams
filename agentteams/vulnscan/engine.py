@@ -18,7 +18,19 @@ Server inventory line formats (one per line; anything else is ignored):
 | ``OSREL`` | os-release ``ID``, ``VERSION_ID``, ``PRETTY_NAME`` (an ``ID`` not in ``runtimes.OS_PRODUCTS`` is unscannable) |
 | ``ESM`` | esm-infra, esm-apps: ``enabled``, ``disabled`` or ``unknown`` (Ubuntu Pro, from its status file) |
 | ``HOSTCHECK`` | severity, message |
+| ``HOSTEVIDENCE`` | digest (hex), files, deny rules: evidence for the ``HOSTCHECK`` it directly follows |
 | ``IOC`` | message |
+| ``SCOPE`` | path, label, match (``tree`` or ``exact``), evidence: a location that is not the live system |
+| ``PYSITE`` | site-packages location, interpreter line ``X.Y`` |
+| ``DISTROPKG`` | location, name, version, owning package, source package, its version, origin |
+| ``AUTOUPD`` | manager, key, value: automatic-update settings and package-list age |
+| ``UPDATEINFO`` | pass (``installed`` / ``available``), ALAS advisory, CVE, package NEVRA (dnf hosts; ``L1-audit.sh`` ``dnf_updateinfo``) |
+| ``UPDATEINFOREAD`` | pass, ``ok`` or ``failed``: whether that dnf updateinfo pass read the host's cache |
+
+A ``HOSTEVIDENCE`` line becomes that host check's :attr:`.report.Finding.evidence` (:func:`host_evidence`): the
+audit's one digest over every hit file's HMAC (a random per-host key that never leaves the host) and every nginx
+``deny`` rule, so a known entry (:mod:`.known`) keyed on it voids when a file or the deny rule changes. No per-file
+value is ever printed.
 
 A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted
 distribution archive; ``repo:<host>:<name>`` and ``repo:unknown:<name>`` come from anywhere else and are
@@ -29,6 +41,14 @@ is the end of *standard* support, so an Ubuntu release past it whose ESM has not
 ``ESM`` line: esm-infra not enabled (or no line) is HIGH; esm-infra enabled is LOW, or MODERATE when a
 universe package (``pkg:<name>:universe``) runtime is present without esm-apps. When whether its ESM still runs is
 unknown (no extended-support data), it is HIGH, "ESM state unknown", whatever the ``ESM`` line says.
+
+A ``SCOPE`` line labels finding locations (:attr:`Finding.location_labels`): ``disabled`` for a renamed tree nothing
+references any more, ``on-disk-not-served`` for an npm location nginx refuses. A label changes no row and no grade
+(Rule 12). A ``PYSITE`` line whose interpreter line is end-of-life, with packages there whose fix release's
+``requires_python`` excludes that line, gives a HIGH ``runtime`` finding (:func:`held_by_interpreter`).
+
+``DISTROPKG`` lines give each OS-managed PyPI finding a distro verdict beside its upstream grade
+(:mod:`.distro_verdict`, plan vfr-a A2): Ubuntu from OSV by source package, Amazon Linux 2023 from ``UPDATEINFO``.
 """
 
 from __future__ import annotations
@@ -44,7 +64,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, osv, private_sources, project_policy, runtimes, specifiers
+from agentteams.vulnscan import (_http, distro_verdict, images, offnpm_sources, osv, private_sources, project_policy,
+                                 runtimes, specifiers)
 from agentteams.vulnscan.manifests import REQ_SCAN_NAME, Dep, Manifest, discover, parse
 from agentteams.vulnscan.report import OS_RELEASE, PARTIAL_RANGE_CAP, Finding, Report
 from agentteams.vulnscan.versions import version_key
@@ -144,6 +165,91 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
                 malformed=malformed, fix_hidden=hidden,
                 count_dev=dev_policy.get(target) if scope == "dev" else None,
                 detail="MALICIOUS package version (OSV MAL-*)" if malicious else ""))
+
+
+#: An npm dependency resolved from an allowlisted non-npm source: (target label, dependency, the source row).
+SourceItem = tuple[str, Dep, offnpm_sources.Source]
+
+
+def analyze_sources(items: list[SourceItem], report: Report, *,
+                    dev_policy: dict[str, bool] | None = None) -> None:
+    """Grade npm dependencies installed from allowlisted non-npm sources on their advisories' ranges (vfr-e.E3).
+
+    Each distinct name goes to OSV without a version (:func:`osv.package_ids`), and every advisory is judged
+    against the installed version (:func:`offnpm_sources.judge`). The entry is then ``fixed``, ``vulnerable``
+    or ``unknown`` (:data:`offnpm_sources.GRADES`):
+
+    - ``vulnerable`` or ``unknown``: a ``package`` finding at the advisories' severity, as :func:`analyze` makes
+      one, its detail naming the source, the grade and each unknown advisory's reason; an unknown advisory counts
+      as one without a fix;
+    - ``fixed`` (or no advisory at all): no finding.
+
+    Every entry, whatever its grade, is listed in ``report.sources`` ("<target>: <name> <version> from <host>:
+    <grade> ..."), so none is silently clean. A feed failure goes to ``report.feed_errors`` (never clean).
+
+    Args:
+        items: The dependencies, each with its matching :class:`offnpm_sources.Source`.
+        report: Report to extend; ``checked`` counts the distinct (name, version, source) entries.
+        dev_policy: Per target, the project's ``include_dev``.
+    """
+    dev_policy = dev_policy or {}
+    by_key: dict[tuple[str, str, str], list[SourceItem]] = defaultdict(list)
+    for it in items:
+        by_key[(it[1].name, it[1].version, it[2].host)].append(it)
+    report.checked += len(by_key)
+    try:
+        hits = osv.package_ids(sorted({("npm", name) for name, _v, _h in by_key}))
+    except _http.FeedError as exc:
+        report.feed_errors.append(f"OSV query for {report.target} (allowlisted non-npm sources): {exc}")
+        for (name, ver, host), group in sorted(by_key.items()):
+            for target in sorted({t for t, _d, _s in group}):
+                report.sources.append(f"{target}: {name} {ver} from {host}: unknown (the OSV query failed)")
+        return
+    fetched = _fetch_details(sorted({i for ids in hits.values() for i in ids}), report)
+    for (name, ver, host), group in sorted(by_key.items()):
+        src = group[0][2]
+        ids = hits.get(("npm", name), [])
+        affected: list[tuple[str, str]] = []   # (id, fix or "")
+        unknown: list[tuple[str, str]] = []    # (id, why)
+        for vid in ids:
+            rec = fetched.get(vid)
+            verdict, info = (offnpm_sources.judge(rec, name, ver) if rec is not None
+                             else ("unknown", "advisory record unavailable"))
+            if verdict == "affected":
+                affected.append((vid, info))
+            elif verdict == "unknown":
+                unknown.append((vid, info))
+        fixed, vulnerable, unknown_grade = offnpm_sources.GRADES
+        grade = vulnerable if affected else unknown_grade if unknown else fixed
+        counted = (f"{len(affected)} affected, {len(unknown)} unknown, of {len(ids)} advisory(ies) judged on "
+                   "their ranges" if ids else "no advisory names the package")
+        for target in sorted({t for t, _d, _s in group}):
+            report.sources.append(f"{target}: {name} {ver} from {host}: {grade} ({counted})")
+        if grade == fixed:
+            continue
+        per_target: dict[str, list[Dep]] = defaultdict(list)
+        for target, d, _s in group:
+            per_target[target].append(d)
+        flagged = [v for v, _i in affected] + [v for v, _i in unknown]
+        records = [fetched[v] for v in flagged if fetched.get(v) is not None]
+        ranks = [osv.severity(r) for r in records]
+        rated = max(ranks, default=0)
+        unscored = ranks.count(0) + len(flagged) - len(records)
+        malicious = any(osv.is_malicious(v) for v, _i in affected)
+        fixes = [f for _v, f in affected if f]
+        why = "; ".join(f"{v}: {i}" for v, i in unknown[:3]) + ("; …" if len(unknown) > 3 else "")
+        detail = (f"resolved from {host} (allowlisted non-npm source, {src.publisher}); graded on the npm "
+                  f"advisories' ranges: {grade}" + (f" — unknown: {why}" if unknown else ""))
+        for target, ds in sorted(per_target.items()):
+            scope = "runtime" if any(d.scope == "runtime" for d in ds) else "dev"
+            report.findings.append(Finding(
+                kind="package", target=target, name=name, version=ver, ecosystem="npm", scope=scope,
+                severity=4 if malicious else max(rated, UNSCORED_DEFAULT if unscored else 0),
+                fix=max(fixes, key=version_key) if fixes else "",
+                unfixed=len(flagged) - len(fixes), ids=sorted(flagged), locations=sorted({d.source for d in ds}),
+                malicious=malicious, rated=rated, unscored=unscored,
+                count_dev=dev_policy.get(target) if scope == "dev" else None,
+                detail="MALICIOUS package version (OSV MAL-*); " + detail if malicious else detail))
 
 
 @dataclass
@@ -324,6 +430,10 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     sent to OSV (``withheld``, ``"<repo>: <name> (<ecosystem>)"``); ``include_dev`` decides whether the
     repository's dev-only findings count.
 
+    An npm lockfile entry whose ``resolved`` URL is on an allowlisted non-npm source (:mod:`.offnpm_sources`, e.g.
+    SheetJS's CDN ``xlsx``) is graded on its advisories' ranges instead (:func:`analyze_sources`) and listed in
+    ``sources``; any other entry is queried by exact version.
+
     The repository's own tooling withholds names too (:mod:`.private_sources`): Go modules matching
     ``GOPRIVATE`` / ``GONOPROXY`` / ``GONOSUMDB``, every NuGet package of a repository whose ``nuget.config`` names
     a non-nuget.org source, and pnpm/Bun names in an ``.npmrc`` scope with a non-npmjs registry. A
@@ -349,6 +459,7 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     root = root.resolve()
     report = Report(target=str(root))
     deps: list[tuple[str, Dep]] = []
+    source_items: list[SourceItem] = []   # npm entries resolved from an allowlisted non-npm source (E3)
     policies = project_policy.PolicyCache()
     dev_policy: dict[str, bool] = {}
     ranges: list[RangeItem] = []
@@ -396,9 +507,13 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
                 label = f"{target}: {d.name} ({d.ecosystem})"
                 if label not in report.withheld:
                     report.withheld.append(label)
+            elif d.ecosystem == "npm" and d.resolved and (src := offnpm_sources.match(d.name, d.version, d.resolved)):
+                source_items.append((target, Dep(d.ecosystem, d.name, d.version, d.scope, rel, d.resolved), src))
             else:
                 deps.append((target, Dep(d.ecosystem, d.name, d.version, d.scope, rel)))
     analyze(deps, report, dev_policy=dev_policy)
+    if source_items:
+        analyze_sources(source_items, report, dev_policy=dev_policy)
     ranges = _withhold_index_repos(root, index_files, ranges, range_files, report)
     if ranges:
         notes = analyze_ranges(ranges, report, dev_policy=dev_policy)
@@ -548,6 +663,123 @@ def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str
                                    fix=v.upgrade_to, locations=["/etc/os-release"], detail=f"{verdict}: {detail}"))
 
 
+#: ``SCOPE`` match modes: ``tree`` covers the path and everything under it, ``exact`` the path only.
+SCOPE_MATCH = ("tree", "exact")
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+!-]{0,127}$")
+_REQUIRES_PYTHON: dict[tuple[str, str], str] = {}
+
+
+def apply_scopes(scopes: list[tuple[str, str, str, str]], report: Report) -> None:
+    """Label every finding location a ``SCOPE`` record covers; no finding is removed or regraded (Rule 12).
+
+    Args:
+        scopes: (path, label, match, evidence) records. A path that is not absolute, or is ``/``, labels nothing;
+            a match other than ``tree`` covers the path only.
+        report: Report whose findings get :attr:`Finding.location_labels` entries.
+    """
+    usable = [(p.rstrip("/"), lab, m, ev) for p, lab, m, ev in scopes if p.startswith("/") and p.rstrip("/")]
+    for f in report.findings:
+        for loc in f.locations:
+            for path, label, match, evidence in usable:
+                if loc.rstrip("/") == path or (match == "tree" and loc.startswith(path + "/")):
+                    f.location_labels[loc] = {"label": label, "path": path, "evidence": evidence}
+                    break
+
+
+def requires_python(name: str, version: str) -> str:
+    """Return the ``requires_python`` PyPI publishes for one release.
+
+    Args:
+        name: PyPI project name.
+        version: Release version.
+
+    Returns:
+        The specifier text; ``""`` when the release sets none.
+
+    Raises:
+        _http.FeedError: PyPI could not be read, or the name or version is not a plain PyPI identifier.
+    """
+    key = (name.lower(), version)
+    if key not in _REQUIRES_PYTHON:
+        if not (_SAFE_NAME.match(name) and _SAFE_NAME.match(version)):
+            raise _http.FeedError(f"{name[:40]!r} {version[:40]!r} is not a PyPI name and version")
+        data = _http.fetch_json(f"{_http.PYPI_JSON}/{name}/{version}/json")
+        info = (data or {}).get("info") if isinstance(data, dict) else None
+        _REQUIRES_PYTHON[key] = str((info or {}).get("requires_python") or "").strip()
+    return _REQUIRES_PYTHON[key]
+
+
+def held_by_interpreter(target: str, pysites: list[tuple[str, str]], report: Report) -> None:
+    """R4: report an end-of-life interpreter line whose packages cannot reach their fix (``requires_python``).
+
+    For each non-OS ``PYSITE`` location (OS-managed paths get distro fixes, :data:`DISTRO_LOCATION`) whose line is
+    end-of-life upstream, every PyPI package finding there with a fix is checked: it is held when no patch release
+    of the line satisfies the fix release's ``requires_python``. One HIGH ``runtime`` finding per location lists the
+    held packages; the package findings stay as they are. A ``requires_python`` PyPI does not answer, or that does
+    not parse, is a feed error (never read as "not held").
+
+    Args:
+        target: Host label.
+        pysites: (location, ``X.Y``) pairs from ``PYSITE`` lines.
+        report: Report holding the package findings; extended in place.
+    """
+    for loc, line in sorted(set(pysites)):
+        if DISTRO_LOCATION.match(loc) or not re.fullmatch(r"\d+\.\d+", line):
+            continue
+        cands = [f for f in report.findings if f.kind == "package" and f.ecosystem == "PyPI" and f.fix
+                 and loc in f.locations and f.target == target]
+        if not cands:
+            continue
+        v = runtimes.evaluate("python", f"{line}.0", loc)
+        if v.verdict == "unchecked":
+            report.feed_errors.append(f"{target}: python {line} at {loc}: {v.detail}")
+            continue
+        if v.verdict != "eol":
+            continue
+        probe = f"{line}.999"   # held only when no patch release of the line is allowed
+        held: list[str] = []
+        unread: list[str] = []
+        for f in sorted(cands, key=lambda f: f.name.lower()):
+            try:
+                text = requires_python(f.name, f.fix)
+                ok = not text or specifiers.parse_specifier(text).contains(probe)
+            except (_http.FeedError, ValueError):
+                unread.append(f.name)
+                continue
+            if not ok:
+                held.append(f"{f.name} {f.version} → {f.fix} (requires_python {text})")
+        if unread:
+            report.feed_errors.append(f"{target}: requires_python of the fix release unread for {len(unread)} "
+                                      f"package(s) at {loc}: {', '.join(unread[:5])}")
+        if held:
+            report.findings.append(Finding(
+                kind="runtime", target=target, name="python", version=line, severity=3, fix=v.upgrade_to,
+                locations=[loc],
+                detail=(f"runtime-eol: python {line} is end-of-life; {len(held)} package(s) here are held below their "
+                        f"fix by requires_python: {'; '.join(held)}")))
+
+
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_COUNT = re.compile(r"^[1-9][0-9]{0,3}$")
+
+
+def host_evidence(digest: str, files: str, deny: str) -> str:
+    """Return one host check's evidence from its ``HOSTEVIDENCE`` line.
+
+    Args:
+        digest: The audit's sha256 over every hit file's per-host HMAC and every nginx ``deny`` rule (hex).
+        files: How many files it covers.
+        deny: How many deny rules it covers.
+
+    Returns:
+        ``sha256:<hex>;files=N;deny=M``, or "" when the line is malformed or covers no file or no deny rule (a known
+        entry then cannot key on it).
+    """
+    if not (_HEX64.match(digest) and _COUNT.match(files) and _COUNT.match(deny)):
+        return ""
+    return f"sha256:{digest};files={files};deny={deny}"
+
+
 def scan_inventory(text: str, target: str) -> Report:
     """Analyze the inventory lines a server-kit audit printed.
 
@@ -563,9 +795,18 @@ def scan_inventory(text: str, target: str) -> Report:
     rts: list[tuple[str, str, str, str]] = []
     osrel: tuple[str, str, str] | None = None
     esm: tuple[str, str] | None = None
+    scopes: list[tuple[str, str, str, str]] = []
+    pysites: list[tuple[str, str]] = []
+    distro_pkgs: list[distro_verdict.DistroPkg] = []
+    updateinfo: list[distro_verdict.UpdateInfo] = []
+    updateinfo_read: dict[str, str] = {}
+    autoupd: dict[tuple[str, str], str] = {}
+    check: Finding | None = None
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
+        if len(parts) > 1 and tag not in ("HOSTCHECK", "HOSTEVIDENCE"):
+            check = None   # HOSTEVIDENCE belongs to the HOSTCHECK before it: any other record (a tab) breaks the link
         if tag == "INV" and len(parts) == 5:
             _, eco, name, ver, loc = parts
             deps.append((target, Dep(eco, name, ver, "runtime", loc)))
@@ -577,13 +818,33 @@ def scan_inventory(text: str, target: str) -> Report:
             esm = tuple(p if p in ESM_STATES else "unknown" for p in parts[1:3])  # type: ignore[assignment]
         elif tag == "HOSTCHECK" and len(parts) == 3:
             sev = osv.SEVERITY_RANK.get(parts[1].upper(), 2)
-            report.findings.append(Finding(kind="host", target=target, name="host", severity=sev, detail=parts[2]))
+            check = Finding(kind="host", target=target, name="host", severity=sev, detail=parts[2])
+            report.findings.append(check)
+        elif tag == "HOSTEVIDENCE" and len(parts) == 4 and check is not None:
+            check.evidence = host_evidence(parts[1], parts[2], parts[3])
+            check = None   # one evidence line per check
         elif tag == "IOC" and len(parts) == 2:
             report.findings.append(Finding(kind="ioc", target=target, name="compromise indicator",
                                            severity=4, detail=parts[1]))
+        elif tag == "SCOPE" and len(parts) == 5:
+            scopes.append((parts[1], parts[2], parts[3] if parts[3] in SCOPE_MATCH else "exact", parts[4]))
+        elif tag == "PYSITE" and len(parts) == 3:
+            pysites.append((parts[1], parts[2]))
+        elif tag == "DISTROPKG" and (rec := distro_verdict.parse_distropkg(parts)) is not None:
+            distro_pkgs.append(rec)
+        elif tag == "UPDATEINFO" and (up := distro_verdict.parse_updateinfo(parts)) is not None:
+            updateinfo.append(up)
+        elif tag == "UPDATEINFOREAD" and len(parts) == 3 and parts[1] in distro_verdict.UPDATEINFO_PASSES:
+            # one failed line for a pass wins over an ok one: a doubtful read gives no verdict, never "no advisory"
+            updateinfo_read[parts[1]] = parts[2] if updateinfo_read.get(parts[1], "ok") == "ok" else "failed"
+        elif tag == "AUTOUPD" and len(parts) == 4:
+            autoupd.setdefault((parts[1], parts[2]), parts[3])
     analyze(deps, report, distro_check=True)
     _runtime_findings(target, rts, report)
     _os_findings(target, osrel, esm, [m for _k, _v, _p, m in rts], report)
+    held_by_interpreter(target, pysites, report)
+    distro_verdict.apply(target, osrel, esm, distro_pkgs, updateinfo, updateinfo_read, autoupd, report)
+    apply_scopes(scopes, report)
     return report
 
 

@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from agentteams.vulnscan import images, manifests, project_policy, runtimes
+from agentteams.vulnscan.npm_ops import OWN_PR   # npm_ops imports neither fix nor this module
 from agentteams.vulnscan.versions import version_key
 
 if TYPE_CHECKING:
@@ -109,11 +110,11 @@ def hazard(data: bytes) -> str:
         different escape character, or another frontend, changes how every line parses); "" otherwise.
     """
     if data.startswith(b"\xef\xbb\xbf"):
-        return "a byte-order mark: change it by hand"
+        return f"a byte-order mark: {OWN_PR}"
     if b"<<" in data:
-        return "a heredoc (<<): change it by hand"
+        return f"a heredoc (<<): {OWN_PR}"
     if _DIRECTIVE.search(data):
-        return "an escape or syntax parser directive: change it by hand"
+        return f"an escape or syntax parser directive: {OWN_PR}"
     return ""
 
 
@@ -128,7 +129,7 @@ def _shape_problem(ref: images.ImageRef) -> str:
     if ref.digest:
         return "pinned by digest: stage-image never changes a digest-pinned reference"
     if ref.arg_default:
-        return "set by an ARG default: change the ARG by hand"
+        return f"set by an ARG default: changing the ARG is {OWN_PR}"
     if images.tag_os(ref.tag):
         return "the tag names an OS release: the new line may not be published for it"
     version, suffix = images.split_tag(ref.tag)
@@ -209,7 +210,7 @@ def plan_file(path: Path, rel: str, today: _dt.date | None = None) -> ImagePlan:
         elif tag and (parsed is None or lines[ref.line - 1].rstrip().endswith("\\") or
                       (parsed.registry, parsed.repository, parsed.tag, parsed.digest) !=
                       (ref.registry, ref.repository, ref.tag, ref.digest)):
-            why = "FROM spans several lines: change it by hand"
+            why = f"FROM spans several lines: {OWN_PR}"
         if why:
             out.held.append((rel, ref.line, ref.display(), ref.tag or "(no tag)", why))
         elif tag:
@@ -351,7 +352,7 @@ def fix_result(wt: Path, claims: dict[str, list[int]]) -> FixResult:
 
     Args:
         wt: The executor's worktree.
-        claims: ``{normalized name: [PR numbers]}`` other open PRs update (:func:`.open_prs.staging_claims`).
+        claims: ``{normalized name: [PR numbers]}`` other open PRs update (:func:`.writer_prs.staging_claims`).
 
     Returns:
         The result; ``resolved`` is the number of tags moved.
@@ -391,7 +392,7 @@ def futile_detail(changes: list[PinChange]) -> str:
     )
 
     held = sum(1 for c in changes if c.action == HELD)
-    return f"{retry_guard.IMAGE_FUTILE_DETAIL} ({held} base image reference(s) held for a person; see the fix plan)"
+    return f"{retry_guard.IMAGE_FUTILE_DETAIL} ({held} base image reference(s) held, {OWN_PR}; see the fix plan)"
 
 
 def plan_rows(path: Path, rel: str, found: list[Finding], errors: list[str]) -> list[PinChange]:

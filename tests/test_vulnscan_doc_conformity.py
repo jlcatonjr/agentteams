@@ -47,6 +47,7 @@ _DOCUMENTED_IN: dict[str, str] = {
     "agent_drivers_copilot": "### `agentteams.vulnscan.agent_drivers`",
     "checkout_freshness": "### `agentteams.vulnscan.daily`",   # split from daily.py, re-exported by it
     "coverage": "## Project registry",
+    "known_cli": "### `agentteams.vulnscan.known`",   # the known propose|sign|list|remove commands
     "registry": "## Project registry",
     "project_cli": "## Project registry",
     "executor_serve": "### `agentteams.vulnscan.executor`",
@@ -56,6 +57,7 @@ _DOCUMENTED_IN: dict[str, str] = {
     "npm_major": "### `agentteams.vulnscan.fix`",          # stage-major's package.json raise (fix.npm_majors)
     "npm_groups": "### `agentteams.vulnscan.fix`",         # stage-fix's exact-peer / direct-parent selection
     "npm_ops": "### `agentteams.vulnscan.fix`",            # npm_ops.npm_moves runs those moves (fail closed)
+    "handoff_lapse": "### `agentteams.vulnscan.handoff`",   # B1b/OD10: the own-pr lapse
     "image_fix": "### Base images (`stage-image`)",         # stage-image's FROM tag planner and validate_diff check
     "infra_retry": "### `agentteams.vulnscan.daily`",
     "gateway_context": "### `agentteams.vulnscan.gateway`",

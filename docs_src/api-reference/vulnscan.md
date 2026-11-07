@@ -87,6 +87,9 @@ section and the agent phase use that record instead of probing again, and `summa
 2. **Summarise:** write `summary.md`, `summary.json` and the heartbeat (atomically); send `run-done`
    when the run exits non-zero or finds new findings (`daily._finish`). NEW marks compare with the
    newest readable earlier `summary.json`; an unreadable one is skipped with a note in `summary.md`.
+   A target that run has no complete scan record for is compared with the newest earlier run (up to 7
+   back) that has one ([`effectiveness.fill_baseline`](#fill_baselineprevious-previous_dir-targets-lookback7)),
+   so a host back after an unreachable day does not read as all-new.
    A write that fails (disk full) makes the run exit 3 (4 on compromise indicators), and `run-done`
    is still sent. `summary.md` ends with a **Remediation effectiveness** section
    (`effectiveness.section`, counts only, since the summary is published): findings fixed and new since
@@ -171,6 +174,8 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Remediation grants | `~/.config/agentteams/vulnscan-grants/vg-*.json` | mode 600; each file must be a regular file you own, not group/world-writable, not a symlink. The directory must be a real directory (not a symlink) you own, not group/world-writable, or every grant is refused |
 | Publish grants | `~/.config/agentteams/vulnscan-publish-grants/vp-*.json` | as for remediation grants |
 | Operator notes | `~/.config/agentteams/vulnscan-notes/note-*.json` | directory must be yours and not group/world-writable |
+| Known entries | `~/.config/agentteams/vulnscan-known/vk-*.json` | mode 600, as for remediation grants; in force only with a committed row in `<governance dir>/references/vulnscan-known-index.csv` ([known](#agentteamsvulnscanknown)) |
+| Known-entry proposals | `<state>/known-proposals/vk-*.json` | unsigned; written by `known propose`, read by `known sign` |
 | Operator verify keys (public) | `~/.config/agentteams/verify-keys/<key-id>.pub.pem` | the directory and the file must be yours, not group/world-writable and not symlinks |
 | Operator signing key (private) | `~/.config/agentteams/keys/decision-signing-<key-id>.pem` | as written by `provision-operator-signing-key.sh`; named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` |
 | Ledger MAC key, high-water mark | `~/.config/agentteams/keys/vulnscan-ledger.key`, `vulnscan-ledger.hwm` | never mounted into a container |
@@ -499,7 +504,9 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 `__main__` defines most commands. The rest come from modules that add their own (`register(sub)`) and run
 them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `publish-grant`, `publish`,
 `agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`),
-`handoff` (`handoff status`), `remediation_report` (`remediation-report`) and `docker_readiness` (`ready`).
+`handoff` (`handoff status`, `handoff verify-directive`), `remediation_report` (`remediation-report`),
+`docker_readiness` (`ready`), `verify` (`verify`, `effectiveness`) and `known_cli` (`known`; its `dispatch(args)`
+needs no config).
 
 | Command | Purpose |
 |---|---|
@@ -514,7 +521,8 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `scan`, `inventory`, `runtimes`: `--unscored-as critical\|high\|moderate\|low` | What an unscored advisory counts as for `--fail-on` (default `high`; `daily` uses the config's `unscored_as`) |
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
 | `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
-| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
+| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
+| `act server-apply HOST:LEVEL [--confirm-plan-sha256 D]` / `act runtime-patch FORMULA [--confirm-plan-sha256 D]` | The host-changing ops, operator-run only ([`host_change`](#agentteamsvulnscanhost_change)): `act` shows the dry-run plan and its sha256, then asks `y` on a terminal (stdin and stdout; without one it refuses, even with `--confirm-plan-sha256`, which only requires the preview to have that digest) before the executor runs exactly that plan. The terminal requirement is not an identity check. `server-apply` targets are `HOST:l2-security`, `HOST:l4-pins`, `HOST:py-venv` or `HOST:remove-path:/exact/path` ([`server_apply`](#agentteamsvulnscanserver_apply)); `runtime-patch` takes one signed Homebrew formula ([`runtime_patch`](#agentteamsvulnscanruntime_patch)) |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
@@ -526,22 +534,34 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `roots` | Every candidate scan root with its source: `repo_roots`, `registry (scan)`, `registry (remediate)`, `excluded`, `opted out`, `unanswered` or `duplicate` (`SCAN` or `SKIP` per line) |
 | `status [--project DIR] [--json]` | One project's status, read-only and without the network: identity, enrolment level, fix checkout, whether the daily run scans it, last scan time, its open package findings by severity in the latest run, the `stage-fix` / `open-pr` actions the ledger recorded for it (branch and PR URL, not checked online), and whether a valid grant covers its fix checkout |
 | `halts` | Open escalations and decision-log HALTs, with how to clear each |
-| `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)) |
+| `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)). A stale `reject` shows a `NEEDS YOU:` line ([handoff_stale](#agentteamsvulnscanhandoff_stale)) |
+| `handoff verify-directive --team-dir DIR --handoff-id ID [--directive-id ID] [--json]` | One handoff's review directive against its team's ledger (`management_directives.verify_handoff_directive`): verified only when the `prev_digest` chain is intact, exactly one row carries the scope `review-vulnscan-handoff-<id>` (and `--directive-id`, when given), that row passes every check, and every other row is valid or only expired. Prints one line (or the verdict as JSON, with a reason code); exit 0 verified, 1 not, 2 bad arguments. Reporting only: it authorizes nothing ([handoff](#agentteamsvulnscanhandoff)) |
+| `handoff answer --repo PATH --answer keep-rejected\|ask-again [--note TEXT]` | Record your answer to a stale `reject` of the staged fix (interactive confirmation; a `handoff-answer` ledger row). It clears that digest's Needs-you line and authorizes nothing. Exit 0 recorded, 1 declined, 2 refused ([handoff_stale](#agentteamsvulnscanhandoff_stale)) |
 | `remediation-report LEDGER SINCE [--log FILE] [--run NAME] [--attempt N] [--out FILE] [--agent-since TS] [--agent-until TS]` | One unattended remediation attempt's outcome from the executor's ledger rows at or after `SINCE` (ISO, UTC or with an offset): one JSON object (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) on stdout, and `remediation.md` written to `--out`. `--agent-since`/`--agent-until` (the agent run's `started`/`finished`) add its executor rows, never past `SINCE`, in their own section; a bad or out-of-range time is a Needs-you note, never a usage error (listed under Needs you, never counted as infra). Run by `scripts/vulnscan-remediation/vulnscan-remediate-auto.sh` ([remediation_report](#agentteamsvulnscanremediation_report)) |
 | `ready [--ensure] [--json]` | Docker readiness, layer by layer (`cli`, `daemon`, `tools_image`, `agent_image`, `tools_selftest`, `agent_selftest`), each with its state and, when it fails, a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). Read-only without `--ensure`; `--ensure` makes the repairs the `docker` config allows (start Docker, re-run a stale self-test) under the daily run lock, and only checks while a daily run holds it. `--json` prints `{layer: {state, code, message}}`. Never builds an image ([`docker_readiness`](#agentteamsvulnscandocker_readiness)) |
+| `verify [--mirror-refresh SCRIPT] [--force] [--date DATE]` | Same-day verification, run by the afternoon job (`vulnscan-daily-wrapped.sh --verify`, installed by `vulnscan-remediate-auto.sh --install`): refresh the scan mirrors with `--mirror-refresh` (`bash SCRIPT refresh`), re-scan each root whose mirror moved since the morning run, re-audit the hosts an executor `server-*` op ran against today, and write `<run>/verify.json` with each assessed morning finding's outcome. Takes `remediate.flock` and `daily.lock` without waiting; stages nothing and opens no PR. `--force` verifies again although today's `verify.json` is complete; `--date` names the run (default today). Prints one JSON line ([verify](#agentteamsvulnscanverify)) |
+| `effectiveness BASE LATER [--alias OLD=NEW]… [--path-alias OLD=NEW]… [--csv FILE] [--out FILE]` | Per finding: was each finding of the run directory `BASE` remediated by the run `LATER` (`effectiveness.compare`: version lines paired, renamed trees reported as moved). `--alias` names a target renamed between the runs, `--path-alias` a location prefix renamed on disk. Markdown to stdout or `--out`; `--csv` writes one row per baseline finding. Machine-local: it names targets and packages |
 | `resolve ID --evidence TEXT [--key-id ID]` | Resolve an escalation ([Escalations](#escalations)) |
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
 | `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports. `sign` checks `--node-id` and `--owner-id` first (exit 2): `refused: --node-id is empty — run the gh lookup first; it must be the ops repository's node id (gh repo view <owner/repo> --json id)`, `refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`, `is required` in place of `is empty` when the flag is omitted, and `refused: --owner-id must be your numeric GitHub user id (got '…')` |
 | `publish [--run DATE]` | Publish a run's files now |
+| `known propose\|sign\|list\|remove` | Known-finding entries ([known](#agentteamsvulnscanknown)). `propose --finding KEY… --decision-plan SLUG --decision-step STEP --key-id ID --governance-dir DIR [--reason TEXT \| --from-note NOTE_ID] [--days N] [--renews ENTRY_ID] [--run DATE] [--out FILE]` writes an unsigned proposal from a run's findings (`--days` default and maximum 90) and prints the signing command; it never signs and never reads a key. `sign PROPOSAL [--confirm-review-sha256 D] [--allow-checkout-signing]` is the operator's: it signs, installs and appends the index row (in force once committed). `list` prints every entry and its status; `remove ENTRY_ID` deletes one |
 | `agent-chat [--run DATE]` | Resume a past run's agent session interactively (goose and claude; copilot and codex are refused: `no debrief for <framework>`) |
 
 The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious kinds) also accept
 `--allow-checkout-signing` and `--confirm-review-sha256` ([Signing](#signing)). `DATE` is always
 `YYYY-MM-DD`.
 
-`grant sign` takes `--op OP` (repeatable, no default: `stage-fix`, `stage-major`, `stage-image`, `open-pr`,
+`grant sign` takes `--op OP` (repeatable, no default: `stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`,
 `close-superseded`, `server-audit`, `server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
-`--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. `publish-grant sign` takes
+`--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. For a v2 grant ([`grant_v2`](#agentteamsvulnscangrant_v2)),
+`grant sign` also takes `--op server-apply` / `--op runtime-patch` with `--level HOST:LEVEL`, `--restart-unit HOST:UNIT`,
+`--major-allowed HOST:UNIT` and `--remove-path HOST:/path` (repeatable), `--runtime FORMULA` (repeatable),
+`--restart-window HH:MM-HH:MM` (UTC), `--apps-conf-sha256 HEX|auto`, `--ancestor GRANT_ID` (the revoked grant it
+re-issues) and `--max-read-uses N` (a `server-apply` grant's separate `server-audit`/`server-dryrun` cap, 1..500;
+its `--max-uses` then counts `server-apply` uses only, at most 20). `grant sign --check-only` builds and validates the
+whole record, the still-installed ancestor included, and signs nothing (exit 0 valid, 2 refused): run it before
+revoking the grant a re-issue replaces. `publish-grant sign` takes
 `--ops-repo DIR`, `--remote-url URL` (default: the ops repository's `remote.origin.url`), `--node-id`,
 `--owner-id`, `--governance-dir DIR`, `--days N` (default 30), `--max-uses N` (default 60) and `--key-id ID`.
 Both `revoke` actions take `--grant-id`.
@@ -609,13 +629,17 @@ its fixes from `origin/HEAD` against the checkout, so use `scan_mirror` with the
 | `say` | done | no such note | refused | — | — |
 | `publish-grant sign` | signed and installed | not signed | refused (also: `--node-id` / `--owner-id` empty, missing or not numeric) | — | — |
 | `publish` | published | no publish grant | no such run, or no config | failed or refused | — |
+| `known` | `propose`: written · `sign`: signed and installed · `list` · `remove`: removed | `sign`: not signed · `remove`: no such entry | refused (a missing run or finding key, the cap of 30, a never-known finding, bounds) | — | — |
 | `enroll` | written | nothing to enrol, or aborted | refused (CI, no terminal, an unreadable or malformed registry) | — | — |
 | `roots` | listed | — | an unreadable registry, or an unusable config | — | — |
 | `status` | printed | — | no such directory, or an unusable config | — | — |
 | `tools-image build`, `tools-selftest` | built / passed | failed | a setup error (an unusable config) | — | — |
 | `handoff status` | printed | — | an unusable config | — | — |
+| `handoff verify-directive` | verified | unverified (any reason code) | no `--team-dir`, or not a handoff id | — | — |
 | `remediation-report` | reported (an unreadable ledger is reported, as `error`) | — | a bad `SINCE`, or `--out` not writable | — | — |
 | `ready` | ready (no layer failed) | — | an unusable config | degraded (a layer failed; the first line names its reason code) | — |
+| `verify` | verified (or already verified today) | — | no config, or a bad `--date` | partial (a refresh, re-scan or audit failed), a lock held, or no morning run today | — |
+| `effectiveness` | written | — | an unreadable run, a bad `--alias` / `--path-alias`, or an unwritable `--csv` / `--out` | — | — |
 | `agent-chat` | the session's exit code | | refused | | 75: run lock held · 124: time cap · 143: SIGTERM (both containers removed) |
 
 "No config" includes a config that cannot be used (invalid JSON, not an object, a key with a wrong
@@ -642,11 +666,12 @@ config's `governance_dir`) and exits 0 or 1 as above; with an unusable one it ex
 | `opted_out` | array of strings | repositories the operator enrolled at `off` (not scanned) |
 | `brief_off` | array of strings | repositories whose brief says `vulnerability_scanning.level: off` but that the operator enrolled or listed in `repo_roots`: scanned anyway, reported as a mismatch |
 | `excluded` | array of strings | `"repo: path in repo"`: manifests skipped by a brief's `exclude_paths` |
+| `sources` | array of strings | `"repo: name version from host: grade (...)"`: npm entries installed from an [allowlisted non-npm source](#agentteamsvulnscanoffnpm_sources), each graded `fixed`, `vulnerable` or `unknown` on its advisories' ranges; listed whatever the grade |
 | `withheld` | array of strings | `"repo: name (ecosystem)"`: private packages (a brief's `private_packages`), not checked and never sent. The daily `summary.json` (which the agent's MCP server reads) writes `"repo: (private)"` instead, one per package; only the machine-local `repos-*.json` keeps the names |
 | `generated_at` | string | UTC ISO-8601 time, whole seconds |
 | `unscored_as` | string | what an unscored advisory counted as in this report: `critical`, `high`, `moderate` or `low` (default `high`) |
 
-In the daily aggregate the `opted_out`, `brief_off`, `excluded` and `withheld` lists name each repository under
+In the daily aggregate the `opted_out`, `brief_off`, `excluded`, `withheld` and `sources` lists name each repository under
 its root, as findings do (`<root>/<repo>`). A path inside the operator's `exclude` never appears in them.
 
 A Finding (`report.Finding`):
@@ -675,6 +700,17 @@ A Finding (`report.Finding`):
 | `detail` | string | host-check or runtime message, or the malicious-package note |
 | `spec` | string | `range` only: the requirement's specifier set (`""`: any version); `version` is then `""` |
 | `partial` | boolean | `range` only: part of the allowed range is affected (severity capped at MODERATE) |
+| `location_labels` | object | location → `{label, path, evidence}` for a location a `SCOPE` line covers (a disabled tree, or node_modules nginx refuses); information only, the finding keeps its row and grade. `{}` in a report written before it |
+| `distro_verdict` | string | OS-managed package: `fixed-in-installed`, `fix-available-not-installed`, `esm-only` or `no-distro-fix` (`engine` via `distro_verdict`); `""` for none. Beside the upstream grade, never instead of it |
+| `distro_note` | string | the verdict's source and per-advisory reasons, or why there is no verdict (unowned, another origin, a feed error); `""` in a report written before it |
+| `evidence` | string | `host` web-root check only: `sha256:<hex>;files=N;deny=M` from the audit's `HOSTEVIDENCE` line, a digest over per-host-key HMACs of the files and the nginx `deny` rules (`engine.host_evidence`); `""` otherwise |
+| `kev` | boolean | on CISA KEV, when a feed sets it (none does in this release); a known entry voids when it turns true |
+| `known`, `known_until` | string | daily runs: the [known entry](#agentteamsvulnscanknown) that covers this finding and its expiry date (`""` = none). A covered finding stays in the list and does not count toward `fail_on` |
+
+A daily report also carries `known_entries`: one object per known entry (`entry_id`, `status` `known` / `not
+seen` / `void` / `renewed` / `problem`, `target`, `kind`, `members`, `covered`, `reason`, `expires`, `key_id`,
+`decision_ref`, `renewal_count`, `renews`, `void_reason`). A void entry also adds a HIGH `integrity` finding
+(`name` `known-entry`).
 
 ---
 
@@ -798,8 +834,8 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix, stage-major or stage-image*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names). The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
-| `request` | `op` (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix`, `stage-major` or `stage-image` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)), and `stage-image` only for one whose plan has base-image rows with action `stage-image`, on its own ([Base images](#base-images-stage-image)) |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix, stage-major or stage-image*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names), or, for a mark with `"after": "fix-pr"`, **fix PR opened `<date>` for this plan's `fix` rows; its major-held rows remain → request `stage-major` for this repository now**. The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
+| `request` | `op` (`stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix`, `stage-major` or `stage-image` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)), and `stage-image` only for one whose plan has base-image rows with action `stage-image`, on its own ([Base images](#base-images-stage-image)) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
@@ -829,7 +865,7 @@ executor validates):
 |---|---|
 | `id` | 32 lowercase hex characters; equals the file name; never reused (replay is refused) |
 | `op` | an `OPS` value, or `report` / `escalate` |
-| `target` | absolute repo path (`stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
+| `target` | absolute repo path (`stage-fix`, `stage-major`, `stage-image`, `stage-cargo`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
 | `rationale` | string, kept in the ledger |
 | `created` | ISO timestamp |
 | `payload` | only for `report` (`{"markdown"}`) and `escalate` (`{"kind", "evidence"}`) |
@@ -855,8 +891,9 @@ for one can never verify as the other.
 | Gate action (HALT) | `vulnscan-remediation` | `vulnscan-publish` |
 
 **Operations.** v1 grants may name `stage-fix`, `stage-major`, `stage-image`, `open-pr`, `close-superseded`,
-`server-audit` and `server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build`
-refuses them. An existing grant does not cover `close-superseded`, `stage-major` or `stage-image` until the operator
+`server-audit` and `server-dryrun`. A v2 grant ([`grant_v2`](#agentteamsvulnscangrant_v2)) may also name
+`server-apply` and `runtime-patch`; a v1 record naming either is refused. `merge` is reserved: the CLI lists it,
+and `grant.build` refuses it. An existing grant does not cover `close-superseded`, `stage-major` or `stage-image` until the operator
 signs one that names it; `grant sign --op` has no default, so no grant names an op the operator did not list.
 `stage-image` is constraint-relaxing too: it lifts the "dependency pins and lockfiles only" bound to Dockerfile
 `FROM` tags ([Base images](#base-images-stage-image)).
@@ -927,7 +964,12 @@ included, delivered as PRs that CI must pass; this op is how. It differs from `s
   its spec raised to `^<fixed version>` in place, every other byte kept (`npm_major.rewrite_specs`), and npm
   re-resolves the lockfile with `npm install --package-lock-only --ignore-scripts` (same scratch copy, registry,
   `--strict-ssl` and cooldown handling as the audit fix), before `npm audit fix` runs as usual. A package only
-  some other package depends on stays `major-held` ("transitive only"): its parent must move first. npm
+  some other package depends on is never raised itself: when a raised direct parent installed it and the
+  re-resolved lockfile no longer holds the vulnerable copy, its row becomes `moves-with` (`fix.MOVES_WITH`,
+  naming the parent; never counted as its own fix or as held); otherwise it stays `major-held` ("transitive
+  only"): its parent must move first. A dry-run plan already notes, on such a row, `transitive: moves with
+  <parent> when stage-major raises it` when the parent is itself a direct `major-held` row. A `stage-major` is
+  refused (before a grant use) while the repository has a staged fix with no PR yet. npm
   workspaces stay refused. A spec that is a URL, path, git or `npm:` alias is never rewritten. `npm install`
   fails closed: it is refused (the stage fails, nothing is written) unless the tools container is active
   (never on the host, never with `confine.subprocesses: false`), and unless the base `package.json` and lockfile
@@ -1022,7 +1064,9 @@ the stage, nothing is guessed).
   the tests in it, and the PR is labelled `vulnscan-major`. The staged state and the `stage-image` and `open-pr`
   results carry `"image": true`.
 - **Lanes.** `close-superseded` closes only older PRs in the replacement's lane (`ops.lane_of`: `image` for a
-  `stage-image` PR, `deps` for every other): a base-image PR and a dependency PR never supersede each other.
+  `stage-image` PR, `major` for a `stage-major` PR, `deps` for every other) (every `open-pr` result, a claimed existing PR included, carries
+  its lane: `executor_pr.lane_fields`): a base-image PR, a MAJOR PR and a
+  dependency PR never supersede each other (a MAJOR PR is staged beside the fix PR, vfr-b.B2).
 
 ### Grants from the registry
 
@@ -1168,7 +1212,7 @@ or kind word; otherwise nothing is sent.
 | `publish-done` | Run report published to the ops repository. |
 | `run-stale` | No daily run has completed for {hours}h: running the missed scan now. Check: vulnscan schedule status |
 | `run-missing` | No daily run has completed yet: running it now. Check: vulnscan schedule status |
-| `repo-held` | A repository is held: nothing is fixable without a major upgrade and its fix plan has not changed. Upgrade it by hand. Run: vulnscan review |
+| `repo-held` | A repository is held: nothing is fixable without a major upgrade and its fix plan has not changed. Sign a grant naming stage-major for it, or leave the upgrade to the repository's own PR. Run: vulnscan review |
 | `stale-prs` | {count} remediation PR(s) waiting: {old} older than {days} days, {failing} failing CI. Run: vulnscan review |
 | `agent-down` | The remediation agent has not completed for {count} runs in a row. Run: vulnscan review |
 | `remediation-blocked` | Remediation is blocked ({count} reason(s)): see Remediation readiness in the summary. Run: vulnscan halts |
@@ -1270,7 +1314,17 @@ skipped (`opted_out`). Each repository's brief then narrows what is sent, never 
 scanned and listed in `brief_off`), manifests under `exclude_paths` are skipped (`excluded`), packages
 matching `private_packages` are never sent to OSV (`withheld`), and `include_dev` sets `count_dev` on
 its dev-only findings. `unpinned_ranges=True` also checks the ranges of Python manifests without exact pins
-([Unpinned Python requirements](#unpinned-python-requirements)).
+([Unpinned Python requirements](#unpinned-python-requirements)). An npm lockfile entry whose `resolved` URL is on
+an [allowlisted non-npm source](#agentteamsvulnscanoffnpm_sources) is graded by `analyze_sources` instead.
+
+#### `engine.analyze_sources(items, report, *, dev_policy=None)`
+
+Grade `(target, Dep, offnpm_sources.Source)` items (npm entries resolved from an allowlisted non-npm source)
+against every OSV advisory for their names, queried by name (`osv.package_ids`) and judged locally with
+`offnpm_sources.judge`. A `vulnerable` or `unknown` entry is a `package` finding at its advisories' severity, the
+detail naming the source, the grade and each unknown advisory's reason (an unknown advisory counts in `unfixed`); a
+`fixed` entry has no finding. Every entry is listed in `report.sources`. A failed query goes to
+`report.feed_errors`, and its entries are listed `unknown`.
 
 #### `engine.analyze_ranges(items, report, *, dev_policy=None, query_limit=UNPINNED_QUERY_LIMIT, detail_limit=UNPINNED_DETAIL_LIMIT)`
 
@@ -1297,6 +1351,44 @@ another prefix or field count is ignored:
 | `ESM` | esm-infra, esm-apps: `enabled`, `disabled` or `unknown` (Ubuntu only, read from `/var/lib/ubuntu-advantage/status.json`; the kit never runs `pro`) |
 | `HOSTCHECK` | severity, message |
 | `IOC` | message |
+| `SCOPE` | path, label, match (`tree`: the path and everything under it; `exact`: the path only), evidence |
+| `PYSITE` | site-packages location, interpreter line `X.Y` |
+| `DISTROPKG` | location, name, version, owning dpkg/rpm package, source package, that package's version, origin (`unowned` when no package owns it): the distro verdict's join ([`distro_verdict`](#agentteamsvulnscandistro_verdict)) |
+| `AUTOUPD` | manager (`apt` or `dnf`), key, value: unattended-upgrades' allowed origins and `APT::Periodic` values, or dnf-automatic's `[commands]` values and enabled timers, and `lists-age-hours` / `metadata-age-hours` (the dnf age is shown with AL2023 verdicts) |
+| `UPDATEINFO` | pass (`installed` or `available`), ALAS advisory (or `-`), CVE, package NEVRA: Amazon Linux 2023's updateinfo, printed by `L1-audit.sh` on dnf hosts from `dnf -C -q updateinfo list --security --installed\|--available --with-cve`; advisory is `-` (the listing names CVEs) |
+| `UPDATEINFOREAD` | pass, `ok` or `failed`: whether that `dnf -C updateinfo` pass read the host's cache. A pass dnf fails, or with any line other than `[i] <CVE> <severity>/Sec. <NEVRA>`, is `failed` and prints no records |
+
+`SCOPE` labels locations that are on disk but not the live system; `L1-audit.sh` emits two labels:
+
+- `disabled` (`tree`): a directory renamed `<name>.disabled-YYYYMMDD` (evidence `inert since YYYY-MM-DD`), only
+  when nothing outside it names it: no systemd unit (system, user, transient, generated, `/usr/local/lib/systemd`;
+  including `Environment=` and the `EnvironmentFile=` files), cron or `at` entry, `/etc/profile*` or shell rc file,
+  `/etc/pam.d`, `/etc/default`, `/etc/logrotate.d`, `/etc/php*`, loader configuration (`/etc/ld.so.preload` too),
+  web-server or supervisor configuration (`nginx -T` too), pm2 dump, user dotfile, `.pth`/`.egg-link`/
+  `sitecustomize.py` outside it, symlink into it, container mount (`docker`/`podman inspect`), or running process
+  whose binary, working directory, mapped files or mount table name it. Secret-store dotfiles (`.env`, `.npmrc`,
+  `.pypirc`, `.vault-token`, `.s3cfg`, `.boto`) and `EnvironmentFile=` files are matched with `grep -lF` only (path,
+  never content). It fails closed: a source it cannot read, an `EnvironmentFile=` it cannot resolve to one regular
+  file (quoted, `%`-specifier, several paths, relative, not a regular file, or missing without the optional `-`),
+  or a failed `nginx -T`, `docker ps`/`inspect` (when a docker socket or `dockerd` exists) or `podman` query leaves
+  the tree unlabelled. A missing `-` file loads nothing and blocks nothing. History and credential-only files
+  (`.pgpass`, `.netrc`, `.git-credentials`, `.my.cnf`) are never read.
+- `on-disk-not-served` (`exact`): an npm manifest location whose `node_modules` lies under an nginx `root`, when
+  every server with such a root selects, for each probe URI, a location that holds `deny all`, `internal` or
+  `return 403|404` (with no `allow`, `if`, `rewrite` or nested location). If the server has any regex location, the
+  refusal must be a `^~` or `=` location (the note says so: "a regex location exists; a ^~ or = refusal is needed"). The evidence names the rule. Apache on the host, a failed `nginx -T`, an
+  `include` inside a server block, a location outside every server block (an included snippet), a relative root, or
+  an alias or location-level root reaching the tree leaves it unlabelled.
+
+`engine.apply_scopes` copies a label to every finding location it covers (`Finding.location_labels`). A label
+changes no row, severity, key or exit code; the summary groups the findings whose every location carries one label
+under *On disk, not the live system*, and names a finding also found at a live location apart.
+
+A `PYSITE` location outside the OS-managed paths whose interpreter line is end-of-life (endoflife.date `python`)
+gets one HIGH `runtime` finding named `python` (`engine.held_by_interpreter`) when a PyPI package finding there has
+a fix whose `requires_python` (`engine.requires_python`, from `https://pypi.org/pypi/<name>/<version>/json`) allows
+no release of that line. The detail lists the held packages; the package findings stay. A `requires_python` PyPI
+does not answer, or that does not parse, is a feed error.
 
 A `RUNTIME` manager says where a package-manager install came from. `pkg:<package>` (or
 `pkg:<package>:universe` for Ubuntu universe/multiverse) means the installed version comes from an
@@ -1436,6 +1528,45 @@ located at each) and feed errors. `engine.scan_path` calls it for every containe
 
 `(findings, feed errors)` for the fix plan; `fix.fix_path` turns each finding into a plan-only `PinChange`.
 
+### `agentteams.vulnscan.distro_verdict`
+
+Distro verdicts for Python packages in OS-managed paths (plan vfr-a A2), called by `engine.scan_inventory` after
+the package findings exist. Each finding with `DISTROPKG` lines for all its locations gets `Finding.distro_verdict`
+and `Finding.distro_note`; its row, severity, key and exit-code treatment do not change (Rule 12). Verdicts
+(`report.DISTRO_VERDICTS`, best first) are judged per advisory, joined on its CVE ids (the id, or its OSV record's `aliases` and
+`upstream`): the best among one advisory's CVE ids, the worst across its owning packages and across advisories.
+
+- **Ubuntu**: OSV's `Ubuntu:<release>[:LTS]` and `Ubuntu:Pro:<release>[:LTS]` ecosystems (`ubuntu_ecosystems`), by
+  the **source** package and the installed package version. A `UBUNTU-<CVE>` record that lists the package
+  (`osv.package_ids`) but does not affect the installed version (`osv.vulnerable_ids`, OSV's own ordering) is
+  `fixed-in-installed`. An affected one is `fix-available-not-installed` when the release entry has a fix,
+  `esm-only` when only a Pro entry or an `esm` version has one (`fix-available-not-installed` when the `ESM` line
+  shows esm-apps enabled for a universe package, or esm-infra for another), else `no-distro-fix`. No record for
+  the CVE, or an advisory with no CVE id, is `no-distro-fix`.
+- **Amazon Linux 2023**: the host's `UPDATEINFO` lines, joined on the owning rpm's name: `available` is
+  `fix-available-not-installed`, `installed` is `fixed-in-installed`, neither is `no-distro-fix`. Without any
+  `UPDATEINFOREAD` line there is no verdict. A pass that is not `ok` gives no verdict and a LOW `host` finding named
+  `distro-updateinfo` (`report.UPDATEINFO_CHECK`), which the *Distro verdicts* section names; it is not a feed
+  error (the `--with-cve` format is unverified, and a mismatch must not fail the host's scan daily).
+
+No verdict, with a note, when the origin is `unowned` or `repo:…` (the finding then loses `distro` when any
+location is such, and is judged upstream), when the PyPI version is not the package's upstream version
+(`upstream_matches`), for another release, or on a feed error (`Report.feed_errors`: the run is partial, never
+"not affected").
+
+#### `distro_verdict.apply(target, osrel, esm, records, updateinfo, updateinfo_read, autoupd, report)`
+
+Judge `target`'s findings in `report` in place. Does nothing without `records`.
+
+#### `distro_verdict.parse_distropkg(parts)` / `distro_verdict.parse_updateinfo(parts)`
+
+A `DistroPkg` / `UpdateInfo` from one tab-split line, or None for a malformed one.
+
+#### `distro_verdict.ubuntu_ecosystems(version_id)` / `distro_verdict.upstream_matches(pypi_version, pkgversion)` / `distro_verdict.rpm_name(binary, pkgversion)`
+
+OSV's two Ubuntu ecosystems for a release (None unless `YY.MM`); whether a dpkg/rpm version is a build of a PyPI
+version (epoch, revision, `+…` suffix and `~` dropped); the name part of an rpm NEVRA.
+
 ### `agentteams.vulnscan.project_policy`
 
 A project's own scanning intent: the brief's `vulnerability_scanning` block
@@ -1485,6 +1616,12 @@ when the key names a worktree (no `/`), the directory is real, and the day's rec
 
 `skips` (resolved exclude paths or opted-out checkouts) plus, for each inside `root`, the same path inside `mirror`.
 
+#### `scan_mirror.scan_root(cfg, root, mirror, exclude, opted_out)`
+
+Scan one effective root as the daily run does: `mirror` when given, else the checkout, with the operator's
+exclusions and opted-out checkouts holding inside the mirror too (`also_under`). Findings keep the targets
+`engine.scan_path` gives them; the caller files them under the checkout. The daily scan and `verify` both call it.
+
 ### `agentteams.vulnscan.manifests`
 
 Finds dependency manifests and reads exact versions from them; the formats are listed under
@@ -1494,7 +1631,8 @@ Finds dependency manifests and reads exact versions from them; the formats are l
 #### `Dep` / `Manifest`
 
 `Dep` is frozen: `ecosystem` (the OSV name, e.g. `PyPI`, `npm`, `Packagist`), `name`, `version`, `scope`
-(`"runtime"` or `"dev"`), `source` (the manifest path or install location). `Manifest` is the parse result
+(`"runtime"` or `"dev"`), `source` (the manifest path or install location), `resolved` (an npm lockfile entry's
+`resolved` URL; `""` otherwise). `Manifest` is the parse result
 for one file: `path`, `deps`, `unscannable` (the reason, when no exact version could be read), `unpinned`
 (requirement lines without an `==` pin) and `covered` (a `pyproject.toml` whose pins the requirements
 files beside it already carry, so it has nothing of its own to report).
@@ -1566,12 +1704,14 @@ Composer versions for advisory ranges and upgrade targets.
 
 Dataclass: `target`, `findings`, `unscannable` (`(path, reason)` tuples), `feed_errors`, `checked`,
 `opted_out`, `excluded` (`"<repo>: <path>"`), `withheld` (`"<repo>: <name> (<ecosystem>)"`), `brief_off`,
-`unscored_as`, `generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code;
+`sources` (allowlisted non-npm sources and their grades), `unscored_as`, `generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code;
 `apply_unscored(level)` counts every unscored advisory as `level` (raises `ValueError` for another
 value); `unscored_findings()` lists the findings whose severity comes from it; `policy_counts()` gives
 `{repo: (excluded manifests, withheld packages)}`; `to_dict(*, private_names=True)` / `from_dict(data)` convert
 to and from the [JSON shape](#json-output) (`private_names=False` shows each withheld name as `(private)`); `markdown(new_keys)` renders
-`summary.md`; `merge(other)` folds another report in.
+`summary.md` (with a *Distro verdicts* section: per host, the count of each verdict and the `esm-only` count for
+operator decision OD1); `distro_verdict_counts()` gives `{host: {verdict: n, "none": n}}`; `merge(other)` folds
+another report in.
 
 #### `Finding`
 
@@ -1648,6 +1788,21 @@ Minimal PEP 440 specifier sets as version intervals, on `versions.version_key`, 
 | `read_requirements(path, repo)` / `read_pyproject(path, skip=())` | A `RangeFile` (`reqs`, `unchecked`, `unreadable`, `private_index`); `private_index` files keep `reqs` empty |
 | `Interval`, `intersect(a, b)`, `merge(intervals)` | Version intervals (`None` bounds are unbounded; `fixed` marks an advisory's fix as the upper end) |
 
+### `agentteams.vulnscan.offnpm_sources`
+
+Allowlisted non-npm sources (vfr-e.E3): a publisher's own host for npm packages it does not publish to the
+registry. SheetJS's `cdn.sheetjs.com` (`xlsx` after 0.18.5) is the one row. The GHSA records for npm `xlsx` name no
+fixed npm version, so an exact-version query marks every CDN release affected; an entry from an allowlisted source
+is graded on the advisories' affected ranges instead. There is no general CDN trust: an entry that matches no row
+exactly is judged as an npm package, as before. No network.
+
+| Name | Behaviour |
+|---|---|
+| `Source`, `SOURCES` | The allowlist, one row per host: `host`, `packages` (npm names), `path` (tarball pattern with `name` and `version` groups), `publisher`, `evidence` |
+| `match(name, version, resolved, sources=SOURCES)` | The row an entry resolves from, or None: `https://` on the row's host exactly (no user info, port, query or fragment), the path matching in full, and its name and version equal to the entry's |
+| `judge(record, name, version)` | One advisory: `("affected", fix or "")` when a closed range holds the version, or an open-ended one does with nothing bounding it; `("unknown", why)` when an open-ended range holds it but the entry's `database_specific.last_known_affected_version_range` (`< X` / `<= X`) ends below it, a range has a bound that is not a version (`fixed: "next"`) or starts above its end, or the record cannot be judged; `("not affected", "")` otherwise |
+| `GRADES` | `fixed` (no advisory affects it), `vulnerable` (one does), `unknown` (never clean: the finding keeps its severity until a known entry settles it) |
+
 ### `agentteams.vulnscan.cvss`
 
 `score(vector) -> float | None` (v3.0, v3.1 or v4.0; None for another version or a malformed vector),
@@ -1685,7 +1840,7 @@ told never to request `stage-fix` for them, and `executor.validate_diff` refuses
 Plan-only rows for one `lockfiles.FORMATS` file (`go.mod`, `pnpm-lock.yaml`, `bun.lock`, `Gemfile.lock`,
 `gradle.lockfile`, `packages.lock.json`), from OSV, as `plan_cargo_lock` makes them: `plan-only` with `new` the
 minimal fixed version and the format's command in the note, `no-clean-release`, or `malicious`. A command is written
-only when the name, the installed and the fixed version all match the format's patterns, else "fix by hand".
+only when the name, the installed and the fixed version all match the format's patterns, else "left to the repository's own PR".
 Private packages are never sent to OSV. `markdown()` renders them under
 `## <label>: <lock> — plan-only (no staged edit)` (labels `Go`, `npm (pnpm)`, `npm (Bun)`, `RubyGems`,
 `Maven (Gradle)`, `NuGet`), headed by `lockfile_note(name)`; `executor.validate_diff` refuses a change to any of
@@ -1728,7 +1883,9 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 with `major` set (spec raised to `^<fixed version>` by `npm_major.rewrite_specs`, the lockfile re-resolved by
 `npm_fix(..., install=True)`), those `skip` names (another open PR updates them) `pr-held`, the rest still
 `major-held` with the reason (transitive only, workspaces, or a
-`package.json` that could not be rewritten). Which names are direct is `npm_major.direct_majors(lockfile, names)`
+`package.json` that could not be rewritten), except a transitive row a raised parent carried off its vulnerable
+version (`npm_groups.LockGraph.carried_by` on the base lockfile, `npm_groups.installed` on the re-resolved one):
+that row is `moves-with`, its note naming the parent. Which names are direct is `npm_major.direct_majors(lockfile, names)`
 (`({name: section}, package.json text, problem)`; `problem` is `npm_major.WORKSPACES` when
 `npm_major.in_workspaces(lockfile)`, or why `package.json` is a symlink, unreadable or not an object), the rule
 `executor_guard.stage_major_packages` shares. Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
@@ -2193,7 +2350,7 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
   a gh failure opens nothing). If a PR that is not the executor's now updates a package the staged change updates,
   the staged state is retired and the result is `failed` with `an open PR already updates <names> (#N); not
   duplicated`. `stage_fix` checks the same list before staging and leaves such packages out (`fix_path(...,
-  skip=open_prs.staging_claims(...))`); see [Major upgrades](#major-upgrades-stage-major) for the matching rules.
+  skip=writer_prs.staging_claims(...))`); see [Major upgrades](#major-upgrades-stage-major) for the matching rules.
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
@@ -2285,14 +2442,14 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 | `protected_identities(cfg, extra=())` | `{origin identity: path}` of those (and `extra`); used by `grant sign --from-registry` |
 | `origin_of(path)` | `host/owner/name` of the checkout containing `path` (nearest `.git` upwards; git is not run), or `None` for a repository without a host origin |
 | `repo_identity(path)` | The git common dir of the repository containing `path`, or `None` |
-| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str, "major_next": {target: {"since": date, "packages": [name, ...]}}}`) for the MCP server; called before the agent container starts. `major_next` lists each remediate-level plan whose next step is `stage-major` (the agent never sees, in its own run, the result of a `stage-fix` it requested): `retry_guard.major_next_since` gives a date, no fix is staged for it, and `stage_major_packages` returns names; empty when the registry or the ledger cannot be read |
+| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str, "major_next": {target: {"since": date, "packages": [name, ...][, "after": "fix-pr"]}}}`) for the MCP server; called before the agent container starts. `major_next` lists each remediate-level plan whose next step is `stage-major` (the agent never sees, in its own run, the result of a `stage-fix` it requested): `retry_guard.major_next_since` gives a date, no fix is staged for it, and `stage_major_packages` returns names; or (`"after": "fix-pr"`, vfr-b.B2) a plan with `fix` rows too whose last non-major PR was opened at this plan with no `stage-major` since (`retry_guard.major_beside_since`; `stage_major_packages(..., beside=True)` skips the `fix` rows), so the majors go on a second branch beside that PR; empty when the registry or the ledger cannot be read |
 | `stage_major_packages(plan, repo)` | The `major-held` packages of a fix plan's Markdown that `stage-major` could take, in plan order: requirements pins, and npm packages `npm_major.direct_majors` places (direct, outside workspaces, `package.json` neither a symlink nor unreadable; a lockfile path outside `repo` takes nothing). `[]` when the plan has any `fix` row. Only names `mcp.package_name_ok` accepts for the row's ecosystem are returned |
 
 All raise `executor.ExecError` when they refuse.
 
 ### `agentteams.vulnscan.grant`
 
-#### `grant.build(*, ops, repo_roots, hosts, days, max_uses, key_id, governance_dir, now)`
+#### `grant.build(*, ops, repo_roots, hosts, days, max_uses, key_id, governance_dir, now, before_revoke, **v2)`
 
 An unsigned grant, after every bound above. Raises `GrantError`.
 
@@ -2376,6 +2533,109 @@ allowed), or `None`. Unsigned, forged or unreadable files are ignored.
 
 The shared signing flow described under [Signing](#signing). Returns the signed record, or `None`
 after printing why nothing was signed.
+
+### `agentteams.vulnscan.grant_v2`
+
+The v2 grant record that bounds the host-changing ops (vfr-s S1-S3, vfr-d.D4). Its signature uses
+`PURPOSE_TAG_V2` (`agentteams-vulnscan-remediation-grant-v2`) over every v1 field plus `EXTRA_FIELDS`:
+
+- `version` (`2`);
+- `server_levels` (`host:level` pairs; `LEVELS` = `l2-security`, `l4-pins`, `py-venv`, `remove-path`);
+- `restart_units` (`host:unit.service`, for `l2-security`);
+- `restart_window` (`HH:MM-HH:MM` UTC; required whenever a `RESTARTING_LEVELS` level is signed, `l2-security`
+  included);
+- `apps_conf_sha256` (required for `l4-pins` / `py-venv`);
+- `major_allowed` (`host:unit.service`);
+- `remove_paths` (`host:/exact/path`, each passing `trust_root_problem`: absolute, normalised, no leading `//`,
+  outside, inside or above no `TRUST_ROOTS` entry, where a `*` component such as `/home/*/.config/agentteams`
+  matches one component);
+- `runtimes` (Homebrew formulae; `refused_formula` refuses `python*`, `git`, `gh`, `openssh`, `gnupg`);
+- `ancestor` (the grant id it re-issues);
+- `max_read_uses`.
+
+`check_shape` enforces the bounds at build and verify time. A grant naming `server-apply` holds server ops only.
+`uses_left` counts its `server-apply` uses against `max_uses` (at most `MAX_USES_SERVER_APPLY`, 20) and its
+`READ_OPS` against `max_read_uses` (at most `MAX_READ_USES`, 500); other grants keep one pool.
+
+`ancestor_problem` requires the ancestor to be gone from the active grants directory and archived in
+`grant.revoked_dir()` (`grant revoke` moves a revoked record there). The archived record must verify, and its
+`grant_id` must equal the ancestor id and the file name (`grant.ancestor_ok`). This is checked when the re-issue is
+signed (`extend`; `before_revoke` for `--check-only`) and again each time `grant.load_active` reads it. A grant whose
+id is in the revoke archive is never honoured, even if its file is moved back.
+
+`in_window` reads the restart window and handles windows that wrap midnight. `grant.covers` matches `server-apply`
+targets exactly (`HOST:LEVEL`, or `HOST:remove-path:/path` against `remove_paths`) and `runtime-patch` targets
+against `runtimes`.
+
+### `agentteams.vulnscan.host_plan`
+
+The shared confirmation pieces: `CONFIRM_KEY` (the `act` payload key), `HEX64`, `plan_lines` and `plan_sha256`.
+`plan_sha256` is the Python twin of the kit's `plan_digest` shell function: PLAN lines only, whitespace squeezed,
+sorted bytewise, unique.
+
+### `agentteams.vulnscan.server_apply`
+
+`server-apply HOST:LEVEL[:path]` runs inside `executor.act`, after `authorize` has written the `begun` row.
+
+1. `precheck` validates the target and host, refuses on an open escalation for the host, and requires the
+   confirmed digest.
+2. `gate` checks the signed restart window (every `RESTARTING_LEVELS` level) and the signed sha256 of a private
+   `apps.conf` snapshot. For `remove-path` it also refuses on `earlier_attempt` (an earlier `done`, a `failed`, or a
+   `begun` with neither, on the same host and path), and `removal_clearance` requires the decision row
+   `server-apply:remove-path:<host>:<path>`. That row must pass `security_gate.check_clearance` (read-only), name
+   exactly that id and carry `conditions_verified=verified`.
+3. `_prepare` runs the pre-audit (L1; its standard output is the one read for the `SCOPE <path> disabled` line,
+   `disabled_scope_problem`). It then runs `run-host.sh HOST --level L` (`level_args`, `check_argv`), takes
+   `plan_section` (from the first `== Level` line to the last `PLANDIGEST` line, so the L1 audit's lines never count),
+   requires its `plan_sha256` to equal both run-host's printed digest and the confirmed one, and writes the pre-state
+   `note` row.
+4. `_apply` runs `run-host.sh … --apply --expect-digest D`, then a post-audit.
+
+`run_kit` decodes output with `errors="replace"` (`KitRun.decoded`). Exit 4 at any stage, the preview included, opens
+an `ioc` escalation. Once the apply has started, every failure opens an `other` escalation on the host (`Escalated`):
+
+- exit 6 or 7, or another failed step;
+- exit 2 or 5 after an earlier step applied (run-host's `APPLYSTEP` lines);
+- an incomplete or worse post-audit;
+- a timeout;
+- output that is not UTF-8.
+
+Only exit 2 or 5 with no step applied is a plain failure (`NothingChanged`). `preview` runs only the plan, with no use
+reserved, for `host_change`.
+
+### `agentteams.vulnscan.runtime_patch`
+
+`runtime-patch FORMULA` (vfr-d.D4) upgrades one Homebrew formula on this machine. `check` refuses on any of these:
+
+- a refused name, or a formula vulnscan judges no runtime for (`runtime_kind`);
+- any formula in `toolchain`: the executor's interpreter and git/gh/ssh/gpg formulae (`own_tool_formulae`),
+  `TOOL_DEPENDENCIES` (`openssl@3`, `ca-certificates`, …), and `brew deps --installed` of those;
+- a formula with no runtime finding for it in the latest completed run (`latest_findings` / `flagged`: kind
+  `runtime`, target `this-machine`, `[brew]`, a location in its Cellar);
+- a tap other than `homebrew/core`;
+- a formula that is not installed and linked, or is pinned;
+- no bottle for `bottle_tag()` (or `all`);
+- a dry run that names anything but exactly this formula, at the same major;
+- a target version that is not its line's latest patch released at least `RELEASE_COOLDOWN_DAYS` (14) days ago
+  (`runtimes.patch_release_date`; an unknown date refuses).
+
+The preview may refresh Homebrew's index. The apply (`run`) uses `APPLY_ENV` (`HOMEBREW_NO_AUTO_UPDATE`,
+`HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK`, …), recomputes the digest and compares it with the confirmed one, writes a
+`note` row and upgrades. It then requires the linked version to be the planned one and `poured_from_bottle` to be
+true, escalating otherwise. brew runs only from `BREW_PATHS`, never as root and never with `SUDO_*`.
+
+### `agentteams.vulnscan.host_change`
+
+The operator side of the two ops. `operator_act` requires a terminal (stdin and stdout); without one it refuses
+before the preview. This guards against an unattended job or an agent shell confirming a plan; it is not an identity
+check.
+
+It then previews (`server_apply.preview` inside the confinement scope, or `runtime_patch.preview`), shows the PLAN
+lines and their sha256, refuses when `--confirm-plan-sha256` is given and differs, and asks
+`Apply exactly this plan?`. Only on `y` does it call `executor.act` with that digest.
+
+`add_grant_options` and `grant_fields` are the v2 `grant sign` options (`V2_OPTIONS`; `--apps-conf-sha256 auto`
+hashes the current `apps.conf`).
 
 ### `agentteams.vulnscan.publish`
 
@@ -2511,6 +2771,64 @@ Promote one `/vulnscan note` comment to a note. The author must be the authentic
 
 `remove` deletes one note: True when one was removed, False when none existed; `ValueError` for a malformed
 id, `OSError` when it exists but cannot be removed (`say --remove`). `notes_dir()` is `<config>/vulnscan-notes`.
+
+### `agentteams.vulnscan.known`
+
+Entries apply to `daily` only: ad-hoc `scan` and `inventory` ignore them, so their exit codes can differ.
+
+Known-finding entries (vfr-k K1): the operator's Ed25519-signed (purpose `agentteams-vulnscan-known-v1`),
+expiring (at most 90 days) decision to accept a finding. A covered finding is graded `known until <date>` and
+leaves the exit code; it never leaves the report, and `summary.md` lists every entry under *Known findings*
+(reason fenced as data and capped at 200 characters, expiry, key id, decision reference, renewal count; void
+entries with why). It supersedes operator notes for this purpose: a note still never suppresses anything,
+and `known propose --from-note` migrates one into a proposal. The commands are in `known_cli`.
+
+- **Key**: `package`: target, kind, ecosystem, name, installed version, advisory ids. `group`: the full
+  member list (2–40 members, each keyed the same way; never a path prefix). `host`: the web-root check's
+  detail and `evidence` (one digest over the files' HMACs under a random per-host key kept at
+  `/var/lib/agentteams-server-kit/l1-evidence.key` on the host, and the nginx `deny` rules; rotating the key
+  voids the host's entries), or the os-release check's version.
+- **Never known**, even signed: trust-root targets (signing store, verify keys, rosters, secrets, integrity
+  manifest, constitution, grants, ledger, the known index and store, the decisions log, the agentteams
+  install), `MAL-*` advisories and malicious packages, CRITICAL members (no KEV catalog is read yet), `ioc`,
+  `range` and `integrity` findings, other host checks.
+- **Governance**: the class is derived by `effect_classifier.classify_row` (a non-eligible effect is
+  refused); a HALT on `vulnscan-known` (or `vulnscan-known:<anything>`) voids every entry, a HALT on the bare
+  entry id `vk-…` or a lineage id voids that entry; the decision reference (`plan_slug`, `step`) must name a
+  cleared decision-log row (`CLEARED-WITH-CONDITIONS` / `CONDITIONAL` only with `conditions_verified` =
+  `verified`); the body's sha256 must be in
+  the committed (`HEAD`) `references/vulnscan-known-index.csv`; at most 30 entries are in force and the newest
+  over the cap are void.
+- **Void** on a version change, a new advisory id, a new fix the entry did not record, a severity rise, KEV,
+  an evidence change, expiry, a retracted or HALTed decision, a missing or mismatched index row, or a bad
+  signature. A void entry covers nothing and adds a HIGH `integrity` finding.
+
+#### `known.build(findings, *, reason, decision_ref, days, key_id, governance_dir, renews, now)`
+
+An unsigned entry for findings of one target (several make a group). Raises `KnownError` on any bound or refusal.
+
+#### `known.verify(record, *, now)`
+
+Shape, refusals, derived class, lifetime and Ed25519 signature (an HMAC signature is refused). Returns the class.
+
+#### `known.sign(record, *, confirm_sha256, allow_checkout)`
+
+Sign through `grant.operator_sign` (operator only; `known sign`).
+
+### `agentteams.vulnscan.known_report`
+
+Loads and judges the store and grades a report (split from `known`). A HALT on an entry's id or on any id in its
+lineage is a dynamic gate site, as `branch-cleanup:<sha>` is; `vulnscan-known` is in `action_ids.GATE_ACTIONS`.
+
+#### `known_report.load(*, now)`
+
+Every entry in the store, judged (`valid`, `void` with reasons, `inactive` renewed, index `problems`). Never raises.
+
+#### `known_report.apply(report, *, now, loaded)`
+
+Mark the covered findings, add the integrity findings for void entries, and set `report.known_entries`. The daily
+run calls it after `apply_unscored` and before `exit_code`. Never raises.
+
 
 ### `agentteams.vulnscan.agent_run`
 
@@ -3063,7 +3381,7 @@ check, and the flags fingerprint a self-test record must match.
 
 ### `agentteams.vulnscan.subproc_confine_ssh`
 
-#### `run_kit(script, host, script_args, *, conf_dir, logs, timeout=3600)`
+#### `run_kit(script, host, script_args, *, conf_dir, logs, timeout=3600, text=True)`
 
 One packaged server-kit script against one hosts.conf host in the tools container: `build_ssh_files`
 writes the run's ssh config and known_hosts lines (from `ssh -G` and `ssh-keygen -F` on the host) into
@@ -3099,7 +3417,7 @@ image id and `flags_sha256`; only a full pass unlocks confined operations.
 
 Add `tools-image build` and `tools-selftest` to the vulnscan parser, and run one: 0 done or passed, 1
 failed, 2 a setup error. `handoff.register` / `handoff.dispatch` do the same for `handoff status` (0
-printed, 2 an unusable config).
+printed, 2 an unusable config) and `handoff verify-directive` (0 verified, 1 unverified, 2 bad arguments).
 
 ### `agentteams.vulnscan.docker_readiness`
 
@@ -3159,9 +3477,18 @@ Publish a run when a publish grant is active; `None` otherwise.
 Write a starter config (the defaults, with the given `repo_roots` and `servers`) at `path` (default
 `paths.config_file()`) unless one exists; never overwrites. Returns the path. The `init` command calls it.
 
-#### `daily.run_lock_path()`
+#### `daily.run_lock_path()` / `daily.remediation_lock_path()`
 
-`<state>/daily.lock`, held for a whole daily run.
+`<state>/daily.lock`, held for a whole daily run; `<state>/remediate.flock`, held by the remediation runner, a
+deploy and `verify`.
+
+#### `daily.scan_server(host, kit, out_dir)` / `daily.write_atomic(path, text)` / `daily.ITEM_ERRORS`
+
+`scan_server` runs the packaged server kit's read-only L1 audit on one host (its log `server-<host>.log` in
+`out_dir`) and returns the host's report; `write_atomic` writes through a temporary file and a rename;
+`ITEM_ERRORS` is what stops one scan root or fix plan without stopping the run. `verify` uses all three.
+`coverage.under_root(root_s, target)` names a target under its root's label and `coverage.drop_excluded(cfg, root,
+rep)` drops what lies inside an `exclude` path; both moved from `daily`.
 
 #### Split modules
 
@@ -3177,10 +3504,61 @@ range, every `agent.*` key included ([`validate_agent`](#validate_agenta)).
 
 ### `agentteams.vulnscan.effectiveness`
 
-#### `section(total, previous, *, stats=None)`
+#### `section(total, previous, *, stats=None, scanned=None)`
 
 The summary's **Remediation effectiveness** section and the PR counts behind it (`PrStats`). Counts
-only, and passed through `publish.rewrite_paths`: no repository, PR, host or path is named.
+only, and passed through `publish.rewrite_paths`: no repository, PR, host or path is named. With `scanned` (the
+daily run passes `scanned_targets(run_dir)`) and a previous run, it adds one row per outcome of `compare`: the
+previous run's findings remediated, partly remediated, open, moved (not remediated), present elsewhere (not
+remediated) and not assessed. Without it
+those rows are left out, so an unscanned target never reads as remediated. With `scanned`, fixed, new and net
+also count only targets this run covered, on both sides; the previous run's findings on any other target are
+carried on a row of their own ("Previous findings on targets this run did not scan").
+
+#### `fill_baseline(previous, previous_dir, targets, *, lookback=7)`
+
+Returns `(baseline, notes)`: `previous` with each of `targets` it has no complete scan record for (or that its own
+feed errors name) replaced by that target's findings from the newest earlier run, up to `lookback` back, that
+scanned it. A target no run in range scanned keeps the previous run's partial findings. `previous` is not changed;
+each substitution gets a note for the summary. The daily run uses the baseline for the NEW marks, the heartbeat's
+`new` and `section`.
+
+#### `compare(baseline, later, *, scanned=None, aliases=None, path_aliases=None)`
+
+Per finding (vfr-v V2): for each finding of `baseline`, whether `later` shows it remediated. A finding is keyed by
+target, kind, ecosystem and package name (runtime and host findings also by their detail). Each later finding is
+paired with **one** baseline finding of its key at the same place (a shared location, or either has none): the one
+whose version is the highest at or below the later one, else the lowest. Two version lines of one package
+therefore never match each other. Statuses (`OUTCOMES`): `remediated`; `partly remediated` (some advisories gone,
+or now at a higher version that is still vulnerable); `open`; `moved (not remediated)` (still there, but only
+under a tree `detect_moves` found renamed); `present elsewhere (not remediated)` (nothing at its place, but the
+later run has its key at a place no baseline finding of that key had, e.g. `/root/anaconda3` → `/opt/anaconda3` or
+another lockfile); `not assessed` (the target is not in `scanned`). Requirement-range
+findings are left out (no installed version). `aliases` maps a later target name to the baseline's (a renamed
+host, e.g. `{"jlc-prod": "vk-prod"}`); `path_aliases` maps a renamed location prefix the same way and reads as
+`open`. Returns a `Comparison` (`outcomes`, `new`: the later findings paired with no baseline finding, a new key or a known one at a new place, `moves`, `counts()`).
+`outcome_rows(cmp)` gives one plain row per outcome.
+
+#### `detect_moves(baseline, later, *, aliases=None, path_aliases=None)`
+
+Trees renamed on disk between the runs, per target: `{new prefix: old prefix}`. A baseline location the later run
+lacks and a later location the baseline lacked are a candidate when exactly one path component was renamed in
+place, keeping its name and adding (or dropping) a suffix after `.`, `-`, `_`, `~` or `+`
+(`/root/anaconda3` → `/root/anaconda3.disabled-20261101`; `python3.10` → `python3.12` is not one). The move is
+accepted when the renamed tree carries at least one of the old tree's findings unchanged (kind, ecosystem, package,
+version). That is weaker than "the same package set" on purpose (Rule 12): a rename combined with one upgrade must
+still read as a move, never as a remediation of everything else in the tree.
+
+#### `scanned_targets(run_dir, *, since=None)` / `assessed(targets, scanned)` / `load_run(run_dir)`
+
+`scanned_targets` is what a run directory has a complete record for: each `repos-*.json`'s root (a
+`<repo>.worktrees/<name>` mirror filed under its checkout; a root under the home directory also as `~/...`), each
+host whose `server-<host>.log` holds the audit's `RESULT` line, and `this-machine`; with `since` (epoch seconds;
+the daily run passes its own start) a record written before it is ignored, so a file an earlier run of the day left
+behind is never read as this run's scan. `assessed` keeps the targets
+equal to one of them or inside a scanned root. `load_run` reads a run's `summary.json` (`OSError`, or `ValueError`
+for one that is not a report).
+
 
 #### `pr_urls(rows)` / `pr_stats(urls, *, now=None, view=None)`
 
@@ -3222,7 +3600,7 @@ is reported on stderr and returns `None`.
 
 The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
 repository's successful `open-pr` PRs, oldest first, and `ledger_lanes(repo, rows)` the same as `{url: lane}`
-(`ops.lane_of`: `image` for a `stage-image` PR, else `deps`): only older PRs in the replacement's lane are
+(`ops.lane_of`: `image` for a `stage-image` PR, `major` for a `stage-major` PR, else `deps`): only older PRs in the replacement's lane are
 candidates; `head_problem(data)` and `touched_problem(data,
 identity)` say why a PR may not be closed, and `authored_problem(data, identity)` (commits only) why a PR is not
 the executor's own (the replacement; and the PR open-pr would claim, `open_pr_with_same_change`). Each candidate is looked up again right before it is closed; a
@@ -3251,6 +3629,12 @@ directories only. Called by `executor.authorize`.
 The local date (`YYYY-MM-DD`) of `target`'s last `stage-fix` result when it failed "nothing fixable without a
 major jump" (not the upstream variant), `futile_reason` still holds it at the current plan, and no `stage-major`
 row of any kind follows it in the ledger; else `""`. Read by `executor_guard.write_plan_levels` (`major_next`).
+
+#### `major_beside_since(target, rows)`
+
+vfr-b.B2: the local date of `target`'s last `open-pr` `done` row when its result is neither `major` nor `image`,
+the current fix plan is that day's, and no `stage-major` row follows it; else `""`. Marks the plan
+`"after": "fix-pr"` in `major_next`: the `fix` rows have their PR, so `stage-major` is next beside it.
 
 #### `mark_held(target)` / `held_count()`
 
@@ -3379,6 +3763,76 @@ reading side: writing packets and issuing the directive is operator tooling outs
   `sandbox/confine-run.sh` the handoff's goose session would run under: the goose home's, else
   `<agent.team_dir>/sandbox/confine-run.sh`), `launcher_state` / `launcher_detail` (see
   [launcher_lineage](launcher-lineage.md)) and `launcher_warning()`, printed by `handoff status` unless `current`.
+- **The `own-pr` lapse** (`handoff_lapse`, operator decision OD10). `handoff_lapse.clock(repo, branch)` starts a
+  clock the first time the newest verdict for a staged fix is `own-pr`: a `handoff-clock` row (`state: start`, with
+  the fix `digest`, the fix `plan` digest and the verdict's `handoff_id`) in the MAC-chained ledger, whose own `ts` is
+  the start, so no unsigned file can move it. A different digest, plan or `handoff_id` restarts it, and any sight of
+  another verdict stops it (`state: stop`), so `own-pr` → `reject` → `own-pr` starts over. An unreadable ledger
+  starts nothing and lapses nothing. Until `LAPSE_DAYS` (7) have passed, `open-pr` stays refused and the refusal
+  names the lapse date (`pending_detail`); `RepoHandoff.lapses`, `lapsed`, `owner_prs` and `ask` (`packet_ask`: the
+  request the next handoff packet should carry, for the operator's packet tooling) show it in the summary and
+  `handoff status`, which also starts or stops the clock. After that, `handoff_lapse.gate(op, repo, cfg)` (called by
+  `authorize`) lets `open-pr` proceed under the existing grant when no open owner PR updates the staged packages
+  (`open_prs.owner_prs`: any author, not a fork, not `vulnscan/*`, title or branch naming a package), and
+  `handoff_lapse.log` writes a `handoff-lapsed` ledger row only once a grant covers the `open-pr`. The owner PRs
+  that keep it deferring are named in the summary (`own-pr kept: owner PR #N open`). Only `own-pr` lapses; a gh
+  failure or a staged record without packages keeps deferring.
+
+### `agentteams.vulnscan.handoff_stale`
+
+A stale `reject` (vfr-c.C4). `handoff_stale.clock(repo, branch)` starts a `handoff-reject-clock`
+  ledger row the first time the newest verdict for a staged fix's digest is `reject` (keyed by the digest alone).
+  Its `since` is the digest's earliest start row after the newest `handoff-answer` row for it (or the earliest at
+  all): reject → defer → reject writes stop and start rows but keeps `since`; only a person's answer or a new
+  digest restarts it. After `STALE_DAYS` (14) `needs_you(repo, rec)` returns a
+  line naming the repository, handoff, digest and date; `RepoHandoff.needs_you` carries it into the summary
+  (`**Needs you:**`) and `handoff status` (`NEEDS YOU:`). Nothing re-asks the orchestrator: no packet text, no request,
+  and `open-pr` stays refused. Only a person clears the line, for that digest: `handoff answer --repo PATH --answer
+  keep-rejected|ask-again [--note TEXT]` (`cmd_answer`, interactive confirmation; `record_answer` writes a
+  `handoff-answer` ledger row), which also restarts its 14 days. The terminal check is not an identity check: an
+  answer can only hide the alert, never authorize anything.
+
+### `agentteams.vulnscan.npm_kept`
+
+`stage-major` on a base with kept off-registry entries (vfr-c.C2, vfail F2's rule). `base_problem(rel, manifest_text,
+lock_text)` returns `(problem, kept)`: an off-registry entry passes only as a top-level `packages` entry
+`node_modules/<name>` resolved over `https://` with a `sha512-` integrity and a plain version, not a link, that
+`package.json` names by exactly that URL (portal's SheetJS `xlsx`); every other non-registry source is refused as
+`manifests.npm_off_registry` refuses it. `after_problem(rel, kept, lock_text)` refuses the re-resolved lockfile
+unless its off-registry entries are exactly `kept`, byte-identical in every field at the same key (none added,
+changed, moved or removed). npm runs lockfile-only and script-free in the tools container, whose egress is
+`registry.npmjs.org:443` only, so the CDN is never fetched.
+
+### `agentteams.vulnscan.writer_prs`
+
+A writer's open PR holds its packages back from staging (vfr-d D6). `staging_claims(target_repo)` returns a
+`Claims` (`open_prs.claimed`'s Dependabot / Renovate map plus `holds`); any gh failure means no claim and no hold.
+`holds(target_repo, prs)` looks at same-repository, non-`vulnscan/*`, non-bot PRs (at most `MAX_PRS`) whose author
+`can_write` (the collaborator-permission API: `admin` or `write`), and reads `parse_diff(gh pr diff)` as data:
+`requirements*.txt` and npm lockfiles only, plain names and versions only, nothing for a diff over `MAX_DIFF_BYTES`
+or naming over `MAX_NAMES` packages. Each hold's start is the package's first `writer-hold` ledger row in that
+repository, whichever PR wrote it: a new PR for the same package never renews a hold. `leave_to_prs(rows, skip)`
+(also used by `fix`) marks a row `pr-held` ("held by #N ... expires <time>, Rule S-VM") only when the PR changes the
+same file and moves the package to the row's fixed version or later, until `deadline(hold, ids)`: the start plus
+`DEADLINES` by the worst advisory (24 h critical, 7 days high or unscored, 30 days moderate or low; an unreadable
+advisory counts as critical). An expired hold is noted on the row the fix then takes. `open-pr`'s fail-closed
+duplicate check is unchanged (Dependabot / Renovate only).
+
+### `agentteams.vulnscan.cargo_fix`
+
+`stage-cargo` (vfr-d.D3; a grant must name it). `in_major_target(name, installed, ids)` picks the smallest version
+the advisories name `fixed` in the installed version's caret line that passes the S-10 search (an OSV query on the
+exact release; any advisory, or a malicious one, refuses). `annotate(path, rows)` (from `fix.plan_cargo_lock`)
+turns such rows into `stage-cargo` rows; `sources_problem(text)` refuses git and alternate-registry packages.
+`fix_result(wt, claims)` runs `run_updates(lock, moves)`, which first refuses a target that `yanked_problem` finds
+yanked, missing or unreadable in crates.io's sparse index (`fetch_index`, inside the container through the same
+index-only egress; `index_path`), since cargo 1.77+ lets `--precise` pick a yanked release; then `cargo update -p <name>@<old> --precise <new>` per move,
+in the tools container only (`subproc_confine.run_cargo`, egress `index.crates.io:443`), on a scratch copy with the
+tree's `Cargo.toml` files, its `Cargo.lock` and empty `.rs` stubs (no `.cargo` config, an empty `CARGO_HOME`); only
+`Cargo.lock` is copied back. `check_lock_edit(rel, old, new, planned=None)` (also `validate_diff`'s check in
+`cargo` mode, which accepts no other file) allows only in-major `version` and matching `checksum` lines of crates.io
+packages and the dependency references that follow them; with `planned`, exactly those moves. Nothing to update
+raises `FUTILE_DETAIL`, held per op by `retry_guard`.
 
 ### `agentteams.vulnscan.remediation_status`
 
@@ -3417,6 +3871,63 @@ and named under *Needs you*, not classified. An unreadable ledger sets `error`
 - `needs_line(row)` is one *Needs you* line, with control characters replaced and the detail cut to
   `DETAIL_CHARS` (200). `render_markdown(outcome, run_name=, attempt=, log_text=)` and `report(...)` build
   `remediation.md`: PR links and the last per-repository line from the attempt's log, then *Needs you*.
+
+### `agentteams.vulnscan.verify`
+
+Same-day verification (`verify`) and the per-finding comparison of two runs (`effectiveness`). The morning scan
+cannot see a fix merged or a host changed after it ran; the verification job measures those the same day. It is
+read-only toward everything but its own files: it stages nothing, writes no fix plan, opens no PR, starts no agent
+and sends no notification.
+
+#### `run_verify(cfg, *, today=None, mirror_refresh=None, force=False)`
+
+Re-scan what changed since this morning's run and write `<run>/verify.json`. In order:
+
+1. Read the morning's `summary.json` (none: exit 3, `state: no-run`, nothing written). A `verify.json` already
+   `complete` today is returned as `already-verified` (exit 0) unless `force`.
+2. Take `<state>/remediate.flock` (`daily.remediation_lock_path()`) and then `<state>/daily.lock`, the order
+   `vulnscan-deploy.sh` takes them, each without waiting. While a remediation attempt, a deploy or a daily run holds
+   either one, nothing is written and the exit code is 3 (`state: busy`).
+3. Keep the morning's scan-mirror record as `<run>/verify/mirrors-morning.json` (once a day: a second verification
+   compares with the morning's commits, not with the first verification's), then run `bash SCRIPT refresh` for
+   `mirror_refresh` (the operator's refresh job, `vauto-a-mirrors.sh`) through `open_refresh(script)`: see below.
+4. Re-scan, from its refreshed mirror (`scan_mirror.scan_root`), each effective root whose record went from one
+   `ok <sha>` to another since the morning: a repository whose default branch moved today. A root without `ok` before
+   and after is listed in `not_rescanned` (its morning scan read the checkout, or the refresh failed); with
+   `scan_mirror` off no repository is re-scanned.
+5. Run the read-only L1 audit (`daily.scan_server`, the audit of the daily scan and of the executor's
+   `server-audit` op) on each configured `servers` host that an executor `server-*` op ran against today
+   (`audited_hosts(rows, day)`: `done` or `failed` ledger rows of that local date). Its logs go to `<run>/verify/`;
+   a host that is not a configured server is listed in `hosts_skipped` (no morning baseline).
+6. Compare the morning's findings of the targets re-scanned without an error with the new scan
+   (`effectiveness.compare`) and write `verify.json`: `day`, `started`, `finished`, `complete` (no feed error),
+   `mirror_refresh`, `rescanned` (`root`, `before`, `after` commits), `not_rescanned`, `hosts`, `hosts_skipped`,
+   `assessed`, `feed_errors`, `counts` (per status), `moves`, `findings` (one row per assessed morning finding:
+   `status`, `severity`, `target`, `kind`, `ecosystem`, `name`, `version`, `fix`, `fixed_upstream`, `note`) and
+   `new` (findings of keys the morning lacked). It names repositories, hosts and packages: machine-local, never
+   published. `summary.*`, the heartbeat and the morning's `repos-*.json` and `server-*.log` are left as they were.
+
+Returns `(record, exit code)`: 0 complete, 3 partial (a refresh, re-scan or audit failed), busy or no morning run.
+
+#### `open_refresh(script)` / `refresh_problem(script)`
+
+`open_refresh` opens the mirror refresh script for running and returns the descriptor, or raises `RefreshRefused`
+(a `ValueError`) naming the check that failed. It refuses a relative path, and opens with `O_NOFOLLOW`, so a
+symlink is refused. On the open descriptor (`fstat`) the file must be regular, owned by the user and not group- or
+world-writable. No directory of its parent path below the home directory (below `/` outside it) may be a
+symlink. Every directory above it up to the home directory (or `/` outside it) must be owned by the user or
+root and not group- or world-writable, and the path must still name the opened file (same device and inode). The
+script then runs as `bash /dev/fd/N refresh` with that descriptor passed (`pass_fds`), never by path, so a file
+swapped in after the checks is not what runs. `refresh_problem` returns the refusal text, or "".
+
+#### `comparison_markdown(cmp, *, baseline, later, aliases, path_aliases)`
+
+The `effectiveness` command's report: counts per status, the trees renamed between the runs, counts per target, and
+the CRITICAL and HIGH findings not remediated. Machine-local (it names targets and packages).
+
+#### `register(sub)` / `dispatch(args, load_cfg)`
+
+The `verify` and `effectiveness` commands ([Command reference](#command-reference)).
 
 ### `agentteams.vulnscan.notify`
 

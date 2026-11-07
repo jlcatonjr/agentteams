@@ -263,3 +263,75 @@ def test_the_staged_index_lists_staged_repositories(env: dict, tmp_path: Path) -
     run_dir.mkdir()
     assert executor_serve.write_staged_index(run_dir) == ["/repos/app"]
     assert json.loads((run_dir / executor_serve.STAGED_INDEX).read_text()) == {"repos": ["/repos/app"]}
+
+
+def _on(target: str, *keys: str) -> list[Finding]:
+    return [Finding(kind="package", target=target, name=k, version="1.0.0", ecosystem="npm", severity=3,
+                    ids=[f"GHSA-{k}"]) for k in keys]
+
+
+def test_findings_on_a_target_this_run_did_not_scan_are_carried_not_fixed(env: dict) -> None:
+    """Unknown is not clean: a host whose audit did not complete keeps its findings out of fixed, new and net."""
+    prev, now = Report(target="daily"), Report(target="daily")
+    prev.findings += _on("host-up", "a", "b") + _on("host-down", "c", "d", "e")
+    now.findings += _on("host-up", "b", "f")          # host-down: audit failed, no findings and no scan record
+    st = effectiveness.PrStats()
+    md, _ = effectiveness.section(now, prev, stats=st, scanned={"host-up"})
+    assert "| Findings fixed since the previous run | 1 |" in md          # only "a"; c, d, e are not fixed
+    assert "| Findings new since the previous run | 1 |" in md and "| Net change in findings | +0 |" in md
+    assert "| Previous findings on targets this run did not scan (carried, not counted above) | 3 |" in md
+    # Rule 12: the same host, scanned this time, counts again (the exclusion is per run, not sticky)
+    md2, _ = effectiveness.section(now, prev, stats=st, scanned={"host-up", "host-down"})
+    assert "| Findings fixed since the previous run | 4 |" in md2 and "carried, not counted" not in md2
+
+
+def _run_dir(state: Path, day: str, findings: list[Finding], hosts_done: tuple[str, ...]) -> Path:
+    d = state / day
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "summary.json").write_text(json.dumps(Report(target="daily", findings=findings).to_dict()), encoding="utf-8")
+    for h in hosts_done:
+        (d / f"server-{h}.log").write_text("RESULT action-needed\n", encoding="utf-8")
+    return d
+
+
+def test_a_host_back_after_an_unscanned_run_is_compared_with_its_last_scan(tmp_path: Path) -> None:
+    """The mirror case: a host the previous run could not reach must not read as all-new when it comes back."""
+    from agentteams.vulnscan.report import new_finding_keys
+
+    _run_dir(tmp_path, "2026-01-01", _on("host-a", "a1", "a2") + _on("host-b", "b1"), ("host-a", "host-b"))
+    prev_dir = _run_dir(tmp_path, "2026-01-02", _on("host-b", "b1"), ("host-b",))   # host-a: audit did not complete
+    prev = effectiveness.load_run(prev_dir)
+    now = Report(target="daily")
+    now.findings += _on("host-a", "a1", "a3") + _on("host-b", "b1") + _on("host-c", "c1")   # host-c: never scanned
+    assert len(new_finding_keys(now, prev)) == 3                                           # a1, a3, c1: a1 reads new
+    base, notes = effectiveness.fill_baseline(prev, prev_dir, {f.target for f in now.findings})
+    assert {k.split("|")[3] for k in new_finding_keys(now, base)} == {"a3", "c1"}          # a1 was there on 01-01
+    assert any("host-a" in n and "2026-01-01" in n for n in notes)
+    assert not any("host-c" in n for n in notes)                                          # nothing to compare: no note
+    md, _ = effectiveness.section(now, base, stats=effectiveness.PrStats(), scanned={"host-a", "host-b", "host-c"})
+    assert "| Findings fixed since the previous run | 1 |" in md                           # a2, gone since 01-01
+    assert prev.findings == _on("host-b", "b1")                                            # previous left unchanged
+
+
+def test_fill_baseline_is_a_no_op_when_the_previous_run_scanned_every_target(tmp_path: Path) -> None:
+    prev_dir = _run_dir(tmp_path, "2026-01-02", _on("host-a", "a1"), ("host-a",))
+    prev = effectiveness.load_run(prev_dir)
+    base, notes = effectiveness.fill_baseline(prev, prev_dir, {"host-a"})
+    assert base is prev and notes == []
+
+
+def test_fill_baseline_keeps_partial_findings_and_trusts_the_runs_own_feed_errors(tmp_path: Path) -> None:
+    """Review A1/A2: no earlier scan keeps the previous run's partial findings; a leftover RESULT log is not a scan
+    when the run's summary names the host as failed."""
+    from agentteams.vulnscan.report import new_finding_keys
+
+    prev_dir = _run_dir(tmp_path, "2026-01-02", _on("host-a", "a1"), ("host-a",))   # leftover RESULT log ...
+    rep = effectiveness.load_run(prev_dir)
+    rep.feed_errors.append("host-a: audit did not complete (ssh exit 255)")        # ... but the run says it failed
+    (prev_dir / "summary.json").write_text(json.dumps(rep.to_dict()), encoding="utf-8")
+    prev = effectiveness.load_run(prev_dir)
+    now = Report(target="daily")
+    now.findings += _on("host-a", "a1", "a2")
+    base, notes = effectiveness.fill_baseline(prev, prev_dir, {"host-a"})
+    assert {k.split("|")[3] for k in new_finding_keys(now, base)} == {"a2"}         # a1 kept from the partial run
+    assert any("partial findings" in n for n in notes)

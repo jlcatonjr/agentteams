@@ -81,6 +81,28 @@ def test_an_open_pr_with_the_same_change_is_claimed(env: dict, monkeypatch: pyte
     assert not executor.staged_file(repo.resolve()).exists()
 
 
+def test_an_open_pr_behind_the_current_base_is_not_claimed(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 2026-11-04: an earlier day's PR with the same change, staged on a base main has since moved past. Claiming it
+    # would leave a PR whose checks tested the old base and that nothing updates: open a current one instead.
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-fix", "open-pr"], hosts=[], max_uses=20)
+    monkeypatch.setattr(fix, "fix_path", _pin_fix)
+    first = executor.act("stage-fix", str(repo), env["cfg"])
+    earlier = _earlier_pr(Path(first["worktree"]), first["branch"])
+    (repo / "CHANGELOG.md").write_text("main moved on\n")                     # an unrelated commit lands on main
+    _git(repo, "add", "CHANGELOG.md")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "main moves")
+    _git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    staged = executor.act("stage-fix", str(repo), env["cfg"])                 # re-staged on the new base
+    assert staged["status"] == "done", staged
+    bindir = _fake_gh(env, monkeypatch)
+    (bindir / "open.json").write_text(json.dumps([
+        {"url": "https://github.example.com/o/svc/pull/7", "headRefName": earlier, "isCrossRepository": False}]))
+    res = executor.act("open-pr", str(repo), env["cfg"])
+    assert res["status"] == "done" and res["pr"].endswith("/pull/9") and "existing" not in res, res
+    assert any(c.startswith("pr create") for c in _gh_calls(bindir))
+
+
 def test_an_open_pr_with_a_commit_by_someone_else_is_not_claimed(env: dict,
                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     # the same content, but authored by another identity: the digest is public, so content alone is not enough

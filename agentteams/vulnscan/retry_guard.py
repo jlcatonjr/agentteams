@@ -16,7 +16,8 @@ so a futile ``stage-major`` never holds ``stage-fix`` and vice versa. A ``stage-
 recorded as :data:`MAJOR_FUTILE_DETAIL`, never as "nothing fixable without a major jump".
 
 ``stage-image`` (end-of-life base image ``FROM`` tags) is held on its own too: a ``stage-image`` that finds no base
-image it may move is recorded as :data:`IMAGE_FUTILE_DETAIL` and held until the fix plan changes.
+image it may move is recorded as :data:`IMAGE_FUTILE_DETAIL` and held until the fix plan changes; ``stage-cargo``
+likewise with :data:`CARGO_FUTILE_DETAIL`.
 """
 
 from __future__ import annotations
@@ -28,14 +29,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import paths
+from agentteams.vulnscan import ops, paths
 
 FUTILE_DETAIL = "nothing fixable without a major jump"
 #: ``stage-major``'s futile result: even with semver-major upgrades allowed, the change fixes nothing.
 MAJOR_FUTILE_DETAIL = "nothing fixable even with a major upgrade"
 #: ``stage-image``'s futile result: no end-of-life base image it may move (:mod:`.image_fix`).
 IMAGE_FUTILE_DETAIL = "no base image stage-image may upgrade"
-_HELD_OPS = ("stage-fix", "stage-major", "stage-image")
+#: ``stage-cargo``'s futile result (:data:`.cargo_fix.FUTILE_DETAIL`; kept equal by a test).
+CARGO_FUTILE_DETAIL = "no Cargo.lock crate stage-cargo may update"
+_HELD_OPS = ("stage-fix", "stage-major", "stage-image", "stage-cargo")
 #: Recorded instead of :data:`FUTILE_DETAIL` when the default branch has nothing vulnerable: the fix is already
 #: upstream and the local checkout (whose scan wrote the fix plan) is behind. Held the same way.
 UPSTREAM_DETAIL = "already fixed on the default branch"
@@ -84,7 +87,8 @@ def _last_futile(target: str, rows: list[dict[str, Any]], op: str = "stage-fix")
         if r.get("op") == op and r.get("target") == target and r.get("kind") in ("done", "failed"):
             last = r
     detail = str(last.get("detail", "")) if last is not None else ""
-    prefix = next((p for p in (FUTILE_DETAIL, MAJOR_FUTILE_DETAIL, IMAGE_FUTILE_DETAIL, UPSTREAM_DETAIL)
+    prefix = next((p for p in (FUTILE_DETAIL, MAJOR_FUTILE_DETAIL, IMAGE_FUTILE_DETAIL, CARGO_FUTILE_DETAIL,
+                               UPSTREAM_DETAIL)
                    if detail.startswith(p)), "")
     if last is None or last.get("kind") != "failed" or not prefix:
         return None
@@ -98,10 +102,11 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
     """Return why a staging op on ``target`` would only repeat a "nothing fixable" result, or "".
 
     Each op is held only by its own last result: a futile ``stage-major`` never holds ``stage-fix``, nor the reverse,
-    and ``stage-image`` likewise.
+    and ``stage-image`` and ``stage-cargo`` likewise.
 
     Args:
-        op: The requested operation (only ``stage-fix``, ``stage-major`` and ``stage-image`` are ever held).
+        op: The requested operation (only ``stage-fix``, ``stage-major``, ``stage-image`` and ``stage-cargo`` are
+            ever held).
         target: Canonical repository path.
         rows: Ledger rows.
 
@@ -124,6 +129,9 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
     if prefix == IMAGE_FUTILE_DETAIL:
         return (f"{HELD_PREFIX}stage-image found {IMAGE_FUTILE_DETAIL} on {day} and this repository's fix plan has "
                 "not changed since; it is not staged again until the plan changes (the base-image rows need a person)")
+    if prefix == CARGO_FUTILE_DETAIL:
+        return (f"{HELD_PREFIX}stage-cargo found {CARGO_FUTILE_DETAIL} on {day} and this repository's fix plan has "
+                "not changed since; it is not staged again until the plan changes (the rest needs a person)")
     if prefix == MAJOR_FUTILE_DETAIL:
         return (f"{HELD_PREFIX}stage-major found {MAJOR_FUTILE_DETAIL} on {day} and this repository's fix plan has "
                 "not changed since; it is not staged again until the plan changes (the rest needs a person)")
@@ -156,6 +164,43 @@ def major_next_since(target: str, rows: list[dict[str, Any]]) -> str:
     if any(r.get("op") == "stage-major" and r.get("target") == target for r in rows[last + 1:]):
         return ""
     return found[0]
+
+
+def major_beside_since(target: str, rows: list[dict[str, Any]]) -> str:
+    """Return the day ``target``'s non-major fix PR was opened, when ``stage-major`` is next beside it (vfr-b.B2).
+
+    A plan with both ``fix`` and ``major-held`` rows never reaches :func:`major_next_since`: its ``stage-fix``
+    succeeds, so it is never held, and the major rows were never requested while a patch row existed. Once the
+    ``fix`` rows have their PR, ``stage-major`` can stage the major rows as a second branch beside it (its own
+    ``close-superseded`` lane, :func:`.ops.lane_of`, so neither PR closes the other). That is: ``target``'s last
+    ``open-pr`` ``done`` row opened (or claimed) a PR that is neither ``major`` nor ``image``, the current fix plan
+    is the one of that day (a changed plan means new ``fix`` rows to stage first), and no ``stage-major`` row of any
+    kind follows it. The caller still checks the plan for major rows ``stage-major`` can take.
+
+    Args:
+        target: Canonical repository path.
+        rows: Ledger rows, in ledger order.
+
+    Returns:
+        The local date (``YYYY-MM-DD``) of that ``open-pr`` result, or "".
+    """
+    last = None
+    for i, r in enumerate(rows):
+        if r.get("op") == "open-pr" and r.get("target") == target and r.get("kind") == "done":
+            last = i
+    if last is None:
+        return ""
+    try:   # a truncated or odd detail is unknown, never read as the deps lane: nothing is marked
+        readable = isinstance(json.loads(str(rows[last].get("detail", ""))), dict)
+        day = datetime.fromisoformat(str(rows[last]["ts"])).astimezone().date().isoformat()
+    except (KeyError, ValueError):
+        return ""
+    if not readable or ops.lane_of(rows[last]) != "deps":   # a MAJOR or base-image PR is not the fix PR
+        return ""
+    if any(r.get("op") == "stage-major" and r.get("target") == target for r in rows[last + 1:]):
+        return ""
+    then, now = plan_digest(target, day), plan_digest(target)
+    return day if then and then == now else ""
 
 
 def _read_held() -> dict[str, str]:

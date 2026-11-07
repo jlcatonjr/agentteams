@@ -1,0 +1,8 @@
+{
+  "patch_id": "64f0c101f682cea9acd57eda98a9c02a8f42ae25",
+  "commit": "ad3784c821d0b44f7a7a5146561de54dadc5466c",
+  "subject": "fix(vulnscan): P9 review fixes (D6 hold renewal, C4 reject clock, yanked crates, hygiene)",
+  "impact": "3 symbols added, 1 symbols removed",
+  "note": "P9 repo levers on feat/vfr-remediation: npm_kept, handoff_stale, cargo_fix, writer_prs; stage-cargo op; open_prs.staging_claims removed; unreviewed",
+  "recorded_at": "2026-11-03T02:03:49Z"
+}

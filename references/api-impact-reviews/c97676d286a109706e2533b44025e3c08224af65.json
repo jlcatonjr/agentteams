@@ -1,0 +1,8 @@
+{
+  "patch_id": "c97676d286a109706e2533b44025e3c08224af65",
+  "commit": "d75b2f722be9c804aab5c2f579217ad64312662b",
+  "subject": "feat(vulnscan/server-kit): distro sources, not-live labels, held interpreters (vfr A1, E1, E2b, R4)",
+  "impact": "3 symbols added",
+  "note": "vfr A1/E1/E2b/R4: engine.apply_scopes, requires_python, held_by_interpreter added; Finding.location_labels additive; docs updated",
+  "recorded_at": "2026-11-02T21:50:22Z"
+}
