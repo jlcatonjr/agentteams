@@ -438,6 +438,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--update` against a bridge target refuses before rendering.** The refusal printed after "Rendering templates…",
   so a claude or goose dry run over a bridge looked like a render crash.
 - New test: `--update --merge --dry-run` leaves the whole project tree byte-identical (copilot-vscode, claude, goose).
+
 ### security (sandbox switches and WASM)
 
 - **Turning a sandbox off is governed.** Five transitions are constraint-relaxing effects (Rule 15):
@@ -735,6 +736,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signing, verification), `known_report.py` (loading, voids, grading), `known_cli.py`; `vulnscan-known` joins
   `action_ids.GATE_ACTIONS`. No entry is created by this change (K4 is not
   cleared).
+
 ### changed (WASM: native Windows is not supported for now)
 
 - **Native Windows is not supported for WASM for now.** With WASM on, a render on native Windows now also prints and

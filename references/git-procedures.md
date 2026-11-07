@@ -521,6 +521,10 @@ bash scripts/check-durable-tmp-refs.sh
 (`git log --first-parent --merges --format='- %s' origin/main..origin/dev`). Fix failures on `dev`. Merge with a
 **merge commit**, never squash or rebase. Verify CI and the Pages deploy, then `git merge --ff-only origin/main` on `dev`.
 
+`dev` must be a **protected branch** (no deletion, no force push; no required checks or reviews, so local merges
+still push). With `delete_branch_on_merge` on, GitHub deletes a release PR's head branch when it merges, and only
+protection exempts it: release #398 (2026-11-07) deleted an unprotected `dev`, which was recreated at `main`.
+
 **Hotfix:** `hotfix/<topic>` from `origin/main`, then a PR to `main`, then merge it. Straight after,
 `git switch dev && git merge origin/main && git push origin dev`.
 
