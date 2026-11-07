@@ -1,0 +1,8 @@
+{
+  "patch_id": "96e2550478d7ad5019076bde6b5afea57c2ca59e",
+  "commit": "9f1283be151ef453f9d469ea84a9c8c810387bf4",
+  "subject": "fix: cite the constraint-relaxing rule by name; C-2 waiver wording; shared-checkout rule; known limitations",
+  "impact": "2 schemas changed",
+  "note": "9f1283be (fix/peer-findings-rule-name-b81), reviewed at release time 2026-11-07: both schema changes are description text only ('Rule 15' -> 'constraint-relaxing-authorizations rule'); with every description key removed both schemas are identical before and after, so no contract, API page or example changes.",
+  "recorded_at": "2026-11-07T12:28:47Z"
+}
