@@ -17,6 +17,12 @@ settings reference). This module owns one managed block holding up to two of the
   control is DECLARED. An operator's own ``[permission]`` table is never touched: TOML allows one, so the block
   then omits it and says so.
 
+With ``grok:mcp`` on, the block owns ``[mcp_servers]``, so other ``[mcp_servers.*]`` tables outside it are replaced and
+reported. The one exception is agentteams' own ``agentteams_wasm`` table, which the operator merges from the inert
+example and agentteams never writes (Grok is example-only). It survives only while it equals the table this render
+computes (``keep_if_exact``, bounded by :func:`_keep_problems`); a copy that differs is replaced and reported like
+any other (remediation row wasm-hosts, gap 2).
+
 Writes go through :func:`codex_mcp_emit.splice_managed_toml` (content-preservation check: every other key must
 survive, or nothing is written) and refuse a symlinked ``.grok`` or config file. @security step-12b
 (tmp/by-week/2026-W42/grok-integration.plan.md §12.1).
@@ -65,7 +71,56 @@ class GrokConfigResult:
     wired: list[str] = field(default_factory=list)
     not_wired: dict[str, str] = field(default_factory=dict)
     dropped_unmanaged: list[str] = field(default_factory=list)
+    #: Outside ``[mcp_servers.*]`` tables kept because they equal the ``keep_if_exact`` table (``agentteams_wasm``).
+    kept_unmanaged: list[str] = field(default_factory=list)
     permission_written: bool = False
+
+
+#: The only outside tables ``keep_if_exact`` may name, and the exact keys each may hold (the inert example's shape).
+_KEEPABLE_IDS = ("agentteams_wasm",)
+_KEEPABLE_KEYS = frozenset({"command", "args"})
+
+
+def _is_session_launch(command: object, args: object) -> bool:
+    """True iff ``command``/``args`` are exactly a compute-only ``_session`` launch of the installed server.
+
+    Only the team's languages and the pins hash vary between renders, so the list is rebuilt from those two values
+    with ``wasm_mcp.launch_args`` and must match element for element. No spelling of a grant (``--read=/``, an
+    argparse prefix such as ``--rea``, a second ``--agent``) survives that. The interpreter must be one of the fixed
+    ``runner_mcp.SYSTEM_PYTHONS``.
+    """
+    from agentteams import wasm_exec, wasm_mcp
+    from agentteams.runner_mcp import SYSTEM_PYTHONS
+
+    if command not in SYSTEM_PYTHONS or not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+        return False
+    head = [*wasm_mcp.PYTHON_FLAGS, wasm_mcp.PROTECTED_PATH, "--agent", wasm_mcp.SESSION_AGENT, "--languages"]
+    try:
+        if args[:len(head)] != head:
+            return False
+        languages = args[len(head)].split(",")
+        pins = args[args.index("--pins-sha256") + 1]
+        return args == wasm_mcp.launch_args(wasm_mcp.SESSION_AGENT, wasm_exec.COMPUTE_ONLY, languages, pins_sha=pins)
+    except (IndexError, ValueError):
+        return False
+
+
+def _keep_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
+    """Why ``keep_if_exact`` is not exactly agentteams' compute-only ``agentteams_wasm`` example table (or ``[]``).
+
+    Only ``mcp_servers.agentteams_wasm``; keys exactly ``command``/``args``; and those are exactly a compute-only
+    ``--agent _session`` launch (:func:`_is_session_launch`).
+    """
+    problems: list[str] = []
+    for name, fields in tables.items():
+        sid = name.split(".", 1)[1] if name.startswith("mcp_servers.") else ""
+        if sid not in _KEEPABLE_IDS:
+            problems.append(f"keep_if_exact: {name!r} is not an agentteams first-party server")
+            continue
+        if (not isinstance(fields, dict) or set(fields) != _KEEPABLE_KEYS
+                or not _is_session_launch(fields.get("command"), fields.get("args"))):
+            problems.append(f"keep_if_exact: {name} is not the canonical compute-only agentteams_wasm table")
+    return problems
 
 
 def grok_mcp_enabled(features: list[str]) -> bool:
@@ -204,6 +259,7 @@ def emit_grok_config(
     features: list[str],
     output_root: Path,
     dry_run: bool = False,
+    keep_if_exact: dict[str, dict[str, Any]] | None = None,
 ) -> GrokConfigResult:
     """Write the agentteams-managed block of ``<output_root>/.grok/config.toml``.
 
@@ -212,13 +268,22 @@ def emit_grok_config(
         features: Active host-feature tokens (``grok:mcp`` and/or ``grok:sandbox``).
         output_root: The project root.
         dry_run: When True, compute without writing.
+        keep_if_exact: ``{"mcp_servers.agentteams_wasm": {command, args}}`` from
+            ``frameworks._wasm_wiring.grok_kept_tables``, or None. An outside table with that name survives a
+            ``grok:mcp`` render only when it equals these fields; it is never written by this function.
 
     Returns:
         :class:`GrokConfigResult`; ``errors`` is non-empty when the write was refused.
 
     Raises:
         OSError: The config cannot be read or written.
+        ValueError: A ``keep_if_exact`` entry that is not the canonical compute-only ``agentteams_wasm`` table, or
+            an existing agentteams-managed block that does not parse as TOML.
     """
+    keep = dict(keep_if_exact or {})
+    problems = _keep_problems(keep)
+    if problems:
+        raise ValueError("; ".join(problems))
     result = GrokConfigResult()
     root = Path(output_root)
     out_path = root / GROK_CONFIG_REL
@@ -270,14 +335,39 @@ def emit_grok_config(
     # removes its table from the block, which the preservation check must not read as an outside edit.
     owned = tuple(sorted({*(k for k, on in (("mcp_servers", want_mcp), ("permission", result.permission_written))
                             if on), *_previous_block_keys(existing_text)}))
-    result.dropped_unmanaged = sorted(
-        set((outside.get("mcp_servers") or {}).keys()) - set(result.wired)) if want_mcp else []
-    strip = strip_unmanaged_mcp_tables if want_mcp else None
-    splice = splice_managed_toml(out_path, render_tables(tables), owned_keys=owned, header=_MANAGED_HEADER,
-                                 footer=_MANAGED_FOOTER, strip_unmanaged=strip, dry_run=dry_run)
+    outside_servers = outside.get("mcp_servers") or {}
+    # A kept id the block also wires would be a duplicate table, so the block's copy wins and the outside one goes.
+    kept = sorted(name.split(".", 1)[1] for name, fields in keep.items()
+                  if name.split(".", 1)[1] not in result.wired and outside_servers.get(name.split(".", 1)[1]) == fields
+                  ) if want_mcp else []
+    strip = (lambda text: strip_unmanaged_mcp_tables(text, keep=kept)) if want_mcp else None
+
+    def _splice(dry: bool) -> Any:
+        return splice_managed_toml(out_path, render_tables(tables), owned_keys=owned, header=_MANAGED_HEADER,
+                                   footer=_MANAGED_FOOTER, strip_unmanaged=strip, dry_run=dry)
+
+    splice = _splice(True)  # judge the text first: the report and the refusal below come from what would be written
     if splice.error:
         result.errors.append(splice.error)
         return result
+    if want_mcp:
+        after = tomllib.loads(splice.new_text).get("mcp_servers") or {}
+        # The strip matches only a bare "[mcp_servers.<id>]" header; a table spelled otherwise ("[ mcp_servers.x ]")
+        # would survive it unseen, outside the block that owns [mcp_servers], so refuse rather than report it dropped.
+        survivors = sorted(set(after) - set(result.wired) - set(kept))
+        if survivors:
+            result.errors.append(f"{out_path}: [mcp_servers.*] {', '.join(survivors)} outside the agentteams-managed "
+                                 "block is spelled in a way the strip does not match (for example a spaced or quoted "
+                                 "header), so it would survive a render that owns [mcp_servers]; nothing was written. "
+                                 "Rewrite its header as [mcp_servers.<id>], or remove it.")
+            return result
+        result.kept_unmanaged = [sid for sid in kept if after.get(sid) == outside_servers.get(sid)]
+        result.dropped_unmanaged = sorted(set(outside_servers) - set(after))
+    if not dry_run:
+        splice = _splice(False)
+        if splice.error:
+            result.errors.append(splice.error)
+            return result
     result.written.append(str(out_path))
     return result
 

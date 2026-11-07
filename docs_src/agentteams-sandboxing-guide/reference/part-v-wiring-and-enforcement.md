@@ -169,7 +169,7 @@ Ed25519-signed grant** verified at start: purpose-tagged, bound to the agent, to
 and the installed server's sha256, at most 30 days, at most 500 writes, read from a custody-checked
 operator file outside the project — and more than **3** active grants activates none. An unsigned
 `approval: "direct"` acts as staged. **Deletes are always staged.** A direct grant is a constraint-relaxing change
-(Rule 15) — hence the asymmetric signature and the caps.
+(constraint-relaxing-authorizations rule) — hence the asymmetric signature and the caps.
 
 ### Audit, wiring check, interop
 

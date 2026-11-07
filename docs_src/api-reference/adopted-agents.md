@@ -58,8 +58,8 @@ never applies it automatically, because adding an entry widens what the orchestr
 | Clearance | A decision row, never a waiver, for action `adopt-orphans-merge` (an `overwrite` row does not satisfy it) |
 | Scope | `scope` must be exactly `adopt-orphans-merge` |
 | Exact grant | `effect_grants` must equal exactly `agents:<slug>` for each slug this run adds; a superset or subset refuses and names the difference |
-| Signature | Declaring a grant makes Rule 15 require the operator's Ed25519 signature; `scope` and `effect_*` are inside the signed payload |
-| Cap | The Rule 15(d) aggregate cap (`exception_registry.assert_within_aggregate_cap`) is checked first |
+| Signature | Declaring a grant makes the constraint-relaxing-authorizations rule require the operator's Ed25519 signature; `scope` and `effect_*` are inside the signed payload |
+| Cap | The aggregate cap (`exception_registry.assert_within_aggregate_cap`; constraint-relaxing-authorizations rule, clause d) is checked first |
 | Consumption | The clearance is spent once, on the real run; `--dry-run` never spends it |
 | Write | The orchestrator is backed up, only the missing slugs are appended (sorted), nothing else in the file changes, and a re-run adds nothing |
 | Record | Each applied run appends `applied_at, orchestrator, added, clearance_date, key_id, signature_prefix` to `references/adopt-orphans-merge.log.csv` |

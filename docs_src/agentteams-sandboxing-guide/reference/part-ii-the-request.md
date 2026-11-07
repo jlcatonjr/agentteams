@@ -37,7 +37,7 @@ back on; the control-plane stubs a sibling team's launcher needs are still emitt
 boundary under `cooperative` and counts as the explicit opt-in that flips the gate hook fail-closed.
 Precedence: `--os-sandbox` > an explicit `--target-host-features <fw>:sandbox` > the brief's
 `os_sandbox` > the profile > any `*:sandbox` token; `--os-sandbox off` with an explicit token is refused.
-Turning the boundary off is constraint-relaxing (Rule 15): in a governed workspace (strict decision
+Turning the boundary off is constraint-relaxing (see the constraint-relaxing-authorizations rule): in a governed workspace (strict decision
 signing, on by default) it needs an operator Ed25519-signed decision `sandbox-os-off:<framework>`;
 elsewhere it prints `SANDBOX RELAXATION` and is recorded in the build-log `sandbox_state`. It is refused
 with `write_policy: orchestrator-only`. A typo fails closed, like the profile.

@@ -3,7 +3,7 @@
 Operator-signed direct-write grants (phase R5 of `references/plans/mcp-mediated-agent-writes.plan.md`). An agent
 writing through the `agentteams_runner` MCP server is **staged** by default: the orchestrator approves each write. A
 brief `mcp_grants` entry with `approval: "direct"` only *asks* for the agent's writes to land at once. That would
-remove the orchestrator's look at each write, a constraint-relaxing change (Rule 15), so the runner does it **only** with a
+remove the orchestrator's look at each write, a constraint-relaxing change (constraint-relaxing-authorizations rule), so the runner does it **only** with a
 verified operator-signed grant.
 
 > Source: `agentteams/mcp_direct_grants.py` (integrity-pinned). Operator commands are in

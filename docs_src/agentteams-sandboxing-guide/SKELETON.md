@@ -515,7 +515,7 @@ sandbox.)*
    start (purpose-tagged; bound to the agent, tools, scopes, gates and the server's sha256; ≤30 days;
    ≤500 writes; at most 3 active grants, or none is used; read from an operator-owned file outside the
    project, custody-checked). An unsigned `approval: "direct"` acts as staged. **Deletes are always
-   staged.** A direct grant is treated as a constraint-relaxing change (Rule 15), hence the asymmetric
+   staged.** A direct grant is treated as a constraint-relaxing change (constraint-relaxing-authorizations rule), hence the asymmetric
    signature and the caps.
 6. **Audit and wiring check.** `AR_WRITE_POLICY` (`audit_agent_contract`, importing the generator's
    read-only token set so they cannot drift) flags any non-orchestrator agent that can write, dispatch,
@@ -778,7 +778,7 @@ flowchart TD
 
 ### SB26 — Turning a sandbox off is governed (D7)  ✅
 **Canonical facts.**
-1. Five transitions are **constraint-relaxing** (Rule 15): `sandbox-os-off`, `sandbox-wasm-off` (WASM
+1. Five transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule): `sandbox-os-off`, `sandbox-wasm-off` (WASM
    off after on, and the model-substrate floor lowered), `wasm-grant-widen`, `native-exec-keep` and
    `wasm-to-os-switch` (a runner `confined_programs` entry moved from `sandbox: wasm` back to `os`).
    Gate action ids are `<kind>:<framework>` (or `:model-substrate`, or `:<agent>` for the runner

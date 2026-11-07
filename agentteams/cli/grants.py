@@ -3,7 +3,7 @@
 A capability grant is a signed, scoped, time-bounded authorization by one team
 (``issuer_team``) for another (``holder_team``) to perform an operation on a specific
 path in the issuer's workspace. It is the cross-workspace analogue of a security waiver,
-but inverted in intent: a waiver *lifts a stop* (clearance to proceed past a HALT); a
+but inverted in intent: a waiver *lifts a stop* (clears a gate block, never a HALT: C-2); a
 grant *permits a reach* (widens a boundary). They are kept as separate ledgers for that
 reason — see ``security_gate.py`` for the waiver side.
 
@@ -404,7 +404,7 @@ def _assert_approver_on_roster(approver: str, output_dir: Path) -> None:
     or names no approver, ``_approved_decision_authors`` falls back to the built-in
     ``{security, @security}`` default (decision_log.py), which lets a grant naming
     ``@security`` as its own approver self-clear. That fallback is correct for ordinary
-    local HALT-clearance but unsafe for cross-workspace widening (P2-2, C-5): a grant that
+    local gate clearance but unsafe for cross-workspace widening (P2-2, C-5): a grant that
     widens another repo's write boundary must be cleared by a recorded, project-chosen
     principal, never by an unrecorded default. So this grant chokepoint hard-errors
     (fail-closed) when no approver roster is present.

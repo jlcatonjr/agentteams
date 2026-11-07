@@ -5,6 +5,7 @@ Plan tmp/by-week/2026-W42/grok-integration.plan.md §12 (P2-A..E) and the @secur
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import tomllib
@@ -168,3 +169,70 @@ def test_launcher_protects_grok_whole_and_warns() -> None:
     dirs = re.search(r"CONTROL_PLANE_DIRS_REL=\(([^)]*)\)", text).group(1).split()
     assert ".grok" in dirs
     assert re.search(r"^grok_config_warn$", text, re.M), "grok_config_warn is defined but never called"
+
+
+# Row wasm-hosts gap 2: keep_if_exact is bounded to the canonical compute-only agentteams_wasm table ------------------
+
+def _wasm_table(**kw) -> dict:
+    """A compute-only ``_session`` launch, as ``_wasm_wiring.grok_kept_tables`` computes it."""
+    from agentteams import wasm_exec, wasm_mcp
+
+    args = wasm_mcp.launch_args(wasm_mcp.SESSION_AGENT, wasm_exec.COMPUTE_ONLY, ["python"], pins_sha="ab" * 32)
+    return {"command": "/usr/bin/python3", "args": args, **kw}
+
+
+def _args_with(*extra: str, at: int | None = None) -> list[str]:
+    args = list(_wasm_table()["args"])
+    args[len(args) if at is None else at:len(args) if at is None else at] = list(extra)
+    return args
+
+
+@pytest.mark.parametrize("keep, why", [
+    ({"mcp_servers.pg": {"command": "npx"}}, "not an agentteams first-party server"),
+    ({"mcp_servers.agentteams_wasm": _wasm_table(env={})}, "canonical"),
+    ({"mcp_servers.agentteams_wasm": _wasm_table(command="/tmp/python3")}, "canonical"),
+    ({"mcp_servers.agentteams_wasm": _wasm_table(args=_args_with("--read", "/"))}, "canonical"),
+    ({"mcp_servers.agentteams_wasm": _wasm_table(args=_args_with("--read=/"))}, "canonical"),
+    ({"mcp_servers.agentteams_wasm": _wasm_table(args=_args_with("--rea", "/", at=9))}, "canonical"),
+    ({"mcp_servers.agentteams_wasm": _wasm_table(args=_args_with("--agent", "navigator"))}, "canonical"),
+    ({"mcp_servers.agentteams_wasm": _wasm_table(args=["-I", "x.py", "--agent", "navigator"])}, "canonical"),
+])
+def test_keep_if_exact_refuses_anything_but_the_compute_only_table(tmp_path: Path, keep: dict, why: str) -> None:
+    with pytest.raises(ValueError, match=why):
+        emit_grok_config(servers=[_server()], features=["grok:mcp"], output_root=tmp_path, keep_if_exact=keep)
+    assert not (tmp_path / ".grok").exists()
+
+
+def test_an_operator_server_cannot_claim_the_kept_id(tmp_path: Path) -> None:
+    """The schema forbids ``_`` in server_id, so no wired table can collide with the kept agentteams_wasm one."""
+    table = _wasm_table()
+    (tmp_path / ".grok").mkdir()
+    body = "".join(f"{k} = {json.dumps(v)}\n" for k, v in table.items())
+    (tmp_path / ".grok" / "config.toml").write_text(f"[mcp_servers.agentteams_wasm]\n{body}", encoding="utf-8")
+    res = emit_grok_config(servers=[_server(server_id="agentteams_wasm")], features=["grok:mcp"],
+                           output_root=tmp_path, keep_if_exact={"mcp_servers.agentteams_wasm": table})
+    assert res.errors and "server_id" in res.errors[0] and not res.wired
+    assert _cfg(tmp_path)["mcp_servers"]["agentteams_wasm"] == table  # left exactly as the operator merged it
+
+
+def test_keep_if_exact_dry_run_reports_without_writing(tmp_path: Path) -> None:
+    table = _wasm_table()
+    (tmp_path / ".grok").mkdir()
+    body = "".join(f"{k} = {json.dumps(v)}\n" for k, v in table.items())
+    text = f"[mcp_servers.agentteams_wasm]\n{body}\n[mcp_servers.mine]\ncommand = \"x\"\n"
+    (tmp_path / ".grok" / "config.toml").write_text(text, encoding="utf-8")
+    res = emit_grok_config(servers=[_server()], features=["grok:mcp"], output_root=tmp_path, dry_run=True,
+                           keep_if_exact={"mcp_servers.agentteams_wasm": table})
+    assert res.kept_unmanaged == ["agentteams_wasm"] and res.dropped_unmanaged == ["mine"]
+    assert (tmp_path / ".grok" / "config.toml").read_text(encoding="utf-8") == text
+
+
+def test_an_unmatched_spelling_outside_the_block_refuses_the_write(tmp_path: Path) -> None:
+    """@security 2026-11-05: a spaced header escapes the strip, so it is refused, never reported as replaced."""
+    (tmp_path / ".grok").mkdir()
+    text = "[ mcp_servers.mine ]\ncommand = \"x\"\n"
+    (tmp_path / ".grok" / "config.toml").write_text(text, encoding="utf-8")
+    res = emit_grok_config(servers=[_server()], features=["grok:mcp"], output_root=tmp_path,
+                           keep_if_exact={"mcp_servers.agentteams_wasm": _wasm_table()})
+    assert res.errors and "mine" in res.errors[0] and not res.written and not res.dropped_unmanaged
+    assert (tmp_path / ".grok" / "config.toml").read_text(encoding="utf-8") == text

@@ -312,7 +312,7 @@ def _orchestrator_section(manifest: dict[str, Any], framework: str, slug: str, *
         "their shell, and whether the host enforces it, is in the `[WASM-ENFORCEMENT]` notice and `wasm_enforcement`.\n"
         f"- **Grant changes go to `@security` first:** widening a grant (read paths, scratch), adding a "
         "`native_exec_keep` entry or setting `native_exec: keep`, turning WASM off, or moving a confined program "
-        f"from `sandbox: wasm` back to `os` ({_relaxations()}). Each relaxes a constraint (Rule 15): in a governed "
+        f"from `sandbox: wasm` back to `os` ({_relaxations()}). Each relaxes a constraint (constraint-relaxing-authorizations rule): in a governed "
         "workspace it needs the operator's Ed25519 signature.\n"
         + _DATA_LINE + "\n"
         + _ENFORCEMENT_LINE
@@ -327,7 +327,7 @@ def _security_section(manifest: dict[str, Any]) -> str:
     return (
         "\n## WASM Sandbox: Reviewing Grants and Relaxations\n\n"
         f"This team runs with the WASM sandbox on. Widened grants at this render: {widened}. Review each of these "
-        "before it proceeds; each is constraint-relaxing (Rule 15) and in a governed workspace needs the operator's "
+        "before it proceeds; each is constraint-relaxing (see the constraint-relaxing-authorizations rule) and in a governed workspace needs the operator's "
         "Ed25519 signature, never an HMAC row or an agent's say-so.\n\n"
         f"- **Grant widening (`{fx.WASM_GRANT_WIDEN}`).** A read path must be project-relative and must not hold "
         "credentials, keys or the control plane (`.agentteams/`, `.git/`, agent directories, MCP configs). A scratch "
@@ -456,7 +456,7 @@ def security_trigger_rows() -> str:
     return (
         "\n| Any change to a `wasm_sandbox` grant (read paths, scratch, limits), to `native_exec` / "
         "`native_exec_keep`, turning WASM off, or moving a `confined_programs` entry from `sandbox: wasm` to `os` | "
-        f"Capability widening (C-3) / sandbox relaxation (Rule 15: {_relaxations()}) |"
+        f"Capability widening (C-3) / sandbox relaxation (constraint-relaxing-authorizations rule: {_relaxations()}) |"
         f"\n| Any edit to `{wasm_mcp.PROTECTED_PATH}` or its bundle ({bundle} and their siblings), to "
         "`.agentteams/wasm/` (incl. `exec/` and `scratch/`), or to an `agentteams_wasm` server entry in an agent "
         "file or MCP config | Sandbox bypass: the WASM server is the boundary on its host |"
@@ -479,7 +479,7 @@ def routing_rows() -> str:
         "`run_wasm`, or the runner under its grant; never the orchestrator's shell | \"Run this script\", \"compute "
         "X\", code handed over by another agent |"
         "\n| Widen a WASM grant, keep an agent's native exec, turn WASM off, or move a program from `sandbox: wasm` "
-        "to `os` | `@security` first | Rule 15 relaxations: the operator signs them in a governed workspace |"
+        "to `os` | `@security` first | Relaxations under the constraint-relaxing-authorizations rule: the operator signs them in a governed workspace |"
     )
 
 
@@ -553,7 +553,7 @@ the strong mode: it alone executes queued commands.
 
 ## Relaxations
 
-{_relaxations()} relax a constraint (Rule 15). In a governed workspace each needs the operator's Ed25519
+{_relaxations()} relax a constraint (constraint-relaxing-authorizations rule). In a governed workspace each needs the operator's Ed25519
 signature; elsewhere generation prints a `SANDBOX RELAXATION` notice and records it.
 
 ## Provisioning and output

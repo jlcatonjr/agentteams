@@ -416,7 +416,7 @@ def validate_spec(spec: HandoffSpec) -> None:
     blob = "\n".join([*one_line, *(s.run for s in (*spec.steps, *spec.verify))])
     roots = trust_roots_named(spec)
     if roots:
-        raise HandoffError("a handoff may not write a trust root or capability grant (C-3, Rule 15(c)); the "
+        raise HandoffError("a handoff may not write a trust root or capability grant (C-3, constraint-relaxing-authorizations rule, clause c); the "
                            "operator changes these by hand: " + ", ".join(roots))
     secrets = find_secrets(blob)
     if secrets:

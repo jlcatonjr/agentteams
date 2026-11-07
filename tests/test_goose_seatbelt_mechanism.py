@@ -1,7 +1,7 @@
 """#5 (2026-09-30): the emitted goose Seatbelt profile, run under the real ``sandbox-exec``.
 
 Opt-in (``RUN_GOOSE_SEATBELT_PROBES=1``) on darwin with ``/usr/bin/sandbox-exec``: the CI
-``macos-seatbelt`` job sets it (advisory first). The workspace and the "outside" target live
+``macos-seatbelt`` job sets it (blocking since 2026-11-05). The workspace and the "outside" target live
 under ``$HOME``, never under a tmp dir the profile allows (``/private/tmp``, ``/private/var/folders``),
 so the inside-write negative control and the outside-write deny can both genuinely fail. Params
 are passed as goose's documented launch line does, with realpaths (Seatbelt matches resolved

@@ -1077,8 +1077,17 @@ def _merge_fenced_content(
             # notice "replaced" rather than "retained" under the default preserve policy.
             inner.lost_fence_bodies[_WHOLE_BODY_FENCE] = mig.old_body
             inner.migrated = True
-            inner.shrink_notices.insert(0, _wbm.migration_notice(
-                mig, has_tail=bool(_split_at_last_fence_end(existing_on_disk)[1].strip())))
+            notice = _wbm.migration_notice(
+                mig, has_tail=bool(_split_at_last_fence_end(existing_on_disk)[1].strip()))
+            # The migration replaces the reviewed `content` body, so it is a shrink the guard can release with
+            # the same content-bound entry as any other section (`--shrink-allow FILE:content@<digest>`);
+            # without this, --shrink-policy=halt pinned a layout split with no way past it (2026-11-06).
+            content_key = _shrink_key(rel_path, _WHOLE_BODY_FENCE, _existing_probe.get(_WHOLE_BODY_FENCE, ""))
+            if shrink_allow and content_key in shrink_allow:
+                inner.shrink_overridden.append(_WHOLE_BODY_FENCE)
+            else:
+                notice += f" To release it under --shrink-policy=halt after review: --shrink-allow {content_key}"
+            inner.shrink_notices.insert(0, notice)
             return inner
 
     # Reported, never applied: front matter lies outside every fence, so the merge below leaves

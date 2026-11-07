@@ -338,7 +338,7 @@
     "os_sandbox": {
       "type": "string",
       "enum": ["on", "off"],
-      "description": "Dedicated OS-sandbox switch, independent of privilege_profile (P00). Absent: derived from privilege_profile (confined/exclusive = on, cooperative = off), exactly as before. \"off\" suppresses every OS boundary agentteams emits for the selected framework (settings sandbox block, Seatbelt profile, runners, neutral launcher) while everything else privilege_profile controls stays as it is; it is refused with write_policy orchestrator-only, and it is constraint-relaxing (Rule 15): in a governed workspace (strict decision signing, on by default) it needs an operator Ed25519-signed decision sandbox-os-off:<framework>, elsewhere a SANDBOX RELAXATION notice. \"on\" emits the boundary even under cooperative. --os-sandbox overrides this key. Never touches live settings or the runner's confined_programs sandbox."
+      "description": "Dedicated OS-sandbox switch, independent of privilege_profile (P00). Absent: derived from privilege_profile (confined/exclusive = on, cooperative = off), exactly as before. \"off\" suppresses every OS boundary agentteams emits for the selected framework (settings sandbox block, Seatbelt profile, runners, neutral launcher) while everything else privilege_profile controls stays as it is; it is refused with write_policy orchestrator-only, and it is constraint-relaxing (see the constraint-relaxing-authorizations rule): in a governed workspace (strict decision signing, on by default) it needs an operator Ed25519-signed decision sandbox-os-off:<framework>, elsewhere a SANDBOX RELAXATION notice. \"on\" emits the boundary even under cooperative. --os-sandbox overrides this key. Never touches live settings or the runner's confined_programs sandbox."
     },
     "wasm_sandbox": {
       "type": "object",
@@ -783,7 +783,7 @@
       "type": "array",
       "uniqueItems": true,
       "items": {"type": "string", "enum": ["codex", "goose", "agents-md", "claude", "copilot-vscode", "copilot-cli", "grok", "wasm"]},
-      "description": "Layer-2 key (Rule 15): the agent surfaces (framework ids) the project keeps frozen; updates leave the paths each one owns (agentteams.cli.frozen_surfaces.FROZEN_SURFACE_PATHS) to the project. The working brief is not the freeze baseline: the effect classifier takes the recorded freeze state. [] or absent freezes nothing."
+      "description": "Layer-2 key (constraint-relaxing-authorizations rule): the agent surfaces (framework ids) the project keeps frozen; updates leave the paths each one owns (agentteams.cli.frozen_surfaces.FROZEN_SURFACE_PATHS) to the project. The working brief is not the freeze baseline: the effect classifier takes the recorded freeze state. [] or absent freezes nothing."
     },
     "s10_cooldown_exempt_repos": {
       "type": "array",

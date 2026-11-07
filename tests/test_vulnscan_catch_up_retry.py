@@ -15,7 +15,8 @@ import pytest
 from agentteams.vulnscan import daily, docker_readiness as dr, paths
 from agentteams.vulnscan.report import EXIT_UNSCANNED, Report
 
-TODAY = dt.date.today().isoformat()
+# No module-level TODAY: pytest imports this file at collection, and a CI run that crosses midnight then wrote the
+# run directory under yesterday's date while infra_retry_due looked under today's (2026-11-06, every test leg).
 READY = dr.Readiness()
 DOWN = dr.Readiness(cli=dr.Layer("ok"), daemon=dr.Layer("fail", dr.DAEMON, "down"))
 
@@ -36,7 +37,7 @@ def _last_run(exit_code: int, *, feed_errors: list[str], docker: dict | None = N
               infra_codes: list[str] | None = None) -> Path:
     if infra_codes is None:   # what the run records when Docker caused its feed error (daily._note_infra)
         infra_codes = [dr.DAEMON] if feed_errors == INFRA else []
-    run = paths.state_dir() / TODAY
+    run = paths.state_dir() / dt.date.today().isoformat()   # the date infra_retry_due reads, at call time
     run.mkdir(parents=True, exist_ok=True)
     (run / "summary.json").write_text(json.dumps({"feed_errors": feed_errors, "remediation": {"docker": docker or {}},
                                                   "infra_codes": infra_codes}))

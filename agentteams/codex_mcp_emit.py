@@ -74,6 +74,7 @@ from __future__ import annotations
 
 import re
 import tomllib
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -210,11 +211,25 @@ def _strip_managed_block(text: str) -> str:
     return strip_marked_block(text, _MANAGED_HEADER, _MANAGED_FOOTER)
 
 
-def strip_unmanaged_mcp_tables(text: str) -> str:
+def strip_unmanaged_mcp_tables(text: str, keep: Collection[str] = ()) -> str:
     """Remove any [mcp_servers.*] tables left outside a managed block (e.g.
     hand-authored, or from a version of this module predating the managed-
-    block marker) so a re-run replaces rather than duplicates them."""
-    return _MCP_TABLE_BLOCK_RE.sub("", text)
+    block marker) so a re-run replaces rather than duplicates them.
+
+    Args:
+        text: The config text outside the managed block.
+        keep: Server ids whose table survives, matched only on a bare ``[mcp_servers.<id>]`` header line (a quoted
+            or sub-table spelling is still stripped; callers re-check what survived).
+
+    Returns:
+        *text* without the stripped tables.
+
+    Raises:
+        Nothing.
+    """
+    kept_headers = {f"[mcp_servers.{sid}]" for sid in keep}
+    return _MCP_TABLE_BLOCK_RE.sub(
+        lambda m: m.group(0) if m.group(0).split("\n", 1)[0].strip() in kept_headers else "", text)
 
 
 @dataclass

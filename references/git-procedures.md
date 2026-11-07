@@ -526,3 +526,23 @@ bash scripts/check-durable-tmp-refs.sh
 
 **Branch tools:** `agentteams --branch-inventory` reads `dev` from the brief: `dev` is *integration* (never deleted)
 and a branch merged only into `dev` is *integrated* (kept until the release).
+
+---
+
+## H. Scripted Steps and Operator Handoffs (2026-11-04)
+
+Two failures on one day led to this section. A `cd` into a removed clone failed, and the commands after it ran a trial merge in the shared checkout. Separately, a handoff ran `gh pr merge` straight after a failed check watch, which landed a PR with red CI.
+
+- **Stop on the first failure.** Begin every multi-command step with `set -euo pipefail` and use absolute paths. Don't join dependent commands with `;`. Before writing, confirm you are where you think you are (`git branch --show-current`, or `pwd`).
+- **Mind the negated-grep trap.** Under `pipefail`, a guard like `! cmd | grep -q x` can pass falsely, because `grep -q` exits early and `cmd` gets SIGPIPE. Capture the output first, then test it.
+- **Gate every PR merge on its checks with `&&`** (release and hotfix PRs into `main`; §G). A checks command only protects a merge that is chained to it. Checks may not have started yet, and `gh pr checks` treats "no checks reported" as a failure, so wait for them first. Pin the merge to the commit that was checked:
+
+  ```bash
+  until [ -n "$(gh pr checks "$PR" 2>/dev/null)" ]; do sleep 15; done \
+  && gh pr checks "$PR" --watch --fail-fast \
+  && gh pr merge "$PR" --merge --match-head-commit "$HEAD_SHA" \
+  && git pull --ff-only
+  ```
+
+  Stop and read the output if a step fails. The `until` loop runs forever if the PR's workflows never start, so interrupt it if no checks appear after a few minutes.
+- **Test platform-specific output on every CI platform before pushing.** If a test reads a file that is generated on only one OS, set that platform in the test. When you can't run on the other OS, simulate it by patching `sys.platform`, and treat a pass as evidence, not proof: the CI job is the real test.

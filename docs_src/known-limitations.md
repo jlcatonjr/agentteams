@@ -58,6 +58,20 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   - On Codex, use the launcher, `.codex/confined-run.example.sh`.
 - **Tracking:** `STABILITY.md` section 6. Remediation log rows 386 and 396 (Goose) and 432 (Grok).
 
+### `write_policy` renders only for Claude and launcher-run Codex
+
+- **What:** `write_policy: "orchestrator-only"` needs a session sandbox that denies the runner's key directory, so
+  render accepts it only for `claude` and for `codex` (Linux and macOS, launched through
+  `.codex/confined-run.example.sh`). Without `write_policy_frameworks`, a render for `goose` (see the
+  cooperative-grants entry above), `copilot-vscode`, `copilot-cli`, `agents-md` or `grok` is refused. With it, a
+  framework not on the list renders without the switch and prints a notice. The list itself may name only
+  `claude`, `goose` and `codex`, and `goose` on it is still refused. On Linux, `--check-wiring` also refuses a
+  Claude team under the switch (next entry).
+- **Who:** teams that render for any other framework under the switch.
+- **Workaround:** set `write_policy_frameworks` to `claude` and/or `codex`; the other frameworks then render
+  without the switch.
+- **Tracking:** `write_policy.resolve` (`agentteams/write_policy.py`).
+
 ### Claude under the switch is refused on Linux
 
 - **What:** `--check-wiring` refuses a Claude team under the switch on Linux. The runner's `.agentteams-status/`
@@ -132,7 +146,7 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Tracking:** remediation log row 338 (fixed by #224). CHANGELOG `[1.0.0-rc.10]`, "1.0 must-fix set",
   "Disclosure".
 
-### The Rule 15(d) aggregate cap is not consulted for operator-signed relaxing decisions
+### The aggregate cap (constraint-relaxing-authorizations rule, clause d) is not consulted for operator-signed relaxing decisions
 
 - **What:** `exception_registry.assert_within_aggregate_cap` runs only on the adopt-merge path. Other
   Ed25519-signed relaxing decisions (cross-repo actions, grants) are bounded only by their own expiry.
@@ -141,6 +155,30 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   rows at each release or fleet round. `--audit-exceptions` covers only `references/exception-registry.json`, so it
   does not see these rows.
 - **Tracking:** remediation log row 337.
+
+### Generation-time grant widening does not consume `max_uses`
+
+- **What:** a capability grant that permits `write` widens the holder's sandbox `allowWrite` when the holder team
+  is generated. That path does not decrement `max_uses`: widening isn't a per-write event. An exhausted grant is
+  still rejected, but while a grant is valid `expires_at` is the only bound that applies.
+- **Who:** operators who issue `write` grants and expect `max_uses` to limit them.
+- **Mitigation:** bound write grants by a short `expires_at`, and do not rely on `max_uses`.
+- **Tracking:** `agentteams/cli/grants.py` module docstring ("On `max_uses`"). The field is reserved for a future
+  per-write runtime path.
+
+### Management directives are signed with one shared HMAC key
+
+- **What:** a management directive is authenticated by an HMAC-SHA256 signature under the shared
+  `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`. Constraint-relaxing decisions require the operator's Ed25519 signature
+  instead. With a symmetric key, any holder of the key can sign a directive, so the signature defeats keyless
+  injection only, not a key holder.
+- **Who:** workspaces that provision the management signing key.
+- **Mitigation:** a directive authorizes only the exact non-destructive scope it names. Scopes that would clear
+  destruction, pass a HALT, widen a capability or change governance are refused even when the signature verifies.
+  Issue the key out of band to the operator and the rostered managers only, and never let it enter an agent
+  session.
+- **Tracking:** `agentteams/cli/management_directives.py` ("Trust model (symmetric)"), and the C-4 bounded exception
+  in `agentteams/templates/universal/instruction-authority.reference.template.md`.
 
 ### A full render can't be covered by a signed `overwrite` row, because it writes CLAUDE.md
 
@@ -245,7 +283,7 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 ### New teams start a legacy six-column decision log
 
 - **What:** a fresh render seeds `references/security-decisions.log.csv` with the older six-column header, on
-  every framework. A signed row (for example a `#210` or Rule 15 row) needs the current schema.
+  every framework. A signed row (for example a `#210` or constraint-relaxing row) needs the current schema.
 - **Who:** teams that will sign decisions.
 - **Workaround:** run `--migrate-decision-log` on the team before the first signed row (see
   [Upgrading to 1.0, Step 2](migration-guide.md#step-2-upgrade-or-re-pad-a-legacy-log-migrate-decision-log)).

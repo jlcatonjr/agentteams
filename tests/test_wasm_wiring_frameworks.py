@@ -242,22 +242,117 @@ def test_check_wiring_problems_only_where_the_server_is_installed(tmp_path):
     assert ww.check_wiring_problems(tmp_path, "claude", analyze.build_manifest(BRIEF, framework="claude")) == []
 
 
+def _merged_grok_config(tmp_path, manifest, example=None):
+    """A config with the managed block plus the operator's merge of the (or a given) example, as the operator does."""
+    from agentteams.grok_config_emit import emit_grok_config
+
+    example = example or dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
+    assert not emit_grok_config(servers=[], features=["grok:sandbox"], output_root=tmp_path).errors
+    config = tmp_path / ".grok" / "config.toml"
+    config.write_text(config.read_text(encoding="utf-8") + "\n" + example, encoding="utf-8")
+    return config, tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]["agentteams_wasm"]
+
+
 @pytest.mark.parametrize("wires_a_server", [False, True])
-def test_a_merged_grok_example_survives_a_re_render_unless_grok_mcp_wires_servers(tmp_path, wires_a_server):
+def test_a_merged_grok_example_survives_a_re_render(tmp_path, wires_a_server):
+    """Row wasm-hosts gap 2: a grok:mcp render that wires a server keeps an exact merged copy instead of stripping it."""
     from agentteams.grok_config_emit import emit_grok_config
     from tests.test_grok_config_emit import _server
 
     manifest = _manifest("grok")
     example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
-    assert "grok:mcp" in example and "fresh render" in example  # warns about the drop and the missing protection
-    assert not emit_grok_config(servers=[], features=["grok:sandbox"], output_root=tmp_path).errors
-    config = tmp_path / ".grok" / "config.toml"
-    config.write_text(config.read_text(encoding="utf-8") + "\n" + example, encoding="utf-8")  # the operator's merge
-    merged = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]["agentteams_wasm"]
+    assert "grok:mcp" in example and "equals this example exactly" in example and "fresh render" in example
+    config, merged = _merged_grok_config(tmp_path, manifest, example)
     features = ["grok:mcp", "grok:sandbox"] if wires_a_server else ["grok:sandbox"]
-    res = emit_grok_config(servers=[_server()], features=features, output_root=tmp_path)
+    res = emit_grok_config(servers=[_server()], features=features, output_root=tmp_path,
+                           keep_if_exact=ww.grok_kept_tables(manifest))
     after = tomllib.loads(config.read_text(encoding="utf-8")).get("mcp_servers", {})
-    if wires_a_server:  # the managed block owns [mcp_servers]: the merged copy is replaced, and reported
-        assert "agentteams_wasm" not in after and res.dropped_unmanaged == ["agentteams_wasm"]
+    assert not res.errors and after.get("agentteams_wasm") == merged and not res.dropped_unmanaged
+    assert res.kept_unmanaged == (["agentteams_wasm"] if wires_a_server else [])
+    if wires_a_server:
+        assert "pg" in after and config.read_text(encoding="utf-8").count("[mcp_servers.agentteams_wasm]") == 1
+        again = emit_grok_config(servers=[_server()], features=features, output_root=tmp_path,
+                                 keep_if_exact=ww.grok_kept_tables(manifest))  # idempotent: still one copy
+        assert again.kept_unmanaged == ["agentteams_wasm"]
+        assert config.read_text(encoding="utf-8").count("[mcp_servers.agentteams_wasm]") == 1
+
+
+@pytest.mark.parametrize("edit", [
+    lambda t: t.replace('"--agent", "_session"', '"--agent", "_session", "--read", "/"'),   # a widened grant
+    lambda t: t.replace("[mcp_servers.agentteams_wasm]", '[mcp_servers."agentteams_wasm"]'),  # another spelling
+    lambda t: t + 'env = { X = "1" }\n',                                                     # an extra key
+])
+def test_a_merged_grok_table_that_differs_is_replaced_and_reported(tmp_path, edit):
+    from agentteams.grok_config_emit import emit_grok_config
+    from tests.test_grok_config_emit import _server
+
+    manifest = _manifest("grok")
+    example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
+    config, _ = _merged_grok_config(tmp_path, manifest, edit(example))
+    res = emit_grok_config(servers=[_server()], features=["grok:mcp"], output_root=tmp_path,
+                           keep_if_exact=ww.grok_kept_tables(manifest))
+    assert not res.errors and res.dropped_unmanaged == ["agentteams_wasm"] and not res.kept_unmanaged
+    assert "agentteams_wasm" not in tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]
+
+
+def test_without_keep_if_exact_the_merged_grok_table_is_replaced(tmp_path):
+    """WASM off (grok_kept_tables is None): the old behaviour, so a stale copy cannot linger unseen."""
+    from agentteams.grok_config_emit import emit_grok_config
+    from tests.test_grok_config_emit import _server
+
+    manifest = analyze.build_manifest(BRIEF, framework="grok")
+    assert ww.grok_kept_tables(manifest) is None and ww.WIRING_KEY not in manifest
+    config, _ = _merged_grok_config(tmp_path, _manifest("grok"))
+    res = emit_grok_config(servers=[_server()], features=["grok:mcp"], output_root=tmp_path, keep_if_exact=None)
+    assert res.dropped_unmanaged == ["agentteams_wasm"] and not res.kept_unmanaged
+
+
+def test_grok_kept_tables_is_the_example_table_and_creates_no_wiring_row():
+    manifest = _manifest("claude")  # host-scoped: a non-grok render with grok:mcp keeps the merged table too
+    tables = ww.grok_kept_tables(manifest)
+    example = dict(FRAMEWORKS["grok"]().extra_output_files(_manifest("grok")))[f"../../{ww.GROK_EXAMPLE}"]
+    assert tables == {"mcp_servers.agentteams_wasm": tomllib.loads(example)["mcp_servers"]["agentteams_wasm"]}
+    assert "grok" not in (manifest.get(ww.WIRING_KEY) or {}).get("frameworks", {})
+
+
+@pytest.mark.parametrize("tamper", [False, True])
+def test_the_cli_names_the_kept_or_replaced_wasm_table_with_the_right_remedy(tmp_path, capsys, tamper):
+    """Row wasm-hosts gap 2: the replaced-table warning no longer says "add it to mcp_servers[]" for agentteams_wasm."""
+    from agentteams.cli.artifacts import _emit_grok_config_if_enabled
+    from tests.test_grok_config_emit import _server
+
+    manifest = _manifest("grok")
+    example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
+    if tamper:
+        example = example.replace('"--agent", "_session"', '"--agent", "_session", "--read", "/"')
+    config, _ = _merged_grok_config(tmp_path, manifest, example + '\n[mcp_servers.mine]\ncommand = "x"\n')
+    manifest["host_features"] = ["grok:mcp"]
+    manifest["mcp_servers"] = [_server()]
+    _emit_grok_config_if_enabled(manifest, tmp_path)
+    out = capsys.readouterr().out
+    assert "replaced: mine (add them to mcp_servers[] to keep them)" in out  # other tables: unchanged message
+    if tamper:
+        assert "[mcp_servers.agentteams_wasm] in .grok/config.toml was replaced" in out
+        assert "Do not add agentteams_wasm to mcp_servers[]" in out and "Kept the merged" not in out
     else:
-        assert after.get("agentteams_wasm") == merged and not res.dropped_unmanaged
+        assert f"Kept the merged [mcp_servers.*] agentteams_wasm in .grok/config.toml: it equals this render's " \
+               f"{ww.GROK_EXAMPLE}" in out and "was replaced: it does not equal" not in out
+
+
+def test_the_cli_reports_an_unparseable_managed_grok_block_instead_of_aborting(tmp_path, capsys):
+    """A managed block that no longer parses as TOML is reported on stderr; the render carries on."""
+    from agentteams.cli.artifacts import _emit_grok_config_if_enabled
+    from agentteams.grok_config_emit import _MANAGED_FOOTER, _MANAGED_HEADER
+    from tests.test_grok_config_emit import _server
+
+    config = tmp_path / ".grok" / "config.toml"
+    config.parent.mkdir(parents=True)
+    broken = _MANAGED_HEADER + "[mcp_servers.x\n" + _MANAGED_FOOTER
+    config.write_text(broken, encoding="utf-8")
+    manifest = _manifest("grok")
+    manifest["host_features"] = ["grok:mcp"]
+    manifest["mcp_servers"] = [_server()]
+    _emit_grok_config_if_enabled(manifest, tmp_path)
+    err = capsys.readouterr().err
+    assert "Grok config write failed" in err and "does not parse" in err
+    assert config.read_text(encoding="utf-8") == broken  # nothing written over the operator's file

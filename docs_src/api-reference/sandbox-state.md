@@ -37,7 +37,7 @@ off; when on, True for `token=None`, for a token in `host_features`, or when the
 `legacy_os_requested` is kept for the control-plane stubs only (`control_plane_io.stubs_enabled`), which must
 never fall below what they were before the switch existed.
 
-Turning the OS sandbox off is constraint-relaxing (Rule 15): `cli/artifacts.finalize_privilege_wiring` runs the
+Turning the OS sandbox off is constraint-relaxing (see the constraint-relaxing-authorizations rule): `cli/artifacts.finalize_privilege_wiring` runs the
 P15 gate (`cli/sandbox_relaxation_gate`, engaged by `cli/os_sandbox_switch`) whenever the switch is set, the
 previous render recorded a `sandbox_state`, or the previous state had the OS sandbox on and the new one has it off
 for any reason (so `confined` -> `cooperative` over an on-disk boundary is a `sandbox-os-off:<framework>` too), and

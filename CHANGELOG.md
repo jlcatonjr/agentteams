@@ -92,6 +92,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the package's first `writer-hold` ledger row in the repository: a new PR never renews it). The plan says "held by #N" with the expiry; any gh failure holds nothing.
   `fix._leave_to_prs` moved to `writer_prs.leave_to_prs`; the unused `open_prs.staging_claims` is gone
   (`writer_prs.staging_claims` replaces it).
+
+### fix (whole-body migration: heading variants no longer duplicate, and `--shrink-allow` can release the split)
+
+- **A legacy `content` fence whose section headings differ from the template's only in case or punctuation now
+  migrates cleanly.** `## Disposition Prompt (end-of-task)` and `## Disposition prompt (end of task)` are one section.
+  Before, the old copy was treated as a section the template lacks and carried out of the fence, beside the
+  template's fenced copy. On agentteams' own pr-manager that left a stale disposition table ("Commit + push to
+  main"). With a backup dir the old copy now goes to the `.lost` sidecar and is named in the notice, exactly as an
+  exact-heading match always did. Headings that differ in level or in words are unchanged.
+- **`--shrink-policy=halt` no longer pins a layout split with no way past it.** The migration notice now prints its
+  content-bound entry (`--shrink-allow FILE:content@<digest>`), and that entry releases it while the on-disk body
+  still hashes to the reviewed digest.
+
+### fix (a grok:mcp render no longer strips the merged `agentteams_wasm` table; WASM follow-up row wasm-hosts, gap 2)
+
+- **The operator's merged `[mcp_servers.agentteams_wasm]` now survives a `grok:mcp` render**, if it equals that
+  render's `.grok/mcp.agentteams-wasm.example.toml` table exactly. Before, any render where `grok:mcp` wired a server
+  stripped it, so `run_wasm` disappeared until the operator merged it again. Grok stays `example-only`: agentteams
+  still never writes this table, it only stops deleting an exact copy. The comparison uses the table this render
+  computes, not the example on disk, which Grok does not write-protect. A copy that differs (a widened grant, an extra
+  key, another header spelling, or WASM off) is still replaced and reported.
+- **The CLI warning for a replaced `agentteams_wasm` now gives the right remedy:** check the example against a fresh
+  render and merge it again. It used to say "add them to `mcp_servers[]`", which a schema-valid server id cannot do
+  for this table. Other replaced tables keep the old message.
+- `emit_grok_config` takes `keep_if_exact`, bounded to the compute-only `agentteams_wasm` table and refusing anything
+  else with `ValueError`. `_wasm_wiring.grok_kept_tables` supplies it. `strip_unmanaged_mcp_tables` takes `keep`.
+  Supersedes the "replaces the merged table" sentence in the F3 entry below.
+
+### tests (the nested network-deny and credential-deny WASM tests run under bwrap too; WASM follow-up, bwrap deny-test row)
+
+- `test_nested_network_denied` and `test_nested_credential_store_unreadable` now have a bwrap branch next to the
+  Seatbelt one. Each builds the same `bwrap_argv` that a nested run uses, and checks a control first: the host's
+  loopback listener is reachable without `--unshare-net` and unreachable with it, and a credential directory
+  (`~/.ssh`) and file (`~/.netrc`) in a temporary `HOME` are readable unhidden and unreadable with `NEST_DENY_READS`.
+  Their `SANDBOX_ALLOW["bwrap"]` entries are gone, so the `wasm-live` skip guard fails if either skips. The Linux
+  claim now covers R5 deny_reads and network deny, not only nesting. Supersedes the F2 entry's "Seatbelt-only"
+  note below.
+
+### changed (live WASM CI jobs now block merges; WASM follow-up rows wasm-live-job-required, macos-seatbelt-job-required)
+
+- **`wasm-live` (Linux, bwrap) and `macos-seatbelt` are no longer advisory.** Both drop `continue-on-error`, so a
+  failing live WASM test, an unexpected skip, or a goose Seatbelt failure now fails the CI run. Both were green on
+  #367, #381 and the last two `main` runs. Both are required status checks in branch protection (set 2026-11-05);
+  `macos-seatbelt` is skipped on a branch push and runs on PRs, tags and manual dispatch.
+  Supersedes the F2 entry's "advisory" wording below.
+- **Test fix:** `test_the_unix_listener_admits_only_the_allowed_uid` raced on macOS. When the gateway closed a refused
+  connection before the client's write, `sendall` raised `BrokenPipeError`. That case is now treated as a refusal,
+  like `ConnectionResetError`.
+
 ### feat (opt-in integration-branch model, to cut GitHub Actions cost)
 
 - **New brief block `git_workflow`** (`branch_model`: `"trunk"` default | `"integration"`; `integration_branch`,

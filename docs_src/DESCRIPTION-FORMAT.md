@@ -189,7 +189,7 @@ Each entry:
   hook fail closed.
 
 `--os-sandbox on|off` overrides it for one run. Any other value fails closed. Turning the boundary off is
-constraint-relaxing (Rule 15): in a governed workspace (strict decision signing, on by default) it needs an
+constraint-relaxing (see the constraint-relaxing-authorizations rule): in a governed workspace (strict decision signing, on by default) it needs an
 operator Ed25519-signed decision `sandbox-os-off:<framework>`; otherwise generation prints a `SANDBOX RELAXATION`
 notice. The effective state is recorded in the build-log `sandbox_state`, and `--check-wiring` reports live config
 that still enables a sandbox. Never touches live settings or the runner's `confined_programs` sandbox.
@@ -411,7 +411,7 @@ Fields:
 | Key | Type | Meaning |
 |---|---|---|
 | `layer2_profile` | string (lowercase slug) | The Layer-2 profile the project was scaffolded with, e.g. `"scholarly"`. |
-| `frozen_surfaces` | array of framework ids (`codex`, `goose`, `agents-md`, `claude`, `copilot-vscode`, `copilot-cli`, `grok`), unique | Rule 15: the agent surfaces the project keeps frozen. A render never writes a path a frozen surface owns: rendering a frozen framework is refused, and another surface's file in a frozen path (the shared `AGENTS.md` under a Codex freeze, for one) is skipped with a notice. The effect classifier reads the recorded freeze state, not the working brief. |
+| `frozen_surfaces` | array of framework ids (`codex`, `goose`, `agents-md`, `claude`, `copilot-vscode`, `copilot-cli`, `grok`), unique | Under the constraint-relaxing-authorizations rule: the agent surfaces the project keeps frozen. A render never writes a path a frozen surface owns: rendering a frozen framework is refused, and another surface's file in a frozen path (the shared `AGENTS.md` under a Codex freeze, for one) is skipped with a notice. The effect classifier reads the recorded freeze state, not the working brief. |
 | `s10_cooldown_exempt_repos` | array of `owner/name` repository identifiers, unique | Rule S-10's local-repository carve-out (an operator ruling): the project's own interdependent repositories, whose releases may be adopted inside the 14-day cooldown. The vulnerability search, Rule S-9's signed-tag check and the latest-stable rule still apply. In a governed workspace a repository renders only with the operator's Ed25519-signed decision for `s10-cooldown-exempt:<owner/name>` (`cli/s10_exempt_gate`); otherwise it is left out with a notice. Sign it into `.github/agents`: every surface of the project (`.claude`, `.goose`, `.codex`, …) authorizes against that log and its exception registry, so one row exempts the repository on all of them, while a HALT in any surface's own log still removes it there. |
 | `researchteam_notes` | object; `exclude`: array of agent slugs | researchteam notes agents this project does not take. |
 | `governance_agents` | array of agent slugs, unique | The governance roster the Layer-2 tooling expects. Informational: agentteams still derives the generated roster itself. |
