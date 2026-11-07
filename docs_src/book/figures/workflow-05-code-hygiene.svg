@@ -73,15 +73,15 @@
 <!-- au -->
 <g id="node9" class="node">
 <title>au</title>
-<path fill="#4682b4" stroke="black" stroke-width="1.2" d="M264.45,-181.2C264.45,-181.2 147,-181.2 147,-181.2 141,-181.2 135,-175.2 135,-169.2 135,-169.2 135,-141.6 135,-141.6 135,-135.6 141,-129.6 147,-129.6 147,-129.6 264.45,-129.6 264.45,-129.6 270.45,-129.6 276.45,-135.6 276.45,-141.6 276.45,-141.6 276.45,-169.2 276.45,-169.2 276.45,-175.2 270.45,-181.2 264.45,-181.2"/>
-<text xml:space="preserve" text-anchor="middle" x="205.72" y="-157.1" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">@agent&#45;updater</text>
-<text xml:space="preserve" text-anchor="middle" x="205.72" y="-142.1" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">Update docs</text>
+<path fill="#4682b4" stroke="black" stroke-width="1.2" d="M262.45,-181.2C262.45,-181.2 145,-181.2 145,-181.2 139,-181.2 133,-175.2 133,-169.2 133,-169.2 133,-141.6 133,-141.6 133,-135.6 139,-129.6 145,-129.6 145,-129.6 262.45,-129.6 262.45,-129.6 268.45,-129.6 274.45,-135.6 274.45,-141.6 274.45,-141.6 274.45,-169.2 274.45,-169.2 274.45,-175.2 268.45,-181.2 262.45,-181.2"/>
+<text xml:space="preserve" text-anchor="middle" x="203.72" y="-157.1" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">@agent&#45;updater</text>
+<text xml:space="preserve" text-anchor="middle" x="203.72" y="-142.1" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">Update docs</text>
 </g>
 <!-- dec&#45;&gt;au -->
 <g id="edge5" class="edge">
 <title>dec&#45;&gt;au</title>
-<path fill="none" stroke="#333333" stroke-dasharray="5,2" d="M231.77,-796.05C256.07,-765.36 283.73,-720.42 283.73,-674.8 283.73,-674.8 283.73,-674.8 283.73,-284 283.73,-247.37 260.04,-212.36 238.77,-188.31"/>
-<polygon fill="#333333" stroke="#333333" points="241.05,-186.66 233.59,-182.64 236.92,-190.43 241.05,-186.66"/>
+<path fill="none" stroke="#333333" stroke-dasharray="5,2" d="M231.77,-796.05C256.07,-765.36 283.73,-720.42 283.73,-674.8 283.73,-674.8 283.73,-674.8 283.73,-284 283.73,-247.11 259.43,-212.13 237.62,-188.16"/>
+<polygon fill="#333333" stroke="#333333" points="239.81,-186.4 232.29,-182.49 235.73,-190.24 239.81,-186.4"/>
 <text xml:space="preserve" text-anchor="middle" x="296.85" y="-474.95" font-family="Helvetica,sans-Serif" font-size="11.00"> &#160;No &#160;</text>
 </g>
 <!-- ec -->
@@ -122,37 +122,37 @@
 <!-- vs -->
 <g id="node8" class="node">
 <title>vs</title>
-<path fill="#b8860b" stroke="black" stroke-width="1.2" d="M180.07,-310.8C180.07,-310.8 69.38,-310.8 69.38,-310.8 63.38,-310.8 57.38,-304.8 57.38,-298.8 57.38,-298.8 57.38,-271.2 57.38,-271.2 57.38,-265.2 63.38,-259.2 69.38,-259.2 69.38,-259.2 180.07,-259.2 180.07,-259.2 186.07,-259.2 192.07,-265.2 192.07,-271.2 192.07,-271.2 192.07,-298.8 192.07,-298.8 192.07,-304.8 186.07,-310.8 180.07,-310.8"/>
-<text xml:space="preserve" text-anchor="middle" x="124.72" y="-286.7" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">@voice&#45;style</text>
-<text xml:space="preserve" text-anchor="middle" x="124.72" y="-271.7" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">Two&#45;pass audit</text>
+<path fill="#b8860b" stroke="black" stroke-width="1.2" d="M181.95,-310.8C181.95,-310.8 61.5,-310.8 61.5,-310.8 55.5,-310.8 49.5,-304.8 49.5,-298.8 49.5,-298.8 49.5,-271.2 49.5,-271.2 49.5,-265.2 55.5,-259.2 61.5,-259.2 61.5,-259.2 181.95,-259.2 181.95,-259.2 187.95,-259.2 193.95,-265.2 193.95,-271.2 193.95,-271.2 193.95,-298.8 193.95,-298.8 193.95,-304.8 187.95,-310.8 181.95,-310.8"/>
+<text xml:space="preserve" text-anchor="middle" x="121.72" y="-286.7" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">@voice&#45;style</text>
+<text xml:space="preserve" text-anchor="middle" x="121.72" y="-271.7" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">Three&#45;pass audit</text>
 </g>
 <!-- aw&#45;&gt;vs -->
 <g id="edge9" class="edge">
 <title>aw&#45;&gt;vs</title>
-<path fill="none" stroke="#333333" d="M112.69,-388.39C114.97,-368.99 118.15,-341.97 120.66,-320.55"/>
-<polygon fill="#333333" stroke="#333333" points="123.44,-320.93 121.59,-312.66 117.88,-320.28 123.44,-320.93"/>
-<text xml:space="preserve" text-anchor="middle" x="126.67" y="-345.35" font-family="Helvetica,sans-Serif" font-size="11.00"> &#160;6 &#160;</text>
+<path fill="none" stroke="#333333" d="M112.1,-388.39C113.92,-368.99 116.46,-341.97 118.48,-320.55"/>
+<polygon fill="#333333" stroke="#333333" points="121.26,-320.89 119.22,-312.66 115.68,-320.37 121.26,-320.89"/>
+<text xml:space="preserve" text-anchor="middle" x="125.08" y="-345.35" font-family="Helvetica,sans-Serif" font-size="11.00"> &#160;6 &#160;</text>
 </g>
 <!-- vs&#45;&gt;au -->
 <g id="edge10" class="edge">
 <title>vs&#45;&gt;au</title>
-<path fill="none" stroke="#333333" d="M140.73,-258.79C153.32,-238.95 170.97,-211.15 184.7,-189.52"/>
-<polygon fill="#333333" stroke="#333333" points="187.02,-191.09 188.94,-182.84 182.29,-188.09 187.02,-191.09"/>
-<text xml:space="preserve" text-anchor="middle" x="176.65" y="-215.75" font-family="Helvetica,sans-Serif" font-size="11.00"> &#160;7 &#160;</text>
+<path fill="none" stroke="#333333" d="M137.93,-258.79C150.67,-238.95 168.54,-211.15 182.44,-189.52"/>
+<polygon fill="#333333" stroke="#333333" points="184.77,-191.07 186.74,-182.83 180.06,-188.05 184.77,-191.07"/>
+<text xml:space="preserve" text-anchor="middle" x="174.18" y="-215.75" font-family="Helvetica,sans-Serif" font-size="11.00"> &#160;7 &#160;</text>
 </g>
 <!-- ca -->
 <g id="node10" class="node">
 <title>ca</title>
-<path fill="#4682b4" stroke="black" stroke-width="1.2" d="M269.7,-51.6C269.7,-51.6 141.75,-51.6 141.75,-51.6 135.75,-51.6 129.75,-45.6 129.75,-39.6 129.75,-39.6 129.75,-12 129.75,-12 129.75,-6 135.75,0 141.75,0 141.75,0 269.7,0 269.7,0 275.7,0 281.7,-6 281.7,-12 281.7,-12 281.7,-39.6 281.7,-39.6 281.7,-45.6 275.7,-51.6 269.7,-51.6"/>
-<text xml:space="preserve" text-anchor="middle" x="205.72" y="-27.5" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">@conflict&#45;auditor</text>
-<text xml:space="preserve" text-anchor="middle" x="205.72" y="-12.5" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">Verify consistency</text>
+<path fill="#4682b4" stroke="black" stroke-width="1.2" d="M267.7,-51.6C267.7,-51.6 139.75,-51.6 139.75,-51.6 133.75,-51.6 127.75,-45.6 127.75,-39.6 127.75,-39.6 127.75,-12 127.75,-12 127.75,-6 133.75,0 139.75,0 139.75,0 267.7,0 267.7,0 273.7,0 279.7,-6 279.7,-12 279.7,-12 279.7,-39.6 279.7,-39.6 279.7,-45.6 273.7,-51.6 267.7,-51.6"/>
+<text xml:space="preserve" text-anchor="middle" x="203.72" y="-27.5" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">@conflict&#45;auditor</text>
+<text xml:space="preserve" text-anchor="middle" x="203.72" y="-12.5" font-family="Helvetica,sans-Serif" font-size="14.00" fill="white">Verify consistency</text>
 </g>
 <!-- au&#45;&gt;ca -->
 <g id="edge11" class="edge">
 <title>au&#45;&gt;ca</title>
-<path fill="none" stroke="#333333" d="M205.72,-129.19C205.72,-109.79 205.72,-82.77 205.72,-61.35"/>
-<polygon fill="#333333" stroke="#333333" points="208.53,-61.47 205.73,-53.47 202.93,-61.47 208.53,-61.47"/>
-<text xml:space="preserve" text-anchor="middle" x="214.72" y="-86.15" font-family="Helvetica,sans-Serif" font-size="11.00"> &#160;8 &#160;</text>
+<path fill="none" stroke="#333333" d="M203.72,-129.19C203.72,-109.79 203.72,-82.77 203.72,-61.35"/>
+<polygon fill="#333333" stroke="#333333" points="206.53,-61.47 203.73,-53.47 200.93,-61.47 206.53,-61.47"/>
+<text xml:space="preserve" text-anchor="middle" x="212.72" y="-86.15" font-family="Helvetica,sans-Serif" font-size="11.00"> &#160;8 &#160;</text>
 </g>
 </g>
 </svg>

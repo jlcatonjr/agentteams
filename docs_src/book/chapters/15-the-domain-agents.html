@@ -94,7 +94,7 @@
     <section id="sec:domain-project-agents">
       <h2>6. Domain Agents in This Project</h2>
 
-      <p>The domain agents in the illustrative team instantiate the general principles developed above. Each agent corresponds to one of the production-chain functions identified in §1: content composition, prose-quality audit, within-section cohesion repair, voice calibration, format conversion, figure generation, compilation, and citation verification.</p>
+      <p>The domain agents in the illustrative team instantiate the general principles developed above. Each of the eight agents corresponds to one of the production-chain functions identified in §1: content composition, prose-quality audit, within-section cohesion repair, voice calibration, format conversion, figure generation, compilation, and citation verification. Six are profiled below. The expert-critic and the argument-weaver, whose audit and repair functions are described in §1, have no separate profile.</p>
 
       <h3>The Book-Content Expert</h3>
 
@@ -106,7 +106,7 @@
 
       <h3>The Voice-Style Agent</h3>
 
-      <p>The voice-enforcement agent holds the inductively derived voice model and exercises exclusive constitutional authority over voice rulings: the guarantee, developed in §2, that prevents competing feedback from fragmenting the content agent's revision path. Because the model is extracted from the author's published work rather than prescribed from abstract principles of good writing, it captures the idiosyncratic regularities that make a particular voice recognizable rather than merely correct.</p>
+      <p>The voice-enforcement agent holds the inductively derived voice model and exercises exclusive constitutional authority over voice rulings: the guarantee, developed in §3, that prevents competing feedback from fragmenting the content agent's revision path. Because the model is extracted from the author's published work rather than prescribed from abstract principles of good writing, it captures the idiosyncratic regularities that make a particular voice recognizable rather than merely correct.</p>
 
       <div class="project-illustration">
         <p>In this project, the voice-style agent models James Caton's academic writing through a three-priority audit: twenty E-series codes that identify architectural editorial patterns, twenty-eight A-series codes that identify AI-generated prose signatures, and ten V-series codes that capture Caton's inductively derived voice features. After the book-content-expert drafts a chapter, the orchestrator invokes the voice-style agent to run all three passes and specify required revisions. When the conflict-auditor detects a voice-consistency issue between chapters (a logged conflict instance (BK-prefix identifier)), it logs the finding and routes it to the voice-style agent for evaluation rather than assessing the deviation directly. The editorial-pattern codes take highest priority, followed by AI-tell codes, then voice-fidelity codes. The constitutional rule establishing exclusive voice authority prohibits any other agent from issuing voice deviation rulings or modifying the voice-sample files.</p>
@@ -114,7 +114,7 @@
 
       <h3>The HTML-Document-Builder</h3>
 
-      <p>The format-bridging agent combines structural validation with format conversion: the two-function approach that §3 identifies as efficient when the conversion is straightforward enough not to warrant a dedicated conversion agent. It implements the unidirectional content-flow rule. All changes originate in the canonical authored format, and if the source contains structural anomalies that would produce incorrect output, the agent halts rather than generating a silently defective file.</p>
+      <p>The format-bridging agent combines structural validation with format conversion: the two-function approach that §4 identifies as efficient when the conversion is straightforward enough not to warrant a dedicated conversion agent. It implements the unidirectional content-flow rule. All changes originate in the canonical authored format, and if the source contains structural anomalies that would produce incorrect output, the agent halts rather than generating a silently defective file.</p>
 
       <div class="project-illustration">
         <p>In this project, the html-document-builder validates each chapter file against the structural template, which includes correct <code>&lt;article id="ch:..."&gt;</code> wrapping, properly nested <code>&lt;section id="sec:..."&gt;</code> elements, and well-formed <code>&lt;cite class="citation" data-key="..."&gt;</code> markup, then converts validated chapters to LaTeX according to the project's element-by-element mapping. The builder generates LaTeX output but never edits it, treating HTML as the only writable source.</p>
@@ -122,7 +122,7 @@
 
       <h3>The LaTeX Specialist</h3>
 
-      <p>The compilation function, which §3 distinguishes from conversion, assembles format-converted pieces into a complete publishable artifact. The compilation agent's scope is deliberately downstream: it does not touch chapter content, does not modify the conversion agent's output, and does not originate any change that would need to flow back to the canonical source. Content-level errors encountered during compilation are reported upstream through the format-conversion agent, preserving the canonical-format rule that all corrections originate in the authored format.</p>
+      <p>The compilation function, which §4 distinguishes from conversion, assembles format-converted pieces into a complete publishable artifact. The compilation agent's scope is deliberately downstream: it does not touch chapter content, does not modify the conversion agent's output, and does not originate any change that would need to flow back to the canonical source. Content-level errors encountered during compilation are reported upstream through the format-conversion agent, preserving the canonical-format rule that all corrections originate in the authored format.</p>
 
       <div class="project-illustration">
         <p>In this project, the latex-specialist receives converted <code>.tex</code> chapter files from the html-document-builder and assembles them into a compilable root document: a preamble with required packages, the chapter files included in correct order, and bibliography integration via BibTeX. It compiles the assembled manuscript across as many passes as needed to resolve labels and cross-references. Errors from content-level problems, broken cross-references, unresolvable citation commands, are reported back through the builder to the HTML source.</p>
@@ -138,7 +138,7 @@
 
       <h3>The Bibliography Manager</h3>
 
-      <p>The source-verification agent, whose architecture §4 develops, is the sole authority over the citation database and applies two-tier verification to every citation entering the work. Tier one confirms key presence, and tier two confirms metadata accuracy. An independent enforcement layer, the security agent's citation-integrity rule, operates as a constitutional backstop that catches citations bypassing the primary verification workflow.</p>
+      <p>The source-verification agent, whose architecture §5 develops, is the sole authority over the citation database and applies two-tier verification to every citation entering the work. Tier one confirms key presence, and tier two confirms metadata accuracy. An independent enforcement layer, the security agent's citation-integrity rule, operates as a constitutional backstop that catches citations bypassing the primary verification workflow.</p>
 
       <div class="project-illustration">
         <p>In this project, the bibliography-manager maintains <code>references/bibliography.bib</code> as the citation database. Tier-one verification confirms key presence before a draft is finalized. Tier-two verification confirms metadata accuracy before the entry is treated as authenticated. The bibliography-manager also maintains three topical focus-area clusters, which includes Agent-Based Models and Computation, Knowledge, Speech Acts, Community, and Governance, and Capital, Institutions, and Transaction Costs, that organize the book's primary intellectual genealogy by topic, supplying the book-content-expert with pre-organized source material during the research phase. The security agent's S-3 rule provides the independent enforcement layer: citations reaching the security checkpoint without bibliography-manager verification are flagged as constitutional violations.</p>
@@ -150,13 +150,15 @@
       </div>
     </section>
 
-    <section id="sec:domain-knowledge-concatenation">
+    <section id="sec:domain-technical-accuracy">
       <h2>7. Technical Accuracy as Comparative Design Choice</h2>
 
       <p>Technical accuracy governance can be organized in at least two valid ways. The first, used in this project, assigns a broad mandate to code-hygiene and routes remediation through content and reference specialists. The second splits that mandate into narrower code-hygiene plus technical-validator roles. The split can improve specialization when projects have deep executable-code surfaces; the broad model can improve coordination economy when prose, references, and architecture claims are tightly coupled.</p>
 
       <p>Neither arrangement is universally superior. The architectural choice is a tradeoff between specialization depth and handoff overhead. This chapter therefore treats the split as a comparative design variant rather than a normative replacement of the live system.</p>
 
+      </section>
+    <section id="sec:domain-knowledge-concatenation">
       <h2>8. Knowledge Concatenation in Production Workflows</h2>
 
       <p>Each agent contributes a knowledge type that it holds exclusively, which includes composition knowledge, prose-quality knowledge, within-section cohesion knowledge, voice knowledge, structural and format-conversion knowledge, figure-generation knowledge, compilation knowledge, citation-verification knowledge, and no other agent holds an equivalent supply of any of these types. Five of these, which includes composition, prose-quality assessment, cohesion repair, voice calibration, and citation verification, are content-domain knowledge types, organized around the project's substantive output. Three, which includes format conversion, figure generation, and compilation, are tool-domain knowledge types, organized around a production medium that recurs across projects. The knowledge types layer sequentially rather than aggregating in a central node, with each stage's contribution depending on having received the prior stage's output in the form that the prior stage's expertise produced.</p>
@@ -175,7 +177,7 @@
     <section id="sec:domain-archetype-correspondence">
       <h2>9. Domain Agents and Their Template Archetypes</h2>
 
-      <p>The production-chain agents in any project that follows this architecture each instantiate one of the domain-template archetypes in the module's <code>templates/domain/</code> library. Each archetype defines the structural profile of its function class — the tools the agent may invoke, the handoff chain it participates in, the quality floors its output must clear before advancing downstream. The book project instantiates nine of the available domain archetypes: the eight production-chain agents described in §5, each corresponding to a named archetype, plus <code>workstream-expert.template.md</code>, which the orchestrator instantiates per chapter via Workflow 2 to produce each chapter-expert agent.</p>
+      <p>The production-chain agents in any project that follows this architecture each instantiate one of the domain-template archetypes in the module's <code>templates/domain/</code> library. Each archetype defines the structural profile of its function class — the tools the agent may invoke, the handoff chain it participates in, the quality floors its output must clear before advancing downstream. The book project instantiates nine of the available domain archetypes: the eight production-chain agents described in §1, each corresponding to a named archetype, plus the component-expert archetype <code>workstream-expert.template.md</code>, whose book instance <code>chapter-expert.template.md</code> the orchestrator instantiates per chapter via Workflow 2 to produce each chapter-expert agent.</p>
 
       <div class="project-illustration">
         <p>In this project, the book-content-expert instantiates the <code>primary-producer</code> archetype: brief-driven composition with handoffs to quality-auditor, cohesion-repairer, and style-guardian in sequence. The expert-critic instantiates the <code>quality-auditor</code> archetype: read-only structural and logical audit with typed findings the archetype routes back to the composition agent. The argument-weaver instantiates the <code>cohesion-repairer</code> archetype: edit-capable within-section repair, scope-limited to the section level, handing off to the style-guardian after edits. The voice-style agent instantiates the <code>style-guardian</code> archetype: exclusive style authority with a three-priority audit protocol: editorial patterns first, AI-tell codes second, voice-fidelity codes third. The html-document-builder instantiates the <code>format-converter</code> archetype: structural validation followed by element-by-element format translation, with the constitutional constraint that the canonical source remains unmodified. The graphviz-expert instantiates the <code>visual-designer</code> archetype: tool-invocation expertise organized around a specific diagramming medium, producing finished figures that downstream agents incorporate without modification. The latex-specialist instantiates the <code>output-compiler</code> archetype: downstream assembly with content-error reporting directed back through the conversion agent to the canonical source. The bibliography-manager instantiates the <code>reference-manager</code> archetype: two-tier citation database management with constitutional enforcement as a backstop against fabricated references.</p>
