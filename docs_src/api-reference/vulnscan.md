@@ -860,7 +860,7 @@ refuses them. An existing grant does not cover `close-superseded`, `stage-major`
 signs one that names it; `grant sign --op` has no default, so no grant names an op the operator did not list.
 `stage-image` is constraint-relaxing too: it lifts the "dependency pins and lockfiles only" bound to Dockerfile
 `FROM` tags ([Base images](#base-images-stage-image)).
-`stage-major` is **constraint-relaxing** (Rule 15): it lifts `stage-fix`'s "no semver-major jump" bound, so a grant
+`stage-major` is **constraint-relaxing** (see the constraint-relaxing-authorizations rule): it lifts `stage-fix`'s "no semver-major jump" bound, so a grant
 naming `stage-fix` never implies it; like every grant, one naming it is Ed25519-signed by the operator
 ([Major upgrades](#major-upgrades-stage-major)).
 
@@ -921,7 +921,7 @@ agent's quoted rationale are both inside the body.
 `fix.fix_path(..., allow_major=True)`). The operator decided on 2026-10-31 that remediation is automatic, majors
 included, delivered as PRs that CI must pass; this op is how. It differs from `stage-fix` in these ways only:
 
-- **Grant.** Only a grant that names `stage-major` covers it (constraint-relaxing, Rule 15).
+- **Grant.** Only a grant that names `stage-major` covers it (constraint-relaxing; see the constraint-relaxing-authorizations rule).
 - **pip.** A `==` pin may move to the smallest clean release on a new major line (`PinChange.major` is set).
 - **npm.** A `major-held` package that `package.json` lists **directly** (`dependencies` or `devDependencies`) has
   its spec raised to `^<fixed version>` in place, every other byte kept (`npm_major.rewrite_specs`), and npm
@@ -979,7 +979,7 @@ The agent requests `stage-major` only for a repository whose fix plan shows `maj
 
 `stage-image REPO` (`executor.stage_fix(repo, cfg, mode="image")`, module `image_fix`) moves the `FROM` tag of an
 end-of-life base image in a Dockerfile to a supported release line of the **same** variant:
-`python:3.9-slim` → `python:3.14-slim`. It is a constraint-relaxing op of its own (Rule 15): only a grant that names
+`python:3.9-slim` → `python:3.14-slim`. It is a constraint-relaxing op of its own (constraint-relaxing-authorizations rule): only a grant that names
 it covers it, and a grant naming `stage-fix` or `stage-major` never implies it. The agent names only the
 repository; every edit is derived by the executor from the scan's own data (`images.refs`, the
 `image_fix.ELIGIBLE` table, and the endoflife.date release data `runtimes.evaluate` reads; a feed failure refuses

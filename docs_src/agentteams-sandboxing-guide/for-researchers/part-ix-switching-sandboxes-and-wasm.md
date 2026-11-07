@@ -38,7 +38,7 @@ A separate switch, `wasm_sandbox.model_substrate`, projects a floor to consumers
 
 ## Who can turn a box off (SB26)
 
-Every weakening is a **derived** constraint-relaxing effect (Rule 15), never a self-declared flag:
+Every weakening is a **derived** constraint-relaxing effect (constraint-relaxing-authorizations rule), never a self-declared flag:
 `sandbox-os-off`, `sandbox-wasm-off`, `wasm-grant-widen`, `native-exec-keep`, `wasm-to-os-switch`.
 
 The governance property to check: **"governed" is the default.** Strict decision signing

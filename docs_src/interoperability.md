@@ -115,7 +115,7 @@ enforcement-class (2) and Copilot-size (5) refusals are `--interop-from`'s.
     An agent whose grant is narrower than the surface default (any of read, search, edit, execute missing) is
     refused on a declared or none surface. `--interop-allow-cooperative SLUG[,SLUG...]` lets the operator project
     named agents anyway: each gets a "grant is cooperative on this surface" banner and a `NOT ENFORCED` notice, and
-    each opt-in is **recorded** (Rule 15) as one row in the destination team's
+    each opt-in is **recorded** (constraint-relaxing-authorizations rule) as one row in the destination team's
     `references/security-decisions.log.csv`: `action_reviewed` `interop-allow-cooperative:<framework>:<slug>`,
     verdict `RECORDED` (not an authorizing verdict, so it clears nothing), written in that log's own schema through
     `governance_logs.append_row`, with the `prev_digest` a hash-chained log requires. Without that log the opt-in

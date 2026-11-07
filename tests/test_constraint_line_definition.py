@@ -180,7 +180,12 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # disabled); per-file baseline raised 4 -> 5. Same reasoning as rules 8/9: the template is wrapped
     # whole in the `content` fence at emit. The new sandbox-handoff.reference.template.md carries its
     # own explicit fence, so it adds no file to the count. The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 176), (
+    # 176 -> 177 (2026-11-06, B81 shared checkout): +1 constraint line, git-operations.template.md
+    # Invariant rule 11 (keep a shared checkout on the default branch; branch work in a worktree; no
+    # discarding commands there; no `git worktree prune` from any checkout); per-file baseline raised
+    # 5 -> 6. Same reasoning as rules 8-10: the template is wrapped whole in the `content` fence at
+    # emit. The predicate did not move.
+    assert (len(current), sum(current.values())) == (43, 177), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
         "it was 43 / 168 after the Rule-11 addition. Explain the move, do not re-baseline."
     )

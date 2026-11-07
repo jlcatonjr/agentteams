@@ -629,7 +629,7 @@ def prepare(manifest: dict[str, Any], cai: dict[str, Any], framework: str, targe
     log = Path(target_dir) / DECISION_LOG_REL
     if policy.allow_cooperative and enforcement_class(framework, manifest) != ENFORCED and not log.is_file():
         raise ValueError(f"--interop-allow-cooperative: {log} is missing, so the opt-in for "
-                         f"{', '.join(sorted(policy.allow_cooperative))} cannot be recorded (Rule 15). Create the "
+                         f"{', '.join(sorted(policy.allow_cooperative))} cannot be recorded (constraint-relaxing-authorizations rule). Create the "
                          "destination team's decision log first")
     if framework != "goose":
         return run

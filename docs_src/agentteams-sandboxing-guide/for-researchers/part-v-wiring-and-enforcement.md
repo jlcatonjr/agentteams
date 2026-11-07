@@ -42,7 +42,7 @@ channel is derived from the directory it arrived in, not from anything the sende
 - Writes are **staged** for the orchestrator by default. Only the runner can upgrade one to a direct
   write, and only under an **operator Ed25519-signed grant** that verified at start (bound to agent,
   tools, scopes, gates and the server hash; ≤30 days, ≤500 writes, ≤3 active or none used). **Deletes
-  are always staged.** This is the repository's Rule 15 pattern: a constraint-relaxing grant must be
+  are always staged.** This is the constraint-relaxing-authorizations rule's pattern: a constraint-relaxing grant must be
   asymmetric-signed, bounded and capped.
 - `AR_WRITE_POLICY` audits that no non-orchestrator agent can still write; `--check-wiring` checks the
   live configuration the layer depends on (no shadowing server, Claude denies/`denyWrite`, Goose
