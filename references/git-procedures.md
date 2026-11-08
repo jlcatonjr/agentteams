@@ -467,10 +467,16 @@ unrecorded agentteams code.
 
   ```bash
   git fetch origin
-  git worktree add ../agentteams-wt-<topic> -b <branch> origin/dev   # origin/main only for a hotfix (§G)
+  git worktree add --no-track ../agentteams-wt/<topic> -b <branch> origin/dev   # origin/main only for a hotfix (§G)
   # ... work, commit, run the local gate, merge into dev (§G) ...
-  git worktree remove ../agentteams-wt-<topic>
+  git push origin <branch>                                                     # no -u (see below)
+  git worktree remove ../agentteams-wt/<topic>
   ```
+
+- **Sandboxed agents (Claude Code):** worktrees go under `../agentteams-wt/`, which the project sandbox lists as a
+  *literal* writable path. A wildcard entry such as `agentteams-wt-*` makes only the directory itself writable, not
+  its contents, so checkout fails there. `.git/config` is write-protected in the sandbox, so use `--no-track` and push
+  without `-u`; anything that writes upstream tracking fails with `could not lock config file`.
 
 - **Never run `git reset --hard`, `git checkout -- .` or `git clean -fd` in the shared checkout.** They discard
   other people's uncommitted or untracked work. To update it, use `git switch main` and `git pull --ff-only`,
@@ -513,7 +519,7 @@ python -m agentteams.man | diff - agentteams.1
 bash scripts/check-durable-tmp-refs.sh
 ```
 
-**Merge into `dev`:** a worktree on `dev` (`git worktree add ../agentteams-wt-dev dev` once), then
+**Merge into `dev`:** a worktree on `dev` (`git worktree add ../agentteams-wt/dev dev` once), then
 `git pull --ff-only && git merge --no-ff <branch> && git push origin dev`. Never in the shared checkout, which stays on
 `main` so editable installs render released code.
 
