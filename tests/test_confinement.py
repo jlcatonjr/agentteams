@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import multiprocessing
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -130,7 +131,8 @@ def test_declared_program_writes_its_root(project):
 def test_writes_outside_the_roots_are_refused_by_the_kernel(project, target):
     code = f"open({target!r}, 'w').write('x')"
     result = _run(project, code)
-    assert result["exit"] != 0 and "Operation not permitted" in result["stderr"] + "PermissionError"
+    # Refused by errno, not message text: EPERM (Ubuntu 24, macOS) or EROFS (Ubuntu 26) (#262).
+    assert result["exit"] != 0 and re.search(r"\[Errno (1|30)\]", result["stderr"]), result["stderr"]
     assert P.verify_ledger(project) == []
 
 

@@ -58,7 +58,15 @@ jobs:
       - name: Install package and pytest
         run: pip install -e ".[test,research]"
 
+      # #262 item 4 (remediation row LINUX-BWRAP-SKIP-GAP): without bubblewrap every live confinement test skipped
+      # here and the job still went green. Install and probe it, and make a missing bwrap fail the run.
+      - name: Install and probe bubblewrap
+        if: startsWith(matrix.os, 'ubuntu')
+        run: bash scripts/ci-bwrap-setup.sh
+
       - name: Run tests
+        env:
+          AGENTTEAMS_REQUIRE_BWRAP: ${{ startsWith(matrix.os, 'ubuntu') && '1' || '' }}
         run: pytest tests/
 
       # The full suite above installs the package EDITABLE, where source `schemas/`
@@ -166,6 +174,40 @@ jobs:
       - name: Lineage corpus provenance and regeneration
         run: pytest tests/test_template_lineage.py -v
 
+  # #262: Ubuntu 26 evidence leg. NOT a required check (the release-lines ruleset requires only the six existing
+  # names), so a red result leaves a PR UNSTABLE, not blocked. It records os-release and the bwrap version, runs the
+  # confinement suites with bwrap required, and fails if the survivor test skipped instead of running.
+  ubuntu-26-confinement:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install package and pytest
+        run: pip install -e ".[test]"
+
+      - name: Install and probe bubblewrap
+        run: bash scripts/ci-bwrap-setup.sh
+
+      - name: Evidence (os-release, bwrap, coreutils)
+        run: |
+          cat /etc/os-release
+          bwrap --version
+          ls -l /usr/bin/true; readlink -f /usr/bin/true
+          grep -q '^VERSION_ID="26' /etc/os-release || { echo "::error::not an Ubuntu 26 runner"; exit 1; }
+
+      - name: Confinement suites (bwrap required)
+        env:
+          AGENTTEAMS_REQUIRE_BWRAP: "1"
+        run: |
+          pytest tests/test_confinement.py tests/test_confinement_xcrun.py -v -rA | tee "$RUNNER_TEMP/confinement.log"
+          grep -E 'test_survivor_fails_the_run (PASSED|FAILED)' "$RUNNER_TEMP/confinement.log" \
+            || { echo "::error::test_survivor_fails_the_run did not run (skipped or missing)"; exit 1; }
+
   # Live WASM tests on Linux (WASM follow-up F2): the `test` matrix never installs wasmtime, so every live WASM test
   # skips there. This job installs bubblewrap and the pinned runtimes, then runs the live tests with wasmtime nested
   # under bwrap (os_confinement=nested, nested:bwrap). A skip guard fails the job if any test skips outside the
@@ -185,36 +227,8 @@ jobs:
       - name: Install package and pytest
         run: pip install -e ".[test]"
 
-      - name: Install bubblewrap
-        run: sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
-
-      # Ubuntu 23.10+ can restrict unprivileged user namespaces through AppArmor, which bwrap needs. Probe with the
-      # exact _sandbox_profiles.available() command. On failure, first apply the remedy a stock-Ubuntu user would
-      # (an unconfined bwrap profile that allows userns, as in scripts/test-sandbox-apparmor-userns.sh), and only
-      # if that fails relax the sysctl. Either remedy is a warning, and the outcome goes in the step summary.
-      - name: bwrap probe (AppArmor user-namespace restriction)
-        run: |
-          probe() { bwrap --ro-bind / / --dev /dev --unshare-pid --die-with-parent true; }
-          knob="$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo absent)"
-          echo "kernel.apparmor_restrict_unprivileged_userns = $knob"
-          remedy=none
-          if ! probe; then
-            printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' \
-              'profile bwrap /usr/bin/bwrap flags=(unconfined) {' '  userns,' \
-              '  include if exists <local/bwrap>' '}' \
-              | sudo tee /etc/apparmor.d/bwrap >/dev/null
-            if sudo apparmor_parser -r /etc/apparmor.d/bwrap && probe; then
-              remedy="AppArmor profile /etc/apparmor.d/bwrap (userns)"
-            else
-              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-              remedy="sysctl kernel.apparmor_restrict_unprivileged_userns=0 (the profile was not enough)"
-              probe || { echo "::error::bwrap still cannot start after both remedies"; exit 1; }
-            fi
-            echo "::warning::bwrap needed a remedy on this runner: $remedy"
-          fi
-          { echo "### bwrap / AppArmor"
-            echo "- kernel.apparmor_restrict_unprivileged_userns: $knob"
-            echo "- remedy: $remedy"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Install and probe bubblewrap (AppArmor user-namespace restriction)
+        run: bash scripts/ci-bwrap-setup.sh
 
       # The install refuses a missing project root (wasm_runtime._check_project_root).
       - name: Install the pinned WASM runtimes into a scratch project

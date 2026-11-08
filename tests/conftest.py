@@ -248,6 +248,22 @@ def pytest_sessionstart(session):  # noqa: D103
               file=sys.stderr, flush=True)
     _tree_watch["prev"] = _snapshot_watched_tree()
     _report_stale_integrity_manifest(session)
+    _require_bwrap_when_asked()
+
+
+def _require_bwrap_when_asked() -> None:
+    """Fail the run, not skip the confinement tests, when CI promises bwrap and it is unusable (#262 item 4).
+
+    Without this, a Linux runner missing bubblewrap (or blocked by AppArmor's user-namespace restriction) skips
+    every live confinement test and still goes green (remediation row LINUX-BWRAP-SKIP-GAP).
+    """
+    if os.environ.get("AGENTTEAMS_REQUIRE_BWRAP") != "1" or not sys.platform.startswith("linux"):
+        return
+    from agentteams import confinement
+
+    if confinement.available() != "bwrap":
+        raise pytest.UsageError("AGENTTEAMS_REQUIRE_BWRAP=1, but bwrap is not usable on this host, so the live "
+                                "confinement tests would skip. Install bubblewrap and run scripts/ci-bwrap-setup.sh.")
 
 
 def pytest_runtest_teardown(item, nextitem):  # noqa: D103
