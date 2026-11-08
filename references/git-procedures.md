@@ -467,10 +467,16 @@ unrecorded agentteams code.
 
   ```bash
   git fetch origin
-  git worktree add ../agentteams-wt-<topic> -b <branch> origin/dev   # origin/main only for a hotfix (§G)
+  git worktree add --no-track ../agentteams-wt/<topic> -b <branch> origin/dev   # origin/main only for a hotfix (§G)
   # ... work, commit, run the local gate, merge into dev (§G) ...
-  git worktree remove ../agentteams-wt-<topic>
+  git push origin <branch>                                                     # no -u (see below)
+  git worktree remove ../agentteams-wt/<topic>
   ```
+
+- **Sandboxed agents (Claude Code):** worktrees go under `../agentteams-wt/`, which the project sandbox lists as a
+  *literal* writable path. A wildcard entry such as `agentteams-wt-*` makes only the directory itself writable, not
+  its contents, so checkout fails there. `.git/config` is write-protected in the sandbox, so use `--no-track` and push
+  without `-u`; anything that writes upstream tracking fails with `could not lock config file`.
 
 - **Never run `git reset --hard`, `git checkout -- .` or `git clean -fd` in the shared checkout.** They discard
   other people's uncommitted or untracked work. To update it, use `git switch main` and `git pull --ff-only`,
@@ -513,13 +519,17 @@ python -m agentteams.man | diff - agentteams.1
 bash scripts/check-durable-tmp-refs.sh
 ```
 
-**Merge into `dev`:** a worktree on `dev` (`git worktree add ../agentteams-wt-dev dev` once), then
+**Merge into `dev`:** a worktree on `dev` (`git worktree add ../agentteams-wt/dev dev` once), then
 `git pull --ff-only && git merge --no-ff <branch> && git push origin dev`. Never in the shared checkout, which stays on
 `main` so editable installs render released code.
 
 **Release** (at a milestone): open the PR `dev` → `main` with the first-parent merge list
 (`git log --first-parent --merges --format='- %s' origin/main..origin/dev`). Fix failures on `dev`. Merge with a
 **merge commit**, never squash or rebase. Verify CI and the Pages deploy, then `git merge --ff-only origin/main` on `dev`.
+
+`dev` must be a **protected branch** (no deletion, no force push; no required checks or reviews, so local merges
+still push). With `delete_branch_on_merge` on, GitHub deletes a release PR's head branch when it merges, and only
+protection exempts it: release #398 (2026-11-07) deleted an unprotected `dev`, which was recreated at `main`.
 
 **Hotfix:** `hotfix/<topic>` from `origin/main`, then a PR to `main`, then merge it. Straight after,
 `git switch dev && git merge origin/main && git push origin dev`.

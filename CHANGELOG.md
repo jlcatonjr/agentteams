@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Codex write-policy fence is scoped to Codex, #249)
+
+- The `codex_write_policy` fence Codex adds to a shared repo-root `AGENTS.md` (one Goose and Grok also load) now
+  says, under its heading, that it applies to Codex sessions only and that Grok and Goose sessions ignore it.
+  Before, a Grok session could read "Write Policy: You Are the Orchestrator" as its own policy and refuse writes
+  or issue dispatches no runner serves. The heading is unchanged, and so is `v=1`: the next Codex render
+  replaces the fence's content in place.
+- `codex_write_policy` is now a framework-owned fence (`FRAMEWORK_OWNED_FENCE_IDS`, owner `codex`). An interop
+  import strips it from Claude, Copilot, Grok and Goose instructions, so a crafted CAI can no longer plant a Codex
+  write policy there; Codex's own import keeps it. The goose `AGENTS.md` co-owner carry-over is unchanged
+  (@security CX-1 finding, operator ruling 2026-11-08).
+
 ### fixed (vulnscan: a remediation PR behind its base is superseded, not claimed; operator decision 2026-11-04)
 
 - `open-pr` no longer claims an earlier day's executor PR carrying the same change when that PR does not contain the base
@@ -438,6 +450,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--update` against a bridge target refuses before rendering.** The refusal printed after "Rendering templates…",
   so a claude or goose dry run over a bridge looked like a render crash.
 - New test: `--update --merge --dry-run` leaves the whole project tree byte-identical (copilot-vscode, claude, goose).
+
 ### security (sandbox switches and WASM)
 
 - **Turning a sandbox off is governed.** Five transitions are constraint-relaxing effects (Rule 15):
@@ -735,6 +748,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signing, verification), `known_report.py` (loading, voids, grading), `known_cli.py`; `vulnscan-known` joins
   `action_ids.GATE_ACTIONS`. No entry is created by this change (K4 is not
   cleared).
+
 ### changed (WASM: native Windows is not supported for now)
 
 - **Native Windows is not supported for WASM for now.** With WASM on, a render on native Windows now also prints and
@@ -1580,6 +1594,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A config query git fails is a refusal**, not "no problem" ("git cannot read this repository's config").
 
   This closes the follow-up in #311's security review.
+
+### interop (Codex under `write_policy: "orchestrator-only"`)
+
+- **`--interop-from … --framework codex --description BRIEF` now works under the switch**, so adopted (bespoke) agents
+  can be narrowed on Codex. Before, it was refused. The 1.0.x backport is noted in known limitations; reported by
+  mathAgents.
+  - It is admitted only into a native Codex team already rendered under the switch, because Codex enforces the
+    switch only through agentteams' launcher and role gate, which interop doesn't emit. The build-log must record
+    the switch, the role gate must match its pinned hash, `.codex/hooks.json` must be agentteams', and the launcher
+    must exist. Every missing precondition is named before any write.
+  - Imported agents render read-only with the role-gate reading instructions (`privilege_profile` is carried).
+  - `mcp_grants` are kept, as native Codex generation keeps them, so granted sources still match their section.
+    They aren't honoured on Codex, and a notice says so.
+  - An imported slug that matches a native agent is an error. The check is case-insensitive and always covers
+    `orchestrator`. The import never writes `AGENTS.md`. A notice covers routing and later `--update` orphans.
+  - The `--convert-from` refusal for a Codex team under the switch now points to this import.
 
 ### vulnscan (a reply that is all reasoning)
 

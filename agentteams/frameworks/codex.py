@@ -70,8 +70,10 @@ from ._agents_md_ownership import (
     CODEX_AGENTS_MD_MARKER,
     CODEX_WRITE_POLICY_FENCE_ID,
     classify_agents_md,
+    CODEX_WRITE_POLICY_SCOPE_NOTE,
+    WRITE_POLICY_INSTRUCTIONS_HEADING,
+    codex_write_policy_block,
     codex_write_policy_decision,
-    fence_pattern,
     strip_agents_md_notice,
     symlink_on_path,
 )
@@ -650,35 +652,7 @@ def _in_team(handoffs: list[dict[str, Any]], manifest: dict[str, Any]) -> list[d
 
 #: Where the write-policy block goes for an AGENTS.md Codex may not write (relative to ``.codex/agents``).
 _WRITE_POLICY_EXAMPLE_REL = "../examples/AGENTS.codex-write-policy-block.md"
-_WRITE_POLICY_FENCE_RE = fence_pattern("write_policy")
-#: The top-level session's section heading (``write_policy._INSTRUCTIONS_SECTION``).
-WRITE_POLICY_INSTRUCTIONS_HEADING = "## Write Policy: You Are the Orchestrator"
 
-
-def codex_write_policy_block(rendered: str) -> str | None:
-    """The rendered AGENTS.md's orchestrator write-policy section, as one ``codex_write_policy`` fence.
-
-    Args:
-        rendered: Codex's rendered AGENTS.md (``write_policy.apply_instructions`` already applied).
-
-    Returns:
-        The fenced block, BEGIN and END markers included, or None when the render has no such section
-        (the switch is off for Codex).
-
-    Raises:
-        Nothing.
-    """
-    m = _WRITE_POLICY_FENCE_RE.search(rendered)
-    if m is not None:
-        inner = m.group(0).split("-->", 1)[1].rsplit("<!--", 1)[0]
-    else:
-        at = rendered.find(WRITE_POLICY_INSTRUCTIONS_HEADING)
-        inner = rendered[at:] if at >= 0 else ""
-    if WRITE_POLICY_INSTRUCTIONS_HEADING not in inner:
-        return None
-    sid = CODEX_WRITE_POLICY_FENCE_ID
-    # Bumping v= here needs a literal BEGIN marker too: interop_helpers.template_fence_versions can't see an f-string.
-    return f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n{inner.strip()}\n<!-- AGENTTEAMS:END {sid} -->"
 
 
 def agents_md_is_codex_owned(path: Path) -> bool:

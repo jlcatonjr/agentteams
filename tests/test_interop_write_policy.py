@@ -1,6 +1,6 @@
 """M6: ``--interop-from --description BRIEF`` carries write_policy and mcp_grants into an import.
 
-Adopted bespoke agents reach Claude and Goose through interop. Before this, the interop manifest had no
+Adopted bespoke agents reach Claude and Goose through interop (Codex: tests/test_interop_codex_switch.py). Before this, the interop manifest had no
 write_policy/mcp_grants, so a granted agent got no agentteams_runner block or tools while the orchestrator's queue
 refused it. Each test builds a bespoke source team the way mathAgents does (write_policy.apply on the canonical
 file), imports it, and checks the result against what native generation guarantees.
@@ -154,9 +154,10 @@ def test_an_install_outside_the_project_is_refused_before_writing(tmp_path):
     assert not target.exists() or not any(target.iterdir())
 
 
-def test_codex_is_refused_under_the_switch():
-    with pytest.raises(ValueError, match="claude and goose"):
-        manifest_fields({**BRIEF, "write_policy_frameworks": ["claude", "codex"]}, "codex")
+def test_codex_takes_the_switch_keeping_grants_as_native_does():
+    # Admitted since 2026-10-27, into a native Codex team's gate only (tests/test_interop_codex_switch.py).
+    fields = manifest_fields({**BRIEF, "write_policy_frameworks": ["claude", "codex"]}, "codex")
+    assert fields["mcp_grants"] == BRIEF["mcp_grants"] and fields["privilege_profile"] == "confined"
 
 
 def test_malformed_grants_are_refused():

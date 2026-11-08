@@ -363,6 +363,8 @@ Adapter for the OpenAI Codex CLI. Emits each agent as a Codex **custom agent**, 
   | Hand-written, Grok, agents-md, legacy-fenced or unsafe | Never written; a `MISSING` notice names the absent section, and the block is written to `.codex/examples/AGENTS.codex-write-policy-block.md` to paste in (not when `.codex/examples` is a symlink) |
 
   With the switch off, nothing changes: a non-Codex `AGENTS.md` is left untouched, and a stale `codex_write_policy` block in a goose file is named in the notice.
+
+  The fence carries `CODEX_WRITE_POLICY_SCOPE_NOTE` under its heading: the section applies to Codex sessions only, and Grok and Goose sessions reading the shared file ignore it (#249).
 - An interop import keeps `.github/agents/...` paths as they are, because interop does not copy references. Native generation rewrites them to `.codex/agents/...`.
 - Codex loads `.codex/agents/**/*.toml` only, so reference docs under `.codex/agents/references/` are ignored by Codex.
 - `codex exec --ephemeral` breaks custom-agent spawning in codex-cli 0.160.1 ("collab spawn failed: ... no rollout found for thread id"): spawned agents need the session's rollout. Run multi-agent teams without `--ephemeral`. Observed in mathAgents' live check, 2026-10-07.
