@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Before, a Grok session could read "Write Policy: You Are the Orchestrator" as its own policy and refuse writes
   or issue dispatches no runner serves. The heading is unchanged, and so is `v=1`: the next Codex render
   replaces the fence's content in place.
+- `codex_write_policy` is now a framework-owned fence (`FRAMEWORK_OWNED_FENCE_IDS`, owner `codex`). An interop
+  import strips it from Claude, Copilot, Grok and Goose instructions, so a crafted CAI can no longer plant a Codex
+  write policy there; Codex's own import keeps it. The goose `AGENTS.md` co-owner carry-over is unchanged
+  (@security CX-1 finding, operator ruling 2026-11-08).
 
 ### fixed (vulnscan: a remediation PR behind its base is superseded, not claimed; operator decision 2026-11-04)
 

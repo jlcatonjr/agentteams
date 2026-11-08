@@ -264,6 +264,7 @@ def strip_fence(text: str, fence_id: str) -> str:
 #: its importer adds the block back itself.
 FRAMEWORK_OWNED_FENCE_IDS: dict[str, str] = {
     GROK_FENCE_ID: "grok",
+    CODEX_WRITE_POLICY_FENCE_ID: "codex",  # only Codex instructions carry it (#249 follow-up, operator 2026-11-08)
     "goose_bridge_entry": "goose",
     "goose_bridge_hints": "goose",
 }

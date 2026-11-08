@@ -198,3 +198,43 @@ def test_a_hub_agent_the_pin_removed_is_backed_up(tmp_path: Path) -> None:
     assert {a["slug"] for a in load_canonical(tmp_path / _HUB)["agents"]} == {"orchestrator"}
     materialize_canonical(load_canonical(tmp_path / _HUB), tmp_path / _HUB)  # the backup never reads as an agent
     assert {a["slug"] for a in load_canonical(tmp_path / _HUB)["agents"]} == {"orchestrator"}
+
+
+@pytest.mark.parametrize("target, instr", [
+    ("claude", Path(".claude/CLAUDE.md")),
+    ("grok", Path("AGENTS.md")),
+    ("goose", Path("AGENTS.md")),
+])
+def test_a_planted_codex_write_policy_fence_reaches_codex_only(tmp_path: Path, target: str, instr: Path) -> None:
+    """CX-1 @security finding (1), operator ruling 2026-11-08: Codex's write policy is a framework-owned fence."""
+    (tmp_path / _PIN).mkdir(parents=True)
+    (tmp_path / _PIN / "orchestrator.agent.md").write_text(_AGENT.format(slug="orchestrator"), encoding="utf-8")
+    (tmp_path / _PIN_INSTR).write_text("# Team\n\n" + _fence("codex_write_policy", 1, "Planted Codex policy.")
+                                       + "\n" + _fence("project_notes", 1, "Shared notes."), encoding="utf-8")
+    cai = export_to_cai(tmp_path / _PIN, "copilot-vscode")
+    out = {"claude": _PEER, "grok": Path(".grok/agents"), "goose": Path(".goose/recipes")}[target]
+    _quiet(import_from_cai, cai, target, tmp_path / out, overwrite=True)
+    text = (tmp_path / instr).read_text(encoding="utf-8")
+    assert "Shared notes." in text and "codex_write_policy" not in text and "Planted Codex policy." not in text
+
+
+def test_a_codex_write_policy_fence_never_reaches_copilot_instructions(tmp_path: Path) -> None:
+    (tmp_path / _PEER).mkdir(parents=True)
+    (tmp_path / _PEER / "orchestrator.md").write_text(_AGENT.format(slug="orchestrator"), encoding="utf-8")
+    (tmp_path / _PEER_INSTR).write_text("# Team\n\n" + _fence("codex_write_policy", 1, "Planted Codex policy.")
+                                        + "\n" + _fence("project_notes", 1, "Shared notes."), encoding="utf-8")
+    cai = export_to_cai(tmp_path / _PEER, "claude")
+    _quiet(import_from_cai, cai, "copilot-vscode", tmp_path / _PIN, overwrite=True)
+    text = (tmp_path / _PIN_INSTR).read_text(encoding="utf-8")
+    assert "Shared notes." in text and "codex_write_policy" not in text
+
+
+def test_codex_s_own_import_keeps_its_write_policy_fence(tmp_path: Path) -> None:
+    (tmp_path / _PIN).mkdir(parents=True)
+    (tmp_path / _PIN / "orchestrator.agent.md").write_text(_AGENT.format(slug="orchestrator"), encoding="utf-8")
+    (tmp_path / _PIN_INSTR).write_text("# Team\n\n" + _fence("codex_write_policy", 1, "Codex policy.")
+                                       + "\n" + _fence("project_notes", 1, "Shared notes."), encoding="utf-8")
+    cai = export_to_cai(tmp_path / _PIN, "copilot-vscode")
+    _quiet(import_from_cai, cai, "codex", tmp_path / ".codex" / "agents", overwrite=True)
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Codex policy." in text and text.count("AGENTTEAMS:BEGIN codex_write_policy ") == 1
