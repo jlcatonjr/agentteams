@@ -67,7 +67,14 @@ jobs:
       - name: Run tests
         env:
           AGENTTEAMS_REQUIRE_BWRAP: ${{ startsWith(matrix.os, 'ubuntu') && '1' || '' }}
-        run: pytest tests/
+        # Failed test ids also go out as annotations: readable through the checks API by reviewers (and agents)
+        # that cannot download job logs.
+        run: |
+          set +e
+          pytest tests/ -rfE 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+          status=${PIPESTATUS[0]}
+          grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/pytest.log" | head -40 | sed 's/^/::error title=pytest::/'
+          exit "$status"
 
       # The full suite above installs the package EDITABLE, where source `schemas/`
       # is always on the path — which is exactly why the rc6 wheel shipping zero
@@ -204,7 +211,12 @@ jobs:
         env:
           AGENTTEAMS_REQUIRE_BWRAP: "1"
         run: |
-          pytest tests/test_confinement.py tests/test_confinement_xcrun.py -v -rA | tee "$RUNNER_TEMP/confinement.log"
+          set +e
+          pytest tests/test_confinement.py tests/test_confinement_xcrun.py -v -rA 2>&1 | tee "$RUNNER_TEMP/confinement.log"
+          status=${PIPESTATUS[0]}
+          grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/confinement.log" | head -40 | sed 's/^/::error title=pytest::/'
+          grep -E 'test_survivor_fails_the_run' "$RUNNER_TEMP/confinement.log" | head -3 | sed 's/^/::notice title=survivor::/'
+          [ "$status" = 0 ] || exit "$status"
           grep -E 'test_survivor_fails_the_run (PASSED|FAILED)' "$RUNNER_TEMP/confinement.log" \
             || { echo "::error::test_survivor_fails_the_run did not run (skipped or missing)"; exit 1; }
 
