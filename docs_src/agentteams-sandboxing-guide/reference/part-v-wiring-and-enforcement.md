@@ -187,8 +187,8 @@ operator file outside the project — and more than **3** active grants activate
   `goose` imports only.
 - **Convert and bridge stubs refuse.** `--convert-from` and bridge subagent stubs (Claude, Goose) apply none
   of that, so they refuse a team under the switch (read from its `references/build-log.json` or from
-  `--description`; a build-log that exists but is unreadable fails closed). For claude and goose they print the
-  interop command; for other convert targets, they say to regenerate natively. A bridge-only project with no native build-log is
+  `--description`; a build-log that exists but is unreadable fails closed). For claude, goose and codex they print the
+  interop command (codex: into a native Codex team rendered under the switch); for other convert targets, they say to regenerate natively. A bridge-only project with no native build-log is
   detected only through `--description`.
 - The layer's core modules (`write_policy`, the audit, the runner and its policy/staging halves, `runner_mcp` and the server, `mcp_direct_grants`, the Codex role gate) are pinned in the integrity manifest (SB18); the interop carrier `interop_write_policy` is not.
 

@@ -54,7 +54,8 @@ def _build_parser() -> argparse.ArgumentParser:
         required=False,
         default=None,
         help="Project description file (.json or .md). Required unless --self is used. With --interop-from, "
-             "supplies the target team's write_policy and mcp_grants (claude and goose imports).",
+             "supplies the target team's write_policy and mcp_grants (claude, goose and codex imports; codex "
+             "only into a native Codex team rendered under the switch).",
     )
     parser.add_argument(
         "--project", "-p",

@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Codex write-policy fence is scoped to Codex, #249)
+
+- The `codex_write_policy` fence Codex adds to a shared repo-root `AGENTS.md` (one Goose and Grok also load) now
+  says, under its heading, that it applies to Codex sessions only and that Grok and Goose sessions ignore it.
+  Before, a Grok session could read "Write Policy: You Are the Orchestrator" as its own policy and refuse writes
+  or issue dispatches no runner serves. The heading is unchanged, and so is `v=1`: the next Codex render
+  replaces the fence's content in place.
+- An interop import now strips the `codex_write_policy` fence from Claude, Copilot, Grok and Goose instructions,
+  so a crafted CAI can no longer plant a Codex write policy there; Codex's own import keeps it. The goose `AGENTS.md` co-owner carry-over is unchanged
+  (@security CX-1 finding, operator ruling 2026-11-08).
+
+### interop (Codex under `write_policy: "orchestrator-only"`)
+- **`--interop-from … --framework codex --description BRIEF` now works under the switch**, so adopted (bespoke) agents
+  can be narrowed on Codex. Before, it was refused. The 1.0.x backport is noted in known limitations; reported by
+  mathAgents.
+  - It is admitted only into a native Codex team already rendered under the switch, because Codex enforces the
+    switch only through agentteams' launcher and role gate, which interop doesn't emit. The build-log must record
+    the switch, the role gate must match its pinned hash, `.codex/hooks.json` must be agentteams', and the launcher
+    must exist. Every missing precondition is named before any write.
+  - Imported agents render read-only with the role-gate reading instructions (`privilege_profile` is carried).
+  - `mcp_grants` are kept, as native Codex generation keeps them, so granted sources still match their section.
+    They aren't honoured on Codex, and a notice says so.
+  - An imported slug that matches a native agent is an error. The check is case-insensitive and always covers
+    `orchestrator`. The import never writes `AGENTS.md`. A notice covers routing and later `--update` orphans.
+  - The `--convert-from` refusal for a Codex team under the switch now points to this import.
+
 ## [1.1.0-rc.16] - 2026-11-03
 
 ### release notes

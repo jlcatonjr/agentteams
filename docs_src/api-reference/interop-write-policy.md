@@ -3,8 +3,9 @@
 > **Goose is refused under `write_policy: "orchestrator-only"`** (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's `write`/`edit`/`shell` extensions instead of their sub-recipe's narrowed `extensions:`, so the policy can't be enforced there. `write_policy.resolve` and `--check-wiring` refuse it; use the switch on Claude (or Codex through its launcher).
 
 Carries the target brief's `write_policy` and `mcp_grants` into an interop import (`--interop-from DIR --framework
-claude|goose --description BRIEF`). Adopted bespoke agents reach Claude and Goose through interop, and without these
-fields a granted agent got no `agentteams_runner` block or tools, while the orchestrator's queue refused it.
+claude|goose|codex --description BRIEF`). Adopted bespoke agents reach Claude, Goose and Codex through interop, and
+without these fields a granted agent got no `agentteams_runner` block or tools, while the orchestrator's queue refused
+it.
 
 > Source: `agentteams/interop_write_policy.py`. Called by `interop.import_from_cai` (`write_policy_fields=`) and the
 > CLI. The policy itself is resolved by `write_policy.resolve`, which native generation (`analyze.build_manifest`)
@@ -16,8 +17,8 @@ fields a granted agent got no `agentteams_runner` block or tools, while the orch
   - `write_policy.resolve` applies `write_policy_frameworks`, refuses legacy Goose scoping, and requires an explicit
     `privilege_profile` of `confined` or `exclusive`.
   - `mcp_grants` go through the runner's own validator.
-  - Only `claude` and `goose` imports are accepted. Codex holds the switch only through its launcher, which interop
-    doesn't emit.
+  - `claude`, `goose` and `codex` imports are accepted (`SUPPORTED`). A `codex` import has extra conditions; see
+    below.
 - **Every non-orchestrator agent is narrowed.** Its declared tool scopes are cut to `read`/`search`/`todo` (always
   `read`), the rule `write_policy.narrow_tools` applies. Goose imports declare those tools too, because grant-mode
   recipes derive their extensions from them.
@@ -37,21 +38,69 @@ fields a granted agent got no `agentteams_runner` block or tools, while the orch
 - **The pinned server is installed** in `.agentteams/bin/`. The agents directory must be the project's
   `.claude/agents` or `.goose/recipes`; this is checked before any agent is written.
 
+### Codex imports (since 2026-10-27)
+
+Codex ignores a spawned agent's `sandbox_mode` and tool list. On Codex the switch holds only through agentteams'
+launcher (`.codex/confined-run.example.sh`) and the role gate it runs as a PreToolUse hook. The gate denies every
+spawned agent's writes by its runtime `agent_type`, whatever the agent file says. Interop emits neither file, so:
+
+- **The import needs a native Codex team rendered under the switch** (`require_native_codex_gate`). All of these
+  must hold, and every missing one is named before any agent is written:
+  - the target is the project's `.codex/agents`;
+  - its `references/build-log.json` records `write_policy: "orchestrator-only"`;
+  - `.agentteams/bin/codex-role-gate.py` matches `CODEX_ROLE_GATE_SHA256`;
+  - `.codex/hooks.json` is agentteams' role-gate wiring;
+  - the launcher exists.
+- **`mcp_grants` are kept, as native Codex generation keeps them, but not honoured.** A source rendered with them
+  keeps its matching write-policy section. On Codex the role gate allows spawned agents only the read-only
+  `agentteams_readfs` tools, so a granted agent is read-only there; a notice names it. Grants hold on Claude.
+- **`privilege_profile` is carried**, so the imported agents get the role-gate reading instructions native agents
+  get.
+- **The import never replaces the native team.**
+  - An imported slug that matches a native agent is an error (`native_agent`). Native agents are those in the
+    build-log's `agent_slug_list` or its generated `.toml` files, plus `orchestrator` always, compared
+    case-insensitively. A build-log with no `agent_slug_list` is refused.
+  - `AGENTS.md` is never written, even when it is missing (`keeps_native_instructions`).
+  - A notice says to route to the imported agents in `AGENTS.md`'s editable section, and that a later native
+    `--update` lists them as orphans; keep them with `--adopt-orphans` (`codex_import_notices`).
+
 Without `--description`, or with a brief that doesn't turn the switch on, an import is unchanged.
 
 ## Functions
 
 ### `manifest_fields(description: dict, framework: str) -> dict`
 
-The fields native generation would set: `write_policy`, `mcp_grants` when set, and `goose_tool_scoping: "grant"` for
-goose. Returns `{}` when the switch is off for this framework. **Raises:** `ValueError` for any `write_policy.resolve`
-refusal, a framework other than claude/goose under the switch, or malformed `mcp_grants`.
+The fields native generation would set: `write_policy`, `mcp_grants` when set, `goose_tool_scoping: "grant"` for
+goose, and `privilege_profile` for codex. Returns `{}` when the switch is off for this framework. **Raises:**
+`ValueError` for any `write_policy.resolve` refusal, a framework outside `SUPPORTED` under the switch, or malformed
+`mcp_grants`.
 
 ### `prepare(manifest: dict, fields: dict | None, framework: str, target_dir: Path, *, preserve_existing: bool) -> None`
 
 Merges the brief's fields into the interop manifest (last, so nothing captured overrides them), and checks the server's
-install location before any agent is written. **Raises:** `ValueError` for an install outside the project, or
-`preserve_existing` under the switch.
+install location before any agent is written. For codex under the switch it also runs `require_native_codex_gate`.
+**Raises:** `ValueError` for an install outside the project, `preserve_existing` under the switch, or a codex target
+without its native gate.
+
+### `require_native_codex_gate(target_dir: Path) -> list[str]`
+
+Checks the preconditions above and returns the native agents' slugs (roster, generated `.toml` stems and
+`orchestrator`). **Raises:** `ValueError` naming every missing precondition, or for a build-log with no
+`agent_slug_list`.
+
+### `native_agent(slug: str, dest: Path, manifest: dict) -> list[str]`
+
+The error for an imported agent that would replace a native Codex agent, under the switch.
+
+### `keeps_native_instructions(framework: str, manifest: dict, inst_dest: Path) -> bool`
+
+True for a codex import under the switch: the import never writes `AGENTS.md`, which is the native team's.
+
+### `codex_import_notices(manifest: dict, imported: list[str]) -> list[str]`
+
+The notices a codex import under the switch leaves for the operator: imported agents render read-only and need routing
+in `AGENTS.md`, a later native `--update` flags them as orphans, and any `mcp_grants` for them aren't honoured on
+Codex.
 
 ### `left_in_place(dest: Path, manifest: dict) -> list[str]`
 
@@ -101,9 +150,9 @@ read, or isn't a JSON object, reads as **on**: it fails closed.
 
 **Raises:** `ValueError` when the target's
 build-log records the switch, or when `description` turns it on for `framework` (including `write_policy.resolve`'s
-own refusals). For claude and goose, the message names the `--interop-from … --description … --overwrite`
-command. For any other framework, which interop refuses under the switch, it says to regenerate natively with
-`--description`.
+own refusals). For a framework in `SUPPORTED`, the message names the `--interop-from … --description … --overwrite`
+command; for codex it adds that the import goes into a native Codex team rendered under the switch. For any other
+framework it says to regenerate natively with `--description`.
 
 ### `refuse_bridge_stubs(source_framework: str, framework: str, output_root: Path, host_features: list[str], description: dict | None = None) -> None`
 

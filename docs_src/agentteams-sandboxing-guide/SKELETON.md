@@ -528,9 +528,10 @@ sandbox.)*
 7. **Interop (PR #174).** `--interop-from DIR --description BRIEF` now carries `write_policy` and
    `mcp_grants` into an import under the same `resolve` checks, narrows each imported agent's scopes,
    gives it its section exactly once (a contradicting section is refused), and installs the pinned server
-   — for `claude` and `goose` imports only (codex is refused: interop does not emit its launcher).
+   — for `claude`, `goose` and `codex` imports (codex only into a native Codex team rendered under the switch,
+   because interop does not emit its launcher and relies on the native one).
    `--convert-from` and bridge subagent stubs (Claude, Goose) apply none of this, so they **refuse** a
-   team under the switch. For claude and goose, they name the `--interop-from … --description … --overwrite`
+   team under the switch. For claude, goose and codex, they name the `--interop-from … --description … --overwrite`
    command; for other convert targets, they say to regenerate natively. The switch
    is read from the target team's `references/build-log.json` (native generation records `write_policy`
    there) or from `--description`. A build-log that exists but is unreadable fails closed. A bridge-only
