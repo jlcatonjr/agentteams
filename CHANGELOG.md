@@ -6,8 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### interop (Codex under `write_policy: "orchestrator-only"`)
+### fixed (Codex write-policy fence is scoped to Codex, #249)
 
+- The `codex_write_policy` fence Codex adds to a shared repo-root `AGENTS.md` (one Goose and Grok also load) now
+  says, under its heading, that it applies to Codex sessions only and that Grok and Goose sessions ignore it.
+  Before, a Grok session could read "Write Policy: You Are the Orchestrator" as its own policy and refuse writes
+  or issue dispatches no runner serves. The heading is unchanged, and so is `v=1`: the next Codex render
+  replaces the fence's content in place.
+
+### interop (Codex under `write_policy: "orchestrator-only"`)
 - **`--interop-from … --framework codex --description BRIEF` now works under the switch**, so adopted (bespoke) agents
   can be narrowed on Codex. Before, it was refused. The 1.0.x backport is noted in known limitations; reported by
   mathAgents.
