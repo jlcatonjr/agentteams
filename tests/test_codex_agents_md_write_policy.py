@@ -21,6 +21,7 @@ from agentteams import write_policy
 from agentteams.emit import emit_all
 from agentteams.frameworks import _agents_md_ownership as own
 from agentteams.frameworks.codex import (
+    CODEX_WRITE_POLICY_SCOPE_NOTE,
     WRITE_POLICY_INSTRUCTIONS_HEADING,
     CodexAdapter,
     codex_write_policy_block,
@@ -71,6 +72,30 @@ def test_the_block_is_one_well_formed_fence_and_none_without_the_switch():
     assert codex_write_policy_block(_codex_render(switch=False)) is None
     unfenced = write_policy.apply_instructions("# Brief\n", _ON)        # a body without fences: section unfenced
     assert codex_write_policy_block(unfenced) is not None
+
+
+def test_the_block_says_it_is_codex_only_249(tmp_path: Path):
+    """#249: the fence sits in a shared AGENTS.md that Grok and Goose also load, so it must name Codex as its scope."""
+    block = codex_write_policy_block(_codex_render())
+    heading_at = block.index(WRITE_POLICY_INSTRUCTIONS_HEADING)
+    assert block.count(CODEX_WRITE_POLICY_SCOPE_NOTE) == 1
+    assert heading_at < block.index(CODEX_WRITE_POLICY_SCOPE_NOTE) < block.index("--issue-dispatch")
+    assert codex_write_policy_block(block).count(CODEX_WRITE_POLICY_SCOPE_NOTE) == 1   # the note never stacks
+    # goose -> codex -> goose re-render with Grok's block alongside: the shared file still scopes the fence to Codex.
+    agents_md = tmp_path / "AGENTS.md"
+    agents_md.write_text(GOOSE_TEXT, encoding="utf-8")
+    _emit_codex(tmp_path, merge=True)
+    agents_md.write_text(f"{agents_md.read_text(encoding='utf-8')}\n{grok_runtime_block()}\n", encoding="utf-8")
+    kept, _ = _goose_guard(tmp_path)
+    emit_all(kept, output_dir=tmp_path / ".goose" / "recipes", yes=True, merge=True)
+    text = agents_md.read_text(encoding="utf-8")
+    fence = own.fence_pattern(own.CODEX_WRITE_POLICY_FENCE_ID).search(text).group(0)
+    assert CODEX_WRITE_POLICY_SCOPE_NOTE in fence and own.GROK_FENCE_ID in text
+    # ... and back to codex (codex -> goose -> codex round trip, @security CX-1 condition 2): still exactly one note.
+    _emit_codex(tmp_path, merge=True)
+    text = agents_md.read_text(encoding="utf-8")
+    assert text.count(CODEX_WRITE_POLICY_SCOPE_NOTE) == 1
+    assert text.count(f"AGENTTEAMS:BEGIN {own.CODEX_WRITE_POLICY_FENCE_ID} ") == 1
 
 
 def test_goose_then_codex_adds_only_the_write_policy_block(tmp_path: Path):
