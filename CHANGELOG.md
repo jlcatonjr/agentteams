@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Codex write-policy fence is scoped to Codex, #249)
+
+- The `codex_write_policy` fence Codex adds to a shared repo-root `AGENTS.md` (one Goose and Grok also load) now
+  says, under its heading, that it applies to Codex sessions only and that Grok and Goose sessions ignore it.
+  Before, a Grok session could read "Write Policy: You Are the Orchestrator" as its own policy and refuse writes
+  or issue dispatches no runner serves. The heading is unchanged, and so is `v=1`: the next Codex render
+  replaces the fence's content in place.
+
 ### fixed (vulnscan: a remediation PR behind its base is superseded, not claimed; operator decision 2026-11-04)
 
 - `open-pr` no longer claims an earlier day's executor PR carrying the same change when that PR does not contain the base

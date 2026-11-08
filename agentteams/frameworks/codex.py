@@ -655,6 +655,12 @@ _WRITE_POLICY_FENCE_RE = fence_pattern("write_policy")
 WRITE_POLICY_INSTRUCTIONS_HEADING = "## Write Policy: You Are the Orchestrator"
 
 
+CODEX_WRITE_POLICY_SCOPE_NOTE = (
+    "**This section applies to Codex sessions only.** Grok and Goose sessions that read this shared "
+    "`AGENTS.md` ignore it and follow their own instructions."
+)
+
+
 def codex_write_policy_block(rendered: str) -> str | None:
     """The rendered AGENTS.md's orchestrator write-policy section, as one ``codex_write_policy`` fence.
 
@@ -676,6 +682,11 @@ def codex_write_policy_block(rendered: str) -> str | None:
         inner = rendered[at:] if at >= 0 else ""
     if WRITE_POLICY_INSTRUCTIONS_HEADING not in inner:
         return None
+    # #249: the fence lives in a repo-root AGENTS.md that Goose and Grok also load, so it says whose policy it is.
+    if CODEX_WRITE_POLICY_SCOPE_NOTE not in inner:
+        head, _, rest = inner.strip().partition("\n")
+        inner = f"{head}\n\n{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{rest.lstrip()}" if head.startswith("## ") \
+            else f"{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{inner.strip()}"
     sid = CODEX_WRITE_POLICY_FENCE_ID
     # Bumping v= here needs a literal BEGIN marker too: interop_helpers.template_fence_versions can't see an f-string.
     return f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n{inner.strip()}\n<!-- AGENTTEAMS:END {sid} -->"
