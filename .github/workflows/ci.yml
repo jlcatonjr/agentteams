@@ -206,6 +206,21 @@ jobs:
           bwrap --version
           ls -l /usr/bin/true; readlink -f /usr/bin/true
           grep -q '^VERSION_ID="26' /etc/os-release || { echo "::error::not an Ubuntu 26 runner"; exit 1; }
+          echo "::notice title=env::$(. /etc/os-release && echo "$PRETTY_NAME") | $(bwrap --version) | true -> $(readlink -f /usr/bin/true)"
+
+      # #262 item 2: how does bwrap's PID 1 treat a child that outlives the main command? Time three runs and check
+      # whether the sleeper is still alive after bwrap returns.
+      - name: Survivor mechanism probe
+        run: |
+          for i in 1 2 3; do
+            t0=$(date +%s.%N)
+            bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid --die-with-parent \
+              python3 -c 'import subprocess,sys; subprocess.Popen(["sleep","5"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)'
+            rc=$?; t1=$(date +%s.%N)
+            alive=$(pgrep -fc '^sleep 5$' || true)
+            echo "::notice title=survivor-probe-$i::bwrap rc=$rc elapsed=$(echo "$t1 - $t0" | bc)s sleepers_alive_after=$alive"
+            sleep 6
+          done
 
       - name: Confinement suites (bwrap required)
         env:
