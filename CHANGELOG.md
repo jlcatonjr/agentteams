@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An interop import now strips the `codex_write_policy` fence from Claude, Copilot, Grok and Goose instructions,
   so a crafted CAI can no longer plant a Codex write policy there; Codex's own import keeps it. The goose `AGENTS.md` co-owner carry-over is unchanged
   (@security CX-1 finding, operator ruling 2026-11-08).
+- `--convert-from` now strips the fences interop strips from the source instructions before rendering: a
+  `codex_write_policy` block in the source no longer reaches a non-Codex target's instructions (or the Goose
+  adapter's project-authority input), and Grok's block is re-added by Grok's own render. Codex keeps its own fence (@security AT-11 review, operator ruling 2026-11-08).
 
 ### interop (Codex under `write_policy: "orchestrator-only"`)
 - **`--interop-from … --framework codex --description BRIEF` now works under the switch**, so adopted (bespoke) agents
