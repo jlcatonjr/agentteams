@@ -653,8 +653,8 @@ _WRITE_POLICY_EXAMPLE_REL = "../examples/AGENTS.codex-write-policy-block.md"
 _WRITE_POLICY_FENCE_RE = fence_pattern("write_policy")
 #: The top-level session's section heading (``write_policy._INSTRUCTIONS_SECTION``).
 WRITE_POLICY_INSTRUCTIONS_HEADING = "## Write Policy: You Are the Orchestrator"
-
-
+#: Put under the heading of the ``codex_write_policy`` fence (#249): the repo-root AGENTS.md is shared with Goose
+#: and Grok, so the section names its scope or a Grok session reads Codex's write policy as its own.
 CODEX_WRITE_POLICY_SCOPE_NOTE = (
     "**This section applies to Codex sessions only.** Grok and Goose sessions that read this shared "
     "`AGENTS.md` ignore it and follow their own instructions."
@@ -685,8 +685,10 @@ def codex_write_policy_block(rendered: str) -> str | None:
     # #249: the fence lives in a repo-root AGENTS.md that Goose and Grok also load, so it says whose policy it is.
     if CODEX_WRITE_POLICY_SCOPE_NOTE not in inner:
         head, _, rest = inner.strip().partition("\n")
-        inner = f"{head}\n\n{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{rest.lstrip()}" if head.startswith("## ") \
-            else f"{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{inner.strip()}"
+        if head.startswith("## "):
+            inner = f"{head}\n\n{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{rest.lstrip()}"
+        else:
+            inner = f"{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{inner.strip()}"
     sid = CODEX_WRITE_POLICY_FENCE_ID
     return f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n{inner.strip()}\n<!-- AGENTTEAMS:END {sid} -->"
 
