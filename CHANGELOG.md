@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Before, a Grok session could read "Write Policy: You Are the Orchestrator" as its own policy and refuse writes
   or issue dispatches no runner serves. The heading is unchanged, and so is `v=1`: the next Codex render
   replaces the fence's content in place.
+- An interop import now strips the `codex_write_policy` fence from Claude, Copilot, Grok and Goose instructions,
+  so a crafted CAI can no longer plant a Codex write policy there; Codex's own import keeps it. The goose `AGENTS.md` co-owner carry-over is unchanged
+  (@security CX-1 finding, operator ruling 2026-11-08).
 
 ### interop (Codex under `write_policy: "orchestrator-only"`)
 - **`--interop-from … --framework codex --description BRIEF` now works under the switch**, so adopted (bespoke) agents
