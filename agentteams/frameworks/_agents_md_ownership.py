@@ -393,3 +393,48 @@ def codex_write_policy_decision(target: Path, block: str | None, *, repo_root: P
                   "instructions from AGENTS.md, but this file has no 'Write Policy: You Are the Orchestrator' section "
                   "agentteams maintains. Paste the block in .codex/examples/AGENTS.codex-write-policy-block.md into "
                   "it; until you do, the session will not issue dispatch nonces or apply proposals.")
+
+
+#: The orchestrator write-policy section Codex mirrors into a shared AGENTS.md (moved from ``codex.py``, CH-07).
+_WRITE_POLICY_FENCE_RE = fence_pattern("write_policy")
+#: The top-level session's section heading (``write_policy._INSTRUCTIONS_SECTION``).
+WRITE_POLICY_INSTRUCTIONS_HEADING = "## Write Policy: You Are the Orchestrator"
+#: Put under the heading of the ``codex_write_policy`` fence (#249): the repo-root AGENTS.md is shared with Goose
+#: and Grok, so the section names its scope or a Grok session reads Codex's write policy as its own.
+CODEX_WRITE_POLICY_SCOPE_NOTE = (
+    "**This section applies to Codex sessions only.** Grok and Goose sessions that read this shared "
+    "`AGENTS.md` ignore it and follow their own instructions."
+)
+
+
+def codex_write_policy_block(rendered: str) -> str | None:
+    """The rendered AGENTS.md's orchestrator write-policy section, as one ``codex_write_policy`` fence.
+
+    Args:
+        rendered: Codex's rendered AGENTS.md (``write_policy.apply_instructions`` already applied).
+
+    Returns:
+        The fenced block, BEGIN and END markers included, or None when the render has no such section
+        (the switch is off for Codex).
+
+    Raises:
+        Nothing.
+    """
+    m = _WRITE_POLICY_FENCE_RE.search(rendered)
+    if m is not None:
+        inner = m.group(0).split("-->", 1)[1].rsplit("<!--", 1)[0]
+    else:
+        at = rendered.find(WRITE_POLICY_INSTRUCTIONS_HEADING)
+        inner = rendered[at:] if at >= 0 else ""
+    if WRITE_POLICY_INSTRUCTIONS_HEADING not in inner:
+        return None
+    # #249: the fence lives in a repo-root AGENTS.md that Goose and Grok also load, so it says whose policy it is.
+    if CODEX_WRITE_POLICY_SCOPE_NOTE not in inner:
+        head, _, rest = inner.strip().partition("\n")
+        if head.startswith("## "):
+            inner = f"{head}\n\n{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{rest.lstrip()}"
+        else:
+            inner = f"{CODEX_WRITE_POLICY_SCOPE_NOTE}\n\n{inner.strip()}"
+    sid = CODEX_WRITE_POLICY_FENCE_ID
+    # Bumping v= here needs a literal BEGIN marker too: interop_helpers.template_fence_versions can't see an f-string.
+    return f"<!-- AGENTTEAMS:BEGIN {sid} v=1 -->\n{inner.strip()}\n<!-- AGENTTEAMS:END {sid} -->"
