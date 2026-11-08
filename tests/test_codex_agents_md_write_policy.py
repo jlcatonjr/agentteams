@@ -91,6 +91,11 @@ def test_the_block_says_it_is_codex_only_249(tmp_path: Path):
     text = agents_md.read_text(encoding="utf-8")
     fence = own.fence_pattern(own.CODEX_WRITE_POLICY_FENCE_ID).search(text).group(0)
     assert CODEX_WRITE_POLICY_SCOPE_NOTE in fence and own.GROK_FENCE_ID in text
+    # ... and back to codex (codex -> goose -> codex round trip, @security CX-1 condition 2): still exactly one note.
+    _emit_codex(tmp_path, merge=True)
+    text = agents_md.read_text(encoding="utf-8")
+    assert text.count(CODEX_WRITE_POLICY_SCOPE_NOTE) == 1
+    assert text.count(f"AGENTTEAMS:BEGIN {own.CODEX_WRITE_POLICY_FENCE_ID} ") == 1
 
 
 def test_goose_then_codex_adds_only_the_write_policy_block(tmp_path: Path):
