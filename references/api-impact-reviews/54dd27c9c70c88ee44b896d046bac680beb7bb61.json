@@ -1,0 +1,8 @@
+{
+  "patch_id": "54dd27c9c70c88ee44b896d046bac680beb7bb61",
+  "commit": "8aaefe48bae404ece3b9916d1e3a106679f7b53a",
+  "subject": "feat(branch-inventory): warn when a release merge would delete the integration branch (row 675)",
+  "impact": "1 symbols added, 1 symbols changed",
+  "note": "branch_inventory.integration_protection_notes: new public, read-only helper (added to __all__); documented in docs_src/api-reference/branch-inventory.md (Public API row + 'Integration-branch protection check'); docstring Args/Returns; callers: build_inventory only (informational notes, no plan/state change). @security review pending in the parent session (WP-G, pinned module).",
+  "recorded_at": "2026-11-09T18:52:54Z"
+}
