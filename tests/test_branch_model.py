@@ -285,6 +285,16 @@ def test_unprotected_integration_branch_with_auto_delete_warns():
     assert len(_warnings(notes)) == 1 and "merging the release PR will delete dev" in notes[0]
 
 
+def test_a_non_dict_repo_body_is_unknown():
+    class _ListBody(_RepoAPI):
+        def get(self, path):
+            if path == f"/repos/{self.repo}":
+                return "ok", ["not", "a", "dict"]
+            return super().get(path)
+    notes = bi.integration_protection_notes(_ListBody(), "dev")
+    assert _unknown(notes) and not _warnings(notes)
+
+
 def test_protected_integration_branch_or_auto_delete_off_is_silent():
     assert bi.integration_protection_notes(_RepoAPI(auto_delete=True, protected={"dev"}), "dev") == []
     api = _RepoAPI(auto_delete=False)
@@ -297,6 +307,7 @@ def test_protected_integration_branch_or_auto_delete_off_is_silent():
     {"repo_verdict": bi.API_UNKNOWN},            # repo endpoint failed
     {"repo_verdict": bi.API_NOT_FOUND},
     {"auto_delete": True, "rules_verdict": bi.API_UNKNOWN},  # protection not readable
+    {"auto_delete": "true"},                     # non-bool field: unknown, never read as on/off
 ])
 def test_unknown_facts_give_a_could_not_check_note_never_a_warning(kw):
     notes = bi.integration_protection_notes(_RepoAPI(**kw), "dev")
