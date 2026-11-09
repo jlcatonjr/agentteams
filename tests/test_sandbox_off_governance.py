@@ -32,7 +32,7 @@ from agentteams.cli import exception_registry as er
 from agentteams.cli import sandbox_relaxation_gate as gate
 from agentteams.frameworks.registry import agents_dir_for
 from tests._fresh_intel import OFFLINE_FLAG, seed_offline_intel
-from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _log, _row, _stub_sig
+from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _baseline_row, _log, _row, _stub_sig
 from tests._wasm_framework_helpers import _INTEL_AT
 
 REPO = Path(__file__).resolve().parent.parent
@@ -98,9 +98,7 @@ class Team:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             assert build_team.main(["--migrate-decision-log", "--output", str(self.dir), "--yes"]) == 0
         if "approved-baseline" not in log.read_text(encoding="utf-8"):   # the ancestor every lineage names
-            rows = ({c: "" for c in _COLUMNS} | {"timestamp": "2026-10-01", "requesting_agent": "security",
-                                                 "action_reviewed": "approved-baseline", "verdict": "PASS",
-                                                 "conditions_verified": "verified"}, *rows)
+            rows = ({c: "" for c in _COLUMNS} | _baseline_row(), *rows)
         _log(self.dir, *rows)
 
     def state(self) -> dict[str, Any]:
