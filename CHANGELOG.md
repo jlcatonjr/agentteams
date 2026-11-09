@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (fleet: `--fleet-skip-parent`)
+
+- **`--fleet-skip-parent`** leaves the fleet DIR's own workspace alone when DIR is itself a workspace: it gets a
+  `SKIP` row with target `(parent-skipped)`, and workspaces below DIR still run. `--fleet-exclude` never matches DIR itself, so without
+  this flag a single `--fleet ~/githubrepositories` run renders the root folder's own team. That folder is
+  non-git, so it has no snapshot rollback. Opt-in; the default is unchanged.
+
 ### changed (fleet: release-locked repositories are skipped; new `--fleet-exclude`)
 
 - **`--fleet` no longer renders a release-locked workspace.** On 2026-11-09 the weekly fleet re-rendered

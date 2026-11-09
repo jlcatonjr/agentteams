@@ -40,7 +40,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--fleet DIR] [--fleet-frameworks {github,claude,goose,both,all}] [--fleet-report DIR]
-           [--fleet-exclude GLOB] [--fleet-ignore-locks GLOB] [--fleet-allow-no-verify]
+           [--fleet-exclude GLOB] [--fleet-skip-parent] [--fleet-ignore-locks GLOB] [--fleet-allow-no-verify]
            [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
            [--version]
 ```
@@ -1511,6 +1511,13 @@ Skip folders under `DIR` that match `GLOB`. Repeatable. A pattern matches the fo
 (`visualknowledge/old-*`) or the folder's own name (`agentteams*`), case-sensitively. A matched folder is
 neither updated nor descended into, and the report shows it as a `SKIP` row with target `(excluded)`. `DIR`
 itself is never excluded.
+
+### `--fleet-skip-parent`
+
+When `DIR` is itself a workspace (under the chosen `--fleet-frameworks`), do not update it; the report gives it a
+`SKIP` row with target `(parent-skipped)`, which also covers a release-locked `DIR`. Otherwise the flag does nothing.
+Workspaces below `DIR` are unaffected. Use it when `DIR` is a folder of repositories that also carries agent files of its
+own, typically a non-git folder with no snapshot rollback, which `--fleet-exclude` cannot name.
 
 ### `--fleet-ignore-locks GLOB`
 

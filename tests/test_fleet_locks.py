@@ -47,6 +47,7 @@ class _Args:
         self.fleet_allow_no_verify = False
         self.fleet_exclude = kw.get("fleet_exclude")
         self.fleet_ignore_locks = kw.get("fleet_ignore_locks")
+        self.fleet_skip_parent = kw.get("fleet_skip_parent", False)
 
 
 def _run(tmp_path, monkeypatch, **kw):
@@ -219,3 +220,25 @@ def test_cli_flags_parse():
     assert ns.fleet_exclude == ["a*", "b"] and ns.fleet_ignore_locks == ["*"]
     ns = parser.parse_args(["--fleet", "x"])
     assert ns.fleet_exclude is None and ns.fleet_ignore_locks is None
+
+
+def test_skip_parent_leaves_the_parent_workspace_alone(tmp_path, monkeypatch):
+    """--fleet-skip-parent: DIR's own (non-git) team gets a SKIP row; workspaces below still run."""
+    _ws(tmp_path)
+    _ws(tmp_path / "child")
+    ran, _ = _run(tmp_path, monkeypatch, fleet_skip_parent=True)
+    report = json.loads(next((tmp_path / "_report").glob("*/report.json")).read_text())
+    rows = {w["path"]: [t["target"] for t in w["targets"]] for w in report["workspaces"]}
+    assert rows[str(tmp_path.resolve())] == ["(parent-skipped)"]
+    # Every target path (--project, and --output, which bridge targets use instead) is inside the child.
+    paths = {Path(a[a.index(flag) + 1]).resolve() for a in ran for flag in ("--project", "--output") if flag in a}
+    child = (tmp_path / "child").resolve()
+    assert paths and all(p == child or child in p.parents for p in paths)
+
+
+def test_without_skip_parent_the_parent_workspace_is_updated(tmp_path, monkeypatch):
+    _ws(tmp_path)
+    ran, _ = _run(tmp_path, monkeypatch)
+    report = json.loads(next((tmp_path / "_report").glob("*/report.json")).read_text())
+    assert all(t["target"] != "(parent-skipped)" for w in report["workspaces"] for t in w["targets"])
+    assert ran

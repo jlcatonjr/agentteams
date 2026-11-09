@@ -46,7 +46,7 @@ Each `(workspace, target)` row is one of:
 | `SKIP` | An excluded folder (`target = "(excluded)"`), a release-locked workspace (`"(release-locked)"`) or a linked worktree (`"(linked-worktree)"`); see [Guards](#guards). Ambiguous `.claude/` (no bridge signal and no resolvable descriptor), left for manual review. Also a bridge whose recorded source framework fleet can't bridge from: an unknown framework, a missing source directory, an unreadable entry file, or a source equal to the bridge's own framework. Also used for an interop-projected `.codex/agents` team (`origin: "interop"` marker): the row's `detail` carries the refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), which fleet never runs. |
 | `WOULD-UPDATE` | Dry-run preview only. |
 
-> **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, `"goose-bridge"`, or `"codex-direct"` (a native `.codex/agents` team, `--update --merge --framework codex`, `all` only). Guard rows carry `target = "(excluded)"`, `"(release-locked)"` or `"(linked-worktree)"` and never another row for the same workspace. A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified); an interop-projected Codex team's `SKIP` row carries `target = "codex"`. Filter for these explicitly so manual-review rows are not dropped.
+> **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, `"goose-bridge"`, or `"codex-direct"` (a native `.codex/agents` team, `--update --merge --framework codex`, `all` only). Guard rows carry `target = "(excluded)"`, `"(release-locked)"`, `"(parent-skipped)"` or `"(linked-worktree)"` and never another row for the same workspace. A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified); an interop-projected Codex team's `SKIP` row carries `target = "codex"`. Filter for these explicitly so manual-review rows are not dropped.
 
 ### Guards
 
@@ -66,6 +66,10 @@ repositories with a different build and rolled their teams back:
 `--fleet-ignore-locks GLOB` (repeatable; `'*'` for all; **`lock_ignored`**) renders a locked workspace anyway when
 `GLOB` matches the folder holding its lock, i.e. the locked repository (by path relative to the parent, or by
 name), never the workspace's own name, so one deliberate exception does not lift every lock in the run.
+
+`--fleet-skip-parent` leaves the fleet parent's own workspace alone (`target = "(parent-skipped)"`); `--fleet-exclude`
+never matches the parent, so this is the only way to keep a parent that is itself a workspace, such as a non-git
+folder of repositories with no snapshot rollback, out of a single-root run.
 
 `report.json` rows for these carry `target = "(excluded)"` or `"(release-locked)"`, alongside the existing
 `"(linked-worktree)"` rows.
@@ -160,7 +164,7 @@ Entry point dispatched from `build_team.main()` when `--fleet` is set. Discovers
 
 **Parameters:**
 
-- `args` (`argparse.Namespace`) — Parsed CLI arguments (reads `fleet`, `fleet_frameworks`, `fleet_report`, `fleet_exclude`, `fleet_ignore_locks`, `yes`, `dry_run`, `shrink_policy`, `fleet_allow_no_verify`).
+- `args` (`argparse.Namespace`) — Parsed CLI arguments (reads `fleet`, `fleet_frameworks`, `fleet_report`, `fleet_exclude`, `fleet_skip_parent`, `fleet_ignore_locks`, `yes`, `dry_run`, `shrink_policy`, `fleet_allow_no_verify`).
 - `parser` (`argparse.ArgumentParser`) — The CLI parser (reserved for error reporting).
 
 **Returns:** `int` — Process exit code.

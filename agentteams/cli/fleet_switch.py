@@ -58,6 +58,17 @@ def add_fleet_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     fleet_group.add_argument(
+        "--fleet-skip-parent",
+        action="store_true",
+        default=False,
+        dest="fleet_skip_parent",
+        help=(
+            "Do not update DIR's own workspace (it gets a SKIP row); workspaces below DIR "
+            "are unaffected. For a DIR that is a non-git workspace with no snapshot rollback, "
+            "which --fleet-exclude cannot name."
+        ),
+    )
+    fleet_group.add_argument(
         "--fleet-ignore-locks",
         metavar="GLOB",
         action="append",
