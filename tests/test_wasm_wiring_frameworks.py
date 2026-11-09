@@ -210,6 +210,20 @@ def test_grok_example_is_inert_and_protected():
     assert ww.GROK_EXAMPLE in manifest[ww.WIRING_KEY]["protected_config_paths"]
 
 
+def test_grok_example_header_names_the_profile_mode_exposure():
+    """Row 648 gap 1 (B2): Grok's profile cannot deny a write without denying the read, so the example says where
+    it is protected (inside the launcher) and where it is not (profile mode), and how to merge it safely."""
+    manifest = _manifest("grok")
+    example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]
+    header = "\n".join(line for line in example.splitlines() if line.startswith("# "))
+    for needle in ("confined-run.example.sh", "GROK_CONFINE_MODE=profile", ".grok/config.toml",
+                   "fresh render", "diff"):
+        assert needle in header, needle
+    tomllib.loads(example)  # the header stays TOML comments
+    reason = manifest[ww.WIRING_KEY]["frameworks"]["grok"]["reason"]
+    assert "write-protected only inside the agentteams launcher" in reason
+
+
 def test_scan_finds_the_grok_example(tmp_path):
     manifest = _manifest("grok")
     example = dict(FRAMEWORKS["grok"]().extra_output_files(manifest))[f"../../{ww.GROK_EXAMPLE}"]

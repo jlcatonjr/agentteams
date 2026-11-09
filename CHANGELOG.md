@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
+
+- The inert `.grok/mcp.agentteams-wasm.example.toml` header, and the Grok `wasm_wiring` row, now say that only the
+  agentteams launcher (`.grok/confined-run.example.sh`, the default launcher mode) makes `.grok` read-only to a Grok
+  session. In profile mode (`GROK_CONFINE_MODE=profile`) a session can edit the example and `.grok/config.toml`
+  alike, so the operator should merge only from a fresh render, after a diff. No deny rule was added: Grok's
+  sandbox profile cannot deny a write without denying the read, and protecting the example alone would leave
+  `.grok/config.toml` exposed.
+
 ### fixed (integration-branch teams are told to protect the integration branch)
 
 - The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now
