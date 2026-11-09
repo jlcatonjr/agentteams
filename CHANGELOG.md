@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   import strips it from Claude, Copilot, Grok and Goose instructions, so a crafted CAI can no longer plant a Codex
   write policy there; Codex's own import keeps it. The goose `AGENTS.md` co-owner carry-over is unchanged
   (@security CX-1 finding, operator ruling 2026-11-08).
+- `--convert-from` now strips another framework's owned fences (`FRAMEWORK_OWNED_FENCE_IDS`) from the source
+  instructions before rendering, as interop does: a `codex_write_policy` or goose bridge block in the source no longer
+  reaches Claude's `CLAUDE.md` or Goose's `AGENTS.md` (or the Goose adapter's project-authority input). Each
+  target keeps its own fences (@security AT-11 review, operator ruling 2026-11-08).
 
 ### fixed (vulnscan: a remediation PR behind its base is superseded, not claimed; operator decision 2026-11-04)
 
