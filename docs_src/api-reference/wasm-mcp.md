@@ -110,7 +110,7 @@ Only passes are cached, so a runtime installed later is picked up without a rest
 | `grant_parts(grant)`, `grant_digest(grant) -> str`, `grant_args(grant) -> list[str]` | A `Grant`'s read paths and scratch flag, its canonical digest, and its flags. |
 | `launch_args(agent, grant, languages, pins_sha=None) -> list[str]` | The canonical arguments for one instance. There is no `--root`: the server derives the root from its install location. |
 | `agent_launch_args(state, agent, pins_sha=None)`, `session_launch_args(state, pins_sha=None)` | The same from a `SandboxState`. Each returns `None` when WASM is off. |
-| `is_session_launch(command, args) -> bool` | True only for an exact compute-only `_session` launch: `command` in `runner_mcp.SYSTEM_PYTHONS` and `args` equal to `launch_args` rebuilt from their own languages and pins hash. The bound for Codex's `first_party_tables` and Grok's `keep_if_exact`. |
+| `is_session_launch(command, args) -> bool` | True only for an exact compute-only `_session` launch: `command` in `runner_mcp.SYSTEM_PYTHONS` and `args` equal to `launch_args` rebuilt from their own languages and pins hash, which must be 64 lowercase hex. The bound for Codex's `first_party_tables` and Grok's `keep_if_exact`. |
 | `interpreter() -> str`, `tool_names() -> list[str]` | The system `python3` (shared with `runner_mcp`), and `["mcp__agentteams_wasm__run_wasm"]`. |
 | `claude_entry(args, python) -> str`, `goose_extension(args, python) -> dict`, `table_entry(args, python) -> dict` | Entry builders P11 composes into front matter, recipes and TOML/JSON configs. |
 | `install_files(manifest)`, `install_binary_files(manifest)` | The text and binary install files (`../../.agentteams/bin/...`) when WASM is on, else `[]`. |

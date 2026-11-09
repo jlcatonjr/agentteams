@@ -305,7 +305,7 @@ def is_session_launch(command: object, args: object) -> bool:
     ``keep_if_exact`` admit. Only the team's languages and the pins hash vary between renders, so the list is
     rebuilt from those two values with :func:`launch_args` and must match element for element. No spelling of a
     grant (``--read=/``, an argparse prefix such as ``--rea``, a second ``--agent``) survives that. The interpreter
-    must be one of the fixed ``runner_mcp.SYSTEM_PYTHONS``.
+    must be one of the fixed ``runner_mcp.SYSTEM_PYTHONS``, and the ``--pins-sha256`` value 64 lowercase hex.
 
     Args:
         command: The table's ``command`` value.
@@ -328,6 +328,8 @@ def is_session_launch(command: object, args: object) -> bool:
             return False
         languages = args[len(head)].split(",")
         pins = args[args.index("--pins-sha256") + 1]
+        if not re.fullmatch(r"[0-9a-f]{64}", pins):
+            return False
         return args == launch_args(SESSION_AGENT, wasm_exec.COMPUTE_ONLY, languages, pins_sha=pins)
     except (IndexError, ValueError):
         return False

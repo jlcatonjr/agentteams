@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sandbox profile cannot deny a write without denying the read, and protecting the example alone would leave
   `.grok/config.toml` exposed.
 
+### fixed (the MCP server interpreter must not be swappable by another account)
+
+- When agentteams writes the launch command for the `agentteams_runner` and `agentteams_wasm` MCP servers, it now
+  skips a `python3` candidate whose resolved file, or that file's directory, is group- or world-writable or owned
+  by anyone other than root or you, and uses the next one; if none qualifies, the error names why each was
+  skipped. Typical installs are unaffected (`/usr/bin/python3` is root-owned; Homebrew's resolves to user-owned,
+  non-group-writable files). Residue, documented: a user-owned interpreter is trusted as much as your account,
+  and the symlink's own directory (`/opt/homebrew/bin`), intermediate links and ancestor directories are not
+  checked; the audit and the launch check stay membership checks (remediation row 2026-11-09).
+- `wasm_mcp.is_session_launch` (the exact bound for the shared `agentteams_wasm` table in Codex and Grok) also
+  requires the `--pins-sha256` value to be 64 lowercase hex. The server already refused other values at start.
+
 ### fixed (integration-branch teams are told to protect the integration branch)
 
 - The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now
