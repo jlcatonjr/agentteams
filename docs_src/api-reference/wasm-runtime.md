@@ -15,6 +15,10 @@ Pinned provisioning and verify-on-use for the WASM runtime (wasmtime) and the gu
 
 - **Explicit operator act.** Downloads happen only behind `--wasm-install` / `--wasm-pin-update`. Rendering never
   touches the network: `urllib` is imported lazily inside the downloader, and render code may call `status()` only.
+- **Bounded retries.** A download gets 3 attempts (`FETCH_RETRIES = 2`, 60 s timeout each). Network errors and
+  the transient HTTP statuses in `RETRYABLE_HTTP_STATUSES` (408, 429, 500, 502, 503, 504) are retried after
+  2 s, then 4 s, or after a numeric `Retry-After` capped at 30 s. Other HTTP errors fail at once, and allowlist,
+  redirect and size refusals are never retried.
 - **Pinned by URL, size and sha256.** The archive is checked before extraction. Extracted files are pinned by
   sha256, and the CPython stdlib by a tree digest (sha256 over sorted `"<relpath>\0<sha256>\n"` lines).
 - **Fail closed on `TODO-PIN`.** A pin not yet verified holds the literal `TODO-PIN`. `install()` and `resolve()`

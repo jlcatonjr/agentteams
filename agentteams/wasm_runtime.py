@@ -36,6 +36,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -93,6 +94,13 @@ ARCHIVE_KINDS: frozenset[str] = frozenset({"tar.xz", "zip", "none"})
 MAX_REDIRECTS = 5
 FETCH_TIMEOUT_S = 60.0
 FETCH_RETRIES = 2
+#: HTTP statuses retried like a network error: transient server/CDN failures and rate limiting. Any other HTTP error
+#: (404, 403, ...) fails at once.
+RETRYABLE_HTTP_STATUSES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
+#: Delay before retry ``n`` (0-based) is ``FETCH_BACKOFF_S * 2**n``; a numeric ``Retry-After`` replaces it.
+#: Every delay is capped at ``FETCH_BACKOFF_MAX_S``.
+FETCH_BACKOFF_S = 2.0
+FETCH_BACKOFF_MAX_S = 30.0
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _RUNTIME_GUEST = re.compile(r"^/lib(/[A-Za-z0-9._-]+)*$")
@@ -652,7 +660,8 @@ def download(url: str, size: int, dest: Path) -> str:
 
     Raises:
         WasmRuntimeError: URL off the allowlist, redirect off the allowlist, or size mismatch.
-        WasmNetworkError: Every attempt failed at the network layer.
+        WasmNetworkError: Every attempt failed at the network layer or with a retryable HTTP status
+            (:data:`RETRYABLE_HTTP_STATUSES`), or the server answered with any other HTTP error (not retried).
     """
     import http.client
     import urllib.error
@@ -670,10 +679,31 @@ def download(url: str, size: int, dest: Path) -> str:
                 check_download_url(resp.geturl())
                 return _stream_to(resp, size, dest)
         except urllib.error.HTTPError as exc:
-            raise WasmNetworkError(f"{url}: HTTP {exc.code}") from exc
+            if exc.code not in RETRYABLE_HTTP_STATUSES:
+                raise WasmNetworkError(f"{url}: HTTP {exc.code}") from exc
+            last = exc
+            delay = _retry_after(exc, attempt)
+            exc.close()
         except (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError) as exc:
             last = exc
+            delay = _backoff(attempt)
+        if attempt < FETCH_RETRIES:
+            time.sleep(delay)
     raise WasmNetworkError(f"{url}: failed after {FETCH_RETRIES + 1} attempts: {last}")
+
+
+def _backoff(attempt: int) -> float:
+    """Exponential delay before retry ``attempt`` (0-based), capped at :data:`FETCH_BACKOFF_MAX_S`."""
+    return min(FETCH_BACKOFF_S * (2 ** attempt), FETCH_BACKOFF_MAX_S)
+
+
+def _retry_after(exc: Any, attempt: int) -> float:
+    """A numeric ``Retry-After`` header (seconds, capped), else :func:`_backoff`. HTTP-date values are ignored."""
+    raw = (exc.headers.get("Retry-After") if getattr(exc, "headers", None) is not None else None) or ""
+    raw = str(raw).strip()
+    if raw.isascii() and raw.isdigit():   # isdigit alone accepts U+00B2, which float() rejects
+        return min(float(raw), FETCH_BACKOFF_MAX_S)
+    return _backoff(attempt)
 
 
 # ---------------------------------------------------------------------------

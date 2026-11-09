@@ -253,7 +253,7 @@
     "agentteams/wasm_mcp.py": "f8ddca22765d5fbf2ec75351030f8f9050f0ab6568a1fb742a109bd237219801",
     "agentteams/wasm_pins.py": "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df",
     "agentteams/wasm_policy.py": "9c38b8c804824f11acc873d817712aa02b707a3faab70499d84b494eaa5a4d73",
-    "agentteams/wasm_runtime.py": "b70019b822466cbda1ecfeab6df02514cffdb821ea44c4d3b2ac698b955d6e90",
+    "agentteams/wasm_runtime.py": "40a40f12ec89a93aa8bf5ef3161be548adac3f15eb3f48a930fde5c22c436cce",
     "agentteams/whole_body_migration.py": "b5cfa8668f3b80d23db42849e8c13132822f50057470f80f6ecf2dc6918a3cc9",
     "agentteams/write_policy.py": "8fa129e0bca9d1d10fcfec433c3da831512d0b08ec5772998a1a8aa4a5ea64e8"
   },
