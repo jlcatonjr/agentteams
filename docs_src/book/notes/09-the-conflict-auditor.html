@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 9: The Conflict Auditor</title>
+</head>
+<body>
+  <article id="notes:the-conflict-auditor">
+    <h1>Cliff Notes: Chapter 9: The Conflict Auditor</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/09-the-conflict-auditor.html#ch:the-conflict-auditor">Chapter 9</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-09-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that a multi-agent team needs one agent that reads the whole project, classifies every inconsistency it finds under a typed category and records it without resolving it. The conflict auditor detects, logs and hands off. Because it changes nothing, it can run at the close of every workflow that creates or modifies content. The chapter frames the typed categories as "a grammar for the project's documentation," a vocabulary that says which deviations count as violations and what kind of resolution each requires.</p>
+    </section>
+
+    <section id="notes-09-covers">
+      <h2>What the chapter covers</h2>
+      <p>The first section sets out ten conflict categories. Terminology conflicts arise when one concept carries different names in different chapters. Claim conflicts arise when two chapters make incompatible assertions about the same entity. Attribution errors assign a theoretical claim to the wrong author or work. The remaining seven cover source drift, missing references, mismatched references, count mismatches, hierarchy conflicts, stale references and phantom entries. In the book project each category has a two-letter code, TM, CC, AE, SD, RM, RX, CN, HC, SR and PE, while each detected instance receives a sequential BK identifier that is kept separate from the code. The chapter explains that the RM and RX names are deliberate, since they keep the taxonomy independent of whether the reference store is a BibTeX file, a citation index or a registry. The categories grew inductively. The phantom entry category, for example, appeared during an architectural rewrite.</p>
+      <p>The second section describes a four-layer audit scope. The auditor reads a chapter layer, a reference layer, an agent documentation layer and a source material layer. This breadth is why it serves as the mandatory closer, since it is the only quality-assurance agent that reads the entire project. The auditor reads the infrastructure layers first to build a model of the project's actual state and then compares chapter claims against that model, which matches an authority hierarchy that ranks source code and agent files above chapter drafts.</p>
+      <p>The third section covers the append-only conflict log. Entries are added but never deleted. When a conflict is resolved, its status changes but the row remains. In the book project the log is a CSV file whose fields include the instance identifier, date, category, the two files, verbatim excerpts from each, a description, a recommended resolution and resolution details. The append-only rule works like immutability in an audit ledger. An agent that introduced a conflict cannot erase the record instead of fixing the problem. The chapter states that the rule is enforced at the agent level, through the auditor's instructions and the orchestrator's expectation that the log grows monotonically. The log is also the channel to the conflict-resolution agent of Chapter 10, which reads open entries and issues dispositions. The two agents communicate through this shared structure, not through direct messages.</p>
+      <p>The fourth section explains detection without resolution. Resolving a conflict requires judging which claim is correct, which depends on the authority hierarchy, the domain and sometimes the author's intent. The auditor's competence is detecting patterns, not deciding which version prevails. Detection-only operation is also idempotent. "Running it twice on the same state produces the same report." There is one exception for deterministic cases. RM and RX findings route directly to the reference-manager, and SD findings in code-claim passages route to a technical-validator role where one exists. If lookup authority is missing or conflicting, the case escalates back to conflict resolution.</p>
+      <p>The fifth section presents the mandatory closer pattern. The book's constitutional rules require closing with the conflict auditor after any multi-file change session. Eight workflows include the step, Workflow 10 includes it conditionally, and the auditor's position varies from terminal to opening depending on the workflow. Deletion workflows follow their own authorization sequence, described in Chapter 14. A workflow that skips the closer has broken a rule, not met a barrier. "What it establishes is that the check was owed, so that its absence is itself a finding." The chapter notes that rules expressible as a path, a tool, a system call or a single writer can now be checked before the act on some surfaces, but a check owed at the close of a workflow is not among them. The section closes by previewing the mandatory opener of Chapter 11.</p>
+    </section>
+
+    <section id="notes-09-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Ten typed categories. Two-letter codes that classify each inconsistency by the norm it violates.</li>
+        <li>Four-layer scope. Chapters, reference data, agent documentation and source material.</li>
+        <li>Infrastructure-first scanning. Build a model of actual state, then test chapter claims against it.</li>
+        <li>Append-only log. A permanent record in which resolved rows remain visible.</li>
+        <li>Detection without resolution. The auditor logs and the resolution agent decides.</li>
+        <li>Idempotency. Repeated runs on the same state yield the same report.</li>
+        <li>Selective direct routing. Deterministic reference and source-drift repairs bypass adjudication.</li>
+        <li>Mandatory closer. A required consistency check whose omission is itself visible.</li>
+      </ul>
+    </section>
+
+    <section id="notes-09-frames">
+      <h2>Theoretical frames</h2>
+      <p>The chapter's main frame is Crawford and Ostrom (1995), who develop a grammar of institutions that classifies rules by the normative situation they create, whether an action is required, prohibited, permitted or incentivized. The chapter argues that the ten conflict categories serve an analogous function. They classify inconsistencies by the type of norm each one violates. A terminology mismatch breaks a shared vocabulary norm, a hierarchy conflict breaks a priority ordering rule and a missing citation breaks a verification requirement. The append-only log draws on the logic of an audit ledger, where immutability makes evasion visible.</p>
+    </section>
+
+    <section id="notes-09-matters">
+      <h2>Why it matters</h2>
+      <p>The conflict auditor is the team's main defense against errors that are correct in isolation but inconsistent together, which no single agent working alone can see. The chapter is careful to treat the closer as a rule that creates accountability rather than a mechanism that prevents omission, and it marks plainly which kinds of rules can and cannot yet be checked before the act. The pairing of closer and opener sets up the bracket of reactive and proactive governance developed in Chapter 11.</p>
+    </section>
+
+    <section id="notes-09-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no features as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

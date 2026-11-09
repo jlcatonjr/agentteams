@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 13: The Agent Refactorer</title>
+</head>
+<body>
+  <article id="notes:the-agent-refactorer">
+    <h1>Cliff Notes: Chapter 13: The Agent Refactorer</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/13-the-agent-refactorer.html#ch:the-agent-refactorer">Chapter 13</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-13-thesis"><h2>Thesis</h2>
+      <p>The agent-refactorer has two jobs. It extracts shared or volatile data from agent prose into reference files, and it enforces the structural compliance of every agent file against the project specification. The chapter argues that extraction is a cost-benefit decision rather than a reflex, governed by a four-condition test in which volatility is the deciding factor. It closes by arguing that the same economics apply when a team is composed from templates, so that a template is to the refactorer's audit what constitution-making is to adjudication.</p>
+    </section>
+    <section id="notes-13-covers"><h2>What the chapter covers</h2>
+      <p>The chapter has five numbered sections. The first sets out DRY enforcement. A block of content is a candidate for extraction when it exceeds ten lines, appears in more than one agent file, contains volatile information and states factual rather than procedural content. "All four conditions must hold." The author says the test exists to prevent over-extraction, since "Not all duplication is harmful." When the test is met, the refactorer moves the content into a centralized references directory and replaces the copies with references. In the book project the chapter-outlines reference file, the voice-samples collection and the chapter-writing-process document all began this way.</p>
+      <p>The second section covers specification compliance. The module's authoring guide defines required YAML fields, body sections and per-tier content rules. In the book project the specification requires six frontmatter fields and three body elements, and the refactorer reports violations with ten typed codes, AR-01 through AR-10. The chapter notes that the module's portable baseline uses a compact five-field front matter contract, which the local ten-code system extends. Overlap with the code-hygiene agent's rules is called deliberate, since the two agents flag the same file from different angles.</p>
+      <p>The third section treats reference file management. The refactorer looks for orphaned reference files that no agent file cites and for citations that point to files that do not exist. AR-04 flags the second case, while the first has no dedicated code and is reported as an orphan finding. The refactorer's scope is limited to agent-file citations, so a reference used only by chapter drafts is flagged as orphaned and left for the orchestrator to settle.</p>
+      <p>The fourth section places the refactorer after the updater in the propagation chain, so it always sees files in their post-update state. Running earlier could lock outdated content into a reference file, and running concurrently could produce write conflicts. The chapter then describes a narrow exception that the framework's orchestrator later added. Its coordinated-concurrency workflow lets steps that touch overlapping files but share no dependency run together, where the operator has tagged them, by dividing shared files into disjoint regions claimed in an append-only ledger. The earlier claim wins, and work falls back to serial order where regions cannot be made disjoint. The updater and refactorer do not qualify, because the refactorer depends on the updater's output.</p>
+      <p>The fifth section develops the economics of extraction and extends them to team composition.</p>
+    </section>
+    <section id="notes-13-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Four-condition extraction test. Length over ten lines, duplication, volatility and factual content, all required.</li>
+        <li>Volatility as discriminator. "Stable content can be duplicated without danger. Volatile content cannot."</li>
+        <li>Reference files as shared libraries. They centralize volatile content so a change in one place reaches every consumer.</li>
+        <li>AR-01 to AR-10. Typed violation codes covering missing fields, a title mismatch, oversized inline data, dead file references, files over 200 lines, a modified invariant core (AR-06), unlisted handoff targets, a missing purpose section, duplicate content and a missing handoff back to the orchestrator.</li>
+        <li>Orphan finding. An uncited reference file, reported without a dedicated code and kept distinct from a dead citation.</li>
+        <li>Content versus structural maintenance. The updater ensures what files say is correct, and the refactorer ensures how they are organized is correct. "The concerns are independent."</li>
+        <li>Coordinated concurrency. A later orchestrator workflow for independent steps, with disjoint regions and an append-only ledger.</li>
+        <li>Templates as anticipated extraction. Fixed structure, project slots, and reference documents shipped from the outset.</li>
+      </ul>
+    </section>
+    <section id="notes-13-frames"><h2>Theoretical frames</h2>
+      <p>The central frame is Williamson (1985). The chapter treats the extraction decision as a governance problem in which the choice between organizing an activity internally and externalizing it depends on relative transaction costs. Inline content minimizes navigation costs, because the file is self-contained. Inline duplication of volatile content imposes governance costs, because every copy must be updated together and this coordination fails silently when one copy is missed. Extraction adds a navigation step but removes the coordination problem. The four-condition test approximates the crossover between the two costs.</p>
+      <p>The chapter treats the ten-line threshold as "a heuristic, not a theorem." Short blocks are easy to update and scan, while a long passage that differs in one detail between two files is harder to spot. The ten-line mark approximates where duplication costs begin to exceed extraction costs for an average block.</p>
+      <p>The closing frame is constitutional. A template states a rule about what an agent file must contain, and it binds before any file exists. The refactorer applies that rule to files that have since drifted. The chapter calls this "the relationship between constitution-making and adjudication." The cost is the same in both cases, and only its timing differs.</p>
+    </section>
+    <section id="notes-13-matters"><h2>Why it matters</h2>
+      <p>The chapter shows that structural governance of agent files can be stated as explicit criteria and typed codes rather than taste. The four-condition test guards against two failures at once, the drift that comes from duplicated volatile content and the needless indirection that comes from extracting stable content. The sequencing argument explains why verification must follow content maintenance, and the account of coordinated concurrency shows that the framework relaxed strict ordering only where steps share no dependency. The final section moves the analysis from audit to design. The chapter argues that applying extraction economics at composition costs nothing, "since there is no deployed file to disturb." The templates from which agentteams composes a team therefore encode in advance the outcome that the refactorer would otherwise reach through repeated audit, and the specification behind them makes that composition checkable.</p>
+    </section>
+    <section id="notes-13-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

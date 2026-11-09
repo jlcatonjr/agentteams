@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 1: The Coding Agent: What It Is and What It Isn’t</title>
+</head>
+<body>
+  <article id="notes:the-coding-agent">
+    <h1>Cliff Notes: Chapter 1: The Coding Agent: What It Is and What It Isn’t</h1>
+    <p class="part-label">Part I: Foundations</p>
+    <p class="notes-source">A summary of <a href="chapters/01-the-coding-agent.html#ch:the-coding-agent">Chapter 1</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-01-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that a coding agent is not a model but a model in an organized setting. It defines the agent as a model attached to infrastructure, "where the usefulness of the attachment depends on the infrastructure's organization toward a coherent set of goals". The preview restates the point in one line. "The agent's rationality is not separable from the infrastructure within which it operates." Better infrastructure therefore improves the agent, and stale infrastructure wastes a powerful model.</p>
+    </section>
+
+    <section id="notes-01-covers">
+      <h2>What the chapter covers</h2>
+      <p>The opening section frames the coordination problem. Agent teams overload limited context, let documentation drift, propagate inconsistencies and inherit conflicting directives. It introduces Hayek (1952), whose account of the mind as a structure that selects and classifies stimuli serves as the model for how infrastructure shapes what a model perceives.</p>
+      <p>Section 1.1 separates a conversational model from an agent. "Tool access provides environmental traction", and a model-tool bundle run by a framework that iterates toward a goal counts as an agent, following Yao et al. (2023). Each round of reading and acting changes the conditions of the next round. Section 1.2 argues that "An agent can be improved without upgrading its model." The initial design is the developer's entrepreneurial judgment in the sense of Foss and Klein (2012), and part of it can be allocated to agents, for instance by asking an orchestrating agent to create a specialist. A daily pipeline later lets agents modify other agents' specifications in response to investigation findings.</p>
+      <p>Section 1.3 defines infrastructure in three senses and adopts the middle one, "the documentation system as organizational capital." The concrete form is a project-level instructions file and per-role agent files. The book's team runs on GitHub Copilot in VS Code, but the chapter notes that the framework that generated it can render the team for Claude Code, Codex, Goose, Grok Build and the cross-tool AGENTS.md standard, so it describes the files by function. "These files do not program the model in a deterministic sense." They work through in-context learning. Writing them is Nonaka's externalization, and the files form a ba.</p>
+      <p>Section 1.4 treats the project as a goal-bundle. "A project is a coherent set of goals toward which infrastructure is organized." Goals come from the principal, but agents can be allocated judgment about means. Section 1.5 separates a determinate procedure from allocated judgment and reads the latter as Misesian means-ends action. The agent's preference ordering combines model weights, instructions and project state. The chapter calls this a functional signature, not felt experience. Infrastructure files are "partly constitutive of the agent's preference ordering", so a revision by the agent-updater reshapes how an agent will judge on its next invocation. The section closes with a reply to the charge that Hayek's agents are "Robbinsean maximizers".</p>
+      <p>Section 1.6 treats infrastructure as an institution with a cognitive dimension. The orchestrator's routing table directs a bibliography question toward the bibliography manager and a voice question toward the voice auditor, yet "The table does not answer either question." It organizes attention. Section 1.7 reverses the view of documentation as overhead and holds that "documentation is the primary productive activity", one that needs continual reinvestment as files drift. Section 1.8 limits the parallel with the human mind to one that is "organizational and functional rather than ontological", since "LLMs do not have subjective experience." Section 1.9 describes the feedback by which work reshapes infrastructure, Nonaka's knowledge spiral. Section 1.10 applies Lachmann to argue that documentation is heterogeneous, plan-dependent capital.</p>
+      <p>The second section previews the book part by part and chapter by chapter, including Part VI on enforcement, signed authority, the management layer and remediation under grant. It ends by handing off to the context window as the constraint behind the whole architecture.</p>
+    </section>
+
+    <section id="notes-01-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li><strong>Coding agent.</strong> A model attached to infrastructure organized toward a coherent set of goals.</li>
+        <li><strong>Agent.</strong> A model and its tools, run by a framework that iterates until a goal is reached.</li>
+        <li><strong>Three senses of infrastructure.</strong> The files, the documentation system (the default sense) and the whole technical substrate.</li>
+        <li><strong>Instructions file and agent files.</strong> Constitutional scaffolding for the team, and role knowledge, tool boundaries and workflows for each agent, named differently on each runtime.</li>
+        <li><strong>Project as goal-bundle.</strong> The goals toward which infrastructure is organized, furnished by the principal.</li>
+        <li><strong>Determinate procedure and allocated judgment.</strong> Executing specified means, as against choosing among means.</li>
+        <li><strong>Functional signature.</strong> Context-sensitive selection among alternatives without experienced deliberation.</li>
+        <li><strong>Routing table.</strong> The orchestrator's map that organizes attention before reasoning about an answer begins.</li>
+        <li><strong>Knowledge spiral.</strong> The continuing interaction by which infrastructure organizes work and work reorganizes infrastructure.</li>
+      </ul>
+    </section>
+
+    <section id="notes-01-frames">
+      <h2>Theoretical frames</h2>
+      <p>Hayek (1952) supplies the mind as a classifying structure. Wei et al. (2022), Vaswani et al. (2017), Yao et al. (2023) and Brown et al. (2020) supply model capabilities, agents as reasoning plus action, and in-context learning. Foss and Klein (2012) ground entrepreneurial judgment and the project. Mises (1949) and Kirzner (1962) supply purposeful action. Hayek (1945) and Caton (2017) frame the man on the spot whose interpretive frame faces selection. Kirzner (1979) raises the maximizer critique, which Caton (2025) answers computationally. Caton and Lopez (2020), Hayek (1937), Hayek (1943a), Hayek (1962) and Denzau and North (1994) frame the cognitive side of institutions. Nonaka (1994) and Nonaka and Konno (1998) supply externalization, combination and ba. Lachmann (1956), Menger (1871), Hayek (1941), Harwick (2022) and Kirzner (1966) supply capital and reinvestment. Wagner (2010) marks the limits of the mind-society parallel.</p>
+    </section>
+
+    <section id="notes-01-matters">
+      <h2>Why it matters</h2>
+      <p>The chapter fixes the unit of analysis for the rest of the book. Because the agent is the model plus its documentation, work on documentation is work on the agent. Three ideas carry forward. Allocated judgment returns with the orchestrator. The claim that agent files help constitute preference orderings explains why the agent-updater and drift handling matter. The capital framing of Section 1.10 is a placeholder that Chapter 3 develops. The chapter also states in advance that the parallel with human minds is functional only. Its closing hand-off makes the context window the source of the demand for all this structure.</p>
+    </section>
+
+    <section id="notes-01-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Like Chapters 1 through 21 generally, it describes the book's own team as configured through July 2026, with framework passages, such as the list of runtimes the framework can render, at the 1.1 anchor. The chapter flags no 1.2 items.</p>
+    </section>
+  </article>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 4: Constitutional Constraints and Authority Hierarchies</title>
+</head>
+<body>
+  <article id="notes:constitutional-constraints">
+    <h1>Cliff Notes: Chapter 4: Constitutional Constraints and Authority Hierarchies</h1>
+    <p class="part-label">Part II: The Agent Team</p>
+    <p class="notes-source">A summary of <a href="chapters/04-constitutional-constraints.html#ch:constitutional-constraints">Chapter 4</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-04-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that every agent team needs an explicit constitution, chosen before ordinary decisions in Buchanan and Tullock's (1962) sense, and that this constitution works mainly through accountability rather than prevention. "The constitutional framework enables accountability for scope violations, not prevention of them." It then marks the bounded exception. A rule moves to prevention only when it can be stated as a path, a tool, a system call or a writer and the runtime checks it before the act. An authorization binds only when the agents it governs cannot forge it.</p>
+    </section>
+
+    <section id="notes-04-covers">
+      <h2>What the chapter covers</h2>
+      <p>The first section opens with a note that narrows "coordination" to an architectural question about making agent actions compatible with one another and with project goals. It then sets out the constitutional moment, the choice among rules. Strict invariant cores limit flexibility but prevent catastrophic errors such as unauthorized deletions and fabricated citations. A team without explicit rules still has a de facto constitution, but implicit constitutions decay through context loss and project drift. Section 1.1 reads agent files as personal constitutions, drawing on the "artifactual man" of Lewis and Dold (2020) and on Buchanan (1979). "Agent file design is constitution-writing." In the module's template system, each agent file carries YAML front matter with five required fields, which are name, description, user-invocable, tools and model. "Tool restriction is constitutional, not cosmetic" because the tool list sets an operational boundary.</p>
+      <p>The second section sets out the authority hierarchy. Sources conflict, so agents need a ranking. Source code and agent files on disk are ground truth for technical claims, and for this book the author's published research also serves as a source of truth. North (1990b) supplies institutions as shared constraints, and Crawford and Ostrom (1995) supply the grammar that maps invariant cores to must rules, workflow conventions to should norms and optional procedures to may strategies. Section 2.1 grounds the hierarchy in public justification after Gaus (2011), Vallier (2021) and Moehler (2018). Each agent can see why the ranking is reasonable from its own role. Where a team requires signed decisions, an expansion that grants a capability takes effect only once the principal has signed it, which the chapter defers to Chapter 23. Vallier (2026) moves the problem to the ecosystem, where selection works against lineages that spend compute on alignment, and the chapter quotes his advice, "Don't align the players. Align the game".</p>
+      <p>Section 2.2 limits what constitutions can do. Agents may exceed scope through ambiguity, context pressure or an unclear hierarchy, so rules are preconditions for detection rather than barriers. This is the ordinary condition Buchanan and Tullock describe, and it is why each later rule is paired with an agent that notices violations. A tool set is the plainest exception, since an agent with no write tool cannot write.</p>
+      <p>Section 2.3 states the reach of prevention. A statable rule checked by the runtime keeps its deontic force and seldom needs a sanction, because the forbidden act fails. "Even then, prevention holds only where it has been built." One provider's runtime may check a rule that another treats as advice, and an emitted boundary may do nothing until the principal wires it into live settings. Signing moves identification to the moment before the act. The principal's Ed25519 signature counts only where custody of the private key is confined, and the HMAC signatures for routine decisions, HALT retractions, waivers and directives count only while their keys stay outside every agent's environment. Accountability still governs every rule needing judgment, every statable rule on a surface that treats it as advice, and every authorization whose key an agent could reach.</p>
+      <p>The third section describes invariant cores, marked with a stop-marker and changeable only with explicit principal approval, alongside extension points that evolve through the daily pipeline. It distinguishes operational, legislative and constitutional levels, and defends rigidity because constitutional change is systemic. The fourth section treats security as constitutional enforcement, citing North (1990) and Ostrom (1990), with deletions running from code-hygiene to security to cleanup to the agent-updater. The fifth section presents the living document policy as a trust-sustaining institution. "Documentation drift is a trust violation, not merely a documentation error."</p>
+    </section>
+
+    <section id="notes-04-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li><strong>Constitutional moment.</strong> The choice of rules before choices within rules, revisited at each later revision.</li>
+        <li><strong>Agent file as personal constitution.</strong> The file defines the agent's functional identity, with machine-readable front matter.</li>
+        <li><strong>Authority hierarchy.</strong> A ranking of sources from ground truth to derived artifact that resolves conflicting signals.</li>
+        <li><strong>Must, should and may.</strong> Invariant rules, norms and strategies in the institutional grammar.</li>
+        <li><strong>Accountability rather than prevention.</strong> The default effect of rules that need judgment.</li>
+        <li><strong>Reach of prevention.</strong> Statable rules checked before the act, limited to surfaces that check them and to wired settings.</li>
+        <li><strong>Signed authorization.</strong> Ed25519 and HMAC signatures that bind only under confined key custody.</li>
+        <li><strong>Invariant core and extension point.</strong> Protected rules versus evolving procedures.</li>
+        <li><strong>Living document policy.</strong> A norm against stale content that sustains trust in proxies.</li>
+      </ul>
+    </section>
+
+    <section id="notes-04-frames">
+      <h2>Theoretical frames</h2>
+      <p>Buchanan and Tullock (1962) and Buchanan (1979) supply constitutional choice and self-constitution, with Lewis and Dold (2020) on artifactual man. North (1990b) and North (1990) frame institutions and political transaction costs. Crawford and Ostrom (1995) and Searle (1995) supply the institutional grammar and the constitutive view of rules. Gaus (2011), Vallier (2021) and Moehler (2018) supply public justification and trust. Vallier (2026) extends governance to competing lineages. Ostrom (1990) and Aligica, Boettke, and Tarko (2019) frame security as governance of a commons.</p>
+    </section>
+
+    <section id="notes-04-matters">
+      <h2>Why it matters</h2>
+      <p>The chapter sets the legal order every later agent operates within. Its central distinction tells the reader how to read every rule that follows. Most bind through detection, so the book pairs each rule with an agent that notices breaches. A narrow set bind through runtime checks and signatures, but only on named surfaces, once wired, and under confined key custody. Those conditions carry forward to the chapters on enforcement, signed authority, the management layer and remediation under grant.</p>
+    </section>
+
+    <section id="notes-04-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Like Chapters 1 through 21 generally, it describes the book's own team as configured through July 2026, with framework passages, such as the reach of prevention and the signing conditions in Section 2.3, at the 1.1 anchor. The chapter flags no 1.2 items.</p>
+    </section>
+  </article>
+</body>
+</html>
