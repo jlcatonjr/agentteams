@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1-rc.1] - 2026-11-09
+
+### release notes
+
+agentteams 1.1.1-rc.1 is the first release candidate for 1.1.1. It is 1.1.0 plus one operator-facing change,
+backported from `dev`: the operator signers find your Ed25519 key from the spec's `key_id`, so signing steps no
+longer need a key path. No new capability. The confirm gate, the install-location gate, the integrity pin and the
+sandbox read-deny on the key directory are unchanged.
+
 ### changed (operator signing finds its own key)
 
 - `--sign-decision`, `--sign-grant`, `--sign-mcp-direct-grant` and `vulnscan grant sign` no longer need
