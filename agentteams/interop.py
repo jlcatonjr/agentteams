@@ -629,9 +629,8 @@ def import_from_cai(
         else:
             inst_dest = target_dir.parent / instructions_name
         # A CAI is data: stacked/crafted ownership notices and Grok's block never reach a target (spoofing).
-        instructions_content = _strip_fence(_strip_all_ownership_notices(instructions_content), _GROK_FENCE_ID)
-        if target_framework != "codex":  # Codex's write policy reaches Codex only (dev: FRAMEWORK_OWNED_FENCE_IDS)
-            instructions_content = _strip_fence(instructions_content, _CODEX_WRITE_POLICY_FENCE_ID)
+        instructions_content = _strip_foreign_fences(_strip_all_ownership_notices(instructions_content),
+                                                     target_framework)
     if instructions_content and _iwp.keeps_native_instructions(target_framework, manifest, inst_dest):
         result.skipped.append(str(inst_dest))
         result.notices.append(f"{inst_dest}: not written (the native Codex team's; a codex import under "
@@ -935,10 +934,10 @@ def _frontmatter_value(content: str, key: str) -> str:
 
 # A.3/A.4 helpers extracted to interop_helpers.py (CH-07 module-size compliance)
 from agentteams.frameworks._agents_md_ownership import (  # noqa: E402
-    CODEX_WRITE_POLICY_FENCE_ID as _CODEX_WRITE_POLICY_FENCE_ID,
     GROK_FENCE_ID as _GROK_FENCE_ID,
     strip_all_ownership_notices as _strip_all_ownership_notices,
     strip_fence as _strip_fence,
+    strip_foreign_fences as _strip_foreign_fences,
 )
 from agentteams._interop_grok import (  # noqa: E402
     grok_capabilities as _grok_capabilities,

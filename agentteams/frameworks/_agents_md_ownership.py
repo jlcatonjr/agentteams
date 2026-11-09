@@ -258,6 +258,27 @@ def strip_fence(text: str, fence_id: str) -> str:
     return re.sub(rf"\n*{fence_pattern(fence_id).pattern}\n*", "\n\n", text, flags=re.DOTALL)
 
 
+def strip_foreign_fences(text: str, framework: str) -> str:
+    """Remove the owned fences *framework*'s instructions must not carry (1.1's rule; dev's name and signature).
+
+    ``grok_runtime`` is always stripped (Grok's importer and render add their own block back) and
+    ``codex_write_policy`` reaches Codex only. dev generalises this with ``FRAMEWORK_OWNED_FENCE_IDS``, which also
+    covers the goose bridge fences; 1.1 does not strip those (r11 P10-8, @code-hygiene row 732).
+
+    Args:
+        text: The instructions text being projected or converted.
+        framework: The target framework id.
+
+    Returns:
+        *text* without those fences.
+
+    Raises:
+        Nothing.
+    """
+    text = strip_fence(text, GROK_FENCE_ID)
+    return text if framework == "codex" else strip_fence(text, CODEX_WRITE_POLICY_FENCE_ID)
+
+
 #: Goose's opt-in for an AGENTS.md it does not own: there is no adopt flag (a standing way to relax the guard,
 #: @security step-10 ruling), the operator removes the file and re-renders.
 _GOOSE_OPT_IN = "To hand it to goose, remove AGENTS.md and re-render."
