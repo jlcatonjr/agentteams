@@ -77,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   variable no longer has to be exported into a shell that might also launch an agent, where sandboxed commands
   would inherit it. The confirm gate, the install-location gate, the integrity pin and the sandbox read-deny on
   the key directory are unchanged. HMAC keys (`AGENTTEAMS_*_SIGNING_KEY`) are not resolved automatically yet.
+- Docs, `--help` text, the man page, the grant refusal messages and `provision-operator-signing-key.sh`'s printed
+  commands now say the key is found from `key_id`, and the signing examples name no key. The error for a missing
+  key says why no default was tried when the `key_id` is absent or cannot name a file.
 
 ### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
 
