@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `wasm_mcp.is_session_launch` (the exact bound for the shared `agentteams_wasm` table in Codex and Grok) also
   requires the `--pins-sha256` value to be 64 lowercase hex. The server already refused other values at start.
 
+### added (`--branch-inventory` warns when a release merge would delete the integration branch)
+
+- For an integration-model project, `--branch-inventory` (and the inventory under `--branch-post-merge` /
+  `--branch-cleanup`) now checks the repository's "Automatically delete head branches" setting and the integration
+  branch's protection through its existing read-only GitHub client. Auto-delete on with the branch unprotected
+  adds a `WARNING:` note: merging the release PR would delete the branch, as it deleted this repository's `dev` on
+  2026-11-07. A fact it cannot read gives a "could not check" note instead. The check changes no branch state,
+  action, deletion plan or exit code (row 675 follow-up).
+
 ### fixed (integration-branch teams are told to protect the integration branch)
 
 - The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now

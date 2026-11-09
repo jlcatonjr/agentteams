@@ -453,6 +453,40 @@ def _protection(api: GitHubAPI, branch: str) -> str:
     return "yes" if rules else "no"
 
 
+def integration_protection_notes(api: Any, branch: str) -> list[str]:
+    """Notes on whether a release merge would delete the integration branch (row 675).
+
+    GitHub deletes a merged PR's head branch when the repository's ``delete_branch_on_merge`` is on, and only
+    branch protection exempts it, so a release PR (``branch`` -> default) deletes an unprotected integration
+    branch. Read-only and best-effort: anything not positively known yields a "could not check" note, never a
+    warning and never an error.
+
+    Args:
+        api: A :class:`GitHubAPI` (or a stub with ``repo`` and ``get``).
+        branch: The integration branch.
+
+    Returns:
+        ``[]`` when the branch is safe (auto-delete off, or the branch is protected); one ``WARNING: ...`` note
+        when auto-delete is on and the branch is unprotected; one "could not check" note otherwise.
+    """
+    unknown = (f"could not check whether integration branch {branch} survives a release merge "
+               "(repository delete_branch_on_merge or branch protection not readable)")
+    verdict, data = api.get(f"/repos/{api.repo}")
+    auto_delete = data.get("delete_branch_on_merge") if verdict == "ok" and isinstance(data, dict) else None
+    if not isinstance(auto_delete, bool):
+        return [unknown]
+    if not auto_delete:
+        return []
+    protected = _protection(api, branch)
+    if protected == "yes":
+        return []
+    if protected == "no":
+        return [f"WARNING: integration branch {branch} is not protected and the repository deletes merged "
+                f"head branches (delete_branch_on_merge): merging the release PR will delete {branch}. "
+                "Protect it (no deletion, no force push): references/integration-branch.reference.md section 5"]
+    return [unknown]
+
+
 def _merged_pr(api: GitHubAPI, repo: Path, cfg: InventoryConfig, default_ref: str,
                rec: RefRecord) -> tuple[str, int | None]:
     """Return ``(verdict, pr_number)`` for the Merged-by-PR test.
@@ -618,6 +652,8 @@ def build_inventory(cfg: InventoryConfig, *, api: GitHubAPI | None = None,
     api_facts = _open_pr_facts(api if cfg.use_api else None)
     if cfg.use_api and api is None:
         api_facts.notes.append("push remote is not github.com: remote deletions are not planned")
+    if cfg.use_api and api is not None and cfg.integration_branch:
+        api_facts.notes.extend(integration_protection_notes(api, cfg.integration_branch))
 
     operators = {e.strip().lower() for e in cfg.operator_emails if e.strip()}
     me = git(repo, "config", "user.email", check=False)
@@ -846,6 +882,7 @@ def summary_line(inventory: dict[str, Any]) -> str:
 
 __all__ = [
     "CSV_COLUMNS", "STATES", "GitHubAPI", "InventoryConfig", "InventoryError", "RefRecord",
-    "build_inventory", "deletion_plan", "git", "git_ok", "github_repo_of", "item_commands",
+    "build_inventory", "deletion_plan", "git", "git_ok", "github_repo_of", "integration_protection_notes",
+    "item_commands",
     "plan_digest", "pr_ref_matches", "summary_line", "write_reports",
 ]
