@@ -1,0 +1,8 @@
+{
+  "patch_id": "45dfd376985c93b89346ab2d2dc4ef526ab463f3",
+  "commit": "7c33a17e79b40e1f1d88669d79f7cbfaf5d128a1",
+  "subject": "fix(sync): self-ignoring backup roots, fence-less hub backup, f-string fence sites listed (row 662)",
+  "impact": "1 symbols added, 1 symbols changed",
+  "note": "WP-A (row 662): new public backup.ensure_backup_root_ignored(root) writes a self-ignoring .gitignore into a backups root; added to backup.__all__; callers: backup.py, fence_inject.py, stale_remediate.py; documented in docs_src/api-reference/emit.md and CHANGELOG. Additive; no existing signature changed.",
+  "recorded_at": "2026-11-09T19:21:39Z"
+}
