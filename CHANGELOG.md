@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-09
+
+### release notes
+
+agentteams 1.1.0 is the first final release of the 1.1 line. It is v1.1.0-rc.17 with no code change: the downstream
+rehearsals (researchteam, mathAgents, baseAgent) ran against rc.17. See the `[1.1.0-rc.1]` through `[1.1.0-rc.17]`
+sections below for everything 1.1 adds over 1.0.
+
+- **Install:** from a verified, detached checkout of the signed `v1.1.0` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
 ## [1.1.0-rc.17] - 2026-11-09
 
 ### release notes
