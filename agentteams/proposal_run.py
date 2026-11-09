@@ -177,6 +177,8 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             command, cmd_env, cmd_cwd = launch.argv, launch.env, Path(launch.cwd)  # env is empty (R9)
         before = P._snapshot(root, env)  # re-taken after the write-ahead row, so only the command's changes count
         timed_out, group_killed, survivors = False, False, False
+        report_r: int | None = None
+        report_w: int | None = None
         started = time.monotonic()
         notice_days = {time.strftime("%Y-%m-%d", time.gmtime())}  # the hook names its log by UTC date (M6-F7)
         if jail is not None and wasm_cmd is None:
@@ -188,17 +190,25 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             except P._confinement.ConfinementError as exc:
                 shutil.rmtree(run_tmp, ignore_errors=True)
                 raise P.ProposalError(f"confined_programs.{agent}: {exc}") from exc
+            if sandbox == "bwrap":  # #262 item 2: survivors are counted inside the sandbox, before its teardown
+                report_r, report_w = os.pipe()
             if sandbox:
                 command = P._confinement.wrap(command, sandbox=sandbox, root=root, cwd=cwd, exec_paths=jail["exec"],
-                                            write_roots=checked_roots, tmp_dir=Path(run_tmp), resolver=resolver)
+                                            write_roots=checked_roots, tmp_dir=Path(run_tmp), resolver=resolver,
+                                            survivor_fd=report_w)
         try:
             # Own process group, so a timeout kills everything the command started before the final check.
             child = subprocess.Popen(command, cwd=cmd_cwd, env=cmd_env,
                                      stdin=subprocess.PIPE if stdin_bytes is not None else subprocess.DEVNULL,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,
-                                     start_new_session=True)
+                                     start_new_session=True, pass_fds=(report_w,) if report_w is not None else ())
         except (OSError, subprocess.SubprocessError) as exc:
+            if report_r is not None:
+                os.close(report_r)
             raise P.ProposalError(f"command could not run: {exc}") from exc
+        finally:
+            if report_w is not None:
+                os.close(report_w)  # only the shim holds the write end now
         try:
             out, err = child.communicate(stdin_bytes, timeout=timeout)
             proc = subprocess.CompletedProcess(argv, child.returncode, out, err)
@@ -225,6 +235,12 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 survivors = True
             except ProcessLookupError:
                 survivors = False  # the group is empty: nothing outlived the command
+            if report_r is not None:
+                # bwrap: the in-sandbox count is the reliable signal (the group is often already gone). A timeout
+                # killed the shim too, so its missing report is not read as survivors there.
+                reported = P._confinement.read_survivor_report(report_r)
+                survivors = survivors or (reported and not timed_out)
+                report_r = None
             if run_tmp:
                 shutil.rmtree(run_tmp, ignore_errors=True)
         after = P._snapshot(root, env)

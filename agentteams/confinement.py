@@ -481,8 +481,53 @@ def bwrap_argv(*, root: Path, write_roots: list[str], tmp_dir: Path, cwd: Path) 
                                 protected_rel=PROTECTED_REL, key_dir=KEY_DIR)
 
 
+#: #262 item 2. bwrap's PID 1 exits the moment the command exits and the namespace teardown kills anything left, so a
+#: post-exit ``killpg`` from outside races the teardown and usually finds nothing. This shim runs inside the sandbox:
+#: it runs the command with the report fd closed (the command cannot forge the report), then counts the processes
+#: still in the PID namespace other than PID 1 (bwrap's init) and itself, writes ``survivors=N`` to the fd, and exits
+#: with the command's status. A missing report (the shim was killed) is read as survivors: fail closed.
+_SURVIVOR_SHIM = ('fd=$1; shift; eval "\\"\\$@\\" $fd>&-"; rc=$?; n=0; '
+                  'for p in /proc/[0-9]*; do q=${p#/proc/}; [ "$q" = 1 ] || [ "$q" = "$$" ] || n=$((n+1)); done; '
+                  'eval "echo survivors=$n >&$fd"; exit "$rc"')
+
+
+def read_survivor_report(fd: int, *, timeout: float = 5.0) -> bool:
+    """Read the in-sandbox survivor report from *fd* (then close it); True when processes outlived the command.
+
+    Args:
+        fd: The read end of the report pipe passed to :func:`wrap` as ``survivor_fd``'s pair.
+        timeout: Seconds to wait for the writer to finish.
+
+    Returns:
+        True when the shim counted survivors, or when no report arrived (the shim was killed: fail closed).
+    """
+    import select
+
+    data = b""
+    try:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([fd], [], [], max(0.0, deadline - time.monotonic()))
+            if not ready:
+                break
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            data += chunk
+    finally:
+        os.close(fd)
+    lines = [ln for ln in data.decode("ascii", "replace").splitlines() if ln.startswith("survivors=")]
+    if not lines:
+        return True
+    try:
+        return int(lines[-1].split("=", 1)[1]) > 0
+    except ValueError:
+        return True
+
+
 def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: list[str],
-         write_roots: list[str], tmp_dir: Path, resolver: LauncherResolver | None = None) -> list[str]:
+         write_roots: list[str], tmp_dir: Path, resolver: LauncherResolver | None = None,
+         survivor_fd: int | None = None) -> list[str]:
     """Return *argv* wrapped in *sandbox*.
 
     For Seatbelt the exec allowlist is first expanded by :func:`expand_exec_paths` (xcrun launchers reach their
@@ -499,6 +544,8 @@ def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: li
         write_roots: Project-relative writable directories.
         tmp_dir: The run's private ``TMPDIR`` (must exist).
         resolver: The xcrun launcher resolver; a fresh :func:`xcrun_resolver` when None (Seatbelt only).
+        survivor_fd: bwrap only: the write end of a pipe the in-sandbox survivor check reports on (pass it to the
+            child with ``pass_fds``; read it with :func:`read_survivor_report`). None keeps the plain wrap.
 
     Returns:
         The wrapped argv.
@@ -519,6 +566,8 @@ def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: li
                                    exec_literals=[e for k, e in extra if k == "literal"])
         return ["/usr/bin/sandbox-exec", "-p", profile, *argv]
     if sandbox == "bwrap":
+        if survivor_fd is not None:
+            argv = ["/bin/sh", "-c", _SURVIVOR_SHIM, "agentteams-survivor-check", str(survivor_fd), *argv]
         return [*bwrap_argv(root=root, write_roots=write_roots, tmp_dir=tmp_dir, cwd=cwd), "--", *argv]
     raise ConfinementError(f"unknown sandbox {sandbox!r}")
 
