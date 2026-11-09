@@ -166,7 +166,7 @@ explicit list replaces the default (`[]` keeps none).
 | goose | `wired-per-agent` (grant mode); `not-wired` under legacy scoping | recipe extensions, honoured on a direct `goose run --recipe`; a delegate cannot add the server |
 | codex | `wired-shared` | one compute-only instance in `.codex/config.toml` (loaded for a trusted project), approval mode `prompt` |
 | copilot-vscode / copilot-cli | `example-only` | inert `.vscode/` / `.github/mcp.agentteams-wasm.example.json`; no `run_wasm` in agent tools |
-| grok | `example-only` | inert `.grok/mcp.agentteams-wasm.example.toml`; the operator merges its table into `.grok/config.toml`, outside the agentteams-managed block |
+| grok | `example-only` | inert `.grok/mcp.agentteams-wasm.example.toml`; the operator merges its table into `.grok/config.toml`, outside the agentteams-managed block. Write-protected only inside the agentteams launcher; in profile mode neither file is, so merge from a fresh render after a diff |
 | agents-md | `instructions-only` | no MCP channel |
 
 **Operator spike B.** Run on the operator's macOS host on 2026-11-01 with the development wasmtime 36.0.16

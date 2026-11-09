@@ -152,8 +152,8 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
                    "mcp-servers in CLI agent profiles unverified; "
                    + _NESTED_UNLESS_SANDBOXED.format(flag="--sandbox"), True, [COPILOT_CLI_EXAMPLE])
     if framework == "grok":
-        return row(EXAMPLE_ONLY, "session-compute-only", f"inert {GROK_EXAMPLE} (not write-protected on Grok: check it "
-                   "against a fresh render before merging); merge its table into .grok/config.toml, outside the "
+        return row(EXAMPLE_ONLY, "session-compute-only", f"inert {GROK_EXAMPLE} (write-protected only inside the agentteams "
+                   "launcher, not in profile mode: check it against a fresh render before merging); merge its table into .grok/config.toml, outside the "
                    "agentteams-managed block (loaded after folder trust); no "
                    "[permission] ask rule covers it, and custom agents carry mcpInheritance: none (their access and "
                    "Grok's approval prompt are untested); "
@@ -278,9 +278,12 @@ def _toml_example(target: str, entry: Mapping[str, Any]) -> str:
     table = "".join(f"{key} = {json.dumps(value, ensure_ascii=False)}\n" for key, value in entry.items())  # valid TOML
     caveat = ("A render with grok:mcp wiring any server owns [mcp_servers]: it keeps this table only while it equals "
               "this example exactly, and otherwise replaces it (it says so); merge it again after such a render.")
-    verify = ("Grok does not write-protect this file: before merging, check it matches a fresh render (the "
+    verify = ("Grok itself does not write-protect this file: before merging, check it matches a fresh render (the "
               "--agent value must be _session).")
-    return f"# {note}\n# {caveat}\n# {verify}\n[mcp_servers.agentteams_wasm]\n{table}"
+    exposure = ("Only the agentteams launcher (.grok/confined-run.example.sh, the default launcher mode) makes .grok "
+                "read-only to a Grok session; in profile mode (GROK_CONFINE_MODE=profile) a session can edit this "
+                "example and .grok/config.toml alike, so merge only from a fresh render, after a diff.")
+    return f"# {note}\n# {caveat}\n# {verify}\n# {exposure}\n[mcp_servers.agentteams_wasm]\n{table}"
 
 
 def output_files(manifest: dict[str, Any], framework: str) -> list[tuple[str, str]]:
