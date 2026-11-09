@@ -487,10 +487,14 @@ def test_survivor_report_on_an_fd_above_1023_is_still_read():
         resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
 
 
-def test_survivor_report_read_failure_fails_closed():
+def test_survivor_report_read_failure_fails_closed(monkeypatch):
     r, w = C.survivor_channel()
     os.close(w)
-    os.close(r)  # a bad fd: the read fails, and that is reported as a missing report, not raised
+
+    def failing_read(fd, n):
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(os, "read", failing_read)  # the read fails: reported as a missing report, not raised
     assert "no well-formed" in C.read_survivor_report(r)
 
 
@@ -508,7 +512,11 @@ _FAKE_PROC = ('mk() {{ mkdir -p "$PROC/$1/task/$1"; echo "$1 (x) $2 $3 0" > "$PR
 ])
 def test_survivor_shim_walk_against_a_fake_proc(tmp_path, extra, why):
     # The shim's own text, pointed at a fake /proc, with kill replaced by removing the entry (no real process).
-    shim = C._SURVIVOR_SHIM.replace("/proc", "$PROC").replace('kill -9 "$q" 2>/dev/null', 'rm -rf "$PROC/$q"')
+    real_kill = 'kill -9 "$q" 2>/dev/null'
+    # Never run the shim's real kill against this host: refuse unless both substitutions really apply.
+    assert C._SURVIVOR_SHIM.count(real_kill) == 1 and "/proc/" in C._SURVIVOR_SHIM, "shim text drifted; fix this test"
+    shim = C._SURVIVOR_SHIM.replace("/proc", "$PROC").replace(real_kill, 'rm -rf "$PROC/$q"')
+    assert "kill" not in shim and "/proc" not in shim
     script = f"PROC={tmp_path}; " + _FAKE_PROC.format(extra=extra) + shim
     r, w = C.survivor_channel()
     shell = C.survivor_shim_argv(w, [])[0]
