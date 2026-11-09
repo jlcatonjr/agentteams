@@ -367,26 +367,86 @@ def _location_gate(project_roots: list[Path], allow_checkout: bool) -> bool | No
     return bool(refusals)
 
 
-def _signing_preflight(project_roots: list[Path], allow_checkout: bool) -> tuple[str, bool] | None:
-    """Everything before the display, key unread: env, key file present, integrity, install location.
+#: ``provision-operator-signing-key.sh``'s file name for key ``<key_id>`` inside ``SIGNING_KEY_DIR``.
+DEFAULT_KEYFILE_TEMPLATE = "decision-signing-{key_id}.pem"
+
+#: Longest ``key_id`` that derives a path (keeps the file name far below NAME_MAX).
+_MAX_DERIVED_KEY_ID = 128
+
+
+def _key_dir() -> Path:
+    """``SIGNING_KEY_DIR`` expanded (a seam: the test suite points it at a temp dir)."""
+    from agentteams.frameworks._sandbox_emit import SIGNING_KEY_DIR
+
+    return Path(os.path.expanduser(SIGNING_KEY_DIR))
+
+
+def default_keyfile(key_id: str) -> Path | None:
+    """The conventional private-key path for ``key_id``, or None when ``key_id`` cannot name one.
+
+    Args:
+        key_id: The verify key's file stem (the spec's ``key_id``).
+
+    Returns:
+        ``~/.config/agentteams/keys/decision-signing-<key_id>.pem`` (expanded), or None for an empty
+        or malformed ``key_id`` (the whole id must match ``decision_log._KEY_ID_RE``, which has no
+        path separator, and be at most :data:`_MAX_DERIVED_KEY_ID` characters).
+    """
+    from agentteams.cli.decision_log import _KEY_ID_RE
+
+    if not key_id or len(key_id) > _MAX_DERIVED_KEY_ID or not _KEY_ID_RE.fullmatch(key_id):
+        return None
+    return _key_dir() / DEFAULT_KEYFILE_TEMPLATE.format(key_id=key_id)
+
+
+def _resolve_keyfile(key_id: str) -> str | None:
+    """The operator key file: ``KEYFILE_ENV`` when set, else :func:`default_keyfile` when it exists.
+
+    Locating the key is a convenience, not a control (the confirm gate, install-location gate,
+    integrity pin and the sandbox read-deny on ``SIGNING_KEY_DIR`` are), so the operator need not
+    name a path the spec's ``key_id`` already implies. The path (never the key) is printed.
+
+    Returns:
+        The key-file path, or None after printing why none was found.
+    """
+    keyfile = os.getenv(KEYFILE_ENV, "")
+    if keyfile:
+        return keyfile
+    derived = default_keyfile(key_id)
+    if derived is not None and derived.is_file():
+        print(f"Note: {KEYFILE_ENV} is not set; using {derived}, the key for key_id {key_id!r}.",
+              file=sys.stderr)
+        return str(derived)
+    where = (f", and there is no key for key_id {key_id!r} at {derived}" if derived is not None
+             else "")
+    print(
+        f"Error: {KEYFILE_ENV} is not set{where} — it must name the operator private key file "
+        "(never an agent env). Refusing to sign (fail-closed).",
+        file=sys.stderr,
+    )
+    return None
+
+
+def _signing_preflight(project_roots: list[Path], allow_checkout: bool,
+                       key_id: str = "") -> tuple[str, bool] | None:
+    """Everything before the display, key unread: integrity, key file located, install location.
+
+    The integrity check runs first, so the key directory is not looked at (and no unpinned module
+    is imported to find it) before the signing code is known to match its manifest.
 
     Args:
         project_roots: Projects whose sandbox ``allowWrite`` roots count as agent-writable.
         allow_checkout: ``--allow-checkout-signing`` (operator argv).
+        key_id: The spec's ``key_id``; locates the key when ``KEYFILE_ENV`` is unset.
 
     Returns:
         ``(key file path, overridden)`` where ``overridden`` says an install-location refusal was
         overridden by ``--allow-checkout-signing``; None after printing why signing is refused.
     """
-    keyfile = os.getenv(KEYFILE_ENV, "")
-    if not keyfile:
-        print(
-            "Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator "
-            "private key file (never an agent env). Refusing to sign (fail-closed).",
-            file=sys.stderr,
-        )
-        return None
     if not presign_integrity_check():
+        return None
+    keyfile = _resolve_keyfile(key_id)
+    if not keyfile:
         return None
     if not Path(keyfile).is_file():
         print(f"Error: cannot read operator private key file: {keyfile!r} does not exist or is not "
@@ -560,7 +620,7 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         print("Error: refusing to sign — this decision's payload begins with the capability-"
               "grant purpose tag (use --sign-grant for grants).", file=sys.stderr)
         return 1
-    preflight = _signing_preflight(_project_roots(output_dir), allow_checkout)
+    preflight = _signing_preflight(_project_roots(output_dir), allow_checkout, str(row.get("key_id") or ""))
     if preflight is None:
         return 1
     keyfile, overridden = preflight
@@ -726,7 +786,7 @@ def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]], *,
         print(f"Error: refusing to sign: {spoof} (a display-spoofing character). The key was not "
               "read.", file=sys.stderr)
         return 1
-    preflight = _signing_preflight([Path.cwd().resolve()], allow_checkout)
+    preflight = _signing_preflight([Path.cwd().resolve()], allow_checkout, key_id)
     if preflight is None:
         return 1
     keyfile, _ = preflight
@@ -790,7 +850,8 @@ def sign_mcp_direct_grant(record: dict, *, project_root: Path | None = None, con
         print(f"Error: refusing to sign: {spoof}. The key was not read.", file=sys.stderr)
         return None
     project = Path(project_root).resolve() if project_root is not None else Path.cwd().resolve()
-    preflight = _signing_preflight([project], allow_checkout)   # the project the digest binds
+    preflight = _signing_preflight([project], allow_checkout,   # the project the digest binds
+                                    str(record.get("key_id") or ""))
     if preflight is None:
         return None
     keyfile, _ = preflight
@@ -820,7 +881,9 @@ def sign_mcp_direct_grant(record: dict, *, project_root: Path | None = None, con
 
 __all__ = [
     "GRANT_SPEC_REQUIRED",
+    "DEFAULT_KEYFILE_TEMPLATE",
     "KEYFILE_ENV",
+    "default_keyfile",
     "SIGNING_CLOSURE",
     "grant_spec_kwargs",
     "load_grant_spec",
