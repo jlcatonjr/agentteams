@@ -36,6 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2026-11-07. A fact it cannot read gives a "could not check" note instead. The check changes no branch state,
   action, deletion plan or exit code (row 675 follow-up).
 
+### fixed (sync hub backups and fence-less hubs, row 662)
+
+- Every `.agentteams-backups` directory now ignores itself in git: the first backup writes a `.gitignore`
+  (`*`) into it unless one exists. Hub backups under `.agentteams/canonical/agents/.agentteams-backups` no
+  longer show as untracked in a committed hub whose `.gitignore` lacks the name. An existing `.gitignore`
+  there is left alone, so removing or replacing it is how to commit backups.
+- When a sync replaces a fence-less hub's instruction text with the pin's, it now backs up the hub's
+  `team.cai.json` first (`agents/.agentteams-backups/<timestamp>/__external__/`, restorable with
+  `--restore-backup`). Before, git history was the only copy.
+- The fences agentteams builds by f-string, which the version-ceiling scan can't read, are now listed with
+  their `v=` in a test, so a new site or a version bump fails until someone decides its ceiling. No merge
+  behaviour changes.
+
 ### fixed (integration-branch teams are told to protect the integration branch)
 
 - The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now

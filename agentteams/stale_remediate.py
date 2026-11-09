@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentteams import fleet
-from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME, inert_backup_name
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME, ensure_backup_root_ignored, inert_backup_name
 from agentteams.stale_detector import (
     GitRunner,
     StalenessReport,
@@ -89,6 +89,7 @@ def snapshot_files(root: Path, rel_paths: list[str], *, stamp: str | None = None
         dst.write_bytes(data)
         entries.append({"rel": rel, "stored": stored, "sha256": hashlib.sha256(data).hexdigest()})
     snap.mkdir(parents=True, exist_ok=True)
+    ensure_backup_root_ignored(snap.parent)
     (snap / "manifest.json").write_text(
         json.dumps({"created_utc": _utc_stamp(), "files": entries}, indent=2),
         encoding="utf-8",

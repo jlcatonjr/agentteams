@@ -5,7 +5,7 @@
 
 - Modules mapped: **443**
 - Packages: **14**
-- Internal import edges: **1665**
+- Internal import edges: **1666**
 - Distinct external dependencies: **11**
 
 ---
@@ -77,7 +77,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.audit` | `agentteams.audit_agent_contract`, `agentteams.audit_types`, `agentteams.backup`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.goose`, `agentteams.living_doc` | `agentteams.cli.generate`, `agentteams.cli.write_policy_warning` |
 | `agentteams.audit_agent_contract` | `agentteams.audit_types`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.front_matter_merge`, `agentteams.runner_mcp`, `agentteams.write_policy` | `agentteams.audit`, `agentteams.cli.write_policy_warning`, `agentteams.interop_write_policy` |
 | `agentteams.audit_types` | `agentteams.frameworks.registry` | `agentteams.audit`, `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_policy_warning`, `agentteams.rank_conformance` |
-| `agentteams.backup` | `agentteams`, `agentteams.atomicio`, `agentteams.frameworks.registry`, `agentteams.liaison_logs` | `agentteams.architecture`, `agentteams.audit`, `agentteams.bridge`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.adopt_only`, `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.commands`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.output_target`, `agentteams.cli.render_pipeline`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync`, `agentteams.runner_mcp`, `agentteams.scan`, `agentteams.stale_detector`, `agentteams.stale_remediate`, `agentteams.sync_roster` |
+| `agentteams.backup` | `agentteams`, `agentteams.atomicio`, `agentteams.frameworks.registry`, `agentteams.liaison_logs` | `agentteams.architecture`, `agentteams.audit`, `agentteams.bridge`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.adopt_only`, `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.commands`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.output_target`, `agentteams.cli.render_pipeline`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync`, `agentteams.runner_mcp`, `agentteams.scan`, `agentteams.stale_detector`, `agentteams.stale_remediate`, `agentteams.sync_hub_refresh`, `agentteams.sync_roster` |
 | `agentteams.baseline` | — | `agentteams.cli.app` |
 | `agentteams.behavioral_drift` | `agentteams.handoff_payloads` | — |
 | `agentteams.branch_cleanup` | `agentteams._utils`, `agentteams.branch_inventory`, `agentteams.cli.grants`, `agentteams.cli.security_gate` | `agentteams.cli.branch_switch` |
@@ -359,7 +359,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.svg_render` | — | `agentteams.architecture`, `agentteams.graph` |
 | `agentteams.sync_baseline` | `agentteams.atomicio` | `agentteams.cli.commands`, `agentteams.multi_sync` |
 | `agentteams.sync_classifier` | `agentteams.front_matter_merge` | `agentteams.cli.commands`, `agentteams.multi_sync` |
-| `agentteams.sync_hub_refresh` | `agentteams.canonical`, `agentteams.fences`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.interop_helpers`, `agentteams.sync_pin` | `agentteams.cli.sync_switch`, `agentteams.multi_sync` |
+| `agentteams.sync_hub_refresh` | `agentteams.backup`, `agentteams.canonical`, `agentteams.fences`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.interop_helpers`, `agentteams.sync_pin` | `agentteams.cli.sync_switch`, `agentteams.multi_sync` |
 | `agentteams.sync_pin` | `agentteams.atomicio` | `agentteams.multi_sync`, `agentteams.stale_detector`, `agentteams.sync_hub_refresh` |
 | `agentteams.sync_roster` | `agentteams.backup`, `agentteams.git_exec` | `agentteams.multi_sync` |
 | `agentteams.team_dir_advisories` | — | `agentteams.cli.generate_helpers`, `agentteams.codex_mcp_emit` |
@@ -4441,6 +4441,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/sync_hub_refresh.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.backup",
         "agentteams.canonical",
         "agentteams.fences",
         "agentteams.frameworks.registry",
@@ -10597,6 +10598,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.sync_classifier",
       "target": "agentteams.front_matter_merge"
+    },
+    {
+      "source": "agentteams.sync_hub_refresh",
+      "target": "agentteams.backup"
     },
     {
       "source": "agentteams.sync_hub_refresh",
