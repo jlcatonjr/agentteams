@@ -278,7 +278,7 @@ def _toml_example(target: str, entry: Mapping[str, Any]) -> str:
     table = "".join(f"{key} = {json.dumps(value, ensure_ascii=False)}\n" for key, value in entry.items())  # valid TOML
     caveat = ("A render with grok:mcp wiring any server owns [mcp_servers]: it keeps this table only while it equals "
               "this example exactly, and otherwise replaces it (it says so); merge it again after such a render.")
-    verify = ("Grok does not write-protect this file: before merging, check it matches a fresh render (the "
+    verify = ("Grok itself does not write-protect this file: before merging, check it matches a fresh render (the "
               "--agent value must be _session).")
     exposure = ("Only the agentteams launcher (.grok/confined-run.example.sh, the default launcher mode) makes .grok "
                 "read-only to a Grok session; in profile mode (GROK_CONFINE_MODE=profile) a session can edit this "
