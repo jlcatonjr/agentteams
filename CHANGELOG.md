@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
+
+- **A process left running by a confined command fails the run again under bwrap.** bwrap's PID 1 exits with the
+  command and the namespace teardown kills what is left, so the runner's check from outside raced the teardown and
+  usually saw nothing (Ubuntu 26, and Ubuntu 24.04 once the tests really ran). A shim inside the sandbox now counts
+  the namespace's processes after the command exits, before teardown, and reports on a pipe the command cannot
+  write to; a missing report counts as a survivor (except after a timeout, which
+  kills the shim too). Nothing ever escaped: this restores the failure signal.
+- The kernel-refusal test matches the errno (EPERM or EROFS), and the coreutils lookup test accepts Rust coreutils.
+- CI installs and probes bubblewrap on the Ubuntu test rows and sets `AGENTTEAMS_REQUIRE_BWRAP=1`, so a missing
+  bwrap fails the run instead of silently skipping every live confinement test. A non-required `ubuntu-26.04` job
+  records the runner, bwrap and coreutils versions and fails if the survivor test does not run.
+
+### fixed (WASM installer retries transient HTTP errors)
+
+- `--wasm-install` and `--wasm-pin-update` (`wasm_runtime.download`) now retry HTTP 408, 429, 500, 502, 503 and
+  504 within the existing 3-attempt budget instead of failing on the first one, and wait between attempts (2 s,
+  then 4 s; a numeric `Retry-After` is honoured, capped at 30 s). Network errors and timeouts get the same delay.
+  Any other HTTP error (404, 403, …) still fails at once, URL, redirect and size refusals are never retried, and
+  the exit code for a network failure is still 3. Motivation: a GitHub release-asset `HTTP 504` turned `main`'s
+  post-merge `wasm-live` red twice on 2026-11-08.
+
 ### fixed (Codex write-policy fence is scoped to Codex, #249)
 
 - The `codex_write_policy` fence Codex adds to a shared repo-root `AGENTS.md` (one Goose and Grok also load) now

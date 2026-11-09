@@ -47,6 +47,12 @@ def _row(action: str, *, scope: str | None = None, relaxes: str | None = None, g
     return row
 
 
+def _baseline_row() -> dict[str, str]:
+    """The ``approved-baseline`` PASS row a signed row's lineage (``derives_from``) names."""
+    return {"timestamp": "2026-10-01", "requesting_agent": "security", "action_reviewed": "approved-baseline",
+            "verdict": "PASS", "conditions_verified": "verified"}
+
+
 def _log(team: Path, *rows: dict[str, str]) -> Path:
     """Append rows to the decisions log (created with an ancestor row the lineage can name)."""
     path = team / "references" / "security-decisions.log.csv"
@@ -58,9 +64,7 @@ def _log(team: Path, *rows: dict[str, str]) -> Path:
             fields = list(reader.fieldnames or fields)
             existing = list(reader)
     else:
-        existing = [{c: "" for c in _COLUMNS} | {"timestamp": "2026-10-01", "requesting_agent": "security",
-                                                 "action_reviewed": "approved-baseline", "verdict": "PASS",
-                                                 "conditions_verified": "verified"}]
+        existing = [{c: "" for c in _COLUMNS} | _baseline_row()]
     with path.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
