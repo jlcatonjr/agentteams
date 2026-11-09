@@ -47,7 +47,8 @@ it). It survives only while it equals the table this render computes (`keep_if_e
 
 - The comparison source is computed, never the example on disk, which Grok does not write-protect. Only the
   agentteams launcher makes `.grok` read-only to a session; in profile mode (`GROK_CONFINE_MODE=profile`) neither
-  the example nor `.grok/config.toml` is protected (row 648 gap 1: documented, no deny rule).
+  the example nor `.grok/config.toml` is protected from shell writes: the `[permission]` `deny` below covers only
+  Grok's Read/Edit/Write tools (row 648 gap 1: documented, no sandbox deny rule).
 - `keep_if_exact` is bounded: only `mcp_servers.agentteams_wasm`, keys exactly `command`/`args`, the command one of
   `runner_mcp.SYSTEM_PYTHONS`, and args exactly a compute-only `--agent _session` launch, rebuilt with
   `wasm_mcp.launch_args` (`wasm_mcp.is_session_launch`, shared with Codex's `first_party_tables`). Anything else

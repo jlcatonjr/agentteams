@@ -342,7 +342,7 @@ def interpreter() -> str:
         ``runner_mcp.interpreter()``.
 
     Raises:
-        ValueError: No system python3 exists.
+        ValueError: No trusted system python3 qualifies (see ``runner_mcp.interpreter``).
     """
     from agentteams import runner_mcp
 

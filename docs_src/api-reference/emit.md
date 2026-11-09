@@ -219,7 +219,7 @@ Print the structured dry-run plan recorded on `EmitResult.dry_run_report`.
 
 Copy existing agent files to a timestamped backup directory before a write.
 
-The backup is placed at `<output_dir>/.agentteams-backups/YYYYMMDD-HHMMSS/`. The first backup also writes `<output_dir>/.agentteams-backups/.gitignore` (`*`) unless one exists, so backups never show as untracked in a committed tree; remove or replace that file to commit them. If `files_to_backup` is given, only those relative paths are backed up (plus liaison/security CSV logs when present). If `files_to_backup` is `None`, every file in `output_dir` is copied except backup storage and `references/build-log.json`.
+The backup is placed at `<output_dir>/.agentteams-backups/YYYYMMDD-HHMMSS/`. The first backup also writes `<output_dir>/.agentteams-backups/.gitignore` (`*`) unless one exists, so backups never show as untracked in a committed tree; remove or replace that file to commit them (`ensure_backup_root_ignored(root) -> bool` writes it, returning `True` when it created the file; its text is `BACKUP_GITIGNORE_TEXT`; both are public in `agentteams.backup`). If `files_to_backup` is given, only those relative paths are backed up (plus liaison/security CSV logs when present). If `files_to_backup` is `None`, every file in `output_dir` is copied except backup storage and `references/build-log.json`.
 
 **Args:**
 

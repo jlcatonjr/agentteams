@@ -69,7 +69,8 @@ Raises `ValueError` carrying `pin_instruction_problem`'s text. `run_sync` and `s
 `refresh_hub_for_projection(root, pin_doc, hub, canonical_dir, *, dry_run, notices) -> None`
 
 `run_sync`'s pre-projection step: `refresh_hub_binding` from the pin alone, reported in `notices`, saved unless
-`dry_run`.
+`dry_run`. When it replaces a fence-less hub's instruction text, it first backs up `team.cai.json` (as
+`refresh_hub_instructions` does) and names the backup in `notices`.
 
 ## The projection guard
 

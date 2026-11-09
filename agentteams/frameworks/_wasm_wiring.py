@@ -281,8 +281,9 @@ def _toml_example(target: str, entry: Mapping[str, Any]) -> str:
     verify = ("Grok itself does not write-protect this file: before merging, check it matches a fresh render (the "
               "--agent value must be _session).")
     exposure = ("Only the agentteams launcher (.grok/confined-run.example.sh, the default launcher mode) makes .grok "
-                "read-only to a Grok session; in profile mode (GROK_CONFINE_MODE=profile) a session can edit this "
-                "example and .grok/config.toml alike, so merge only from a fresh render, after a diff.")
+                "read-only to a Grok session; in profile mode (GROK_CONFINE_MODE=profile) a session's shell can edit this "
+                "example and .grok/config.toml alike (the [permission] deny covers only Grok's file tools), so "
+                "merge only from a fresh render, after a diff.")
     return f"# {note}\n# {caveat}\n# {verify}\n# {exposure}\n[mcp_servers.agentteams_wasm]\n{table}"
 
 
