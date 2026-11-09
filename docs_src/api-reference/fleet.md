@@ -1,6 +1,6 @@
 # `fleet` — AgentTeamsModule
 
-Safely run `--update --merge` across **every** agent-infrastructure workspace under a parent directory (and its subfolders) in one command — covering both `.github/agents/` (copilot-vscode) and `.claude/` infrastructures — with a git-commit snapshot before each apply and a `git diff` content audit after.
+Safely run `--update --merge` across **every** agent-infrastructure workspace under a parent directory (and its subfolders) in one command, except folders matching `--fleet-exclude` and release-locked workspaces, — covering both `.github/agents/` (copilot-vscode) and `.claude/` infrastructures — with a git-commit snapshot before each apply and a `git diff` content audit after.
 
 > *Source: `agentteams/fleet.py`*
 
@@ -20,13 +20,16 @@ agentteams --fleet /path/to/parent --update --merge --yes
 # Restrict to one infrastructure, or change the report location.
 agentteams --fleet /path/to/parent --update --merge --yes --fleet-frameworks github
 agentteams --fleet /path/to/parent --update --merge --yes --fleet-report /tmp/fleet-out
+
+# Leave some folders alone (repeatable; matches the relative path or the folder name).
+agentteams --fleet /path/to/parent --update --merge --yes --fleet-exclude 'agentteams*'
 ```
 
 `--fleet` **requires** `--update` and `--merge`. The default (without `--yes`) is a **dry-run preview**; pass `--yes` to apply. See the [CLI Reference → Fleet Update](../cli-reference.md#fleet-update-multi-workspace) for the option table and the full exclusivity rules.
 
 ### What one run does, per discovered workspace
 
-1. **Discover** — find directories containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals.
+1. **Discover** — find directories containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals. **Guards:** a folder matching a `--fleet-exclude` glob ([`_fleet_locks.excluded_by`](#guards)) is not descended into and gets a `SKIP` row with target `(excluded)`. A workspace whose repository release-locks agentteams in `toolchain.lock` gets a `SKIP` row with target `(release-locked)`, before the snapshot and any write, unless a `--fleet-ignore-locks` glob matches its locked repository (see [Guards](#guards)).
 2. **Snapshot (to a ref)** — before applying, record the workspace's agent-infra state as a commit (`chore(fleet): pre-update snapshot`) under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace hash>` (or stay at `HEAD` when already clean). It is built in a temporary index: the checked-out branch, `HEAD`, the index and the working tree are never changed, and no commit hook runs (`update-ref` still fires a `reference-transaction` hook if one is installed). Untracked agent files are captured (ignored ones are not). Because no pre-commit secret scanner sees a ref, a workspace whose changed agent files hold a high-severity credential finding (`agentteams.scan`) gets no snapshot, and a dirty workspace with no snapshot is SKIPped (never updated over uncommitted edits it could not snapshot). This is the recoverable rollback point and the diff base. The refs stay local, but they survive `gc` and `clone --mirror` / `push --mirror` copy them; list them with `git for-each-ref refs/agentteams/fleet-snapshots/` and delete one with `git update-ref -d <ref>`. Non-git workspaces fall back to the automatic `<output_dir>/.agentteams-backups/<ts>/` snapshot.
 3. **Update in-process** — re-enter the standard update path per target (`--update --merge` for `.github/agents/` and native `.claude/agents/`, `.goose/recipes/` and `.codex/agents/` teams, each with `--project <workspace>` so the project scan runs; `--bridge-merge` for bridge consumers). A bridge refreshes from the source framework its entry file records inside the `AGENTTEAMS-BRIDGE` fence ("Use source framework `goose` …": `.goose/recipes`; `claude`: `.claude/agents`; otherwise `.github/agents`). A recorded source fleet can't use is a `SKIP`, never a re-bridge from `.github/agents`. No subprocess is spawned, so a successful merge is never misreported because of an interpreter/exit-code quirk, and a failure in one target is isolated.
 4. **Diff analysis** — after applying, the snapshot is diffed tree to tree against the agent paths as they are now (so a file untracked before the update is not a deletion, and a file the update creates is an addition) and classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. A `USER-EDITABLE` region opens only at a real marker (a blockquote notice naming it, such as `## Project-Specific Notes`' `> ⚙️ **USER-EDITABLE**` or the orchestrator's project-rules notice; a heading naming it; or an explicit `BEGIN USER-EDITABLE` comment). It runs to the next real `<!-- AGENTTEAMS:BEGIN … -->` fence, an end marker, or the end of the file, so a user's own `## ` heading inside it stays covered. A fenced line is never user-editable, and prose that merely mentions the phrase (or quotes a fence marker) opens nothing. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
@@ -40,10 +43,32 @@ Each `(workspace, target)` row is one of:
 | `OK` | Merge succeeded; only fenced/generated regeneration and intel churn. |
 | `REVIEW` | A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. Also a kept pre-fencing twin, a dropped twin that retired a rule, a duplicate section (`duplicates`: a heading present twice, including both copies inside fences; [`whole_body_migration`](whole-body-migration.md)), or a fence-twin acknowledgement that no earlier applied run has shown (see below). Twin and duplicate classes are matched at the start of the notice, so a quoted heading cannot reclassify one. |
 | `FAIL` | The merge itself errored (e.g. invalid/absent descriptor, bridge source missing). |
-| `SKIP` | Ambiguous `.claude/` (no bridge signal and no resolvable descriptor), left for manual review. Also a bridge whose recorded source framework fleet can't bridge from: an unknown framework, a missing source directory, an unreadable entry file, or a source equal to the bridge's own framework. Also used for an interop-projected `.codex/agents` team (`origin: "interop"` marker): the row's `detail` carries the refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), which fleet never runs. |
+| `SKIP` | An excluded folder (`target = "(excluded)"`), a release-locked workspace (`"(release-locked)"`) or a linked worktree (`"(linked-worktree)"`); see [Guards](#guards). Ambiguous `.claude/` (no bridge signal and no resolvable descriptor), left for manual review. Also a bridge whose recorded source framework fleet can't bridge from: an unknown framework, a missing source directory, an unreadable entry file, or a source equal to the bridge's own framework. Also used for an interop-projected `.codex/agents` team (`origin: "interop"` marker): the row's `detail` carries the refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), which fleet never runs. |
 | `WOULD-UPDATE` | Dry-run preview only. |
 
-> **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, `"goose-bridge"`, or `"codex-direct"` (a native `.codex/agents` team, `--update --merge --framework codex`, `all` only). A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified); an interop-projected Codex team's `SKIP` row carries `target = "codex"`. Filter for these explicitly so manual-review rows are not dropped.
+> **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, `"goose-bridge"`, or `"codex-direct"` (a native `.codex/agents` team, `--update --merge --framework codex`, `all` only). Guard rows carry `target = "(excluded)"`, `"(release-locked)"` or `"(linked-worktree)"` and never another row for the same workspace. A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified); an interop-projected Codex team's `SKIP` row carries `target = "codex"`. Filter for these explicitly so manual-review rows are not dropped.
+
+### Guards
+
+`agentteams/_fleet_locks.py` holds two guards, added after the 2026-11-09 weekly run re-rendered release-locked
+repositories with a different build and rolled their teams back:
+
+- **`read_release_lock(ws, parent)`** searches for `toolchain.lock` from the workspace upward to its git toplevel,
+  wherever the fleet parent is, so `--fleet <repo>/Projects` still sees `<repo>/toolchain.lock`. Only for a
+  workspace outside git does the search stop at the fleet parent. The nearest lock with an
+  `agentteams=<repo>@<commit>` or `agentteams.tag=<tag>` line decides; a lock without one (a sub-tool's) is passed
+  over. A submodule or nested repository is its own toplevel and does not inherit its superproject's lock. It returns `{"tag", "commit", "lock"}` or `None`;
+  an unreadable lock counts as a lock, so in doubt the workspace is skipped. A lock that matches the running
+  build still counts: the repository's own pin process (validate, gates, lock bump) is what moves it.
+- **`excluded_by(rel, patterns)`** returns the first `--fleet-exclude` glob matching the folder's path relative to
+  the parent, or its name.
+
+`--fleet-ignore-locks GLOB` (repeatable; `'*'` for all; **`lock_ignored`**) renders a locked workspace anyway when
+`GLOB` matches the folder holding its lock, i.e. the locked repository (by path relative to the parent, or by
+name), never the workspace's own name, so one deliberate exception does not lift every lock in the run.
+
+`report.json` rows for these carry `target = "(excluded)"` or `"(release-locked)"`, alongside the existing
+`"(linked-worktree)"` rows.
 
 ### Fence-twin acknowledgements are reviewed once
 
@@ -119,11 +144,11 @@ Aggregate result for one workspace.
 
 ## Functions
 
-### `discover_workspaces(parent, frameworks="both", *, skipped_worktrees=None)`
+### `discover_workspaces(parent, frameworks="both", *, skipped_worktrees=None, exclude=(), excluded=None)`
 
 > *Source: `agentteams/fleet.py`*
 
-Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose and Codex. A Codex team qualifies only with a regular, non-symlink `.codex/agents/references/build-log.json` marker, native or `origin: "interop"`. Prunes `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `.codex`, `tmp`, `.worktrees`, `archive`, and the fleet's own `.agentteams-fleet` output/backup tree, never recurses into `.github`/`.claude` internals, and skips git linked worktrees (and submodules) — their agent infra is covered via the main working tree. If `skipped_worktrees` (a keyword-only `list[Path]`) is passed, each excluded linked worktree that carries agent infra is appended to it so the caller can surface the exclusion as a visible report row.
+Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose and Codex. A Codex team qualifies only with a regular, non-symlink `.codex/agents/references/build-log.json` marker, native or `origin: "interop"`. Prunes `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `.codex`, `tmp`, `.worktrees`, `archive`, and the fleet's own `.agentteams-fleet` output/backup tree, never recurses into `.github`/`.claude` internals, and skips git linked worktrees (and submodules) — their agent infra is covered via the main working tree. If `skipped_worktrees` (a keyword-only `list[Path]`) is passed, each excluded linked worktree that carries agent infra is appended to it so the caller can surface the exclusion as a visible report row. A folder below `parent` matching an `exclude` glob is neither a workspace nor descended into; when `excluded` is a list, `(folder, pattern)` is appended for a visible SKIP row. `parent` itself is never excluded. A bare-string `exclude` raises `TypeError`.
 
 **Returns:** `list[Path]`
 
@@ -135,7 +160,7 @@ Entry point dispatched from `build_team.main()` when `--fleet` is set. Discovers
 
 **Parameters:**
 
-- `args` (`argparse.Namespace`) — Parsed CLI arguments (reads `fleet`, `fleet_frameworks`, `fleet_report`, `yes`, `dry_run`, `shrink_policy`, `fleet_allow_no_verify`).
+- `args` (`argparse.Namespace`) — Parsed CLI arguments (reads `fleet`, `fleet_frameworks`, `fleet_report`, `fleet_exclude`, `fleet_ignore_locks`, `yes`, `dry_run`, `shrink_policy`, `fleet_allow_no_verify`).
 - `parser` (`argparse.ArgumentParser`) — The CLI parser (reserved for error reporting).
 
 **Returns:** `int` — Process exit code.

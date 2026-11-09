@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (fleet: release-locked repositories are skipped; new `--fleet-exclude`)
+
+- **`--fleet` no longer renders a release-locked workspace.** On 2026-11-09 the weekly fleet re-rendered
+  repositories whose `toolchain.lock` pins agentteams (`agentteams=<repo>@<commit>`, `agentteams.tag=<tag>`) with a
+  different build. That rolled researchteam's and mathAgents' pinned teams back. Such a workspace now gets a `SKIP`
+  row with target `(release-locked)`, naming the pin and the lock file, before any snapshot or write. The governing
+  lock is the nearest `toolchain.lock` naming agentteams, from the workspace up to its repository's git toplevel
+  (even when the fleet parent is below it), so nested workspaces inherit it. A lock matching the running build
+  still counts. `--fleet-ignore-locks GLOB` (repeatable; `'*'` for all) renders the workspaces of matching locked repositories anyway; the glob matches the repository holding the lock, not a workspace name. **Behaviour change:** a run that used to update a locked repository now skips it.
+- **New `--fleet-exclude GLOB`** (repeatable): skip folders whose path relative to the fleet parent, or whose own
+  name, matches. A matched folder is not descended into and gets a `SKIP` row with target `(excluded)`. This lets
+  one root run replace the per-folder loops that operator scripts used for exclusion.
+
 ### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
 
 - The inert `.grok/mcp.agentteams-wasm.example.toml` header, and the Grok `wasm_wiring` row, now say that only the
