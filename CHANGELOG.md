@@ -19,14 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - no rendered string names C-1..C-5 or a HALT (after NFKC folding), and no relaxed clause names the mechanism,
     lineage, the cap, sunset or expiry;
   - an entry never grants a capability or clears a destructive action, and no target or rendered string names a
-    trust root (keys, integrity manifest, decisions log, approvers, rosters, directive ledger, constitution files,
-    registries);
+    trust root (keys, integrity manifest, decisions log, approvers, privilege and signing markers, rosters,
+    management-authority, directive ledger, waivers, constitution files, registries);
   - a whole rule is never lifted, and of the constraint-relaxing rule only (b), by number (refused when the
     constitution doesn't number it); strings other than `text` are ASCII, with no invisible format characters;
   - `decision_log` must be a generated team directory (with its build log, so the sandbox protects its key store);
-    `sequence` must rise on every re-sign, checked against the full history (shallow clones refused) and a high-water
+    `sequence` must rise on every re-sign, checked against the last 500 commits of full history (shallow clones refused) and a high-water
     mark; a HALT on `carveout:<id>` stops it; a refused registry's blocks are removed.
-- The registry is a trust root (`carveout` / `carve-out` governance stems; a handoff trust-root token), and the module
+- The registry is a trust root (`carveouts-json` / `carve-outs-json` governance stems; a handoff trust-root token), and the module
   is integrity-pinned.
 - **`--sync-carveouts`** renders the binding entries into every enabled entry file's Project-Specific Rules region as a
   hash-stamped block, after every generate and `--update` too (it survives `--update --merge`; a hand-edited block is

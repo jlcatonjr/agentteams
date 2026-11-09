@@ -6,7 +6,7 @@ generated team and never a specific exception: this module is that machinery. Ea
 operator writes and signs, in one file:
 
 * **Registry** ``.agentteams/carveouts.json`` at the project root, one source for every provider surface. It is a
-  trust root (``governance_targets`` stems ``carveout`` / ``carve-out``; a handoff trust-root token), so a decision
+  trust root (``governance_targets`` stems ``carveouts-json`` / ``carve-outs-json``; a handoff trust-root token), so a decision
   row that targets it is non-eligible and a sandbox handoff that names it is refused.
 * **Operator signature.** Every entry derives as constraint-relaxing, so the registry needs the operator's Ed25519
   signature (Rule 15(b)): ``--sign-carveouts`` signs the whole registry with the operator key, after the same
@@ -609,7 +609,9 @@ def signer(root: Path, registry: dict) -> str:
         fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()[:16] if _KEY_ID_RE.match(key_id) else "?"
     except OSError:
         fingerprint = "unreadable"
-    return f"signed with key {key_id or '?'} in {team} (public key sha256 {fingerprint}); make sure it is yours"
+    shown_key = key_id if _KEY_ID_RE.match(key_id) else "(invalid key id)"
+    shown_team = team if team in TEAM_DIRS else "(invalid decision_log)"  # never echo unvalidated registry text
+    return f"signed with key {shown_key} in {shown_team} (public key sha256 {fingerprint}); make sure it is yours"
 
 
 def signature_problem(root: Path, registry: dict) -> Problem | None:
@@ -756,7 +758,8 @@ def project(root: Path, *, frozen: object = None, write: bool = True, today: _dt
 
     Raises:
         CarveoutError: The registry is refused (unreadable, uncommitted, invalid, unsigned, a lineage HALT, an
-            uncleared clearance, over the aggregate cap); nothing is written then.
+            uncleared clearance, over the aggregate cap); nothing is rendered then, and the blocks it rendered
+            earlier are removed first.
         ValueError: *frozen* is not a list of known surface ids.
     """
     from agentteams.rules_projection import (

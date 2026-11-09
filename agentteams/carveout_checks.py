@@ -59,7 +59,8 @@ def rule15_numbers(root: Path) -> set[int]:
         Every number found across the entry files (they should agree).
     """
     found: set[int] = set()
-    for rel in (".claude/CLAUDE.md", "CLAUDE.md", ".github/copilot-instructions.md", "AGENTS.md"):
+    for rel in (".claude/CLAUDE.md", "CLAUDE.md", ".github/copilot-instructions.md", "AGENTS.md", "AGENTS.override.md",
+                ".goosehints"):
         path = root / rel
         if path.is_file() and not path.is_symlink():
             found.update(int(m.group(1)) for m in _RULE15_HEADING_RE.finditer(path.read_text(encoding="utf-8")))
@@ -77,7 +78,7 @@ def clause_problems(root: Path, registry: dict) -> list[Problem]:
         The problems.
     """
     numbers = rule15_numbers(root)
-    if not numbers:  # fail closed: without the number, (a) and (d) could be lifted under any wording
+    if not numbers:  # fail closed: without the number, (a), (c) and (d) could be lifted under any wording
         return [Problem("registry", "no-rule15", "no entry file numbers the constraint-relaxing-authorizations rule "
                                                  "('<n>. **Constraint-relaxing authorizations'), so the clauses that "
                                                  "may never be lifted can't be identified")]

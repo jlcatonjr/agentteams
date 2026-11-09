@@ -49,7 +49,7 @@ One file, `.agentteams/carveouts.json`, at the project root. It is the one sourc
 | `status` | `active`, `closed`, `expired` or `revoked`. Only `active` entries bind. |
 | `workspaces` | Required. `repo:<owner>/<name>` (the GitHub origin, case-folded) or `team:<slug>` (the brief's `project_name` slug). **Exact match only**: no prefix, suffix or substring widening, the same rule as management directives' task scopes. |
 | `relaxes` | Required. Each is `rule-<n>(<letter>)`, then `: ` and what the clause says, so the limits can read it. A whole rule (no letter) is never lifted. |
-| `effect` | The structured effect: `targets`, `relaxes`, `cross_repo`, `bulk` (and `grants`, `destructive`, which are always refused). The effect class is **derived** from it by `effect_classifier`; a declared `effect_class` must agree. An entry that derives as non-relaxing is refused as unnecessary. |
+| `effect` | The structured effect: `targets`, `relaxes`, `cross_repo`, `bulk` (and `grants`, `destructive`, which are always refused). The effect class is **derived** from it by `effect_classifier`; a declared `effect_class` must agree. Every valid entry derives as relaxing, so the class is shown and compared with a declared one, nothing more. |
 | `conditions`, `text` | Required. What the activity must still satisfy, and the wording every constitution copy shows. No HTML comment markers. |
 | `added`, `expires` | Required dates. `added` is not in the future, and `expires` is at most 90 days after it. An `active` entry past `expires` stops binding: its text leaves every copy on the next sync, and `--verify-carveouts` reports it (`lapsed`) until it is set to `expired`. |
 | `closes_when`, `plan`, `ledger` | Optional. Paths are relative to the project root, without `..`. |
@@ -57,7 +57,7 @@ One file, `.agentteams/carveouts.json`, at the project root. It is the one sourc
 | `clearance` | Optional `{scope, file}`: a verified @security PASS must exist for `scope` bound to the file's current sha256. |
 | `cap.max_active` | Active entries allowed; default 1, never above 3. They also count against the team's Rule 15 exception-registry cap, with its active relaxing exceptions. |
 | `decision_log` | Required: one of the generated team directories (it must hold `references/build-log.json`, since the sandbox protects only a team's key store that exists when it starts) — `.claude/agents`, `.github/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents` — whose verify-key store, approvers and rosters the emitted sandboxes write-protect. Its `references/` must hold the decisions log and the exception registry. No other directory is accepted, so a registry can't choose where its own verify key lives. |
-| `sequence` | Required positive integer, raised on every re-sign. The registry is refused (`rollback`) when any commit in its full history (`--full-history`, replace refs ignored) holds a different version with an equal or higher sequence, when the clone is shallow, or when the team dir's `references/carveout-high-water.json` records a higher sequence already rendered. |
+| `sequence` | Required positive integer, raised on every re-sign. The registry is refused (`rollback`) when any of its last 500 commits (`--full-history`, replace refs ignored) holds a different version with an equal or higher sequence, when the clone is shallow, or when the team dir's `references/carveout-high-water.json` records a higher sequence already rendered. |
 | `signature` | Written by `--sign-carveouts`: the operator's Ed25519 signature over the domain tag `agentteams-carveouts-v1`, the key id and the canonical registry. Any later edit breaks it. |
 
 Unknown fields are refused, so a misspelt `expires` can't silently drop a limit.
@@ -76,7 +76,8 @@ No entry can lift these. Strings are checked after NFKC folding, with every dash
   precedence, the constitution;
 - it never grants a capability (C-3) and is never destructive (C-5);
 - no target and no rendered string names a trust root: the verify keys, signing keys, integrity manifest, decisions
-  log, approvers, rosters, directive ledger, constitution files, exception registry or this registry;
+  log, approvers, agent-privilege and signing-governed markers, rosters, management-authority, directive ledger,
+  waivers, constitution files, exception registry or this registry;
 - a whole rule is never lifted (every clause names its letter), and of the constraint-relaxing-authorizations rule
   only (b), the operator-signature clause, can be, by number as this project's constitution numbers it. When no
   entry file numbers that rule, every carve-out is refused. Clause (c) is not liftable: every trust root it protects
@@ -108,7 +109,7 @@ These are accepted and bounded by the operator signature, the 90-day expiry and 
 
 ## Trust root
 
-The registry is a trust root. `governance_targets.GOVERNANCE_TARGET_STEMS` names it (`carveout`, `carve-out`, so
+The registry is a trust root. `governance_targets.GOVERNANCE_TARGET_STEMS` names it (`carveouts-json`, `carve-outs-json`, so
 `CarveOuts.json` and `carve_outs.json` match too), which makes a decision row targeting it non-eligible.
 `sandbox_handoff.EXTRA_TRUST_ROOT_TOKENS` names it as well, so a handoff that touches it is refused. The module is
 integrity-pinned.
@@ -151,7 +152,7 @@ own rules, so it is never re-projected as a project rule.
 | `derived_effect_class(entry)` | `relaxing`, `non-relaxing` or `indeterminate`, from `effect_classifier.derive_effect_class`. |
 | `active_entries(registry, ids, today=)` | The entries that bind now. |
 | `signed_fields(registry, key_id)` / `signature_problem(root, registry)` / `signer(root, registry)` | What the operator signs, why a signature does not verify, and who signed it (team, key id, public-key fingerprint). |
-| `carveout_checks.team_dir_problem(root, registry)` | The pinned team directory must hold `references/build-log.json` (a generated team), and be one of `TEAM_DIRS`: `.claude/agents`, `.github/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`, whose key stores the sandbox protects) must not be reached through a symlink, and must hold its decisions log and exception registry. |
+| `carveout_checks.team_dir_problem(root, registry)` | The pinned team directory must hold `references/build-log.json` (a generated team), and be one of `TEAM_DIRS`: `.claude/agents`, `.github/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`, whose key stores the sandbox protects; it must not be reached through a symlink, and must hold its decisions log and exception registry. |
 | `carveout_checks.rollback_problem(root, registry)` | Every earlier commit of the registry must have a lower `sequence`, so an older signed registry can't be restored. |
 | `carveout_checks.clause_problems(root, registry)` | By number, read from this project's constitution: only clause (b) of the constraint-relaxing-authorizations rule can be lifted, and nothing can when no entry file numbers that rule. |
 | `carveout_checks.check_own_halts(root, registry, entries)` | A HALT on `carveout:<id>` stops that carve-out, lineage or not (C-2). |

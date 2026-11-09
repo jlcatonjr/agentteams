@@ -1328,8 +1328,8 @@ Commit the registry afterwards.
 Render the carve-outs in `.agentteams/carveouts.json` that bind this workspace into the `## Project-Specific Rules`
 region of every enabled entry file, as a hash-stamped `CARVEOUTS` block ([`carveouts`](api-reference/carveouts.md)).
 The registry is a trust root: it must be operator-signed (`--sign-carveouts`) and committed. An invalid registry, a
-lineage HALT, an uncleared clearance, a breach of the aggregate cap or a hand-edited block is refused, and nothing is
-written. It also runs after every generate and `--update`. A block that binds nothing any more is removed. Runs in the working directory only;
+lineage HALT, an uncleared clearance, a breach of the aggregate cap or a hand-edited block is refused: nothing is
+rendered, and the blocks it rendered earlier are removed. It also runs after every generate and `--update`. A block that binds nothing any more is removed. Runs in the working directory only;
 with `--dry-run` it writes nothing and exits `1` when a copy is out of date.
 
 ### `--verify-carveouts`

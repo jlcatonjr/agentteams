@@ -9,7 +9,7 @@ under the module-size ceiling, and every one fails closed.
 |---|---|
 | `team_dir_problem(root, registry)` | The pinned `decision_log` must be a generated team (`references/build-log.json`), not reached through a symlink, and hold its decisions log and exception registry. |
 | `rule15_numbers(root)` / `clause_problems(root, registry)` | The number this project's constitution gives the constraint-relaxing-authorizations rule; only its clause (b) may be lifted, and nothing may when no entry file numbers the rule. |
-| `rollback_problem(root, registry)` | Refuses a shallow clone, any version in the registry's full history (`--full-history`, replace refs ignored) with an equal or higher `sequence`, and a sequence below the team dir's high-water mark. |
+| `rollback_problem(root, registry)` | Refuses a shallow clone, any version in the registry's last 500 commits (`--full-history`, replace refs ignored) with an equal or higher `sequence`, and a sequence below the team dir's high-water mark. |
 | `record_high_water(root, registry)` | Raises `references/carveout-high-water.json` after a successful render. |
 | `check_own_halts(root, registry, entries)` | A HALT on `carveout:<id>` stops that carve-out (C-2). |
 | `check_lineage(root, registry, entries)` | Each lineage id must be a logged decision with no unretracted HALT, ancestors included. |
