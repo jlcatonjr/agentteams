@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 17: The Abstract Agent</title>
+</head>
+<body>
+  <article id="notes:the-abstract-agent">
+    <h1>Cliff Notes: Chapter 17: The Abstract Agent</h1>
+    <p class="part-label">Part IV: Emergence and Abstraction</p>
+    <p class="notes-source">A summary of <a href="chapters/17-the-abstract-agent.html#ch:abstract-agent">Chapter 17</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-17-thesis"><h2>Thesis</h2>
+      <p>Agent teams built separately in one workspace converged on the same governance patterns, and those patterns were extracted bottom-up into an abstract agent layer that now acts as a platform. The chapter is careful about the cause. The convergence is "iterated design improvement, not institutional emergence across multiple independent decision-makers", because one developer and model pairing designed every team. The abstract layer grows through bidirectional propagation, protects shared rules through invariant cores and extension points, and is codified by the agentteams module into a factory that generates new teams. The chapter calls the result a recursive structure in which "the practice revises the theory."</p>
+    </section>
+    <section id="notes-17-covers"><h2>What the chapter covers</h2>
+      <p>Section 1 describes convergent design across repositories of roughly ten to twenty agents and qualifies it as refinement by a single designer. Section 2 presents the abstract layer as platform and as infrastructure capital, and names the tension between bottom-up convergence and top-down enforcement as the central problem of the remaining chapters. Subsection 2.1 identifies the module's three template tiers, universal, domain and builder, and two constitutional documents for the library, the authoring guide and the placeholder-conventions document.</p>
+      <p>Section 3 sets out bidirectional propagation. Stage 8 of the daily pipeline pushes codified practice down, Stages 10 and 11 carry discovered patterns, and novel-pattern reports flow back up. Only the governance substrate travels, while domain knowledge stays local.</p>
+      <p>Section 4 names three meta-agents, the workspace orchestrator, the collector-discovery agent and the agent-abstraction-reviewer, plus the agent-investigator of Chapter 18. It records that the investigator template is not yet packaged in the single-repository template set. It then argues that the absence of templates for the three propagation meta-agents is not a gap. Their procedures are fully statable, so the module implements them operationally. Its fleet operation and drift detection do the work.</p>
+      <p>Section 5 explains invariant cores and extension points, with auto-resolved and manual-required placeholders. Section 6 classifies differences. Section 7 treats propagation across frameworks, and Section 8 presents team generation. There the project-description schema encodes the four-tier architecture of orchestrator, governance, domain and workstream-expert agents, so a description that violates it cannot proceed. The chapter calls the schema "an executable statement of the architectural theory this book develops."</p>
+    </section>
+    <section id="notes-17-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Abstract agent layer. A workspace-level repository of governance patterns, extracted from observed convergence.</li>
+        <li>Three template tiers. Universal governance templates, domain production templates and builder agents that interview and render a team.</li>
+        <li>Bidirectional propagation. Top-down distribution of templates and bottom-up reports of novel patterns.</li>
+        <li>Material choice. An instruction file costs context at the moment of use, while a fully specified procedure costs nothing then, so statable functions descend into code.</li>
+        <li>Fleet operation and drift detection. A merge-mode update across every workspace under a directory, and a comparison that sorts template divergence from changes in team composition.</li>
+        <li>Template method pattern. A word-for-word invariant core with marked extension points.</li>
+        <li>Placeholder tokens. Auto-resolved tokens from the manifest and manual-required tokens collected into a setup checklist. Leftover manual tokens are "an initialization-completeness test, not a documentation-maintenance task."</li>
+        <li>Three-class taxonomy. Intentional extension, accidental drift and novel pattern, compared to errors, warnings and notes in static analysis.</li>
+        <li>Canonical Agent Interface. A framework-neutral representation that supports interop, format migration and the bridge.</li>
+        <li>Platform and factory. The module validates a project description against a schema, builds a team manifest and runs an ingest, analyze, render and emit pipeline.</li>
+      </ul>
+    </section>
+    <section id="notes-17-frames"><h2>Theoretical frames</h2>
+      <p>Miller and Drexler (1988a) supply the observation that open computational systems develop regularities because the environment selects for them. Miller and Drexler (1988c) describe ecologies of specialized agents that combine local expertise through defined protocols, which the three meta-agents instantiate. Menger (1883) is the contrast case. Mengerian emergence explains institutions no single actor designed, and the chapter says its own convergence came from design iteration by a single agent.</p>
+      <p>Butos and McQuade (2005) on adaptive classifying systems frame the reviewer. The three classes are stable, but the content of the novel-pattern class feeds back into the abstract layer. "Its classifications change what there is to classify."</p>
+      <p>Section 7 returns to the plan-dependence of capital from Chapter 3. A change of host is a limiting case in which the plan is unchanged and only its embodiment fails. The chapter calls it milder than the obsolescence Lachmann analyzes, and solvable by separating governance content from its encoding.</p>
+    </section>
+    <section id="notes-17-matters"><h2>Why it matters</h2>
+      <p>The chapter opens Part IV by moving from single teams to the platform that generates them. Its distinction between design iteration and Mengerian emergence prevents the book from overclaiming. Its argument about meta-agents changes how progress should be measured, since a census of templates will understate the abstract layer whenever a pattern proves specifiable enough to descend into procedure. Section 7 adds a second axis of propagation. At the framework's anchor a team can be emitted for Copilot in VS Code and on the command line and for Claude Code, and in beta for Goose, Codex, Grok Build and the AGENTS.md standard. Format migration and the bridge do not accept Codex or Grok, which reach other hosts only through interop, and Goose recipes converted from a Claude source currently lose their delegation. Portability is therefore "a property of particular pairs of hosts rather than of the team as such". Where a team runs on several hosts, learned content sits in marked blocks synchronized across copies behind scan, fence and denylist gates. This axis appears nowhere in agent files because the machinery carries it.</p>
+    </section>
+    <section id="notes-17-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items as arriving in release 1.2, though it marks the Goose, Codex, Grok Build and AGENTS.md targets as beta.</p>
+    </section>
+  </article>
+</body>
+</html>

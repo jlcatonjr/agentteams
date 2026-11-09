@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 12: The Agent Updater</title>
+</head>
+<body>
+  <article id="notes:the-agent-updater">
+    <h1>Cliff Notes: Chapter 12: The Agent Updater</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/12-the-agent-updater.html#ch:the-agent-updater">Chapter 12</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-12-thesis"><h2>Thesis</h2>
+      <p>The agent-updater keeps agent documentation in step with the project it describes. When chapters, the bibliography, the project structure or reference files change, it finds the agent files the change affects and edits them. The chapter organizes this work around a single data structure and states plainly that "The impact matrix is the updater's core data structure." The updater's power to edit is bounded by a constitutional limit. In the chapter's words, "Invariant core preservation is the updater's primary constitutional constraint." The chapter argues that documentation maintenance is a cross-cutting duty that every workflow creates and that the updater discharges inside the workflow that created it.</p>
+    </section>
+    <section id="notes-12-covers"><h2>What the chapter covers</h2>
+      <p>The chapter opens with the agent's purpose statement and then runs through five numbered sections. The first describes the change-to-agent impact matrix, which maps categories of project change to the agent files that must be reviewed. In the book team a new chapter file touches the navigator's project map, the conflict-auditor's scope and the book-content-expert's chapter inventory. The matrix says where updates are needed but not what they should say. The chapter calls the identification of impacted files the updater's "first-order contribution" and the edits themselves its second-order contribution. The matrix is also maintained. When Workflow 2 creates chapter-expert agents the matrix grows, so it is "itself subject to the update process it tracks."</p>
+      <p>The same section describes how the framework handles the matrix's question for code. At the anchor, the generated instructions require the updater to run a census of additions, changes, deletions, merges, reverts and restores before a session that changed tracked files closes, and to record whether published or API documentation needs updating. The adversarial agent then challenges it. The chapter marks the next step as arriving in release 1.2. In 1.2 a hook run before each commit reports which modules, public names, command-line options, schemas and structural files the commit adds, removes or renames, and the orchestrator's API Impact Review takes that report as its scope. Neither the hook nor the review is part of the 1.1 framework.</p>
+      <p>The second section describes the propagation chain. The updater runs first, then a structural auditor, then a consistency auditor. In the book team this is Workflow 7, which invokes the agent-updater, then the agent-refactorer, then the conflict-auditor. The chain guards against "cascading staleness", in which a correct update points to another file that is already out of date. The order is fixed, and "The chain is not recursive". Later findings go to a new workflow invocation, which prevents the updater and the refactorer from fixing each other's fixes without end.</p>
+      <p>The third section concerns the invariant core. When a change reaches entrenched content, the updater "flags the modification as requiring human approval rather than making the change autonomously." A new subsection, 3.1, treats updates that arrive from the framework itself. The updater runs a merge-mode update that re-renders only framework-owned regions, confirms a backup first, performs a dry run, and then reviews each notice raised when a regenerated region has shrunk materially.</p>
+      <p>The fourth section covers the Living Document Policy, the scan for unreplaced placeholder tokens and the check for personal information. The fifth places the updater in five orchestrator workflows of the book team.</p>
+    </section>
+    <section id="notes-12-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Change-to-agent impact matrix. A map from types of project change to the agent files that need review.</li>
+        <li>Closeout census. At the 1.1 anchor, a pre-closeout record of changes and of whether published or API documentation needs updating, challenged by the adversarial agent.</li>
+        <li>API Impact Review hook. Arriving in release 1.2, a pre-commit report of added, removed or renamed surfaces that scopes the orchestrator's review.</li>
+        <li>Propagation chain. Updater, then refactorer, then conflict-auditor, in a fixed order, with no recursion inside one run.</li>
+        <li>Asymmetric correction. If a chapter and the orchestrator's core disagree, the updater may revise the chapter or flag the discrepancy, but it may not revise the orchestrator's file.</li>
+        <li>Framework updates. A merge-mode run that keeps manual fields and passages outside a fence, with backup, dry run and review of shrink notices that do not block the run.</li>
+        <li>Living Document Policy. Agent files "record what the agent does, not what it once did." Audit counts belong in reference files.</li>
+        <li>Initialization-completeness failure. An unfilled manual token shows that setup never finished, which differs in kind from drift.</li>
+        <li>PII scan. The scan checks for "user names, local absolute paths, email addresses, and secret-bearing literals."</li>
+        <li>Documentation debt. Staleness a workflow creates, discharged within that workflow.</li>
+      </ul>
+    </section>
+    <section id="notes-12-frames"><h2>Theoretical frames</h2>
+      <p>The chapter's main frame is Lachmann (1956) on capital complementarity. Capital goods are productive in combination, and a machine is rendered partly unproductive if one of its complements changes without adjustment. Agent files depend on each other in the same way. A chapter-expert's specification refers to the orchestrator's workflow sequence, and the orchestrator's routing table refers to the chapter-expert's slug. The chapter concludes that "The propagation chain restores complementarity".</p>
+      <p>The invariant core draws on the constitutional entrenchment of Chapter 4. The chapter also links the core to the account of agent rationality in Chapter 1, section 1.5. Each modification to an agent file reshapes the preference ordering through which the agent will judge on its next invocation, so the constraint protects the constitutional foundations of that rationality from routine maintenance.</p>
+    </section>
+    <section id="notes-12-matters"><h2>Why it matters</h2>
+      <p>The chapter turns the claim that agent files are interdependent capital into a maintenance procedure. Its impact matrix makes the propagation paths explicit, which replaces an ad hoc search that the chapter calls prone to omission. Its fixed chain shows how verification can follow an edit without creating loops. The invariant core shows where an agent with write access meets a limit it cannot edit around, and the asymmetric rule ensures that "the entrenched portions of agent specifications outrank all other documentation". The chapter's distinction between the census at the 1.1 anchor and the mechanical first pass that arrives in 1.2 shows how far the framework can answer the matrix's question from the changes themselves. Both leave the content of an update to judgment.</p>
+    </section>
+    <section id="notes-12-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags one 1.2 item, the pre-commit hook whose report scopes the orchestrator's API Impact Review, which arrives in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 16: Agent Communication and Coordination</title>
+</head>
+<body>
+  <article id="notes:the-repo-liaison">
+    <h1>Cliff Notes: Chapter 16: Agent Communication and Coordination</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/16-the-repo-liaison.html#ch:repo-liaison">Chapter 16</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-16-thesis"><h2>Thesis</h2>
+      <p>A team's authority stops at its repository boundary, but its outputs do not. The chapter argues that the coordination problem at that boundary "is communicative before it is operational." Teams fail first because they cannot reliably say which state transition occurred and what it triggers downstream. The answer is a single boundary agent, the repo liaison, which reads, monitors, assesses and reports, together with durable written artifacts that survive session turnover. In the chapter's phrase, private memory "is not governable at ecosystem scale." The liaison holds boundary knowledge, the orchestrator holds decision authority, and "Neither holds both."</p>
+    </section>
+    <section id="notes-16-covers"><h2>What the chapter covers</h2>
+      <p>The chapter has eight numbered sections. Section 1 states the problem. No single orchestrator holds legitimate authority across two repositories, so letting every agent write to adjacent repositories would expose their constitutional rules to unilateral change. Section 2 introduces the liaison and its four protocols, which are Impact Assessment, Adjacent-Repository Update, Orchestrator-to-Orchestrator Coordination and Registry Maintenance. Detection and decision are kept apart, and the liaison standardizes communication into typed messages.</p>
+      <p>Section 3 describes the adjacent-repository registry, which records each repository's path, agent infrastructure, relationship type and a changelog of cross-boundary actions. The chapter calls the registry institutional memory rather than configuration. Stale entries are flagged rather than silently removed. Work summaries extend this memory from boundary state to workflow state.</p>
+      <p>Section 4 treats work summaries as typed coordination artifacts. It gives a minimum schema, a closed catalog of triggers, amendment rules and escalation. The framework's work-summary agent adds a rule of evidence for the day's commit count, which must come from a git log run in that session and be quoted with the latest short hash. The rule followed a day on which about twenty summary entries claimed no commits while five existed.</p>
+      <p>Section 5 covers coordination with a repository that has its own orchestrator. The liaison composes a Coordination Request rather than editing the peer's files. The framework later added a second channel, a signed directive that a management repository may relay to a team whose roster recognizes the manager, which Chapter 24 examines. A directive carries only an exact, non-destructive task, so the Coordination Request remains the route for everything else.</p>
+      <p>Section 6 sets the minimal-footprint invariant. Section 7 presents the liaison as an institutional bridge. Its lack of any productive or domain role is described as a positive design choice, since boundary decisions entangled with production decisions could not be audited cleanly. The chapter puts it this way. "An inspector whose jurisdiction overlaps with the object being inspected cannot generate unambiguous audit reports." Section 8 lays out the six steps of Workflow 11.</p>
+    </section>
+    <section id="notes-16-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Four protocols. Impact Report, cleared minimal update, Coordination Request to both principals, and registry upkeep.</li>
+        <li>Adjacent-repository registry. A declarative record of every repository the project interacts with and what has passed between them.</li>
+        <li>Work-summary schema. Trigger type, timestamp, contributing agent, affected scope, governing disposition, unresolved obligations and pointers to source artifacts.</li>
+        <li>Closed trigger catalog. Step completion, blockers, contradiction resolutions, cross-repository impacts, security clearances, deployment outcomes, boundary decisions and a provisional unclassified-event intake. Closure "does not authorize event suppression."</li>
+        <li>Artifact precedence. Workflow logs are execution ground truth, registry changelogs are cross-boundary write ground truth, and summaries are derived digests corrected to match them.</li>
+        <li>Shared event identifiers. Unique within the workspace, with supersession pointers on duplicates.</li>
+        <li>Disputed entries. Frozen and escalated rather than silently overwritten.</li>
+        <li>Minimal footprint. Every adjacent-repository write is treated as a destructive operation equivalent, cleared by the security agent, read in full first and logged. Under the framework's single writer the liaison loses write access and proposes changes for the orchestrator to approve, unless the operator has signed a grant for direct writes, which Chapter 22 describes.</li>
+        <li>Workflow 11. Invocation, registry read, Impact Report and approval, cleared update, Coordination Request where a peer orchestrator exists, and a closing conflict audit.</li>
+      </ul>
+    </section>
+    <section id="notes-16-frames"><h2>Theoretical frames</h2>
+      <p>Coase (1937) frames the boundary. The firm ends where internal organizing costs meet market costs, and the team ends where its internally coordinated governance becomes insufficient. Hayek (1945) supplies "the man on the spot", whose knowledge is inseparable from his position. The liaison is that figure at the repository boundary. Later, Hayek (1945) on dispersed knowledge explains why distributing write authority would scatter traceability across agents.</p>
+      <p>Williamson (1985) on asset specificity explains why cross-repository infrastructure needs governance, since an adjacent repository's documentation assumes this project's schemas stay stable. Nonaka (1994) appears twice. The registry is an act of combination, and the liaison's records are externalization at the ecosystem level. Ostrom (1990) frames the peer-orchestrator case as polycentric governance, in which neither orchestrator holds authority over the other, and supplies the idea of boundary rules that say who may cross and how crossings are recorded.</p>
+    </section>
+    <section id="notes-16-matters"><h2>Why it matters</h2>
+      <p>The chapter carries the book's separation of concerns from relations between agents to relations between teams. Concentrating boundary contact in one agent is "a bottleneck in the audit sense", because every cross-boundary action traces to the liaison and every write appears in the registry. The read-before-write rule matters because an error in an adjacent repository falls outside this project's audit cycle and can be corrected only by the other team. The work-summary rules show how coordination memory can be made checkable without granting new authority to whoever writes the summary. Workflow 11 makes boundary assessment a structured consequence of architectural change, and even a confirmed non-impact is recorded as a verified determination. With Workflows 1 to 10 and 12, it defines the operational perimeter of the team.</p>
+    </section>
+    <section id="notes-16-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

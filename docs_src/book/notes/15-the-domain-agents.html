@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 15: The Domain Agents</title>
+</head>
+<body>
+  <article id="notes:the-domain-agents">
+    <h1>Cliff Notes: Chapter 15: The Domain Agents</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/15-the-domain-agents.html#ch:domain-agents">Chapter 15</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-15-thesis"><h2>Thesis</h2>
+      <p>Functional agents govern and domain agents produce. The chapter argues that this division is "a distinction in authority and scope, not in capability", and that teams need both kinds because governance and production are complements. Domain agents form a pool of specialized capabilities that the orchestrator draws on in workflow-specific sequences. Each holds one knowledge type that no other agent holds, and the quality of the final work is the cumulative product of that sequential specialization. The chapter treats voice authority, canonical format and citation verification as the three disciplines that keep such a chain coherent.</p>
+    </section>
+    <section id="notes-15-covers"><h2>What the chapter covers</h2>
+      <p>Section 1 defines the two agent types and maps them onto the cycle of interpretation, reorganization and action from Chapter 1. Domain agents perform action, and functional agents perform interpretation and reorganization. A team of only functional agents "governs an empty enterprise", while a team of only domain agents accumulates inconsistencies no one may fix. The section introduces the pool design and lists the book's eight domain agents, the book-content-expert, expert-critic, argument-weaver, voice-style agent, html-document-builder, graphviz-expert, latex-specialist and bibliography-manager.</p>
+      <p>Section 2 maps each local name to a generalized archetype, such as book-content-expert to primary-producer and voice-style to style-guardian. The mapping is comparative, not a replacement. Section 2.5 notes that some deployments split a technical-validator out of code-hygiene, while the book's live architecture keeps the broader code-hygiene mandate.</p>
+      <p>Section 3 argues that voice authority must be exclusive, or a content agent receives competing rulings it cannot reconcile and "The chapter iterates without converging." Voice models should be built inductively from the author's own work. Section 4 sets out unidirectional content flow from one canonical format, and separates conversion from compilation. In the book, HTML is canonical and LaTeX is generated. Section 5 develops zero-fabrication discipline and two-tier citation verification. It adds that the framework's research agents now reach the web through one scoped command, and that retrieved content carries no authority to instruct the agent that fetched it.</p>
+      <p>Section 6 profiles six of the eight agents. Section 7 treats the code-hygiene and technical-validator arrangements as a tradeoff. Section 8 describes knowledge concatenation through Workflow 3, and Section 9 maps the agents onto the module's domain templates. Subsection 9.1 adds that several agents in the team carry no book-specific alias, among them the git-operations agent, the content-enricher, the module-doc-author and module-doc-validator, and the tool-doc-researcher. Their absence from the mapping reflects naming history rather than team composition. The chapter closes with comparative notes on tool tiers and an eight-tier documentation search.</p>
+    </section>
+    <section id="notes-15-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Functional and domain agents. Governance and production, divided by authority and scope.</li>
+        <li>Pool design. "Pool membership is permanent. Deployment is task-specific."</li>
+        <li>Exclusive voice authority. One agent issues voice rulings, and detection may be distributed but must end in one authority path.</li>
+        <li>Inductive voice model. Ten voice codes, twenty editorial-pattern codes and twenty-eight AI-tell codes, applied in a three-pass audit with editorial patterns first, AI tells second and voice fidelity third.</li>
+        <li>Unidirectional content flow. Edits originate only in the canonical format, and the rule is constitutional rather than a technical lock.</li>
+        <li>Conversion and compilation. The html-document-builder converts and validates, and the latex-specialist assembles and compiles.</li>
+        <li>Two-tier verification. Tier one confirms a key exists, and tier two confirms its metadata. "A plausible-looking database entry is not a verified one."</li>
+        <li>Constitutional backstop. The security agent's S-3 rule flags citations that bypass the bibliography-manager.</li>
+        <li>Content-domain and tool-domain archetypes. Five content archetypes declare read, edit and search tools, and three tool-domain archetypes add execute.</li>
+        <li>Nine instantiated archetypes. The eight production agents plus the workstream-expert archetype, instantiated per chapter through Workflow 2.</li>
+      </ul>
+    </section>
+    <section id="notes-15-frames"><h2>Theoretical frames</h2>
+      <p>The chapter grounds the functional and domain division in the Austrian tradition on productive organization, in which governance of an enterprise and execution within it are distinct activities. It refers to Chapter 3 for the development of this point through Smith and Hayek. Lachmann (1956) supplies the claim that governance and productive capabilities are complements, not substitutes, so removing either type degrades the other. The chapter concludes that the right unit of analysis is the team as a coordinated combination.</p>
+      <p>The account of production chains is a division-of-labor argument. Each agent's depth is possible because its scope is bounded, and no single agent could hold all domains without holding each superficially. The graphviz expert illustrates the content and tool-domain distinction from Chapter 3, since its expertise is organized around a production medium. Section 8 counts five content-domain and three tool-domain knowledge types in the chain.</p>
+      <p>The zero-fabrication argument rests on a structural claim about language models. Fabricated references are a predictable consequence of training, and their plausibility is what makes them dangerous. Raising citation integrity to constitutional status makes verification mandatory at every point of entry.</p>
+    </section>
+    <section id="notes-15-matters"><h2>Why it matters</h2>
+      <p>The chapter supplies the production half of the book's architecture. It shows how the book's typeset output emerges from a sequence in which each stage adds a quality dimension the prior stage neither provides nor assesses, with the orchestrator routing returns upstream when a downstream finding requires it. The exclusive-authority principle explains how quality enforcement avoids deadlock. The canonical-format rule removes the question of which version is authoritative. The two-tier protocol treats fabrication as a structural risk rather than a rare lapse. The archetype mapping shows how the same chain logic transfers to other projects while the project supplies its subject matter. In the chapter's words, "The template provides the chain structure. The project provides the subject matter." The chapter also cautions that the template library holds archetypes the book never uses, so the library's catalogue is not evidence about the book's own team.</p>
+    </section>
+    <section id="notes-15-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

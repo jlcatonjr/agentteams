@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 23: Signed Authority: Waivers, Grants and Constraint-Relaxing Exceptions</title>
+</head>
+<body>
+  <article id="notes:signed-authority">
+    <h1>Cliff Notes: Chapter 23: Signed Authority: Waivers, Grants and Constraint-Relaxing Exceptions</h1>
+    <p class="part-label">Part VI: Hardening and Scale</p>
+    <p class="notes-source">A summary of <a href="chapters/23-signed-authority.html#ch:signed-authority">Chapter 23</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-23-thesis"><h2>Thesis</h2>
+      <p>The chapter argues that, where key custody is confined, the authorizations that relax a constraint move from an assent recorded in a file any agent could write to a verifiable artifact. That artifact is classified by its effect, signed with a key no confined agent can read, held under caps and barred from the trust roots on which signing depends. The retraction that lifts a HALT becomes a named act that must authenticate and carry its evidence, though it needs no such key. Routine clearance of destructive actions is unchanged. The chapter presents this as a refinement of the book's account of attribution. The principal's authority keeps its scope, and for the relaxing class its exercise becomes something the constrained agents cannot imitate.</p>
+    </section>
+    <section id="notes-23-covers"><h2>What the chapter covers</h2>
+      <p>The first section uses Searle (1995) on status functions to ask when a record of assent counts as the assent of the person it names. A PASS row counts as the principal's clearance only if the recognized conditions exclude the agents it governs. Until August 2026 the framework's decision log was an unsigned table, and its record lists three breaches, including an agent that wrote its own PASS row and had it accepted as clearance. In each breach the forged row cleared the gate, so the trace was available only after the action ran.</p>
+      <p>The second section separates three instruments by the question each answers. A clearance asks whether a destructive action may run here and now, a waiver whether work may proceed past a gate block, and a capability grant whether one team may reach into another's workspace. Each has its own ledger. A fourth artifact, the management directive, confers no privilege. Above all of them sits the constitutional core, and the HALT is the fixed point of the scheme.</p>
+      <p>The third section distinguishes finality from permanence. A HALT may be lifted, but only by a separate, named and authenticated act recorded with the verdict HALT-RETRACTED and carrying its evidence. Later sections classify exceptions by effect, place trust roots beyond any signature and set out what the principal still decides.</p>
+    </section>
+    <section id="notes-23-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>A symmetric HMAC signature can be made by anyone holding the shared secret. An Ed25519 signature uses a private key only the principal holds and is checked against a public key.</li>
+        <li>The gate now scans every row rather than the latest. A later PASS does not clear a HALT, and a HALT passes down the declared lineage of actions derived from the halted one. The lineage is self-declared, so a hostile rename falls to the classifier and its stricter signing path.</li>
+        <li>A retraction stays off the stricter path. Because it accepts the shared decision secret, a HALT stays in force only while that secret stays out of every agent's environment.</li>
+        <li>Rows that authorize must authenticate, while a HALT is honoured whether or not it authenticates. The chapter states that a false stop is visible and annoying, while a false clearance is quiet and dangerous.</li>
+        <li>The signature covers the scope and effect columns, and each row carries a digest of the row before it, so a deleted row breaks the chain.</li>
+        <li>The chapter states the rule by content. Constraint-relaxing authorizations are "derived, elevated and bounded." In a governed workspace they require the principal's asymmetric signature and are refused outright when they target a trust root.</li>
+        <li>The class is derived from structured effect fields and from scope and verdict text together. When no axis decides, the row is treated as relaxing. Waivers never reach the classifier.</li>
+        <li>The exception registry caps active relaxing exceptions, with a default of one. At the 1.1 release that cap is checked when an exception is registered or an adopted agent is merged, and other signed relaxing decisions are bounded only by their own expiry. Direct-write grants carry a cap of three, and standing remediation grants a cap of two.</li>
+        <li>The classifier's ceiling is "coverage-bounded rather than universal," since a relaxing effect described in unfamiliar words with no structured effect escapes the text axis.</li>
+        <li>Trust roots are non-eligible, and a row that would write one is refused before any signature is checked. The shared AGENTS.md file is not yet classed as a root at the 1.1 release.</li>
+        <li>The private key sits in a directory every emitted sandbox read-denies and the launcher masks. The denial holds only under a wired sandbox or the launcher, and a symmetric write grant is refused everywhere.</li>
+        <li>The constraint-relaxing rule is Rule 11 of the generated instructions file, but other framework files cite it under a different number, which is why the chapter names it by content.</li>
+      </ul>
+    </section>
+    <section id="notes-23-frames"><h2>Theoretical frames</h2>
+      <p>Searle (1995) frames the question of what makes a signed row count as assent, with the stated limit that the agents recognize nothing and the gate applies the conditions by rule. Buchanan and Tullock (1962) supply attribution and, through Chapter 10, pre-commitment. Elster (1977) returns through Ulysses at the mast, which the chapter finds fits the retraction rule more closely, since the principal is among the bound. Crawford and Ostrom (1995) supply the grammar of deontic operators, though the framework's test is narrower than the grammar. Saltzer and Schroeder (1975) supply fail-safe defaults for classification and separation of privilege for the two-key elevation. Miller and Drexler (1988c), Lampson (1973) and Buchanan (1979) frame interfaces, key confinement and the principal's choice as self-creation.</p>
+    </section>
+    <section id="notes-23-matters"><h2>Why it matters</h2>
+      <p>The chapter closes a gap in the book's own account of attribution, which had silently assumed that agents do not forge rows in the log. It keeps every decision with the principal and changes only the evidence the gate accepts that the principal has decided. By Chapter 22's test this is prevention of a narrow kind, since a forged clearance cannot take effect wherever decision signing is enforced, on the stricter path only where key custody is confined and on the routine path only while the shared secret is kept from every agent. The gate cannot prevent the forging itself. Its advice to adopters is to sign from a verified install outside every agent write root and to treat key confinement as a condition to check.</p>
+    </section>
+    <section id="notes-23-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapter 23 is new in this edition. The chapter flags no release 1.2 features, and it marks two current limits at the 1.1 release, the scope of the registry cap check and the shared AGENTS.md file not yet being a trust root.</p>
+    </section>
+  </article>
+</body>
+</html>

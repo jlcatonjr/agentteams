@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 10: Conflict Resolution</title>
+</head>
+<body>
+  <article id="notes:conflict-resolution">
+    <h1>Cliff Notes: Chapter 10: Conflict Resolution</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/10-conflict-resolution.html#ch:conflict-resolution">Chapter 10</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-10-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that resolving the conflicts an auditor finds is a judicial function and should sit with a separate agent bound by a fixed rule of decision. The conflict-resolution agent issues one of three dispositions for every open entry, justifies each against the authority hierarchy and, when evidence is ambiguous, defaults to the source that ranks higher. In the chapter's terms the default runs in one direction only, so that "the thesis yields to the nomos," and departures from that ordering require affirmative justification.</p>
+    </section>
+
+    <section id="notes-10-covers">
+      <h2>What the chapter covers</h2>
+      <p>The first section sets out the disposition framework. ACCEPT means the second file, usually the chapter draft, is correct and the first file should change. REJECT means the first file, usually the infrastructure source, is correct and the second should change. REVISE means both need modification. The author constrained the set deliberately and offers no DEFER, MERGE or IGNORE, so every open conflict receives a disposition that commits to a corrective action. Each disposition carries a written justification that cites the authority hierarchy, which turns what would be an opaque decree into a reasoning trace the human principal can review. A conflict the hierarchy cannot settle goes to the orchestrator. The chapter adds that from release 1.2, where a decision is one only the principal can make, the framework's orchestrator will put it to the principal as a short list of options with the recommended one first, the Operator Decision Query of Chapter 5. In practice, per-code defaults guide each disposition. TM goes to the highest-authority term, CC to the higher-authority claim, AE requires external verification against the cited source, and SD updates derived text to match what is on disk.</p>
+      <p>The second section treats the authority hierarchy as the decision rule. The agent may not resolve a conflict by plausibility, editorial preference or narrative flow. The book project's six-tier hierarchy places source code and agent files on disk in Tier 1, published papers in Tier 2, project conventions in Tier 3, agent documentation in Tier 4 and chapter sources in Tier 5. Conflicts within a tier are settled by appeal to a higher tier, so when two chapters disagree about a workflow count, the agent counts the workflows in the orchestrator's file. The section then separates two questions. The hierarchy ranks sources of fact. It does not settle whose instruction wins, which is the question a prompt injection attacks. The framework therefore adds a second ordering for sources of instruction, from the host platform's constraints through a constitutional core, the operator's live instruction, project extensions and the agent's role, down to read content, which has no authority at all. The hierarchy of fact appears in that ordering as a single tier below the role instructions. The chapter concludes that the resolution agent's deference is "deference about what is true, not about what to do."</p>
+      <p>The third section develops the asymmetric default toward rejection. When evidence is ambiguous the agent presumes the chapter is wrong and the infrastructure file is right. An ACCEPT therefore requires affirmative evidence, such as a known error in the agent file or an approved change that has not yet propagated. A REJECT needs only a pointer to the file and the hierarchy. "The asymmetry makes it harder to override ground truth than to defer to it." The default also guards against narrative drift.</p>
+      <p>The fourth section separates detection from adjudication, following the logic already applied to the security and code-hygiene agents. A single agent would carry conflicting incentives, thoroughness in finding and parsimony in resolving, and would end up either over-cautious or under-cautious. The two agents communicate through the conflict log of Chapter 9, so resolution can handle a batch of conflicts accumulated across several audit runs.</p>
+      <p>The fifth section draws out the judicial function. The pair has mandatory justification, a defined rule of decision, a finite set of dispositions and a permanent record. The REJECT default works like a legal presumption. The chapter argues that "Judicial independence requires institutional separation, not just functional separation," because an auditor that resolved its own findings would face no external review. The chapter ends by pointing to Chapter 11, which turns the adversarial principle into a dedicated governance function.</p>
+    </section>
+
+    <section id="notes-10-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Three dispositions. ACCEPT, REJECT and REVISE, each committing to a correction.</li>
+        <li>Mandatory justification. Every disposition cites the authority hierarchy and is logged.</li>
+        <li>Per-code defaults. Starting dispositions for TM, CC, AE and SD that higher-tier evidence can override.</li>
+        <li>Six-tier hierarchy of fact. Files on disk at the top and chapter sources near the bottom.</li>
+        <li>Ordering of instruction. A separate framework ordering in which read content has no authority.</li>
+        <li>Asymmetric default. Ambiguity resolves toward REJECT.</li>
+        <li>Escalation. Unsettled conflicts go to the orchestrator, and from release 1.2 decisions reserved to the principal take the form of an Operator Decision Query.</li>
+      </ul>
+    </section>
+
+    <section id="notes-10-frames">
+      <h2>Theoretical frames</h2>
+      <p>Hayek (1973) supplies the nomos and thesis distinction, between rules that evolved into entrenched constraints and commands issued for particular ends. The chapter treats source files as nomos, the settled result of design and testing, and chapter prose as thesis, composed after the fact and open to the errors of retrospective description. Buchanan and Tullock (1962) supply the logic of constitutional pre-commitment behind the asymmetric default. The rule is set in advance because agents under production pressure would otherwise resolve ambiguity in the chapter's favor. Legal theory supplies the separation of investigative and judicial functions and the idea of a rebuttable presumption.</p>
+    </section>
+
+    <section id="notes-10-matters">
+      <h2>Why it matters</h2>
+      <p>The chapter shows how a team can make binding decisions about its own documentation without leaving them to taste. The narrow disposition set, the required justification and the one-way default keep the specification from drifting toward its description. The distinction between ranking facts and ranking instructions is perhaps the chapter's most consequential addition, since it explains why a source can win a dispute of fact without gaining any power to direct an agent.</p>
+    </section>
+
+    <section id="notes-10-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags one item for release 1.2, the Operator Decision Query, through which the orchestrator will put decisions reserved to the principal as a short list of options.</p>
+    </section>
+  </article>
+</body>
+</html>

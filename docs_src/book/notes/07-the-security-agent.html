@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 7: The Security Agent</title>
+</head>
+<body>
+  <article id="notes:the-security-agent">
+    <h1>Cliff Notes: Chapter 7: The Security Agent</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/07-the-security-agent.html#ch:the-security-agent">Chapter 7</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-07-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that security must stand first in absolute precedence among the team's objectives, and that this priority is real only when it is entrenched beyond the reach of the agents it constrains. The security agent holds the team's only veto, and that veto can be changed only by the human principal. As the chapter puts it, "A security mechanism that can be softened by the agents it constrains offers no real protection." A second argument runs alongside the first. Because text in context shapes behavior, the boundary between instruction and data cannot be enforced by the medium that carries both and has to be declared as a constitutional rule.</p>
+    </section>
+
+    <section id="notes-07-covers">
+      <h2>What the chapter covers</h2>
+      <p>The first section establishes security as the first priority. In the book project the priority ordering runs from security through theoretical accuracy, voice fidelity and technical accuracy to internal consistency. The security agent is "the only agent in the team with veto power." When it issues a HALT, the requesting agent and the orchestrator stop, and the halt persists until the human principal clears it. The veto sits in the agent's invariant core, so changing it requires the same authority as changing the constitution. The chapter grounds this entrenchment in Buchanan and Tullock (1962).</p>
+      <p>The second section describes trigger-based activation. The orchestrator routes specific event categories to the security agent before execution. The book project defines eight mandatory triggers, among them file deletion, writes to external repositories, credential exposure, unverified citations and bulk edits. The agent is interrupt-driven and dormant between triggers, and the triggers live in the constitution. The chapter then separates two questions. Clearance settles who may authorize a dangerous act, but it is silent about the state that act leaves behind. The generating tooling answers the second question by copying prior state before every rewrite and by letting an operator preview the affected files without touching them. The chapter calls clearance constitutional and recovery operational.</p>
+      <p>The third section explains the HALT mechanism. A directive names the rule, the file and line, the risk and a recommended remedy. Only the human principal can clear it. "What this yields is accountability rather than impossibility." A workflow can still proceed without clearance, but not with the team's authorization. In an unsigned log a halt could lapse without any act naming it, and the chapter points to Chapter 23 for how the framework closed that route where decision signing is enforced, through a named retraction that must authenticate. "The closure holds while the shared secret that signs the retraction stays out of every agent's environment." Every halt is logged, and "The log is memory."</p>
+      <p>The fourth section covers read-only enforcement. The agent cannot create files, edit content or run commands. The chapter qualifies this at once. The limit holds only where the runtime enforces a declared tool set. At the framework's anchor Claude and Copilot enforce it, Goose does so only on a direct run, Codex only under its launcher's role gate, and on Grok the list is advisory. Until the framework corrected its emitter, Claude Code ignored the key under which the list was written. A security agent able to write could itself become a vector for the risks it detects. Detection and remediation therefore stay with different agents, a separation the chapter says Chapters 8 and 9 repeat.</p>
+      <p>The fifth section covers dual-domain coverage across infrastructure protection and content integrity. Through July 2026 the book's team carried eight rules, while the team regenerated at the anchor carries ten, S-1 through S-10, plus a vulnerability monitoring rule examined in Chapter 25. The account keeps to the eight. The chapter traces how an earlier six-rule set was amended, with path sanitization moving into a stricter S-8 and the freed S-5 and S-6 positions taken by rules against prompt injection. The framework has since added an eight-layer model for deployed systems and a supply-chain rule, S-10, that imposes a cooldown on new packages. Finally, fabricated citations were reclassified from a content-quality concern to a security concern after they appeared in production, and S-3 formalizes that change.</p>
+    </section>
+
+    <section id="notes-07-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Absolute veto. A HALT stops every agent, including the orchestrator, until the human principal clears it.</li>
+        <li>Entrenchment. The veto and the triggers can be changed only by direct human edit.</li>
+        <li>Trigger-based activation. Eight event categories route operations to review, and the agent is otherwise dormant.</li>
+        <li>Clearance and recovery. Constitutional authorization of an act is paired with operational means of undoing it.</li>
+        <li>Read-only posture. Enforced only on runtimes that honor a declared tool set.</li>
+        <li>Rules S-1 to S-8. Credential scanning, external read-only access, reference integrity, destructive operation gating, injection detection, content isolation, scope limitation and machine-specific information.</li>
+        <li>Content as data. Text under review is inert by stipulation, and the framework's principle C-4 extends that status to decoded, translated or summarized content.</li>
+      </ul>
+    </section>
+
+    <section id="notes-07-frames">
+      <h2>Theoretical frames</h2>
+      <p>Buchanan and Tullock (1962) supply the logic of constitutional pre-commitment. Rules are set in advance to bind agents against actions that production pressure would otherwise make tempting. The chapter returns to Buchanan when it explains the injection rules. A constitutional rule declares a boundary but cannot make it physically real, and rules bind because violations are detectable often enough to matter. For that reason the chapter reads S-5's own description, "a defense-in-depth gate rather than a guarantee of exhaustive detection," as the ordinary condition of constitutional constraint rather than a flaw. The isolation rule in S-6 carries the load because it holds even when detection fails.</p>
+    </section>
+
+    <section id="notes-07-matters">
+      <h2>Why it matters</h2>
+      <p>The security agent is the clearest case in the book of a rule placed beyond the reach of the agents it governs. The chapter is also candid about its limits. It distinguishes what a rule authorizes from what a runtime enforces, and it names the surfaces where a read-only claim holds only on paper. The treatment of prompt injection as a constitutional question, rather than a detection problem alone, gives the book's theory of documentation as infrastructure its sharpest test.</p>
+    </section>
+
+    <section id="notes-07-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter keeps to the team's eight security rules while noting that the regenerated team at the anchor carries ten. It flags no features as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>
