@@ -99,10 +99,20 @@ emit_codex_mcp_config(
     features: list[str],
     output_root: Path,
     dry_run: bool = False,
+    first_party_tables: dict[str, dict] | None = None,
 ) -> CodexMCPEmissionResult
 ```
-Splice wirable MCP servers into `output_root/.codex/config.toml`. No-op
-(`gated_off=True`) when `codex:mcp` is not active; no-op when `servers` is empty.
+Splice wirable MCP servers into `output_root/.codex/config.toml`. Without `codex:mcp`
+no operator server is wired: the call is a no-op (`gated_off=True`) unless `first_party_tables`
+is given, and then only those tables are written. No-op when both `servers` and
+`first_party_tables` are empty.
+
+`first_party_tables` carries agentteams' own servers (the WASM wiring's
+`{"mcp_servers.agentteams_wasm": ...}` from `frameworks._wasm_wiring.codex_first_party_tables`).
+They bypass `mcp_wirable` and the `codex:mcp` gate, so each must be exactly the canonical
+compute-only `agentteams_wasm` session table: `command` one of `runner_mcp.SYSTEM_PYTHONS` and `args`
+exactly the canonical launch (`wasm_mcp.is_session_launch`). Anything else raises `ValueError`
+before any file is touched.
 Non-conforming entries (schema validation, via [`mcp_emit._inert_problems`](mcp-emit.md))
 are routed to `result.errors`. An existing file that fails to parse as TOML refuses
 the splice entirely (`result.errors`, file untouched) rather than guessing.

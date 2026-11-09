@@ -105,6 +105,16 @@ def test_integration_reference_template_uses_only_known_placeholders():
     assert "Never squash or rebase the release PR" in text
 
 
+def test_integration_reference_requires_protecting_the_integration_branch():
+    """Row 675: a release merge deletes an unprotected integration branch when delete_branch_on_merge is on."""
+    text = (TEMPLATES / bm.REFERENCE_TEMPLATE).read_text(encoding="utf-8")
+    fenced = text.split("<!-- AGENTTEAMS:BEGIN integration_branch", 1)[1].split("<!-- AGENTTEAMS:END", 1)[0]
+    assert "**`{INTEGRATION_BRANCH}` must itself be a protected branch**" in fenced
+    for needle in ("delete_branch_on_merge", "allow_deletions", "allow_force_pushes", "enforce_admins",
+                   "refs/heads/{INTEGRATION_BRANCH}"):
+        assert needle in fenced, needle
+
+
 def test_analyze_adds_the_reference_and_record_only_for_integration():
     from agentteams import analyze, ingest
 
