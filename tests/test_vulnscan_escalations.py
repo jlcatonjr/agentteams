@@ -239,7 +239,7 @@ def test_sign_resolution_operator_flow(env: dict, monkeypatch: pytest.MonkeyPatc
 
     keyfile = env["tmp"] / "op.pem"
     keyfile.write_text(env["pem"])
-    monkeypatch.setattr(ops_, "_signing_preflight", lambda roots, allow: (str(keyfile), False))
+    monkeypatch.setattr(ops_, "_signing_preflight", lambda roots, allow, key_id="": (str(keyfile), False))
     esc = _rec("injection", REPO)
     rec = E.build_resolution(esc.id, "reviewed the diff", "op")
     assert E.sign_resolution(rec, confirm_sha256="0" * 64) is None
