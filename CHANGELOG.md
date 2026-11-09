@@ -67,6 +67,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `command`, so `--read=/`, an argparse prefix (`--rea`), `--scratch=…` or a trailing second `--agent` passed. Only
   direct API callers could reach it; the CLI always passes the canonical table. Grok's `keep_if_exact` is unchanged.
 
+### changed (operator signing finds its own key)
+
+- `--sign-decision`, `--sign-grant`, `--sign-mcp-direct-grant` and `vulnscan grant sign` no longer need
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE` when the key sits where `provision-operator-signing-key.sh` puts it:
+  with the variable unset, the signer uses `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the
+  spec's `key_id` and prints that path (never the key) before the confirm gate. A set variable still wins. If
+  neither exists, the error names both. Signing steps and handoff scripts can drop the key argument, and the
+  variable no longer has to be exported into a shell that might also launch an agent, where sandboxed commands
+  would inherit it. The confirm gate, the install-location gate, the integrity pin and the sandbox read-deny on
+  the key directory are unchanged. HMAC keys (`AGENTTEAMS_*_SIGNING_KEY`) are not resolved automatically yet.
+
 ### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
 
 - **A process left running by a confined command fails the run again under bwrap.** bwrap's PID 1 exits with the

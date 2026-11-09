@@ -177,7 +177,7 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Known entries | `~/.config/agentteams/vulnscan-known/vk-*.json` | mode 600, as for remediation grants; in force only with a committed row in `<governance dir>/references/vulnscan-known-index.csv` ([known](#agentteamsvulnscanknown)) |
 | Known-entry proposals | `<state>/known-proposals/vk-*.json` | unsigned; written by `known propose`, read by `known sign` |
 | Operator verify keys (public) | `~/.config/agentteams/verify-keys/<key-id>.pub.pem` | the directory and the file must be yours, not group/world-writable and not symlinks |
-| Operator signing key (private) | `~/.config/agentteams/keys/decision-signing-<key-id>.pem` | as written by `provision-operator-signing-key.sh`; named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` |
+| Operator signing key (private) | `~/.config/agentteams/keys/decision-signing-<key-id>.pem` | as written by `provision-operator-signing-key.sh`; named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`, or found by `key_id` when that is unset |
 | Ledger MAC key, high-water mark | `~/.config/agentteams/keys/vulnscan-ledger.key`, `vulnscan-ledger.hwm` | never mounted into a container |
 | State | `~/.local/state/agentteams/vulnscan/` | `$XDG_STATE_HOME` honoured; `AGENTTEAMS_VULNSCAN_STATE_DIR` |
 | Ledger | `<state>/ledger.jsonl` | append-only, MAC-chained |
@@ -1111,8 +1111,8 @@ Group- or world-*readable* is fine.
 
 Every signature goes through one flow (`grant.operator_sign`):
 
-1. **Preflight, key unread.** `AGENTTEAMS_DECISION_ED25519_KEYFILE` must name your private key
-   file; the signing code's integrity is checked; the install-location check
+1. **Preflight, key unread.** `AGENTTEAMS_DECISION_ED25519_KEYFILE` names your private key
+   file (unset: `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the record's `key_id`); the signing code's integrity is checked; the install-location check
    (`signer_location.verify_install_location`) refuses an `agentteams` an agent could edit: the
    package, a venv's `sys.prefix` or the interpreter inside the current directory, a git work tree
    or an agent-writable `allowWrite` root. The base interpreter (`sys.executable`, and `sys.prefix`
