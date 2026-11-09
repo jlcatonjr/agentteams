@@ -341,6 +341,94 @@ def test_redirect_off_allowlist_refused():
     assert handler.max_redirections == wr.MAX_REDIRECTS
 
 
+_URL = "https://github.com/o/r/releases/download/v1/a.bin"
+
+
+class _FakeResp(io.BytesIO):
+    def geturl(self):
+        return _URL
+
+
+def _scripted_opener(monkeypatch, script):
+    """Make download() see ``script`` (exceptions to raise, or bytes to serve) one item per attempt."""
+    calls = []
+
+    class _Opener:
+        def open(self, req, timeout=None):
+            calls.append(req.full_url)
+            item = script[len(calls) - 1]
+            if isinstance(item, BaseException):
+                raise item
+            return _FakeResp(item)
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *a: _Opener())
+    sleeps = []
+    monkeypatch.setattr(wr.time, "sleep", sleeps.append)
+    return calls, sleeps
+
+
+def _http_error(code, headers=None):
+    import email.message
+    import urllib.error
+    msg = email.message.Message()
+    for k, v in (headers or {}).items():
+        msg[k] = v
+    return urllib.error.HTTPError(_URL, code, "x", msg, io.BytesIO(b""))
+
+
+def test_download_retries_a_transient_504_then_succeeds(monkeypatch, tmp_path):
+    data = b"payload"
+    calls, sleeps = _scripted_opener(monkeypatch, [_http_error(504), data])
+    digest = wr.download(_URL, len(data), tmp_path / "d")
+    assert digest == hashlib.sha256(data).hexdigest()
+    assert (tmp_path / "d").read_bytes() == data
+    assert len(calls) == 2 and sleeps == [wr.FETCH_BACKOFF_S]
+
+
+def test_download_does_not_retry_a_404(monkeypatch, tmp_path):
+    calls, sleeps = _scripted_opener(monkeypatch, [_http_error(404), b"never"])
+    with pytest.raises(wr.WasmNetworkError, match="HTTP 404"):
+        wr.download(_URL, 5, tmp_path / "d")
+    assert len(calls) == 1 and sleeps == []
+
+
+def test_download_gives_up_after_the_retry_budget_with_exponential_backoff(monkeypatch, tmp_path):
+    n = wr.FETCH_RETRIES + 1
+    calls, sleeps = _scripted_opener(monkeypatch, [_http_error(503)] * n)
+    with pytest.raises(wr.WasmNetworkError, match=f"failed after {n} attempts: HTTP Error 503"):
+        wr.download(_URL, 5, tmp_path / "d")
+    assert len(calls) == n
+    assert sleeps == [min(wr.FETCH_BACKOFF_S * 2 ** i, wr.FETCH_BACKOFF_MAX_S) for i in range(n - 1)]
+
+
+def test_download_honours_a_numeric_retry_after_capped(monkeypatch, tmp_path):
+    data = b"ok"
+    script = [_http_error(429, {"Retry-After": "7"}), _http_error(503, {"Retry-After": "9999"}), data]
+    calls, sleeps = _scripted_opener(monkeypatch, script)
+    wr.download(_URL, len(data), tmp_path / "d")
+    assert sleeps == [7.0, wr.FETCH_BACKOFF_MAX_S]
+
+
+def test_download_ignores_a_non_ascii_digit_retry_after(monkeypatch, tmp_path):
+    data = b"ok"
+    calls, sleeps = _scripted_opener(monkeypatch, [_http_error(503, {"Retry-After": "\xb2"}), data])
+    wr.download(_URL, len(data), tmp_path / "d")
+    assert sleeps == [wr.FETCH_BACKOFF_S]
+
+
+def test_download_backs_off_between_network_errors_too(monkeypatch, tmp_path):
+    data = b"ok"
+    calls, sleeps = _scripted_opener(monkeypatch, [TimeoutError("read timed out"), data])
+    wr.download(_URL, len(data), tmp_path / "d")
+    assert len(calls) == 2 and sleeps == [wr.FETCH_BACKOFF_S]
+
+
+def test_download_never_retries_a_size_refusal(monkeypatch, tmp_path):
+    calls, sleeps = _scripted_opener(monkeypatch, [b"too many bytes", b"too many bytes"])
+    with pytest.raises(wr.WasmRuntimeError, match="exceeds its pinned size"):
+        wr.download(_URL, 3, tmp_path / "d")
+    assert len(calls) == 1 and sleeps == []
+
+
 @pytest.fixture
 def loopback(tmp_path):
     """A loopback http.server serving tmp_path/www (no external network)."""

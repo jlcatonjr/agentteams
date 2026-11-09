@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bwrap fails the run instead of silently skipping every live confinement test. A non-required `ubuntu-26.04` job
   records the runner, bwrap and coreutils versions and fails if the survivor test does not run.
 
+### fixed (WASM installer retries transient HTTP errors)
+
+- `--wasm-install` and `--wasm-pin-update` (`wasm_runtime.download`) now retry HTTP 408, 429, 500, 502, 503 and
+  504 within the existing 3-attempt budget instead of failing on the first one, and wait between attempts (2 s,
+  then 4 s; a numeric `Retry-After` is honoured, capped at 30 s). Network errors and timeouts get the same delay.
+  Any other HTTP error (404, 403, …) still fails at once, URL, redirect and size refusals are never retried, and
+  the exit code for a network failure is still 3. Motivation: a GitHub release-asset `HTTP 504` turned `main`'s
+  post-merge `wasm-live` red twice on 2026-11-08.
+
 ### fixed (Codex write-policy fence is scoped to Codex, #249)
 
 - The `codex_write_policy` fence Codex adds to a shared repo-root `AGENTS.md` (one Goose and Grok also load) now
