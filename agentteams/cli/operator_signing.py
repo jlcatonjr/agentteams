@@ -1,7 +1,8 @@
 """operator_signing.py — the integrity-pinned operator signing path (pin-signing-cli-modules).
 
 ``--sign-decision`` and ``--sign-grant`` are the only code paths that read the operator's Ed25519
-**private key** (the file named by ``AGENTTEAMS_DECISION_ED25519_KEYFILE``). Their orchestration —
+**private key** (the file named by ``AGENTTEAMS_DECISION_ED25519_KEYFILE``, else
+``~/.config/agentteams/keys/decision-signing-<key_id>.pem``; :func:`default_keyfile`). Their orchestration —
 env read, key-file read, payload construction, the operator display, the pre-sign refusals, the
 signature, verify-before-append and the append — lives here, in a module listed in
 ``integrity.ENFORCEMENT_MODULES``, so an in-place edit to it is recorded by
@@ -418,7 +419,8 @@ def _resolve_keyfile(key_id: str) -> str | None:
               file=sys.stderr)
         return str(derived)
     where = (f", and there is no key for key_id {key_id!r} at {derived}" if derived is not None
-             else "")
+             else f", and key_id {key_id!r} cannot name a key file in {_key_dir()}" if key_id
+             else ", and there is no key_id to find a key by")
     print(
         f"Error: {KEYFILE_ENV} is not set{where} — it must name the operator private key file "
         "(never an agent env). Refusing to sign (fail-closed).",

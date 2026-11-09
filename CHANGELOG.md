@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (signing docs and messages name the key_id lookup)
+
+- Docs, `--help` text, the man page, the grant refusal messages and `provision-operator-signing-key.sh`'s printed
+  commands now say the key is found from `key_id`, and the signing examples name no key. The error for a missing
+  key says why no default was tried when the `key_id` is absent or cannot name a file.
+
 ## [1.1.1-rc.1] - 2026-11-09
 
 ### release notes

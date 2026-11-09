@@ -1158,7 +1158,8 @@ def _build_parser() -> argparse.ArgumentParser:
                             help=f"Orchestrator-only-writes (R3): {text}. Goes through the runner (--serve-requests).")
     parser.add_argument("--sign-mcp-direct-grant", metavar="AGENT", dest="sign_mcp_direct_grant", default=None,
                         help="Operator-only (R5): sign a direct-write grant for AGENT (whose mcp_grants entry asks for "
-                             "approval 'direct') with the operator key (AGENTTEAMS_DECISION_ED25519_KEYFILE) and --key-id, "
+                             "approval 'direct') with the operator key (AGENTTEAMS_DECISION_ED25519_KEYFILE, else the key for --key-id in "
+                             "~/.config/agentteams/keys) and --key-id, "
                              "binding the brief's current tools, scopes and gates; shown for review, signed on a confirmed "
                              "digest (--confirm-review-sha256), saved outside the project. Run outside every agent "
                              "session; restart the runner.")
@@ -1294,8 +1295,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "spec (the --issue-grant fields plus key_id) and append it to the HOLDER "
             "workspace's ledger under --output/--project (else CWD). The only minter of a grant "
             "that widens the holder's sandbox allowWrite (at its next --update). Reads the "
-            "operator private key from the file named by AGENTTEAMS_DECISION_ED25519_KEYFILE "
-            "(keep it in ~/.config/agentteams/keys). The payload carries the purpose tag "
+            "operator private key from the file named by AGENTTEAMS_DECISION_ED25519_KEYFILE, or, "
+            "when that is unset, ~/.config/agentteams/keys/decision-signing-<key_id>.pem. The payload carries the purpose tag "
             "agentteams-grant-v1, so it can never double as a decision signature. The row is "
             "verified BEFORE it is appended against the holder TEAM dir (the one --update with "
             "the same --framework/--output writes): its "
@@ -1439,7 +1440,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "appended. When the log has a text_digest column (a new log does; --migrate-decision-log "
             "adds it) the row's conditions and evidence are bound into the signature; otherwise a "
             "notice says they are not. Reads the operator private key from the file named by "
-            "AGENTTEAMS_DECISION_ED25519_KEYFILE (never from an agent env). Prints the row's "
+            "AGENTTEAMS_DECISION_ED25519_KEYFILE (never from an agent env), else from "
+            "~/.config/agentteams/keys/decision-signing-<key_id>.pem. Prints the row's "
             "derived material effect for a deliberate second look before writing. This is the ONLY "
             "minter of Ed25519 relaxing rows. Keep the key in ~/.config/agentteams/keys: every "
             "emitted sandbox read-denies that directory, so there the key FILE is unreadable "
