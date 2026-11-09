@@ -151,6 +151,41 @@ def test_the_fences_a_release_writes_from_code_are_exactly_these() -> None:
     assert found == {("write_policy", 1), ("goose_operational_notes", 1), ("content", 1)}
 
 
+#: Every fence a release builds by f-string, so ``template_fence_versions`` cannot see its ``v=`` (row 662 (3)).
+#: (module, id expression, id value or None for a runtime id, v). A new site or a ``v=`` bump fails
+#: ``test_every_f_string_fence_site_is_listed`` until it is listed here, and its ceiling handled on purpose:
+#: listing it changes no merge behaviour (exposing these ids to the ceiling scan would, e.g. grok_runtime v=2).
+_F_STRING_FENCES = {
+    ("fence_inject.py", "fence_id", None, 1),  # content / content_N, chosen at runtime
+    ("wasm_policy.py", "FENCE_ID", "wasm_sandbox", 1),
+    ("frameworks/codex.py", "_TRANSLATION_FENCE_ID", "codex_translation", 1),
+    ("frameworks/grok.py", "GROK_FENCE_ID", "grok_runtime", 2),
+    ("frameworks/_agents_md_rules.py", "SECTION_ID", "constitutional_rules_baseline", 1),
+    ("frameworks/_agents_md_ownership.py", "sid", "codex_write_policy", 1),  # sid = CODEX_WRITE_POLICY_FENCE_ID
+}
+
+
+def test_every_f_string_fence_site_is_listed() -> None:
+    import re
+
+    package = Path(agentteams.__file__).parent
+    marker = re.compile(r"AGENTTEAMS:BEGIN \{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\} v=(?P<v>\d+)")
+    found = {(p.relative_to(package).as_posix(), m["name"], int(m["v"])) for p in package.rglob("*.py")
+             for m in marker.finditer(p.read_text(encoding="utf-8"))}
+    assert found == {(mod, name, v) for mod, name, _sid, v in _F_STRING_FENCES}
+
+
+def test_the_listed_f_string_fence_ids_are_what_the_code_emits() -> None:
+    from agentteams import wasm_policy
+    from agentteams.frameworks import _agents_md_ownership, _agents_md_rules, codex
+
+    assert wasm_policy.FENCE_ID == "wasm_sandbox"
+    assert codex._TRANSLATION_FENCE_ID == "codex_translation"
+    assert _agents_md_ownership.GROK_FENCE_ID == "grok_runtime"
+    assert _agents_md_rules.SECTION_ID == "constitutional_rules_baseline"
+    assert _agents_md_ownership.CODEX_WRITE_POLICY_FENCE_ID == "codex_write_policy"
+
+
 def test_a_fence_less_hub_refreshes_from_a_fenced_pin(tmp_path: Path) -> None:
     _team(tmp_path, instructions="# Team\n\nNo fences yet.\n")
     (tmp_path / _PIN_INSTR).write_text("# Team\n\n" + _fence("project_notes", 1, "Now fenced."), encoding="utf-8")
@@ -161,6 +196,36 @@ def test_a_fence_less_hub_refreshes_from_a_fenced_pin(tmp_path: Path) -> None:
     assert "Now fenced." in hub["instructions_binding"]["content"]
     assert any("had no AGENTTEAMS fences; replaced with the pin's" in n for n in result.notices)
     assert not any("not refreshed" in n for n in result.notices)
+    # Row 662 (2): the old fence-less text is recoverable from the hub's backups, not only from git.
+    backups = list((tmp_path / _HUB / "agents" / ".agentteams-backups").rglob("team.cai.json*"))
+    assert backups and "No fences yet." in backups[0].read_text(encoding="utf-8")
+    assert any("fence-less instruction text is backed up" in n for n in result.notices)
+
+
+def test_a_backup_root_ignores_itself_in_git(tmp_path: Path) -> None:
+    # Row 662 (1): a committed hub (or agents dir) never shows its backups as untracked.
+    from agentteams.backup import backup_output_dir
+
+    _git(tmp_path, "init", "-q")
+    agents = tmp_path / ".agentteams" / "canonical" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "helper.md").write_text("x", encoding="utf-8")
+    _commit(tmp_path)
+    _quiet(backup_output_dir, agents, files_to_backup=["helper.md"], reason="test")
+    status = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=tmp_path,
+                                     text=True)
+    assert ".agentteams-backups" not in status
+    assert (agents / ".agentteams-backups" / ".gitignore").read_text(encoding="utf-8").splitlines()[-1] == "*"
+
+
+def test_an_existing_backup_root_gitignore_is_left_alone(tmp_path: Path) -> None:
+    from agentteams.backup import ensure_backup_root_ignored
+
+    root = tmp_path / ".agentteams-backups"
+    root.mkdir()
+    (root / ".gitignore").write_text("!keep-me\n", encoding="utf-8")
+    assert ensure_backup_root_ignored(root) is False
+    assert (root / ".gitignore").read_text(encoding="utf-8") == "!keep-me\n"
 
 
 def test_goose_owned_fences_reach_goose_only(tmp_path: Path) -> None:

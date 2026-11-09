@@ -61,7 +61,7 @@ def _log(out: Path) -> bytes:
 
 def _backups(out: Path) -> list[Path]:
     root = out / ".agentteams-backups"
-    return sorted(root.iterdir()) if root.is_dir() else []
+    return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []  # not the root's .gitignore
 
 
 @pytest.fixture(autouse=True)

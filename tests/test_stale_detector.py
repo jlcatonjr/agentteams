@@ -529,13 +529,29 @@ class TestStaleIgnore:
 # ---------------------------------------------------------------------------
 
 class TestBackupsGuard:
-    def test_warns_when_not_gitignored(self, tmp_path):
-        # repo with a relocatable broken ref → apply writes a snapshot; .agentteams-backups
-        # is not gitignored → a warning is emitted.
+    def test_the_snapshot_root_ignores_itself_when_the_repo_does_not(self, tmp_path):
+        # repo with a relocatable broken ref → apply writes a snapshot. The repo's .gitignore lacks
+        # .agentteams-backups, but the root's own .gitignore (row 662 (1)) ignores it → no warning.
         _init_repo(tmp_path)
         (tmp_path / "new").mkdir()
         (tmp_path / "new" / "helper.py").write_text("x=1\n")
         (tmp_path / "doc.md").write_text("[h](old/helper.py)\n")
+        _commit(tmp_path, "init")
+        report = sd.scan_staleness(tmp_path)
+        result = sr.apply_fixes(report, tmp_path, apply=True)
+        assert result.snapshot_dir is not None
+        assert (tmp_path / ".agentteams-backups" / ".gitignore").is_file()
+        assert result.warnings == []
+
+    def test_warns_when_the_root_gitignore_was_removed(self, tmp_path):
+        # An operator who deleted the root's .gitignore (to commit backups) still gets the warning.
+        _init_repo(tmp_path)
+        (tmp_path / "new").mkdir()
+        (tmp_path / "new" / "helper.py").write_text("x=1\n")
+        (tmp_path / "doc.md").write_text("[h](old/helper.py)\n")
+        root = tmp_path / ".agentteams-backups"
+        root.mkdir()
+        (root / ".gitignore").write_text("# opted in\n")
         _commit(tmp_path, "init")
         report = sd.scan_staleness(tmp_path)
         result = sr.apply_fixes(report, tmp_path, apply=True)

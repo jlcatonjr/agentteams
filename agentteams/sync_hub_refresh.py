@@ -25,7 +25,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agentteams.canonical import load_canonical, materialize_canonical
+from agentteams.backup import backup_output_dir
+from agentteams.canonical import TEAM_FILE_NAME, load_canonical, materialize_canonical
 from agentteams.frameworks.registry import agents_dir_for
 from agentteams.interop import export_to_cai
 from agentteams.interop_helpers import _VERSIONED_BEGIN_RE, keep_newer_fences, template_fence_versions
@@ -54,6 +55,9 @@ class HubRefreshResult:
     notices: list[str] = field(default_factory=list)
     changed: bool = False
     dry_run: bool = False
+    #: The hub's instruction content had no fences and was replaced wholesale by the pin's (row 662 (2)):
+    #: the save paths back up ``team.cai.json`` first, since a fence merge would have kept the old text.
+    replaced_fenceless: bool = False
 
 
 def refresh_hub_instructions(root: Path, *, dry_run: bool = False) -> HubRefreshResult:
@@ -79,8 +83,35 @@ def refresh_hub_instructions(root: Path, *, dry_run: bool = False) -> HubRefresh
     hub = load_canonical(canonical_dir)
     result = refresh_hub_binding(root, pin_doc, hub, dry_run=dry_run)
     if result.changed and not dry_run:
+        _backup_fenceless_hub(canonical_dir, result)
         materialize_canonical(hub, canonical_dir)
     return result
+
+
+def _backup_fenceless_hub(canonical_dir: Path, result: HubRefreshResult) -> None:
+    """Back up the hub's ``team.cai.json`` before a fence-less instruction text is replaced (row 662 (2)).
+
+    The backup goes with the hub's other backups, ``agents/.agentteams-backups/`` (as
+    ``__external__/team.cai.json…``), so ``--restore-backup`` on the hub's agents dir maps it back.
+
+    Args:
+        canonical_dir: The hub's directory.
+        result: The refresh outcome; nothing is done unless ``replaced_fenceless`` is set. A notice names
+            the backup, or says it could not be taken (the replacement still proceeds: git history, if the
+            hub is committed, is then the only copy).
+    """
+    if not result.replaced_fenceless:
+        return
+    agents_dir = Path(canonical_dir) / "agents"
+    try:
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        backup = backup_output_dir(agents_dir, files_to_backup=[f"../{TEAM_FILE_NAME}"],
+                                   reason="pre-sync-hub-fenceless-replace")
+    except (OSError, ValueError) as exc:
+        result.notices.append(f"could not back up the hub's fence-less instruction text before replacing it: {exc}")
+        return
+    if backup.backup_path is not None:
+        result.notices.append(f"the hub's old fence-less instruction text is backed up in {backup.backup_path}")
 
 
 def pin_instruction_problem(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]) -> str:
@@ -176,7 +207,8 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
         # A fence-less hub can't be fence-merged, so it never refreshed and projected nothing (remediation-log
         # 2026-11-04). Its text came from a pin at --sync-init; the pin decides, so it is replaced.
         current, seed_note = "", ("the hub's instruction content had no AGENTTEAMS fences; replaced with the "
-                                  "pin's (the old text is in git history only if the hub is committed)")
+                                  "pin's (a real run backs up team.cai.json first)")
+        result.replaced_fenceless = True
     if current:
         incoming, hub_kept = keep_newer_fences(deployed, current)
         result.notices.extend(hub_kept)
@@ -249,6 +281,10 @@ def refresh_hub_for_projection(root: Path, pin_doc: dict[str, Any], hub: dict[st
     moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
     notices.append(f"hub instruction fences {'would be ' if dry_run else ''}refreshed from the pin "
                    f"({result.pin}): {moved}")
+    if not dry_run:
+        already = len(result.notices)
+        _backup_fenceless_hub(canonical_dir, result)
+        notices.extend(result.notices[already:])
     materialize_canonical(hub, canonical_dir, dry_run=dry_run)
 
 
