@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (DRAFT, pending the operator's Rule 15 signature: Codex `codex:wasm-auto-approve`)
+
+- New opt-in host feature `codex:wasm-auto-approve`: with WASM on, the shared `agentteams_wasm` table in
+  `.codex/config.toml` gets `default_tools_approval_mode = "auto"`, so `codex exec` under `workspace-write` no
+  longer stops at the approval prompt for `run_wasm` (compute-only). Operator-declared servers keep `prompt`,
+  and without the token nothing changes. The first-party bound now requires exactly the mode the features
+  select (`codex_mcp_emit.first_party_approval_mode`). Row 648 gap 4. **Not to be released until the operator's
+  Ed25519-signed decision is recorded.**
+
 ### fixed (integration-branch teams are told to protect the integration branch)
 
 - The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now

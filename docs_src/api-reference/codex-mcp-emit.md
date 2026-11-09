@@ -34,6 +34,13 @@ The emitter therefore restores a per-call prompt explicitly: every server it wir
 `approve`). An operator may relax a single tool under `[mcp_servers.<id>.tools.<tool>]`
 with `approval_mode`.
 
+**Draft, pending the operator's Rule 15 signature (WP-C, 2026-11-09):** the opt-in host feature
+`codex:wasm-auto-approve` sets `agentteams_wasm` alone to `auto`, so `codex exec` under
+`workspace-write` runs `run_wasm` (compute-only: no host writes outside the guest's scratch, no
+network) without the prompt. Operator-declared servers keep `prompt`. The first-party bound requires
+exactly the mode the features select (`first_party_approval_mode`), so a table with any other value is
+refused. Without the token nothing changes.
+
 ## No comment-preserving TOML round-trip — text-level splice instead
 
 `.codex/config.toml` is shared and multi-purpose (sandbox/profile settings live
