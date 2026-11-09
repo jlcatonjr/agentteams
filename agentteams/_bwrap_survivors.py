@@ -7,6 +7,7 @@ on a socket the command cannot reopen. Split out of :mod:`agentteams.confinement
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import os
 import re
@@ -118,7 +119,7 @@ def read_survivor_report(fd: int, *, timeout: float = 5.0) -> str | None:
         shim counted N, or no well-formed report arrived: fail closed).
 
     Raises:
-        OSError: Reading *fd* failed (it is closed either way).
+        Nothing: a failed read is reported as a missing report (fail closed); *fd* is closed either way.
     """
     data = b""
     try:
@@ -132,8 +133,11 @@ def read_survivor_report(fd: int, *, timeout: float = 5.0) -> str | None:
             if not chunk:
                 break
             data += chunk
+    except (OSError, ValueError) as exc:  # the run must still be recorded: a failed read is a missing report
+        return f"no well-formed survivor report from inside the sandbox (reading it failed: {exc})"
     finally:
-        os.close(fd)
+        with contextlib.suppress(OSError):  # an fd that was already bad must not turn the report into a crash
+            os.close(fd)
     m = re.fullmatch(rb"survivors=([0-9]+)\n", data)
     if m is None:
         return f"no well-formed survivor report from inside the sandbox (got {data[:40]!r})"

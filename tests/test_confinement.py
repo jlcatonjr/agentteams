@@ -466,3 +466,57 @@ def test_a_fork_and_exit_chain_is_a_survivor(project):
              "    time.sleep(0.02)\n")
     with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
         _run(project, "import subprocess, sys; " + _DETACH.format(chain))
+
+
+def test_survivor_report_on_an_fd_above_1023_is_still_read():
+    # select.select() refuses fds >= FD_SETSIZE; the many-fds case is exactly where the bash fallback is used.
+    import resource
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft <= 1500 and hard <= 1500:
+        pytest.skip("cannot open an fd above 1023 here")
+    resource.setrlimit(resource.RLIMIT_NOFILE, (max(soft, min(hard, 4096)), hard))
+    try:
+        r, w = C.survivor_channel()
+        os.dup2(r, 1500)
+        os.close(r)
+        os.write(w, b"survivors=0\n")
+        os.close(w)
+        assert C.read_survivor_report(1500) is None
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+
+
+def test_survivor_report_read_failure_fails_closed():
+    r, w = C.survivor_channel()
+    os.close(w)
+    os.close(r)  # a bad fd: the read fails, and that is reported as a missing report, not raised
+    assert "no well-formed" in C.read_survivor_report(r)
+
+
+_FAKE_PROC = ('mk() {{ mkdir -p "$PROC/$1/task/$1"; echo "$1 (x) $2 $3 0" > "$PROC/$1/stat"; '
+              'echo "$1 (x) $2 $3 0" > "$PROC/$1/task/$1/stat"; }}; mk 1 S 0; mk 2 S 1; mk "$$" S 2; {extra}; ')
+
+
+@pytest.mark.parametrize("extra, why", [
+    ("true", None),                                                      # only the shim and its ancestors
+    ("mk 500 S 1", "counted and killed 1"),                              # a live survivor
+    ('mk 501 Z 1; mkdir -p "$PROC/501/task/502"; echo "502 (x) S 1 0" > "$PROC/501/task/502/stat"',
+     "counted and killed 1"),                                            # an exited leader with a live thread
+    ("mk 503 Z 1", None),                                                # a zombie is not a survivor
+    ('mkdir -p "$PROC/504/task"', "counted and killed 1"),               # tasks unreadable while it exists: live
+])
+def test_survivor_shim_walk_against_a_fake_proc(tmp_path, extra, why):
+    # The shim's own text, pointed at a fake /proc, with kill replaced by removing the entry (no real process).
+    shim = C._SURVIVOR_SHIM.replace("/proc", "$PROC").replace('kill -9 "$q" 2>/dev/null', 'rm -rf "$PROC/$q"')
+    script = f"PROC={tmp_path}; " + _FAKE_PROC.format(extra=extra) + shim
+    r, w = C.survivor_channel()
+    shell = C.survivor_shim_argv(w, [])[0]
+    try:
+        done = subprocess.run([shell, "-c", script, "x", str(w), sys.executable, "-c", "raise SystemExit(3)"],
+                              pass_fds=(w,), capture_output=True, text=True, timeout=30)
+    finally:
+        os.close(w)
+    got = C.read_survivor_report(r)
+    assert done.returncode == 3, done.stderr  # the command's status passes through
+    assert got is None if why is None else why in got
