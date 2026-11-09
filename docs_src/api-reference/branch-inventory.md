@@ -26,6 +26,7 @@ the **Merged-by-PR** state, verified through the GitHub API.
 | `summary_line(inventory) -> str` | The Output Contract value (`clean` or `N merged-undeleted \| …`) |
 | `GitHubAPI(repo)` | Read-only REST client. It uses `GH_TOKEN`/`GITHUB_TOKEN` over urllib, otherwise the `gh` CLI. `get` returns `ok`, `notfound` or `unknown` |
 | `github_repo_of(url)` | `owner/name` for a github.com remote, else `None` |
+| `integration_protection_notes(api, branch) -> list[str]` | Row 675: `[]` when a release merge cannot delete the integration branch, a `WARNING: …` note when the repository deletes merged head branches and the branch is unprotected, else one "could not check" note |
 | `STATES`, `CSV_COLUMNS` | The twelve states in evaluation order, and the CSV column order |
 
 ## State model
@@ -66,3 +67,21 @@ States are evaluated in order, and the first match wins:
 
 **Actions:** `keep`, `delete`, `tag-then-delete`, or `ask-operator` (patch-equivalent and
 stale-unmerged).
+
+## Integration-branch protection check
+
+For an integration-model project with the GitHub API in use, the inventory also checks whether merging the
+release PR would delete the integration branch. GitHub deletes a merged PR's head branch when the repository's
+"Automatically delete head branches" setting (`delete_branch_on_merge`) is on, and only branch protection exempts
+it. The check reads the repository endpoint and the branch's protection through the same read-only client.
+
+- Auto-delete on and the branch unprotected: a `WARNING: integration branch … will delete …` line in `notes`
+  (printed as `NOTE:` by `--branch-inventory`). Protect the branch as the generated
+  `references/integration-branch.reference.md` §5 describes.
+- Auto-delete off, or the branch protected: nothing.
+- Anything not positively known (the field missing, for example without admin access; a failed request;
+  protection unreadable): one "could not check" note, never a warning.
+
+It is informational only: it changes no state, hold, action or exit code, and it is not part of the deletion
+plan's `sha256`. A trunk-model project, or a run without the API, makes no call.
+

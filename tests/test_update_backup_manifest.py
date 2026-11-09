@@ -77,7 +77,7 @@ def _seed_pass(output_dir: Path, monkeypatch):
 
 
 def _latest_backup(output_dir: Path) -> Path:
-    backups = sorted((output_dir / ".agentteams-backups").iterdir())
+    backups = sorted(p for p in (output_dir / ".agentteams-backups").iterdir() if p.is_dir())
     assert backups, "no backup directory created"
     return backups[-1]
 

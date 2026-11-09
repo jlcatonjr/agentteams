@@ -358,3 +358,17 @@ def _wasm_test_guests_allowed():
         os.environ.pop(name, None)
     else:
         os.environ[name] = previous
+
+
+@pytest.fixture(autouse=True)
+def _no_real_operator_key_dir(tmp_path_factory, monkeypatch):
+    """No test may find the operator's real ~/.config/agentteams/keys/decision-signing-<key_id>.pem.
+
+    With AGENTTEAMS_DECISION_ED25519_KEYFILE unset, the signers fall back to that directory; a test
+    that unsets the variable on the operator's machine could otherwise load a real key (and reach
+    the y/N confirm on a terminal). Tests that want a default key patch ``_key_dir`` themselves.
+    """
+    import agentteams.cli.operator_signing as ops
+
+    empty = tmp_path_factory.getbasetemp() / "no-operator-keys"
+    monkeypatch.setattr(ops, "_key_dir", lambda: empty)

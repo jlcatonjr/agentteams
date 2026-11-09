@@ -103,6 +103,8 @@ brief (or `--integration-branch`):
 - `{INTEGRATION_BRANCH}` itself is **Integration**: never proposed for deletion, even though a release merge makes it
   an ancestor of the default branch.
 - A branch merged only into `{INTEGRATION_BRANCH}` is **Integrated**: kept until the release.
+- `--branch-inventory` warns when GitHub would delete `{INTEGRATION_BRANCH}` on a release merge (auto-delete on
+  and the branch unprotected, §5), and says so when it could not check.
 <!-- AGENTTEAMS:END integration_branch -->
 
 ## Project-Specific Notes
