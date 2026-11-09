@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (integration-branch teams are told to protect the integration branch)
+
+- The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now
+  states a setup prerequisite: the integration branch must be a protected branch (no deletion, no force push, no
+  required checks or reviews). With GitHub's "Automatically delete head branches" on, merging a release PR deletes
+  its head branch, the integration branch, unless it is protected; this repository lost `dev` that way on
+  2026-11-07 (release #398). The reference gives the `gh api` checks, a minimal protection rule, and how to
+  recreate a deleted branch. Existing teams pick it up on the next `agentteams --update --merge` (same fence, `v=1`).
+
 ### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
 
 - **A process left running by a confined command fails the run again under bwrap.** bwrap's PID 1 exits with the

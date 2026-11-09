@@ -24,7 +24,8 @@ release instead of once per feature.
 ## What an integration team gets
 
 - `references/integration-branch.reference.md` (feature work, local gate, release PR, hotfix and back-merge,
-  trigger alignment, branch tools), added to the output plan by `analyze`.
+  trigger alignment, branch tools, and the setup prerequisite that the integration branch be a protected branch
+  so a release merge cannot delete it), added to the output plan by `analyze`.
 - Rows in the merge-strategy matrix, `@git-operations`' ground truth and output contract (`Local gate`; rule 7
   `N/A — integration branch`), `@pr-manager`'s ground truth and disposition table (merge locally into the
   integration branch; open the release PR), and the branch-lifecycle state table (*Integration*, *Integrated*).
