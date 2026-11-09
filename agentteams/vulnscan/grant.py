@@ -158,7 +158,7 @@ def operator_sign(record: dict[str, Any], *, digest_kind: str, banner: str, fiel
     from agentteams.cli import operator_signing as ops_
     from agentteams.cli.signed_ledger import ed25519_sign
 
-    preflight = ops_._signing_preflight([Path.cwd().resolve()], allow_checkout)
+    preflight = ops_._signing_preflight([Path.cwd().resolve()], allow_checkout, str(record.get("key_id") or ""))
     if preflight is None:
         return None
     print(banner)
