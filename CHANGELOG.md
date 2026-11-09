@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.17] - 2026-11-09
+
+### release notes
+
+agentteams 1.1.0-rc.17 is the seventeenth release candidate of the 1.1 line, and the candidate the downstream
+rehearsals (researchteam, mathAgents, baseAgent) run against before 1.1.0.
+
+- **Codex under orchestrator-only writes** (#319, #249). Adopted agents can now be imported onto a native Codex team
+  rendered under `write_policy: "orchestrator-only"`; they render read-only and never replace a native agent or
+  `AGENTS.md`. The Codex write-policy block in a shared `AGENTS.md` now says it applies to Codex sessions only, so
+  Grok and Goose sessions do not read it as their own.
+- **A Codex write policy reaches Codex only.** An interop import or a `--convert-from` conversion strips a
+  `codex_write_policy` block from every other framework's instructions, so a crafted source cannot plant one there.
+- **Linux confinement on Ubuntu 26 and with bubblewrap required** (#262). A process a confined command leaves running
+  fails the run again under bwrap: a check inside the sandbox counts and kills leftovers before teardown and reports
+  on a channel the command cannot write. CI now installs bubblewrap and fails, instead of skipping, when it is missing.
+- **Provider documentation register** re-verified, so release CI no longer fails on stale entries.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.17` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+### Changes since 1.1.0-rc.16
+
 ### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
 
 - **A process left running by a confined command fails the run again under bwrap.** bwrap's PID 1 exits with the
