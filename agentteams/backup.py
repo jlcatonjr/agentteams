@@ -26,6 +26,7 @@ __all__ = [
     "BACKUP_MANIFEST_NAME", "BACKUP_MANIFEST_SCHEMA_VERSION",
     "backup_output_dir", "restore_backup", "list_backups", "verify_backup",
     "prune_backups", "inert_backup_name", "backup_before_projection",
+    "BACKUP_GITIGNORE_TEXT", "ensure_backup_root_ignored",
 ]
 
 
@@ -43,6 +44,36 @@ _BACKUP_DIR_NAME = BACKUP_DIR_NAME  # legacy private alias; existing importers r
 
 #: Default number of most-recent backups prune_backups keeps (remediation Plan 3).
 DEFAULT_BACKUP_KEEP_LAST = 10
+
+#: Written into every backup root so the backups never show as untracked in a committed tree (a hub under
+#: ``.agentteams/canonical/agents`` or any framework agents dir), whatever the consumer's ``.gitignore`` says.
+BACKUP_GITIGNORE_TEXT = "# agentteams: local recovery copies; never commit (remove this file to opt in)\n*\n"
+
+
+def ensure_backup_root_ignored(backup_root: Path) -> bool:
+    """Write a self-ignoring ``.gitignore`` (``*``) into *backup_root* unless one is already there.
+
+    Remediation row 662 (1): hub backups in ``.agentteams/canonical/agents/.agentteams-backups`` showed as
+    untracked noise in a committed hub when the consumer's ``.gitignore`` lacked ``.agentteams-backups``. An
+    existing ``.gitignore`` (or a symlink at that name) is never touched, so a consumer who removed or
+    replaced it to commit their backups keeps that choice.
+
+    Args:
+        backup_root: The ``.agentteams-backups`` directory (created by the caller).
+
+    Returns:
+        True if the file was written, False if one already existed or the write failed (non-fatal: the
+        backup itself is unaffected).
+    """
+    target = backup_root / ".gitignore"
+    if target.exists() or target.is_symlink():
+        return False
+    try:
+        _atomic_write_text(target, BACKUP_GITIGNORE_TEXT)
+    except OSError as exc:
+        print(f"  !  Could not write {target}: {exc}", file=sys.stderr)
+        return False
+    return True
 
 
 @dataclass
@@ -402,6 +433,7 @@ def backup_output_dir(
         return result
 
     backup_path.mkdir(parents=True, exist_ok=True)
+    ensure_backup_root_ignored(backup_path.parent)
 
     file_pairs: list[tuple[Path, Path]] = []
     for src in paths:

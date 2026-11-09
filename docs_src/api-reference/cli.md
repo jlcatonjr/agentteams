@@ -79,8 +79,9 @@ update into a failed one.
 
 ## The pinned operator signing path
 
-`--sign-decision` and `--sign-grant` are the only code paths that read the operator's Ed25519
-private key (the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`). Everything between that
+`--sign-decision`, `--sign-grant`, `--sign-mcp-direct-grant` and `vulnscan grant sign` are the only code
+paths that read the operator's Ed25519 private key (the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+else `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the spec's `key_id`). Everything between that
 env read and the appended row lives in `operator_signing.py`, which is listed in
 [`integrity.ENFORCEMENT_MODULES`](integrity.md), so an in-place edit to it shows up in
 `references/enforcement-integrity.json`, `--verify-integrity` and red-team phase 6. The

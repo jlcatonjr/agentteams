@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 6: The Navigator</title>
+</head>
+<body>
+  <article id="notes:the-navigator">
+    <h1>Cliff Notes: Chapter 6: The Navigator</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/06-the-navigator.html#ch:the-navigator">Chapter 6</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-06-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that a team economizes on context when one agent holds the project's structural knowledge and every other agent queries it. In the chapter's words, the navigator exists "to compress structural knowledge into a form that other agents can query without loading the full directory tree into their own context windows." Its role rests on a single distinction, stated plainly in the text. "The navigator knows where everything is, but it does not know what everything means." The chapter treats that split between structural and substantive knowledge as the navigator's place in the team's division of labor.</p>
+    </section>
+
+    <section id="notes-06-covers">
+      <h2>What the chapter covers</h2>
+      <p>The chapter opens with the navigator's purpose statement, which charges it with maintaining a project map, helping agents locate files and answering structural queries. Five numbered sections follow.</p>
+      <p>The first section treats the directory tree as a knowledge structure. The navigator's main artifact is a project map that records directory structure, file types, chapter status and agent inventory. The map is regenerated after structural changes and consulted before other agents attempt file operations. The navigator's constitutional constraint is that "it never answers a structural query from memory." The rule stops stale paths from an earlier session spreading to every agent that asks. The map also records external source repositories, which are read-only from the book project's perspective.</p>
+      <p>The second section describes the component dependency table. This matrix maps chapters, governance artifacts and pipeline components to their architectural and theoretical sources. It supports two operations. When a source changes, it identifies the affected components, so a change to the daily pipeline script means Chapters 19 through 21 should be checked. When drafting begins, it hands the drafting agent the authoritative list of sources. A topology artifact records stage dependencies and handoff edges for the daily pipeline, and together the two give the navigator its "two structural views of the project." The chapter likens the table to a requirements traceability matrix from software engineering.</p>
+      <p>The third section develops structural indirection. Because the context window is scarce, a drafting agent that explores the file system itself spends context on listings and false starts. The navigator absorbs that cost and keeps one shared model of the structure in place of a copy in every context window. The navigator also resolves the generic labels used in chapter prose to concrete paths, so only one agent maintains that mapping. The chapter draws on Miller and Drexler (1988a) for the principle of access through clean interfaces, summed up as "a query goes in, a path comes out." The section then turns to a second kind of question, which asks where something was said. The module supplies a retrieval index over work summaries, plan records and reference documents, queried as "a question in, ranked passages out," with a parallel index over the project's scripts and the interfaces they call. Both are rebuilt as their sources change. The chapter adds that the framework now rebuilds every provider's copy of the index together, and that what the index returns carries no authority to instruct the agent that asked.</p>
+      <p>The fourth section separates knowing from acting. The navigator is "read-oriented in practice." Its workflows do not authorize changes to project state. A navigator that could rename files would have to update its map mid-operation and might serve inconsistent paths in the meantime. Agents that change structure consult the navigator for a location and then decide for themselves.</p>
+      <p>The fifth section covers external source navigation. The navigator knows the internal structure of the external repositories, including which agent files exist, how large each team is and which pipeline stages match which chapters. This serves the technical accuracy auditor of Chapter 8 and the drafting agent of Chapter 15. The book draws on three external repositories and a daily pipeline script. The chapter notes that "Chapter prose never reveals the actual repository names or file system locations," and the navigator is the one agent that keeps the mapping between labels and locations.</p>
+    </section>
+
+    <section id="notes-06-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Project map. A maintained record of structure, file types, chapter status and agent inventory, regenerated after structural change.</li>
+        <li>No answers from memory. Every structural query is answered from the map or the file system.</li>
+        <li>Structural versus substantive knowledge. The navigator holds where things are, not what they mean.</li>
+        <li>Component dependency table. A chapter-to-source matrix used for impact analysis and for source lists at drafting time.</li>
+        <li>Pipeline topology. A second structural view that records stage dependencies and handoff edges.</li>
+        <li>Structural indirection. One shared model of the project, queried on demand through a narrow interface.</li>
+        <li>Retrieval indexes. Ranked-passage search over summaries, plans and references, and over scripts and their interfaces, rebuilt as sources change.</li>
+        <li>Separation of knowing from acting. The navigator locates, and other agents modify.</li>
+      </ul>
+    </section>
+
+    <section id="notes-06-frames">
+      <h2>Theoretical frames</h2>
+      <p>The chapter's economic rationale comes from the treatment of context as a scarce resource in Chapter 2. The dependency table is modeled on requirements traceability matrices, which let an engineer trace the effect of a changed requirement. Miller and Drexler (1988a) supply the principle that productive interaction among computational agents depends on clean interfaces rather than direct exposure of state.</p>
+      <p>The retrieval indexes are presented as knowledge proxies in Chapter 2's sense. The chapter argues that they extend that chapter's argument in a new direction. Chapter 2 answered the knowledge problem by distributing knowledge across specialists. Retrieval answers it by making what no specialist holds available on demand. The chapter states that "a team of any longevity needs both," because the specialist division cannot foresee every later question.</p>
+    </section>
+
+    <section id="notes-06-matters">
+      <h2>Why it matters</h2>
+      <p>The navigator is the simplest governance agent in Part III and the clearest case of the claim that a team saves context by dividing knowledge. It also sets a pattern the following chapters repeat, in which an agent that knows or detects is kept apart from the agents that act. The retrieval passage stands out because it adds a second answer to the knowledge problem, one that complements specialization instead of extending it.</p>
+    </section>
+
+    <section id="notes-06-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no features as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

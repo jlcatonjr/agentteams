@@ -145,7 +145,8 @@ def test_cli_in_place_with_yes_rewrites_and_backs_up(tmp_path, capsys):
     assert _FENCE_BEGIN_RE.search(src.read_text()) is not None
     backups_root = tmp_path / ".agentteams-backups"
     assert backups_root.exists()
-    snaps = list(backups_root.iterdir())
+    snaps = [p for p in backups_root.iterdir() if p.is_dir()]  # the root also holds its self-ignoring .gitignore
+    assert (backups_root / ".gitignore").is_file()
     assert snaps and (snaps[0] / "x.md.agentteams-bak").exists()  # stored inert
 
 

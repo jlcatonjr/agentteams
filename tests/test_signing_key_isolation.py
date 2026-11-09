@@ -256,16 +256,17 @@ def test_provision_writes_into_a_0700_keys_dir(repo, home):
 
 
 @needs_openssl
-def test_provision_advises_a_per_command_keyfile_never_an_export(repo, home):
-    """#16: the walkthrough says never to leave the key-file variable set, so the advice must not
-    print an ``export`` line; it shows the per-command form and warns against exporting."""
+def test_provision_advises_signing_by_key_id_never_an_export(repo, home):
+    """#16 + signing-key-autoresolve: the signers find the key by key id, so the printed signing
+    commands name no key file and set no variable; it still warns against exporting one."""
     run = _provision(repo, home, "op-1")
     assert run.returncode == 0, run.stderr
     priv = home / ".config" / "agentteams" / "keys" / "decision-signing-op-1.pem"
     assert not any(ln.lstrip().startswith("export ") for ln in run.stdout.splitlines())
-    assert (f'AGENTTEAMS_DECISION_ED25519_KEYFILE="{priv}" python -m agentteams.vulnscan grant sign'
-            in run.stdout)
-    assert f'AGENTTEAMS_DECISION_ED25519_KEYFILE="{priv}" agentteams --sign-decision' in run.stdout
+    assert "AGENTTEAMS_DECISION_ED25519_KEYFILE=" not in run.stdout
+    assert "  python -m agentteams.vulnscan grant sign --key-id op-1" in run.stdout
+    assert "  agentteams --sign-decision path/to/decision-spec.json" in run.stdout
+    assert f"the signers find {priv} by key id op-1" in run.stdout
     assert "Do NOT export AGENTTEAMS_DECISION_ED25519_KEYFILE" in run.stdout
 
 

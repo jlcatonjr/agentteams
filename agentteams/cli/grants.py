@@ -208,13 +208,14 @@ def _hmac_write_refusal(record: dict[str, str]) -> GrantError:
             f"grant {record.get('grant_id')!r} permits {'/'.join(ops)!r} but is "
             f"{_grant_scheme(record)}-signed: a grant of an operator-only op must be Ed25519-signed "
             "by the operator. REFUSED. Sign it with `agentteams --sign-grant SPEC.json --framework "
-            "<fw> --project <repo>` (operator key via AGENTTEAMS_DECISION_ED25519_KEYFILE).")
+            "<fw> --project <repo>` (operator key: ~/.config/agentteams/keys/decision-signing-<key_id>.pem, or the file AGENTTEAMS_DECISION_ED25519_KEYFILE names).")
     return GrantError(
         f"grant {record.get('grant_id')!r} permits 'write' but is {_grant_scheme(record)}-signed: "
         "a grant that widens the sandbox allowWrite must be Ed25519-signed by the operator (the "
         "shared AGENTTEAMS_GRANT_SIGNING_KEY is inherited by sandboxed agents). REFUSED. Migrate: "
         "re-issue it with `agentteams --sign-grant SPEC.json --framework <fw> --output <holder "
-        "team dir>` (operator key via AGENTTEAMS_DECISION_ED25519_KEYFILE; public key at <team "
+        "team dir>` (operator key: ~/.config/agentteams/keys/decision-signing-<key_id>.pem, or the "
+        "file AGENTTEAMS_DECISION_ED25519_KEYFILE names; public key at <team "
         "dir>/references/authorized-verify-keys/<key_id>.pub.pem)."
     )
 

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 5: The Orchestrator</title>
+</head>
+<body>
+  <article id="notes:the-orchestrator">
+    <h1>Cliff Notes: Chapter 5: The Orchestrator</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/05-the-orchestrator.html#ch:the-orchestrator">Chapter 5</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-05-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that the orchestrator coordinates the team by holding coordinative knowledge only. It receives tasks, classifies them and routes them to specialists through a fixed catalog of workflows. "The orchestrator knows which agent handles which type of work. It does not know how that work is done." That ignorance is a design choice that economizes on context and keeps domain authority with specialists. The chapter closes by showing that a plan recorded as an artifact lets procedures derive options, while the choice among them stays a judgment.</p>
+    </section>
+
+    <section id="notes-05-covers">
+      <h2>What the chapter covers</h2>
+      <p>The chapter opens with the book orchestrator's purpose statement and then describes routing as coordination architecture. Routing runs through a numbered workflow catalog in which each entry fixes a sequence of agent invocations. The orchestrator picks the entry and manages execution, and "It does not design the invocation sequence on the fly." The book team defines twelve workflows. Since the team was regenerated, the orchestrator file also holds the generic catalog the agentteams module generates, with project notes mapping each of the twelve onto the procedure that runs it. Workflow 1 builds outlines, Workflow 6 runs a four-agent review, and Workflow 3 routes drafting through ten agents. "The catalog structure makes routing quasi-deterministic." Every workflow ends with mandatory closing steps, and ambiguous requests call for allocated judgment guided by the catalog.</p>
+      <p>The second section describes the domain agent routing table, which assigns each of ten content areas to exactly one domain agent. The chapter lists them, from chapter experts and the book-content-expert to the voice-style agent, expert-critic, argument-weaver, html-document-builder, graphviz-expert, latex-specialist, bibliography-manager and adversarial agent. It also gives the generalized template names beside the book's names, such as primary-producer for book-content-expert and reference-manager for bibliography-manager. The table encodes an asymmetry. "The orchestrator can invoke any agent in the team. No other agent can invoke the orchestrator." The hub-and-spoke shape makes the orchestrator "a designed bottleneck intended to maintain order." At the framework's anchor the chapter adds a refinement, since an orchestrator may spawn a child orchestrator or become the prime of another conversation, but invocation still never runs from a specialist upward.</p>
+      <p>The third section covers authority hierarchy enforcement. The book's hierarchy has six tiers, from source code and agent files on disk down to generated artifacts, and seven constitutional rules limit routing, among them no fabricated citations, never bypassing security, and closing multi-file changes with the conflict-auditor. The hierarchy is entrenched in the invariant core, and only the principal may edit it. The fourth section explains coordinative knowledge without domain knowledge. The orchestrator cannot judge a draft or a citation, so it defers to specialists, for instance forwarding a voice deviation flagged by the voice-style agent to the book-content-expert.</p>
+      <p>The fifth section describes dynamic instantiation. Workflow 2 reads chapter-expert.template.md, the book's instance of the module's workstream-expert.template.md, along with the chapter outline, and fills four manual-required placeholders. In a fully automated setup a team-builder agent would run an intake interview, but here the outline substitutes for it. The team begins with eighteen agents and grows as chapter experts are added, so team size is set at runtime. The sixth section shows how the catalog partitions into production, maintenance and dual-purpose workflows, with Workflow 11 for cross-repository coordination, and how mandatory closers weave maintenance into production.</p>
+      <p>The seventh section adds Workflow 12, a post-step gate loop. After each step, remaining rows pass through adversarial review and conflict auditing before the next step runs. This requires the plan to exist as an inspectable table, whose columns the module fixes and the orchestrator must create before the first step. "The columns are the contract" while the content is judgment. Declared dependencies let a procedure report which steps could run together, but "What can be handed to a procedure is the derivation of options, not the choice among them." The chapter then describes what comes in release 1.2. A request with several separable items will receive one plan per item and an audited metaplan that schedules them, and choices that belong to the operator will go through the host's interactive picker under a protocol the framework calls the Operator Decision Query. An answer there never clears a HALT, replaces a clearance or widens a capability, and the chapter says the channel "opens no route around the constitution."</p>
+    </section>
+
+    <section id="notes-05-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li><strong>Workflow catalog.</strong> Numbered, fixed sequences of agent invocations selected by task type.</li>
+        <li><strong>Mandatory closers.</strong> Consistency and propagation steps that no workflow may skip.</li>
+        <li><strong>Domain agent routing table.</strong> One agent per content area, enforcing the division of labor.</li>
+        <li><strong>Invocation asymmetry.</strong> The orchestrator calls specialists, and specialists never call upward.</li>
+        <li><strong>Entrenched hierarchy.</strong> Six tiers and seven rules in the invariant core, editable only by the principal.</li>
+        <li><strong>Dynamic instantiation.</strong> New chapter experts built at runtime from a template with auto-resolved and manual-required placeholders.</li>
+        <li><strong>Post-step gate loop.</strong> Adversarial and conflict audits of the remaining plan after every step.</li>
+        <li><strong>Plan as artifact.</strong> A step table with fixed columns and declared dependencies.</li>
+        <li><strong>Metaplan and Operator Decision Query.</strong> Features the chapter marks as coming in release 1.2.</li>
+      </ul>
+    </section>
+
+    <section id="notes-05-frames">
+      <h2>Theoretical frames</h2>
+      <p>The chapter relies mostly on frames built earlier in the book rather than new citations. It applies allocated judgment from Chapter 1 to ambiguous routing, the context constraint of Chapter 2 to explain why the orchestrator carries no domain knowledge, and the twin-task structure and division of knowledge of Chapter 3 to the partition of the catalog. The principle of least authority explains the invocation asymmetry, and constitutional entrenchment explains why the hierarchy is protected from the team's ordinary processes. Chapter 17 is named as the place where the two kinds of placeholder are formalized.</p>
+    </section>
+
+    <section id="notes-05-matters">
+      <h2>Why it matters</h2>
+      <p>The orchestrator is the hub every later chapter connects to. Its catalog makes behavior predictable, its routing table enforces specialization, and its closers keep maintenance inside production. The gate loop and plan table show how coordination can be audited at all. By separating the derivation of options from the choice among them, the chapter marks the limit of mechanizing coordination.</p>
+    </section>
+
+    <section id="notes-05-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Like Chapters 1 through 21 generally, it describes the book's own team as configured through July 2026, with framework passages, such as child orchestrators and the plan table, at the 1.1 anchor. The chapter flags two items for release 1.2, the per-item plans with an audited metaplan and the Operator Decision Query.</p>
+    </section>
+  </article>
+</body>
+</html>

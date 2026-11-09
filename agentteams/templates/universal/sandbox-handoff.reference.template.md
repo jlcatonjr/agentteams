@@ -5,7 +5,7 @@ SECTION MANIFEST
 | sandbox_handoff | FENCED      |
 -->
 
-<!-- AGENTTEAMS:BEGIN sandbox_handoff v=2 -->
+<!-- AGENTTEAMS:BEGIN sandbox_handoff v=3 -->
 # Sandbox Operator Handoff Reference — {PROJECT_NAME}
 
 How an agent running inside an OS sandbox finishes work the sandbox refuses: it writes a reviewable
@@ -79,6 +79,16 @@ trust root or capability grant (settings/hook files, approver or manager rosters
 `management-authority.json`, the integrity manifest, signing keys — the operator changes those by hand),
 or carries credential-shaped text. Scripts reference credentials through variables the operator already
 has (`"$GITHUB_TOKEN"`), never literal values.
+
+**Signing and approval steps name no key the tool can find itself.** The operator signers
+(`--sign-decision`, `--sign-grant`, `--sign-mcp-direct-grant`, `vulnscan grant sign`) find the Ed25519 key
+from the spec's `key_id` (`~/.config/agentteams/keys/decision-signing-<key_id>.pem`) when
+`AGENTTEAMS_DECISION_ED25519_KEYFILE` is unset, and print the path they use. So a signing step, whether in a
+script the operator runs by hand or in the message, gives the complete command with the spec's `key_id`
+filled in. It never asks the operator for a key or a key path, and never sets the variable to a guessed
+path. Where a key really must be supplied (an HMAC `AGENTTEAMS_*_SIGNING_KEY`), the step names the exact
+variable and where the operator keeps the value (for example its Keychain item), never a placeholder like
+`<path-to-key>`, and never the value itself.
 
 **The message to the operator** — always these lines, in this order, with the command copied verbatim
 from the `write` output:

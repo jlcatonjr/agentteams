@@ -15,6 +15,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   select (`codex_mcp_emit.first_party_approval_mode`). Row 648 gap 4. **Not to be released until the operator's
   Ed25519-signed decision is recorded.**
 
+### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
+
+- The inert `.grok/mcp.agentteams-wasm.example.toml` header, and the Grok `wasm_wiring` row, now say that only the
+  agentteams launcher (`.grok/confined-run.example.sh`, the default launcher mode) makes `.grok` read-only to a Grok
+  session. In profile mode (`GROK_CONFINE_MODE=profile`) a session can edit the example and `.grok/config.toml`
+  alike, so the operator should merge only from a fresh render, after a diff. No deny rule was added: Grok's
+  sandbox profile cannot deny a write without denying the read, and protecting the example alone would leave
+  `.grok/config.toml` exposed.
+
+### fixed (the MCP server interpreter must not be swappable by another account)
+
+- When agentteams writes the launch command for the `agentteams_runner` and `agentteams_wasm` MCP servers, it now
+  skips a `python3` candidate whose resolved file, or that file's directory, is group- or world-writable or owned
+  by anyone other than root or you, and uses the next one; if none qualifies, the error names why each was
+  skipped. Typical installs are unaffected (`/usr/bin/python3` is root-owned; Homebrew's resolves to user-owned,
+  non-group-writable files). Residue, documented: a user-owned interpreter is trusted as much as your account,
+  and the symlink's own directory (`/opt/homebrew/bin`), intermediate links and ancestor directories are not
+  checked; the audit and the launch check stay membership checks (remediation row 2026-11-09).
+- `wasm_mcp.is_session_launch` (the exact bound for the shared `agentteams_wasm` table in Codex and Grok) also
+  requires the `--pins-sha256` value to be 64 lowercase hex. The server already refused other values at start.
+
+### added (`--branch-inventory` warns when a release merge would delete the integration branch)
+
+- For an integration-model project, `--branch-inventory` (and the inventory under `--branch-post-merge` /
+  `--branch-cleanup`) now checks the repository's "Automatically delete head branches" setting and the integration
+  branch's protection through its existing read-only GitHub client. Auto-delete on with the branch unprotected
+  adds a `WARNING:` note: merging the release PR would delete the branch, as it deleted this repository's `dev` on
+  2026-11-07. A fact it cannot read gives a "could not check" note instead. The check changes no branch state,
+  action, deletion plan or exit code (row 675 follow-up).
+
+### fixed (sync hub backups and fence-less hubs, row 662)
+
+- Every `.agentteams-backups` directory now ignores itself in git: the first backup writes a `.gitignore`
+  (`*`) into it unless one exists. Hub backups under `.agentteams/canonical/agents/.agentteams-backups` no
+  longer show as untracked in a committed hub whose `.gitignore` lacks the name. An existing `.gitignore`
+  there is left alone, so removing or replacing it is how to commit backups.
+- When a sync replaces a fence-less hub's instruction text with the pin's, it now backs up the hub's
+  `team.cai.json` first (`agents/.agentteams-backups/<timestamp>/__external__/`, restorable with
+  `--restore-backup`). Before, git history was the only copy.
+- The fences agentteams builds by f-string, which the version-ceiling scan can't read, are now listed with
+  their `v=` in a test, so a new site or a version bump fails until someone decides its ceiling. No merge
+  behaviour changes.
+
 ### fixed (integration-branch teams are told to protect the integration branch)
 
 - The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now
@@ -32,6 +75,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both). Before, it checked a six-element prefix plus literal `--read`/`--scratch` membership and ignored
   `command`, so `--read=/`, an argparse prefix (`--rea`), `--scratch=…` or a trailing second `--agent` passed. Only
   direct API callers could reach it; the CLI always passes the canonical table. Grok's `keep_if_exact` is unchanged.
+
+### changed (operator signing finds its own key)
+
+- `--sign-decision`, `--sign-grant`, `--sign-mcp-direct-grant` and `vulnscan grant sign` no longer need
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE` when the key sits where `provision-operator-signing-key.sh` puts it:
+  with the variable unset, the signer uses `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the
+  spec's `key_id` and prints that path (never the key) before the confirm gate. A set variable still wins. If
+  neither exists, the error names both. Signing steps and handoff scripts can drop the key argument, and the
+  variable no longer has to be exported into a shell that might also launch an agent, where sandboxed commands
+  would inherit it. The confirm gate, the install-location gate, the integrity pin and the sandbox read-deny on
+  the key directory are unchanged. HMAC keys (`AGENTTEAMS_*_SIGNING_KEY`) are not resolved automatically yet.
+- Docs, `--help` text, the man page, the grant refusal messages and `provision-operator-signing-key.sh`'s printed
+  commands now say the key is found from `key_id`, and the signing examples name no key. The error for a missing
+  key says why no default was tried when the `key_id` is absent or cannot name a file.
 
 ### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
 

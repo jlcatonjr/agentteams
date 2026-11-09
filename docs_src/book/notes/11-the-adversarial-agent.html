@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 11: The Adversarial Agent</title>
+</head>
+<body>
+  <article id="notes:the-adversarial-agent">
+    <h1>Cliff Notes: Chapter 11: The Adversarial Agent</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/11-the-adversarial-agent.html#ch:the-adversarial-agent">Chapter 11</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-11-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that the governance agents of Chapters 7 through 10 share a blind spot. "Each of these agents governs what has been written down." Plans also rest on expectations that nobody states, and those are the conditions most likely to be wrong. The adversarial agent extracts a plan's unstated presuppositions, classifies them, tests whether they are mutually compatible and externally valid, and traces what fails if they do not hold. It does this before execution, as a read-only and advisory critic.</p>
+    </section>
+
+    <section id="notes-11-covers">
+      <h2>What the chapter covers</h2>
+      <p>The first section states the problem of unstated assumptions. Drawing on Hayek (1937), the chapter holds that "plan compatibility is an empirical condition, not a logical entailment." Following Lachmann (1994), it separates two ways expectations fail. They may be internally inconsistent, or they may be consistent and still not match the environment. The conflict auditor can catch only the first. The chapter maps three epistemic domains. The conflict auditor checks consistency of the explicit, the agent investigator of Chapter 18 checks correspondence of the explicit to the actual, and the adversarial agent checks external validity of the implicit. No single agent covers all three.</p>
+      <p>The second section covers presupposition extraction and classification. The book project uses eight categories, DATA_STATE, SYSTEM_STATE, CAUSAL_CLAIM, SCOPE_BOUNDARY, TEMPORAL, BEHAVIORAL, IDENTITY and POLICY. Each category maps to its own validation requirement, so classification decides where the agent must look. The chapter states that "The eight categories are a map of the different ways the world can fail to match what a plan assumed." They are orthogonal to the auditor's ten inconsistency types, which classify relations between explicit claims. The module's portable template first reduced the scheme to six categories, Empirical, Logical, Behavioral, Scope, Temporal and Causal. At the framework's anchor the template carries a seventh, Historical, for assumptions that depend on what held in a source's own time and place. The book's eight categories have no counterpart to it. An example shows a drafting brief whose assumed citation key is missing, so the finding routes to the bibliography-manager before drafting begins.</p>
+      <p>The third section presents the Critique Protocol as a falsification procedure. Each presupposition faces four questions. Is it empirically verified? Is it logically necessary? What if it is false? What does being wrong cost? Validated presuppositions pass, uncertain ones are flagged for caution, and those that fail the third question must be addressed. The agent then re-applies the procedure to the revised plan and stops on convergence, on divergence or at a ceiling of five iterations. The chapter reports that most plans converge within two. In the book project the agent runs after the chapter expert's brief and before drafting, and it returns PROCEED, PROCEED WITH CAUTION, REVISE BEFORE PROCEEDING or HALT.</p>
+      <p>The fourth section explains cascade analysis. For each challenged presupposition the agent traces the dependency chain to terminal actions and marks each node SURVIVES, WEAKENED, INVALIDATED or REDIRECTED. The shape of the tree shows how fragile the plan is. Cross-boundary cascades, which cross system, agent or workflow lines, are flagged as coordination risks. The chapter's example shows a revision of one section whose terminology change would spread into Terminology Mismatch entries in other chapters.</p>
+      <p>The fifth section introduces the mandatory opener as the proactive partner of Chapter 9's closer. The closer checks state after changes, and the opener tests a plan before them. "Each catches a class of problems the other cannot see." The opener applies to Workflows 3, 4 and 8, which rest on substantive judgment, and not to fully specified procedures. The adversarial role also recurs between steps of an adaptive plan, which Chapter 5's Workflow 12 formalizes. Opener findings cost nothing to act on, while closer findings require repair after the fact.</p>
+      <p>The sixth section explains read-only critique. "Its role is to play the critic, not the decider." If the agent could modify plans, the object of its analysis would shift under it. Its verdicts are advisory, and the orchestrator decides. The chapter presents this as the complement of the security agent's veto. Security deals in categorical stakes, while external validity admits of degree.</p>
+    </section>
+
+    <section id="notes-11-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Internal consistency and external validity. Two separate ways a plan's expectations can fail.</li>
+        <li>Three epistemic domains. Consistency of the explicit, correspondence of the explicit and validity of the implicit.</li>
+        <li>Eight presupposition categories. Each routes to its own kind of evidence.</li>
+        <li>Six-category template with a seventh, Historical, at the anchor. A portable reduction for code-centric projects.</li>
+        <li>Critique Protocol. Four falsification questions, applied recursively up to five iterations.</li>
+        <li>Cascade analysis. Survival annotations along each dependency chain, with cross-boundary effects flagged.</li>
+        <li>Mandatory opener and between-step gate. Critique before execution and again after each completed step.</li>
+        <li>Graduated advisory verdicts. PROCEED, PROCEED WITH CAUTION, REVISE BEFORE PROCEEDING and HALT.</li>
+      </ul>
+    </section>
+
+    <section id="notes-11-frames">
+      <h2>Theoretical frames</h2>
+      <p>Hayek (1937) frames coordination as an empirical question about whether the world can satisfy several plans at once. Lachmann (1994) supplies the two dimensions of expectational failure. Nonaka (1994) extends the need for compatible expectations from markets to the firm. Mill (1859, ch. II) warns that unchallenged truths decay into dead dogma, and the chapter infers that challenge converts implicit background conditions into testable claims. Popper (1963) supplies the falsification logic, in which a belief earns standing by surviving refutation. The chapter notes that Popper and Hayek were colleagues at the London School of Economics, and it limits the parallel to method, since the agent tests a plan's conditions rather than scientific hypotheses.</p>
+    </section>
+
+    <section id="notes-11-matters">
+      <h2>Why it matters</h2>
+      <p>The adversarial agent closes the last gap in the governance coverage of Part III by reaching what nobody wrote down. The opener and closer together bracket production with proactive and reactive checks. The chapter's comparison of advisory critique with the security veto clarifies a general principle of the design, that each governance function should operate in the mode its domain warrants.</p>
+    </section>
+
+    <section id="notes-11-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The seventh template category, Historical, is described as present at the anchor. The chapter flags no features as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>
