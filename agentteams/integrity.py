@@ -64,6 +64,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
     "agentteams/audit_agent_contract.py",  # R6: AR_WRITE_POLICY decides which agentteams_runner grants are canonical
     "agentteams/confinement.py",  # orchestrator-only-writes pilot: the runner's OS sandbox (C-3/C-5 boundary)
+    "agentteams/_bwrap_survivors.py",  # #262: the in-sandbox survivor check confinement.py wraps bwrap runs in
     "agentteams/proposal_runner.py",  # orchestrator-only-writes pilot: sole holder of the ledger key
     "agentteams/sealed_result.py",  # seals the orchestrator's runner results in the session-readable status tree
     "agentteams/proposal_policy.py",  # orchestrator-only-writes pilot: the policy half of proposals.py

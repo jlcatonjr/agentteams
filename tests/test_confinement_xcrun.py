@@ -55,7 +55,10 @@ def test_non_launcher_adds_nothing() -> None:
     calls: list[str] = []
     exp = C.expand_exec_paths(["/usr/bin/true", "/opt/lean/bin"], fake_resolver({}, calls), platform="darwin")
     assert exp == C.Expansion([], [], [])
-    assert calls == ["true"]  # only /usr/bin programs are looked up
+    # Only /usr/bin programs are looked up, under their real name: `true` with GNU coreutils, `gnutrue` (or no
+    # /usr/bin program at all) with Rust coreutils on Ubuntu 26 (#262).
+    real = os.path.realpath("/usr/bin/true")
+    assert calls == ([os.path.basename(real)] if os.path.dirname(real) == "/usr/bin" else [])
 
 
 def test_usr_bin_itself_allows_tool_directories_and_dedupes() -> None:

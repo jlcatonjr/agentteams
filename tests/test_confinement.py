@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import multiprocessing
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -130,7 +131,8 @@ def test_declared_program_writes_its_root(project):
 def test_writes_outside_the_roots_are_refused_by_the_kernel(project, target):
     code = f"open({target!r}, 'w').write('x')"
     result = _run(project, code)
-    assert result["exit"] != 0 and "Operation not permitted" in result["stderr"] + "PermissionError"
+    # Refused by errno, not message text: EPERM (Ubuntu 24, macOS) or EROFS (Ubuntu 26) (#262).
+    assert result["exit"] != 0 and re.search(r"\[Errno (1|30)\]", result["stderr"]), result["stderr"]
     assert P.verify_ledger(project) == []
 
 
@@ -364,3 +366,166 @@ def test_brief_schema_accepts_the_p4b_fields():
         "allow_unconfined_runs": False,
     }.items():
         jsonschema.validate(value, schema["properties"][key])
+
+
+# --- the in-sandbox survivor report (#262 item 2): portable, no bwrap needed ---------------------------------------
+
+
+def _report(payload: bytes | None, *, timeout: float = 5.0) -> bool:
+    r, w = os.pipe()
+    if payload is not None:
+        os.write(w, payload)
+        os.close(w)
+        return C.read_survivor_report(r, timeout=timeout)
+    try:  # the writer stays open and silent: the read times out
+        return C.read_survivor_report(r, timeout=timeout)
+    finally:
+        os.close(w)
+
+
+@pytest.mark.parametrize("payload, why", [
+    (b"survivors=0\n", None),
+    (b"survivors=2\n", "counted and killed 2"),
+    (b"", "no well-formed"),                         # no report: the shim was killed (fail closed)
+    (b"survivors=x\n", "no well-formed"),            # garbled count
+    (b"survivors=-1\n", "no well-formed"),           # a sign is not a count
+    (b"survivors=0", "no well-formed"),              # no newline
+    (b"survivors=0\nsurvivors=0\n", "no well-formed"),  # a second line (a forged append)
+    (b"noise\nsurvivors=0\n", "no well-formed"),      # anything but the exact report
+])
+def test_survivor_report_is_exact_and_fails_closed(payload, why):
+    got = _report(payload)
+    assert got is None if why is None else why in got
+
+
+def test_survivor_report_times_out_closed():
+    assert "no well-formed" in _report(None, timeout=0.2)
+
+
+def test_survivor_channel_is_a_socket_and_picks_a_shell_that_can_address_it():
+    import stat as st
+
+    r, w = C.survivor_channel()
+    try:
+        assert st.S_ISSOCK(os.fstat(w).st_mode)  # a socket cannot be reopened through /proc/<pid>/fd
+        # dash addresses fds 0-9 only: a higher child fd runs the same script under bash
+        assert C.survivor_shim_argv(w, ["x"])[0] == ("/bin/sh" if w <= 9 else "/bin/bash")
+        os.write(w, b"survivors=0\n")
+    finally:
+        os.close(w)
+    assert C.read_survivor_report(r) is None
+
+
+def test_bwrap_wrap_adds_the_survivor_shim_only_when_asked(tmp_path):
+    (tmp_path / "out").mkdir()
+    kw = dict(sandbox="bwrap", root=tmp_path, cwd=tmp_path, exec_paths=[], write_roots=["out"], tmp_dir=tmp_path)
+    plain = C.wrap([PY, "-c", "pass"], **kw)
+    shimmed = C.wrap([PY, "-c", "pass"], survivor_fd=7, **kw)
+    assert plain[plain.index("--") + 1:] == [PY, "-c", "pass"]
+    assert shimmed[shimmed.index("--") + 1:] == ["/bin/sh", "-c", C._SURVIVOR_SHIM, "agentteams-survivor-check", "7",
+                                                 PY, "-c", "pass"]
+
+
+# --- the survivor check under attack (bwrap only; the ubuntu jobs run these) ---------------------------------------
+
+bwrap_live = pytest.mark.skipif(SANDBOX != "bwrap", reason="the in-sandbox survivor check is bwrap's")
+_DETACH = "subprocess.Popen([sys.executable, '-c', {!r}], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"
+
+
+@bwrap_live
+def test_a_survivor_cannot_forge_the_report_through_proc(project):
+    # A daemon that tries to write a clean report through every fd its ancestors hold, then keeps running.
+    forger = ("import os, time\n"
+              "for pid in ('1', str(os.getppid())):\n"
+              "    for fd in os.listdir(f'/proc/{pid}/fd') if os.path.isdir(f'/proc/{pid}/fd') else []:\n"
+              "        try:\n"
+              "            with open(f'/proc/{pid}/fd/{fd}', 'w') as f: f.write('survivors=0\\n')\n"
+              "        except OSError: pass\n"
+              "time.sleep(5)\n")
+    with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
+        _run(project, "import subprocess, sys; " + _DETACH.format(forger))
+
+
+@bwrap_live
+def test_a_live_thread_under_an_exited_leader_is_a_survivor(project):
+    # The leader calls SYS_exit (not exit_group): /proc/<pid>/stat says Z while a thread keeps running.
+    leader = ("import ctypes, platform, threading, time\n"
+              "threading.Thread(target=time.sleep, args=(5,)).start()\n"
+              "ctypes.CDLL(None).syscall({'x86_64': 60, 'aarch64': 93}[platform.machine()], 0)\n")
+    with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
+        _run(project, "import subprocess, sys; " + _DETACH.format(leader))
+
+
+@bwrap_live
+def test_a_fork_and_exit_chain_is_a_survivor(project):
+    chain = ("import os, time\n"
+             "end = time.time() + 4\n"
+             "while time.time() < end:\n"
+             "    if os.fork():\n"
+             "        os._exit(0)\n"
+             "    time.sleep(0.02)\n")
+    with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
+        _run(project, "import subprocess, sys; " + _DETACH.format(chain))
+
+
+def test_survivor_report_on_an_fd_above_1023_is_still_read():
+    # select.select() refuses fds >= FD_SETSIZE; the many-fds case is exactly where the bash fallback is used.
+    import resource
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft <= 1500 and hard <= 1500:
+        pytest.skip("cannot open an fd above 1023 here")
+    resource.setrlimit(resource.RLIMIT_NOFILE, (max(soft, min(hard, 4096)), hard))
+    try:
+        r, w = C.survivor_channel()
+        os.dup2(r, 1500)
+        os.close(r)
+        os.write(w, b"survivors=0\n")
+        os.close(w)
+        assert C.read_survivor_report(1500) is None
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+
+
+def test_survivor_report_read_failure_fails_closed(monkeypatch):
+    r, w = C.survivor_channel()
+    os.close(w)
+
+    def failing_read(fd, n):
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(os, "read", failing_read)  # the read fails: reported as a missing report, not raised
+    assert "no well-formed" in C.read_survivor_report(r)
+
+
+_FAKE_PROC = ('mk() {{ mkdir -p "$PROC/$1/task/$1"; echo "$1 (x) $2 $3 0" > "$PROC/$1/stat"; '
+              'echo "$1 (x) $2 $3 0" > "$PROC/$1/task/$1/stat"; }}; mk 1 S 0; mk 2 S 1; mk "$$" S 2; {extra}; ')
+
+
+@pytest.mark.parametrize("extra, why", [
+    ("true", None),                                                      # only the shim and its ancestors
+    ("mk 500 S 1", "counted and killed 1"),                              # a live survivor
+    ('mk 501 Z 1; mkdir -p "$PROC/501/task/502"; echo "502 (x) S 1 0" > "$PROC/501/task/502/stat"',
+     "counted and killed 1"),                                            # an exited leader with a live thread
+    ("mk 503 Z 1", None),                                                # a zombie is not a survivor
+    ('mkdir -p "$PROC/504/task"', "counted and killed 1"),               # tasks unreadable while it exists: live
+    ('mk 505 Z 1; mkdir -p "$PROC/505/task/506"', "counted and killed 1"),  # Z leader, a thread's stat unreadable
+])
+def test_survivor_shim_walk_against_a_fake_proc(tmp_path, extra, why):
+    # The shim's own text, pointed at a fake /proc, with kill replaced by removing the entry (no real process).
+    real_kill = 'kill -9 "$q" 2>/dev/null'
+    # Never run the shim's real kill against this host: refuse unless both substitutions really apply.
+    assert C._SURVIVOR_SHIM.count(real_kill) == 1 and "/proc/" in C._SURVIVOR_SHIM, "shim text drifted; fix this test"
+    shim = C._SURVIVOR_SHIM.replace("/proc", "$PROC").replace(real_kill, 'rm -rf "$PROC/$q"')
+    assert "kill" not in shim and "/proc" not in shim
+    script = f"PROC={tmp_path}; " + _FAKE_PROC.format(extra=extra) + shim
+    r, w = C.survivor_channel()
+    shell = C.survivor_shim_argv(w, [])[0]
+    try:
+        done = subprocess.run([shell, "-c", script, "x", str(w), sys.executable, "-c", "raise SystemExit(3)"],
+                              pass_fds=(w,), capture_output=True, text=True, timeout=30)
+    finally:
+        os.close(w)
+    got = C.read_survivor_report(r)
+    assert done.returncode == 3, done.stderr  # the command's status passes through
+    assert got is None if why is None else why in got
