@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by anyone other than root or you, and uses the next one; if none qualifies, the error names why each was
   skipped. Typical installs are unaffected (`/usr/bin/python3` is root-owned; Homebrew's resolves to user-owned,
   non-group-writable files). Residue, documented: a user-owned interpreter is trusted as much as your account,
-  and the symlink's own directory (`/opt/homebrew/bin`) is not checked (remediation row 2026-11-09).
+  and the symlink's own directory (`/opt/homebrew/bin`), intermediate links and ancestor directories are not
+  checked; the audit and the launch check stay membership checks (remediation row 2026-11-09).
 - `wasm_mcp.is_session_launch` (the exact bound for the shared `agentteams_wasm` table in Codex and Grok) also
   requires the `--pins-sha256` value to be 64 lowercase hex. The server already refused other values at start.
 

@@ -75,9 +75,11 @@ def interpreter() -> str:
     its directory is group- or world-writable, or owned by anyone other than root or the current user
     (:func:`_untrusted_reason`), since such a file could be swapped by another account. Residue, by design: a
     user-owned interpreter (Homebrew's ``/opt/homebrew/bin/python3``) is trusted as much as the user's own account,
-    and the directory holding the symlink itself (``/opt/homebrew/bin``, group ``admin``-writable on Homebrew) is
-    not checked. The choice is made once, at render; the launch-time checks stay membership in
-    :data:`SYSTEM_PYTHONS`.
+    and the symlink's own directory (``/opt/homebrew/bin``, group ``admin``-writable on Homebrew), intermediate links
+    and ancestor directories are not checked, so another admin-group account could re-point the chain. Anything
+    running as the user (an agent included) could replace a user-owned interpreter; the sandbox write-deny on
+    those install trees is the control for that. The choice is made once, at render: the audit and
+    ``wasm_mcp.is_session_launch`` stay membership checks in :data:`SYSTEM_PYTHONS` and do not re-check trust.
 
     Returns:
         The first of :data:`SYSTEM_PYTHONS` that exists, is executable and passes the ownership check.
@@ -120,9 +122,11 @@ def _untrusted_reason(path: str) -> str | None:
     me = os.geteuid() if hasattr(os, "geteuid") else None
     for label, target in (("file", real), ("directory", os.path.dirname(real))):
         try:
-            st = os.stat(target)
+            st = os.lstat(target)  # lstat: a link swapped in after realpath is refused, not followed
         except OSError as exc:
             return f"cannot stat {label} {target}: {exc.strerror}"
+        if stat.S_ISLNK(st.st_mode):
+            return f"{label} {target} changed into a symlink after it was resolved"
         if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             return f"{label} {target} is group- or world-writable"
         if me is not None and st.st_uid not in (0, me):
