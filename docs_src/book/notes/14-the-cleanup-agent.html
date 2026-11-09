@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 14: The Cleanup Agent</title>
+</head>
+<body>
+  <article id="notes:the-cleanup-agent">
+    <h1>Cliff Notes: Chapter 14: The Cleanup Agent</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/14-the-cleanup-agent.html#ch:the-cleanup-agent">Chapter 14</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-14-thesis"><h2>Thesis</h2>
+      <p>The cleanup agent removes stale files, and the chapter calls it the most dangerous agent in the team by one measure, the irreversibility of its actions. Its design answers that risk with a four-gate safety system that every deletion must pass. The chapter argues that the gates are proportionate to an extreme asymmetry, since over-retention costs clutter while over-deletion can destroy the only copy of something. It then qualifies the argument. Recoverability lowers the cost of a mistake as gates lower its chance, and the two substitute only within the losses that recovery can reach.</p>
+    </section>
+    <section id="notes-14-covers"><h2>What the chapter covers</h2>
+      <p>The chapter has five numbered sections. The first sets out the four gates. Gate one is identification, performed by an auditing agent and never by the deletion agent itself. In the book project the code-hygiene agent performs it as part of Workflow 8 (Cleanup). Gate two removes any candidate that matches a protected category. Gate three checks whether any content in the file is unique, and if it is, the deletion becomes a relocation recommendation. Gate four submits every remaining candidate to security review. In the book project the security agent checks deletions against the rules that bear on them, S-1, S-2, S-3, S-4 and S-8, and only files that receive a PROCEED response are deleted.</p>
+      <p>The second section explains the whitelist. In the book project it covers ten protected categories, among them HTML chapters, chapter outlines, bibliography files, voice samples, the theory map, agent files, agent reference files, the book plan, the project instructions and referenced figures. The chapter calls the whitelist "a blunt instrument by design." It protects whole file types whose loss would be catastrophic and whose identification is unambiguous. Its exclusions, such as build artifacts, temporary files and LaTeX that can be regenerated from HTML, define the agent's legitimate targets.</p>
+      <p>The third section treats content uniqueness. The check compares substance rather than characters. A file generated mechanically from a source is not unique, but a hand-edited generated file whose changes were never carried back may be. When unique content is found, the agent reports to the orchestrator and recommends extraction before any deletion.</p>
+      <p>The fourth section places the agent in Workflow 8, in which the code-hygiene agent identifies candidates, the adversarial agent reviews the plan, the security agent clears it, the cleanup agent deletes, and the agent-updater propagates the removal through documentation. No other workflow deletes a non-regenerable file. Workflow 9 ends by removing build artifacts that the next build recreates. The section also notes that the framework later extended controlled deletion to git branches. Every branch is classified before removal, a branch whose merge rewrote its commits is deleted only after the hosting service's copy is confirmed, and an idle branch with unique work is never deleted automatically.</p>
+      <p>The fifth section develops the economics of irreversible operations and ends with the module's recovery mechanisms.</p>
+    </section>
+    <section id="notes-14-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Four-gate architecture. Identification, protected-file check, content uniqueness and security clearance, all required before a deletion.</li>
+        <li>Separation of detection from remediation. "The deletion agent never decides on its own what to delete."</li>
+        <li>Protected whitelist. Categorical protection for files whose loss would compromise the project.</li>
+        <li>Relocation recommendation. The outcome when gate three finds unique content.</li>
+        <li>Error asymmetry. A false negative costs disk space, while a false positive costs irreversible information loss.</li>
+        <li>Centralized deletion. One agent with one safety architecture instead of safeguards replicated in every agent.</li>
+        <li>Branch lifecycle. A later framework extension that classifies branches and defers to the operator on idle work.</li>
+        <li>Recovery mechanisms. A timestamped copy before any rewrite, with the most recent copy exempt from pruning, a listing of affected files without writing, and a withheld write when a merge would shorten a passage.</li>
+      </ul>
+    </section>
+    <section id="notes-14-frames"><h2>Theoretical frames</h2>
+      <p>The chapter draws on Hayek (1941) on irreversible production processes. The errors of investing too much and consuming too much are not symmetric in their consequences, and capital consumed in production cannot be reconstituted by reversing the decision. A deleted file occupies the same position. The four-gate architecture makes this asymmetry a procedural commitment, preferring the error of retaining too much because "one is reversible and the other may not be."</p>
+      <p>The chapter then relaxes the premise of irreversibility. Gates lower the probability of a mistaken destructive act, and recoverability lowers the loss a mistake produces. "The two are substitutes at the margin." The chapter says the agentteams module treats reversibility as the cheaper purchase wherever it is available. It records that Chapter 22 adds two qualifications. Under the framework's single writer the orchestrator, not the cleanup agent, applies every deletion, and timestamped copies once defeated that switch until they were stored under a suffix no runtime loads. The chapter still keeps the gates. Recoverability reaches only losses that procedures were written to recover, and across failure modes gates and recovery are complements.</p>
+    </section>
+    <section id="notes-14-matters"><h2>Why it matters</h2>
+      <p>The chapter applies the team's separation of detection from remediation to the one agent whose actions cannot simply be redone. It explains why deletion authority sits in a single agent and why a whitelist, a uniqueness check and a security gate are all needed rather than any one of them. Its final argument changes the shape of the justification rather than its conclusion. The gates are not defended by irreversibility in general. They are defended by "the residue of irreversibility that no snapshot can reach". Examples include a deletion whose consequences are noticed only after the recovery window has been reasoned away, or damage that lies in what an external repository can no longer resolve. This gives a principled reason to keep costly checks even after recovery tooling exists, and it marks where snapshots, dry runs and shrink guards can safely carry part of the load.</p>
+    </section>
+    <section id="notes-14-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items as arriving in release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

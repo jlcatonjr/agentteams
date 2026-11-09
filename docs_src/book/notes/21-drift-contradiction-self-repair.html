@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 21: Drift, Contradiction, and Self-Repair</title>
+</head>
+<body>
+  <article id="notes:drift-contradiction-self-repair">
+    <h1>Cliff Notes: Chapter 21: Drift, Contradiction, and Self-Repair</h1>
+    <p class="part-label">Part V: Automated Governance</p>
+    <p class="notes-source">A summary of <a href="chapters/21-drift-contradiction-self-repair.html#ch:drift-contradiction">Chapter 21</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-21-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that documentation drift is irreducible and compounding, so an agent team needs standing mechanisms that detect it, record it and repair it. Drift cannot be eliminated because documentation sits "at one logical remove" from the reality it describes, and every update is a translation that introduces error and delay. The contradiction register, the living document policy and the investigation-remediation cycle together form a self-repair mechanism. The chapter concedes that it "is not perfect" but holds that it is "systematically better than manual maintenance".</p>
+    </section>
+
+    <section id="notes-21-covers">
+      <h2>What the chapter covers</h2>
+      <p>Section 1 starts from configuration drift in infrastructure engineering and calls documentation drift "the agent-team equivalent and arguably more insidious." It separates template drift, discussed in Chapter 17, from reality drift, which is "the gradual loss of correspondence between documentation and the actual state of the system it describes." The two need different detection and remediation. The section then describes the contradiction register maintained at Stage 6. Each entry has a stable CONT identifier, a status of open, resolved or deferred, dates and a description. Stage 9 reads the register to compute health metrics, whose meaning lies "in the trend rather than in any single reading." The worked example is CONT-042, a cleanup agent that refers to an infrastructure agent the repository does not have. The register is institutional memory, and a lifecycle clarification explains that resolved entries stay in the register because the living document policy removes history from agent prose but keeps it in data files. Only entries past a retention period are archived.</p>
+      <p>Section 2 lays out the auditor's four phases of detection, classification, resolution and verification. The auditor's own writes are limited to its report and the register, and it has "no authority to modify" other agents' files. A working team's conflict log shows the mechanism in miniature, with an example conflict between a plan's stated agent count and an inventory file.</p>
+      <p>Section 3 states the four rules of the living document policy. They forbid dated audit snapshots, resolved issue archaeology and dated fix logs, and they require hardcoded state to live in reference files. The policy makes agent files declarative and moves historical data elsewhere, eliminating "the class of statements that are true but useless".</p>
+      <p>Section 4 treats drift as technical debt with a compounding dynamic. Twenty stale instructions create "a qualitatively different condition" in which verifying an instruction costs nearly as much as rewriting it. Errors multiply through cross-references. The chapter argues the policy must be constitutional rather than a best practice, because best practices are deferred under pressure.</p>
+      <p>Section 5 lists the concrete costs of drift and describes self-repair at the file, repository and ecosystem levels. It introduces section fencing in the agentteams module, with named and versioned regions that let drift detection and repair work section by section while leaving user content outside the fences intact. It contrasts semantic drift, which needs interpretive judgment, with configuration drift, which needs structural comparison. It frames the template module as "a realized partial step" and notes that five live-system agents remain outside the packaged template set. Subsection 5.1 reads the team-builder layer as institutional design across Claude, Copilot CLI and VS Code workflows.</p>
+    </section>
+
+    <section id="notes-21-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li><strong>Reality drift versus template drift.</strong> Loss of correspondence with the system, as against divergence from an abstract template. Either can occur without the other.</li>
+        <li><strong>Contradiction register.</strong> A persistent record of inconsistencies with stable identifiers, statuses and dates, read by Stage 9 for health metrics.</li>
+        <li><strong>Four-phase audit.</strong> Detection, classification by severity and scope, resolution by routing to the owning agent, and verification after repair.</li>
+        <li><strong>Living document policy.</strong> Four constitutional rules that keep agent files declarative and move history into data files.</li>
+        <li><strong>Compounding drift.</strong> Stale entries interact through cross-references, so "The errors multiply rather than add."</li>
+        <li><strong>Section fencing.</strong> Named regions that make each section independently trackable, so a fence is "simultaneously an integrity boundary and a preservation boundary".</li>
+        <li><strong>Semantic versus configuration drift.</strong> Logical inconsistency in prose, caught by the auditor, as against divergence from the canonical template, caught by structural comparison.</li>
+        <li><strong>Staged institutionalization.</strong> Reusable templates exist and work, while some abstraction work remains clearly delimited.</li>
+      </ul>
+    </section>
+
+    <section id="notes-21-frames">
+      <h2>Theoretical frames</h2>
+      <p>Ward Cunningham's metaphor of technical debt frames drift as a deferred maintenance cost, which the chapter extends with a compounding dynamic.</p>
+      <p>Mitchell (2006) supports the claim that the impact of drift is a system-level property that cannot be understood by examining components in isolation.</p>
+      <p>Vallier (2021) supplies the rationale for making the policy constitutional. On the chapter's reading, a constitutional order requires active maintenance of the conditions that make it reliable, and the living document policy is such a maintenance mandate.</p>
+      <p>Menger's account of institutions that emerge from repeated practice and are then codified frames the team builder. The chapter joins this to Chapter 1's account of entrepreneurial judgment and to Chapter 4's authority-separation patterns.</p>
+    </section>
+
+    <section id="notes-21-matters">
+      <h2>Why it matters</h2>
+      <p>The chapter names the failure that the governance machinery of Part V exists to prevent. Its picture of a team "rich in documentation and poor in coordination" describes a system whose instructions are extensive but unreliable. The chapter says plainly that it has seen this condition, and that it motivates the policy's stringency.</p>
+      <p>The chapter also explains why no single mechanism suffices. The register gives memory, the policy keeps the files that agents read current, the cycle drives correction across repositories, and fencing protects human customization while repairing generated content. The contrast between semantic and configuration drift shows that a team can be consistent in its prose while its generated sections diverge unseen, so both kinds of check are necessary. The chapter ends by reading the platform as having moved "from ad hoc reuse to codified reusable governance".</p>
+    </section>
+
+    <section id="notes-21-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items for release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>
