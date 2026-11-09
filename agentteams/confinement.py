@@ -483,12 +483,27 @@ def bwrap_argv(*, root: Path, write_roots: list[str], tmp_dir: Path, cwd: Path) 
 
 #: #262 item 2. bwrap's PID 1 exits the moment the command exits and the namespace teardown kills anything left, so a
 #: post-exit ``killpg`` from outside races the teardown and usually finds nothing. This shim runs inside the sandbox:
-#: it runs the command with the report fd closed (the command cannot forge the report), then counts the processes
-#: still in the PID namespace other than PID 1 (bwrap's init) and itself, writes ``survivors=N`` to the fd, and exits
-#: with the command's status. A missing report (the shim was killed) is read as survivors: fail closed.
-_SURVIVOR_SHIM = ('fd=$1; shift; eval "\\"\\$@\\" $fd>&-"; rc=$?; n=0; '
-                  'for p in /proc/[0-9]*; do q=${p#/proc/}; [ "$q" = 1 ] || [ "$q" = "$$" ] || n=$((n+1)); done; '
-                  'eval "echo survivors=$n >&$fd"; exit "$rc"')
+#: it runs the command with the report fd closed (the command cannot forge the report), then counts the live (non-zombie)
+#: processes in the PID namespace other than itself and its ancestors (bwrap's init and any intermediate bwrap
+#: process), using shell builtins only so the count forks nothing, writes ``survivors=N`` to the fd, and exits with
+#: the command's status. A missing report (the shim was killed) is read as survivors: fail closed.
+_SURVIVOR_SHIM = r"""fd=$1; shift; eval "\"\$@\" $fd>&-"; rc=$?
+anc=" $$ "; p=$$
+while [ "$p" -gt 1 ] 2>/dev/null; do
+  read -r st < "/proc/$p/stat" || break
+  st=${st##*) }; set -- $st; p=$2; anc="$anc$p "
+done
+n=0
+for d in /proc/[0-9]*; do
+  q=${d#/proc/}
+  case "$anc" in *" $q "*) continue ;; esac
+  read -r st < "$d/stat" 2>/dev/null || continue
+  st=${st##*) }; set -- $st
+  [ "$1" = Z ] && continue
+  n=$((n+1))
+done
+eval "echo survivors=$n >&$fd"; exit "$rc"
+"""
 
 
 def read_survivor_report(fd: int, *, timeout: float = 5.0) -> bool:

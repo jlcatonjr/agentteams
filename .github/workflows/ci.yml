@@ -221,6 +221,11 @@ jobs:
             echo "::notice title=survivor-probe-$i::bwrap rc=$rc elapsed=$(echo "$t1 - $t0" | bc)s sleepers_alive_after=$alive"
             sleep 6
           done
+          # What runs inside the namespace while a command runs (pid, comm, state, ppid): the survivor shim excludes
+          # its own ancestors, so this shows which processes those are.
+          tree=$(bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid --die-with-parent --new-session \
+            /bin/sh -c 'for d in /proc/[0-9]*; do read -r st < "$d/stat"; echo "$st" | cut -d" " -f1-4; done' | tr '\n' ';')
+          echo "::notice title=ns-processes::$tree"
 
       - name: Confinement suites (bwrap required)
         env:
