@@ -32,7 +32,8 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: ``server-apply`` is the family of the per-path ``server-apply:remove-path:<host>:<path>`` id.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
                                  "branch-cleanup", "vulnscan-remediation", "vulnscan-publish", "wasm-pin-remediation",
-                                 "vulnscan-known", "server-apply", *SANDBOX_RELAXATION_KINDS, "s10-cooldown-exempt")
+                                 "vulnscan-known", "server-apply", *SANDBOX_RELAXATION_KINDS, "s10-cooldown-exempt",
+                                 "carveout")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:

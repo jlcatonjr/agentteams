@@ -89,6 +89,9 @@ def project_rules(manifest: dict, output_dir: Path, *, write: bool = True) -> bo
             print(f"  !  Agent-surface matrix not written: {exc}", file=sys.stderr)
     configured = manifest.get("project_rules_source") or None
     frozen = manifest.get("frozen_surfaces") or None
+    from agentteams.cli.carveout_commands import after_build
+
+    carveouts_stale = after_build(root, frozen=frozen, write=write)  # the signed carve-outs, in every entry file
     try:
         report = rules_projection.project(root, configured=configured, frozen=frozen, write=write)
         pointers = rules_projection.sync_pointers(root, configured=configured, frozen=frozen, write=write)
@@ -98,8 +101,8 @@ def project_rules(manifest: dict, output_dir: Path, *, write: bool = True) -> bo
     if report.source is None:
         if configured:
             print(f"  !  project_rules_source {configured} has no Project-Specific Rules to project.", file=sys.stderr)
-        return bool(configured)
-    stale = False
+        return bool(configured) or carveouts_stale
+    stale = carveouts_stale
     diff = next((o.diff for o in report.outcomes if o.diff), "")
     if diff and write:  # what is about to bind every provider is shown, never applied silently
         print(f"  ↻  Project rules changed in {report.source}; every provider's copy now says:\n{diff}")

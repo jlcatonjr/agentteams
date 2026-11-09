@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (carve-out registry: operator-signed, workspace-scoped carve-outs)
+
+- **`.agentteams/carveouts.json`**, read by the new `agentteams.carveouts` module. An operator declares which rule
+  clauses don't refuse one bounded activity, in an exact list of workspaces (`repo:<owner>/<name>`, `team:<slug>`),
+  until a date. The operator signs the registry (**`--sign-carveouts`**, Ed25519, the `--sign-decision` preflight), and
+  it must be committed byte for byte; unsigned, it renders nothing. Machine-checked, and refused when broken:
+  - `added` is not in the future, and `expires` is required and at most 90 days after it. A lapsed entry stops binding
+    and leaves every copy;
+  - the cap defaults to 1 active entry, with a ceiling of 3, and counts against the Rule 15 exception-registry cap;
+  - lineage in the signed, pinned decision log must carry no unretracted HALT;
+  - no rendered string names C-1..C-5 or a HALT (after NFKC folding), and no relaxed clause names the mechanism,
+    lineage, the cap, sunset or expiry;
+  - an entry never grants a capability or clears a destructive action, and no target or rendered string names a
+    trust root (keys, integrity manifest, decisions log, approvers, rosters, directive ledger, constitution files,
+    registries);
+  - a whole rule is never lifted, and of the constraint-relaxing rule only (b), by number (refused when the
+    constitution doesn't number it); strings other than `text` are ASCII, with no invisible format characters;
+  - `decision_log` must be a generated team directory (with its build log, so the sandbox protects its key store);
+    `sequence` must rise on every re-sign, checked against the full history (shallow clones refused) and a high-water
+    mark; a HALT on `carveout:<id>` stops it; a refused registry's blocks are removed.
+- The registry is a trust root (`carveout` / `carve-out` governance stems; a handoff trust-root token), and the module
+  is integrity-pinned.
+- **`--sync-carveouts`** renders the binding entries into every enabled entry file's Project-Specific Rules region as a
+  hash-stamped block, after every generate and `--update` too (it survives `--update --merge`; a hand-edited block is
+  refused). **`--verify-carveouts`** reports
+  every problem and every drifted copy.
+- **`--check-clearance SCOPE --clearance-file PATH`**: a read-only check that a verified @security PASS exists for
+  `SCOPE` bound to the file's sha256, with no HALT on `SCOPE`. Operator scripts no longer hand-roll that gate.
+- Motivation: the manager-roster rollout's Rule 11(e) in infrastructureManagement (2026-11-08) had three hand-pasted
+  copies that drifted, prose-only expiry and cap checks, and a sha-bound gate that took twelve review rounds.
+
 ### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
 
 - **A process left running by a confined command fails the run again under bwrap.** bwrap's PID 1 exits with the

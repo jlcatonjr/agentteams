@@ -348,6 +348,13 @@ def test_every_gate_call_site_is_listed():
 
                 assert "server-apply" in GATE_ACTIONS and removal_action("h", "/p") == "server-apply:remove-path:h:/p"
                 assert text.count("action = removal_action(host, path)") == 1 and text.count("action=action") == 2
+            elif arg in {"lid", "own_action"} and path.name == "carveout_checks.py":
+                # A carve-out's lineage ids (logged decisions) and its own carveout:<id>: HALT scans only.
+                assert "carveout" in GATE_ACTIONS and 'own_action = f"{GATE_FAMILY}:{entry[\'id\']}"' in text
+            elif arg in {"scope", "action"} and path.name == "clearance_binding.py":
+                # <scope>:sha256-<hex>: the scope is refused unless it is a plain action id, before both calls.
+                assert text.count("action = clearance_action(scope, path)") == 1
+                assert text.index("action = clearance_action(scope, path)") < text.index("action=scope)")
             elif arg in {"exempt_action", "exempt_family"} and path.name == "s10_exempt_gate.py":
                 s10_sites.append(arg)  # s10-cooldown-exempt:<owner/name> and the bare family, checked below
             else:

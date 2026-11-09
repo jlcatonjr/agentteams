@@ -54,7 +54,7 @@ _BLOCK_RE = {
         rf"copy-sha256=(?P<csha>[0-9a-f]{{64}})(?: mode=(?P<mode>copy|reference))? -->[ \t]*\n"
         rf"(?P<body>.*?)^(?P=indent)<!-- {kind}:END -->[ \t]*\n?",
         re.MULTILINE | re.DOTALL)
-    for kind in ("PROJECTED-RULES", "PROJECT-RULES-POINTER")
+    for kind in ("PROJECTED-RULES", "PROJECT-RULES-POINTER", "CARVEOUTS")  # CARVEOUTS: agentteams.carveouts
 }
 _RULES_HEADING_RE = re.compile(rf"^[ \t]*{re.escape(_RULES_HEADING)}[ \t]*$", re.MULTILINE)
 
