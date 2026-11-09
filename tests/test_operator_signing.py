@@ -253,6 +253,7 @@ def _invoke(argv: list[str]) -> int:
 
 
 def _run(name: str, tmp: Path, mp: pytest.MonkeyPatch, capsys) -> tuple[int, str, str]:
+    mp.setattr(operator_signing, "_key_dir", lambda: tmp / "operator-home" / ".config" / "agentteams" / "keys")
     argv = CASES[name](tmp, mp)
     capsys.readouterr()
     rc = _invoke(argv)
@@ -304,7 +305,7 @@ EXPECTED: dict[str, tuple[int, str, str]] = {  # regenerated for #9/#10 (2026-09
     'decision-classifier-error': (1, '',
         "Error: inconsistent effect declaration: row declares effect_class='non-relaxing' but its derived effect is 'relaxing': the relaxing class is derived from effect, never self-declared, and a disagreement is refused (fail-closed). Correct the declaration or the effect fields.\n"),
     'decision-env-unset': (1, '',
-        'Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a verified install outside every agent write root (clone a signed release tag, verify it, pipx install from the clone: SECURITY.md "Signing from a trusted install") and run --verify-integrity first.\nError: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set, and there is no key for key_id \'op-1\' at <TMP>/operator-home/.config/agentteams/keys/decision-signing-op-1.pem — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
     'decision-grant-purpose': (1, '',
         "Error: refusing to sign — this decision's payload begins with the capability-grant purpose tag (use --sign-grant for grants).\n"),
     'decision-malformed-spec': (1, '',
@@ -326,9 +327,9 @@ EXPECTED: dict[str, tuple[int, str, str]] = {  # regenerated for #9/#10 (2026-09
     'grant-bad-framework-bad-max-uses': (1, '',
         'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a verified install outside every agent write root (clone a signed release tag, verify it, pipx install from the clone: SECURITY.md "Signing from a trusted install") and run --verify-integrity first.\nWarning: <TMP>/op.key is outside ~/.config/agentteams/keys: no emitted sandbox read-denies it, so a sandboxed agent may be able to read it.\nError: --framework \'canonical\' has no team directory for grants\n'),
     'grant-bad-framework-env-unset': (1, '',
-        'Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a verified install outside every agent write root (clone a signed release tag, verify it, pipx install from the clone: SECURITY.md "Signing from a trusted install") and run --verify-integrity first.\nError: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set, and there is no key for key_id \'op-1\' at <TMP>/operator-home/.config/agentteams/keys/decision-signing-op-1.pem — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
     'grant-env-unset': (1, '',
-        'Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a verified install outside every agent write root (clone a signed release tag, verify it, pipx install from the clone: SECURITY.md "Signing from a trusted install") and run --verify-integrity first.\nError: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set, and there is no key for key_id \'op-1\' at <TMP>/operator-home/.config/agentteams/keys/decision-signing-op-1.pem — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
     'grant-malformed-spec': (1, '',
         'Error: grant spec missing required field(s): holder_team, target_path, permitted_ops, expires_at, max_uses, approver, ticket_id, reason_code\n'),
     'grant-missing-key-id': (1, '',
@@ -576,3 +577,69 @@ def _no_cryptography_floor_warning(monkeypatch):
     from agentteams.cli import signed_ledger
 
     monkeypatch.setattr(signed_ledger, "_CRYPTO_WARNED", [True])
+
+
+from agentteams.cli import operator_signing  # noqa: E402  (the _key_dir seam)
+
+
+# --- signing-key-autoresolve: an unset AGENTTEAMS_DECISION_ED25519_KEYFILE falls back to the key_id's
+# conventional file (provision-operator-signing-key.sh's name), so a signing step need not name a key.
+
+def _point_key_dir(tmp: Path, mp: pytest.MonkeyPatch) -> None:
+    mp.setenv("HOME", str(tmp / "operator-home"))  # so signing_keyfile_warnings judges the same directory
+    mp.setattr(operator_signing, "_key_dir", lambda: tmp / "operator-home" / ".config" / "agentteams" / "keys")
+
+
+def _default_key(tmp: Path, priv: bytes = _PRIV) -> Path:
+    keys = tmp / "operator-home" / ".config" / "agentteams" / "keys"
+    keys.mkdir(parents=True, mode=0o700)
+    path = keys / f"decision-signing-{_KEY_ID}.pem"
+    path.write_bytes(priv)
+    path.chmod(0o600)
+    return path
+
+
+@pytest.mark.parametrize("verb", ["decision", "grant"])
+def test_unset_env_signs_with_the_key_id_default(verb, tmp_path, monkeypatch, capsys):
+    """No env, key at ~/.config/agentteams/keys/decision-signing-<key_id>.pem: signs, and names the path."""
+    _point_key_dir(tmp_path, monkeypatch)
+    _default_key(tmp_path)
+    argv = (_sd if verb == "decision" else _sg)(tmp_path, monkeypatch, key=False)
+    capsys.readouterr()
+    rc = _invoke(argv)
+    err = _norm(capsys.readouterr().err, tmp_path)
+    assert rc == 0, err
+    assert ("Note: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set; using "
+            "<TMP>/operator-home/.config/agentteams/keys/decision-signing-op-1.pem, the key for key_id 'op-1'.\n") in err
+    assert "is outside ~/.config/agentteams/keys" not in err
+
+
+def test_env_still_wins_over_the_key_id_default(tmp_path, monkeypatch, capsys):
+    """A set env names the key even when a (here: wrong) default exists, so the default is never read."""
+    _point_key_dir(tmp_path, monkeypatch)
+    _default_key(tmp_path, priv=_OTHER_PRIV)  # would fail verify-before-append if it were used
+    argv = _sd(tmp_path, monkeypatch)
+    capsys.readouterr()
+    rc = _invoke(argv)
+    err = capsys.readouterr().err
+    assert rc == 0, err
+    assert "Note: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set" not in err
+
+
+@pytest.mark.parametrize("key_id", ["", "../op-1", "a/b", "op 1", "op-1\n", "x" * 129])
+def test_default_keyfile_refuses_ids_that_cannot_name_a_file(key_id, tmp_path, monkeypatch):
+    """Only a whole-string decision_log._KEY_ID_RE key_id (<=128 chars) derives a path, inside the key dir."""
+    from agentteams.cli.operator_signing import default_keyfile
+
+    _point_key_dir(tmp_path, monkeypatch)
+    assert default_keyfile(key_id) is None
+    path = default_keyfile("op-1")
+    assert path == tmp_path / "operator-home" / ".config" / "agentteams" / "keys" / "decision-signing-op-1.pem"
+
+
+def test_key_dir_is_the_sandbox_denied_signing_key_dir(monkeypatch):
+    """Unpatched, the seam names exactly the directory every emitted sandbox read-denies."""
+    from agentteams.frameworks._sandbox_emit import SIGNING_KEY_DIR
+
+    monkeypatch.undo()  # drop conftest's temp-dir patch; only reads the path, never the directory
+    assert operator_signing._key_dir() == Path(os.path.expanduser(SIGNING_KEY_DIR))
