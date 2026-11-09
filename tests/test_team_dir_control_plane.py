@@ -255,9 +255,14 @@ def test_mixed_confined_goose_and_cooperative_claude_pass_the_launcher_check(tmp
 
 
 @_linux_bwrap
-def test_multi_sync_cooperative_projection_keeps_the_launcher_working(tmp_path, monkeypatch):
+def test_multi_sync_cooperative_projection_keeps_the_launcher_working(tmp_path, monkeypatch, stub_ed25519):
     """An agentteams team (marker present) projected by multi_sync without confining privilege
-    still gets its store sentinel (write-if-absent), so a confined sibling's launcher accepts it."""
+    still gets its store sentinel (write-if-absent), so a confined sibling's launcher accepts it.
+
+    On Linux the confined sibling emits the framework-neutral ``sandbox/confine-run.sh``, which the relaxation gate
+    reads as OS-sandbox evidence for every framework, so projecting the cooperative team plans
+    ``sandbox-os-off:copilot-vscode`` in this governed workspace: the operator's signed decision is supplied
+    (#262; operator ruling 2026-11-08, option B; the mixed-profile false positive is a known limitation for 1.1)."""
     from agentteams import multi_sync
 
     p = (tmp_path / "proj").resolve()
@@ -268,6 +273,7 @@ def test_multi_sync_cooperative_projection_keeps_the_launcher_working(tmp_path, 
     store = (agents / VERIFY_KEY_STORE_SENTINEL_REL).parent
     shutil.rmtree(store)  # as left by an agentteams that predates the unconditional sentinel
     assert _launcher_check(p).returncode == 2
+    _sign_os_off(agents)
     written = multi_sync._emit_privilege_artifacts(p, "copilot-vscode", {"privilege_profile": "cooperative"},
                                                    dry_run=False)
     assert written == [str((agents / VERIFY_KEY_STORE_SENTINEL_REL).resolve())]
@@ -277,6 +283,26 @@ def test_multi_sync_cooperative_projection_keeps_the_launcher_working(tmp_path, 
     (agents / VERIFY_KEY_STORE_SENTINEL_REL).write_text("operator text", encoding="utf-8")
     assert multi_sync._emit_privilege_artifacts(p, "copilot-vscode", None, dry_run=False) == []
     assert (agents / VERIFY_KEY_STORE_SENTINEL_REL).read_text() == "operator text"
+
+
+def _sign_os_off(agents: Path) -> None:
+    """Record the operator's (stub-)signed PASS for ``sandbox-os-off:copilot-vscode`` and roster its key.
+
+    A fresh render seeds the legacy six-column decisions log (a 1.0 known limitation), so the log is first upgraded
+    with the product's own ``--migrate-decision-log`` path, as the operator would before a signed row.
+    """
+    from agentteams.cli import decision_log_migrate as mig
+    from tests._sandbox_gate_helpers import _KEY_ID, _log, _row
+
+    log = agents / "references" / "security-decisions.log.csv"
+    mig.apply_migration(mig.plan_migration(log), agents)
+    keys = agents / "references" / "authorized-verify-keys"
+    keys.mkdir(parents=True, exist_ok=True)
+    (keys / f"{_KEY_ID}.pub.pem").write_text("stub-key", encoding="utf-8")
+    # The lineage ancestor the signed row derives from (``_log`` adds it only when it creates the log).
+    baseline = {"timestamp": "2026-10-01", "requesting_agent": "security", "action_reviewed": "approved-baseline",
+                "verdict": "PASS", "conditions_verified": "verified"}
+    _log(agents, baseline, _row("sandbox-os-off:copilot-vscode"))
 
 
 def _cooperative_team_without_store(p: Path) -> Path:

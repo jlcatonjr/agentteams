@@ -345,6 +345,21 @@ The two switches are described in the [Sandboxing Guide, Part IX](agentteams-san
 The verdict agentteams records per framework is `wasm_enforcement` in the team manifest (printed as
 `[WASM-ENFORCEMENT]`); only `enforced` and `conditional` are claims of enforcement.
 
+### Linux: re-syncing a cooperative team next to a confined one needs a signed decision
+
+- **What:** on Linux, a confined team emits the shared launcher `sandbox/confine-run.sh` at the repository root,
+  and the sandbox-relaxation gate counts that file as OS-sandbox evidence for every framework. In a governed
+  workspace (`enforce_decision_signing`), projecting a *cooperative* team in the same repository (for example
+  `multi_sync` re-syncing a Copilot team beside a confined Codex team) is therefore read as turning an OS sandbox
+  off, and is refused: `'sandbox-os-off:<framework>' relaxes a sandbox ... has no unconsumed decision for it`. The
+  cooperative team never had a sandbox; the gate fails toward "was on" by design. macOS is not affected.
+- **Who:** Linux projects that mix a confined team and a cooperative team under decision signing.
+- **Workaround:** record the operator's signed PASS for `sandbox-os-off:<framework>` (`--sign-decision`, with
+  `scope` equal to the action) before the re-sync. Upgrade a fresh team's decisions log first with
+  `--migrate-decision-log`.
+- **Tracking:** #262 (operator ruling 2026-11-08: fix the test in 1.1, narrow the evidence rule in 1.2 after a
+  @security design review).
+
 ### A WASM guest cannot run Bash, git or npm
 
 - **What:** a guest runs prebuilt `.wasm` modules, Python (CPython WASI) and JavaScript (QuickJS-ng) only, with no
