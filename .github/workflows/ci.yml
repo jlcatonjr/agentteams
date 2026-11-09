@@ -42,8 +42,23 @@ jobs:
       - name: Install package and pytest
         run: pip install -e ".[test,research]"
 
+      # #262 item 4 (remediation row LINUX-BWRAP-SKIP-GAP): without bubblewrap every live confinement test skipped
+      # here and the job still went green. Install and probe it, and make a missing bwrap fail the run.
+      - name: Install and probe bubblewrap
+        if: startsWith(matrix.os, 'ubuntu')
+        run: bash scripts/ci-bwrap-setup.sh
+
       - name: Run tests
-        run: pytest tests/
+        env:
+          AGENTTEAMS_REQUIRE_BWRAP: ${{ startsWith(matrix.os, 'ubuntu') && '1' || '' }}
+        # Failed test ids also go out as annotations: readable through the checks API by reviewers (and agents)
+        # that cannot download job logs.
+        run: |
+          set +e
+          pytest tests/ -rfE 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+          status=${PIPESTATUS[0]}
+          grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/pytest.log" | head -40 | sed 's/^/::error title=pytest::/'
+          exit "$status"
 
       # The full suite above installs the package EDITABLE, where source `schemas/`
       # is always on the path — which is exactly why the rc6 wheel shipping zero
@@ -84,6 +99,65 @@ jobs:
 
       - name: Lineage corpus provenance and regeneration
         run: pytest tests/test_template_lineage.py -v
+
+  # #262: Ubuntu 26 evidence leg. NOT a required check (the release-lines ruleset requires only the six existing
+  # names), so a red result leaves a PR UNSTABLE, not blocked. It records os-release and the bwrap version, runs the
+  # confinement suites with bwrap required, and fails if the survivor test skipped instead of running.
+  ubuntu-26-confinement:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install package and pytest
+        run: pip install -e ".[test]"
+
+      - name: Install and probe bubblewrap
+        run: bash scripts/ci-bwrap-setup.sh
+
+      - name: Evidence (os-release, bwrap, coreutils)
+        run: |
+          cat /etc/os-release
+          bwrap --version
+          ls -l /usr/bin/true; readlink -f /usr/bin/true
+          grep -q '^VERSION_ID="26' /etc/os-release || { echo "::error::not an Ubuntu 26 runner"; exit 1; }
+          echo "::notice title=env::$(. /etc/os-release && echo "$PRETTY_NAME") | $(bwrap --version) | true -> $(readlink -f /usr/bin/true)"
+
+      # #262 item 2: how does bwrap's PID 1 treat a child that outlives the main command? Time three runs and check
+      # whether the sleeper is still alive after bwrap returns.
+      - name: Survivor mechanism probe
+        run: |
+          for i in 1 2 3; do
+            t0=$(date +%s.%N)
+            bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid --die-with-parent \
+              python3 -c 'import subprocess,sys; subprocess.Popen(["sleep","5"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)'
+            rc=$?; t1=$(date +%s.%N)
+            alive=$(pgrep -fc '^sleep 5$' || true)
+            echo "::notice title=survivor-probe-$i::bwrap rc=$rc elapsed=$(echo "$t1 - $t0" | bc)s sleepers_alive_after=$alive"
+            sleep 6
+          done
+          # What runs inside the namespace while a command runs (pid, comm, state, ppid): the survivor shim excludes
+          # its own ancestors, so this shows which processes those are.
+          tree=$(bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid --die-with-parent --new-session \
+            /bin/sh -c 'for d in /proc/[0-9]*; do read -r st < "$d/stat"; echo "$st" | cut -d" " -f1-4; done' | tr '\n' ';')
+          echo "::notice title=ns-processes::$tree"
+
+      - name: Confinement suites (bwrap required)
+        env:
+          AGENTTEAMS_REQUIRE_BWRAP: "1"
+        run: |
+          set +e
+          pytest tests/test_confinement.py tests/test_confinement_xcrun.py -v -rA 2>&1 | tee "$RUNNER_TEMP/confinement.log"
+          status=${PIPESTATUS[0]}
+          grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/confinement.log" | head -40 | sed 's/^/::error title=pytest::/'
+          grep -E 'test_survivor_fails_the_run' "$RUNNER_TEMP/confinement.log" | head -3 | sed 's/^/::notice title=survivor::/'
+          [ "$status" = 0 ] || exit "$status"
+          grep -E 'test_survivor_fails_the_run (PASSED|FAILED)' "$RUNNER_TEMP/confinement.log" \
+            || { echo "::error::test_survivor_fails_the_run did not run (skipped or missing)"; exit 1; }
 
   # Follow-up #5 (2026-09-30): the goose Seatbelt profile under the REAL sandbox-exec on an unnested
   # macOS runner, plus the macOS launcher gate. ADVISORY until 2026-10-14 (remediation row

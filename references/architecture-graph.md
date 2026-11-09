@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **346**
+- Modules mapped: **347**
 - Packages: **11**
-- Internal import edges: **1119**
+- Internal import edges: **1121**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 156 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research`, `agentteams.vulnscan` |
+| `agentteams` | 157 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research`, `agentteams.vulnscan` |
 | `agentteams.cli` | 52 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan` |
 | `agentteams.data` | 6 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -49,6 +49,7 @@ Every module, coloured by package (full adjacency in the table below).
 | Module | Imports (internal) | Imported by |
 | --- | --- | --- |
 | `agentteams` | — | `agentteams.backup`, `agentteams.capability_hints`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.parser`, `agentteams.cli.signer_location`, `agentteams.git_hooks`, `agentteams.projection_marker`, `agentteams.source_provenance`, `agentteams.vulnscan.executor_guard` |
+| `agentteams._bwrap_survivors` | `agentteams.confinement` | `agentteams.confinement` |
 | `agentteams._fleet_bridge` | `agentteams.fences` | `agentteams.fleet` |
 | `agentteams._fleet_grok` | `agentteams.frameworks._agents_md_ownership`, `agentteams.projection_marker` | `agentteams.fleet` |
 | `agentteams._fleet_report` | `agentteams._fleet_shrink_grants`, `agentteams.vulnscan.project_policy` | `agentteams.fleet` |
@@ -140,7 +141,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.code_index` | — | `agentteams.cli.code_index_artifacts`, `agentteams.code_sources`, `agentteams.mcp_servers.recall` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.code_index_artifacts` |
 | `agentteams.codex_mcp_emit` | `agentteams.atomicio`, `agentteams.mcp_emit`, `agentteams.team_dir_advisories`, `agentteams.toml_write` | `agentteams.cli.artifacts`, `agentteams.grok_config_emit`, `agentteams.mcp_catalog` |
-| `agentteams.confinement` | `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.proposal_commands`, `agentteams.cli.standalone_modes`, `agentteams.mcp_direct_grants`, `agentteams.memory_index_surfaces`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals`, `agentteams.surface_matrix` |
+| `agentteams.confinement` | `agentteams._bwrap_survivors`, `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit` | `agentteams._bwrap_survivors`, `agentteams.cli.proposal_commands`, `agentteams.cli.standalone_modes`, `agentteams.mcp_direct_grants`, `agentteams.memory_index_surfaces`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals`, `agentteams.surface_matrix` |
 | `agentteams.control_plane_io` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.multi_sync`, `agentteams.projection_marker` |
 | `agentteams.convert` | `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy` | `agentteams.cli.commands` |
 | `agentteams.copilot_body_limit` | `agentteams.frameworks.copilot_vscode`, `agentteams.user_regions`, `agentteams.yaml_frontmatter` | `agentteams.cli.generate_helpers`, `agentteams.doctor` |
@@ -516,6 +517,16 @@ digraph "agentteams architecture" {
       "path": "agentteams/__init__.py",
       "is_package": true,
       "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams._bwrap_survivors": {
+      "package": "agentteams",
+      "path": "agentteams/_bwrap_survivors.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.confinement"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -1752,6 +1763,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/confinement.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams._bwrap_survivors",
         "agentteams.atomicio",
         "agentteams.frameworks._sandbox_emit"
       ],
@@ -4779,6 +4791,10 @@ digraph "agentteams architecture" {
   ],
   "module_edges": [
     {
+      "source": "agentteams._bwrap_survivors",
+      "target": "agentteams.confinement"
+    },
+    {
       "source": "agentteams._fleet_bridge",
       "target": "agentteams.fences"
     },
@@ -6433,6 +6449,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.codex_mcp_emit",
       "target": "agentteams.toml_write"
+    },
+    {
+      "source": "agentteams.confinement",
+      "target": "agentteams._bwrap_survivors"
     },
     {
       "source": "agentteams.confinement",

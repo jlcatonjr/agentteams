@@ -47,6 +47,12 @@ import time
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
+from agentteams._bwrap_survivors import (  # noqa: F401  re-exported for proposal_run (#262 item 2)
+    _SURVIVOR_SHIM,
+    read_survivor_report,
+    survivor_channel,
+    survivor_shim_argv,
+)
 from agentteams.atomicio import read_regular_nofollow, write_new_atomic
 
 #: Project paths a confined command may never write, even inside a declared write root.
@@ -564,7 +570,8 @@ def bwrap_argv(*, root: Path, write_roots: list[str], tmp_dir: Path, cwd: Path) 
 
 
 def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: list[str],
-         write_roots: list[str], tmp_dir: Path, resolver: LauncherResolver | None = None) -> list[str]:
+         write_roots: list[str], tmp_dir: Path, resolver: LauncherResolver | None = None,
+         survivor_fd: int | None = None) -> list[str]:
     """Return *argv* wrapped in *sandbox*.
 
     For Seatbelt the exec allowlist is first expanded by :func:`expand_exec_paths` (xcrun launchers reach their
@@ -581,6 +588,8 @@ def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: li
         write_roots: Project-relative writable directories.
         tmp_dir: The run's private ``TMPDIR`` (must exist).
         resolver: The xcrun launcher resolver; a fresh :func:`xcrun_resolver` when None (Seatbelt only).
+        survivor_fd: bwrap only: the child fd from :func:`survivor_channel` the in-sandbox survivor check reports
+            on (:mod:`agentteams._bwrap_survivors`). None keeps the plain wrap.
 
     Returns:
         The wrapped argv.
@@ -601,6 +610,8 @@ def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: li
                                    exec_literals=[e for k, e in extra if k == "literal"])
         return ["/usr/bin/sandbox-exec", "-p", profile, *argv]
     if sandbox == "bwrap":
+        if survivor_fd is not None:
+            argv = survivor_shim_argv(survivor_fd, argv)
         return [*bwrap_argv(root=root, write_roots=write_roots, tmp_dir=tmp_dir, cwd=cwd), "--", *argv]
     raise ConfinementError(f"unknown sandbox {sandbox!r}")
 

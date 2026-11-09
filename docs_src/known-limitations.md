@@ -100,14 +100,15 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Who:** every signing-governed team that records clearances by hand.
 - **Workaround:** name clearances `<action>-<instance>`, and restrict them with the `scope` column.
 - **Tracking:** CHANGELOG `[1.0.0-rc.10]`, "a HALT blocks every action named in its id", "Documented known
-  limitations". A near-miss warning is planned for 1.1.
+  limitations". A near-miss warning is not in 1.1; it is planned for a later release.
 
 ### A CONDITIONAL PASS needs `conditions_verified` to be exactly `verified`
 
 - **What:** any other value, including `verified` followed by notes, does not count.
 - **Who:** anyone recording CONDITIONAL PASS rows.
 - **Workaround:** write exactly `verified`, and put the evidence in the `evidence` column.
-- **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is planned for 1.1.
+- **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
+  release.
 
 ### A family retraction clears every prefix-matched HALT of its action
 
