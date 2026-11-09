@@ -19,7 +19,8 @@ def add_fleet_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "Update every agent-infrastructure workspace under DIR and its "
-            "subfolders with --update --merge. Discovers .github/agents/ and "
+            "subfolders with --update --merge (except --fleet-exclude matches and "
+            "release-locked workspaces). Discovers .github/agents/ and "
             ".claude/ targets, snapshots each git workspace via a commit, applies "
             "the merge, then analyses the diff. Default is a DRY-RUN preview; pass "
             "--yes to apply. Non-destructive: merge-only; .claude is bridge-merged."
@@ -43,6 +44,32 @@ def add_fleet_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="DIR",
         default=None,
         help="Directory for the fleet report (default: <DIR>/.agentteams-fleet/<run-id>/).",
+    )
+    fleet_group.add_argument(
+        "--fleet-exclude",
+        metavar="GLOB",
+        action="append",
+        default=None,
+        dest="fleet_exclude",
+        help=(
+            "Skip folders under DIR matching GLOB (repeatable). A pattern matches the "
+            "folder's path relative to DIR or its name (e.g. 'agentteams*'). A matched "
+            "folder is neither updated nor descended into, and gets a SKIP row."
+        ),
+    )
+    fleet_group.add_argument(
+        "--fleet-ignore-locks",
+        metavar="GLOB",
+        action="append",
+        default=None,
+        dest="fleet_ignore_locks",
+        help=(
+            "Render the workspaces of release-locked repositories matching GLOB anyway "
+            "(repeatable; GLOB matches the locked repository's folder, by path relative to DIR "
+            "or by name; '*' for all). By default, a workspace whose repository's "
+            "toolchain.lock pins agentteams (agentteams= / agentteams.tag=) is skipped with a "
+            "SKIP row, because it moves only through its own pin process."
+        ),
     )
     fleet_group.add_argument(
         "--fleet-allow-no-verify",
