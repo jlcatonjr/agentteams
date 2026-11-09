@@ -1114,7 +1114,7 @@ sealed, through the session-readable `.agentteams-status/` tree (see [proposal-r
 ### `--sign-mcp-direct-grant AGENT`
 
 Operator only (R5); run it outside every agent session. It signs a direct-write grant for `AGENT`, whose brief
-`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`, or, when that is unset, from `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for `--key-id`,
 as for every operator signature. Name it with `--key-id ID`. The integrity and install-location checks run first,
 with the key unread. The full grant is then shown with a review digest, and it is signed only once that digest is
 confirmed: a terminal y/N, or `--confirm-review-sha256`. The digest covers what you chose (the agent, the binding,
