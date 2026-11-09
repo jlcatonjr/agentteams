@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.frameworks.base import FrameworkAdapter  # used in function signatures
+from agentteams.frameworks._agents_md_ownership import strip_foreign_fences as _strip_foreign_fences
 
 # ---------------------------------------------------------------------------
 # Registry — single source of truth is agentteams.frameworks.registry (CH-05)
@@ -192,7 +193,9 @@ def convert_team(
             # W3: capture source instructions content once so adapters (GooseAdapter)
             # can propagate the project-specific authority_hierarchy into generated files.
             if "_source_instructions_content" not in manifest:
-                manifest["_source_instructions_content"] = candidate.read_text(encoding="utf-8")
+                # Another framework's owned fences (e.g. codex_write_policy) never reach this target (#402 / P10).
+                manifest["_source_instructions_content"] = _strip_foreign_fences(
+                    candidate.read_text(encoding="utf-8"), adapter.framework_id)
             _convert_file(candidate, target_dir, adapter, manifest, dry_run, overwrite, result)
 
     # F3 — emit framework sidecars not derived from a source file (goose's repo-root
@@ -320,7 +323,8 @@ def _convert_file(
         if dest.exists() and not overwrite:
             result.skipped.append(str(source_path))
             return
-        content = source_path.read_text(encoding="utf-8")
+        # As interop does: another framework's owned fences never reach this target (#402 / P10).
+        content = _strip_foreign_fences(source_path.read_text(encoding="utf-8"), adapter.framework_id)
         # F2 — render through the adapter (e.g. goose strips front matter for AGENTS.md)
         # instead of copying verbatim.
         content = adapter.render_instructions_file(content, manifest)
