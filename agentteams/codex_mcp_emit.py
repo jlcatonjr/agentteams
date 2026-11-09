@@ -342,8 +342,19 @@ def _first_party_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
     """Why ``first_party_tables`` is not exactly agentteams' canonical shared ``agentteams_wasm`` table (or ``[]``).
 
     Bound for the carve-out: only ``mcp_servers.agentteams_wasm``; keys exactly ``command``/``args``/
-    ``default_tools_approval_mode``; approval ``prompt``; args launch the installed server as the compute-only
-    ``--agent _session`` instance (``wasm_mcp.session_launch_args``).
+    ``default_tools_approval_mode``; approval ``prompt``; ``command``/``args`` exactly a compute-only
+    ``--agent _session`` launch of the installed server (``wasm_mcp.is_session_launch``, shared with Grok's
+    ``keep_if_exact``). An element-wise rebuild, so ``--read=/``, an argparse prefix (``--rea``), a second
+    ``--agent`` or an interpreter outside ``runner_mcp.SYSTEM_PYTHONS`` are all refused.
+
+    Args:
+        tables: ``first_party_tables`` as passed to :func:`emit_codex_mcp_config`.
+
+    Returns:
+        One problem string per offending table; ``[]`` when every table is the canonical one.
+
+    Raises:
+        Nothing.
     """
     from agentteams import wasm_mcp
 
@@ -353,12 +364,9 @@ def _first_party_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
         if sid not in _FIRST_PARTY_IDS:
             problems.append(f"first_party_tables: {name!r} is not an agentteams first-party server")
             continue
-        args = fields.get("args") if isinstance(fields, dict) else None
         if (not isinstance(fields, dict) or set(fields) != _FIRST_PARTY_KEYS
                 or fields.get("default_tools_approval_mode") != _DEFAULT_TOOLS_APPROVAL_MODE
-                or not isinstance(args, list) or args[:6] != [*wasm_mcp.PYTHON_FLAGS, wasm_mcp.PROTECTED_PATH,
-                                                               "--agent", wasm_mcp.SESSION_AGENT]
-                or any(a in args for a in ("--read", "--scratch"))):
+                or not wasm_mcp.is_session_launch(fields.get("command"), fields.get("args"))):
             problems.append(f"first_party_tables: {name} is not the canonical compute-only agentteams_wasm table")
     return problems
 

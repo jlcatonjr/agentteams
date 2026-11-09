@@ -1,0 +1,8 @@
+{
+  "patch_id": "ca4ca03b38256ffcbd2e385261e429294eb895c9",
+  "commit": "602a372c3b1ef77ebef4a2e3ee50887f7d5da937",
+  "subject": "fix(codex): exact bound for the first-party agentteams_wasm table (row 659)",
+  "impact": "1 symbols added",
+  "note": "wasm_mcp.is_session_launch: moved from grok_config_emit._is_session_launch (private, identical logic) and now public so codex_mcp_emit uses it; documented in docs_src/api-reference/wasm-mcp.md; reviewed against docstring/Args/Returns/Raises; @security review pending in the parent session (row 659).",
+  "recorded_at": "2026-11-09T16:23:20Z"
+}

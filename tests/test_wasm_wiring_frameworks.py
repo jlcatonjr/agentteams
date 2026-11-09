@@ -76,6 +76,41 @@ def test_codex_first_party_hook_admits_nothing_else(tmp_path, mutate):
     assert not (tmp_path / ".codex").exists()
 
 
+def _with_args(t, edit):
+    entry = t["mcp_servers.agentteams_wasm"]
+    return {"mcp_servers.agentteams_wasm": {**entry, "args": edit(list(entry["args"]))}}
+
+
+def _insert_after_session(args, *extra):
+    i = args.index(wasm_mcp.SESSION_AGENT) + 1
+    return [*args[:i], *extra, *args[i:]]
+
+
+@pytest.mark.parametrize("mutate", [
+    # Row 659: spellings the old args[:6]-prefix + literal-membership check let through.
+    lambda t: _with_args(t, lambda a: _insert_after_session(a, "--read=/")),
+    lambda t: _with_args(t, lambda a: _insert_after_session(a, "--rea", "/")),
+    lambda t: _with_args(t, lambda a: [*a, "--agent", "navigator"]),
+    lambda t: _with_args(t, lambda a: _insert_after_session(a, "--scratch=/tmp")),
+    lambda t: {"mcp_servers.agentteams_wasm": {**t["mcp_servers.agentteams_wasm"], "command": "/tmp/evil"}},
+    lambda t: {"mcp_servers.agentteams_wasm": {**t["mcp_servers.agentteams_wasm"], "command": "python3"}},
+], ids=["read-equals", "argparse-prefix", "second-agent", "scratch-equals", "foreign-command", "bare-command"])
+def test_codex_first_party_hook_requires_the_exact_session_launch(tmp_path, mutate):
+    tables = ww.codex_first_party_tables(_manifest("codex"))
+    with pytest.raises(ValueError, match="canonical compute-only"):
+        ce.emit_codex_mcp_config(servers=[], features=[], output_root=tmp_path, first_party_tables=mutate(tables))
+    assert not (tmp_path / ".codex").exists()
+
+
+def test_is_session_launch_accepts_the_canonical_table_and_rejects_bad_types():
+    entry = ww.codex_first_party_tables(_manifest("codex"))["mcp_servers.agentteams_wasm"]
+    assert wasm_mcp.is_session_launch(entry["command"], entry["args"])
+    assert not wasm_mcp.is_session_launch(entry["command"], tuple(entry["args"]))
+    assert not wasm_mcp.is_session_launch(entry["command"], [*entry["args"][:-1], 1])
+    assert not wasm_mcp.is_session_launch(entry["command"], entry["args"][:7])
+    assert not wasm_mcp.is_session_launch(None, entry["args"])
+
+
 def test_codex_without_mcp_feature_refuses_to_drop_operator_tables(tmp_path):
     cfg = tmp_path / ".codex" / "config.toml"
     cfg.parent.mkdir()
