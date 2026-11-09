@@ -59,7 +59,7 @@ Each call waits up to `--wait` seconds (20 by default, 120 at most) for the runn
 | `PROTECTED_PATH`, `PYTHON_FLAGS`, `SHA256` | Install path, launch flags and the pinned hash. |
 | `server_content() -> str` | The shipped server's source. |
 | `launch_args(agent, tools, approval="staged") -> list[str]` | The canonical arguments for one agent's instance. There is no `--root`: the server derives the project root from its install location (`<root>/.agentteams/bin/`), so a launch from anywhere else fails to start and no machine path is written into the team. |
-| `SYSTEM_PYTHONS`, `interpreter() -> str` | The absolute, system-wide `python3` agents launch the server with (`/usr/bin/python3` first). Never one under a home directory or found via `PATH`. |
+| `SYSTEM_PYTHONS`, `interpreter() -> str` | The absolute, system-wide `python3` agents launch the server with (`/usr/bin/python3` first). Never one under a home directory or found via `PATH`. A candidate is skipped when its resolved file or that file's directory is group- or world-writable, or owned by anyone but root or the current user; `ValueError` names each skipped candidate. Residue: a user-owned interpreter (Homebrew) is trusted like the user's own account, and the symlink's own directory (`/opt/homebrew/bin`) is not checked. Chosen once, at render. |
 | `tool_names(tools) -> list[str]` | Claude's exact names, `mcp__agentteams_runner__<tool>`. |
 | `claude_block(agent, tools, approval, python) -> str` | The canonical inline `mcpServers:` block for a granted Claude agent. |
 | `goose_extension(agent, tools, approval, python) -> dict` | The canonical Goose stdio extension, with an exact `available_tools` list. |

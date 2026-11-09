@@ -71,18 +71,63 @@ SYSTEM_PYTHONS: tuple[str, ...] = ("/usr/bin/python3", "/usr/local/bin/python3",
 def interpreter() -> str:
     """The absolute system ``python3`` agents launch the server with.
 
+    Each :data:`SYSTEM_PYTHONS` candidate is resolved through symlinks, and it is skipped when the resolved file or
+    its directory is group- or world-writable, or owned by anyone other than root or the current user
+    (:func:`_untrusted_reason`), since such a file could be swapped by another account. Residue, by design: a
+    user-owned interpreter (Homebrew's ``/opt/homebrew/bin/python3``) is trusted as much as the user's own account,
+    and the directory holding the symlink itself (``/opt/homebrew/bin``, group ``admin``-writable on Homebrew) is
+    not checked. The choice is made once, at render; the launch-time checks stay membership in
+    :data:`SYSTEM_PYTHONS`.
+
     Returns:
-        The first of :data:`SYSTEM_PYTHONS` that exists.
+        The first of :data:`SYSTEM_PYTHONS` that exists, is executable and passes the ownership check.
 
     Raises:
-        ValueError: None exists; the operator installs one or sets up the team on a machine that has one.
+        ValueError: None qualifies; the message names why each existing candidate was skipped.
     """
     import os
 
+    skipped: list[str] = []
     for path in SYSTEM_PYTHONS:
-        if os.path.isfile(path) and os.access(path, os.X_OK):
+        if not (os.path.isfile(path) and os.access(path, os.X_OK)):
+            continue
+        reason = _untrusted_reason(path)
+        if reason is None:
             return path
-    raise ValueError(f"no system python3 at {', '.join(SYSTEM_PYTHONS)}; the agentteams_runner server needs one")
+        skipped.append(f"{path} ({reason})")
+    detail = f"; skipped: {'; '.join(skipped)}" if skipped else ""
+    raise ValueError(f"no trusted system python3 at {', '.join(SYSTEM_PYTHONS)}{detail}; "
+                     "the agentteams_runner server needs one")
+
+
+def _untrusted_reason(path: str) -> str | None:
+    """Why ``path`` (resolved through symlinks) is not trusted as the launch interpreter, or None when it is.
+
+    Args:
+        path: A candidate from :data:`SYSTEM_PYTHONS`.
+
+    Returns:
+        None when the resolved file and its directory are each owned by root or the current user and neither is
+        group- or world-writable; otherwise a short reason.
+
+    Raises:
+        Nothing: an unreadable candidate is reported as a reason.
+    """
+    import os
+    import stat
+
+    real = os.path.realpath(path)
+    me = os.geteuid() if hasattr(os, "geteuid") else None
+    for label, target in (("file", real), ("directory", os.path.dirname(real))):
+        try:
+            st = os.stat(target)
+        except OSError as exc:
+            return f"cannot stat {label} {target}: {exc.strerror}"
+        if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            return f"{label} {target} is group- or world-writable"
+        if me is not None and st.st_uid not in (0, me):
+            return f"{label} {target} is owned by uid {st.st_uid}, not root or the current user"
+    return None
 
 
 def tool_names(tools: list[str]) -> list[str]:
