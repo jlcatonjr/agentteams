@@ -31,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (@security CX-1 finding, operator ruling 2026-11-08).
 - `--convert-from` now strips the fences interop strips from the source instructions before rendering: a
   `codex_write_policy` block in the source no longer reaches a non-Codex target's instructions (or the Goose
-  adapter's project-authority input), and Grok's block is re-added by Grok's own render. Codex keeps its own fence (@security AT-11 review, operator ruling 2026-11-08).
+  adapter's project-authority input), and Grok's block is re-added by Grok's own render. Codex keeps its own fence.
+  On 1.1, goose bridge fences are not stripped (dev strips them too). Convert and interop share one
+  `strip_foreign_fences`, the name dev uses (@security AT-11 review, operator ruling 2026-11-08).
 
 ### interop (Codex under `write_policy: "orchestrator-only"`)
 - **`--interop-from … --framework codex --description BRIEF` now works under the switch**, so adopted (bespoke) agents

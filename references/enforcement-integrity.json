@@ -53,7 +53,7 @@
     "agentteams/fence_twin_acks.py": "19c0dabc77f0ef4a0db77362818939fe47527dffdb1bd8e5810eb7f94cc9880a",
     "agentteams/fence_twins.py": "764a7c3ef0e0f57f87f43b1c7883e8f737a9490a7e6a6ffc0bfca5c9243bfde1",
     "agentteams/fences.py": "63f2c946c6f890726192f40d20cbd8140c08391d3221b61cb4ac0f6b5b37d4f3",
-    "agentteams/frameworks/_agents_md_ownership.py": "db9e84f98e27cba84186bfd0a5fb809d2b639798a39ff681a6e6d77b6d03010e",
+    "agentteams/frameworks/_agents_md_ownership.py": "955021163afa170da0aae1deb4d5236bb56f3524fb4a3132d7aa38925c4e2b90",
     "agentteams/frameworks/_codex_role_gate_emit.py": "e5643ad71c6765c45d849b25ec539df1dd027f11603673eed9e45a41936bebf8",
     "agentteams/frameworks/_codex_sandbox_emit.py": "3617d47c67bbbd9f00ce921e1e5ddcd08c938bfbe1ea2f817775e69598de4691",
     "agentteams/frameworks/_goose_sandbox_emit.py": "d5d5080ea2065c50b84fdde3ca7faf3a3d4ad7bf8498c70ac1a24ba465502767",

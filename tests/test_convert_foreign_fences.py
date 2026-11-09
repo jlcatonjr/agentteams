@@ -29,6 +29,7 @@ def _source(tmp_path: Path) -> Path:
         "---\nname: orchestrator\ndescription: \"orchestrator\"\ntools: ['read']\n---\n\n# orchestrator\n\nWork.\n")
     (src.parent / "copilot-instructions.md").write_text(
         "# Team\n\n" + _fence("codex_write_policy", "Planted Codex policy.") + "\n"
+        + _fence("grok_runtime", "Planted Grok block.") + "\n"
         + _fence("goose_bridge_entry", "Goose bridge entry.") + "\n" + _fence("project_notes", "Shared notes."))
     return src
 
@@ -49,10 +50,11 @@ def test_converted_instructions_carry_no_foreign_fence(tmp_path: Path, framework
     text = (_convert(tmp_path, framework, agents) / instr).read_text(encoding="utf-8")
     assert "Shared notes." in text
     assert "codex_write_policy" not in text and "Planted Codex policy." not in text
+    assert "grok_runtime" not in text and "Planted Grok block." not in text  # Grok's block never rides along
     if kept:  # the target's own fence stays
         assert kept in text
 
 
 def test_codex_conversion_keeps_its_own_write_policy_fence(tmp_path: Path) -> None:
     text = (_convert(tmp_path, "codex", (".codex", "agents")) / "AGENTS.md").read_text(encoding="utf-8")
-    assert "Planted Codex policy." in text
+    assert "Planted Codex policy." in text and "Planted Grok block." not in text
