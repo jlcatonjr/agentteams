@@ -88,8 +88,9 @@ The model saves money only while no workflow runs on `{INTEGRATION_BRANCH}`. Whe
   head branch, `{INTEGRATION_BRANCH}`, the moment the release merges (§3), and only branch protection exempts it.
   Check with `gh api repos/<owner>/<repo> -q .delete_branch_on_merge` and
   `gh api repos/<owner>/<repo>/branches/{INTEGRATION_BRANCH}/protection`. A minimal rule is a `PUT` to that
-  protection endpoint with `allow_deletions` and `allow_force_pushes` false and `required_status_checks`,
-  `required_pull_request_reviews` and `restrictions` null. If the branch was already deleted, recreate it at the
+  protection endpoint with `allow_deletions`, `allow_force_pushes` and `enforce_admins` false and
+  `required_status_checks`, `required_pull_request_reviews` and `restrictions` null (GitHub requires all four of
+  `required_status_checks`, `enforce_admins`, `required_pull_request_reviews` and `restrictions` in the body). If the branch was already deleted, recreate it at the
   default branch (`git push origin origin/<default>:refs/heads/{INTEGRATION_BRANCH}`): once its release PR has merged,
   everything it held is in the default branch.
 - See also the CI Cost Checklist in `references/github-workflows-merge.reference.md`.

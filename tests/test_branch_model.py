@@ -110,7 +110,7 @@ def test_integration_reference_requires_protecting_the_integration_branch():
     text = (TEMPLATES / bm.REFERENCE_TEMPLATE).read_text(encoding="utf-8")
     fenced = text.split("<!-- AGENTTEAMS:BEGIN integration_branch", 1)[1].split("<!-- AGENTTEAMS:END", 1)[0]
     assert "**`{INTEGRATION_BRANCH}` must itself be a protected branch**" in fenced
-    for needle in ("delete_branch_on_merge", "allow_deletions", "allow_force_pushes",
+    for needle in ("delete_branch_on_merge", "allow_deletions", "allow_force_pushes", "enforce_admins",
                    "refs/heads/{INTEGRATION_BRANCH}"):
         assert needle in fenced, needle
 
