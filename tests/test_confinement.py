@@ -366,3 +366,61 @@ def test_brief_schema_accepts_the_p4b_fields():
         "allow_unconfined_runs": False,
     }.items():
         jsonschema.validate(value, schema["properties"][key])
+
+
+# --- the in-sandbox survivor report (#262 item 2): portable, no bwrap needed ---------------------------------------
+
+
+def _report(payload: bytes | None, *, timeout: float = 5.0) -> bool:
+    r, w = os.pipe()
+    if payload is not None:
+        os.write(w, payload)
+        os.close(w)
+        return C.read_survivor_report(r, timeout=timeout)
+    try:  # the writer stays open and silent: the read times out
+        return C.read_survivor_report(r, timeout=timeout)
+    finally:
+        os.close(w)
+
+
+@pytest.mark.parametrize("payload, why", [
+    (b"survivors=0\n", None),
+    (b"survivors=2\n", "counted and killed 2"),
+    (b"", "no well-formed"),                         # no report: the shim was killed (fail closed)
+    (b"survivors=x\n", "no well-formed"),            # garbled count
+    (b"survivors=-1\n", "no well-formed"),           # a sign is not a count
+    (b"survivors=0", "no well-formed"),              # no newline
+    (b"survivors=0\nsurvivors=0\n", "no well-formed"),  # a second line (a forged append)
+    (b"noise\nsurvivors=0\n", "no well-formed"),      # anything but the exact report
+])
+def test_survivor_report_is_exact_and_fails_closed(payload, why):
+    got = _report(payload)
+    assert got is None if why is None else why in got
+
+
+def test_survivor_report_times_out_closed():
+    assert "no well-formed" in _report(None, timeout=0.2)
+
+
+def test_survivor_channel_is_a_socket_and_picks_a_shell_that_can_address_it():
+    import stat as st
+
+    r, w = C.survivor_channel()
+    try:
+        assert st.S_ISSOCK(os.fstat(w).st_mode)  # a socket cannot be reopened through /proc/<pid>/fd
+        # dash addresses fds 0-9 only: a higher child fd runs the same script under bash
+        assert C.survivor_shim_argv(w, ["x"])[0] == ("/bin/sh" if w <= 9 else "/bin/bash")
+        os.write(w, b"survivors=0\n")
+    finally:
+        os.close(w)
+    assert C.read_survivor_report(r) is None
+
+
+def test_bwrap_wrap_adds_the_survivor_shim_only_when_asked(tmp_path):
+    (tmp_path / "out").mkdir()
+    kw = dict(sandbox="bwrap", root=tmp_path, cwd=tmp_path, exec_paths=[], write_roots=["out"], tmp_dir=tmp_path)
+    plain = C.wrap([PY, "-c", "pass"], **kw)
+    shimmed = C.wrap([PY, "-c", "pass"], survivor_fd=7, **kw)
+    assert plain[plain.index("--") + 1:] == [PY, "-c", "pass"]
+    assert shimmed[shimmed.index("--") + 1:] == ["/bin/sh", "-c", C._SURVIVOR_SHIM, "agentteams-survivor-check", "7",
+                                                 PY, "-c", "pass"]

@@ -64,6 +64,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
     "agentteams/audit_agent_contract.py",  # R6: AR_WRITE_POLICY decides which agentteams_runner grants are canonical
     "agentteams/confinement.py",  # orchestrator-only-writes pilot: the runner's OS sandbox (C-3/C-5 boundary)
+    "agentteams/_bwrap_survivors.py",  # #262: the in-sandbox survivor check confinement.py wraps bwrap runs in
     "agentteams/_sandbox_profiles.py",  # the Seatbelt/bwrap builders confinement.py imports (WASM P02 R2);
                                        # pinned with it so the extraction does not move the profile out of the manifest
     "agentteams/proposal_runner.py",  # orchestrator-only-writes pilot: sole holder of the ledger key

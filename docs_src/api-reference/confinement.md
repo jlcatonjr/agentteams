@@ -88,7 +88,7 @@ runner starts inside an OS sandbox.
 | Inside a write root | `.agentteams`, the queue, `.git` and the control plane are denied | Re-mounted read-only |
 | Key directory `~/.config/agentteams/keys` | Read-denied | Masked with an empty tmpfs |
 | Programs | Only under `exec` (`process-exec` deny-by-default) | Not restricted (decision C) |
-| Leftover processes | `killpg` after exit; any survivor fails the run. A `setsid` escapee isn't caught | New PID namespace and `--die-with-parent`, so nothing survives. A shim inside the sandbox counts the namespace's processes after the command exits and before teardown, so a survivor still fails the run (#262: a `killpg` from outside races the teardown) |
+| Leftover processes | `killpg` after exit; any survivor fails the run. A `setsid` escapee isn't caught | New PID namespace and `--die-with-parent`, so nothing survives. A shim inside the sandbox counts the namespace's processes after the command exits and before teardown, so a survivor still fails the run; a missing report fails closed, except after a timeout (#262: a `killpg` from outside races the teardown) |
 
 `available()` checks for a sandbox by applying a trivial profile. Inside an already-sandboxed process
 `sandbox-exec` can't nest, so it reports none and the runner refuses, unless opted out.
@@ -126,6 +126,10 @@ runner starts inside an OS sandbox.
 - **Gates with `#!/usr/bin/env` or `#!/bin/sh` shebangs** need an explicit `exec` that includes the real
   interpreter.
 
+- **Survivor report (bwrap, #262).** The command cannot reopen the report socket, but a process allowed to ptrace
+  the shim or bwrap's init (`kernel.yama.ptrace_scope=0`) could take the fd with `pidfd_getfd` and forge
+  `survivors=0`. Containment does not depend on the report: the namespace teardown kills every leftover process.
+
 ## Verified live (macOS, 2026-10-06)
 
 - A declared program writes its root.
@@ -146,7 +150,9 @@ runner starts inside an OS sandbox.
 | `available() -> str \| None` | `"seatbelt"`, `"bwrap"` or `None`, found by actually applying a trivial profile. |
 | `kind() -> str \| None` | The platform's sandbox, without probing. |
 | `wrap(argv, *, sandbox, root, cwd, exec_paths, write_roots, tmp_dir, resolver=None, survivor_fd=None) -> list[str]` | Wrap a command; on Seatbelt, expands xcrun launchers first. On bwrap, `survivor_fd` adds the in-sandbox survivor check, which reports on that fd. |
-| `read_survivor_report(fd, *, timeout=5.0) -> bool` | Read and close the survivor report; True when processes outlived the command, or when no report arrived (fail closed). |
+| `survivor_channel() -> tuple[int, int]` | The survivor report channel: a `socketpair` (a socket can't be reopened through `/proc/<pid>/fd`); the child end at a free fd 3-9 when there is one. From `agentteams._bwrap_survivors`. |
+| `survivor_shim_argv(fd, argv) -> list[str]` | Prefix the in-sandbox survivor shim: `/bin/sh`, or `/bin/bash` when the fd is above 9 (dash addresses 0-9 only). |
+| `read_survivor_report(fd, *, timeout=5.0) -> str \| None` | Read and close the report: None when clean, else why the run fails. Only the exact bytes `survivors=<digits>\n` count; anything else fails closed. |
 | `xcrun_resolver(timeout=XCRUN_TIMEOUT)` / `expand_exec_paths(exec_paths, resolver, *, platform=None, ..., lstat=None) -> Expansion` | macOS: resolve xcrun launchers (injectable), and the pure expansion: `extras` tagged `literal`/`subpath`, `unresolved`, `dropped`. |
 | `ownership_problem(path, lstat=None)` | Why a path can't be an exec allowance (it or a parent not root-owned, or group/other-writable), or None. |
 | `expansion_notices(exp)` / `unresolved_launchers(program, exec_paths, resolver)` / `launcher_warning(program, unresolved)` / `launcher_report(exec_lists, resolver)` | The profile-build notices, the runner's once-per-run WARNING, and the `--check-wiring` lines. |

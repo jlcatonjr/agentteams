@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command and the namespace teardown kills what is left, so the runner's check from outside raced the teardown and
   usually saw nothing (Ubuntu 26, and Ubuntu 24.04 once the tests really ran). A shim inside the sandbox now counts
   the namespace's processes after the command exits, before teardown, and reports on a pipe the command cannot
-  write to; a missing report counts as a survivor. Nothing ever escaped: this restores the failure signal.
+  write to; a missing report counts as a survivor (except after a timeout, which
+  kills the shim too). Nothing ever escaped: this restores the failure signal.
 - The kernel-refusal test matches the errno (EPERM or EROFS), and the coreutils lookup test accepts Rust coreutils.
 - CI installs and probes bubblewrap on the Ubuntu test rows and sets `AGENTTEAMS_REQUIRE_BWRAP=1`, so a missing
   bwrap fails the run instead of silently skipping every live confinement test. A non-required `ubuntu-26.04` job

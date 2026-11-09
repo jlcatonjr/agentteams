@@ -273,6 +273,11 @@ def test_multi_sync_cooperative_projection_keeps_the_launcher_working(tmp_path, 
     store = (agents / VERIFY_KEY_STORE_SENTINEL_REL).parent
     shutil.rmtree(store)  # as left by an agentteams that predates the unconditional sentinel
     assert _launcher_check(p).returncode == 2
+    if sys.platform.startswith("linux"):  # the documented 1.1 false positive: refused until the operator signs
+        with pytest.raises(ValueError, match="sandbox-os-off:copilot-vscode"):
+            multi_sync._emit_privilege_artifacts(p, "copilot-vscode", {"privilege_profile": "cooperative"},
+                                                 dry_run=False)
+        assert not (agents / VERIFY_KEY_STORE_SENTINEL_REL).exists()  # refused before writing anything
     _sign_os_off(agents)
     written = multi_sync._emit_privilege_artifacts(p, "copilot-vscode", {"privilege_profile": "cooperative"},
                                                    dry_run=False)
@@ -292,7 +297,7 @@ def _sign_os_off(agents: Path) -> None:
     with the product's own ``--migrate-decision-log`` path, as the operator would before a signed row.
     """
     from agentteams.cli import decision_log_migrate as mig
-    from tests._sandbox_gate_helpers import _KEY_ID, _log, _row
+    from tests._sandbox_gate_helpers import _KEY_ID, _baseline_row, _log, _row
 
     log = agents / "references" / "security-decisions.log.csv"
     mig.apply_migration(mig.plan_migration(log), agents)
@@ -300,9 +305,7 @@ def _sign_os_off(agents: Path) -> None:
     keys.mkdir(parents=True, exist_ok=True)
     (keys / f"{_KEY_ID}.pub.pem").write_text("stub-key", encoding="utf-8")
     # The lineage ancestor the signed row derives from (``_log`` adds it only when it creates the log).
-    baseline = {"timestamp": "2026-10-01", "requesting_agent": "security", "action_reviewed": "approved-baseline",
-                "verdict": "PASS", "conditions_verified": "verified"}
-    _log(agents, baseline, _row("sandbox-os-off:copilot-vscode"))
+    _log(agents, _baseline_row(), _row("sandbox-os-off:copilot-vscode"))
 
 
 def _cooperative_team_without_store(p: Path) -> Path:
