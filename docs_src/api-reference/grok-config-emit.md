@@ -48,7 +48,8 @@ it). It survives only while it equals the table this render computes (`keep_if_e
 - The comparison source is computed, never the example on disk, which Grok does not write-protect.
 - `keep_if_exact` is bounded: only `mcp_servers.agentteams_wasm`, keys exactly `command`/`args`, the command one of
   `runner_mcp.SYSTEM_PYTHONS`, and args exactly a compute-only `--agent _session` launch, rebuilt with
-  `wasm_mcp.launch_args`. Anything else raises `ValueError`.
+  `wasm_mcp.launch_args` (`wasm_mcp.is_session_launch`, shared with Codex's `first_party_tables`). Anything else
+  raises `ValueError`.
 - A copy that differs (a widened grant, an extra key, a quoted header, or WASM off) is replaced and reported.
 - A table whose header the strip does not match, such as `[ mcp_servers.x ]`, would survive outside the owning
   block, so the write is refused instead.

@@ -81,36 +81,14 @@ _KEEPABLE_IDS = ("agentteams_wasm",)
 _KEEPABLE_KEYS = frozenset({"command", "args"})
 
 
-def _is_session_launch(command: object, args: object) -> bool:
-    """True iff ``command``/``args`` are exactly a compute-only ``_session`` launch of the installed server.
-
-    Only the team's languages and the pins hash vary between renders, so the list is rebuilt from those two values
-    with ``wasm_mcp.launch_args`` and must match element for element. No spelling of a grant (``--read=/``, an
-    argparse prefix such as ``--rea``, a second ``--agent``) survives that. The interpreter must be one of the fixed
-    ``runner_mcp.SYSTEM_PYTHONS``.
-    """
-    from agentteams import wasm_exec, wasm_mcp
-    from agentteams.runner_mcp import SYSTEM_PYTHONS
-
-    if command not in SYSTEM_PYTHONS or not isinstance(args, list) or not all(isinstance(a, str) for a in args):
-        return False
-    head = [*wasm_mcp.PYTHON_FLAGS, wasm_mcp.PROTECTED_PATH, "--agent", wasm_mcp.SESSION_AGENT, "--languages"]
-    try:
-        if args[:len(head)] != head:
-            return False
-        languages = args[len(head)].split(",")
-        pins = args[args.index("--pins-sha256") + 1]
-        return args == wasm_mcp.launch_args(wasm_mcp.SESSION_AGENT, wasm_exec.COMPUTE_ONLY, languages, pins_sha=pins)
-    except (IndexError, ValueError):
-        return False
-
-
 def _keep_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
     """Why ``keep_if_exact`` is not exactly agentteams' compute-only ``agentteams_wasm`` example table (or ``[]``).
 
     Only ``mcp_servers.agentteams_wasm``; keys exactly ``command``/``args``; and those are exactly a compute-only
-    ``--agent _session`` launch (:func:`_is_session_launch`).
+    ``--agent _session`` launch (``wasm_mcp.is_session_launch``, shared with the Codex first-party hook).
     """
+    from agentteams import wasm_mcp
+
     problems: list[str] = []
     for name, fields in tables.items():
         sid = name.split(".", 1)[1] if name.startswith("mcp_servers.") else ""
@@ -118,7 +96,7 @@ def _keep_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
             problems.append(f"keep_if_exact: {name!r} is not an agentteams first-party server")
             continue
         if (not isinstance(fields, dict) or set(fields) != _KEEPABLE_KEYS
-                or not _is_session_launch(fields.get("command"), fields.get("args"))):
+                or not wasm_mcp.is_session_launch(fields.get("command"), fields.get("args"))):
             problems.append(f"keep_if_exact: {name} is not the canonical compute-only agentteams_wasm table")
     return problems
 
