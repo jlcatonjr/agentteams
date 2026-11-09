@@ -509,6 +509,7 @@ _FAKE_PROC = ('mk() {{ mkdir -p "$PROC/$1/task/$1"; echo "$1 (x) $2 $3 0" > "$PR
      "counted and killed 1"),                                            # an exited leader with a live thread
     ("mk 503 Z 1", None),                                                # a zombie is not a survivor
     ('mkdir -p "$PROC/504/task"', "counted and killed 1"),               # tasks unreadable while it exists: live
+    ('mk 505 Z 1; mkdir -p "$PROC/505/task/506"', "counted and killed 1"),  # Z leader, a thread's stat unreadable
 ])
 def test_survivor_shim_walk_against_a_fake_proc(tmp_path, extra, why):
     # The shim's own text, pointed at a fake /proc, with kill replaced by removing the entry (no real process).

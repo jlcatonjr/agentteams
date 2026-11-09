@@ -2,7 +2,7 @@
   "modules": {
     ".claude/hooks/constitutional-gate.py": "e03a2a4b0254714f3e3118a0ad5d5533b176f6144ca04833c86df1f1df2c7e23",
     ".github/hooks/constitutional-gate.py": "e03a2a4b0254714f3e3118a0ad5d5533b176f6144ca04833c86df1f1df2c7e23",
-    "agentteams/_bwrap_survivors.py": "173e6b2d497863903f212b9477adae119643dcd371e8b5ba12c38d7eaf09621e",
+    "agentteams/_bwrap_survivors.py": "9136881e410ae47a12489ae1ea5ba3e4df9271ac253d4f48a6d0e5ec4d772462",
     "agentteams/_fleet_twin_acks.py": "69cc16063d05c16deb059f5412beed7f1922bc3dabc5532073dfca76511af207",
     "agentteams/_sandbox_profiles.py": "e576f50fdd82dd9d87c92a644f93cc8dd35ed2fc70e2f2345177749ce5ba7ff6",
     "agentteams/_wasm_archive.py": "18abac594dc6eb7d4462ba9f28e757ff09b738c81b4a6f26d97b31cb85f68536",

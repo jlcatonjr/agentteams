@@ -40,11 +40,14 @@ while [ "$n" -gt 0 ] && [ "$walks" -lt 50 ]; do
     case "$anc" in *" $q "*) continue ;; esac
     live=0; seen=0
     for t in "$d"/task/[0-9]*; do
-      read -r st < "$t/stat" 2>/dev/null || continue
+      if ! read -r st < "$t/stat" 2>/dev/null; then
+        if [ -d "$t" ]; then live=1; break; fi
+        continue
+      fi
       seen=1; st=${st##*) }; set -- $st
       if [ "$1" != Z ]; then live=1; break; fi
     done
-    if [ "$seen" = 0 ] && [ -d "$d" ]; then live=1; fi
+    if [ "$live" = 0 ] && [ "$seen" = 0 ] && [ -d "$d" ]; then live=1; fi
     [ "$live" = 1 ] || continue
     kill -9 "$q" 2>/dev/null
     n=$((n+1))
@@ -60,7 +63,7 @@ def survivor_channel() -> tuple[int, int]:
     """Open the survivor report channel: ``(read_fd, child_fd)``.
 
     A ``socketpair``, because a socket cannot be reopened through ``/proc/<pid>/fd`` (a pipe can). The child end is
-    moved to the lowest free fd from 3 (atomically, ``F_DUPFD``) when that is at most 9, so the shim can run under ``/bin/sh``; otherwise it keeps its
+    moved to the lowest free fd from 3 (atomically, ``F_DUPFD_CLOEXEC``) when that is at most 9, so the shim can run under ``/bin/sh``; otherwise it keeps its
     number and :func:`survivor_shim_argv` uses ``/bin/bash``. Pass ``child_fd`` to :func:`wrap` as ``survivor_fd``
     and to the child with ``pass_fds``; close it in the parent once the child has started.
 
@@ -68,11 +71,16 @@ def survivor_channel() -> tuple[int, int]:
         The parent's read fd and the child's write fd.
 
     Raises:
-        OSError: The socket pair could not be created.
+        OSError: The socket pair, or the low-fd copy, could not be created (nothing is left open).
     """
     parent, child = socket.socketpair()
     read_fd, write_fd = parent.detach(), child.detach()
-    low = fcntl.fcntl(write_fd, fcntl.F_DUPFD, 3)  # atomic: the lowest free fd from 3
+    try:  # atomic: the lowest free fd from 3, close-on-exec until pass_fds hands it to the child
+        low = fcntl.fcntl(write_fd, fcntl.F_DUPFD_CLOEXEC, 3)
+    except OSError:
+        os.close(read_fd)
+        os.close(write_fd)
+        raise
     if low > 9:
         os.close(low)
         return read_fd, write_fd  # survivor_shim_argv runs it under bash, which addresses any fd
