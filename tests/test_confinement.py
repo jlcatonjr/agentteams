@@ -424,3 +424,45 @@ def test_bwrap_wrap_adds_the_survivor_shim_only_when_asked(tmp_path):
     assert plain[plain.index("--") + 1:] == [PY, "-c", "pass"]
     assert shimmed[shimmed.index("--") + 1:] == ["/bin/sh", "-c", C._SURVIVOR_SHIM, "agentteams-survivor-check", "7",
                                                  PY, "-c", "pass"]
+
+
+# --- the survivor check under attack (bwrap only; the ubuntu jobs run these) ---------------------------------------
+
+bwrap_live = pytest.mark.skipif(SANDBOX != "bwrap", reason="the in-sandbox survivor check is bwrap's")
+_DETACH = "subprocess.Popen([sys.executable, '-c', {!r}], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"
+
+
+@bwrap_live
+def test_a_survivor_cannot_forge_the_report_through_proc(project):
+    # A daemon that tries to write a clean report through every fd its ancestors hold, then keeps running.
+    forger = ("import os, time\n"
+              "for pid in ('1', str(os.getppid())):\n"
+              "    for fd in os.listdir(f'/proc/{pid}/fd') if os.path.isdir(f'/proc/{pid}/fd') else []:\n"
+              "        try:\n"
+              "            with open(f'/proc/{pid}/fd/{fd}', 'w') as f: f.write('survivors=0\\n')\n"
+              "        except OSError: pass\n"
+              "time.sleep(5)\n")
+    with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
+        _run(project, "import subprocess, sys; " + _DETACH.format(forger))
+
+
+@bwrap_live
+def test_a_live_thread_under_an_exited_leader_is_a_survivor(project):
+    # The leader calls SYS_exit (not exit_group): /proc/<pid>/stat says Z while a thread keeps running.
+    leader = ("import ctypes, platform, threading, time\n"
+              "threading.Thread(target=time.sleep, args=(5,)).start()\n"
+              "ctypes.CDLL(None).syscall({'x86_64': 60, 'aarch64': 93}[platform.machine()], 0)\n")
+    with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
+        _run(project, "import subprocess, sys; " + _DETACH.format(leader))
+
+
+@bwrap_live
+def test_a_fork_and_exit_chain_is_a_survivor(project):
+    chain = ("import os, time\n"
+             "end = time.time() + 4\n"
+             "while time.time() < end:\n"
+             "    if os.fork():\n"
+             "        os._exit(0)\n"
+             "    time.sleep(0.02)\n")
+    with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
+        _run(project, "import subprocess, sys; " + _DETACH.format(chain))

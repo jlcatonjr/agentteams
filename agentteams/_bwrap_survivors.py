@@ -7,6 +7,7 @@ on a socket the command cannot reopen. Split out of :mod:`agentteams.confinement
 
 from __future__ import annotations
 
+import fcntl
 import os
 import re
 import select
@@ -36,12 +37,13 @@ while [ "$n" -gt 0 ] && [ "$walks" -lt 50 ]; do
   for d in /proc/[0-9]*; do
     q=${d#/proc/}
     case "$anc" in *" $q "*) continue ;; esac
-    live=0
+    live=0; seen=0
     for t in "$d"/task/[0-9]*; do
       read -r st < "$t/stat" 2>/dev/null || continue
-      st=${st##*) }; set -- $st
+      seen=1; st=${st##*) }; set -- $st
       if [ "$1" != Z ]; then live=1; break; fi
     done
+    if [ "$seen" = 0 ] && [ -d "$d" ]; then live=1; fi
     [ "$live" = 1 ] || continue
     kill -9 "$q" 2>/dev/null
     n=$((n+1))
@@ -57,7 +59,7 @@ def survivor_channel() -> tuple[int, int]:
     """Open the survivor report channel: ``(read_fd, child_fd)``.
 
     A ``socketpair``, because a socket cannot be reopened through ``/proc/<pid>/fd`` (a pipe can). The child end is
-    moved to a free fd from 3 to 9 when there is one, so the shim can run under ``/bin/sh``; otherwise it keeps its
+    moved to the lowest free fd from 3 (atomically, ``F_DUPFD``) when that is at most 9, so the shim can run under ``/bin/sh``; otherwise it keeps its
     number and :func:`survivor_shim_argv` uses ``/bin/bash``. Pass ``child_fd`` to :func:`wrap` as ``survivor_fd``
     and to the child with ``pass_fds``; close it in the parent once the child has started.
 
@@ -69,20 +71,12 @@ def survivor_channel() -> tuple[int, int]:
     """
     parent, child = socket.socketpair()
     read_fd, write_fd = parent.detach(), child.detach()
-    low = next((n for n in range(3, 10) if not _is_open(n)), None)
-    if low is None:
+    low = fcntl.fcntl(write_fd, fcntl.F_DUPFD, 3)  # atomic: the lowest free fd from 3
+    if low > 9:
+        os.close(low)
         return read_fd, write_fd  # survivor_shim_argv runs it under bash, which addresses any fd
-    os.dup2(write_fd, low)
     os.close(write_fd)
     return read_fd, low
-
-
-def _is_open(fd: int) -> bool:
-    try:
-        os.fstat(fd)
-    except OSError:
-        return False
-    return True
 
 
 def survivor_shim_argv(fd: int, argv: list[str]) -> list[str]:
@@ -129,9 +123,10 @@ def read_survivor_report(fd: int, *, timeout: float = 5.0) -> str | None:
     data = b""
     try:
         deadline = time.monotonic() + timeout
+        poller = select.poll()  # not select.select(): it refuses fds >= 1024, the many-fds case bash serves
+        poller.register(fd, select.POLLIN | select.POLLHUP)
         while time.monotonic() < deadline and len(data) <= 64:
-            ready, _, _ = select.select([fd], [], [], max(0.0, deadline - time.monotonic()))
-            if not ready:
+            if not poller.poll(max(0, int((deadline - time.monotonic()) * 1000))):
                 break
             chunk = os.read(fd, 128)
             if not chunk:

@@ -198,11 +198,12 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                     command = P._confinement.wrap(command, sandbox=sandbox, root=root, cwd=cwd,
                                                 exec_paths=jail["exec"], write_roots=checked_roots,
                                                 tmp_dir=Path(run_tmp), resolver=resolver, survivor_fd=report_w)
-                except P._confinement.ConfinementError:
+                except P._confinement.ConfinementError as exc:
                     for fd in (report_r, report_w):
                         if fd is not None:
                             os.close(fd)
-                    raise
+                    shutil.rmtree(run_tmp, ignore_errors=True)
+                    raise P.ProposalError(f"confined_programs.{agent}: {exc}") from exc
         try:
             # Own process group, so a timeout kills everything the command started before the final check.
             child = subprocess.Popen(command, cwd=cmd_cwd, env=cmd_env,

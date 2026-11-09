@@ -2,7 +2,7 @@
   "modules": {
     ".claude/hooks/constitutional-gate.py": "e03a2a4b0254714f3e3118a0ad5d5533b176f6144ca04833c86df1f1df2c7e23",
     ".github/hooks/constitutional-gate.py": "e03a2a4b0254714f3e3118a0ad5d5533b176f6144ca04833c86df1f1df2c7e23",
-    "agentteams/_bwrap_survivors.py": "1afd3f0a81da42eb0765855424d108f1cb08d71acae134deba010f0176493cdd",
+    "agentteams/_bwrap_survivors.py": "6947387f57f5c1ef5d7f91b4e5ad00f2fb76aacbf9a4cf479668b4d9e4ea28ea",
     "agentteams/_fleet_twin_acks.py": "69cc16063d05c16deb059f5412beed7f1922bc3dabc5532073dfca76511af207",
     "agentteams/_sandbox_profiles.py": "e576f50fdd82dd9d87c92a644f93cc8dd35ed2fc70e2f2345177749ce5ba7ff6",
     "agentteams/_wasm_archive.py": "18abac594dc6eb7d4462ba9f28e757ff09b738c81b4a6f26d97b31cb85f68536",
@@ -113,7 +113,7 @@
     "agentteams/model_providers/_transport.py": "1545009d64a4f501a30d1a22b32c9ab5a8872480093d0e1dae17132908026b61",
     "agentteams/model_providers/_validate.py": "9123e17ab90a44eefd8323686bea4ed66a88e65dcc777535196afd71dc937ade",
     "agentteams/proposal_policy.py": "1432a649589b0cd348a901622503aad5e487d7568ec5ad1fe786124e613cbdff",
-    "agentteams/proposal_run.py": "feaf99db9acedf7ca63b13790f60c5eca9f24caea54c984028dc0ae6b162603b",
+    "agentteams/proposal_run.py": "fd14eea0d3b8e298c9704d40eea0a01e297abeec7598a43fe103d4da1fb3f529",
     "agentteams/proposal_runner.py": "154f9cfe50ed04749e7e6f47decfdf2dc983484f0e73d1d25a89689a03e57fce",
     "agentteams/proposal_staging.py": "c2c5e41e0d47579e4086fc191e6f88f11f015f3aa02c9cf758246bb6924cdde3",
     "agentteams/proposals.py": "2db55fbc58f69b370cd35191cbd12022755499b34a825ecc0dc3ec50b9d94f10",
