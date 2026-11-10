@@ -153,6 +153,7 @@ def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxSt
         ValueError: A malformed slug or grant mount in either state.
     """
     from agentteams.cli.sandbox_effects import (  # local: keep the gate out of this module's import graph
+        MCP_APPROVAL_AUTO,
         NATIVE_EXEC_KEEP,
         SANDBOX_OS_OFF,
         SANDBOX_WASM_OFF,
@@ -181,6 +182,9 @@ def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxSt
             lines += [f"native exec kept for {token.split(':', 1)[1]} while wasm is on" for token in r.grants]
         elif r.kind == WASM_TO_OS_SWITCH:
             lines.append(f"runner program for {r.qualifier} moved from sandbox wasm to os")
+        elif r.kind == MCP_APPROVAL_AUTO:
+            lines.append(f"agentteams_wasm MCP table for {r.qualifier} set to default_tools_approval_mode = \"auto\" "
+                         "(codex:wasm-auto-approve): run_wasm runs without the per-call approval prompt")
     lines = [f"{SANDBOX_RELAXATION_PREFIX} {line}" for line in lines]
     for line in lines:
         print(line, file=sys.stderr)

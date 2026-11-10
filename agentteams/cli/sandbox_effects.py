@@ -1,6 +1,7 @@
-"""sandbox_effects.py — the five sandbox-relaxation effect kinds and their token spelling (Rule 15, D7).
+"""sandbox_effects.py — the six sandbox-relaxation effect kinds and their token spelling (Rule 15, D7).
 
-Turning a sandbox off, or widening what a WASM guest may reach, is a constraint-relaxing effect: in a governed
+Turning a sandbox off, widening what a WASM guest may reach, or turning off the per-call MCP approval prompt is a
+constraint-relaxing effect: in a governed
 workspace it needs the operator's Ed25519-signed decision row, never a self-declared flag. This small module is the
 one vocabulary the effect classifier, the management-directive denylist and the render-time gate
 (:mod:`agentteams.cli.sandbox_relaxation_gate`) share, so they cannot drift (modelled on
@@ -12,9 +13,12 @@ The kinds:
 * ``sandbox-wasm-off`` — WASM confinement that was on is turned off (also the projected model-substrate switch);
 * ``wasm-grant-widen`` — a per-agent WASM grant gains read paths or a scratch dir beyond compute-only;
 * ``native-exec-keep`` — a WASM-eligible agent keeps native execution while WASM is on;
-* ``wasm-to-os-switch`` — a runner ``confined_programs`` entry moves from ``sandbox: wasm`` back to ``os``.
+* ``wasm-to-os-switch`` — a runner ``confined_programs`` entry moves from ``sandbox: wasm`` back to ``os``;
+* ``mcp-approval-auto`` — the shared ``agentteams_wasm`` MCP table stops prompting per tool call (the opt-in
+  ``codex:wasm-auto-approve`` host feature sets its ``default_tools_approval_mode`` to ``auto``; WP-C2).
 
-Gate action ids are ``<kind>:<qualifier>`` (a framework id, ``model-substrate``, or an agent slug). Grant tokens are
+Gate action ids are ``<kind>:<qualifier>`` (a framework id, ``model-substrate``, or an agent slug); the
+``mcp-approval-auto`` id is ``mcp-approval-auto:codex``. Grant tokens are
 ``wasm:<agent>:read:<rel>``, ``wasm:<agent>:scratch`` and ``native-exec:<agent>``.
 
 Stdlib-only; imports only the leaf :mod:`agentteams.sandbox_tokens` (the token spelling, re-exported here), so
@@ -33,10 +37,11 @@ SANDBOX_WASM_OFF = "sandbox-wasm-off"
 WASM_GRANT_WIDEN = "wasm-grant-widen"
 NATIVE_EXEC_KEEP = "native-exec-keep"
 WASM_TO_OS_SWITCH = "wasm-to-os-switch"
+MCP_APPROVAL_AUTO = "mcp-approval-auto"
 
-#: The five relaxation kinds, in a fixed order (schema enum, gate action families).
+#: The six relaxation kinds, in a fixed order (schema enum, gate action families).
 SANDBOX_RELAXATION_KINDS: tuple[str, ...] = (
-    SANDBOX_OS_OFF, SANDBOX_WASM_OFF, WASM_GRANT_WIDEN, NATIVE_EXEC_KEEP, WASM_TO_OS_SWITCH)
+    SANDBOX_OS_OFF, SANDBOX_WASM_OFF, WASM_GRANT_WIDEN, NATIVE_EXEC_KEEP, WASM_TO_OS_SWITCH, MCP_APPROVAL_AUTO)
 
 #: The qualifier of the projected model-substrate switch (P20): ``sandbox-wasm-off:model-substrate``.
 MODEL_SUBSTRATE_QUALIFIER = "model-substrate"
@@ -45,6 +50,10 @@ _STEMS: tuple[str, ...] = (
     *SANDBOX_RELAXATION_KINDS,
     "sandbox-off", "unsandbox", "disable-sandbox", "no-sandbox", "os-sandbox-off", "wasm-sandbox-off",
     "keep-native-exec", "native-exec", "wasm-to-os",
+    # mcp-approval-auto synonyms (the codex:wasm-auto-approve host feature): word-start prefixes, so every
+    # inflection (auto-approve/-approval/-approving, autoapprove) matches. Not "tools-approval-mode": the
+    # setting's name alone also appears in text about the "prompt" default.
+    "auto-approv", "autoapprov",
 )
 
 #: Word-start stems that name a sandbox relaxation in free text (scope, action, decision, task_scope), in the hyphen,
@@ -119,6 +128,7 @@ def is_relaxation_token(token: str) -> bool:
 
 
 __all__ = [
+    "MCP_APPROVAL_AUTO",
     "MODEL_SUBSTRATE_QUALIFIER",
     "NATIVE_EXEC_KEEP",
     "SANDBOX_OS_OFF",

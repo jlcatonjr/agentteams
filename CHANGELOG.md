@@ -19,6 +19,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name, matches. A matched folder is not descended into and gets a `SKIP` row with target `(excluded)`. This lets
   one root run replace the per-folder loops that operator scripts used for exclusion.
 
+### added (Codex `codex:wasm-auto-approve`, gated as the sixth sandbox relaxation)
+
+- New opt-in host feature `codex:wasm-auto-approve`: with WASM on, the shared `agentteams_wasm` table in
+  `.codex/config.toml` gets `default_tools_approval_mode = "auto"`, so `codex exec` under `workspace-write` no
+  longer stops at the approval prompt for `run_wasm` (compute-only). Operator-declared servers keep `prompt`,
+  and without the token nothing changes. The first-party bound now requires exactly the mode the features
+  select (`codex_mcp_emit.first_party_approval_mode`). Row 648 gap 4. The operator signed the decision to ship
+  it on 2026-11-09 (Ed25519); that decision covers this repository only.
+- Turning the token on is a constraint-relaxing effect, the sixth sandbox-relaxation kind `mcp-approval-auto`
+  (action id `mcp-approval-auto:codex`; WP-C2). A governed workspace (`enforce_decision_signing`) needs its own
+  operator Ed25519-signed decision for that action id: the render is refused until a PASS row with `scope` and
+  `effect_relaxes` both exactly `mcp-approval-auto:codex` and a traceable `derives_from` is recorded; an HMAC-only
+  row or an unretracted HALT refuses it. A cleared one is a standing exception (90-day sunset, bound to its
+  decision row, under the aggregate cap), and dropping the token retires it. Ungoverned workspaces get a
+  `SANDBOX RELAXATION` notice, as for the other kinds. The state is recorded in the build-log's
+  `sandbox_exceptions` as `mcp_approval_auto: "on"`, written only when on, so existing records are unchanged and
+  read as off; a missing, corrupt or symlinked build log also reads as off, so the render counts as new and needs
+  the signed row. Known over-block (fails closed): in a team directory that alternates a Codex render with
+  another framework's, the non-Codex render drops the key without retiring the exception, so the next Codex
+  render asks for a fresh signed row. Free text that names auto-approval in any inflection (`auto-approv…`,
+  `autoapprov…`) counts as naming a sandbox relaxation (directive denylist, effect classifier).
+
 ### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
 
 - The inert `.grok/mcp.agentteams-wasm.example.toml` header, and the Grok `wasm_wiring` row, now say that only the

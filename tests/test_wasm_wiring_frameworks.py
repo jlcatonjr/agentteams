@@ -54,6 +54,57 @@ def test_codex_shared_table_is_compute_only_with_prompt_approval(tmp_path):
     assert ww.CODEX_CONFIG in manifest[ww.WIRING_KEY]["protected_config_paths"]
 
 
+_AUTO = "codex:wasm-auto-approve"
+_OPERATOR_SERVER = {
+    "artifact_type": "mcp-server", "mcp_server_schema_version": "1.0", "server_id": "example-pg",
+    "domain": "data-access", "trust_tier": "first-party", "transport": "stdio", "command": "npx",
+    "auth": {"mechanism": "none"}, "tools": [{"name": "q", "side_effects": "read"}], "scope": ["x"],
+    "progressive_disclosure": "lazy", "security_review": {"required": False},
+}
+
+
+def test_codex_wasm_auto_approve_is_opt_in_and_only_for_agentteams_wasm(tmp_path):
+    """WP-C: the token sets agentteams_wasm alone to auto; operator servers keep prompt."""
+    assert ce.first_party_approval_mode([]) == "prompt"
+    assert ce.first_party_approval_mode(["codex:mcp"]) == "prompt"
+    assert ce.first_party_approval_mode([_AUTO]) == "auto"
+    manifest = _manifest("codex")
+    manifest["host_features"] = ["codex:mcp", _AUTO]
+    tables = ww.codex_first_party_tables(manifest)
+    assert tables["mcp_servers.agentteams_wasm"]["default_tools_approval_mode"] == "auto"
+    res = ce.emit_codex_mcp_config(servers=[_OPERATOR_SERVER], features=manifest["host_features"],
+                                   output_root=tmp_path, first_party_tables=tables)
+    assert res.success, res.errors
+    assert sorted(res.wired) == ["agentteams_wasm", "example-pg"]
+    data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
+    assert data["mcp_servers"]["agentteams_wasm"]["default_tools_approval_mode"] == "auto"
+    for sid, table in data["mcp_servers"].items():
+        if sid != "agentteams_wasm":
+            assert table["default_tools_approval_mode"] == "prompt", sid
+
+
+def test_codex_wasm_auto_approve_table_must_match_the_token(tmp_path):
+    """The bound requires exactly the mode the features select: auto without the token, prompt with it, or any
+    other value, is refused."""
+    prompt_tables = ww.codex_first_party_tables(_manifest("codex"))
+    with pytest.raises(ValueError):
+        ce.emit_codex_mcp_config(servers=[], features=[_AUTO], output_root=tmp_path, first_party_tables=prompt_tables)
+    entry = prompt_tables["mcp_servers.agentteams_wasm"]
+    for mode in ("auto", "writes", "approve", "AUTO", ""):
+        bad = {"mcp_servers.agentteams_wasm": {**entry, "default_tools_approval_mode": mode}}
+        with pytest.raises(ValueError):
+            ce.emit_codex_mcp_config(servers=[], features=[], output_root=tmp_path, first_party_tables=bad)
+    for mode in ("prompt", "writes", "approve", "Auto"):
+        bad = {"mcp_servers.agentteams_wasm": {**entry, "default_tools_approval_mode": mode}}
+        with pytest.raises(ValueError):
+            ce.emit_codex_mcp_config(servers=[], features=[_AUTO], output_root=tmp_path, first_party_tables=bad)
+
+
+def test_codex_wasm_auto_approve_token_is_a_known_host_feature():
+    from agentteams import host_features
+    host_features.validate(_AUTO)
+
+
 def test_codex_tables_only_for_codex_renders_and_wasm_on():
     assert ww.codex_first_party_tables(_manifest("claude")) is None
     off = analyze.build_manifest(BRIEF, framework="codex")

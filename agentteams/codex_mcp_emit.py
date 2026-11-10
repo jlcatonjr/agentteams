@@ -24,7 +24,8 @@ migration section). A version-controlled folder starts in the ``Auto`` preset
 approval; the default ``workspace-write`` sandbox still has no network and confines writes to the
 workspace. Codex's own gate therefore no longer guarantees a prompt per action, so this module
 restores that posture explicitly for what it wires: every emitted server carries
-``default_tools_approval_mode = "prompt"`` (supported values ``auto``/``prompt``/``writes``/
+``default_tools_approval_mode = "prompt"``, except the first-party ``agentteams_wasm`` table under the
+opt-in ``codex:wasm-auto-approve`` token (``auto``) (supported values ``auto``/``prompt``/``writes``/
 ``approve``; per-tool overrides live under ``[mcp_servers.<id>.tools.<tool>]`` with
 ``approval_mode``, which this module does not emit — an operator may relax a specific tool).
 The first-party/read-only wiring bar (``_codex_wirable``) is unchanged. No model or provider
@@ -122,6 +123,30 @@ class CodexMCPEmissionResult:
 #: Codex per-server MCP tool approval (``auto`` | ``prompt`` | ``writes`` | ``approve``, per
 #: learn.chatgpt.com/docs/extend/mcp.md, verified 2026-09-29). ``prompt`` = every tool call asks.
 _DEFAULT_TOOLS_APPROVAL_MODE = "prompt"
+
+#: Opt-in token (WP-C) that sets ``agentteams_wasm`` alone to ``auto``: its only tool, ``run_wasm``, is compute-only
+#: (no host writes outside the guest's scratch, no network), so the prompt is the cost being removed.
+#: Operator-declared servers never get ``auto``. Turning it on is the Rule 15 ``mcp-approval-auto:codex`` relaxation:
+#: in a governed workspace the render-time gate (``cli/sandbox_relaxation_gate``) needs the operator's
+#: Ed25519-signed decision for it (WP-C2).
+_CODEX_WASM_AUTO_APPROVE_TOKEN = "codex:wasm-auto-approve"
+_FIRST_PARTY_AUTO_APPROVAL_MODE = "auto"
+
+
+def first_party_approval_mode(features: list[str] | None) -> str:
+    """The ``default_tools_approval_mode`` the ``agentteams_wasm`` table must carry for ``features``.
+
+    Args:
+        features: The manifest's ``host_features`` tokens.
+
+    Returns:
+        ``"auto"`` when ``codex:wasm-auto-approve`` is active, else ``"prompt"`` (the default for every server).
+
+    Raises:
+        Nothing.
+    """
+    return (_FIRST_PARTY_AUTO_APPROVAL_MODE if _CODEX_WASM_AUTO_APPROVE_TOKEN in set(features or [])
+            else _DEFAULT_TOOLS_APPROVAL_MODE)
 
 
 def codex_mcp_enabled(features: list[str]) -> bool:
@@ -338,17 +363,20 @@ _FIRST_PARTY_IDS = ("agentteams_wasm",)
 _FIRST_PARTY_KEYS = frozenset({"command", "args", "default_tools_approval_mode"})
 
 
-def _first_party_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
+def _first_party_problems(tables: dict[str, dict[str, Any]],
+                          approval_mode: str = _DEFAULT_TOOLS_APPROVAL_MODE) -> list[str]:
     """Why ``first_party_tables`` is not exactly agentteams' canonical shared ``agentteams_wasm`` table (or ``[]``).
 
     Bound for the carve-out: only ``mcp_servers.agentteams_wasm``; keys exactly ``command``/``args``/
-    ``default_tools_approval_mode``; approval ``prompt``; ``command``/``args`` exactly a compute-only
+    ``default_tools_approval_mode``; approval exactly ``approval_mode`` (``prompt``, or ``auto`` under the opt-in
+    ``codex:wasm-auto-approve`` token; any other value, either way, is refused); ``command``/``args`` exactly a compute-only
     ``--agent _session`` launch of the installed server (``wasm_mcp.is_session_launch``, shared with Grok's
     ``keep_if_exact``). An element-wise rebuild, so ``--read=/``, an argparse prefix (``--rea``), a second
     ``--agent`` or an interpreter outside ``runner_mcp.SYSTEM_PYTHONS`` are all refused.
 
     Args:
         tables: ``first_party_tables`` as passed to :func:`emit_codex_mcp_config`.
+        approval_mode: The required value, from :func:`first_party_approval_mode`.
 
     Returns:
         One problem string per offending table; ``[]`` when every table is the canonical one.
@@ -365,7 +393,7 @@ def _first_party_problems(tables: dict[str, dict[str, Any]]) -> list[str]:
             problems.append(f"first_party_tables: {name!r} is not an agentteams first-party server")
             continue
         if (not isinstance(fields, dict) or set(fields) != _FIRST_PARTY_KEYS
-                or fields.get("default_tools_approval_mode") != _DEFAULT_TOOLS_APPROVAL_MODE
+                or fields.get("default_tools_approval_mode") != approval_mode
                 or not wasm_mcp.is_session_launch(fields.get("command"), fields.get("args"))):
             problems.append(f"first_party_tables: {name} is not the canonical compute-only agentteams_wasm table")
     return problems
@@ -413,11 +441,12 @@ def emit_codex_mcp_config(
         CodexMCPEmissionResult.
 
     Raises:
-        ValueError: A ``first_party_tables`` entry that is not the canonical ``agentteams_wasm`` session table.
+        ValueError: A ``first_party_tables`` entry that is not the canonical ``agentteams_wasm`` session table
+            (including an approval mode other than :func:`first_party_approval_mode` for ``features``).
     """
     result = CodexMCPEmissionResult()
     first_party = dict(first_party_tables or {})
-    problems = _first_party_problems(first_party)
+    problems = _first_party_problems(first_party, first_party_approval_mode(features))
     if problems:
         raise ValueError("; ".join(problems))
     if not codex_mcp_enabled(features):

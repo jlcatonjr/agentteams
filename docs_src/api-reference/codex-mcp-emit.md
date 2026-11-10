@@ -30,9 +30,20 @@ the current docs (`agent-approvals-security.md`, `extend/mcp.md`):
   workspace.
 
 The emitter therefore restores a per-call prompt explicitly: every server it wires carries
-`default_tools_approval_mode = "prompt"` (supported values: `auto`, `prompt`, `writes`,
+`default_tools_approval_mode = "prompt"`, with one opt-in exception, below (supported values: `auto`, `prompt`, `writes`,
 `approve`). An operator may relax a single tool under `[mcp_servers.<id>.tools.<tool>]`
 with `approval_mode`.
+
+**Opt-in auto-approval (WP-C, 2026-11-09):** the host feature `codex:wasm-auto-approve` sets
+`agentteams_wasm` alone to `auto`, so `codex exec` under `workspace-write` runs `run_wasm` (compute-only: no
+host writes outside the guest's scratch, no network) without the prompt. Operator-declared servers keep
+`prompt`. The first-party bound requires exactly the mode the features select (`first_party_approval_mode`),
+so a table with any other value is refused. Without the token nothing changes. Turning it on is the
+constraint-relaxing `mcp-approval-auto:codex` effect (WP-C2): in a governed workspace the render is refused
+until the operator records an Ed25519-signed decision with `scope` and `effect_relaxes` both exactly
+`mcp-approval-auto:codex`; the cleared relaxation is a standing exception with a 90-day sunset, retired when
+the token is dropped. The operator's signature that shipped this feature authorizes this repository only, not
+a consumer workspace.
 
 ## No comment-preserving TOML round-trip — text-level splice instead
 

@@ -76,7 +76,23 @@ grant_tokens(agent, grant, *, project_root) -> frozenset[str]
 grant_from_tokens(agent, tokens, limits, *, project_root, check_credentials=True) -> Grant
 state_tokens(state) -> frozenset[str]
 keep_tokens(state, exceptions) -> frozenset[str]
+mcp_approval_auto(manifest) -> bool
+
+@dataclass(frozen=True)
+class SandboxExceptions:   # relaxation-gate inputs outside SandboxState
+    native_exec_keep: frozenset[str] = frozenset(); wasm_programs: frozenset[str] = frozenset()
+    os_programs: frozenset[str] = frozenset(); mcp_approval_auto: bool = False
+    def to_record(self) -> dict
+    @classmethod
+    def from_record(cls, rec) -> SandboxExceptions | None
 ```
+
+`SandboxExceptions.mcp_approval_auto` (WP-C2) records whether the shared `agentteams_wasm` table was emitted with
+`default_tools_approval_mode = "auto"`: `mcp_approval_auto(manifest)` is true for a Codex render with WASM on and
+the opt-in `codex:wasm-auto-approve` host feature (`codex_mcp_emit.first_party_approval_mode`). The record carries
+`"mcp_approval_auto": "on"` only when it is on, so every earlier record (and a team that never uses the token) is
+unchanged and reads as off. The gate compares it with the previous record: on now and not before is a new
+`mcp-approval-auto:codex` relaxation; on in both is a standing one, re-checked against its exception.
 
 The token spelling (`read_token`, `scratch_token`, `native_exec_token`, `valid_rel`, `checked_slug`) lives in the
 stdlib-only leaf `agentteams.sandbox_tokens`, which this module and `wasm_agent.team` import without touching the CLI
