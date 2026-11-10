@@ -116,6 +116,9 @@ docs_src/book/figures/*.svg
 !docs_src/book/figures/agent-team-structure.svg
 !docs/book/figures/workflow-12-adaptive-plan-execution.svg
 !docs_src/book/figures/workflow-12-adaptive-plan-execution.svg
+# Part VI chapter figures (hand-authored in jameslcaton; synced by sync_manuscript.yml)
+!docs/book/figures/part6-*.svg
+!docs_src/book/figures/part6-*.svg
 
 # memory-index validation sidecar cache — machine-specific local cache, never committed
 # (added with the validation-cache perf fix; keeps test_root_doc_hygiene / untracked-artifact checks clean)
