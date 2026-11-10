@@ -188,9 +188,9 @@ for STORE in "${STORES[@]}"; do
   echo "  public (the store the gate reads)   : $STORE/$KEY_ID.pub.pem"
 done
 echo
-echo "To sign, in your interactive shell only, set the key file on the signing command itself:"
-echo "  AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$PRIV\" python -m agentteams.vulnscan grant sign --key-id $KEY_ID ..."
-echo "  AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$PRIV\" agentteams --sign-decision path/to/decision-spec.json --output <the same team dir>"
+echo "To sign, in your interactive shell only (the signers find $PRIV by key id $KEY_ID; name no key):"
+echo "  python -m agentteams.vulnscan grant sign --key-id $KEY_ID ..."
+echo "  agentteams --sign-decision path/to/decision-spec.json --output <the same team dir>   # spec key_id: $KEY_ID"
 echo "Do NOT export AGENTTEAMS_DECISION_ED25519_KEYFILE (or put it in a shell rc file): a variable left"
 echo "set is inherited by every later command in that shell, including any agent session you start."
 echo
