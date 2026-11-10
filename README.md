@@ -409,6 +409,7 @@ Most-used options:
   --fleet-frameworks   github | claude | goose | both | all (default: both)
   --fleet-report DIR   Fleet report dir (default: <DIR>/.agentteams-fleet/<run-id>/)
   --fleet-exclude GLOB Skip folders matching GLOB (relative path or name; repeatable)
+  --fleet-skip-parent  Leave DIR's own workspace alone (SKIP row)
   --fleet-ignore-locks GLOB
                        Render workspaces of locked repos matching GLOB anyway
   --version            Print version

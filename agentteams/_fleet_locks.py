@@ -21,22 +21,51 @@ from pathlib import Path
 LOCK_FILE = "toolchain.lock"
 
 
+class _Unparsable(ValueError):
+    """A lock file that is not ``key=value`` lines: in doubt, the workspace is skipped."""
+
+
 def _parse_lock(path: Path) -> dict[str, str]:
-    """``key=value`` lines of a lock file; comments and blank lines are ignored."""
+    """``key=value`` lines of a lock file; comments and blank lines are ignored.
+
+    Raises ``_Unparsable`` for a non-comment line without ``=`` or bytes that are not UTF-8, and ``OSError``
+    when the file cannot be read.
+    """
     pairs: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise _Unparsable("not UTF-8") from exc
+    for line in text.splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+        if not line or line.startswith("#"):
             continue
+        if "=" not in line:
+            raise _Unparsable(f"line without '=': {line[:40]!r}")
         key, _, value = line.partition("=")
         pairs.setdefault(key.strip(), value.strip())
     return pairs
 
 
+def _is_git_marker(git: Path) -> bool:
+    """Whether *git* marks a repository toplevel: a ``.git`` directory, or a ``.git`` file whose first line is
+    ``gitdir: <path>`` (a linked worktree or submodule). An empty or other planted ``.git`` file does not, so
+    it cannot cut the lock search short below the repository's real toplevel."""
+    try:
+        if git.is_dir():
+            return True
+        if git.is_file():
+            with git.open("rb") as fh:
+                return fh.read(64).startswith(b"gitdir:")
+    except OSError:
+        return False
+    return False
+
+
 def _git_toplevel(ws: Path) -> Path | None:
-    """The nearest directory at or above *ws* holding ``.git`` (a directory or a file), or ``None``."""
+    """The nearest directory at or above *ws* holding a real ``.git`` marker (``_is_git_marker``), or ``None``."""
     for d in (ws, *ws.parents):
-        if os.path.lexists(d / ".git"):
+        if _is_git_marker(d / ".git"):
             return d
     return None
 
@@ -45,7 +74,8 @@ def read_release_lock(ws: Path, parent: Path) -> dict[str, str] | None:
     """The agentteams release lock that governs *ws*, if any.
 
     ``toolchain.lock`` files are searched for from *ws* upward to a bound. The bound is the workspace's git
-    toplevel (the nearest directory holding ``.git``, as a directory or a file), wherever the fleet *parent* is;
+    toplevel (the nearest directory holding a ``.git`` directory, or a ``.git`` file starting ``gitdir:``),
+    wherever the fleet *parent* is;
     so ``--fleet <repo>/Projects`` still sees ``<repo>/toolchain.lock``. Only for a workspace in no git repository
     is the bound the fleet *parent*, so a lock outside the tree being updated is never applied. The nearest lock
     that names agentteams decides; a lock that does not (a sub-tool's) is passed over, so it cannot hide the
@@ -58,8 +88,10 @@ def read_release_lock(ws: Path, parent: Path) -> dict[str, str] | None:
 
     Returns:
         ``{"tag": ..., "commit": ..., "lock": <path>}`` for the governing lock (an ``agentteams.tag`` key, an
-        ``agentteams=<repo>@<commit>`` key, or both; a missing part is ``""``), else ``None``. An unreadable lock
-        file counts as a lock with an empty tag and commit, so in doubt the workspace is skipped.
+        ``agentteams=<repo>@<commit>`` key, or both; a missing part is ``""``), else ``None``. A lock that
+        fails closed counts as a lock with an empty tag and commit, so in doubt the workspace is skipped: an
+        unreadable or unparsable lock file, or a ``toolchain.lock`` path that exists but is not a regular file
+        (a directory, a dangling or looping symlink).
 
     Raises:
         Nothing.
@@ -72,13 +104,15 @@ def read_release_lock(ws: Path, parent: Path) -> dict[str, str] | None:
     for d in (ws, *ws.parents):
         lock = d / LOCK_FILE
         try:
+            if os.path.lexists(lock) and not lock.is_file():   # a directory, dangling or looping symlink
+                return {"tag": "", "commit": "", "lock": str(lock)}
             if lock.is_file():
                 pairs = _parse_lock(lock)
                 if "agentteams.tag" in pairs or "agentteams" in pairs:
                     pin = pairs.get("agentteams", "")
                     commit = pin.partition("@")[2] if "@" in pin else ""
                     return {"tag": pairs.get("agentteams.tag", ""), "commit": commit, "lock": str(lock)}
-        except OSError:
+        except (OSError, _Unparsable):
             return {"tag": "", "commit": "", "lock": str(lock)}
         if d == bound:
             return None
@@ -98,7 +132,8 @@ def lock_detail(lock: dict[str, str]) -> str:
         Nothing.
     """
     pin = " ".join(p for p in (lock["tag"], f"({lock['commit'][:12]})" if lock["commit"] else "") if p)
-    return (f"release-locked: {lock['lock']} pins agentteams {pin or '(unreadable)'}; it moves only through "
+    pin = pin or "(unreadable, unparsable or not a file: skipped)"
+    return (f"release-locked: {lock['lock']} pins agentteams {pin}; it moves only through "
             "its own pin process (pass --fleet-ignore-locks GLOB to render it anyway)")
 
 

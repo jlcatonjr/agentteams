@@ -739,6 +739,9 @@ def run_fleet(args, parser) -> int:
     excluded: list[tuple[Path, str]] = []
     workspaces = discover_workspaces(parent, frameworks, skipped_worktrees=skipped_worktrees,
                                      exclude=tuple(getattr(args, "fleet_exclude", None) or ()), excluded=excluded)
+    skip_parent = bool(getattr(args, "fleet_skip_parent", False)) and parent in workspaces
+    if skip_parent:   # --fleet-skip-parent: DIR's own team is left alone; workspaces below it still run
+        workspaces = [w for w in workspaces if w != parent]
     mode = "APPLY" if apply else "DRY-RUN (preview; pass --yes to apply)"
     print(f"\nFleet update — {mode}")
     print(f"  Parent: {parent}")
@@ -749,37 +752,37 @@ def run_fleet(args, parser) -> int:
     print("=" * 70)
 
     results: list[WorkspaceResult] = []
-    # Surface excluded linked worktrees as visible SKIP rows (coverage auditability).
-    for wt in skipped_worktrees:
-        wr = WorkspaceResult(path=str(wt), is_git=True)
-        wr.targets.append(TargetResult(
-            workspace=str(wt), target="(linked-worktree)", status="SKIP",
-            detail="git linked worktree — excluded from fleet update; its agent infra is "
-                   "covered via the main working tree, and an update here would rewrite "
-                   "files on the worktree's checked-out branch",
-        ))
+    # Guard rows — linked worktrees, the skipped parent, excluded folders — are visible SKIPs (coverage auditability).
+    guards = [(wt, "(linked-worktree)", "git linked worktree — excluded from fleet update; its agent infra is "
+               "covered via the main working tree, and an update here would rewrite files on the worktree's "
+               "checked-out branch", "LINKED WORKTREE") for wt in skipped_worktrees]
+    guards += [(parent, "(parent-skipped)", "--fleet-skip-parent: the fleet DIR's own workspace is not updated",
+                "PARENT")] if skip_parent else []
+    guards += [(f, "(excluded)", f"--fleet-exclude {pat!r}: not updated, not descended into", "EXCLUDED")
+               for f, pat in excluded]
+    for path, target, detail, label in guards:
+        wr = WorkspaceResult(path=str(path), is_git=_is_git_repo(path))
+        wr.targets.append(TargetResult(workspace=str(path), target=target, status="SKIP", detail=detail))
         results.append(wr)
-        rel = wt.relative_to(parent) if wt != parent else Path(".")
-        print(f"\n▸ {rel}  (LINKED WORKTREE)\n    SKIP: excluded (covered via main working tree)")
-    for folder, pat in excluded:
-        wr = WorkspaceResult(path=str(folder), is_git=_is_git_repo(folder))
-        wr.targets.append(TargetResult(workspace=str(folder), target="(excluded)", status="SKIP",
-                                       detail=f"--fleet-exclude {pat!r}: not updated, not descended into"))
-        results.append(wr)
-        print(f"\n▸ {folder.relative_to(parent)}  (EXCLUDED)\n    SKIP: --fleet-exclude {pat!r}")
+        print(f"\n▸ {path.relative_to(parent) if path != parent else Path('.')}  ({label})\n    SKIP: {detail}")
     for ws in workspaces:
         is_git = _is_git_repo(ws)
         wr = WorkspaceResult(path=str(ws), is_git=is_git)
         rel = ws.relative_to(parent) if ws != parent else Path(".")
         print(f"\n▸ {rel}  ({'git' if is_git else 'NON-GIT'})")
-        if (lock := _fleet_locks.read_release_lock(ws, parent)) is not None \
-                and _fleet_locks.lock_ignored(lock, parent, ignore_locks) is None:
-            # Before the snapshot and any write: a release-locked repo moves only through its own pin process.
-            detail = _fleet_locks.lock_detail(lock)
-            wr.targets.append(TargetResult(workspace=str(ws), target="(release-locked)", status="SKIP", detail=detail))
-            results.append(wr)
-            print(f"    SKIP: {detail}")
-            continue
+        if (lock := _fleet_locks.read_release_lock(ws, parent)) is not None:
+            if (lifted := _fleet_locks.lock_ignored(lock, parent, ignore_locks)) is None:
+                # Before the snapshot and any write: a release-locked repo moves only through its own pin process.
+                detail = _fleet_locks.lock_detail(lock)
+                wr.targets.append(TargetResult(workspace=str(ws), target="(release-locked)", status="SKIP",
+                                               detail=detail))
+                results.append(wr)
+                print(f"    SKIP: {detail}")
+                continue
+            # A lifted lock is a REVIEW row (security row 692): visible per workspace, and never auto-committed.
+            detail = f"--fleet-ignore-locks {lifted!r} lifted {lock['lock']}; rendered despite the release lock"
+            wr.targets.append(TargetResult(workspace=str(ws), target="(lock-lifted)", status="REVIEW", detail=detail))
+            print(f"    REVIEW: {detail}")
 
         descriptor = _resolve_descriptor(ws)
         if note := _vpolicy.unanswered_line(ws, _vpolicy.read_policy(ws)):   # prints only; never enrols
