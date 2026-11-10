@@ -41,8 +41,8 @@ session, so it reaches every MCP server in the project and user Grok config thro
 and `use_tool` meta-tools, whatever its `tools:` list says. In a live check (Grok Build 1.0.52, 2026-11-10) a
 generated agent with no MCP tool in its list found and listed `agentteams_wasm__run_wasm`. The exact-limit claims
 below therefore cover built-in tools only. Today agentteams puts an MCP server in `.grok/config.toml` only under
-`grok:mcp` wiring or when the operator merges the compute-only `agentteams_wasm` example; treat any server there as
-reachable by every agent. Without `--always-approve`, a headless MCP call is cancelled rather than run.
+`grok:mcp` wiring or when the operator merges the compute-only `agentteams_wasm` example; treat any MCP server in the project
+or user Grok config as reachable by every agent. Without `--always-approve`, a headless MCP call is cancelled rather than run.
 
 Why all three:
 - **An empty `tools:` list means "inherit every tool"** in Grok, so agentteams refuses to render one.
