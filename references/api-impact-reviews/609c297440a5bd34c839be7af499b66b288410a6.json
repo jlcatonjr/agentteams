@@ -1,0 +1,8 @@
+{
+  "patch_id": "609c297440a5bd34c839be7af499b66b288410a6",
+  "commit": "e84f5dae8338076e4d0f192aaf7276cfd2486513",
+  "subject": "feat(sandbox): gate codex:wasm-auto-approve as the sixth relaxation kind (WP-C2)",
+  "impact": "1 symbols added, 4 symbols changed, 1 schemas changed",
+  "note": "WP-C + WP-C2 reviewed 2026-11-09: first_party_approval_mode documented in docs_src/api-reference/codex-mcp-emit.md; mcp_approval_auto, SandboxExceptions.to_record (optional mcp_approval_auto key) and team-manifest schema documented in docs_src/api-reference/sandbox-state.md; __all__ additions are the new kind constant and helper; CHANGELOG [Unreleased] entry; @security PASS-WITH-FIXES (F1-F3 applied c3cff625)",
+  "recorded_at": "2026-11-10T00:57:32Z"
+}

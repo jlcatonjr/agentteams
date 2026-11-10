@@ -54,9 +54,11 @@ WASM never replaces the OS sandbox: when one is available, the host process stil
 
 ## Turning something off (SB26)
 
-Five changes are constraint-relaxing: `sandbox-os-off`, `sandbox-wasm-off` (WASM off after on, or the
+Six changes are constraint-relaxing: `sandbox-os-off`, `sandbox-wasm-off` (WASM off after on, or the
 model-substrate floor lowered), `wasm-grant-widen`, `native-exec-keep`, `wasm-to-os-switch` (a runner
-program back from `sandbox: wasm` to `os`).
+program back from `sandbox: wasm` to `os`), `mcp-approval-auto` (a Codex render turns on the opt-in
+`codex:wasm-auto-approve` host feature, so `run_wasm` runs without the approval prompt; action id
+`mcp-approval-auto:codex`).
 
 **Your workspace is probably governed.** "Governed" means strict decision signing
 (`enforce_decision_signing`) is on, and it defaults to true from the first render. The gate reads it from

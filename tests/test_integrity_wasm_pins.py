@@ -32,7 +32,7 @@ SECURITY_RELEVANT: dict[str, str] = {
     # The switches, their effects and the relaxation gate (P00, P01, P15).
     "agentteams/sandbox_state.py": "P15/P00/P01: every boundary decision reads it",
     "agentteams/sandbox_tokens.py": "P15: the grant-token spelling sandbox_effects re-exports",
-    "agentteams/cli/sandbox_effects.py": "P15: the five sandbox-relaxation effect kinds",
+    "agentteams/cli/sandbox_effects.py": "P15: the six sandbox-relaxation effect kinds",
     "agentteams/cli/sandbox_relaxation_gate.py": "P15: the Ed25519 chokepoint for sandbox relaxation",
     "agentteams/cli/os_sandbox_switch.py": "P00: when the relaxation gate engages",
     "agentteams/cli/wasm_sandbox_switch.py": "P01: --wasm-sandbox and the WASM half's validation",

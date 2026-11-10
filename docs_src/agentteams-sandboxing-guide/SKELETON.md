@@ -779,17 +779,19 @@ flowchart TD
 
 ### SB26 — Turning a sandbox off is governed (D7)  ✅
 **Canonical facts.**
-1. Five transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule): `sandbox-os-off`, `sandbox-wasm-off` (WASM
-   off after on, and the model-substrate floor lowered), `wasm-grant-widen`, `native-exec-keep` and
-   `wasm-to-os-switch` (a runner `confined_programs` entry moved from `sandbox: wasm` back to `os`).
+1. Six transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule): `sandbox-os-off`, `sandbox-wasm-off` (WASM
+   off after on, and the model-substrate floor lowered), `wasm-grant-widen`, `native-exec-keep`,
+   `wasm-to-os-switch` (a runner `confined_programs` entry moved from `sandbox: wasm` back to `os`) and
+   `mcp-approval-auto` (a Codex render with WASM on turns on `codex:wasm-auto-approve`, so the shared
+   `agentteams_wasm` table stops prompting).
    Gate action ids are `<kind>:<framework>` (or `:model-substrate`, or `:<agent>` for the runner
-   switch).
+   switch; `mcp-approval-auto:codex`).
 2. **"Governed" means strict decision signing is on, and it is on by default** (`enforce_decision_signing`
    defaults to true and is written at the first render). So on every render after the first, each of the
-   five needs an **operator Ed25519-signed decision row** whose scope and effect match exactly; an HMAC
+   six needs an **operator Ed25519-signed decision row** whose scope and effect match exactly; an HMAC
    signature is valid but insufficient, and an unretracted HALT blocks it. The switch is read from disk
    before the render, so the very first render of a new team is not yet governed.
-3. Standing relaxations (OS off, a widening, a native-exec keep, a runner switch) are registered as
+3. Standing relaxations (OS off, a widening, a native-exec keep, a runner switch, MCP auto-approval) are registered as
    exceptions with a 90-day sunset, bound to the decision row, and share the exception registry's
    aggregate cap (default one active relaxing exception), so a workspace that needs several must raise the
    cap. `sandbox-wasm-off` is not standing.

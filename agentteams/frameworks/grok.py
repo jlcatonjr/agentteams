@@ -19,7 +19,10 @@ and tmp/by-week/2026-W42/grok-integration.plan.md §9 for evidence):
   "inherit every tool", and ``injectDefaultTools`` defaults to true, layering session tools on top of the list,
   and ``mcpInheritance`` defaults to ``all`` (source-only: ``xai-grok-agent/src/config.rs``). Every agent
   therefore carries ``injectDefaultTools: false`` and ``mcpInheritance: none`` so ``tools:`` is the exact limit
-  (C-3; @security step-6 ruling).
+  for built-in tools (C-3; @security step-6 ruling). Not for MCP: ``mcpInheritance`` limits only what a subagent
+  inherits, and a custom agent run with ``--agent`` is the top-level session, which reaches every MCP server in the
+  project and user Grok config through the always-on ``search_tool``/``use_tool`` meta-tools (live on the pinned release,
+  2026-11-10: a generated agent listed ``agentteams_wasm__run_wasm``; remediation row 693).
 * Instruction files load only in a trusted folder; Grok reads ``AGENTS.md``, ``CLAUDE.md`` and
   ``.claude/CLAUDE.md`` together. The team brief goes in the shared ``AGENTS.md`` (operator decision D2), whose
   ownership rules live in :mod:`._agents_md_ownership`.

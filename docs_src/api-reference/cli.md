@@ -46,7 +46,7 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
 | `goose_switch.py` | Glue for `--goose-source` / `--goose-model` / `--goose-show`. |
 | `backup_switch.py` | Glue for `--stale-check` / `--stale-remediate` / `--prune-backups` / `--backup-mirror`. |
-| `fleet_switch.py` | Glue for `--fleet` / `--fleet-frameworks` / `--fleet-report` / `--fleet-exclude` / `--fleet-ignore-locks`. |
+| `fleet_switch.py` | Glue for `--fleet` / `--fleet-frameworks` / `--fleet-report` / `--fleet-exclude` / `--fleet-skip-parent` / `--fleet-ignore-locks`. |
 | `package_switch.py` | Glue + dispatch for `--package-team` / `--package-source-framework`. |
 | `sync_switch.py` | Glue + dispatch for `--sync-init` / `--sync` / `--sync-since` / `--pin` / `--sync-refresh-instructions`. |
 | `recipe_check.py` | Standalone structural validator for Goose recipe YAML. |
@@ -58,8 +58,8 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `exit_codes.py` | The named exit-code constants, so a status is set in one place and read everywhere. |
 | `os_sandbox_switch.py` | `--os-sandbox` and the brief's `os_sandbox`: sets the effective OS sandbox host features, prints the ENABLED/OFF notice, decides when the sandbox-relaxation gate engages (`gate_engaged`), runs it and records `sandbox_state`. Integrity-pinned. See [below](#sandbox-and-wasm-flags). |
 | `wasm_sandbox_switch.py` | `--wasm-sandbox` and `--wasm-substrate`: validates the WASM half of the state before anything is emitted, prints the WASM notices and the D6 composition advisories (`wasm-without-os-sandbox`, `wasm-only-host`, `wasm-windows-unsupported`), and reports the per-provider `wasm_enforcement` verdict after the emit. It never claims enforcement itself. |
-| `sandbox_effects.py` | The five sandbox-relaxation effect kinds (`sandbox-os-off`, `sandbox-wasm-off`, `wasm-grant-widen`, `native-exec-keep`, `wasm-to-os-switch`) and their action-id / grant-token spelling, shared by the effect classifier, the directive denylist and the gate. |
-| `sandbox_relaxation_gate.py` | The render-time gate for those five effects (constraint-relaxing-authorizations rule, D7): in a governed workspace each needs an exactly scoped, operator Ed25519-signed decision row; standing ones are registered with a 90-day sunset under the aggregate cap; ungoverned workspaces get a `SANDBOX RELAXATION` notice. Integrity-pinned. |
+| `sandbox_effects.py` | The six sandbox-relaxation effect kinds (`sandbox-os-off`, `sandbox-wasm-off`, `wasm-grant-widen`, `native-exec-keep`, `wasm-to-os-switch`, `mcp-approval-auto`) and their action-id / grant-token spelling, shared by the effect classifier, the directive denylist and the gate. |
+| `sandbox_relaxation_gate.py` | The render-time gate for those six effects (constraint-relaxing-authorizations rule, D7): in a governed workspace each needs an exactly scoped, operator Ed25519-signed decision row; standing ones are registered with a 90-day sunset under the aggregate cap; ungoverned workspaces get a `SANDBOX RELAXATION` notice. Integrity-pinned. |
 | `wasm_commands.py` | `--wasm-install`, `--wasm-status`, `--wasm-pin-update` (with `--remediation`, `--tofu`, `--pins-out`): the explicit provisioning commands (D4). The only caller of `wasm_runtime.install` / `pin_update`. |
 | `wasm_agent_commands.py` | The `--framework wasm` launcher: `--run-wasm-agent` (with `--wasm-task` / `--wasm-task-file`, `--wasm-provider`, `--wasm-base-url`), `--revoke-wasm-run` (`--revoke-reason`) and `--verify-wasm-run` (`--tree`). |
 

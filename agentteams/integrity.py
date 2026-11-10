@@ -344,7 +344,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
     "agentteams/cli/frozen_surfaces.py",        # Rule 15: frozen-surface owned paths + unfreeze vocabulary
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
-    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the five sandbox-relaxation kinds + token vocabulary
+    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the six sandbox-relaxation kinds + token vocabulary
     "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out
@@ -522,6 +522,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # Acknowledgement review (2026-10-11). _fleet_twin_acks decides which acknowledged twins fleet still
     # reports as REVIEW (one not shown to the operator by an earlier run); an unpinned edit could drop that flag.
     "agentteams/_fleet_twin_acks.py",
+    # Release locks (2026-11-09, security row 692). _fleet_locks decides which workspaces fleet must not render
+    # because their repository pins agentteams; an unpinned edit could quietly lift every lock.
+    "agentteams/_fleet_locks.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

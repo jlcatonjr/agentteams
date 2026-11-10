@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (docs: Grok `tools:` is the exact limit for built-in tools only, not for MCP servers)
+
+- A live check (Grok Build 1.0.52, 2026-11-10) found that a generated Grok custom agent run with `grok --agent`
+  reaches every MCP server in the project and user Grok config through Grok's always-on `search_tool`/`use_tool`
+  meta-tools: `mcpInheritance: none` limits only what a subagent inherits, and `--agent` makes the agent the
+  top-level session. The README, STABILITY, CLI reference, framework and Grok-config API references, the Grok
+  privileges page, the Grok `wasm_wiring` row and the module docstrings now say so; the claims that `tools:` is the
+  exact limit now cover built-in tools only. No emitted file changes. Today the only MCP servers agentteams puts
+  in `.grok/config.toml` come from `grok:mcp` wiring or the operator-merged compute-only `agentteams_wasm`
+  example. A real per-agent MCP limit is open (remediation row 693).
+
+### security (fleet release locks: fail closed, visible lifts; @security row 692)
+
+- A `toolchain.lock` that cannot be trusted now counts as a lock: one that is a directory, a dangling or looping
+  symlink, unreadable, not UTF-8, or has a non-comment line without `=`. A `.git` marks a repository toplevel only
+  as a directory or a `gitdir:` file, so an empty planted `.git` can no longer cut the lock search short.
+- Each workspace that `--fleet-ignore-locks` lifts gets a `REVIEW` row with target `(lock-lifted)`, naming the
+  pattern and the lock file. OK-only auto-commit therefore never takes it.
+- The constitutional gate template asks the operator before any command carrying `--fleet-ignore-locks`, or any
+  prefix of it down to `--fleet-i`, or the `fleet_ignore_locks` API argument.
+- `agentteams/_fleet_locks.py` is pinned in `integrity.ENFORCEMENT_MODULES`, and the manifest is re-recorded.
+
+### added (fleet: `--fleet-skip-parent`)
+
+- **`--fleet-skip-parent`** leaves the fleet DIR's own workspace alone when DIR is itself a workspace: it gets a
+  `SKIP` row with target `(parent-skipped)`, and workspaces below DIR still run. `--fleet-exclude` never matches DIR itself, so without
+  this flag a single `--fleet ~/githubrepositories` run renders the root folder's own team. That folder is
+  non-git, so it has no snapshot rollback. Opt-in; the default is unchanged.
+
 ### changed (fleet: release-locked repositories are skipped; new `--fleet-exclude`)
 
 - **`--fleet` no longer renders a release-locked workspace.** On 2026-11-09 the weekly fleet re-rendered
@@ -18,6 +47,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New `--fleet-exclude GLOB`** (repeatable): skip folders whose path relative to the fleet parent, or whose own
   name, matches. A matched folder is not descended into and gets a `SKIP` row with target `(excluded)`. This lets
   one root run replace the per-folder loops that operator scripts used for exclusion.
+
+### added (Codex `codex:wasm-auto-approve`, gated as the sixth sandbox relaxation)
+
+- New opt-in host feature `codex:wasm-auto-approve`: with WASM on, the shared `agentteams_wasm` table in
+  `.codex/config.toml` gets `default_tools_approval_mode = "auto"`, so `codex exec` under `workspace-write` no
+  longer stops at the approval prompt for `run_wasm` (compute-only). Operator-declared servers keep `prompt`,
+  and without the token nothing changes. The first-party bound now requires exactly the mode the features
+  select (`codex_mcp_emit.first_party_approval_mode`). Row 648 gap 4. The operator signed the decision to ship
+  it on 2026-11-09 (Ed25519); that decision covers this repository only.
+- Turning the token on is a constraint-relaxing effect, the sixth sandbox-relaxation kind `mcp-approval-auto`
+  (action id `mcp-approval-auto:codex`; WP-C2). A governed workspace (`enforce_decision_signing`) needs its own
+  operator Ed25519-signed decision for that action id: the render is refused until a PASS row with `scope` and
+  `effect_relaxes` both exactly `mcp-approval-auto:codex` and a traceable `derives_from` is recorded; an HMAC-only
+  row or an unretracted HALT refuses it. A cleared one is a standing exception (90-day sunset, bound to its
+  decision row, under the aggregate cap), and dropping the token retires it. Ungoverned workspaces get a
+  `SANDBOX RELAXATION` notice, as for the other kinds. The state is recorded in the build-log's
+  `sandbox_exceptions` as `mcp_approval_auto: "on"`, written only when on, so existing records are unchanged and
+  read as off; a missing, corrupt or symlinked build log also reads as off, so the render counts as new and needs
+  the signed row. Known over-block (fails closed): in a team directory that alternates a Codex render with
+  another framework's, the non-Codex render drops the key without retiring the exception, so the next Codex
+  render asks for a fresh signed row. Free text that names auto-approval in any inflection (`auto-approv…`,
+  `autoapprov…`) counts as naming a sandbox relaxation (directive denylist, effect classifier).
 
 ### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
 
