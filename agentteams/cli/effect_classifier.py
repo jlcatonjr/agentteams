@@ -152,7 +152,8 @@ def _sandbox_signal(row: dict[str, str], profile: "EffectProfile", *, kind: str)
 
 
 def is_sandbox_relaxation(row: dict[str, str], *, kind: str) -> bool:
-    """Return True when a row turns a sandbox off or widens a WASM grant (the six kinds in
+    """Return True when a row turns a sandbox off, widens a WASM grant, or turns off the per-call MCP approval prompt
+    (the six kinds in
     :mod:`agentteams.cli.sandbox_effects`). Derived from the row's text and effect columns, never declared.
 
     Args:

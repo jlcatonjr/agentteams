@@ -1,4 +1,5 @@
-"""sandbox_relaxation_gate.py — the render-time gate for turning a sandbox off or widening a WASM grant (Rule 15, D7).
+"""sandbox_relaxation_gate.py — the render-time gate for turning a sandbox off, widening a WASM grant, or turning off
+the per-call MCP approval prompt (Rule 15, D7).
 
 Six transitions are constraint-relaxing effects (:mod:`agentteams.cli.sandbox_effects`): ``sandbox-os-off``,
 ``sandbox-wasm-off`` (incl. the projected model-substrate switch), ``wasm-grant-widen``, ``native-exec-keep``,
@@ -301,12 +302,18 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
         return "skip", None  # never switched under governance, or switched back (the entry retired)
     if entries:
         named = ", ".join(str(i) for i in (lapsed or [e.get("id") for e in entries]))
-        return "refuse", (f"exception {named} for {r.action} has lapsed; re-sign a decision or turn the sandbox back "
-                          "on", lapsed)
+        return "refuse", (f"exception {named} for {r.action} has lapsed; re-sign a decision or {_way_back(r)}", lapsed)
     if r.kind == SANDBOX_OS_OFF:
         return "pre-governance", None
     return "refuse", (f"{r.action} continues but no exception was ever recorded for it (only sandbox-os-off can "
-                      "predate governance); re-sign a decision or turn the sandbox back on", lapsed)
+                      f"predate governance); re-sign a decision or {_way_back(r)}", lapsed)
+
+
+def _way_back(r: Relaxation) -> str:
+    """The undo step a lapsed or unrecorded relaxation's refusal names (drop the token for auto-approval)."""
+    if r.kind == MCP_APPROVAL_AUTO:
+        return "drop the codex:wasm-auto-approve host feature"
+    return "turn the sandbox back on"
 
 
 def excuse_stale_evidence(team_dir: Path, old: SandboxState | None, stale: frozenset[str], *,

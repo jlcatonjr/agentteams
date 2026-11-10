@@ -30,7 +30,7 @@ the current docs (`agent-approvals-security.md`, `extend/mcp.md`):
   workspace.
 
 The emitter therefore restores a per-call prompt explicitly: every server it wires carries
-`default_tools_approval_mode = "prompt"` (supported values: `auto`, `prompt`, `writes`,
+`default_tools_approval_mode = "prompt"`, with one opt-in exception, below (supported values: `auto`, `prompt`, `writes`,
 `approve`). An operator may relax a single tool under `[mcp_servers.<id>.tools.<tool>]`
 with `approval_mode`.
 

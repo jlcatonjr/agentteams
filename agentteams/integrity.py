@@ -344,7 +344,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
     "agentteams/cli/frozen_surfaces.py",        # Rule 15: frozen-surface owned paths + unfreeze vocabulary
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
-    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the five sandbox-relaxation kinds + token vocabulary
+    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the six sandbox-relaxation kinds + token vocabulary
     "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out

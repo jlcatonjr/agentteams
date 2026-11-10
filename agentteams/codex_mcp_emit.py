@@ -24,7 +24,8 @@ migration section). A version-controlled folder starts in the ``Auto`` preset
 approval; the default ``workspace-write`` sandbox still has no network and confines writes to the
 workspace. Codex's own gate therefore no longer guarantees a prompt per action, so this module
 restores that posture explicitly for what it wires: every emitted server carries
-``default_tools_approval_mode = "prompt"`` (supported values ``auto``/``prompt``/``writes``/
+``default_tools_approval_mode = "prompt"``, except the first-party ``agentteams_wasm`` table under the
+opt-in ``codex:wasm-auto-approve`` token (``auto``) (supported values ``auto``/``prompt``/``writes``/
 ``approve``; per-tool overrides live under ``[mcp_servers.<id>.tools.<tool>]`` with
 ``approval_mode``, which this module does not emit — an operator may relax a specific tool).
 The first-party/read-only wiring bar (``_codex_wirable``) is unchanged. No model or provider

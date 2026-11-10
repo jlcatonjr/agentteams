@@ -64,7 +64,7 @@ _OPERATOR_SERVER = {
 
 
 def test_codex_wasm_auto_approve_is_opt_in_and_only_for_agentteams_wasm(tmp_path):
-    """WP-C draft: the token sets agentteams_wasm alone to auto; operator servers keep prompt."""
+    """WP-C: the token sets agentteams_wasm alone to auto; operator servers keep prompt."""
     assert ce.first_party_approval_mode([]) == "prompt"
     assert ce.first_party_approval_mode(["codex:mcp"]) == "prompt"
     assert ce.first_party_approval_mode([_AUTO]) == "auto"

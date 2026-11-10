@@ -233,7 +233,7 @@ def test_signed_row_allows_registers_continues_lapses_and_retires(tmp_path, stub
     [cont] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=30))
     assert cont == {"kind": MCP_APPROVAL_AUTO, "action": _ACTION, "authorization": "active-exception",
                     "exception_id": entry["id"]}
-    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed"):
+    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed; re-sign a decision or drop the codex:wasm-auto-approve host feature"):
         gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=91))
 
     # Another framework's render, or a render that keeps the token, retires nothing.
@@ -254,7 +254,7 @@ def test_a_forged_on_record_does_not_make_it_standing(tmp_path, stub_ed25519):
     """A previous record claiming auto-approval was already on carries nothing over without a bound exception."""
     team = _team(tmp_path)
     _log(team)
-    with pytest.raises(gate.SandboxRelaxationError, match="no exception was ever recorded"):
+    with pytest.raises(gate.SandboxRelaxationError, match="no exception was ever recorded.*drop the codex:wasm-auto-approve host feature"):
         gate.authorize(team, _plan(_exc(True), _exc(True)), consume=True, now=_T0)
 
 

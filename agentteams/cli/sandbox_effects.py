@@ -1,6 +1,7 @@
 """sandbox_effects.py — the six sandbox-relaxation effect kinds and their token spelling (Rule 15, D7).
 
-Turning a sandbox off, or widening what a WASM guest may reach, is a constraint-relaxing effect: in a governed
+Turning a sandbox off, widening what a WASM guest may reach, or turning off the per-call MCP approval prompt is a
+constraint-relaxing effect: in a governed
 workspace it needs the operator's Ed25519-signed decision row, never a self-declared flag. This small module is the
 one vocabulary the effect classifier, the management-directive denylist and the render-time gate
 (:mod:`agentteams.cli.sandbox_relaxation_gate`) share, so they cannot drift (modelled on

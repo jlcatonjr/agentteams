@@ -135,9 +135,12 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
         return row(WIRED_PER_AGENT, "per-agent", "recipe extensions, honoured on a direct `goose run --recipe`; "
                    f"a delegate cannot add agentteams_wasm (route that work to a direct run); {_HOST_NOTE}", True)
     if framework == "codex":
+        from agentteams import codex_mcp_emit
+        mode = codex_mcp_emit.first_party_approval_mode(list(manifest.get("host_features") or []))
+        via = " (the opt-in codex:wasm-auto-approve host feature)" if mode == "auto" else ""
         return row(WIRED_SHARED, "session-compute-only", "one compute-only instance in .codex/config.toml (loaded "
-                   "only for a trusted project), configured with default_tools_approval_mode = \"prompt\" (\"auto\" "
-                   "only under the opt-in codex:wasm-auto-approve host feature; a default the host applies, not enforcement agentteams verifies); under the codex:sandbox role gate a "
+                   f"only for a trusted project), configured with default_tools_approval_mode = \"{mode}\"{via} "
+                   "(a default the host applies, not enforcement agentteams verifies); under the codex:sandbox role gate a "
                    "spawned agent outside the keep list is denied the shell and steered to run_wasm (WASM mode), or "
                    "reaches only agentteams_readfs (write_policy: orchestrator-only)", True,
                    [CODEX_CONFIG])
