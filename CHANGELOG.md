@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (fleet release locks: fail closed, visible lifts; @security row 692)
+
+- A `toolchain.lock` that cannot be trusted now counts as a lock: one that is a directory, a dangling or looping
+  symlink, unreadable, not UTF-8, or has a non-comment line without `=`. A `.git` marks a repository toplevel only
+  as a directory or a `gitdir:` file, so an empty planted `.git` can no longer cut the lock search short.
+- Each workspace that `--fleet-ignore-locks` lifts gets a `REVIEW` row with target `(lock-lifted)`, naming the
+  pattern and the lock file. OK-only auto-commit therefore never takes it.
+- The constitutional gate template asks the operator before any command carrying `--fleet-ignore-locks`, or any
+  prefix of it down to `--fleet-i`, or the `fleet_ignore_locks` API argument.
+- `agentteams/_fleet_locks.py` is pinned in `integrity.ENFORCEMENT_MODULES`, and the manifest is re-recorded.
+
 ### added (fleet: `--fleet-skip-parent`)
 
 - **`--fleet-skip-parent`** leaves the fleet DIR's own workspace alone when DIR is itself a workspace: it gets a

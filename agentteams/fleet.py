@@ -770,14 +770,19 @@ def run_fleet(args, parser) -> int:
         wr = WorkspaceResult(path=str(ws), is_git=is_git)
         rel = ws.relative_to(parent) if ws != parent else Path(".")
         print(f"\n▸ {rel}  ({'git' if is_git else 'NON-GIT'})")
-        if (lock := _fleet_locks.read_release_lock(ws, parent)) is not None \
-                and _fleet_locks.lock_ignored(lock, parent, ignore_locks) is None:
-            # Before the snapshot and any write: a release-locked repo moves only through its own pin process.
-            detail = _fleet_locks.lock_detail(lock)
-            wr.targets.append(TargetResult(workspace=str(ws), target="(release-locked)", status="SKIP", detail=detail))
-            results.append(wr)
-            print(f"    SKIP: {detail}")
-            continue
+        if (lock := _fleet_locks.read_release_lock(ws, parent)) is not None:
+            if (lifted := _fleet_locks.lock_ignored(lock, parent, ignore_locks)) is None:
+                # Before the snapshot and any write: a release-locked repo moves only through its own pin process.
+                detail = _fleet_locks.lock_detail(lock)
+                wr.targets.append(TargetResult(workspace=str(ws), target="(release-locked)", status="SKIP",
+                                               detail=detail))
+                results.append(wr)
+                print(f"    SKIP: {detail}")
+                continue
+            # A lifted lock is a REVIEW row (security row 692): visible per workspace, and never auto-committed.
+            detail = f"--fleet-ignore-locks {lifted!r} lifted {lock['lock']}; rendered despite the release lock"
+            wr.targets.append(TargetResult(workspace=str(ws), target="(lock-lifted)", status="REVIEW", detail=detail))
+            print(f"    REVIEW: {detail}")
 
         descriptor = _resolve_descriptor(ws)
         if note := _vpolicy.unanswered_line(ws, _vpolicy.read_policy(ws)):   # prints only; never enrols

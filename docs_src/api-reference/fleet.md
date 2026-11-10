@@ -41,7 +41,7 @@ Each `(workspace, target)` row is one of:
 | Status | Meaning |
 |--------|---------|
 | `OK` | Merge succeeded; only fenced/generated regeneration and intel churn. |
-| `REVIEW` | A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. Also a kept pre-fencing twin, a dropped twin that retired a rule, a duplicate section (`duplicates`: a heading present twice, including both copies inside fences; [`whole_body_migration`](whole-body-migration.md)), or a fence-twin acknowledgement that no earlier applied run has shown (see below). Twin and duplicate classes are matched at the start of the notice, so a quoted heading cannot reclassify one. |
+| `REVIEW` | A workspace rendered past its release lock by `--fleet-ignore-locks` (`target = "(lock-lifted)"`). A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. Also a kept pre-fencing twin, a dropped twin that retired a rule, a duplicate section (`duplicates`: a heading present twice, including both copies inside fences; [`whole_body_migration`](whole-body-migration.md)), or a fence-twin acknowledgement that no earlier applied run has shown (see below). Twin and duplicate classes are matched at the start of the notice, so a quoted heading cannot reclassify one. |
 | `FAIL` | The merge itself errored (e.g. invalid/absent descriptor, bridge source missing). |
 | `SKIP` | An excluded folder (`target = "(excluded)"`), a release-locked workspace (`"(release-locked)"`) or a linked worktree (`"(linked-worktree)"`); see [Guards](#guards). Ambiguous `.claude/` (no bridge signal and no resolvable descriptor), left for manual review. Also a bridge whose recorded source framework fleet can't bridge from: an unknown framework, a missing source directory, an unreadable entry file, or a source equal to the bridge's own framework. Also used for an interop-projected `.codex/agents` team (`origin: "interop"` marker): the row's `detail` carries the refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), which fleet never runs. |
 | `WOULD-UPDATE` | Dry-run preview only. |
@@ -50,7 +50,7 @@ Each `(workspace, target)` row is one of:
 
 ### Guards
 
-`agentteams/_fleet_locks.py` holds two guards, added after the 2026-11-09 weekly run re-rendered release-locked
+`agentteams/_fleet_locks.py` (integrity-pinned) holds the guards, added after the 2026-11-09 weekly run re-rendered release-locked
 repositories with a different build and rolled their teams back:
 
 - **`read_release_lock(ws, parent)`** searches for `toolchain.lock` from the workspace upward to its git toplevel,
@@ -58,14 +58,14 @@ repositories with a different build and rolled their teams back:
   workspace outside git does the search stop at the fleet parent. The nearest lock with an
   `agentteams=<repo>@<commit>` or `agentteams.tag=<tag>` line decides; a lock without one (a sub-tool's) is passed
   over. A submodule or nested repository is its own toplevel and does not inherit its superproject's lock. It returns `{"tag", "commit", "lock"}` or `None`;
-  an unreadable lock counts as a lock, so in doubt the workspace is skipped. A lock that matches the running
+  a lock that cannot be trusted (unreadable, unparsable, or a `toolchain.lock` path that is not a regular file) counts as a lock, so in doubt the workspace is skipped. Only a `.git` directory or a `gitdir:` file marks a toplevel, so an empty planted `.git` file cannot cut the search short. A lock that matches the running
   build still counts: the repository's own pin process (validate, gates, lock bump) is what moves it.
 - **`excluded_by(rel, patterns)`** returns the first `--fleet-exclude` glob matching the folder's path relative to
   the parent, or its name.
 
 `--fleet-ignore-locks GLOB` (repeatable; `'*'` for all; **`lock_ignored`**) renders a locked workspace anyway when
 `GLOB` matches the folder holding its lock, i.e. the locked repository (by path relative to the parent, or by
-name), never the workspace's own name, so one deliberate exception does not lift every lock in the run.
+name), never the workspace's own name. Each lifted workspace also gets a `REVIEW` row with target `(lock-lifted)` (pattern and lock path), so it is never auto-committed, and the constitutional gate asks the operator before any command carrying the flag runs, so one deliberate exception does not lift every lock in the run.
 
 `--fleet-skip-parent` leaves the fleet parent's own workspace alone (`target = "(parent-skipped)"`); `--fleet-exclude`
 never matches the parent, so this is the only way to keep a parent that is itself a workspace, such as a non-git

@@ -1537,6 +1537,12 @@ superproject's.
 
 ## Output Safety
 
+Each workspace a glob lifts gets a `REVIEW` row with target `(lock-lifted)`, naming the pattern and the lock file,
+so it is never auto-committed as OK. A lock that cannot be trusted counts as a lock: a `toolchain.lock` that is a
+directory, a dangling or looping symlink, unreadable, not UTF-8, or has a non-comment line without `=`. A `.git`
+marks a repository toplevel only as a directory or a `gitdir:` file. The constitutional gate routes any command
+using this flag (or a prefix of it, down to `--fleet-i`) to the operator ("ask").
+
 ### `--allow-foreign-output`
 
 Permit a relative `--output` that resolves onto a non-empty, git-tracked directory showing no
