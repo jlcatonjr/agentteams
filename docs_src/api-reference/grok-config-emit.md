@@ -35,7 +35,9 @@ Grok expands `${VAR}` in `url`, `command`, `args`, `env` and `headers` at load t
 - `secret-store` and `oauth` mechanisms are not wired.
 
 Default catalogue servers are withheld unless opted in, as for Codex: Grok applies project MCP servers to the
-session, and generated subagents carry `mcpInheritance: none`.
+session. Generated agents carry `mcpInheritance: none`, but that limits only subagents: an agent run with
+`grok --agent` is the top-level session and reaches every project MCP server through `search_tool`/`use_tool`
+(live, Grok Build 1.0.52, 2026-11-10).
 
 ### Other `[mcp_servers.*]` tables outside the block
 

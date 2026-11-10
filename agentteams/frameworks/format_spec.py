@@ -202,7 +202,8 @@ FORMAT_SPECS: dict[str, FormatSpec] = {
         # .grok/agents is documented on the subagents page, which the watcher does not fetch.
         expected_locations=(".grok/config.toml",),
         toml_keys=True,
-        # tools (exact limit) + the two keys that stop Grok widening it (frameworks/grok.py).
+        # tools (exact limit for built-in tools) + the two keys that stop Grok widening it (frameworks/grok.py);
+        # MCP servers stay reachable to an --agent session via search_tool/use_tool (remediation row 693).
         # disallowedTools is optional (emitted only when declared), so it is not listed: same as claude.
         emitted_front_matter_keys=("name", "description", "tools", "injectDefaultTools", "mcpInheritance"),
         pinned_version="1.0.52",
