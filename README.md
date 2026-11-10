@@ -402,11 +402,15 @@ Most-used options:
   --revert-migration   Undo a --migrate run: git reset --hard pre-fencing-snapshot
   --self               Operate on the module's own agent team
   --fleet DIR          Run --update --merge across every workspace under DIR (and
-                       subfolders), covering .github/agents/ and .claude/. Git-commit
+                       subfolders), covering .github/agents/ and .claude/; skips
+                       --fleet-exclude matches and release-locked (toolchain.lock) repos. Git-commit
                        snapshot + git-diff content audit per workspace; non-destructive
                        (merge-only). Dry-run preview by default; pass --yes to apply.
   --fleet-frameworks   github | claude | goose | both | all (default: both)
   --fleet-report DIR   Fleet report dir (default: <DIR>/.agentteams-fleet/<run-id>/)
+  --fleet-exclude GLOB Skip folders matching GLOB (relative path or name; repeatable)
+  --fleet-ignore-locks GLOB
+                       Render workspaces of locked repos matching GLOB anyway
   --version            Print version
 ```
 

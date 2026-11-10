@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 24: The Management Layer: Fleets, Managers and Delegation</title>
+</head>
+<body>
+  <article id="notes:the-management-layer">
+    <h1>Cliff Notes: Chapter 24: The Management Layer: Fleets, Managers and Delegation</h1>
+    <p class="part-label">Part VI: Hardening and Scale</p>
+    <p class="notes-source">A summary of <a href="chapters/24-the-management-layer.html#ch:management-layer">Chapter 24</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-24-thesis"><h2>Thesis</h2>
+      <p>The chapter argues that the framework now supplies a level above peer teams without abolishing their sovereignty, and that this level is a sanctioned relay channel and not a legislature. A management repository may relay the operator's direction only for an exact, non-destructive task, and only to a team that has agreed in advance to recognize it. The layer as described assumes one operator over every team it reaches. Where projects answer to different principals, the Coordination Request that goes before both remains the instrument. Each relay is an operational act, the channel is constituted from below, and the rules on what a relay may carry are fixed in the framework and made by no manager.</p>
+    </section>
+    <section id="notes-24-covers"><h2>What the chapter covers</h2>
+      <p>The first section finds the missing level. Chapter 4's constitutional structure governs a single team, and Chapter 16 found that two peer teams have no authority over each other. The chapter answers the worry that a level above teams means centralization by limiting that level to authority recognized from below and acting on one named task at a time.</p>
+      <p>The second section states the principle "authority follows the spawner." The conversation that spawns another is its prime, and the spawned one is its delegate. A delegate's user-facing questions route up to the prime, which resolves first and escalates only what needs the user's judgment. With no interactive user, the prime resolves everything and logs each ambiguous decision to an escalation ledger. A carve-out sends questions that would bind the delegate's own constitution to the liaison, and a refusal branch lets the delegate refuse directives its invariant core forbids.</p>
+      <p>The third section describes the management repository and the signed directive. The fourth covers what happens when a directive cannot authorize. The fifth turns to procedures that need no manager, and the sixth sets out what the layer leaves to the teams.</p>
+    </section>
+    <section id="notes-24-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Only one part of the spawner principle is backed by a runtime, and only on Claude, where a subagent's output returns to its spawner. Resolving first, the carve-out, the refusal branch and the ledger are governance prose on every framework.</li>
+        <li>A team becomes a management repository only when its brief turns on a management switch, which is off by default.</li>
+        <li>A managed team names trusted managers in authorized-managers.txt, and an empty roster leaves every manager unrecognized. Enrolling a manager requires the security agent, which is a governance rule, and only a sandboxed team's configuration also denies agents writes to the roster.</li>
+        <li>A directive names the manager, the managed team, the scope, an expiry and a maximum number of uses. A managed agent proceeds without re-asking only when verification passes and the task's scope equals the directive's scope exactly.</li>
+        <li>A denylist refuses every destructive, bulk, cross-repository or governance scope, and a valid signature cannot override it. No directive clears a destructive gate, lifts a HALT or changes a constitution.</li>
+        <li>The directive's HMAC key makes custody decisive. The chapter states, "With a symmetric key, an agent able to verify is able to sign." The signature authenticates only where verification runs somewhere the agent cannot read the key.</li>
+        <li>A failed directive produces one explicit query to the operator. For a refused directive an inline yes only starts the full clearance path. With no operator present the agent fails closed, and the chapter quotes the rule "A timeout is never 'proceed.'"</li>
+        <li>Identical unrecognized directives collapse into one query per task scope per session, but varied scopes still draw one query apiece, which the chapter counts as a limit resting on the operator's attention.</li>
+        <li>A status table lists each agent and task at every pause. A cross-repository handoff stays awaiting until a report returns and is marked stale after a default of 48 hours.</li>
+        <li>The fleet update is merge-only and previews by default. At the 1.1 release it commits a snapshot on the checked-out branch, and release 1.2 moves the snapshot to a separate ref. It marks unpaired fences "do not push" and skips linked worktrees.</li>
+        <li>The pinned framework "seeds canonical and wins every conflict." At the 1.1 release the peers are otherwise equals around a canonical hub, and a change granting a capability is withheld. Release 1.2 tightens the pin so that only the pin's changes reach the hub.</li>
+        <li>Release 1.2 adds a checkout lock under the rule "One writer per checkout." At the 1.1 release nothing stops two generate or update runs of one checkout from writing at once.</li>
+      </ul>
+    </section>
+    <section id="notes-24-frames"><h2>Theoretical frames</h2>
+      <p>Ostrom (1990) supplies nested enterprises and the design principles on recognition by outside authorities, monitoring and low-cost dispute arenas, which the chapter claims only as a parallel. Ostrom (2005) supplies the operational, collective-choice and constitutional levels. Buchanan and Tullock (1962) place consent at the constitutional stage, and the chapter notes that the parallel fails for delegation as a whole and holds only for the carve-out. Aligica, Boettke and Tarko (2019) define polycentric governance, and the chapter admits that the layer is polycentric beneath the operator's apex. Saltzer and Schroeder (1975) frame the exact match and fail-safe refusals. Miller and Drexler (1988c) frame the roster as an interface of endowment. Caton (2020b) supplies the multilevel social contract.</p>
+    </section>
+    <section id="notes-24-matters"><h2>Why it matters</h2>
+      <p>The chapter extends the book's constitutional levels beyond one team while keeping each team's constitution out of any manager's reach. It shows that most fleet coordination needs no manager, because the snapshot, the pin and, from release 1.2, the lock settle by rule who writes a resource. It also records two limits plainly. There is no automated substrate for spawning conversations across repositories, and the duty to run verification before proceeding is an instruction the agent reads. Its practical advice is to enroll managers sparingly, to run verification where the agent cannot read the management key, and to read the status table at each pause.</p>
+    </section>
+    <section id="notes-24-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapter 24 is new in this edition. The chapter flags three items for release 1.2, the snapshot on a separate ref, the tightened pin and the checkout lock.</p>
+    </section>
+  </article>
+</body>
+</html>

@@ -40,7 +40,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--fleet DIR] [--fleet-frameworks {github,claude,goose,both,all}] [--fleet-report DIR]
-           [--fleet-allow-no-verify]
+           [--fleet-exclude GLOB] [--fleet-ignore-locks GLOB] [--fleet-allow-no-verify]
            [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
            [--version]
 ```
@@ -1114,7 +1114,7 @@ sealed, through the session-readable `.agentteams-status/` tree (see [proposal-r
 ### `--sign-mcp-direct-grant AGENT`
 
 Operator only (R5); run it outside every agent session. It signs a direct-write grant for `AGENT`, whose brief
-`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`, or, when that is unset, from `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for `--key-id`,
 as for every operator signature. Name it with `--key-id ID`. The integrity and install-location checks run first,
 with the key unread. The full grant is then shown with a review digest, and it is signed only once that digest is
 confirmed: a terminal y/N, or `--confirm-review-sha256`. The digest covers what you chose (the agent, the binding,
@@ -1490,7 +1490,7 @@ Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `
 
 ### `--fleet DIR`
 
-Update every agent-infrastructure workspace under `DIR` and its subfolders. Requires `--update --merge`. Defaults to a dry-run preview; pass `--yes` to apply.
+Update every agent-infrastructure workspace under `DIR` and its subfolders, except `--fleet-exclude` matches and release-locked workspaces (see `--fleet-ignore-locks`). Requires `--update --merge`. Defaults to a dry-run preview; pass `--yes` to apply.
 
 ### `--fleet-frameworks {github,claude,goose,both,all}`
 
@@ -1504,6 +1504,27 @@ Which infrastructures to update per workspace. Default: `both`.
 ### `--fleet-report DIR`
 
 Directory for the fleet report. Default: `<DIR>/.agentteams-fleet/<run-id>/`.
+
+### `--fleet-exclude GLOB`
+
+Skip folders under `DIR` that match `GLOB`. Repeatable. A pattern matches the folder's path relative to `DIR`
+(`visualknowledge/old-*`) or the folder's own name (`agentteams*`), case-sensitively. A matched folder is
+neither updated nor descended into, and the report shows it as a `SKIP` row with target `(excluded)`. `DIR`
+itself is never excluded.
+
+### `--fleet-ignore-locks GLOB`
+
+Render the workspaces of release-locked repositories matching `GLOB` anyway. Repeatable; `GLOB` matches the
+folder holding the lock (the locked repository), by its path relative to `DIR` or its name, never the workspace's
+own name; `'*'` renders every locked workspace. Scoping it keeps one deliberate exception from lifting every lock in the run. By
+default a workspace is skipped, with a `SKIP` row whose target is
+`(release-locked)`, when its repository's `toolchain.lock` pins agentteams (an `agentteams=<repo>@<commit>` or
+`agentteams.tag=<tag>` line). The skip happens before the snapshot or any write. Such a repository moves only
+through its own pin process; a fleet render with a different build would roll its team back. The governing lock
+is the nearest `toolchain.lock` naming agentteams from the workspace up to its repository's git toplevel, even when
+`DIR` is below that toplevel; a lock without an agentteams line is passed over. Only for a workspace outside git
+does the search stop at `DIR`. A nested workspace inherits its repository's lock; a submodule does not inherit its
+superproject's.
 
 ---
 

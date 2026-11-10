@@ -46,7 +46,7 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
 | `goose_switch.py` | Glue for `--goose-source` / `--goose-model` / `--goose-show`. |
 | `backup_switch.py` | Glue for `--stale-check` / `--stale-remediate` / `--prune-backups` / `--backup-mirror`. |
-| `fleet_switch.py` | Glue for `--fleet` / `--fleet-frameworks` / `--fleet-report`. |
+| `fleet_switch.py` | Glue for `--fleet` / `--fleet-frameworks` / `--fleet-report` / `--fleet-exclude` / `--fleet-ignore-locks`. |
 | `package_switch.py` | Glue + dispatch for `--package-team` / `--package-source-framework`. |
 | `sync_switch.py` | Glue + dispatch for `--sync-init` / `--sync` / `--sync-since` / `--pin` / `--sync-refresh-instructions`. |
 | `recipe_check.py` | Standalone structural validator for Goose recipe YAML. |
@@ -79,8 +79,9 @@ update into a failed one.
 
 ## The pinned operator signing path
 
-`--sign-decision` and `--sign-grant` are the only code paths that read the operator's Ed25519
-private key (the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`). Everything between that
+`--sign-decision`, `--sign-grant`, `--sign-mcp-direct-grant` and `vulnscan grant sign` are the only code
+paths that read the operator's Ed25519 private key (the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+else `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the spec's `key_id`). Everything between that
 env read and the appended row lives in `operator_signing.py`, which is listed in
 [`integrity.ENFORCEMENT_MODULES`](integrity.md), so an in-place edit to it shows up in
 `references/enforcement-integrity.json`, `--verify-integrity` and red-team phase 6. The

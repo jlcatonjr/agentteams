@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 19: The Daily Pipeline</title>
+</head>
+<body>
+  <article id="notes:the-daily-pipeline">
+    <h1>Cliff Notes: Chapter 19: The Daily Pipeline</h1>
+    <p class="part-label">Part V: Automated Governance</p>
+    <p class="notes-source">A summary of <a href="chapters/19-the-daily-pipeline.html#ch:daily-pipeline">Chapter 19</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-19-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that the daily enrichment pipeline is a distributed processor that keeps documentation current without any stage holding the whole picture. It reads the pipeline as "a discovery procedure in Hayek's (1968) sense", because its sequential reports produce knowledge that no stage had before the run began. What a single repository inherits from it is not the nine-stage topology but the cadence, the commitment that maintenance happens on a schedule rather than when someone notices it is overdue.</p>
+    </section>
+
+    <section id="notes-19-covers">
+      <h2>What the chapter covers</h2>
+      <p>Section 1 introduces the pipeline. Nine core stages form the enrichment phase, each assigned to a dedicated agent, and they produce date-stamped reports that accumulate into a rolling knowledge base. The chapter walks through the first four stages using the case of a new Copilot feature, from detection by the docs-researcher to the daily summary from the report-compiler. It notes that the framework now keeps a similar watch over its own providers. A daily job opens a pull request when a provider's published format diverges from what the framework emits, "never merging one", and a separate read-only scan finds provider renders that lag the current templates. The section then states what transfers to a single repository. The agentteams module supplies recurring routines at daily, weekly and monthly intervals, together with commit-triggered refreshes of the team's topology map. It does not reproduce the nine-stage chain. One function "does remain genuinely unpackaged", the cross-repository investigator of Chapter 18.</p>
+      <p>Section 2 explains the stage architecture. Stages 1 to 3 run in parallel because their research is independent. Stages 4 to 9 run serially, and each can read the cumulative output of prior stages. A failed parallel stage falls back to the prior day's report, which the chapter compares to eventually consistent databases. The section describes each serial stage in turn and argues that the stages are "a schedule imposed on functions that already have agents". It then draws a line between measurement with determinate answers, which descends to scheduled routines, and judgments about meaning, which stay with agents because "no rule for performing it can be written in advance". The same division governs how a generated team's behaviour is checked. Quantitative properties are measured by procedures the module supplies, while qualitative properties go to auditor agents. Stage 9, the health monitor, is what turns the other eight stages into a discovery procedure.</p>
+      <p>Section 3 covers Stage 8, the cross-repo propagator. It applies improvements and then audits each changed repository. Before doing so it compares commit SHAs for the agents directory and skips unchanged repositories. The chapter notes that this efficiency depends on regular reconciliation of the managed-repository registry. A frontmatter manifest serves as a compressed index of each agent's capabilities.</p>
+      <p>Section 4 argues that no stage needs a global view. Miller and Drexler (1988b) supply the model of local signals producing efficient allocation. The contradiction register is the clearest case of knowledge that is "genuinely discovered through the process".</p>
+      <p>Section 5 calls attention economization the pipeline's primary function. Information flows through "an additive cascade", and stage reports serve as work-summary artifacts of the kind discussed in Chapter 16. The daily cadence is "the equilibrium between maintenance cost and drift risk".</p>
+      <p>Section 6 treats the pipeline as a trigger-conditioned governance system with three trigger families, updater, adversarial and drift. The adversarial gate "does not create an adversarial veto", since the orchestrator enforces the gate condition. Section 7 presents content fencing as boundary governance that protects local content during propagation.</p>
+    </section>
+
+    <section id="notes-19-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li><strong>Enrichment phase.</strong> Nine core stages, three parallel and six serial, passing date-stamped reports along a fixed chain.</li>
+        <li><strong>Prior-day fallback.</strong> An availability tradeoff that accepts slightly stale data in exchange for continued processing.</li>
+        <li><strong>Cadence over topology.</strong> Generated teams receive recurring routines and commit-triggered refreshes rather than the nine-stage chain.</li>
+        <li><strong>Determinate versus interpretive measurement.</strong> Health checks with determinate answers can be scheduled, while contradiction detection asks about meaning and stays with agents.</li>
+        <li><strong>SHA-gated propagation.</strong> "content-addressable change detection" that skips repositories with no commits since the last run.</li>
+        <li><strong>Trigger families.</strong> Updater-close, adversarial opener and drift triggers, each with a pipeline location, responsible role, required artifact and blocking condition.</li>
+        <li><strong>Content fencing.</strong> Declared protected and updatable regions that let propagation preserve local adaptations, so audits can tell "difference by design" from "difference by defect".</li>
+      </ul>
+    </section>
+
+    <section id="notes-19-frames">
+      <h2>Theoretical frames</h2>
+      <p>Hayek (1968) frames the pipeline as a discovery procedure, a process that generates knowledge which could not exist without the process itself. The chapter calls the pipeline "a managed analogue" of competition in this sense.</p>
+      <p>Miller and Drexler (1988b) show how computational agents can allocate resources without a global view, given properly structured local signals. The chapter maps this onto stage reports.</p>
+      <p>Nonaka (1994) supplies the categories of combination and internalization. Synthesizing findings into a daily summary is combination, and writing that summary back into the documentation is internalization.</p>
+      <p>The chapter also draws on Chapter 2's communication architecture and knowledge proxies and on Chapter 3's view of maintenance as preserving the productive capacity of a capital stock. In Hayekian terms, the triggers are "institutional devices for economizing on dispersed knowledge".</p>
+    </section>
+
+    <section id="notes-19-matters">
+      <h2>Why it matters</h2>
+      <p>The chapter explains how a body of documentation can stay aligned with a changing system without a supervisor reading everything. Its answer is a schedule of specialized stages linked by compressed reports, with a final stage that measures whether the run helped. The chapter insists that "A run that completed is not thereby a run that helped", which makes health measurement central rather than incidental.</p>
+      <p>The chapter also clarifies what generalizes. It separates the workspace-level installation from the functions it sequences, and it explains why some governance work can become a scheduled routine while other work cannot. Governance in this design "scales with change events rather than with total system size", and fencing lets shared improvements spread without erasing legitimate local variation.</p>
+    </section>
+
+    <section id="notes-19-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items for release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

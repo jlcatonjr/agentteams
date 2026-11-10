@@ -343,7 +343,7 @@ EXPECTED: dict[str, tuple[int, str, str]] = {  # regenerated for #9/#10 (2026-09
     'issue-success': (0, 'Issued capability grant grant-<ID> (hmac): team-b → team-a may read /abs/b/shared (expires 2099-01-01T00:00:00Z, max_uses 1)\n  appended to <TMP>/team/references/capability-grants.log.csv\n  verified against team dir <TMP>/team\n',
         ''),
     'issue-write-refusal': (1, '',
-        "Error: grant 'grant-<ID>' permits 'write' but is hmac-signed: a grant that widens the sandbox allowWrite must be Ed25519-signed by the operator (the shared AGENTTEAMS_GRANT_SIGNING_KEY is inherited by sandboxed agents). REFUSED. Migrate: re-issue it with `agentteams --sign-grant SPEC.json --framework <fw> --output <holder team dir>` (operator key via AGENTTEAMS_DECISION_ED25519_KEYFILE; public key at <team dir>/references/authorized-verify-keys/<key_id>.pub.pem).\n"),
+        "Error: grant 'grant-<ID>' permits 'write' but is hmac-signed: a grant that widens the sandbox allowWrite must be Ed25519-signed by the operator (the shared AGENTTEAMS_GRANT_SIGNING_KEY is inherited by sandboxed agents). REFUSED. Migrate: re-issue it with `agentteams --sign-grant SPEC.json --framework <fw> --output <holder team dir>` (operator key: ~/.config/agentteams/keys/decision-signing-<key_id>.pem, or the file AGENTTEAMS_DECISION_ED25519_KEYFILE names; public key at <team dir>/references/authorized-verify-keys/<key_id>.pub.pem).\n"),
 }
 
 
@@ -643,3 +643,17 @@ def test_key_dir_is_the_sandbox_denied_signing_key_dir(monkeypatch):
 
     monkeypatch.undo()  # drop conftest's temp-dir patch; only reads the path, never the directory
     assert operator_signing._key_dir() == Path(os.path.expanduser(SIGNING_KEY_DIR))
+
+
+@pytest.mark.parametrize("key_id, why", [
+    ("", "there is no key_id to find a key by"),
+    ("a/b", "key_id 'a/b' cannot name a key file in <TMP>/operator-home/.config/agentteams/keys"),
+])
+def test_no_default_key_says_why(key_id, why, tmp_path, monkeypatch, capsys):
+    """With the env unset, the refusal names the variable and why no key_id default was tried."""
+    _point_key_dir(tmp_path, monkeypatch)
+    monkeypatch.delenv(_KEY_ENV, raising=False)
+    assert operator_signing._resolve_keyfile(key_id) is None
+    err = _norm(capsys.readouterr().err, tmp_path)
+    assert err == (f"Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set, and {why} — it must name the "
+                   "operator private key file (never an agent env). Refusing to sign (fail-closed).\n")
