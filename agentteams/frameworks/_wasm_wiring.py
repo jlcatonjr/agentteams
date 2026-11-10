@@ -158,8 +158,9 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
         return row(EXAMPLE_ONLY, "session-compute-only", f"inert {GROK_EXAMPLE} (write-protected only inside the agentteams "
                    "launcher, not in profile mode: check it against a fresh render before merging); merge its table into .grok/config.toml, outside the "
                    "agentteams-managed block (loaded after folder trust); no "
-                   "[permission] ask rule covers it, and custom agents carry mcpInheritance: none (their access and "
-                   "Grok's approval prompt are untested); "
+                   "[permission] ask rule covers it; a generated custom agent run with --agent sees it too "
+                   "(mcpInheritance: none limits only subagents; live 2026-11-10), and a headless call without "
+                   "--always-approve is cancelled (the interactive prompt is untested); "
                    + _NESTED_UNLESS_SANDBOXED.format(flag="--sandbox workspace"), True, [GROK_EXAMPLE])
     if framework == "agents-md":
         return row(INSTRUCTIONS_ONLY, "none", "AGENTS.md has no MCP channel; instructions only", True)

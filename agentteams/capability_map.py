@@ -401,7 +401,9 @@ def grok_exact_toolset(content: str) -> bool:
     """Whether a Grok Build agent's ``tools:`` list is its exact limit.
 
     Grok widens a declared list unless BOTH ``injectDefaultTools: false`` (default true: session tools are layered
-    on) and ``mcpInheritance: none`` (default all: every parent MCP server) are set. Parsed case-insensitively, as
+    on) and ``mcpInheritance: none`` (default all: every parent MCP server) are set. "Exact" covers built-in tools:
+    a custom agent run with ``--agent`` still reaches the session's MCP servers through ``search_tool``/``use_tool``
+    (``mcpInheritance`` limits only subagents; remediation row 693). Parsed case-insensitively, as
     Grok does; a duplicate key, a missing key or any other value means NOT exact (@security Phase 3 condition 3).
 
     A list that grok widens is also NOT exact (:func:`grok_widening_entries`: a scoped entry, ``MCPTool``, or a tool both

@@ -117,7 +117,9 @@ Confidence marks:
   - HTTP servers: `url`, `headers`, `bearer_token_env_var`
   - either kind: `enabled`, timeouts, and `${VAR}` expansion
 - `.mcp.json` is also read (`07-mcp-servers.md`).
-- Subagents inherit the parent's MCP servers unless `mcpInheritance` narrows them.
+- Subagents inherit the parent's MCP servers unless `mcpInheritance` narrows them. It does not narrow a custom
+  agent run with `--agent` (the top-level session): live 2026-11-10 (1.0.52), a generated agent with
+  `mcpInheritance: none` reached `agentteams_wasm__run_wasm` through `search_tool`/`use_tool` (remediation row 693).
 
 ### Permissions (D, L)
 

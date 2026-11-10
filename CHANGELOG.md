@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (docs: Grok `tools:` is the exact limit for built-in tools only, not for MCP servers)
+
+- A live check (Grok Build 1.0.52, 2026-11-10) found that a generated Grok custom agent run with `grok --agent`
+  reaches every MCP server in the project and user Grok config through Grok's always-on `search_tool`/`use_tool`
+  meta-tools: `mcpInheritance: none` limits only what a subagent inherits, and `--agent` makes the agent the
+  top-level session. The README, STABILITY, CLI reference, framework and Grok-config API references, the Grok
+  privileges page, the Grok `wasm_wiring` row and the module docstrings now say so; the claims that `tools:` is the
+  exact limit now cover built-in tools only. No emitted file changes. Today the only MCP servers agentteams puts
+  in `.grok/config.toml` come from `grok:mcp` wiring or the operator-merged compute-only `agentteams_wasm`
+  example. A real per-agent MCP limit is open (remediation row 693).
+
 ### security (fleet release locks: fail closed, visible lifts; @security row 692)
 
 - A `toolchain.lock` that cannot be trusted now counts as a lock: one that is a directory, a dangling or looping
