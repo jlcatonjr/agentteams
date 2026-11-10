@@ -29,6 +29,7 @@ from agentteams.sandbox_state import (
     mcp_approval_auto,
     previous_sandbox_exceptions,
 )
+from agentteams.sandbox_state import _BUILD_LOG_REL
 from tests._sandbox_gate_helpers import _KEY_ID, _log, _row, _team
 
 _T0 = datetime(2026, 11, 9, tzinfo=UTC)
@@ -130,6 +131,30 @@ def test_plan_new_continuing_and_off():
     assert [(r.action, r.continuing) for r in _plan(_exc(False), _exc(True))] == [(_ACTION, False)]
     assert [(r.action, r.continuing) for r in _plan(_exc(True), _exc(True))] == [(_ACTION, True)]
     assert _plan(_exc(True), _exc(False)) == [] and _plan(None, _exc(False)) == []
+
+
+@pytest.mark.parametrize("damage", ["bad-json", "symlink", "malformed-record", "non-dict"])
+def test_unusable_previous_build_log_plans_it_as_new_and_refuses(tmp_path, damage):
+    """@security F2 (2026-11-09): a corrupt, symlinked or malformed build log never makes auto-approval standing."""
+    team = _team(tmp_path)
+    log = team / _BUILD_LOG_REL
+    log.parent.mkdir(parents=True, exist_ok=True)
+    if damage == "bad-json":
+        log.write_text("{not json", encoding="utf-8")
+    elif damage == "symlink":
+        real = tmp_path / "elsewhere.json"
+        real.write_text(json.dumps({"sandbox_exceptions": {"mcp_approval_auto": "on"}}), encoding="utf-8")
+        log.symlink_to(real)
+    elif damage == "malformed-record":
+        log.write_text(json.dumps({"sandbox_exceptions": {"mcp_approval_auto": ["on"], "keep": 7}}), encoding="utf-8")
+    else:
+        log.write_text(json.dumps({"sandbox_exceptions": "on"}), encoding="utf-8")
+    previous = previous_sandbox_exceptions(team)
+    assert previous is None or previous.mcp_approval_auto is False
+    plan = _plan(previous, _exc(True))
+    assert [(r.action, r.continuing) for r in plan] == [(_ACTION, False)]
+    with pytest.raises(gate.SandboxRelaxationError, match="this workspace is governed"):
+        gate.authorize(team, plan, consume=True)
 
 
 # --- ungoverned: unchanged from WP-C (a notice, never a refusal) -----------------------------------------------------

@@ -49,7 +49,10 @@ _STEMS: tuple[str, ...] = (
     *SANDBOX_RELAXATION_KINDS,
     "sandbox-off", "unsandbox", "disable-sandbox", "no-sandbox", "os-sandbox-off", "wasm-sandbox-off",
     "keep-native-exec", "native-exec", "wasm-to-os",
-    "auto-approve", "auto-approval",  # mcp-approval-auto synonyms (the codex:wasm-auto-approve host feature)
+    # mcp-approval-auto synonyms (the codex:wasm-auto-approve host feature): word-start prefixes, so every
+    # inflection (auto-approve/-approval/-approving, autoapprove) matches. Not "tools-approval-mode": the
+    # setting's name alone also appears in text about the "prompt" default.
+    "auto-approv", "autoapprov",
 )
 
 #: Word-start stems that name a sandbox relaxation in free text (scope, action, decision, task_scope), in the hyphen,

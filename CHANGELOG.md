@@ -22,7 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decision row, under the aggregate cap), and dropping the token retires it. Ungoverned workspaces get a
   `SANDBOX RELAXATION` notice, as for the other kinds. The state is recorded in the build-log's
   `sandbox_exceptions` as `mcp_approval_auto: "on"`, written only when on, so existing records are unchanged and
-  read as off.
+  read as off; a missing, corrupt or symlinked build log also reads as off, so the render counts as new and needs
+  the signed row. Known over-block (fails closed): in a team directory that alternates a Codex render with
+  another framework's, the non-Codex render drops the key without retiring the exception, so the next Codex
+  render asks for a fresh signed row. Free text that names auto-approval in any inflection (`auto-approv…`,
+  `autoapprov…`) counts as naming a sandbox relaxation (directive denylist, effect classifier).
 
 ### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
 
