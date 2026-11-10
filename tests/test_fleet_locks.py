@@ -47,6 +47,7 @@ class _Args:
         self.fleet_allow_no_verify = False
         self.fleet_exclude = kw.get("fleet_exclude")
         self.fleet_ignore_locks = kw.get("fleet_ignore_locks")
+        self.fleet_skip_parent = kw.get("fleet_skip_parent", False)
 
 
 def _run(tmp_path, monkeypatch, **kw):
@@ -219,3 +220,91 @@ def test_cli_flags_parse():
     assert ns.fleet_exclude == ["a*", "b"] and ns.fleet_ignore_locks == ["*"]
     ns = parser.parse_args(["--fleet", "x"])
     assert ns.fleet_exclude is None and ns.fleet_ignore_locks is None
+
+
+def test_skip_parent_leaves_the_parent_workspace_alone(tmp_path, monkeypatch):
+    """--fleet-skip-parent: DIR's own (non-git) team gets a SKIP row; workspaces below still run."""
+    _ws(tmp_path)
+    _ws(tmp_path / "child")
+    ran, _ = _run(tmp_path, monkeypatch, fleet_skip_parent=True)
+    report = json.loads(next((tmp_path / "_report").glob("*/report.json")).read_text())
+    rows = {w["path"]: [t["target"] for t in w["targets"]] for w in report["workspaces"]}
+    assert rows[str(tmp_path.resolve())] == ["(parent-skipped)"]
+    # Every target path (--project, and --output, which bridge targets use instead) is inside the child.
+    paths = {Path(a[a.index(flag) + 1]).resolve() for a in ran for flag in ("--project", "--output") if flag in a}
+    child = (tmp_path / "child").resolve()
+    assert paths and all(p == child or child in p.parents for p in paths)
+
+
+def test_without_skip_parent_the_parent_workspace_is_updated(tmp_path, monkeypatch):
+    _ws(tmp_path)
+    ran, _ = _run(tmp_path, monkeypatch)
+    report = json.loads(next((tmp_path / "_report").glob("*/report.json")).read_text())
+    assert all(t["target"] != "(parent-skipped)" for w in report["workspaces"] for t in w["targets"])
+    assert ran
+
+
+
+# --- @security row 692: fail-closed lock detection, visible lifts ----------------
+
+def test_a_lock_path_that_is_not_a_regular_file_fails_closed(tmp_path):
+    ws = _ws(tmp_path / "dir-lock")
+    (ws / "toolchain.lock").mkdir()
+    assert _fleet_locks.read_release_lock(ws, tmp_path)["tag"] == ""
+    ws2 = _ws(tmp_path / "dangling")
+    (ws2 / "toolchain.lock").symlink_to(ws2 / "missing")
+    assert _fleet_locks.read_release_lock(ws2, tmp_path) is not None
+    ws3 = _ws(tmp_path / "loop")
+    (ws3 / "toolchain.lock").symlink_to(ws3 / "toolchain.lock")
+    assert _fleet_locks.read_release_lock(ws3, tmp_path) is not None
+    assert "skipped" in _fleet_locks.lock_detail(_fleet_locks.read_release_lock(ws, tmp_path))
+
+
+def test_an_unparsable_lock_fails_closed(tmp_path):
+    ws = _ws(tmp_path / "garbled")
+    (ws / "toolchain.lock").write_text("agentteams v1.1.0\n", encoding="utf-8")
+    assert _fleet_locks.read_release_lock(ws, tmp_path) is not None
+    ws2 = _ws(tmp_path / "binary")
+    (ws2 / "toolchain.lock").write_bytes(b"agentteams.tag=\xff\xfe\n")
+    assert _fleet_locks.read_release_lock(ws2, tmp_path) is not None
+
+
+def test_an_empty_planted_git_file_does_not_cut_the_search_short(tmp_path):
+    repo = tmp_path / "repo"
+    nested = _ws(repo / "Projects" / "p1")
+    (repo / "toolchain.lock").write_text(LOCK, encoding="utf-8")
+    _init_repo(repo)
+    (repo / "Projects" / ".git").write_text("", encoding="utf-8")
+    assert _fleet_locks.read_release_lock(nested, tmp_path)["tag"] == "v1.1.0"
+
+
+def test_a_gitdir_file_still_marks_a_toplevel(tmp_path):
+    (tmp_path / "toolchain.lock").write_text(LOCK, encoding="utf-8")
+    sub = _ws(tmp_path / "sub")
+    (sub / ".git").write_text("gitdir: ../.git/modules/sub\n", encoding="utf-8")
+    assert _fleet_locks.read_release_lock(sub, tmp_path) is None
+
+
+def test_a_lifted_lock_is_a_review_row_per_workspace(tmp_path, monkeypatch):
+    ws = _ws(tmp_path / "locked")
+    (ws / "toolchain.lock").write_text(LOCK, encoding="utf-8")
+    ran, _ = _run(tmp_path, monkeypatch, fleet_ignore_locks=["locked"])
+    report = json.loads(next((tmp_path / "_report").glob("*/report.json")).read_text())
+    rows = [t for w in report["workspaces"] for t in w["targets"] if t["target"] == "(lock-lifted)"]
+    assert len(rows) == 1 and rows[0]["status"] == "REVIEW"
+    assert "'locked'" in rows[0]["detail"] and "toolchain.lock" in rows[0]["detail"]
+    assert ran
+
+
+def test_fleet_locks_is_integrity_pinned():
+    """Security row 692 item 4: an unpinned edit to the lock guard could quietly lift every lock."""
+    from agentteams.integrity import ENFORCEMENT_MODULES
+    assert "agentteams/_fleet_locks.py" in ENFORCEMENT_MODULES
+
+
+def test_a_fifo_lock_fails_closed_without_blocking(tmp_path):
+    """@security row-692 review: a FIFO named toolchain.lock is not a regular file, so it is never opened."""
+    import os
+    ws = _ws(tmp_path / "fifo")
+    os.mkfifo(ws / "toolchain.lock")
+    assert _fleet_locks.read_release_lock(ws, tmp_path) is not None
