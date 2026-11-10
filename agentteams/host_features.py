@@ -69,10 +69,11 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # gate that limits spawned agents to read-only tools (harness-level, Phase 1b).
     # Like goose:sandbox, the token records the REQUEST; generation cannot verify that
     # Codex is actually launched through the example.
-    # `wasm-auto-approve` (DRAFT, WP-C 2026-11-09; Rule 15 relaxation pending the operator's Ed25519
-    # signature): the agentteams_wasm table gets default_tools_approval_mode = "auto" instead of "prompt",
-    # so `codex exec` under workspace-write runs run_wasm without the approval prompt. Opt-in per project,
-    # never a shipped default; operator servers always keep "prompt" (codex_mcp_emit).
+    # `wasm-auto-approve` (WP-C 2026-11-09; shipping it signed by the operator, Rule 15): the agentteams_wasm
+    # table gets default_tools_approval_mode = "auto" instead of "prompt", so `codex exec` under workspace-write
+    # runs run_wasm without the approval prompt. Opt-in per project, never a shipped default; operator servers
+    # always keep "prompt" (codex_mcp_emit). Turning it on is the constraint-relaxing mcp-approval-auto:codex
+    # effect: a governed workspace needs its own Ed25519-signed decision (sandbox_relaxation_gate, WP-C2).
     "codex": frozenset({"mcp", "sandbox", "wasm-auto-approve"}),
     # grok (Phase 2, 2026-10-14; plan tmp/by-week/2026-W42 §12): `mcp` splices operator-specified
     # mcp_servers[] into the project .grok/config.toml (grok_config_emit.py). `sandbox`: confined/exclusive

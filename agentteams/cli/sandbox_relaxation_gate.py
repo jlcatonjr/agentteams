@@ -1,10 +1,11 @@
 """sandbox_relaxation_gate.py — the render-time gate for turning a sandbox off or widening a WASM grant (Rule 15, D7).
 
-Five transitions are constraint-relaxing effects (:mod:`agentteams.cli.sandbox_effects`): ``sandbox-os-off``,
-``sandbox-wasm-off`` (incl. the projected model-substrate switch), ``wasm-grant-widen``, ``native-exec-keep`` and
-``wasm-to-os-switch``. :func:`plan_relaxations` derives them from the previous and the new
-:class:`~agentteams.sandbox_state.SandboxState`; :func:`authorize` clears them; :func:`retire_on_tighten` ends the
-standing exceptions a tightening makes unnecessary. Modelled on :mod:`agentteams.cli.adopt_merge_gate`.
+Six transitions are constraint-relaxing effects (:mod:`agentteams.cli.sandbox_effects`): ``sandbox-os-off``,
+``sandbox-wasm-off`` (incl. the projected model-substrate switch), ``wasm-grant-widen``, ``native-exec-keep``,
+``wasm-to-os-switch`` and ``mcp-approval-auto`` (the shared ``agentteams_wasm`` table of a Codex render stops
+prompting: the opt-in ``codex:wasm-auto-approve`` host feature, WP-C2). :func:`plan_relaxations` derives them from the
+previous and the new :class:`~agentteams.sandbox_state.SandboxState` and gate inputs; :func:`authorize` clears them;
+:func:`retire_on_tighten` ends the standing exceptions a tightening makes unnecessary. Modelled on :mod:`agentteams.cli.adopt_merge_gate`.
 
 **Governed workspace** (``enforce_decision_signing``, read from disk before the render, so a render that flips it
 cannot escape): every new relaxation needs a decision row that is not a waiver, whose ``scope`` is exactly the action
@@ -12,8 +13,8 @@ id, whose effect is exactly this run's (``effect_relaxes`` = the action, or ``ef
 tokens), and that clears the destructive-action gate, whose elevated path demands the operator's Ed25519 signature
 (an HMAC signature is valid but insufficient) and a traceable ``derives_from`` lineage. An unretracted HALT on the
 instance, on any lineage ancestor or on the whole family blocks it (C-2). A standing relaxation (os-off, widening,
-native-exec keep, runner switch) is registered in the exception registry under the aggregate cap with a
-:data:`SANDBOX_EXCEPTION_TTL_DAYS` sunset and a ``decision_sha256`` binding it to the decision row that cleared it.
+native-exec keep, runner switch, MCP auto-approval) is registered in the exception registry under the aggregate cap
+with a :data:`SANDBOX_EXCEPTION_TTL_DAYS` sunset and a ``decision_sha256`` binding it to the decision row that cleared it.
 Every later render that keeps it carries it over only on an entry that is active, has a present, unexpired
 ``expires``, and whose bound decision row is still in the log and re-verifies through the decision log's own
 authenticity path (approved author, Ed25519 signature, lineage, hash chain); anything else is treated as lapsed
@@ -59,6 +60,7 @@ from agentteams.cli.exception_registry import (
     retire_exception,
 )
 from agentteams.cli.sandbox_effects import (
+    MCP_APPROVAL_AUTO,
     MODEL_SUBSTRATE_QUALIFIER,
     NATIVE_EXEC_KEEP,
     SANDBOX_OS_OFF,
@@ -124,11 +126,14 @@ def plan_relaxations(old: SandboxState | None, new: SandboxState, *, framework_i
         new: The state this render emits.
         framework_id: The framework being rendered (the qualifier of the framework-wide kinds).
         profile_would_emit: Whether the privilege profile would emit an OS boundary were it not switched off.
-        exceptions: ``(previous, new)`` gate inputs (native-exec keep set, runner program modes), or None.
+        exceptions: ``(previous, new)`` gate inputs (native-exec keep set, runner program modes, MCP auto-approval),
+            or None.
 
     Returns:
         The relaxations in a stable order. Continuing ``wasm-to-os-switch`` entries are candidates (every agent on
-        ``sandbox: os``); :func:`authorize` keeps only those the registry shows were switched.
+        ``sandbox: os``); :func:`authorize` keeps only those the registry shows were switched. ``mcp-approval-auto``
+        is new when ``new`` turns auto-approval on and the previous record did not (an absent record reads as off),
+        and continuing while both have it on.
 
     Raises:
         ValueError: A malformed slug, framework id or grant mount.
@@ -156,6 +161,9 @@ def plan_relaxations(old: SandboxState | None, new: SandboxState, *, framework_i
         switched = old_exc.wasm_programs - new_exc.wasm_programs if old_exc is not None else frozenset()
         out += [Relaxation(WASM_TO_OS_SWITCH, a) for a in sorted(switched)]
         out += [Relaxation(WASM_TO_OS_SWITCH, a, continuing=True) for a in sorted(new_exc.os_programs - switched)]
+        if new_exc.mcp_approval_auto:
+            was_on = old_exc is not None and old_exc.mcp_approval_auto
+            out.append(Relaxation(MCP_APPROVAL_AUTO, framework_id, continuing=was_on))
     return out
 
 
@@ -173,8 +181,10 @@ def _shape(r: Relaxation) -> str:
     """The decision-row shape the refusal tells the operator to record."""
     effect = (f"effect_grants={';'.join(r.grants)}" if r.kind in (WASM_GRANT_WIDEN, NATIVE_EXEC_KEEP)
               else f"effect_relaxes={r.action}")
+    alternative = (" (or drop the codex:wasm-auto-approve host feature, which keeps the prompt)"
+                   if r.kind == MCP_APPROVAL_AUTO else "")
     return (f"record a PASS row signed with the operator's Ed25519 key (--sign-decision): action_reviewed={r.action}, "
-            f"scope={r.action}, {effect}, derives_from=<a recorded decision id>")
+            f"scope={r.action}, {effect}, derives_from=<a recorded decision id>{alternative}")
 
 
 def _check_new(team_dir: Path, r: Relaxation) -> dict[str, str]:
@@ -510,6 +520,9 @@ def _ended(entry: dict, new: SandboxState, framework_id: str, new_exc: SandboxEx
             return "the runner program is back on sandbox: wasm"
         if qualifier not in new_exc.os_programs:
             return "the agent no longer has a runner program"
+    if (kind == MCP_APPROVAL_AUTO and qualifier == framework_id and new_exc is not None
+            and not new_exc.mcp_approval_auto):
+        return "the agentteams_wasm table is back on prompt approval"
     return None
 
 
@@ -519,7 +532,8 @@ def retire_on_tighten(team_dir: Path, old: SandboxState | None, new: SandboxStat
     """Flip each active sandbox exception that ``new`` no longer needs to ``sunset`` (strictly tightening).
 
     What ended is read from the registry and ``new`` (OS back on, a widened grant or keep entry removed, an agent back
-    on ``sandbox: wasm`` or off the runner); ``old`` is accepted for symmetry with :func:`plan_relaxations`.
+    on ``sandbox: wasm`` or off the runner, the ``agentteams_wasm`` table back on ``prompt``); ``old`` is accepted for
+    symmetry with :func:`plan_relaxations`.
 
     Args:
         team_dir: The team directory (exception registry).

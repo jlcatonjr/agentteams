@@ -6,14 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### added (DRAFT, pending the operator's Rule 15 signature: Codex `codex:wasm-auto-approve`)
+### added (Codex `codex:wasm-auto-approve`, gated as the sixth sandbox relaxation)
 
 - New opt-in host feature `codex:wasm-auto-approve`: with WASM on, the shared `agentteams_wasm` table in
   `.codex/config.toml` gets `default_tools_approval_mode = "auto"`, so `codex exec` under `workspace-write` no
   longer stops at the approval prompt for `run_wasm` (compute-only). Operator-declared servers keep `prompt`,
   and without the token nothing changes. The first-party bound now requires exactly the mode the features
-  select (`codex_mcp_emit.first_party_approval_mode`). Row 648 gap 4. **Not to be released until the operator's
-  Ed25519-signed decision is recorded.**
+  select (`codex_mcp_emit.first_party_approval_mode`). Row 648 gap 4. The operator signed the decision to ship
+  it on 2026-11-09 (Ed25519); that decision covers this repository only.
+- Turning the token on is a constraint-relaxing effect, the sixth sandbox-relaxation kind `mcp-approval-auto`
+  (action id `mcp-approval-auto:codex`; WP-C2). A governed workspace (`enforce_decision_signing`) needs its own
+  operator Ed25519-signed decision for that action id: the render is refused until a PASS row with `scope` and
+  `effect_relaxes` both exactly `mcp-approval-auto:codex` and a traceable `derives_from` is recorded; an HMAC-only
+  row or an unretracted HALT refuses it. A cleared one is a standing exception (90-day sunset, bound to its
+  decision row, under the aggregate cap), and dropping the token retires it. Ungoverned workspaces get a
+  `SANDBOX RELAXATION` notice, as for the other kinds. The state is recorded in the build-log's
+  `sandbox_exceptions` as `mcp_approval_auto: "on"`, written only when on, so existing records are unchanged and
+  read as off.
 
 ### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
 

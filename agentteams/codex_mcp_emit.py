@@ -123,9 +123,11 @@ class CodexMCPEmissionResult:
 #: learn.chatgpt.com/docs/extend/mcp.md, verified 2026-09-29). ``prompt`` = every tool call asks.
 _DEFAULT_TOOLS_APPROVAL_MODE = "prompt"
 
-#: Opt-in token (DRAFT, WP-C; Rule 15 relaxation pending signature) that sets ``agentteams_wasm`` alone to
-#: ``auto``: its only tool, ``run_wasm``, is compute-only (no host writes outside the guest's scratch, no network),
-#: so the prompt is the cost being removed. Operator-declared servers never get ``auto``.
+#: Opt-in token (WP-C) that sets ``agentteams_wasm`` alone to ``auto``: its only tool, ``run_wasm``, is compute-only
+#: (no host writes outside the guest's scratch, no network), so the prompt is the cost being removed.
+#: Operator-declared servers never get ``auto``. Turning it on is the Rule 15 ``mcp-approval-auto:codex`` relaxation:
+#: in a governed workspace the render-time gate (``cli/sandbox_relaxation_gate``) needs the operator's
+#: Ed25519-signed decision for it (WP-C2).
 _CODEX_WASM_AUTO_APPROVE_TOKEN = "codex:wasm-auto-approve"
 _FIRST_PARTY_AUTO_APPROVAL_MODE = "auto"
 

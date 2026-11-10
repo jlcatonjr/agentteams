@@ -21,7 +21,9 @@ engaged and keeps a byte-identical build-log (the P00 carve-out now covers only 
 ``navigator`` / ``git-operations`` unless the brief lists its own) reaches the gate whenever WASM is on, whatever
 ``write_policy`` says; the runner program modes come from ``confined_programs`` under ``orchestrator-only``. Leaving
 ``orchestrator-only`` after runner programs were recorded counts every recorded ``sandbox: wasm`` agent as switched
-(the runner no longer serves it), so ``wasm-to-os-switch`` is still gated.
+(the runner no longer serves it), so ``wasm-to-os-switch`` is still gated. WP-C2: whether the shared
+``agentteams_wasm`` table is emitted with ``auto`` approval (``codex:wasm-auto-approve``) is a gate input too, so
+turning it on is the gated ``mcp-approval-auto:codex``.
 """
 
 from __future__ import annotations
@@ -209,6 +211,9 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
       would load (operator file, else the brief). Otherwise the runner serves nothing (S5): every previously recorded
       ``sandbox: wasm`` or ``os`` agent is carried as ``os_programs``, so a recorded wasm agent is a fresh
       ``wasm-to-os-switch`` and a switched one keeps being re-checked against its standing exception.
+    * ``mcp_approval_auto`` (WP-C2): whether the shared ``agentteams_wasm`` table is emitted with ``auto`` approval
+      (:func:`~agentteams.sandbox_state.mcp_approval_auto`: Codex, WASM on, ``codex:wasm-auto-approve``), so turning
+      it on is a gated ``mcp-approval-auto:codex`` and dropping the token retires its standing exception.
 
     Args:
         manifest: The team manifest (``write_policy``, ``wasm_sandbox``, ``agent_slug_list``).
@@ -218,14 +223,14 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
         brief_confined_programs: The brief's ``confined_programs``.
 
     Returns:
-        None when nothing is or was recorded (a team that never kept native exec or used the runner's WASM keeps a
-        byte-identical build-log), else ``(previous_exc, new)``.
+        None when nothing is or was recorded (a team that never kept native exec, used the runner's WASM or turned
+        on ``mcp_approval_auto`` keeps a byte-identical build-log), else ``(previous_exc, new)``.
 
     Raises:
         WriteRootPolicyError: The operator ``confined_programs`` file fails its custody checks.
         ValueError: A malformed ``wasm_sandbox`` block.
     """
-    from agentteams.sandbox_state import SandboxExceptions
+    from agentteams.sandbox_state import SandboxExceptions, mcp_approval_auto
     from agentteams.wasm_enforcement import gate_keep_set
 
     # P13: native_exec_keep, plus every eligible non-exempt agent under `native_exec: keep` (one effect each).
@@ -245,9 +250,11 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
     else:
         carried = previous_exc.wasm_programs | previous_exc.os_programs if previous_exc is not None else frozenset()
         new_exc = SandboxExceptions(native_exec_keep=keep, os_programs=carried)
-    # Engaged once a keep or a runner wasm program is (or was recorded); once recorded, every later render re-checks
-    # the standing exceptions.
-    if new_exc.wasm_programs or new_exc.native_exec_keep or previous_exc is not None:
+    if mcp_approval_auto(manifest):   # WP-C2: the agentteams_wasm table runs without a per-call prompt
+        new_exc = dataclasses.replace(new_exc, mcp_approval_auto=True)
+    # Engaged once a keep, a runner wasm program or auto-approval is (or was recorded); once recorded, every later
+    # render re-checks the standing exceptions.
+    if new_exc.wasm_programs or new_exc.native_exec_keep or new_exc.mcp_approval_auto or previous_exc is not None:
         return previous_exc, new_exc
     return None
 

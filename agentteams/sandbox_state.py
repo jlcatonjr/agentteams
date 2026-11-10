@@ -333,33 +333,44 @@ class SandboxExceptions:
         wasm_programs: Agents whose runner ``confined_programs`` entry is ``sandbox: wasm`` (P12).
         os_programs: Agents whose runner ``confined_programs`` entry is ``sandbox: os`` (P12). With the exception
             registry it tells a still-switched agent (``wasm-to-os-switch``) from one that has left the runner.
+        mcp_approval_auto: Whether the shared ``agentteams_wasm`` MCP table is emitted with
+            ``default_tools_approval_mode = "auto"`` (a Codex render, WASM on, the opt-in ``codex:wasm-auto-approve``
+            host feature; WP-C2). Recorded only when True, so a record without it (every record before WP-C2)
+            reads as off, and turning it on is a new ``mcp-approval-auto`` relaxation.
     """
 
     native_exec_keep: frozenset[str] = frozenset()
     wasm_programs: frozenset[str] = frozenset()
     os_programs: frozenset[str] = frozenset()
+    mcp_approval_auto: bool = False
 
-    def to_record(self) -> dict[str, list[str]]:
+    def to_record(self) -> dict[str, object]:
         """Return the build-log record (sorted lists).
 
         Returns:
-            ``{"native_exec_keep": [...], "wasm_programs": [...], "os_programs": [...]}``.
+            ``{"native_exec_keep": [...], "wasm_programs": [...], "os_programs": [...]}``, plus
+            ``"mcp_approval_auto": "on"`` only when it is on (an off value is not written, so existing records stay
+            byte-identical).
         """
-        return {"native_exec_keep": sorted(self.native_exec_keep), "wasm_programs": sorted(self.wasm_programs),
-                "os_programs": sorted(self.os_programs)}
+        rec: dict[str, object] = {"native_exec_keep": sorted(self.native_exec_keep),
+                                  "wasm_programs": sorted(self.wasm_programs), "os_programs": sorted(self.os_programs)}
+        if self.mcp_approval_auto:
+            rec["mcp_approval_auto"] = "on"
+        return rec
 
     @classmethod
     def from_record(cls, rec: object) -> SandboxExceptions | None:
         """Parse a record written by :meth:`to_record`.
 
         Args:
-            rec: The decoded record (``os_programs`` may be absent).
+            rec: The decoded record (``os_programs`` and ``mcp_approval_auto`` may be absent; an absent
+                ``mcp_approval_auto`` reads as off).
 
         Returns:
             The value, or None when malformed.
         """
         keys = ("native_exec_keep", "wasm_programs", "os_programs")
-        if not isinstance(rec, dict) or not set(keys[:2]) <= set(rec) <= set(keys):
+        if not isinstance(rec, dict) or not set(keys[:2]) <= set(rec) <= {*keys, "mcp_approval_auto"}:
             return None
         sets: list[frozenset[str]] = []
         for key in keys:
@@ -367,7 +378,36 @@ class SandboxExceptions:
             if not isinstance(value, list) or not all(isinstance(v, str) and _SLUG_RE.match(v) for v in value):
                 return None
             sets.append(frozenset(value))
-        return cls(*sets)
+        auto = rec.get("mcp_approval_auto", "off")
+        if auto not in ON_OFF_VALUES:
+            return None
+        return cls(*sets, mcp_approval_auto=auto == "on")
+
+
+def mcp_approval_auto(manifest: Mapping[str, Any]) -> bool:
+    """Return whether this render emits the shared ``agentteams_wasm`` table with ``auto`` approval (WP-C2).
+
+    True exactly when the render is Codex, WASM is on, and the host features select ``auto``
+    (``codex_mcp_emit.first_party_approval_mode``, the same predicate the emitter and its bound use). A gate input
+    (:class:`SandboxExceptions`), so the relaxation gate can tell a new ``mcp-approval-auto:codex`` from a standing one.
+
+    Args:
+        manifest: The team manifest (``framework``, ``host_features``, the WASM switch).
+
+    Returns:
+        Whether auto-approval is in effect.
+
+    Raises:
+        ValueError: A malformed ``wasm_sandbox`` record or ``--wasm-sandbox`` value.
+    """
+    if manifest.get("framework") != "codex":
+        return False
+    from agentteams.codex_mcp_emit import first_party_approval_mode
+    from agentteams.wasm_config import wasm_switch
+
+    if not wasm_switch(manifest)[0]:
+        return False
+    return first_party_approval_mode(list(manifest.get("host_features") or [])) == "auto"
 
 
 def _read_build_log(team_dir: Path) -> dict | None:
@@ -832,6 +872,7 @@ __all__ = [
     "has_recorded_state",
     "keep_tokens",
     "legacy_os_requested",
+    "mcp_approval_auto",
     "os_sandbox_requested",
     "os_switch_set",
     "os_switch_state",

@@ -1091,7 +1091,7 @@
     },
     "sandbox_exceptions": {
       "type": "object",
-      "description": "P15: relaxation-gate inputs outside SandboxState: agents keeping native exec while WASM is on (P13), and runner confined_programs entries on sandbox: wasm / sandbox: os (P12).",
+      "description": "P15: relaxation-gate inputs outside SandboxState: agents keeping native exec while WASM is on (P13), runner confined_programs entries on sandbox: wasm / sandbox: os (P12), and (WP-C2) whether the shared agentteams_wasm MCP table is emitted with auto approval (codex:wasm-auto-approve; written only when on, absent reads as off).",
       "additionalProperties": false,
       "required": [
         "native_exec_keep",
@@ -1121,6 +1121,14 @@
             "type": "string",
             "pattern": "^[a-z0-9][a-z0-9-]*$"
           }
+        },
+        "mcp_approval_auto": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ],
+          "description": "WP-C2: the mcp-approval-auto relaxation is in effect (a Codex render with WASM on and codex:wasm-auto-approve). Written only when on."
         }
       }
     },
@@ -1143,7 +1151,8 @@
               "sandbox-wasm-off",
               "wasm-grant-widen",
               "native-exec-keep",
-              "wasm-to-os-switch"
+              "wasm-to-os-switch",
+              "mcp-approval-auto"
             ]
           },
           "action": {

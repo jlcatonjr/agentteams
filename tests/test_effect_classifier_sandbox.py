@@ -57,7 +57,8 @@ def test_widening_read_of_a_trust_root_is_non_eligible_even_signed():
 
 
 def test_kinds_are_exported():
-    for name in ("SANDBOX_OS_OFF", "SANDBOX_WASM_OFF", "WASM_GRANT_WIDEN", "NATIVE_EXEC_KEEP", "WASM_TO_OS_SWITCH"):
+    for name in ("SANDBOX_OS_OFF", "SANDBOX_WASM_OFF", "WASM_GRANT_WIDEN", "NATIVE_EXEC_KEEP", "WASM_TO_OS_SWITCH",
+                 "MCP_APPROVAL_AUTO"):
         assert name in ec.__all__ and getattr(ec, name) in SANDBOX_RELAXATION_KINDS
 
 
