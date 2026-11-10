@@ -203,6 +203,10 @@ references/runtime-handoffs.json
 .goose/
 .agents/
 .codex/
+# The agent-surface matrix (surface_matrix.py) is rendered from the ignored team directories above
+# on every generate and --update, so it enumerates the same unpublished team; a clone or CI renders
+# "No agent files found". Keep it local, like its sources.
+/references/agent-surface-matrix.md
 # NOTE: do NOT re-ignore .github/agents/_build-description.json here. It is deliberately
 # un-ignored at the top of this file (see the "so CI can run security-maintenance" comment)
 # so the daily Security Maintenance workflow scans the REAL self-team. A 2026-08-29 scrub
