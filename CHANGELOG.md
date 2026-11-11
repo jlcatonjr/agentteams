@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (vulnscan remediation scripts: hardened git; repository config can no longer run code)
+
+- The remediation scripts run unconfined, with the operator's credentials, in repositories whose git data a confined
+  review agent may have written. Their git calls were plain `git`. A planted `core.fsmonitor`, hook,
+  `remote.origin.uploadpack`, credential helper, `pager.<cmd>` or filter driver would have run outside the sandbox.
+  New `scripts/vulnscan-remediation/vulnscan-git-lib.sh` (copied by `--install`) provides two wrappers:
+  - `hgit` adds the executor's `_GIT_HARDENING` flags plus `log.showSignature=false` and
+    `push.recurseSubmodules=no`, and sets `GIT_PAGER=cat`, `GIT_LFS_SKIP_SMUDGE=1` and `GIT_NO_REPLACE_OBJECTS=1`.
+  - `hgit_net` handles fetch, ls-remote and push. It also pins git's own upload-pack/receive-pack, checks origin URLs
+    the way the executor does, and offers only `gh auth git-credential`, and only to `https://github.com`.
+- Before any command, a repository is refused when its own config sets a key that `-c` cannot neutralise:
+  filter, lfs, gpg, http, url, include, credential and pager keys; `core.worktree`, `core.attributesFile` and
+  `core.alternateRefs*`; or `remote.*.proxy` and `remote.*.vcs`.
+  - The config is read with `-z`, so a value containing a newline is judged as a whole.
+  - An exact allowlist keeps working repositories working: http transfer-size and timeout keys,
+    `lfs.repositoryformatversion`, the repository's own LFS endpoint access mode, and git-lfs's stock
+    `filter.lfs.*` values.
+- `vulnscan-handoff-lib.sh`, `vulnscan-target-agents.sh` and `vulnscan-deploy.sh` use the wrappers.
+  `vulnscan-deploy.sh` keeps raw git for its "not inside a work tree" safety check.
+- @security HALT ×4 → PASS. New tests: `tests/test_vulnscan_git_lib.py`.
+
 ### fixed (server kit: a provider mirror signed by the distro archive keyring is the distro archive)
 
 - L1 graded every package from a provider mirror upstream, because only canonical archive hostnames counted as the

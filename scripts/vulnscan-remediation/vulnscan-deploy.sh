@@ -23,6 +23,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
+. "$(dirname "$0")/vulnscan-git-lib.sh"   # hardened git (hgit / hgit_net)
 REF="origin/main" wait=wait images=1 scripts=0
 for a in "$@"; do
   case "$a" in
@@ -44,14 +45,15 @@ if [[ -d "$LEGACY_LOCK" ]]; then
   fi
 fi
 docker info >/dev/null 2>&1 || { echo "Docker is not running"; exit 2; }
-if [[ "$REF" == origin/* ]]; then git -C "$REPO" fetch -q origin; fi
-SHA="$(git -C "$REPO" rev-parse --verify "$REF^{commit}")"
+if [[ "$REF" == origin/* ]]; then hgit_net "$REPO" fetch -q origin; fi
+SHA="$(hgit -C "$REPO" rev-parse --verify "$REF^{commit}")"
 echo "== deploying $REF = $SHA"
 
 SRC="$(mktemp -d "${TMPDIR:-/tmp}/agentteams-${SHA:0:8}.XXXXXX")/agentteams-${SHA:0:8}"
 mkdir -p "$SRC"
-git -C "$REPO" archive "$SHA" | tar -x -C "$SRC"
-git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1 && { echo "refusing: $SRC is inside a git work tree"; exit 2; }
+hgit -C "$REPO" archive "$SHA" | tar -x -C "$SRC"
+# raw git here: a refusal must not read as "not inside a work tree"
+_git_raw -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1 && { echo "refusing: $SRC is inside a git work tree"; exit 2; }
 
 echo "== 1/4 pipx install (the daily job's interpreter)"
 # Hold the remediation lock, then the daily lock (the order the remediation runner takes them: it holds its own and
