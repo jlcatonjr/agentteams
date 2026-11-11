@@ -201,21 +201,30 @@ class ClaudeAdapter(FrameworkAdapter):
         names don't resolve, so the list is mapped like an agent file's (``Read, Grep, Glob``). Reported from
         mathAgents' P5 render (2026-10-07).
 
+        A ``model:`` Claude cannot read (a converted Copilot builder's list form) becomes the agent default, like
+        an agent file's (``_claude_model.resolve_claude_model``); a valid Claude model and an absent key are kept.
+
         Args:
             content: The rendered builder file.
             manifest: The team manifest (unused).
 
         Returns:
-            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names.
+            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names and any
+            unreadable ``model:`` replaced by the Claude default.
 
         Raises:
             Nothing.
         """
         yaml_text, body = _parse_yaml_front_matter(content)
-        if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
+        if yaml_text is None:
             return content
         head = content[: len(content) - len(body)]  # the parser's own front-matter span: never touch the body
-        head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
+        source_model = _extract_claude_optional_keys(content)[0]
+        model = _resolve_claude_model(content, source_model, "team-builder")
+        if model is not None and model != source_model:
+            head = re.sub(r"^model\s*:.*\n(?:[ \t]+-.*\n)*", f"model: {model}\n", head, count=1, flags=re.MULTILINE)
+        if _YAML_TOOLS_RE.search(yaml_text):
+            head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
         return head + body
 
     def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:

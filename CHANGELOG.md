@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it. To adopt, add the line yourself or run `--update --overwrite` with a `@security` clearance. Claude Code's
   built-in subagents (`Explore`, `general-purpose`, `Plan`) are not generated files and still inherit the session
   model; set `CLAUDE_CODE_SUBAGENT_MODEL=opus` to pin those too.
+- **Claude model ids stay out of Copilot files.** Converting or importing (`--convert-from`, `--interop-from`) a
+  Claude team to copilot-vscode or copilot-cli drops each agent's Claude `model:`, so the Copilot default model
+  applies; an import says so in a notice. The decision is by source framework: a Copilot team's own model values,
+  bare ids such as `gpt-5` included, are kept. A Copilot builder converted to Claude gets `model: opus`, and the
+  Claude team-builder template now pins `model: opus` like every other non-orchestrator agent.
 
 ### security (vulnscan remediation scripts: hardened git; repository config can no longer run code)
 
