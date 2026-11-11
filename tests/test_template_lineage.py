@@ -45,9 +45,9 @@ def _has_git_history() -> bool:
     return proc.returncode == 0 and proc.stdout.strip() == "false"
 
 
-#: sha256 of the canonical JSON of every corpus row whose commit is NOT in ``HEAD``'s history (the
+#: archived pre-public lineage). 112 rows, verified by regeneration with the archive present on 2026-11-11 (item 06: +1 row, conflict-auditor "### Conflict Log Format").
 #: archived pre-public lineage). 111 rows, verified by regeneration with the archive present on 2026-10-10.
-PRE_PUBLIC_DIGEST = "02f346c447ac64a1d0c1fac6008bf96b7e7056c67218d70562eb086ca57dc83d"
+PRE_PUBLIC_DIGEST = "de4a1dd0ec01499fd612d969ac4c6d257e5b96461a71e2f9da0806463c9fd1fe"
 
 
 def _public_commits() -> set[str]:

@@ -270,7 +270,7 @@ _KEY_SUCCESSION: tuple[tuple[str, str], ...] = (
 
 def _migrate_superseded_keys(
     fresh: dict[str, str], current: dict[str, str]
-) -> tuple[dict[str, str], list[str]]:
+) -> tuple[dict[str, str], list[str], set[str]]:
     """Rename a deployed front-matter key when the template has moved to its successor.
 
     Front matter is preserved verbatim by ``--update --merge``, so a change to the *name* of a
@@ -288,15 +288,17 @@ def _migrate_superseded_keys(
         current: Front-matter keys of the on-disk file.
 
     Returns:
-        ``(migrated_current, notices)``. ``migrated_current`` is a copy; ``current`` is not
-        mutated.
+        ``(migrated_current, notices, renamed)``. ``migrated_current`` is a copy; ``current`` is not
+        mutated. ``renamed`` holds the successor keys that were renamed in.
     """
     migrated = dict(current)
     notices: list[str] = []
+    renamed: set[str] = set()
     for new_key, old_key in _KEY_SUCCESSION:
         if new_key in fresh and old_key in migrated and new_key not in migrated:
             value = migrated.pop(old_key)
             migrated[new_key] = value
+            renamed.add(new_key)
             if old_key in CAPABILITY_FRONT_MATTER_KEYS:
                 notices.append(
                     f"front matter: capability key {old_key!r} renamed to {new_key!r} "
@@ -309,7 +311,7 @@ def _migrate_superseded_keys(
                     f"(value preserved: {value!r}). {old_key!r} is not recognised by this "
                     f"framework's runtime, so its value was never honoured."
                 )
-    return migrated, notices
+    return migrated, notices, renamed
 
 
 def _merge_front_matter(
@@ -356,7 +358,7 @@ def _merge_front_matter(
 
     # A key the template has RENAMED is migrated before anything else, so the comparisons below
     # see one declaration rather than an old key and a new key that disagree.
-    current, key_migrations = _migrate_superseded_keys(fresh, current)
+    current, key_migrations, renamed_keys = _migrate_superseded_keys(fresh, current)
 
     merged = dict(current)
     applied: list[str] = list(key_migrations)
@@ -379,15 +381,45 @@ def _merge_front_matter(
         # continue and produced no notice at all. Measured 2026-08-01: not merely unapplied, as
         # the review's §4.3 had it, but entirely silent. The merge still does not touch the value;
         # naming it is the whole remediation.
+        #
+        # "Wider" is any capability the template does not grant (disk − template ≠ ∅), not only a
+        # strict superset: `Bash, Read, Write, Edit` against a read-only `Read, Grep, Glob` grants
+        # Bash/Write/Edit though it is no superset, and the strict test let exactly that through
+        # (IM item 02 / G-04-1). After a key RENAME the old grant was never enforced and now is, so it
+        # is reported whatever its provenance. A value either side cannot parse is reported too: a
+        # grant nobody can read must not pass silently (fail-closed reporting). `disallowedTools` is
+        # a DENY list, so for it the comparison runs the other way (template − disk).
+        template_set = disk_set = None
         if key in _CAPABILITY_FRONT_MATTER_KEYS:
-            _t = _parse_capability_list(template_value, key=key)
-            _d = _parse_capability_list(disk_value or "", key=key)
-            if _t is not None and _d is not None and _t < _d and not (untouched and template_moved):
+            template_set = _parse_capability_list(template_value, key=key)
+            disk_set = _parse_capability_list(disk_value or "", key=key)
+            renamed = key in renamed_keys
+            if (template_set is None or disk_set is None) and disk_value is not None and (
+                renamed or not (untouched and template_moved)
+            ):
+                proposals.append(
+                    f"front matter: {key!r} is a capability declaration that could not be parsed "
+                    f"(template {template_value}, on disk {disk_value!r}), so whether it GRANTS MORE "
+                    f"than the template cannot be checked. Review it by hand."
+                )
+                continue
+            if template_set is not None and disk_set is not None:
+                extra = sorted((template_set - disk_set) if key == "disallowedTools" else (disk_set - template_set))
+            else:
+                extra = []
+            if extra and (renamed or not (untouched and template_moved)):
+                why = (
+                    f"it was declared under a superseded key the runtime ignores and is ENFORCED from "
+                    f"now on, under {key!r}"
+                    if renamed else
+                    "this file has been edited since generation, so the wider grant may be a "
+                    "deliberate project choice or may be an escalation"
+                )
                 proposals.append(
                     f"front matter: {key!r} on disk GRANTS MORE than the template — extra: "
-                    f"{sorted(_d - _t)}. Not applied: this file has been edited since generation, "
-                    f"so the wider grant may be a deliberate project choice or may be an "
-                    f"escalation. Review it, then set `{key}: {template_value}` to revoke."
+                    f"{extra}. Not applied: {why}. Review it, then set `{key}: {template_value}` to "
+                    f"revoke. (`agentteams --reconcile-front-matter` lists every front-matter divergence in "
+                    f"the team; `--reconcile-apply` applies ALL of them, in both directions.)"
                 )
                 continue
 
@@ -395,8 +427,6 @@ def _merge_front_matter(
             continue                                    # template unchanged; project's value wins
 
         if key in _CAPABILITY_FRONT_MATTER_KEYS:
-            template_set = _parse_capability_list(template_value, key=key)
-            disk_set = _parse_capability_list(disk_value or "", key=key)
             narrowing = (
                 template_set is not None
                 and disk_set is not None
@@ -438,6 +468,14 @@ def _merge_front_matter(
             proposals.append(
                 f"front matter: {key!r} changed in BOTH template and this file — template "
                 f"{template_value}, on disk {disk_value!r}. Kept yours; reconcile by hand."
+            )
+    # A capability key only the deployed file declares (the template has none) is a grant the
+    # template never made. The loop above walks template keys only, so it never saw these.
+    for key in sorted(set(current) - set(fresh)):
+        if key in _CAPABILITY_FRONT_MATTER_KEYS and key not in {"disallowedTools", "model", "allowed-tools"}:
+            proposals.append(
+                f"front matter: {key!r} on disk GRANTS MORE than the template — the template declares no "
+                f"{key!r}, the file has {current[key]!r}. Not applied. Review it, then remove it to revoke."
             )
     return merged, applied, proposals
 
@@ -557,3 +595,37 @@ def _render_front_matter(content: str, keys: dict[str, str]) -> str:
     return f"---\n{body}\n---\n" + content[match.end():]
 
 
+def print_merge_notices(notices: list[str]) -> None:
+    """Print a merge run's notices to stderr, capability grants beyond the template first.
+
+    Filed under the generic "fenced region(s) shrank" heading, a capability escalation read like a
+    routine merge notice (IM item 02 audit), so "GRANTS MORE than the template" notices get their
+    own heading.
+
+    Args:
+        notices: The run's notices (``EmitResult.notices``).
+
+    Returns:
+        None.
+
+    Raises:
+        None.
+    """
+    import sys
+
+    grants = [n for n in notices if "GRANTS MORE than the template" in n]
+    others = [n for n in notices if n not in grants]
+    if grants:
+        print(f"\n  ⚠ {len(grants)} capability grant(s) beyond the template (not applied; review each):",
+              file=sys.stderr)
+        for note in grants:
+            print(f"    Notice: {note}", file=sys.stderr)
+    if others:
+        print(f"\n  Notice: {len(others)} fenced region(s) shrank during merge:", file=sys.stderr)
+        for note in others:
+            print(f"    Notice: {note}", file=sys.stderr)
+        print(
+            "     Review whether the source description needs to be expanded "
+            "before re-running, or use --overwrite if the shrink is intended.",
+            file=sys.stderr,
+        )

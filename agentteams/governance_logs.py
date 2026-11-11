@@ -120,6 +120,25 @@ def check_logs(root: Path) -> list[str]:
     return [problem for path in log_paths(root) for problem in check_log(path)]
 
 
+def _refuse_a_chain_break(raw: bytes, header: list[str], cells: dict[str, str]) -> None:
+    """Raise ValueError when appending ``cells`` would break a chained decisions log's hash chain.
+
+    A broken chain makes the gate refuse every decision in the log, so a row that would break it is
+    refused here instead: record such a decision with ``agentteams --sign-decision``, which links it.
+    """
+    from agentteams.cli.decision_chain import verify_chain
+    from agentteams.cli.decision_log import _decision_signing_active
+
+    rows = [dict(zip(header, r)) for r in _parse(raw)[1:] if r]
+    try:
+        verify_chain(rows + [cells], header, signing_active=_decision_signing_active(header))
+    except RuntimeError as exc:
+        raise ValueError(
+            f"appending this row would break the decisions log's hash chain ({exc}); every gate would then "
+            "refuse. Record the decision with `agentteams --sign-decision`, which links it"
+        ) from exc
+
+
 def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
     """Append one row to an existing CSV log, validated, without ever rewriting the file.
 
@@ -136,7 +155,8 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
         None.
 
     Raises:
-        ValueError: The log is malformed or headerless, a dict has unknown keys, a value is not a ``str``, a value
+        ValueError: The log is malformed or headerless, a dict has unknown keys, a security decision row has no
+            action id or no verdict, or the row would break a chained decisions log, a value is not a ``str``, a value
             holds a line that starts a dated record, or the rendered row does not round-trip to the header's field
             count. The file is untouched in every case.
         OSError: The file cannot be read or appended to.
@@ -157,6 +177,15 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
             values = [row.get(name, "") for name in header]
         else:
             values = list(row)
+        if path.name == "security-decisions.log.csv" and {"action_reviewed", "decision"} & set(header):
+            cells = dict(zip(header, values))
+            if "prev_digest" in header:
+                _refuse_a_chain_break(raw, header, cells)
+            action = (cells.get("action_reviewed") or cells.get("decision") or "").strip()
+            verdict = (cells.get("verdict") or cells.get("status") or "").strip()
+            if not action or not verdict:
+                raise ValueError("a security decision row needs its action id and its verdict "
+                                 "(action_reviewed/verdict, or decision/status)")
         if any(not isinstance(v, str) for v in values):
             raise ValueError("every value must be a str")
         if len(values) != len(header):
@@ -176,4 +205,58 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
         os.close(fd)  # closing releases the flock
 
 
-__all__ = ["LOG_DIRS", "LOG_NAMES", "append_row", "check_log", "check_logs", "log_paths"]
+def main(argv: list[str] | None = None) -> int:
+    """CLI: ``check [ROOT]`` reports malformed logs; ``append LOG --row-json JSON`` appends one row.
+
+    ``append`` is how the orchestrator records a row that a read-only agent (``@security``,
+    ``@conflict-auditor``) returned: the agent cannot write, so it hands back the row and the
+    orchestrator appends it here, validated by :func:`append_row` against the log's own header.
+
+    Args:
+        argv: Arguments (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        int: 0 on success, 1 when ``check`` finds a problem or ``append`` refuses the row.
+
+    Raises:
+        None.
+    """
+    import argparse
+    import json
+    import sys
+
+    parser = argparse.ArgumentParser(prog="python -m agentteams.governance_logs",
+                                     description="Check or append to the append-only governance CSV logs.")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    chk = sub.add_parser("check", help="Report malformed governance logs under ROOT.")
+    chk.add_argument("root", nargs="?", default=".", help="Project root or team dir (default: .).")
+    app = sub.add_parser("append", help="Append one validated row to an existing log.")
+    app.add_argument("log", help="Path to the log (it must exist and have a header row).")
+    app.add_argument("--row-json", required=True,
+                     help="The row as a JSON object keyed by the log's header names (or a list in header order).")
+    args = parser.parse_args(argv)
+
+    if args.cmd == "check":
+        problems = check_logs(Path(args.root))
+        for p in problems:
+            print(p)
+        if not problems:
+            print(f"{len(log_paths(Path(args.root)))} governance log(s) well-formed")
+        return 1 if problems else 0
+    try:
+        row = json.loads(args.row_json)
+        if not isinstance(row, (dict, list)):
+            raise ValueError("--row-json must be a JSON object or list")
+        append_row(Path(args.log), row)
+    except (ValueError, OSError) as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 1
+    print(f"appended 1 row to {args.log}")
+    return 0
+
+
+__all__ = ["LOG_DIRS", "LOG_NAMES", "append_row", "check_log", "check_logs", "log_paths", "main"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

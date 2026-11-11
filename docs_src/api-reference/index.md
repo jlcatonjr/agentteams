@@ -111,6 +111,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`team_dir_advisories`](team-dir-advisories.md) | Generation-time advisories for planted team markers and planted Codex config keys (detection only) |
 | [`prompt_roots`](prompt-roots.md) | Prompt-root change detection: per-fence hashes in the build-log, `PROMPT-ROOT CHANGED` warning, `--strict-prompt-roots` (detection only) |
 | [`parallel_plan`](parallel-plan.md) | Parallelisation analysis over a plan's `depends_on` column |
+| [`plan_priority`](plan-priority.md) | Expected-net-benefit ordering of plan items (severity, breadth, cost, confidence) |
 | [`sandbox_handoff`](sandbox-handoff.md) | Operator handoff scripts: the reviewable `.sh` plus hash-checked command a sandboxed agent gives the operator for work the sandbox refuses |
 | [`feature_inventory`](feature-inventory.md) | Generated inventory of the shipped feature surface |
 | [`front_matter_reconcile`](front-matter-reconcile.md) | Report (and optionally apply) template-vs-deployed YAML front-matter divergence |

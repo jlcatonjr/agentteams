@@ -47,7 +47,7 @@ VERIFY_PLIST="$HOME/Library/LaunchAgents/$VERIFY_LABEL.plist"
 VERIFY_TIMES="${VULNSCAN_VERIFY_TIMES:-17:15 18:45}"
 INSTALL_DIR="$CFG_DIR/vulnscan-remediation"
 # The tracked scripts --install copies (vulnscan-operator-actions.sh is site-local: never copied, never removed).
-FILES=(vulnscan-handoff-lib.sh vulnscan-target-agents.sh vulnscan-remediate-auto.sh
+FILES=(vulnscan-handoff-lib.sh vulnscan-git-lib.sh vulnscan-target-agents.sh vulnscan-remediate-auto.sh
        vulnscan-ensure-docker.sh vulnscan-daily-wrapped.sh vulnscan-install-guard.sh)
 OPERATOR_ACTIONS="${VULNSCAN_OPERATOR_ACTIONS:-$INSTALL_DIR/vulnscan-operator-actions.sh}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-8}"

@@ -6,6 +6,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (merge: a capability grant beyond the template is reported even when it is no superset)
+
+- **The bug.** `--update --merge` warned about a wider-than-template grant only when the disk set was a *strict
+  superset* of the template's. A legacy read-only agent with `allowed-tools: Bash, Read, Write, Edit` is no
+  superset of `Read, Grep, Glob`. The `allowed-tools` → `tools` rename then carried it across. The only notices
+  were the rename ("value preserved") and a generic "capability declaration … set it to adopt" note. From then on, `@security` held an enforced Write and
+  Bash grant (IM evaluation item 02, G-04-1).
+- **A capability on disk that the template lacks is now reported** as `GRANTS MORE than the template`, with the
+  extra tools listed.
+  - **When:** whenever the file was edited since generation or has no baseline, and always after a key rename,
+    because the old grant was never enforced and now is.
+  - **Not reported:** an untouched file whose template moved keeps the generic capability proposal, since its
+    grant came from an earlier render.
+  - **Also reported now:** a capability value that cannot be parsed; a capability key only the file declares
+    (`hooks`, `mcpServers`, `permissionMode`, `skills`, `memory`, `agents`, `capabilities`); and a
+    `disallowedTools` deny list that is shorter than the template's.
+  - **Where:** on the console, grant notices now print under their own heading instead of "fenced region(s)
+    shrank".
+  - **The notice** says what `--reconcile-front-matter` lists and that `--reconcile-apply` applies every
+    divergence. The value is still never rewritten without consent.
+- **The Claude team-builder template no longer declares the retired `allowed-tools:` key.** It uses the
+  canonical `tools:` list, which the Claude adapter maps to `Read, Edit, Write, Grep, Glob, Bash` (the same
+  grant). AUTHORING-GUIDE §6 now documents `tools:` and says what actually happens with no `tools:` block. The
+  Claude adapter falls back to `Bash, Read, Write, Edit`, and every shipped template declares `tools:`. The
+  bridge path writes no key and warns (G-04-2).
+- **New `tests/test_read_only_roles_render.py`.** It renders the read-only roles (security, adversarial,
+  code-hygiene, conflict-auditor, quality-auditor, technical-validator) on Copilot, Claude and Grok, and checks
+  that none grants write or execute (G-04-8).
+  - **Goose:** strict `xfail`. Its read-only recipes still get the builtin `developer` extension; that is IM
+    item 14.
+  - **Codex:** `sandbox_mode = "read-only"` is checked as a declaration only.
+- **Integrity manifest.** `references/enforcement-integrity.json` re-pins `agentteams/front_matter_merge.py`.
+
+### security (vulnscan remediation scripts: hardened git; repository config can no longer run code)
+
+- The remediation scripts run unconfined, with the operator's credentials, in repositories whose git data a confined
+  review agent may have written. Their git calls were plain `git`. A planted `core.fsmonitor`, hook,
+  `remote.origin.uploadpack`, credential helper, `pager.<cmd>` or filter driver would have run outside the sandbox.
+  New `scripts/vulnscan-remediation/vulnscan-git-lib.sh` (copied by `--install`) provides two wrappers:
+  - `hgit` adds the executor's `_GIT_HARDENING` flags plus `log.showSignature=false` and
+    `push.recurseSubmodules=no`, and sets `GIT_PAGER=cat`, `GIT_LFS_SKIP_SMUDGE=1` and `GIT_NO_REPLACE_OBJECTS=1`.
+  - `hgit_net` handles fetch, ls-remote and push. It also pins git's own upload-pack/receive-pack, checks origin URLs
+    the way the executor does, and offers only `gh auth git-credential`, and only to `https://github.com`.
+- Before any command, a repository is refused when its own config sets a key that `-c` cannot neutralise:
+  filter, lfs, gpg, http, url, include, credential and pager keys; `core.worktree`, `core.attributesFile` and
+  `core.alternateRefs*`; or `remote.*.proxy` and `remote.*.vcs`.
+  - The config is read with `-z`, so a value containing a newline is judged as a whole.
+  - An exact allowlist keeps working repositories working: http transfer-size and timeout keys,
+    `lfs.repositoryformatversion`, the repository's own LFS endpoint access mode, and git-lfs's stock
+    `filter.lfs.*` values.
+- `vulnscan-handoff-lib.sh`, `vulnscan-target-agents.sh` and `vulnscan-deploy.sh` use the wrappers.
+  `vulnscan-deploy.sh` keeps raw git for its "not inside a work tree" safety check.
+- @security HALT ×4 → PASS. New tests: `tests/test_vulnscan_git_lib.py`.
+
+### fixed (security: a HALT written in the other log schema no longer vanishes; read-only auditors return their log rows)
+
+- **The bug.** A HALT written in the 9-column form the `@security` template asked for, under the 6-column header
+  that new teams are seeded with, was read into the wrong columns. The gate saw no HALT, and a later PASS in the
+  header's own form cleared the action, a C-2 bypass (IM evaluation item 06, G-07-1).
+- **The gate's decision-log reader now fails closed on width.** If any record's field count differs from the
+  header's, the gate refuses every decision in that log and names the row. Malformed logs that used to be read
+  with shifted columns are now refused. So is a log where an open quote has swallowed later rows. To repair one,
+  rewrite each row in the columns of the log's own header (back the file up first), then confirm the fix with
+  `python -m agentteams.governance_logs check`. This applies at once, with no warn-only release: a log the gate
+  cannot read must not clear anything.
+- **`@security` and `@conflict-auditor` no longer write the logs.** Both are read-only. They now end their reports
+  with their rows in a `csv` block, written in the log's own header columns, and the orchestrator appends each row
+  with the new `python -m agentteams.governance_logs append LOG --row-json …`. That command validates every row
+  against the header. A `@security` verdict takes effect only once its row is appended. A clean conflict audit
+  returns one `CLEAN` row (G-07-2, G-09-1, G-21-2).
+- **The security template no longer says to "write new rows in the current 9-column form".** It now names both
+  headers and says to write rows in the log's own one. The seeded header stays at 6 columns. The code writers
+  adapt to whatever header exists, and the signed append writes legacy-led columns.
+- **A HALT binds when `@security` returns it**, even if its append fails; a refused HALT append goes to the operator.
+  Only a PASS or CONDITIONAL PASS waits for its row. A CONDITIONAL PASS is completed by a new PASS row, never by
+  editing the old row in place.
+- **`append` refuses a decision row with no action id or no verdict**, and refuses a row that would break a
+  chained decisions log's hash chain (use `agentteams --sign-decision` there). The gate also refuses a header that names a
+  column twice.
+- **`conflict-log.csv` is now seeded** with the auditor's columns, next to the other logs (G-09-2). `{CONFLICT_LOG_PATH}`
+  now names the team's own `references/` dir on every surface: for example `.claude/agents/references/conflict-log.csv`
+  on Claude. It used to be the Copilot literal `.github/agents/references/conflict-log.csv`, where nothing was
+  seeded and every append was refused. A clean conflict audit's `CLEAN` row is `closed`, so it never waits on
+  `@conflict-resolution`.
+- **Fence versions:** `security_rules_invariant` v=22, `security_verdict_contract` v=2; in the conflict auditor,
+  `invariant_core` v=2, `rules` v=2 and a new `conflict_log_format` fence; in the orchestrator, `available_workflows`
+  v=12.
+- **Integrity manifest.** `references/enforcement-integrity.json` re-pins `agentteams/cli/decision_log.py`.
+
+### added (plans: order items by expected net benefit — `plan_priority`)
+
+- New `python -m agentteams.plan_priority` (`agentteams/plan_priority.py`, stdlib-only, compute-only).
+  - **Ratings and score.** It rates each plan or metaplan item for severity, breadth and cost (1–5), plus an
+    optional confidence (0.25–1.0). Net benefit is `p·S·B − cost_points(C)`, with cost points 1/2/4/8/16.
+  - **Order.** Items are ordered by band (`do-now` ≥ 10, `next` ≥ 4, `later` ≥ 0, `reconsider`). An S=5 safety
+    floor puts a severe item at the head of `next`. Operator-only pins (`operator:<date>:<reason>`) go first.
+  - **Dependencies.** It never reorders across a `depends_on` or implicit read-after-write edge. Priority
+    inheritance keeps a cheap prerequisite from starving.
+  - **Validation.** Bad ratings exit 2 with every bad row listed. `--require` also rejects unrated rows, empty
+    rationales (including a rated CSV with no `rationale_*` columns) and stale computed columns. `--json` emits
+    `{plan, items, pins, warnings, errors}`.
+- `python -m agentteams.parallel_plan --priority` lists wave members in rank order and breaks write-write
+  conflicts by rank instead of CSV order. This can change which items share a wave. The default schedule is
+  unchanged. `compute_waves` gains an optional `priority=` map, and the footprint-edge derivation is now the
+  public `footprint_edges()`.
+- **Templates.**
+  - The plan rule (instructions Rule 9, orchestrator Rule 10) gains the prioritization clause, as an extension
+    with no renumbering.
+  - Workflow 0C steps 1, 3 and 6 rate, compute and dispatch by rank. Workflow 10 step 2a reports open plans by
+    net benefit.
+  - The `available_workflows` fence is now v=11.
+  - New always-emitted `references/net-benefit-prioritization.reference.md`, which holds the rubric, the rating
+    governance (author proposes, `@adversarial` recommends, the orchestrator applies, then ratings and edges freeze)
+    and a user-editable project-anchors section.
+- **Not updated automatically on existing teams.** The rule lines sit outside every fence, so
+  `--update --merge` does not rewrite them on an existing team. Rolling them out to existing teams is a
+  separate, reviewed step.
+- Requested by the operator via infrastructuremanagement-59 (2026-11-10).
+
 ### fixed (server kit: a provider mirror signed by the distro archive keyring is the distro archive)
 
 - L1 graded every package from a provider mirror upstream, because only canonical archive hostnames counted as the
