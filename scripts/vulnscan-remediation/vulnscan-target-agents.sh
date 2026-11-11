@@ -84,17 +84,17 @@ create_goose_team() {   # $1 = repo
   echo "  no goose orchestrator yet"
   # operator-only: the brief is drafted from README text and the rendered agents then run headless (C-4)
   gate "Create worktree ${wt#"$REPOS_ROOT"/} on a new branch and render a goose team for $name there?" || return 1
-  git -C "$repo" fetch -q origin
-  base="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  hgit_net "$repo" fetch -q origin
+  base="$(hgit -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
   if [[ -z "$base" ]]; then
-    for b in origin/main origin/master; do git -C "$repo" rev-parse -q --verify "$b" >/dev/null && { base="$b"; break; }; done
+    for b in origin/main origin/master; do hgit -C "$repo" rev-parse -q --verify "$b" >/dev/null && { base="$b"; break; }; done
   fi
   [[ -n "$base" ]] || { warn "cannot find origin's default branch for $name"; return 1; }
   branch="$TEAM_BRANCH_PREFIX-$(date +%Y%m%d)"
   if [[ -d "$wt" ]]; then
     warn "${wt#"$REPOS_ROOT"/} already exists without a goose team; using it as is ($(repo_state "$wt"))"
   else
-    git -C "$repo" worktree add -q -b "$branch" "$wt" "$base"
+    hgit -C "$repo" worktree add -q -b "$branch" "$wt" "$base"
     ok "worktree ${wt#"$REPOS_ROOT"/} on $branch (from $base)"
   fi
   brief="$(brief_of "$wt")"

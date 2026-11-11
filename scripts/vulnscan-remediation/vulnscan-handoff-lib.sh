@@ -10,6 +10,7 @@
 #                         fallback confinement launcher
 
 PY="$HOME/.local/pipx/venvs/agentteams/bin/python"      # the interpreter the launchd job runs
+. "$(dirname "${BASH_SOURCE[0]}")/vulnscan-git-lib.sh"   # GIT_HARDENING, hgit, hgit_net, git_config_refusal
 AT="$HOME/.local/pipx/venvs/agentteams/bin/agentteams"   # same install's agentteams CLI
 VS=("$PY" -P -m agentteams.vulnscan)
 CFG_DIR="${AGENTTEAMS_VULNSCAN_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agentteams}"
@@ -89,7 +90,7 @@ goose_headless() {   # goose_headless <home> <recipe> <log>  → exit status (12
   proxy="$(awk '/^OPENROUTER_HOST:/{print $2; exit}' "$HOME/.config/goose/config.yaml" 2>/dev/null | sed -E 's#^https?://##; s#/.*##')"
   proxy="${proxy/localhost/127.0.0.1}"
   [[ "$proxy" =~ ^127\.0\.0\.1:[0-9]+$ ]] || { warn "goose OPENROUTER_HOST is not a loopback route proxy ($proxy): refusing unconfined egress"; return 3; }
-  common="$(git -C "$home" rev-parse --git-common-dir)"; [[ "$common" = /* ]] || common="$home/$common"
+  common="$(hgit -C "$home" rev-parse --git-common-dir)"; [[ "$common" = /* ]] || common="$home/$common"
   scratch="$(mktemp -d "${TMPDIR:-/tmp}/vulnscan-goose.XXXXXX")"
   mkdir -p "$HOME/.local/share/goose" "$HOME/.local/state/goose" "$HOME/.config/goose" "$home/$HANDOFF_DIR"
   local protect=() pth
@@ -124,8 +125,8 @@ for f in json.load(open(sys.argv[1]))["findings"]:
         print(f["target"])
 EOF
     [[ "$t" == "$REPOS_ROOT"/* ]] || continue
-    top="$(git -C "$t" rev-parse --show-toplevel 2>/dev/null)" || continue
-    url="$(git -C "$top" remote get-url origin 2>/dev/null || true)"
+    top="$(hgit -C "$t" rev-parse --show-toplevel 2>/dev/null)" || continue
+    url="$(hgit -C "$top" remote get-url origin 2>/dev/null || true)"
     org_re="${REPO_ORG//./\\.}"   # dots in the org match literally
     if [[ "$url" =~ github\.com[:/]$org_re/ ]]; then echo "$top"; else echo "  skipped (not $REPO_ORG: ${url:-no origin}): $top" >&2; fi
   done | sort -u
@@ -169,5 +170,5 @@ with_mgmt_key() {
 }
 
 repo_state() {   # one-line branch / dirty summary
-  printf 'branch=%s dirty=%s' "$(git -C "$1" branch --show-current)" "$(git -C "$1" status --porcelain | wc -l | tr -d ' ')"
+  printf 'branch=%s dirty=%s' "$(hgit -C "$1" branch --show-current)" "$(hgit -C "$1" status --porcelain | wc -l | tr -d ' ')"
 }
