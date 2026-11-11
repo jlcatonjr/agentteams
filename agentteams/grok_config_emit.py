@@ -209,6 +209,28 @@ def grok_permission_table(wired_ids: list[str]) -> dict[str, Any]:
     return table
 
 
+def managed_block(existing_text: str) -> dict[str, Any]:
+    """Return the parsed agentteams-managed block of a ``.grok/config.toml`` (empty when there is none).
+
+    Args:
+        existing_text: The current config file text.
+
+    Returns:
+        The block's tables, as TOML-parsed data.
+
+    Raises:
+        ValueError: The managed block exists but does not parse as TOML.
+    """
+    start = existing_text.find(_MANAGED_HEADER)
+    end = existing_text.find(_MANAGED_FOOTER, start + 1) if start != -1 else -1
+    if start == -1 or end == -1:
+        return {}
+    try:
+        return tomllib.loads(existing_text[start + len(_MANAGED_HEADER):end])
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"the agentteams-managed block in {GROK_CONFIG_REL} does not parse: {exc}") from exc
+
+
 def _previous_block_keys(existing_text: str) -> set[str]:
     """Return the top-level keys inside the existing managed block (empty when there is none).
 
@@ -221,14 +243,7 @@ def _previous_block_keys(existing_text: str) -> set[str]:
     Raises:
         ValueError: The managed block exists but does not parse as TOML.
     """
-    start = existing_text.find(_MANAGED_HEADER)
-    end = existing_text.find(_MANAGED_FOOTER, start + 1) if start != -1 else -1
-    if start == -1 or end == -1:
-        return set()
-    try:
-        return set(tomllib.loads(existing_text[start + len(_MANAGED_HEADER):end]))
-    except tomllib.TOMLDecodeError as exc:
-        raise ValueError(f"the agentteams-managed block in {GROK_CONFIG_REL} does not parse: {exc}") from exc
+    return set(managed_block(existing_text))
 
 
 def emit_grok_config(

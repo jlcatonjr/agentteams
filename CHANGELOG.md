@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--check-wiring`: the gate hook and `permissions.deny` must be merged, not only the sandbox block)
+
+- **The bug.** `--check-wiring` compared only the Claude `sandbox` block. A `.claude/settings.json` holding that
+  block alone printed "OK: sandbox confinement is merged" and exited 0, with no `PreToolUse` gate and no
+  `permissions.deny`. Grok's check looked only for the presence of `[permission]` and the profile (IM evaluation
+  item 03, G-22-1).
+- **Claude, what it checks now.**
+  - A `PreToolUse` hook of `type: command` whose command is exactly the emitted gate command (no added
+    `|| true`), with a matcher that covers every gate tool. Matchers are read as regexes; one that does not
+    compile, or is not a string, covers nothing.
+  - The gate is always required, even if the emitted example leaves it out.
+  - Every emitted `permissions.deny` rule, the `Read(...)` key denies included.
+  - `disableAllHooks: true` fails the check.
+  - `settings.local.json` is read too.
+- **Grok, what it checks now.**
+  - The managed `[permission]` block must hold every emitted deny rule.
+  - The advisory gate files (`agentteams-gate.json`, the shim, `constitutional-gate.py`) must exist, and the JSON
+    must still run the shim. Grok hooks fail open, so this confirms a declared control.
+- **Upgrade note.** A confined (boundary-requested) team that merged only the sandbox block, or whose deny rules
+  or gate drifted, now exits non-zero. That is deliberate: those teams were wrongly reported OK, and failing them
+  is the point of the fix. It departs from the item's warn-first rollback note, which is aimed at teams that
+  could break.
+- **No boundary requested** (cooperative, or switched off after having one): a missing gate or deny rule is a
+  WARNING and the exit stays 0. A follow-up is proposed to make that fail in the next release.
+- **Other changes.**
+  - Live values are never echoed.
+  - The Claude check moved from `frameworks/claude.py` to `frameworks/_claude_wiring_check.py`.
+    `claude._verify_emitted_sandbox_merged` stays as an alias.
+  - The `--help` text and the man page are updated.
+
 ### added (governance logs: `repair`, an operator-approved, backed-up fix for malformed rows)
 
 - `python -m agentteams.governance_logs repair LOG` previews a fix for rows whose field count differs from the

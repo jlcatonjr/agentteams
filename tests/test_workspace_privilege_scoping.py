@@ -660,12 +660,19 @@ def test_wiring_write_roots_narrowing_says_re_merge(tmp_path):
     assert not any("WIDENS" in m or "/srv/other" in m for m in msgs)
 
 
+def _gate_hooks() -> dict:
+    """The constitutional-gate PreToolUse entry a fully merged live settings carries (IM item 03)."""
+    from agentteams.frameworks._claude_wiring_check import GATE_COMMAND, GATE_TOOLS
+    return {"PreToolUse": [{"matcher": "|".join(sorted(GATE_TOOLS)),
+                            "hooks": [{"type": "command", "command": GATE_COMMAND}]}]}
+
+
 def test_wiring_correctly_merged_passes(tmp_path):
     from agentteams.frameworks.claude import verify_sandbox_wiring
     block = _sandbox()
-    _write_claude(tmp_path, example={"sandbox": block}, live={"sandbox": dict(block)})
+    _write_claude(tmp_path, example={"sandbox": block}, live={"sandbox": dict(block), "hooks": _gate_hooks()})
     ok, msgs = verify_sandbox_wiring(tmp_path)
-    assert ok and any(m.startswith("OK:") for m in msgs)
+    assert ok and any(m.startswith("OK:") for m in msgs), msgs
 
 
 def _wiring_args():
@@ -688,7 +695,7 @@ def test_check_wiring_dispatch_maps_the_default_agents_dir_to_the_project(tmp_pa
     """Regression (check-wiring-passes-agents-dir): --output is <project>/.claude/agents in real use."""
     from agentteams.cli.standalone_modes import run_standalone_modes
     block = _sandbox()
-    _write_claude(tmp_path, example={"sandbox": block}, live={"sandbox": dict(block)} if merged else None)
+    _write_claude(tmp_path, example={"sandbox": block}, live={"sandbox": dict(block), "hooks": _gate_hooks()} if merged else None)
     agents = tmp_path / ".claude" / "agents"
     agents.mkdir(parents=True, exist_ok=True)
     rc = run_standalone_modes(_wiring_args(), {"framework": "claude"}, {}, agents, agents)
@@ -698,7 +705,7 @@ def test_check_wiring_dispatch_maps_the_default_agents_dir_to_the_project(tmp_pa
 def test_check_wiring_dispatch_returns_zero_when_merged(tmp_path):
     from agentteams.cli.standalone_modes import run_standalone_modes
     block = _sandbox()
-    _write_claude(tmp_path, example={"sandbox": block}, live={"sandbox": dict(block)})
+    _write_claude(tmp_path, example={"sandbox": block}, live={"sandbox": dict(block), "hooks": _gate_hooks()})
     rc = run_standalone_modes(_wiring_args(), {"framework": "claude"}, {}, tmp_path, tmp_path)
     assert rc == 0
 

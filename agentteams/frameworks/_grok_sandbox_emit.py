@@ -242,7 +242,7 @@ def verify_grok_sandbox_wiring(project_root: Path, manifest: dict[str, Any] | No
     Raises:
         ValueError: An invalid ``os_sandbox`` value in ``manifest``.
     """
-    from agentteams.grok_config_emit import GROK_CONFIG_REL, _previous_block_keys
+    from agentteams.grok_config_emit import GROK_CONFIG_REL, grok_permission_table, managed_block
     from agentteams.sandbox_state import effective_sandbox_state
 
     if manifest is None:
@@ -253,11 +253,12 @@ def verify_grok_sandbox_wiring(project_root: Path, manifest: dict[str, Any] | No
     profile_present = (root / ".grok" / "sandbox.toml").is_file()
     config = root / GROK_CONFIG_REL
     try:
-        permission_present = "permission" in _previous_block_keys(config.read_text(encoding="utf-8"))
+        block = managed_block(config.read_text(encoding="utf-8"))
     except OSError:
-        permission_present = False
+        block = {}
     except ValueError:
         return False, [f"WARNING: the agentteams-managed block in {GROK_CONFIG_REL} does not parse; cannot verify."]
+    permission_present = "permission" in block
     msgs: list[str] = []
     if not on:
         if permission_present:
@@ -279,7 +280,26 @@ def verify_grok_sandbox_wiring(project_root: Path, manifest: dict[str, Any] | No
         msgs.append(f"WARNING: the OS sandbox is on for this team but the agentteams-managed block in "
                     f"{GROK_CONFIG_REL} carries no [permission] table (an operator [permission] table keeps it out; "
                     "merge the control-plane deny rules by hand).")
+    # IM item 03 (G-22-1): the advisory gate is written directly (never operator-merged), so check it is there and
+    # still points at the shim. Grok hooks fail open: this confirms a DECLARED control, not enforcement.
+    hooks_dir = root / ".grok" / "hooks"      # the *_REL constants are relative to .grok/agents
+    gate_files = [hooks_dir / Path(rel).name for rel in (GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL, GROK_GATE_REL)]
+    gate_missing = [f".grok/hooks/{f.name}" for f in gate_files if not f.is_file()]
+    if gate_missing:
+        msgs.append(f"WARNING: the advisory Grok gate is incomplete: {', '.join(gate_missing)} missing; regenerate.")
+    elif "./agentteams-gate-shim.py" not in gate_files[0].read_text(encoding="utf-8", errors="replace"):
+        msgs.append("WARNING: .grok/hooks/agentteams-gate.json no longer runs ./agentteams-gate-shim.py; regenerate.")
+    if permission_present:
+        # IM item 03 (G-22-1): presence alone passed a [permission] table that had lost deny rules.
+        perm = block.get("permission")
+        live_deny = perm.get("deny") if isinstance(perm, dict) else None
+        live_set = {r for r in live_deny if isinstance(r, str)} if isinstance(live_deny, list) else set()
+        missing = sorted(set(grok_permission_table([])["deny"]) - live_set)
+        if missing:
+            msgs.append(f"WARNING: the managed [permission] block in {GROK_CONFIG_REL} is missing {len(missing)} "
+                        f"emitted deny rule(s) {missing!r}; re-render so every control-plane path stays denied.")
     if msgs:
         return False, msgs
-    return True, ["OK: .grok/sandbox.toml is present and the managed .grok/config.toml block carries [permission]. "
+    return True, ["OK: .grok/sandbox.toml is present, the advisory gate files are in place, and the managed "
+                  ".grok/config.toml block carries [permission] with every emitted deny rule. "
                   "These are DECLARED controls; the boundary is .grok/confined-run.example.sh (launcher mode)."]
