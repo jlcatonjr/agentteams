@@ -100,6 +100,7 @@ EXTRA_TRUST_ROOT_TOKENS: tuple[str, ...] = (
     ".claude/settings.json", ".claude/settings.local.json", ".claude/hooks", "settings.hooks.example.json",
     "confined-run.example.sh", "management-authority.json", "agents.md", ".config/agentteams/keys",
     "agentteams_management_signing_key", "agentteams_decision_signing_key", "agentteams_proposal_ledger_key",
+    ".agentteams/carveouts.json",
 )
 
 #: Spec keys :func:`spec_from_dict` accepts; anything else is refused rather than silently ignored.
