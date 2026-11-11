@@ -471,16 +471,16 @@ Claude Code front matter keys written by the adapter:
 |-------|--------|-------|
 | `name` | Extracted from VS Code `name:` key | Falls back to slug-derived name |
 | `description` | Extracted from VS Code `description:` key | Omitted if blank |
-| `allowed-tools` | **Mapped** from the VS Code `tools:` list | `read`→`Read`; `search`→`Grep, Glob`; `edit`→`Edit, Write`; `execute`→`Bash`; `todo`→`TodoWrite`; `agent`→`Task`. Falls back to `Bash, Read, Write, Edit` only when the agent declares no `tools:` block. This preserves per-agent least privilege — a read-only governance agent (`tools: ['read', 'search']`) gets `Read, Grep, Glob`, not write/shell. |
+| `tools` | **Mapped** from the VS Code `tools:` list | `read`→`Read`; `search`→`Grep, Glob`; `edit`→`Edit, Write`; `execute`→`Bash`; `todo`→`TodoWrite`; `agent`→`Task`. This preserves per-agent least privilege — a read-only governance agent (`tools: ['read', 'search']`) gets `Read, Grep, Glob`, not write/shell. An agent whose front matter has no `tools:` block, or one that maps to nothing, falls back to `Bash, Read, Write, Edit` in this adapter (every shipped agent template declares `tools:`, so only a hand-authored agent reaches the fallback). The bridge path (`bridge_subagents.py`) differs: it writes **no** capability key and warns, because a subagent with no `tools:` inherits every tool. Claude Code reads `tools:` only: the older `allowed-tools:` key is ignored by the runtime, and `--update --merge` renames it, reporting any grant beyond the template's. |
 
-VS Code keys **not** passed through verbatim: `user-invocable`, `agents`, `model`, `handoffs`. The `tools:` list is **mapped** to `allowed-tools` (see above), not dropped.
+VS Code keys **not** passed through verbatim: `user-invocable`, `agents`, `model`, `handoffs`. The `tools:` list is **mapped** to Claude tool names (see above), not dropped.
 
 Example Claude Code output (for a `navigator` whose VS Code `tools: ['read', 'search', 'execute']`):
 ```yaml
 ---
 name: Navigator — MyProject
 description: "Navigate the project structure and locate files."
-allowed-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash
 ---
 
 # Navigator
@@ -501,7 +501,7 @@ Before submitting a new template:
    ```bash
    python -c "import yaml; yaml.safe_load(open('.github/agents/your-agent.agent.md').read().split('---')[1])"
    ```
-   For `claude` framework output, YAML front matter is present but uses Claude Code keys (`allowed-tools`) that differ from VS Code format — validate with:
+   For `claude` framework output, YAML front matter is present but uses Claude Code tool names in `tools:` (`Read, Grep, Glob`, …) that differ from the VS Code values — validate with:
    ```bash
    python -c "import yaml; yaml.safe_load(open('.claude/agents/your-agent.md').read().split('---', 2)[1])"
    ```
