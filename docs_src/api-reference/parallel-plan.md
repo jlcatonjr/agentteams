@@ -22,8 +22,12 @@ typed handoffs over those rows are validated by [`handoff_payloads`](handoff_pay
   `touches_shared_state()`, `has_footprint()`.
 - `PlanFootprint` — a whole-plan footprint (`path`, union `reads`/`writes` token sets,
   `determinate` — `False` when the plan has no parseable write footprint at all).
-- `compute_waves(steps)` → `WaveSchedule` — Kahn layering over declared `depends_on`
-  **plus** footprint-implied edges (read-after-write / write-after-write), then
+- `footprint_edges(steps)` → `[(first, second, kind)]` — the footprint-implied facts per step
+  pair: `"raw"` (read-after-write; an ordering edge) or `"ww"` (write-write; a tie that only
+  forbids sharing a wave). Shared with [`plan_priority`](plan-priority.md).
+- `compute_waves(steps, priority=None)` → `WaveSchedule` — Kahn layering over declared `depends_on`
+  **plus** footprint-implied edges (read-after-write; write-write ties serialized in CSV order, or
+  by `priority` rank when a map from `plan_priority.priority_map` is given), then
   conservative refinement: shared-state denylist steps and empty/unparseable-footprint
   steps are forced to singleton waves; dependency cycles are a **blocking error**.
 - `analyze_plan(csv_path)` — read + compute in one call.
@@ -37,7 +41,10 @@ typed handoffs over those rows are validated by [`handoff_payloads`](handoff_pay
 - `render_skill()` — the `parallelize-plan` Claude skill (emitted via `bridge.py`,
   gated by the `bridge:copilot-vscode-to-claude:parallelize` host-feature token; no
   direct/non-bridge consumer exists).
-- `main(argv)` — CLI: `python -m agentteams.parallel_plan STEPS.csv [...] [--json]`.
+- `main(argv)` — CLI: `python -m agentteams.parallel_plan STEPS.csv [...] [--json] [--priority]`.
+  `--priority` ranks the plan with [`plan_priority`](plan-priority.md), lists each wave's members
+  in rank order and breaks write-write ties by rank; it exits 2 when the plan's ratings, ids or
+  dependencies fail `plan_priority`'s validation.
 
 ## Independence heuristic (conservative, fail-safe)
 

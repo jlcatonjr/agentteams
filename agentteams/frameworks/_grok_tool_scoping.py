@@ -45,9 +45,11 @@ _GROK_LIST_BREAKERS = frozenset({"MCPTool"})
 #: count toward a non-empty effective toolset: a list of only these may behave like an empty one (@security delta C2).
 _GROK_NO_GRANT = frozenset({"Write", "WebFetch", "WebSearch"})
 
-#: Front-matter lines every Grok agent carries so ``tools:`` is the exact limit. Grok's defaults widen it:
-#: ``injectDefaultTools`` (default true) layers session tools on top of the list and ``mcpInheritance``
-#: (default ``all``) passes every parent MCP server (source-only: ``xai-grok-agent/src/config.rs``).
+#: Front-matter lines every Grok agent carries so ``tools:`` is the exact limit for built-in tools. Grok's defaults
+#: widen it: ``injectDefaultTools`` (default true) layers session tools on top of the list and ``mcpInheritance``
+#: (default ``all``) passes every parent MCP server to a SUBAGENT (source-only: ``xai-grok-agent/src/config.rs``).
+#: It does not limit a custom agent run with ``--agent``: that is the top-level session and reaches every configured
+#: MCP server through ``search_tool``/``use_tool`` (live on the pinned release, 2026-11-10; remediation row 693).
 GROK_EXACT_TOOLSET_KEYS: tuple[str, str] = ("injectDefaultTools", "mcpInheritance")
 EXACT_TOOLSET_LINES: tuple[str, ...] = (f"{GROK_EXACT_TOOLSET_KEYS[0]}: false", f"{GROK_EXACT_TOOLSET_KEYS[1]}: none")
 
@@ -181,8 +183,8 @@ def to_grok_tools(value: str, *, deny: bool = False) -> str:
 def effective_grok_tools(tools: str, disallowed: str | None) -> list[str]:
     """Return the built-in tools an allow-list keeps after a deny-list (bare names, as emitted).
 
-    Only names in :data:`GROK_TOOL_NAMES` that grant something count (not :data:`_GROK_NO_GRANT`). An ``mcp__`` entry does not: under ``mcpInheritance: none`` the agent
-    has no MCP servers, so an allow-list of only MCP tools (or one whose MCP entries a wildcard deny removes) leaves
+    Only names in :data:`GROK_TOOL_NAMES` that grant something count (not :data:`_GROK_NO_GRANT`). An ``mcp__`` entry does not: an ``mcp__`` name in ``tools:`` grants
+    nothing (Grok reaches MCP tools only through ``search_tool``/``use_tool``, whatever the list says), so an allow-list of only MCP tools (or one whose MCP entries a wildcard deny removes) leaves
     nothing usable (@security grok-scope-fix step 5, condition 1).
 
     Args:

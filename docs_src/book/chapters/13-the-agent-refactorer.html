@@ -64,6 +64,8 @@
 
       <p>The sequencing prevents a specific failure mode. If the refactorer ran before the updater, it might extract content that the updater was about to modify, locking the outdated version into a reference file. If the refactorer ran concurrently with the updater, both might modify the same agent file, creating a write conflict. By running after the updater, the refactorer operates on stable input. The agent files have already been updated to reflect the current project state, and the refactorer's structural audit evaluates that current state rather than a transitional one.</p>
 
+      <p>The framework's orchestrator later added a narrow exception to strict sequencing. Where steps overlap in the files they touch but share no dependency, its coordinated-concurrency workflow lets them run together, where the operator has tagged them for it, by dividing the shared files into disjoint regions, each claimed in an append-only ledger before it is written. Two claims on the same region are settled in favor of the earlier one, and where the regions cannot be made disjoint the work falls back to serial order. The updater and the refactorer are not such a case, since the refactorer depends on what the updater produces.</p>
+
       <p>The relationship illustrates a broader pattern: the updater handles content maintenance (ensuring that what agent files say is correct), while the refactorer handles structural maintenance (ensuring that how they are organized is correct). An agent file can be structurally compliant but factually stale, or factually current but structurally non-compliant. The concerns are independent.</p>
     </section>
 

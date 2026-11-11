@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 22: Enforcement: Where Accountability Becomes Prevention</title>
+</head>
+<body>
+  <article id="notes:enforcement-and-the-single-writer">
+    <h1>Cliff Notes: Chapter 22: Enforcement: Where Accountability Becomes Prevention</h1>
+    <p class="part-label">Part VI: Hardening and Scale</p>
+    <p class="notes-source">A summary of <a href="chapters/22-enforcement-and-the-single-writer.html#ch:enforcement">Chapter 22</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-22-thesis"><h2>Thesis</h2>
+      <p>Chapter 4 had held that "The constitutional framework enables accountability for scope violations, not prevention of them." Chapter 22 asks how far the exception that Chapter 4 granted to architectural constraints can extend. Its criterion is that a prohibition moves from accountability to prevention when two conditions hold. It can be stated as a path, a tool, a system call or a writer, and the runtime that executes the agent checks it before the act. Where a rule needs judgment, or where a runtime treats the declaration as advice, accountability remains the ordinary condition. The chapter concludes that prevention within the team is real but partial, and that it exists only where someone has chosen it, on the surfaces that check it. For every mechanism but the tool grant, it exists only once the operator has wired it.</p>
+    </section>
+    <section id="notes-22-covers"><h2>What the chapter covers</h2>
+      <p>The first section joins Chapter 3's distinction between comparison by rule and judgment about intent with the design principles of Saltzer and Schroeder (1975). The result is the two-condition criterion, and every claim of prevention must name its surfaces.</p>
+      <p>The second section treats declared limits as hypotheses about a runtime, following Lampson (1973). It reports two failures. Claude agents were emitted with the allowed-tools key, which the framework's record says "is ignored in a subagent file, which silently granted every generated agent the full tool pool." Backup copies kept inside the agents directory were loaded as agents and defeated the write-policy switch. The fixes are the tools key, backups stored under a suffix no runtime loads, and a family of checks comparing declaration with effect.</p>
+      <p>The third section describes the pre-action gate, a hook the Claude harness runs before matching tool calls. Before it, the clearance rule for agent-initiated actions "was procedural text." The gate denies deterministic findings and asks about procedural ones. It sees only five tools on Claude and mediates nothing an agent reads. It fails open in a cooperative workspace and fails closed for a team that chose a confined or exclusive profile.</p>
+      <p>The fourth section moves the boundary into the operating system through a privilege_profile with cooperative, confined and exclusive values. Confined is the default at the 1.1 anchor, but the emitted sandbox block is inert until the operator merges it into live settings. WASM confinement is coming in 1.2, and even there the vendor command-line process stays outside the guest.</p>
+      <p>The fifth section presents the single writer. Under the switch that sets write_policy to orchestrator-only, every rendered agent except the orchestrator returns typed proposals, and a runner the operator starts outside every agent session applies the accepted ones itself. The runner holds the proposal-ledger key and by default runs every gate and requested command inside an operating-system sandbox. The switch is refused on most surfaces.</p>
+      <p>The sixth section describes the red-team instrument that measures what judgment cannot guarantee, and the seventh gathers the surfaces into a table and fixes the words enforced, cooperative and inert until wired.</p>
+    </section>
+    <section id="notes-22-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>A cooperative rule is one that binds only if the agent chooses to follow it.</li>
+        <li>After every merge a check reports any deployed grant that "GRANTS MORE than the template." It is advisory, and the merge leaves the wider grant in place for the operator to revoke.</li>
+        <li>Surfaces where grants cannot be checked against rank (Codex, Goose and agents-md) report that they are not checkable, which the chapter calls a fail-safe default applied to reporting.</li>
+        <li>The gate's split of deny and ask follows comparison and judgment. A hook that denied procedural cases outright "would be wrong often enough to get removed."</li>
+        <li>The fail-open default rests on the observation that "a hook that can brick an operator's session gets deleted, and a deleted hook enforces nothing." A wiring check confirms a chosen boundary is in place.</li>
+        <li>An integrity manifest pins the enforcement modules and the gate hook. The framework calls a manifest kept beside the files it protects a speed bump rather than a boundary, and places the durable fix in the harness hook and in keys kept outside the agent's environment. Where the operator pins them, template digests sit outside the writable package.</li>
+        <li>A governed workspace is a team whose decision-signing switch is on, as it is by default from the first render. Where the operator also commits a marker file at the root of the team's agents directory, no later render can turn the switch off. Without the marker a render can still relax it, though never silently.</li>
+        <li>The opt-in decision log is hash-chained, and the chapter quotes its header, "The log is evidence, not the boundary."</li>
+        <li>A handoff script lets an agent blocked by its sandbox pass the work to the operator, who confirms, runs it and answers for it.</li>
+        <li>The single writer has one stated residual. Claude Code's built-in general-purpose subagent is not rendered by the framework and keeps Bash under the switch.</li>
+        <li>On Codex a pinned role gate holds the switch, and without it per-role limits are "INSTRUCTION-LEVEL only." Claude under the switch on Linux is refused by the wiring check.</li>
+        <li>The red-team audit compares a contract arm with an ablated arm and uses benign controls. Its catch-rate reports what share of the enforcement modules have a verifier tested against a planted defect. Before a script drove the corpus through a live agent, the judgment layer was "an accepted risk rather than a measured one."</li>
+      </ul>
+    </section>
+    <section id="notes-22-frames"><h2>Theoretical frames</h2>
+      <p>Buchanan and Tullock (1962) supply the account of constitutional constraint as accountability. Vallier (2026) supplies the instruction to align the game and the argument that selection pressure operates at every level, which the chapter reads as reaching past any single team's architecture. Hayek (1945) explains why rules that need knowledge of particular circumstances cannot be checked by another rule. Saltzer and Schroeder (1975) and Lampson (1973) come from computer security, the first for mediation and the second for confinement and the suspicion toward one's own description of a system. North (1990a) counts enforcement as part of the institution. Elster (1977) frames the protected switch as an analogue of self-binding. Williamson (1985) frames the single writer as a governance structure suited to one kind of transaction, and Vallier (2021) ties trust in rules to evidence that they hold.</p>
+    </section>
+    <section id="notes-22-matters"><h2>Why it matters</h2>
+      <p>Chapter 22 extends the book's earlier account of accountability without reversing it. It fixes the vocabulary the rest of Part VI uses, so that the word prevention always carries the qualification of named surfaces and, for every mechanism but the tool grant, of wiring. Its practical advice is that an operator should run the wiring check after every change of settings, because an unmerged boundary looks the same in the files as a merged one. The chapter also notes that the team maintaining the book runs on Copilot, where the framework would refuse the single writer, so its conflicts remain avoided rather than impossible. The red-team instrument is described without findings, because the framework at the anchor holds no dated note of results.</p>
+    </section>
+    <section id="notes-22-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapter 22 is new in this edition. The chapter marks WASM confinement as coming in 1.2, and at the 1.1 release confinement stops at the operating-system sandbox and the launcher.</p>
+    </section>
+  </article>
+</body>
+</html>

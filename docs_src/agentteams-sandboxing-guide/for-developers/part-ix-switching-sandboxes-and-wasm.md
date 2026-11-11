@@ -54,9 +54,11 @@ WASM never replaces the OS sandbox: when one is available, the host process stil
 
 ## Turning something off (SB26)
 
-Five changes are constraint-relaxing: `sandbox-os-off`, `sandbox-wasm-off` (WASM off after on, or the
+Six changes are constraint-relaxing: `sandbox-os-off`, `sandbox-wasm-off` (WASM off after on, or the
 model-substrate floor lowered), `wasm-grant-widen`, `native-exec-keep`, `wasm-to-os-switch` (a runner
-program back from `sandbox: wasm` to `os`).
+program back from `sandbox: wasm` to `os`), `mcp-approval-auto` (a Codex render turns on the opt-in
+`codex:wasm-auto-approve` host feature, so `run_wasm` runs without the approval prompt; action id
+`mcp-approval-auto:codex`).
 
 **Your workspace is probably governed.** "Governed" means strict decision signing
 (`enforce_decision_signing`) is on, and it defaults to true from the first render. The gate reads it from
@@ -67,9 +69,11 @@ the shape it needs. Mint it outside the agent's session (the spec format is in t
 [CLI reference](../../cli-reference.md#-sign-decision)):
 
 ```
-AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/<key>.pem \
-  agentteams --sign-decision spec.json --output <team dir>
+agentteams --sign-decision spec.json --output <team dir>
 ```
+
+The signer uses `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the spec's `key_id`. Only a key
+kept elsewhere needs `AGENTTEAMS_DECISION_ED25519_KEYFILE=<path>` on the command.
 
 An HMAC-signed row is not enough, and a HALT blocks it. Standing relaxations (OS off, a widening, a keep,
 a runner switch) get a 90-day sunset and count against the exception registry's aggregate cap (default

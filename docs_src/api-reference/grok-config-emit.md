@@ -35,7 +35,9 @@ Grok expands `${VAR}` in `url`, `command`, `args`, `env` and `headers` at load t
 - `secret-store` and `oauth` mechanisms are not wired.
 
 Default catalogue servers are withheld unless opted in, as for Codex: Grok applies project MCP servers to the
-session, and generated subagents carry `mcpInheritance: none`.
+session. Generated agents carry `mcpInheritance: none`, but that limits only subagents: an agent run with
+`grok --agent` is the top-level session and reaches every project MCP server through `search_tool`/`use_tool`
+(live, Grok Build 1.0.52, 2026-11-10).
 
 ### Other `[mcp_servers.*]` tables outside the block
 
@@ -45,10 +47,14 @@ merges from the inert `.grok/mcp.agentteams-wasm.example.toml` (Grok is example-
 it). It survives only while it equals the table this render computes (`keep_if_exact`, from
 `_wasm_wiring.grok_kept_tables`), and is then listed in `kept_unmanaged`:
 
-- The comparison source is computed, never the example on disk, which Grok does not write-protect.
+- The comparison source is computed, never the example on disk, which Grok does not write-protect. Only the
+  agentteams launcher makes `.grok` read-only to a session; in profile mode (`GROK_CONFINE_MODE=profile`) neither
+  the example nor `.grok/config.toml` is protected from shell writes: the `[permission]` `deny` below covers only
+  Grok's Read/Edit/Write tools (row 648 gap 1: documented, no sandbox deny rule).
 - `keep_if_exact` is bounded: only `mcp_servers.agentteams_wasm`, keys exactly `command`/`args`, the command one of
   `runner_mcp.SYSTEM_PYTHONS`, and args exactly a compute-only `--agent _session` launch, rebuilt with
-  `wasm_mcp.launch_args`. Anything else raises `ValueError`.
+  `wasm_mcp.launch_args` (`wasm_mcp.is_session_launch`, shared with Codex's `first_party_tables`). Anything else
+  raises `ValueError`.
 - A copy that differs (a widened grant, an extra key, a quoted header, or WASM off) is replaced and reported.
 - A table whose header the strip does not match, such as `[ mcp_servers.x ]`, would survive outside the owning
   block, so the write is refused instead.

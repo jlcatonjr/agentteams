@@ -175,7 +175,7 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 | `codex` **(beta)** | Codex custom-agent TOML (`.codex/agents/*.toml`) + repo-root `AGENTS.md` | Native (translated into each agent's `developer_instructions`) | `.codex/agents/team-builder.toml` |
 | `grok` **(beta)** | Grok Build custom agents (`.grok/agents/*.md`, Claude-compatible front matter) + repo-root `AGENTS.md` | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | `.grok/agents/team-builder.md` |
 
-> **Grok support is in beta.** `--framework grok` targets xAI's Grok Build CLI (`grok`). Every agent carries `injectDefaultTools: false` and `mcpInheritance: none`, so its `tools:` list is the declared exact limit; no live negative test has yet shown a read-only agent blocked from editing (see [STABILITY.md](STABILITY.md) section 6). Agent `name:` values match the Claude render (Grok always loads `.claude/agents` too). Run an agent by its path, `grok --agent .grok/agents/<slug>.md`: Grok Build 1.0.52 does not resolve a custom agent by name, and cannot spawn one as a subagent, so the orchestrator cannot delegate. A scoped tool entry is dropped for grok, which does not honour it. The repo-root `AGENTS.md` is shared: Grok writes it in full only when absent or its own, otherwise refreshes just its `grok_runtime` block, and never writes a hand-written one. Grok loads project instructions only in a trusted folder (`grok --trust`). Interop (target and source) and absorb accept `grok`; convert and bridge do not, as for codex. See [`references/grok-agent-infrastructure-expert.md`](references/grok-agent-infrastructure-expert.md).
+> **Grok support is in beta.** `--framework grok` targets xAI's Grok Build CLI (`grok`). Every agent carries `injectDefaultTools: false` and `mcpInheritance: none`, so its `tools:` list is the declared exact limit for built-in tools (not for MCP servers: an agent run with `grok --agent` reaches every configured MCP server, since `mcpInheritance` limits only subagents; see [Grok privileges](docs_src/grok-privileges.md)); no live negative test has yet shown a read-only agent blocked from editing (see [STABILITY.md](STABILITY.md) section 6). Agent `name:` values match the Claude render (Grok always loads `.claude/agents` too). Run an agent by its path, `grok --agent .grok/agents/<slug>.md`: Grok Build 1.0.52 does not resolve a custom agent by name, and cannot spawn one as a subagent, so the orchestrator cannot delegate. A scoped tool entry is dropped for grok, which does not honour it. The repo-root `AGENTS.md` is shared: Grok writes it in full only when absent or its own, otherwise refreshes just its `grok_runtime` block, and never writes a hand-written one. Grok loads project instructions only in a trusted folder (`grok --trust`). Interop (target and source) and absorb accept `grok`; convert and bridge do not, as for codex. See [`references/grok-agent-infrastructure-expert.md`](references/grok-agent-infrastructure-expert.md).
 
 > **Goose support is in beta.** Generate, convert, and bridge are supported and validated against the Goose CLI; interop into Goose is supported (the CAI path keeps the handoff graph), and converting from `claude`/`copilot-cli` sources currently yields flat (un-delegated) recipes pending handoff-recovery work. The `goose` adapter is **Beta** under the [stability policy](STABILITY.md): its API may change in a minor release.
 
@@ -402,11 +402,16 @@ Most-used options:
   --revert-migration   Undo a --migrate run: git reset --hard pre-fencing-snapshot
   --self               Operate on the module's own agent team
   --fleet DIR          Run --update --merge across every workspace under DIR (and
-                       subfolders), covering .github/agents/ and .claude/. Git-commit
+                       subfolders), covering .github/agents/ and .claude/; skips
+                       --fleet-exclude matches and release-locked (toolchain.lock) repos. Git-commit
                        snapshot + git-diff content audit per workspace; non-destructive
                        (merge-only). Dry-run preview by default; pass --yes to apply.
   --fleet-frameworks   github | claude | goose | both | all (default: both)
   --fleet-report DIR   Fleet report dir (default: <DIR>/.agentteams-fleet/<run-id>/)
+  --fleet-exclude GLOB Skip folders matching GLOB (relative path or name; repeatable)
+  --fleet-skip-parent  Leave DIR's own workspace alone (SKIP row)
+  --fleet-ignore-locks GLOB
+                       Render workspaces of locked repos matching GLOB anyway
   --version            Print version
 ```
 

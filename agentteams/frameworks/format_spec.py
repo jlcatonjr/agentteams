@@ -72,7 +72,9 @@ class FormatSpec:
             code-quoted `` `key` `` (schema tables). Off for YAML providers, whose
             watch keeps the stricter ``key:`` match.
         emitted_front_matter_keys: The front-matter keys this project's adapter
-            actually WRITES. Cross-checked against the adapter's
+            actually WRITES on every agent file. Optional keys it writes only in some
+            cases (claude's ``model``, ``disallowedTools``, ``permissionMode``) are not
+            listed. Cross-checked against the adapter's
             ``required_front_matter_keys()`` by the single-source guard test.
             Empty for frameworks whose agent files carry no front matter
             (goose recipes, codex custom-agent TOML, agents-md plain Markdown).
@@ -202,7 +204,8 @@ FORMAT_SPECS: dict[str, FormatSpec] = {
         # .grok/agents is documented on the subagents page, which the watcher does not fetch.
         expected_locations=(".grok/config.toml",),
         toml_keys=True,
-        # tools (exact limit) + the two keys that stop Grok widening it (frameworks/grok.py).
+        # tools (exact limit for built-in tools) + the two keys that stop Grok widening it (frameworks/grok.py);
+        # MCP servers stay reachable to an --agent session via search_tool/use_tool (remediation row 693).
         # disallowedTools is optional (emitted only when declared), so it is not listed: same as claude.
         emitted_front_matter_keys=("name", "description", "tools", "injectDefaultTools", "mcpInheritance"),
         pinned_version="1.0.52",

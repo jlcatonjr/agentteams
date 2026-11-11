@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 20: Investigation and Remediation</title>
+</head>
+<body>
+  <article id="notes:investigation-remediation">
+    <h1>Cliff Notes: Chapter 20: Investigation and Remediation</h1>
+    <p class="part-label">Part V: Automated Governance</p>
+    <p class="notes-source">A summary of <a href="chapters/20-investigation-remediation.html#ch:investigation-remediation">Chapter 20</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-20-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that the system's answer to the question of how it knows something has gone wrong is a closed loop of centralized detection and decentralized repair. A workspace-level investigation finds and classifies problems, and each repository's own orchestrator fixes them with local context. No agent in the chain holds a global view, yet coherence results. The chapter's summary is that "The architecture is designed. The coherence it produces is partly emergent."</p>
+    </section>
+
+    <section id="notes-20-covers">
+      <h2>What the chapter covers</h2>
+      <p>Section 1 describes Stage 10, the workspace-level investigation. The abstract orchestrator of Chapter 17 coordinates the agent investigator of Chapter 18 to crawl all managed repositories for the three finding classes. Class 2 findings act as structural error signals, and Class 1 findings mark opportunities for the platform to grow, so the two need different responses. The chapter gives a sample run in which the investigator processes a dozen repositories and reads over a hundred agent files. In that run seven repositories show emergent error-handling patterns, four carry stale directory references, and two have orchestrators that absorbed security work. Building on McQuade and Butos (2005) on adaptive classifying systems, the chapter calls Stage 10 active classification, because Class 1 findings can reshape the categories for future runs. It adds that Stages 10, 10.5 and 11 belong to the workspace installation and that the module emits none of them at the 1.1 release.</p>
+      <p>Section 2 covers Stage 10.5, which updates agent documentation only for repositories whose source has changed. The logic is "Changed? Update. Unchanged? Skip." The stage is "explicitly best-effort", and its failures do not count toward the pipeline's failure total. The chapter states that convergence toward accuracy "is a conditional property", dependent on continued liveness, backfill after failures and periodic audits for drift that code changes do not reveal.</p>
+      <p>Section 3 describes Stage 11, per-repo remediation. Each local orchestrator reads its findings and applies fixes in parallel batches. The investigator has "broad visibility but shallow context", while the local orchestrator has the reverse. Local orchestrators route findings by class and severity to documentation maintenance, conflict resolution or cleanup gated by security clearance. Two findings in one file may need a single coordinated edit. The chapter adds that every remediation in this cycle repairs documentation, and that repair of code follows another path, examined in Chapter 25, in which the agent that requests a fix is separate from the executor that holds the credentials.</p>
+      <p>Section 4 sets out fault tolerance. Failed stages are retried, slow stages are terminated gracefully, and stages that still fail write a failure stub beginning "# STAGE FAILURE". If Stage 6 times out, Stages 7 and 8 continue, and the system is "one day stale on contradiction detection. It is not paralyzed." Stage 9 classifies each stage report as productive, low-yield, failed or skipped, and these classifications accumulate into a health dashboard.</p>
+      <p>Section 5 presents the full cycle as closed-loop feedback. A side effect of one day's fix is caught by the next day's investigation, and the cycle classifies, routes, tolerates partial failure and adjusts to prior results. Section 6 reads the arrangement as a computational ecology in the sense of Miller and Drexler (1988a). Section 7 adds an update deployment protocol for remediation that changes governing files.</p>
+    </section>
+
+    <section id="notes-20-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li><strong>Stage 10.</strong> A cross-repository investigation that produces classified findings, the cycle's raw material.</li>
+        <li><strong>Source-change conditioning.</strong> SHA comparison gates documentation updates, and periodic full-scope audits handle drift that code changes do not reveal.</li>
+        <li><strong>Separation of detection and repair.</strong> Diagnosis comes from the investigator and treatment from the local orchestrator, routing each decision to the agent with the most relevant context.</li>
+        <li><strong>Graceful degradation.</strong> The system continues at reduced capability, using fallback data, rather than halting.</li>
+        <li><strong>Feedback control elements.</strong> Sensors, classifiers, actuators and verification, in the form of the investigation protocol, the three classes, routed workflows and post-remediation audit.</li>
+        <li><strong>Update deployment protocol.</strong> Pre-update checks of rollback capacity and scope, merge-safe writes during the update, and post-update classification.</li>
+        <li><strong>Triage verdicts.</strong> "OK maps to PROCEED, WARN maps to PROCEED WITH CAUTION, and ERROR maps to HALT."</li>
+      </ul>
+    </section>
+
+    <section id="notes-20-frames">
+      <h2>Theoretical frames</h2>
+      <p>McQuade and Butos (2005) treat adaptive classifying systems after Hayek. Building on them, the chapter distinguishes passive classification into fixed categories from active classification that revises its categories, and it places Stage 10 on the active side.</p>
+      <p>Miller and Drexler (1988a) describe computational ecologies in which independent processes interacting through defined interfaces produce aggregate behaviour that none was designed to produce. The chapter applies this to the investigator and the local orchestrators, neither of which is assigned systemic coherence.</p>
+      <p>The chapter also draws on Chapter 2's theme of distributed knowledge, which justifies sending repair to local orchestrators, and on distributed systems engineering for eventual consistency and graceful degradation. It compares a pipeline that halts on one failure to a poorly designed microservice architecture.</p>
+    </section>
+
+    <section id="notes-20-matters">
+      <h2>Why it matters</h2>
+      <p>The chapter shows how the pieces of Part V fit into one self-correcting loop. Investigation without local repair would centralize decisions that need context, and repair without investigation would lack the cross-repository view. The chapter argues that each designed element is necessary. Without classification, investigation "produces undifferentiated noise". Without local orchestrators, remediation loses its context-sensitivity, and without the daily cadence "drift accumulates without bound."</p>
+      <p>The deployment protocol extends the same discipline to the act of correction. Corrective propagation and destructive overwrite can look alike at write time, and the protocol supplies the frame that tells them apart. The system "does not assume every update will be perfect", and it plans a recovery path in advance. Remediation quality is then tested by auditable outcomes rather than inferred from intention.</p>
+    </section>
+
+    <section id="notes-20-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 to 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items for release 1.2.</p>
+    </section>
+  </article>
+</body>
+</html>

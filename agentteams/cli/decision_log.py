@@ -788,18 +788,52 @@ def _assert_decision_chain_intact(rows: list[dict[str, str]], fieldnames: list[s
 
 
 def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[str]] | None:
-    """Return ``(rows, fieldnames)`` for the decisions log, or None when it does not exist."""
+    """Return ``(rows, fieldnames)`` for the decisions log, or None when it does not exist.
+
+    **Fail-closed on width.** Every record must have exactly as many fields as the header. Cells
+    are mapped to columns by position, so a row written in the other schema (a 9-column
+    ``date,plan_slug,step,decision,status,...`` row under the seeded 6-column legacy header, or
+    the reverse) lands its verdict in the wrong column: a HALT written that way reads as no
+    verdict at all, and a later PASS in the header's own form cleared the action (item 06,
+    G-07-1). The same holds for a quote left open, which can swallow later rows (a HALT among
+    them) without changing any field count. Any problem :func:`agentteams.governance_logs.check_log`
+    reports therefore refuses every gate decision, naming the record, rather than being read; a
+    HALT the gate cannot read must block, never vanish (C-2).
+
+    Raises:
+        RuntimeError: The log is unreadable or headerless, its header matches neither schema,
+            or ``check_log`` reports a problem (wrong width, open quote, swallowed rows).
+    """
+    from agentteams.governance_logs import check_log
+
     log_path = output_dir / "references" / "security-decisions.log.csv"
     if not log_path.exists():
         return None
+    # check_log: a record of the wrong width, a quote left open (strict parse), or a field that has
+    # swallowed later dated rows. The last two hide a HALT without changing any field count.
+    problems = check_log(log_path)
+    if problems:
+        raise RuntimeError(
+            "security decisions log is malformed, so no decision is read from it until it is repaired "
+            "(a row read into the wrong columns or swallowed by an open quote can hide a HALT): "
+            + "; ".join(problems[:5])
+            + ". Write every row in the columns of the log's own header row; "
+            "`python -m agentteams.governance_logs check` re-checks it"
+        )
     try:
         with log_path.open("r", encoding="utf-8", newline="") as fh:
-            reader = csv.DictReader(fh)
-            fieldnames = [c.strip() for c in (reader.fieldnames or [])]
-            _security_decision_schema_kind(fieldnames)
-            rows = [{k: (v or "") for k, v in row.items()} for row in reader]
-    except (OSError, csv.Error) as exc:
+            records = [r for r in csv.reader(fh, strict=True) if r]
+    except (OSError, csv.Error, UnicodeDecodeError) as exc:
         raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
+    fieldnames = [c.strip() for c in records[0]]
+    _security_decision_schema_kind(fieldnames)
+    duplicated = sorted({c for c in fieldnames if fieldnames.count(c) > 1})
+    if duplicated:
+        raise RuntimeError(
+            f"security decisions log is malformed: header names {duplicated} more than once, so a "
+            "row's cell for that column is ambiguous"
+        )
+    rows = [dict(zip(fieldnames, r)) for r in records[1:]]
     return rows, fieldnames
 
 

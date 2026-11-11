@@ -37,6 +37,296 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Motivation: the manager-roster rollout's Rule 11(e) in infrastructureManagement (2026-11-08) had three hand-pasted
   copies that drifted, prose-only expiry and cap checks, and a sha-bound gate that took twelve review rounds.
 
+### changed (Claude teams: the orchestrator runs on Fable 5.2, every other agent on Opus)
+
+- **Before**, no generated `.claude/agents/*.md` file carried a `model:` key. Templates declare Copilot's list form
+  (`model: ["Claude Opus 4.8 (copilot)"]`), which Claude Code cannot read, so the adapter dropped it. Every
+  subagent then inherited the session model, and a Fable session spawned Fable subagents.
+- **Now**, the Claude adapter writes `model: claude-fable-5-2` for the orchestrator (`orchestrator`,
+  `bridge-orchestrator`) and `model: opus` for every other agent. Fable is pinned because the model picker offers
+  Fable 5.2 and 5.1 side by side; Opus uses the alias, which follows the newest Opus. A template or CAI source that
+  already sets a valid Claude model (`opus`, `claude-sonnet-5-5`, `opus[1m]`) keeps it. A source with no `model:` key at
+  all, such as an imported Claude team, still inherits the session model.
+- New teams get the defaults at once. **Existing teams do not change silently**: `model:` is a privileged
+  capability key, so `--update --merge` reports each file's proposed `model:` line as a notice rather than writing
+  it. To adopt, add the line yourself or run `--update --overwrite` with a `@security` clearance. Claude Code's
+  built-in subagents (`Explore`, `general-purpose`, `Plan`) are not generated files and still inherit the session
+  model; set `CLAUDE_CODE_SUBAGENT_MODEL=opus` to pin those too.
+- **Claude model ids stay out of Copilot files.** Converting or importing (`--convert-from`, `--interop-from`) a
+  Claude team to copilot-vscode or copilot-cli drops each agent's Claude `model:`, so the Copilot default model
+  applies; an import says so in a notice. The decision is by source framework: a Copilot team's own model values,
+  bare ids such as `gpt-5` included, are kept. A Copilot builder converted to Claude gets `model: opus`, and the
+  Claude team-builder template now pins `model: opus` like every other non-orchestrator agent.
+
+### fixed (merge: a capability grant beyond the template is reported even when it is no superset)
+
+- **The bug.** `--update --merge` warned about a wider-than-template grant only when the disk set was a *strict
+  superset* of the template's. A legacy read-only agent with `allowed-tools: Bash, Read, Write, Edit` is no
+  superset of `Read, Grep, Glob`. The `allowed-tools` → `tools` rename then carried it across. The only notices
+  were the rename ("value preserved") and a generic "capability declaration … set it to adopt" note. From then on, `@security` held an enforced Write and
+  Bash grant (IM evaluation item 02, G-04-1).
+- **A capability on disk that the template lacks is now reported** as `GRANTS MORE than the template`, with the
+  extra tools listed.
+  - **When:** whenever the file was edited since generation or has no baseline, and always after a key rename,
+    because the old grant was never enforced and now is.
+  - **Not reported:** an untouched file whose template moved keeps the generic capability proposal, since its
+    grant came from an earlier render.
+  - **Also reported now:** a capability value that cannot be parsed; a capability key only the file declares
+    (`hooks`, `mcpServers`, `permissionMode`, `skills`, `memory`, `agents`, `capabilities`); and a
+    `disallowedTools` deny list that is shorter than the template's.
+  - **Where:** on the console, grant notices now print under their own heading instead of "fenced region(s)
+    shrank".
+  - **The notice** says what `--reconcile-front-matter` lists and that `--reconcile-apply` applies every
+    divergence. The value is still never rewritten without consent.
+- **The Claude team-builder template no longer declares the retired `allowed-tools:` key.** It uses the
+  canonical `tools:` list, which the Claude adapter maps to `Read, Edit, Write, Grep, Glob, Bash` (the same
+  grant). AUTHORING-GUIDE §6 now documents `tools:` and says what actually happens with no `tools:` block. The
+  Claude adapter falls back to `Bash, Read, Write, Edit`, and every shipped template declares `tools:`. The
+  bridge path writes no key and warns (G-04-2).
+- **New `tests/test_read_only_roles_render.py`.** It renders the read-only roles (security, adversarial,
+  code-hygiene, conflict-auditor, quality-auditor, technical-validator) on Copilot, Claude and Grok, and checks
+  that none grants write or execute (G-04-8).
+  - **Goose:** strict `xfail`. Its read-only recipes still get the builtin `developer` extension; that is IM
+    item 14.
+  - **Codex:** `sandbox_mode = "read-only"` is checked as a declaration only.
+- **Integrity manifest.** `references/enforcement-integrity.json` re-pins `agentteams/front_matter_merge.py`.
+
+### security (vulnscan remediation scripts: hardened git; repository config can no longer run code)
+
+- The remediation scripts run unconfined, with the operator's credentials, in repositories whose git data a confined
+  review agent may have written. Their git calls were plain `git`. A planted `core.fsmonitor`, hook,
+  `remote.origin.uploadpack`, credential helper, `pager.<cmd>` or filter driver would have run outside the sandbox.
+  New `scripts/vulnscan-remediation/vulnscan-git-lib.sh` (copied by `--install`) provides two wrappers:
+  - `hgit` adds the executor's `_GIT_HARDENING` flags plus `log.showSignature=false` and
+    `push.recurseSubmodules=no`, and sets `GIT_PAGER=cat`, `GIT_LFS_SKIP_SMUDGE=1` and `GIT_NO_REPLACE_OBJECTS=1`.
+  - `hgit_net` handles fetch, ls-remote and push. It also pins git's own upload-pack/receive-pack, checks origin URLs
+    the way the executor does, and offers only `gh auth git-credential`, and only to `https://github.com`.
+- Before any command, a repository is refused when its own config sets a key that `-c` cannot neutralise:
+  filter, lfs, gpg, http, url, include, credential and pager keys; `core.worktree`, `core.attributesFile` and
+  `core.alternateRefs*`; or `remote.*.proxy` and `remote.*.vcs`.
+  - The config is read with `-z`, so a value containing a newline is judged as a whole.
+  - An exact allowlist keeps working repositories working: http transfer-size and timeout keys,
+    `lfs.repositoryformatversion`, the repository's own LFS endpoint access mode, and git-lfs's stock
+    `filter.lfs.*` values.
+- `vulnscan-handoff-lib.sh`, `vulnscan-target-agents.sh` and `vulnscan-deploy.sh` use the wrappers.
+  `vulnscan-deploy.sh` keeps raw git for its "not inside a work tree" safety check.
+- @security HALT ×4 → PASS. New tests: `tests/test_vulnscan_git_lib.py`.
+
+### fixed (security: a HALT written in the other log schema no longer vanishes; read-only auditors return their log rows)
+
+- **The bug.** A HALT written in the 9-column form the `@security` template asked for, under the 6-column header
+  that new teams are seeded with, was read into the wrong columns. The gate saw no HALT, and a later PASS in the
+  header's own form cleared the action, a C-2 bypass (IM evaluation item 06, G-07-1).
+- **The gate's decision-log reader now fails closed on width.** If any record's field count differs from the
+  header's, the gate refuses every decision in that log and names the row. Malformed logs that used to be read
+  with shifted columns are now refused. So is a log where an open quote has swallowed later rows. To repair one,
+  rewrite each row in the columns of the log's own header (back the file up first), then confirm the fix with
+  `python -m agentteams.governance_logs check`. This applies at once, with no warn-only release: a log the gate
+  cannot read must not clear anything.
+- **`@security` and `@conflict-auditor` no longer write the logs.** Both are read-only. They now end their reports
+  with their rows in a `csv` block, written in the log's own header columns, and the orchestrator appends each row
+  with the new `python -m agentteams.governance_logs append LOG --row-json …`. That command validates every row
+  against the header. A `@security` verdict takes effect only once its row is appended. A clean conflict audit
+  returns one `CLEAN` row (G-07-2, G-09-1, G-21-2).
+- **The security template no longer says to "write new rows in the current 9-column form".** It now names both
+  headers and says to write rows in the log's own one. The seeded header stays at 6 columns. The code writers
+  adapt to whatever header exists, and the signed append writes legacy-led columns.
+- **A HALT binds when `@security` returns it**, even if its append fails; a refused HALT append goes to the operator.
+  Only a PASS or CONDITIONAL PASS waits for its row. A CONDITIONAL PASS is completed by a new PASS row, never by
+  editing the old row in place.
+- **`append` refuses a decision row with no action id or no verdict**, and refuses a row that would break a
+  chained decisions log's hash chain (use `agentteams --sign-decision` there). The gate also refuses a header that names a
+  column twice.
+- **`conflict-log.csv` is now seeded** with the auditor's columns, next to the other logs (G-09-2). `{CONFLICT_LOG_PATH}`
+  now names the team's own `references/` dir on every surface: for example `.claude/agents/references/conflict-log.csv`
+  on Claude. It used to be the Copilot literal `.github/agents/references/conflict-log.csv`, where nothing was
+  seeded and every append was refused. A clean conflict audit's `CLEAN` row is `closed`, so it never waits on
+  `@conflict-resolution`.
+- **Fence versions:** `security_rules_invariant` v=22, `security_verdict_contract` v=2; in the conflict auditor,
+  `invariant_core` v=2, `rules` v=2 and a new `conflict_log_format` fence; in the orchestrator, `available_workflows`
+  v=12.
+- **Integrity manifest.** `references/enforcement-integrity.json` re-pins `agentteams/cli/decision_log.py`.
+
+### added (plans: order items by expected net benefit — `plan_priority`)
+
+- New `python -m agentteams.plan_priority` (`agentteams/plan_priority.py`, stdlib-only, compute-only).
+  - **Ratings and score.** It rates each plan or metaplan item for severity, breadth and cost (1–5), plus an
+    optional confidence (0.25–1.0). Net benefit is `p·S·B − cost_points(C)`, with cost points 1/2/4/8/16.
+  - **Order.** Items are ordered by band (`do-now` ≥ 10, `next` ≥ 4, `later` ≥ 0, `reconsider`). An S=5 safety
+    floor puts a severe item at the head of `next`. Operator-only pins (`operator:<date>:<reason>`) go first.
+  - **Dependencies.** It never reorders across a `depends_on` or implicit read-after-write edge. Priority
+    inheritance keeps a cheap prerequisite from starving.
+  - **Validation.** Bad ratings exit 2 with every bad row listed. `--require` also rejects unrated rows, empty
+    rationales (including a rated CSV with no `rationale_*` columns) and stale computed columns. `--json` emits
+    `{plan, items, pins, warnings, errors}`.
+- `python -m agentteams.parallel_plan --priority` lists wave members in rank order and breaks write-write
+  conflicts by rank instead of CSV order. This can change which items share a wave. The default schedule is
+  unchanged. `compute_waves` gains an optional `priority=` map, and the footprint-edge derivation is now the
+  public `footprint_edges()`.
+- **Templates.**
+  - The plan rule (instructions Rule 9, orchestrator Rule 10) gains the prioritization clause, as an extension
+    with no renumbering.
+  - Workflow 0C steps 1, 3 and 6 rate, compute and dispatch by rank. Workflow 10 step 2a reports open plans by
+    net benefit.
+  - The `available_workflows` fence is now v=11.
+  - New always-emitted `references/net-benefit-prioritization.reference.md`, which holds the rubric, the rating
+    governance (author proposes, `@adversarial` recommends, the orchestrator applies, then ratings and edges freeze)
+    and a user-editable project-anchors section.
+- **Not updated automatically on existing teams.** The rule lines sit outside every fence, so
+  `--update --merge` does not rewrite them on an existing team. Rolling them out to existing teams is a
+  separate, reviewed step.
+- Requested by the operator via infrastructuremanagement-59 (2026-11-10).
+
+### fixed (server kit: a provider mirror signed by the distro archive keyring is the distro archive)
+
+- L1 graded every package from a provider mirror upstream, because only canonical archive hostnames counted as the
+  distro. On jlc-prod (Ubuntu 24.04 on DigitalOcean, `mirrors.digitalocean.com`) this left 26 PyPI findings open
+  that Ubuntu had already fixed, such as pyasn1 after `0.4.8-4ubuntu0.4`. That error was on the safe side.
+  Operator ruling (2026-11-10): trust the signing key, never a hostname. A mirror (URI and suite) now counts as the
+  distro archive only when every enabled apt entry for it pins `Signed-By` to the distro's own archive keyring,
+  and that keyring is the keyring package's regular, root-owned, not group- or world-writable file. Anything else
+  is still judged upstream. Each accepted mirror prints an `INFO apt mirror ...` line. Reported by
+  infrastructuremanagement-fe (T10).
+
+### fixed (docs: Grok `tools:` is the exact limit for built-in tools only, not for MCP servers)
+
+- A live check (Grok Build 1.0.52, 2026-11-10) found that a generated Grok custom agent run with `grok --agent`
+  reaches every MCP server in the project and user Grok config through Grok's always-on `search_tool`/`use_tool`
+  meta-tools: `mcpInheritance: none` limits only what a subagent inherits, and `--agent` makes the agent the
+  top-level session. The README, STABILITY, CLI reference, framework and Grok-config API references, the Grok
+  privileges page, the Grok `wasm_wiring` row and the module docstrings now say so; the claims that `tools:` is the
+  exact limit now cover built-in tools only. No emitted file changes. Today the only MCP servers agentteams puts
+  in `.grok/config.toml` come from `grok:mcp` wiring or the operator-merged compute-only `agentteams_wasm`
+  example. A real per-agent MCP limit is open (remediation row 693).
+
+### security (fleet release locks: fail closed, visible lifts; @security row 692)
+
+- A `toolchain.lock` that cannot be trusted now counts as a lock: one that is a directory, a dangling or looping
+  symlink, unreadable, not UTF-8, or has a non-comment line without `=`. A `.git` marks a repository toplevel only
+  as a directory or a `gitdir:` file, so an empty planted `.git` can no longer cut the lock search short.
+- Each workspace that `--fleet-ignore-locks` lifts gets a `REVIEW` row with target `(lock-lifted)`, naming the
+  pattern and the lock file. OK-only auto-commit therefore never takes it.
+- The constitutional gate template asks the operator before any command carrying `--fleet-ignore-locks`, or any
+  prefix of it down to `--fleet-i`, or the `fleet_ignore_locks` API argument.
+- `agentteams/_fleet_locks.py` is pinned in `integrity.ENFORCEMENT_MODULES`, and the manifest is re-recorded.
+
+### added (fleet: `--fleet-skip-parent`)
+
+- **`--fleet-skip-parent`** leaves the fleet DIR's own workspace alone when DIR is itself a workspace: it gets a
+  `SKIP` row with target `(parent-skipped)`, and workspaces below DIR still run. `--fleet-exclude` never matches DIR itself, so without
+  this flag a single `--fleet ~/githubrepositories` run renders the root folder's own team. That folder is
+  non-git, so it has no snapshot rollback. Opt-in; the default is unchanged.
+
+### changed (fleet: release-locked repositories are skipped; new `--fleet-exclude`)
+
+- **`--fleet` no longer renders a release-locked workspace.** On 2026-11-09 the weekly fleet re-rendered
+  repositories whose `toolchain.lock` pins agentteams (`agentteams=<repo>@<commit>`, `agentteams.tag=<tag>`) with a
+  different build. That rolled researchteam's and mathAgents' pinned teams back. Such a workspace now gets a `SKIP`
+  row with target `(release-locked)`, naming the pin and the lock file, before any snapshot or write. The governing
+  lock is the nearest `toolchain.lock` naming agentteams, from the workspace up to its repository's git toplevel
+  (even when the fleet parent is below it), so nested workspaces inherit it. A lock matching the running build
+  still counts. `--fleet-ignore-locks GLOB` (repeatable; `'*'` for all) renders the workspaces of matching locked repositories anyway; the glob matches the repository holding the lock, not a workspace name. **Behaviour change:** a run that used to update a locked repository now skips it.
+- **New `--fleet-exclude GLOB`** (repeatable): skip folders whose path relative to the fleet parent, or whose own
+  name, matches. A matched folder is not descended into and gets a `SKIP` row with target `(excluded)`. This lets
+  one root run replace the per-folder loops that operator scripts used for exclusion.
+
+### added (Codex `codex:wasm-auto-approve`, gated as the sixth sandbox relaxation)
+
+- New opt-in host feature `codex:wasm-auto-approve`: with WASM on, the shared `agentteams_wasm` table in
+  `.codex/config.toml` gets `default_tools_approval_mode = "auto"`, so `codex exec` under `workspace-write` no
+  longer stops at the approval prompt for `run_wasm` (compute-only). Operator-declared servers keep `prompt`,
+  and without the token nothing changes. The first-party bound now requires exactly the mode the features
+  select (`codex_mcp_emit.first_party_approval_mode`). Row 648 gap 4. The operator signed the decision to ship
+  it on 2026-11-09 (Ed25519); that decision covers this repository only.
+- Turning the token on is a constraint-relaxing effect, the sixth sandbox-relaxation kind `mcp-approval-auto`
+  (action id `mcp-approval-auto:codex`; WP-C2). A governed workspace (`enforce_decision_signing`) needs its own
+  operator Ed25519-signed decision for that action id: the render is refused until a PASS row with `scope` and
+  `effect_relaxes` both exactly `mcp-approval-auto:codex` and a traceable `derives_from` is recorded; an HMAC-only
+  row or an unretracted HALT refuses it. A cleared one is a standing exception (90-day sunset, bound to its
+  decision row, under the aggregate cap), and dropping the token retires it. Ungoverned workspaces get a
+  `SANDBOX RELAXATION` notice, as for the other kinds. The state is recorded in the build-log's
+  `sandbox_exceptions` as `mcp_approval_auto: "on"`, written only when on, so existing records are unchanged and
+  read as off; a missing, corrupt or symlinked build log also reads as off, so the render counts as new and needs
+  the signed row. Known over-block (fails closed): in a team directory that alternates a Codex render with
+  another framework's, the non-Codex render drops the key without retiring the exception, so the next Codex
+  render asks for a fresh signed row. Free text that names auto-approval in any inflection (`auto-approv…`,
+  `autoapprov…`) counts as naming a sandbox relaxation (directive denylist, effect classifier).
+
+### fixed (Grok WASM example says where it is and is not write-protected, row 648 gap 1)
+
+- The inert `.grok/mcp.agentteams-wasm.example.toml` header, and the Grok `wasm_wiring` row, now say that only the
+  agentteams launcher (`.grok/confined-run.example.sh`, the default launcher mode) makes `.grok` read-only to a Grok
+  session. In profile mode (`GROK_CONFINE_MODE=profile`) a session can edit the example and `.grok/config.toml`
+  alike, so the operator should merge only from a fresh render, after a diff. No deny rule was added: Grok's
+  sandbox profile cannot deny a write without denying the read, and protecting the example alone would leave
+  `.grok/config.toml` exposed.
+
+### fixed (the MCP server interpreter must not be swappable by another account)
+
+- When agentteams writes the launch command for the `agentteams_runner` and `agentteams_wasm` MCP servers, it now
+  skips a `python3` candidate whose resolved file, or that file's directory, is group- or world-writable or owned
+  by anyone other than root or you, and uses the next one; if none qualifies, the error names why each was
+  skipped. Typical installs are unaffected (`/usr/bin/python3` is root-owned; Homebrew's resolves to user-owned,
+  non-group-writable files). Residue, documented: a user-owned interpreter is trusted as much as your account,
+  and the symlink's own directory (`/opt/homebrew/bin`), intermediate links and ancestor directories are not
+  checked; the audit and the launch check stay membership checks (remediation row 2026-11-09).
+- `wasm_mcp.is_session_launch` (the exact bound for the shared `agentteams_wasm` table in Codex and Grok) also
+  requires the `--pins-sha256` value to be 64 lowercase hex. The server already refused other values at start.
+
+### added (`--branch-inventory` warns when a release merge would delete the integration branch)
+
+- For an integration-model project, `--branch-inventory` (and the inventory under `--branch-post-merge` /
+  `--branch-cleanup`) now checks the repository's "Automatically delete head branches" setting and the integration
+  branch's protection through its existing read-only GitHub client. Auto-delete on with the branch unprotected
+  adds a `WARNING:` note: merging the release PR would delete the branch, as it deleted this repository's `dev` on
+  2026-11-07. A fact it cannot read gives a "could not check" note instead. The check changes no branch state,
+  action, deletion plan or exit code (row 675 follow-up).
+
+### fixed (sync hub backups and fence-less hubs, row 662)
+
+- Every `.agentteams-backups` directory now ignores itself in git: the first backup writes a `.gitignore`
+  (`*`) into it unless one exists. Hub backups under `.agentteams/canonical/agents/.agentteams-backups` no
+  longer show as untracked in a committed hub whose `.gitignore` lacks the name. An existing `.gitignore`
+  there is left alone, so removing or replacing it is how to commit backups.
+- When a sync replaces a fence-less hub's instruction text with the pin's, it now backs up the hub's
+  `team.cai.json` first (`agents/.agentteams-backups/<timestamp>/__external__/`, restorable with
+  `--restore-backup`). Before, git history was the only copy.
+- The fences agentteams builds by f-string, which the version-ceiling scan can't read, are now listed with
+  their `v=` in a test, so a new site or a version bump fails until someone decides its ceiling. No merge
+  behaviour changes.
+
+### fixed (integration-branch teams are told to protect the integration branch)
+
+- The generated `references/integration-branch.reference.md` (brief `git_workflow.branch_model: "integration"`) now
+  states a setup prerequisite: the integration branch must be a protected branch (no deletion, no force push, no
+  required checks or reviews). With GitHub's "Automatically delete head branches" on, merging a release PR deletes
+  its head branch, the integration branch, unless it is protected; this repository lost `dev` that way on
+  2026-11-07 (release #398). The reference gives the `gh api` checks, a minimal protection rule, and how to
+  recreate a deleted branch. Existing teams pick it up on the next `agentteams --update --merge` (same fence, `v=1`).
+
+### fixed (Codex first-party `agentteams_wasm` table: exact bound, row 659)
+
+- `codex_mcp_emit`'s `first_party_tables` hook now admits the shared `agentteams_wasm` table only when its
+  `command` is one of `runner_mcp.SYSTEM_PYTHONS` and its `args` are exactly a compute-only `--agent _session`
+  launch, rebuilt element for element (`wasm_mcp.is_session_launch`, moved from `grok_config_emit` and now used by
+  both). Before, it checked a six-element prefix plus literal `--read`/`--scratch` membership and ignored
+  `command`, so `--read=/`, an argparse prefix (`--rea`), `--scratch=…` or a trailing second `--agent` passed. Only
+  direct API callers could reach it; the CLI always passes the canonical table. Grok's `keep_if_exact` is unchanged.
+
+### changed (operator signing finds its own key)
+
+- `--sign-decision`, `--sign-grant`, `--sign-mcp-direct-grant` and `vulnscan grant sign` no longer need
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE` when the key sits where `provision-operator-signing-key.sh` puts it:
+  with the variable unset, the signer uses `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the
+  spec's `key_id` and prints that path (never the key) before the confirm gate. A set variable still wins. If
+  neither exists, the error names both. Signing steps and handoff scripts can drop the key argument, and the
+  variable no longer has to be exported into a shell that might also launch an agent, where sandboxed commands
+  would inherit it. The confirm gate, the install-location gate, the integrity pin and the sandbox read-deny on
+  the key directory are unchanged. HMAC keys (`AGENTTEAMS_*_SIGNING_KEY`) are not resolved automatically yet.
+- Docs, `--help` text, the man page, the grant refusal messages and `provision-operator-signing-key.sh`'s printed
+  commands now say the key is found from `key_id`, and the signing examples name no key. The error for a missing
+  key says why no default was tried when the `key_id` is absent or cannot name a file.
+
 ### fixed (Linux confinement on Ubuntu 26 and with bwrap required, #262)
 
 - **A process left running by a confined command fails the run again under bwrap.** bwrap's PID 1 exits with the

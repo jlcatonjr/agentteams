@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 3: Organizations, Capital, and the Division of Labor</title>
+</head>
+<body>
+  <article id="notes:organizations-capital-division-of-labor">
+    <h1>Cliff Notes: Chapter 3: Organizations, Capital, and the Division of Labor</h1>
+    <p class="part-label">Part II: The Agent Team</p>
+    <p class="notes-source">A summary of <a href="chapters/03-organizations-capital-division-of-labor.html#ch:organizations-capital-division-of-labor">Chapter 3</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-03-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that agent documentation is capital in Lachmann's sense, heterogeneous, specific and complementary, with a structure that makes sense only within the plan that organizes it. From experience with roughly twenty agents across several projects, the author says "the capital-theoretic vocabulary is not analogical." The chapter then explains why teams form at all, using Coase, and how they divide labor and knowledge, using Smith, Hayek and Klein. Its central structural claim is a bifurcation between functional agents that govern documentation and domain agents that produce output.</p>
+    </section>
+
+    <section id="notes-03-covers">
+      <h2>What the chapter covers</h2>
+      <p>The first section sets out Lachmann's theory against the aggregate production function. Capital is not one fund but "a complex structure of heterogeneous, specific, and complementary goods" (Lachmann 1956). The chapter traces the lineage from Menger (1871) and Böhm-Bawerk (1889) through Hayek (1941) to Lachmann and Kirzner (1966), and to Lewin (1999) on perpetual reorganization. A factory with ten machines arranged in a line and one with the same machines piled in a warehouse hold the same aggregate stock but very different capacity. The arrangement matters more than the amount. "As is often the case in art, less is more."</p>
+      <p>The second section argues that agent files embody their technology. Technology is not a free-floating recipe but exists in the goods that carry it. The voice-style agent file is the chapter's example, since the knowledge of how to calibrate voice fidelity exists in that file and the stack it plugs into. When several files converge on the same pattern, the pattern can be abstracted into a template without detaching it from any file. Section 2.2 treats plan-dependence as the core of Lachmann's view and equates the Lachmannian plan with the Foss and Klein project. Plans are always revised, so capital is perpetually in disequilibrium, and agent-team plans face ontological uncertainty after Lane and Maxfield (2005). A note on goal consensus adds that file productivity depends on agreed goals, and that the orchestrator must adjudicate goal conflicts.</p>
+      <p>The third section applies the capital properties to agent files. No file substitutes for another, specificity runs along a gradient from project instructions to reference data, and complementarities are properties of the plan. "In an agent team, documentation is descriptive and operative." The fourth section treats refactoring as restructuring production. Adding an agent without updating routing and authority is like dropping a machine into a factory without connecting it. After building more than ten teams, the author built an automated daily pipeline and wrote the refactoring workflow for an abstract orchestrator. Contingent logic in agent files is itself capital investment.</p>
+      <p>The fifth section asks why teams form. Following Coase (1937), a team reduces re-specification costs, much as the firm reduces transaction costs. Williamson (1985) and Bylund (2015) frame the boundary of the team, North (1990a) supplies the institutional rules, and Miller and Drexler (1988c) the link between object-oriented encapsulation and property rights. The sixth section treats maintenance as one of two co-equal tasks. "A stale file is worse than no file, because it forms a false interpretive frame." Maintenance splits into a comparison against templates, which a rule can perform, and a judgment about intent, which no rule settles. The agentteams module divides the work on that line by marking template-generated regions so updates rewrite only those, leaving judgment with the agents.</p>
+      <p>The seventh section applies Smith (1776) and Klein (2012) to the orchestrator, which holds coordinative knowledge while domain agents hold productive knowledge, linked through handoff formats such as the Chapter Brief. The eighth section develops the functional and domain bifurcation. The book's team uses ten functional agents, and the module's templates/universal/ directory holds twelve functional governance templates at the 1.1 release, those ten plus git-operations and the repo liaison. Domain agents split into content-domain and tool-domain agents, the chapter-NN-expert is a workstream-expert subclass, and tool agents fall into specialist, reference and passive tiers. The ninth section previews a meta team above individual projects.</p>
+    </section>
+
+    <section id="notes-03-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li><strong>Heterogeneity, specificity and complementarity.</strong> The three Lachmannian properties, all of them dependent on the plan.</li>
+        <li><strong>Embedded technology.</strong> Productive technique exists in the specific good, here the agent file, in three senses with Lachmann's as the default.</li>
+        <li><strong>Plan and project.</strong> Two names for the purposive arrangement that gives capital its structure.</li>
+        <li><strong>Twin tasks.</strong> Producing output and maintaining the team, which are co-equal.</li>
+        <li><strong>Comparison and judgment.</strong> Drift against a template is checkable by rule, while intent requires interpretation.</li>
+        <li><strong>Coordinative and productive knowledge.</strong> Held by the orchestrator and by domain agents respectively.</li>
+        <li><strong>Functional and domain agents.</strong> Governance agents that recur across projects, and production agents bound to a plan or a medium.</li>
+        <li><strong>Workstream expert.</strong> A template-instantiated specialist bound to one bounded component, such as a chapter.</li>
+      </ul>
+    </section>
+
+    <section id="notes-03-frames">
+      <h2>Theoretical frames</h2>
+      <p>Lachmann (1956) anchors the chapter, with Menger (1871), Böhm-Bawerk (1889), Hayek (1941), Kirzner (1966), Lewin (1999) and Lewin and Cachanosky (2019) as its lineage. Foss and Klein (2012) supply the project, and Lane and Maxfield (2005) supply ontological uncertainty. Coase (1937), Williamson (1985) and North (1990a) explain why teams form and what institutions they need, and Miller and Drexler (1988c) connect encapsulation with property rights. Smith (1776), Hayek (1937), Hayek (1945) and Klein (2012) frame the division of labor as a division of knowledge.</p>
+    </section>
+
+    <section id="notes-03-matters">
+      <h2>Why it matters</h2>
+      <p>The chapter turns the earlier claim that documentation is capital into a working theory. It explains why adding agents can lower productivity, why stale files mislead, and why maintenance cannot be skipped. The split between comparison and judgment shows which upkeep can move into tooling and which must stay with agents. The functional and domain bifurcation organizes the agent-by-agent chapters that follow and the abstract templates of later parts.</p>
+    </section>
+
+    <section id="notes-03-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Like Chapters 1 through 21 generally, it describes the book's own team as configured through July 2026, with framework passages, such as the template-region marking and the universal templates directory, at the 1.1 anchor. The chapter flags no 1.2 items.</p>
+    </section>
+  </article>
+</body>
+</html>

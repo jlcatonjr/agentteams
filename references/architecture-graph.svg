@@ -5,52 +5,53 @@
       <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
     </marker>
   </defs>
-  <path d="M200,67 L280,67 C316,67 316,173 352,173 L584,173 C620,173 620,135 656,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,67 L280,67 C316,67 316,31 352,31 L388,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,67 L280,67 C316,67 316,69 352,69 L584,69 L656,69 L792,69 C828,69 828,41 864,41 L1032,41 C1068,41 1068,69 1104,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,67 L280,67 C316,67 316,135 352,135 L368,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,67 L280,67 C316,67 316,125 352,125 L584,125 C620,125 620,121 656,121" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,67 L280,67 C316,67 316,219 352,219 L388,219" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,67 L280,67 C316,67 316,21 352,21 L584,21 C620,21 620,55 656,55 L792,55 C828,55 828,27 864,27 L1032,27 C1068,27 1068,117 1104,117" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,67 L280,67 C316,67 316,87 352,87 L368,87" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
   <path d="M200,67 L280,67 C316,67 316,295 352,295" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,67 L280,67 C316,67 316,97 352,97 L584,97 L656,97 L792,97 C828,97 828,69 864,69 L1032,69 C1068,69 1068,117 1104,117 L1112,117" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,67 L280,67 C316,67 316,201 352,201 L584,201 C620,201 620,173 656,173 L792,173 L864,173 L1032,173 C1068,173 1068,155 1104,155 L1296,155 C1332,155 1332,125 1368,125 L1560,125 C1596,125 1596,163 1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,67 L280,67 C316,67 316,257 352,257 L584,257 C620,257 620,229 656,229 L792,229 C828,229 828,257 864,257 L1032,257 C1068,257 1068,211 1104,211 L1296,211 C1332,211 1332,163 1368,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M792,135 C828,135 828,97 864,97 L1032,97 C1068,97 1068,69 1104,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M792,135 L864,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M792,135 C828,135 828,229 864,229 L1032,229 C1068,229 1068,239 1104,239 L1296,239 C1332,239 1332,201 1368,201 L1560,201 C1596,201 1596,163 1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M792,135 C828,135 828,201 864,201 L1032,201 C1068,201 1068,183 1104,183 L1296,183 C1332,183 1332,163 1368,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1296,69 C1332,69 1332,163 1368,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M568,135 L584,135 L656,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M584,295 C620,295 620,257 656,257 L792,257 C828,257 828,285 864,285 L1032,285 C1068,285 1068,267 1104,267 L1296,267 C1332,267 1332,229 1368,229 L1560,229 C1596,229 1596,163 1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M864,135 C828,135 828,201 792,201 L656,201 C620,201 620,229 584,229 L352,229 C316,229 316,67 280,67 L200,67" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-  <path d="M1032,135 C1068,135 1068,69 1104,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1032,135 C1068,135 1068,117 1104,117 L1112,117" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M1632,163 C1596,163 1596,97 1560,97 L1368,97 C1332,97 1332,69 1296,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-  <path d="M1560,163 L1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M200,67 L280,67 C316,67 316,49 352,49 L584,49 C620,49 620,83 656,83 L792,83 C828,83 828,55 864,55 L1032,55 C1068,55 1068,69 1104,69 L1112,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,67 L280,67 C316,67 316,153 352,153 L584,153 C620,153 620,159 656,159 L792,159 L864,159 L1032,159 C1068,159 1068,155 1104,155 L1296,155 C1332,155 1332,125 1368,125 L1560,125 C1596,125 1596,163 1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,67 L280,67 C316,67 316,257 352,257 L584,257 C620,257 620,243 656,243 L792,243 C828,243 828,271 864,271 L1032,271 C1068,271 1068,239 1104,239 L1296,239 C1332,239 1332,191 1368,191" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M792,121 C828,121 828,83 864,83 L1032,83 C1068,83 1068,117 1104,117" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M792,121 L864,121" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M792,121 C828,121 828,187 864,187 L1032,187 C1068,187 1068,183 1104,183 L1296,183 C1332,183 1332,153 1368,153 L1560,153 C1596,153 1596,163 1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M792,121 C828,121 828,215 864,215 L1032,215 C1068,215 1068,211 1104,211 L1296,211 C1332,211 1332,191 1368,191" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M548,219 L584,219 C620,219 620,215 656,215 L792,215 C828,215 828,243 864,243 L1032,243 C1068,243 1068,117 1104,117" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1296,117 C1332,117 1332,191 1368,191" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M568,87 L584,87 C620,87 620,121 656,121" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M584,295 C620,295 620,271 656,271 L792,271 C828,271 828,299 864,299 L1032,299 C1068,299 1068,267 1104,267 L1296,267 C1332,267 1332,229 1368,229 L1560,229 C1596,229 1596,163 1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M864,121 C828,121 828,187 792,187 L656,187 C620,187 620,181 584,181 L352,181 C316,181 316,67 280,67 L200,67" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <path d="M1032,121 C1068,121 1068,117 1104,117" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1032,121 C1068,121 1068,69 1104,69 L1112,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1632,163 C1596,163 1596,97 1560,97 L1368,97 C1332,97 1332,117 1296,117" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <path d="M1560,191 C1596,191 1596,163 1632,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
   <rect x="96" y="52" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
   <text x="148" y="72" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
-  <rect x="656" y="120" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="724" y="140" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
+  <rect x="656" y="106" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="724" y="126" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
   <rect x="76" y="100" width="144" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="148" y="120" font-size="13" text-anchor="middle" fill="#000000">agentteams.data</text>
   <rect x="16" y="148" width="264" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="148" y="168" font-size="13" text-anchor="middle" fill="#000000">agentteams.data.vulnscan_tools</text>
   <rect x="28" y="196" width="240" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="148" y="216" font-size="13" text-anchor="middle" fill="#000000">agentteams.data.wasm_probes</text>
-  <rect x="388" y="16" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="468" y="36" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
+  <rect x="388" y="204" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="468" y="224" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
   <rect x="40" y="244" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="148" y="264" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
-  <rect x="1104" y="54" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="1200" y="74" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
-  <rect x="368" y="120" width="200" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="468" y="140" font-size="13" text-anchor="middle" fill="#000000">agentteams.mcp_servers</text>
+  <rect x="1104" y="102" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="1200" y="122" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
+  <rect x="368" y="72" width="200" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="468" y="92" font-size="13" text-anchor="middle" fill="#000000">agentteams.mcp_servers</text>
   <rect x="352" y="280" width="232" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="468" y="300" font-size="13" text-anchor="middle" fill="#000000">agentteams.model_providers</text>
-  <rect x="864" y="120" width="168" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="948" y="140" font-size="13" text-anchor="middle" fill="#000000">agentteams.redteam</text>
-  <rect x="1112" y="102" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="1200" y="122" font-size="13" text-anchor="middle" fill="#000000">agentteams.research</text>
+  <rect x="864" y="106" width="168" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="948" y="126" font-size="13" text-anchor="middle" fill="#000000">agentteams.redteam</text>
+  <rect x="1112" y="54" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="1200" y="74" font-size="13" text-anchor="middle" fill="#000000">agentteams.research</text>
   <rect x="1632" y="148" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="1720" y="168" font-size="13" text-anchor="middle" fill="#000000">agentteams.vulnscan</text>
-  <rect x="1368" y="148" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="1464" y="168" font-size="13" text-anchor="middle" fill="#000000">agentteams.wasm_agent</text>
+  <rect x="1368" y="176" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="1464" y="196" font-size="13" text-anchor="middle" fill="#000000">agentteams.wasm_agent</text>
 </svg>

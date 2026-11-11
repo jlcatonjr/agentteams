@@ -65,6 +65,13 @@ AGENTTEAMS_REMEDIATION_CSV = "agentteams-remediation-log.csv"
 #: agent never edits an existing row.
 ESCALATION_LOG_CSV = "orchestrator-escalation.log.csv"
 
+#: File name for the conflict log that ``@conflict-auditor`` fills (via rows it returns to the orchestrator)
+#: and ``@conflict-resolution`` reads. Seeded beside the other logs so the orchestrator's validated
+#: append (``python -m agentteams.governance_logs append``) has a header to check against: an unseeded
+#: log could not be appended to, so it stayed empty and Workflow 11 Part B never saw an open row
+#: (item 06, G-09-2). Its path in agent prose is ``{CONFLICT_LOG_PATH}``.
+CONFLICT_LOG_CSV = "conflict-log.csv"
+
 #: Column headers for each CSV
 CHANGELOG_HEADERS: list[str] = ["date", "repo_name", "action", "files_changed", "summary"]
 COORD_LOG_HEADERS: list[str] = ["date", "adjacent_repo", "direction", "outcome"]
@@ -109,6 +116,11 @@ ESCALATION_LOG_HEADERS: list[str] = [
     "ambiguity",
     "needs_user_review",
     "notes",
+]
+#: The conflict-log columns ``conflict-auditor.template.md`` (Conflict Log Format) defines; a test keeps
+#: the two equal.
+CONFLICT_LOG_HEADERS: list[str] = [
+    "date", "category", "code", "severity", "file", "description", "status", "resolution",
 ]
 
 # ---------------------------------------------------------------------------
@@ -205,6 +217,7 @@ def init_csv_stubs(refs_dir: Path, *, mcp_needs: bool = False,
         (SECURITY_DECISIONS_CSV, SECURITY_DECISIONS_HEADERS),
         (AGENTTEAMS_REMEDIATION_CSV, AGENTTEAMS_REMEDIATION_HEADERS),
         (ESCALATION_LOG_CSV, ESCALATION_LOG_HEADERS),
+        (CONFLICT_LOG_CSV, CONFLICT_LOG_HEADERS),
         *(((MCP_NEEDS_CSV, MCP_NEEDS_HEADERS),) if mcp_needs else ()),
     ):
         target = refs_dir / fname

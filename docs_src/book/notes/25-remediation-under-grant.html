@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 25: Remediation Under Grant</title>
+</head>
+<body>
+  <article id="notes:remediation-under-grant">
+    <h1>Cliff Notes: Chapter 25: Remediation Under Grant</h1>
+    <p class="part-label">Part VI: Hardening and Scale</p>
+    <p class="notes-source">A summary of <a href="chapters/25-remediation-under-grant.html#ch:remediation-under-grant">Chapter 25</a>, written to match the text as it describes agentteams 1.1.</p>
+    <section id="notes-25-thesis"><h2>Thesis</h2>
+      <p>The chapter argues that the split between detection and repair from Chapter 20 survives the move from agent files to code, and that repair then divides a second time along a line Hayek did not draw. The agent that knows what to fix and why holds no credentials, and the executor that holds them decides nothing. Because the executor computes each fix from public advisory and registry sources, so that no private knowledge passes across, this second line is one of authority rather than knowledge. The operator stands as owner, and a standing grant signed in advance delegates a bounded decision right that the operator sets, caps and can revoke. Signing, merging and any change to a server stay with the principal at the anchor.</p>
+    </section>
+    <section id="notes-25-covers"><h2>What the chapter covers</h2>
+      <p>The first section explains why code differs from agent files. A wrong fix can break a build, pull in a compromised release or leave the hole open, and code raises the question of who may hold the means to act.</p>
+      <p>The second section describes the vulnerability scanner as a passive classifier. It finds what published advisories name and nothing else, and reads live advisory and release sources each run. The scan itself never commits, pushes or merges. An unscanned run is never reported as clean, and at the 1.1 release container files are reported as coverage gaps. Release 1.2 lets an operator point the scan at a mirror kept on the default branch. A brief never overrides the operator's enrolment, which is a command the operator runs in a terminal and which the generated security agent's rules keep out of every agent session.</p>
+      <p>The third section divides the fixer. The remediation agent chooses what to remediate and why, never how, and has no file-writing or shell tool. The executor runs as the operator, outside the sandbox, and computes each change itself.</p>
+      <p>Later sections cover the standing grant, refusal and measurement, the dependency rule that bent for repair, and code as a new object of self-repair at the existing scales.</p>
+    </section>
+    <section id="notes-25-concepts"><h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Agent mode is opt-in and runs only once Docker, the agent image and its self-test are in place. With confinement on, its default, every granted operation is refused until the tools container has passed a self-test of its own. The agent runs on Goose, Claude Code, the Copilot command-line tool or Codex, and Grok is refused by name. The Copilot and Codex drivers have not yet passed a live acceptance run with real keys.</li>
+        <li>The agent's only route out is an egress gateway, which the framework describes as bounding exfiltration through the model route without closing it.</li>
+        <li>The executor validates each request, builds every argument itself, finds a covering grant, checks for an unretracted HALT and records that it has begun before acting. A staged fix may change only requirements files and npm lockfiles, and the operation that opens a pull request never merges it.</li>
+        <li>A standing grant counts as clearance only when the executor holds the credentials outside the sandbox, computes the change itself, records the begun row first and reads the HALT log of the governance team named inside the signed grant.</li>
+        <li>The grant carries the operator's Ed25519 signature, which means something only while the private key stays out of every confined agent's reach. It lasts at most thirty days and 500 uses, and more than two valid grants at once refuses them all.</li>
+        <li>A HALT on a single target stops all grant use until it is retracted. The retraction path also accepts the shared decision secret, so such a HALT holds only while that secret stays out of every agent's environment, and only in a team that requires signed decisions.</li>
+        <li>At the 1.1 release the executor never stages a major-version jump and never moves a container to a new base image. Release 1.2 adds an operation for each, covered only when a grant lists it by name.</li>
+        <li>No grant covers merging, force-pushing, applying a change to a server or any change the agent wrote. At the 1.1 release server operations are read-only, and release 1.2 adds a narrower delegation started by the operator at the console.</li>
+        <li>The executor claims a matching open pull request of its own instead of opening a duplicate, and opens one anyway if its lookup fails. Release 1.2 makes it defer to other open pull requests that already update a package.</li>
+        <li>In handoff mode the staged fix goes first to the target repository's orchestrator under a directive scoped to review alone, which authenticates only while its shared key stays out of the agent's reach. Only an approve-staged verdict lets the executor open the pull request. A team that answers it will open its own keeps the executor from opening a pull request for that change, and at the 1.1 release nothing makes that answer lapse. Release 1.2 lets it lapse after seven days if no open pull request of the team's own updates the packages.</li>
+        <li>The dependency rule pairs a vulnerability search with a fourteen-day cooldown, with carve-outs for repair and for a project's own interdependent repositories.</li>
+      </ul>
+    </section>
+    <section id="notes-25-frames"><h2>Theoretical frames</h2>
+      <p>Hayek (1945) supplies the man on the spot, who returns at the handoff and the merge. Foss and Klein (2012) supply original and derived judgment, with the operator as owner. McQuade and Butos (2005) supply the sensory order as a complex adaptive classifying system, found in markets, science and other social structures, and the chapter places the scanner as a classifier of the passive kind. Saltzer and Schroeder (1975) supply separation of privilege, and Lampson (1973) confinement applied to authority as well as data. Buchanan and Tullock (1962) separate the choice of rules from action under them. Hayek (1968) treats outcomes as discovered information, and Hayek (1973) supplies the judge who decides, case by case, which of the conflicting expectations to protect.</p>
+    </section>
+    <section id="notes-25-matters"><h2>Why it matters</h2>
+      <p>Code remediation draws on more of Part VI's instruments than any earlier task, including container confinement, the operator's asymmetric signature, the authenticated HALT and capped relaxations, while doing without the single writer and the pre-action gate. The chapter concedes that a thirty-day grant means the operator learns of most acts afterwards, and it answers that the account is narrow. It treats its own counts as "an alarm for stalled repair rather than a grade for good repair." The cooldown, deprecated and then restored with carve-outs by operator ruling, shows a conflict found by operating being settled at the level that writes rules. Finally, the chapter qualifies Chapter 26's account of correction without human intervention, which is to be read with code repair set apart as a class that is not routine.</p>
+    </section>
+    <section id="notes-25-currency"><h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapter 25 is new in this edition. The chapter flags several items for release 1.2, namely scanning a default-branch mirror, operations for major-version jumps and base images, a console-started server and runtime delegation, deference to other open pull requests, outcome tracking per finding and a seven-day lapse for a team's answer in handoff mode.</p>
+    </section>
+  </article>
+</body>
+</html>

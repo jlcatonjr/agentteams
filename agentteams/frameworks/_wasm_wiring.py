@@ -135,9 +135,12 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
         return row(WIRED_PER_AGENT, "per-agent", "recipe extensions, honoured on a direct `goose run --recipe`; "
                    f"a delegate cannot add agentteams_wasm (route that work to a direct run); {_HOST_NOTE}", True)
     if framework == "codex":
+        from agentteams import codex_mcp_emit
+        mode = codex_mcp_emit.first_party_approval_mode(list(manifest.get("host_features") or []))
+        via = " (the opt-in codex:wasm-auto-approve host feature)" if mode == "auto" else ""
         return row(WIRED_SHARED, "session-compute-only", "one compute-only instance in .codex/config.toml (loaded "
-                   "only for a trusted project), configured with default_tools_approval_mode = \"prompt\" (a default "
-                   "the host applies, not enforcement agentteams verifies); under the codex:sandbox role gate a "
+                   f"only for a trusted project), configured with default_tools_approval_mode = \"{mode}\"{via} "
+                   "(a default the host applies, not enforcement agentteams verifies); under the codex:sandbox role gate a "
                    "spawned agent outside the keep list is denied the shell and steered to run_wasm (WASM mode), or "
                    "reaches only agentteams_readfs (write_policy: orchestrator-only)", True,
                    [CODEX_CONFIG])
@@ -152,11 +155,12 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
                    "mcp-servers in CLI agent profiles unverified; "
                    + _NESTED_UNLESS_SANDBOXED.format(flag="--sandbox"), True, [COPILOT_CLI_EXAMPLE])
     if framework == "grok":
-        return row(EXAMPLE_ONLY, "session-compute-only", f"inert {GROK_EXAMPLE} (not write-protected on Grok: check it "
-                   "against a fresh render before merging); merge its table into .grok/config.toml, outside the "
+        return row(EXAMPLE_ONLY, "session-compute-only", f"inert {GROK_EXAMPLE} (write-protected only inside the agentteams "
+                   "launcher, not in profile mode: check it against a fresh render before merging); merge its table into .grok/config.toml, outside the "
                    "agentteams-managed block (loaded after folder trust); no "
-                   "[permission] ask rule covers it, and custom agents carry mcpInheritance: none (their access and "
-                   "Grok's approval prompt are untested); "
+                   "[permission] ask rule covers it; a generated custom agent run with --agent sees it too "
+                   "(mcpInheritance: none limits only subagents; live 2026-11-10), and a headless call without "
+                   "--always-approve is cancelled (the interactive prompt is untested); "
                    + _NESTED_UNLESS_SANDBOXED.format(flag="--sandbox workspace"), True, [GROK_EXAMPLE])
     if framework == "agents-md":
         return row(INSTRUCTIONS_ONLY, "none", "AGENTS.md has no MCP channel; instructions only", True)
@@ -278,9 +282,13 @@ def _toml_example(target: str, entry: Mapping[str, Any]) -> str:
     table = "".join(f"{key} = {json.dumps(value, ensure_ascii=False)}\n" for key, value in entry.items())  # valid TOML
     caveat = ("A render with grok:mcp wiring any server owns [mcp_servers]: it keeps this table only while it equals "
               "this example exactly, and otherwise replaces it (it says so); merge it again after such a render.")
-    verify = ("Grok does not write-protect this file: before merging, check it matches a fresh render (the "
+    verify = ("Grok itself does not write-protect this file: before merging, check it matches a fresh render (the "
               "--agent value must be _session).")
-    return f"# {note}\n# {caveat}\n# {verify}\n[mcp_servers.agentteams_wasm]\n{table}"
+    exposure = ("Only the agentteams launcher (.grok/confined-run.example.sh, the default launcher mode) makes .grok "
+                "read-only to a Grok session; in profile mode (GROK_CONFINE_MODE=profile) a session's shell can edit this "
+                "example and .grok/config.toml alike (the [permission] deny covers only Grok's file tools), so "
+                "merge only from a fresh render, after a diff.")
+    return f"# {note}\n# {caveat}\n# {verify}\n# {exposure}\n[mcp_servers.agentteams_wasm]\n{table}"
 
 
 def output_files(manifest: dict[str, Any], framework: str) -> list[tuple[str, str]]:
@@ -332,7 +340,8 @@ def codex_first_party_tables(manifest: dict[str, Any]) -> dict[str, dict[str, An
         manifest: The team manifest (``framework`` must be ``codex``).
 
     Returns:
-        ``{"mcp_servers.agentteams_wasm": {command, args, default_tools_approval_mode = "prompt"}}``, or None when
+        ``{"mcp_servers.agentteams_wasm": {command, args, default_tools_approval_mode}}`` (``"prompt"``, or
+        ``"auto"`` under the opt-in ``codex:wasm-auto-approve`` host feature), or None when
         WASM is off or the framework is not Codex.
 
     Raises:
@@ -346,8 +355,11 @@ def codex_first_party_tables(manifest: dict[str, Any]) -> dict[str, dict[str, An
     args = _session_args(manifest)
     if args is None:
         return None
+    from agentteams import codex_mcp_emit
+
     entry = wasm_mcp.table_entry(args, wasm_mcp.interpreter())
-    return {f"mcp_servers.{wasm_mcp.SERVER_NAME}": {**entry, "default_tools_approval_mode": "prompt"}}
+    mode = codex_mcp_emit.first_party_approval_mode(manifest.get("host_features") or [])
+    return {f"mcp_servers.{wasm_mcp.SERVER_NAME}": {**entry, "default_tools_approval_mode": mode}}
 
 
 def grok_kept_tables(manifest: dict[str, Any]) -> dict[str, dict[str, Any]] | None:

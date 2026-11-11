@@ -298,6 +298,43 @@ def session_launch_args(state: Any, pins_sha: str | None = None) -> list[str] | 
     return launch_args(SESSION_AGENT, wasm_exec.COMPUTE_ONLY, state.wasm_languages, pins_sha)
 
 
+def is_session_launch(command: object, args: object) -> bool:
+    """True iff ``command``/``args`` are exactly a compute-only :data:`SESSION_AGENT` launch of the installed server.
+
+    The exact bound for the shared ``agentteams_wasm`` table that the Codex first-party hook and Grok's
+    ``keep_if_exact`` admit. Only the team's languages and the pins hash vary between renders, so the list is
+    rebuilt from those two values with :func:`launch_args` and must match element for element. No spelling of a
+    grant (``--read=/``, an argparse prefix such as ``--rea``, a second ``--agent``) survives that. The interpreter
+    must be one of the fixed ``runner_mcp.SYSTEM_PYTHONS``, and the ``--pins-sha256`` value 64 lowercase hex.
+
+    Args:
+        command: The table's ``command`` value.
+        args: The table's ``args`` value.
+
+    Returns:
+        True only for an exact compute-only session launch; False for anything else, including wrong types.
+
+    Raises:
+        Nothing: a malformed list (missing values, unknown languages) is False.
+    """
+    from agentteams import wasm_exec
+    from agentteams.runner_mcp import SYSTEM_PYTHONS
+
+    if command not in SYSTEM_PYTHONS or not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+        return False
+    head = [*PYTHON_FLAGS, PROTECTED_PATH, "--agent", SESSION_AGENT, "--languages"]
+    try:
+        if args[:len(head)] != head:
+            return False
+        languages = args[len(head)].split(",")
+        pins = args[args.index("--pins-sha256") + 1]
+        if not re.fullmatch(r"[0-9a-f]{64}", pins):
+            return False
+        return args == launch_args(SESSION_AGENT, wasm_exec.COMPUTE_ONLY, languages, pins_sha=pins)
+    except (IndexError, ValueError):
+        return False
+
+
 def interpreter() -> str:
     """The absolute system ``python3`` agents launch the server with (shared with ``agentteams_runner``).
 
@@ -305,7 +342,7 @@ def interpreter() -> str:
         ``runner_mcp.interpreter()``.
 
     Raises:
-        ValueError: No system python3 exists.
+        ValueError: No trusted system python3 qualifies (see ``runner_mcp.interpreter``).
     """
     from agentteams import runner_mcp
 

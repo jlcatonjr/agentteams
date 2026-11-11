@@ -71,3 +71,28 @@ def agents_dir_for(framework: str, project_root: Path) -> Path:
     if framework not in FRAMEWORKS:
         raise ValueError(f"unknown framework {framework!r}")
     return FRAMEWORKS[framework]().get_agents_dir(Path(project_root))
+
+
+def conflict_log_path_for(framework: str) -> str:
+    """Return the project-relative conflict log path for a framework's team.
+
+    The log is seeded in the team's own ``references/`` directory (``liaison_logs.init_csv_stubs``),
+    which lives under that framework's agents directory. The path used to be the Copilot literal
+    ``.github/agents/references/conflict-log.csv`` on every surface, so on Claude and the other
+    surfaces the orchestrator's validated append found no log and the auditor's rows were lost
+    (item 06, G-09-2).
+
+    Args:
+        framework: A registered framework id; an unknown id falls back to the Copilot layout.
+
+    Returns:
+        str: e.g. ``.claude/agents/references/conflict-log.csv``.
+
+    Raises:
+        None.
+    """
+    try:
+        agents_dir = agents_dir_for(framework, Path(".")).as_posix()
+    except ValueError:
+        agents_dir = ".github/agents"
+    return f"{agents_dir}/references/conflict-log.csv"

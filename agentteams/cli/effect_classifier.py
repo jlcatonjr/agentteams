@@ -59,6 +59,7 @@ from agentteams.cli.frozen_surfaces import (
 from agentteams.cli.governance_targets import target_is_governance_root
 from agentteams.cli.management_directives import scope_is_allowed
 from agentteams.cli.sandbox_effects import (
+    MCP_APPROVAL_AUTO,
     NATIVE_EXEC_KEEP,
     SANDBOX_OS_OFF,
     SANDBOX_RELAXATION_KINDS,
@@ -151,7 +152,8 @@ def _sandbox_signal(row: dict[str, str], profile: "EffectProfile", *, kind: str)
 
 
 def is_sandbox_relaxation(row: dict[str, str], *, kind: str) -> bool:
-    """Return True when a row turns a sandbox off or widens a WASM grant (the five kinds in
+    """Return True when a row turns a sandbox off, widens a WASM grant, or turns off the per-call MCP approval prompt
+    (the six kinds in
     :mod:`agentteams.cli.sandbox_effects`). Derived from the row's text and effect columns, never declared.
 
     Args:
@@ -538,6 +540,7 @@ __all__ = [
     "RELAXING",
     "NON_RELAXING",
     "INDETERMINATE",
+    "MCP_APPROVAL_AUTO",
     "NATIVE_EXEC_KEEP",
     "SANDBOX_OS_OFF",
     "SANDBOX_RELAXATION_KINDS",

@@ -48,7 +48,8 @@
 # started, stopped or reloaded, nothing is written (but see above), nothing leaves the host, and each runs under `timeout 10`
 # when `timeout` exists. docker reads the local socket only (DOCKER_HOST is pinned to it).
 # RUNTIME manager: nvm / volta / fnm / conda / pyenv / tarball, or for a dpkg/rpm-owned binary
-#   pkg:<package>[:universe]   the installed version comes from an allowlisted distro archive (distro_host);
+#   pkg:<package>[:universe]   the installed version comes from an allowlisted distro archive (distro_host), or from a
+#                              mirror whose every apt entry pins Signed-By to the distro archive keyring (mirror_trust_init);
 #                              ":universe" marks Ubuntu universe/multiverse (security fixes need esm-apps)
 #   repo:<host>:<package>      any other origin: a third-party repository (nginx.org, PGDG, docker, PPA, ...)
 #   repo:unknown:<package>     origin unreadable, a local .deb/.rpm, or a version no repository serves any more
@@ -62,7 +63,8 @@
 # check below, and a secret-looking file under a web root, read only to HMAC it with a per-host key (only one
 # combined digest is printed).
 #
-# AGENTTEAMS_L1_ROOT (tests only) prefixes the files read for OSREL, ESM and dnf-automatic, the configuration and
+# AGENTTEAMS_L1_ROOT (tests only) prefixes the files read for OSREL, ESM and dnf-automatic, apt's sources
+# (/etc/apt/sources.list, sources.list.d/*.list and *.sources) and the distro archive keyring, the configuration and
 # /proc entries (and the docker socket test) the disabled-tree check reads, and the dnf metadata cache, and is stripped from a site-packages path
 # before the OS-managed test; unset on a real host.
 #
@@ -128,14 +130,143 @@ distro_host(){
   esac
   return 1
 }
-apt_sources(){  # "host component" per archive serving the installed version: the `***` block of apt-cache policy
+# A provider mirror (mirrors.digitalocean.com, a cloud's regional archive copy, ...) counts as the distro archive when
+# every apt source entry for that URI and suite pins Signed-By to the distro's own archive keyring: apt then accepts
+# only metadata the distro signed, whatever host serves it (T10, operator ruling 2026-11-10: trust the signing key,
+# never a hostname). Anything else keeps the hostname rule above and is judged upstream: an entry with no Signed-By
+# (any key in apt's global trust store would do), several keys, an inline key, trusted=yes or allow-insecure, a
+# keyring that is not the distro keyring package's own regular, root-owned, not group/world-writable file, or no
+# matching entry at all. Each accepted mirror is reported once as an INFO line, so the widening stays visible.
+distro_keyring(){  # the archive keyring path for this OS (os-release ID), or nothing
+  case "$(osrel_get ID)" in
+    ubuntu) echo /usr/share/keyrings/ubuntu-archive-keyring.gpg;;
+    debian) echo /usr/share/keyrings/debian-archive-keyring.gpg;;
+  esac
+}
+keyring_ok(){  # keyring_ok <path>: the distro keyring package's own file, root-owned and not writable by group or others
+  local k="$1" f="${AGENTTEAMS_L1_ROOT:-}$1" uid=0 m o
+  [ -f "$f" ] && [ ! -L "$f" ] || return 1
+  if [ -n "${AGENTTEAMS_L1_ROOT:-}" ]; then   # tests: the fake tree belongs to whoever owns its root
+    uid=$(stat -c %u "$AGENTTEAMS_L1_ROOT" 2>/dev/null || stat -f %u "$AGENTTEAMS_L1_ROOT" 2>/dev/null) || return 1
+  fi
+  m=$(stat -c '%u %a' "$f" 2>/dev/null || stat -f '%u %Lp' "$f" 2>/dev/null) || return 1
+  case "$m" in "$uid "[0-7][0-7][0-7]|"$uid "[0-7][0-7][0-7][0-7]) ;; *) return 1;; esac
+  m="${m##* }"; m=$(( 8#$m ))
+  [ $(( m & 8#022 )) -eq 0 ] || return 1
+  o=$(pkg_owner "$k")
+  case "$k:$o" in
+    */ubuntu-archive-keyring.gpg:ubuntu-keyring|*/debian-archive-keyring.gpg:debian-archive-keyring) return 0;;
+  esac
+  return 1
+}
+apt_entries(){  # every enabled `deb` entry in apt's sources, one line per URI and suite: "uri<TAB>suite<TAB>key", the
+                # key being its Signed-By path, "-" when it has none, "!" when it is not one keyring file or is insecure
+  local R="${AGENTTEAMS_L1_ROOT:-}" f files=()
+  for f in "$R/etc/apt/sources.list" "$R"/etc/apt/sources.list.d/*.list "$R"/etc/apt/sources.list.d/*.sources; do
+    [ -f "$f" ] && [ ! -L "$f" ] && files+=("$f")
+  done
+  [ "${#files[@]}" -gt 0 ] || return 0
+  awk '
+    # apt reads booleans with StringToBool: only these spellings are false; every other value of an insecure
+    # option counts as set (fail closed), and every other value of Enabled counts as enabled.
+    function isfalse(v) { v = tolower(v); return v == "no" || v == "false" || v == "off" || v == "0" || v == "without" || v == "disable" }
+    function insecure(k) { return k ~ /^(trusted|allow-insecure|allow-weak|allow-downgrade-to-insecure|check-valid-until)$/ }
+    function norm(u) { sub(/\/+$/, "", u); return u }
+    function out(u, s, k) { if (u != "" && s != "") printf "%s\t%s\t%s\n", norm(u), s, (k == "" ? "-" : k) }
+    function stanza(   n, m, i, j, uu, ss, k) {
+      if (!(st_types ~ /(^|[ \t])deb([ \t]|$)/) || (st_enabled != "" && isfalse(st_enabled))) return
+      k = (st_bad || st_key ~ /[ \t,]/) ? "!" : st_key
+      n = split(st_uris, uu, /[ \t]+/); m = split(st_suites, ss, /[ \t]+/)
+      for (i = 1; i <= n; i++) for (j = 1; j <= m; j++) out(uu[i], ss[j], k)
+    }
+    function reset() { st_types = st_uris = st_suites = st_key = st_enabled = st_field = ""; st_bad = 0 }
+    { sub(/\r$/, "") }
+    FNR == 1 { if (deb822) stanza(); reset(); deb822 = (FILENAME ~ /\.sources$/) }
+    /^[ \t]*#/ { next }
+    !deb822 {
+      if ($1 != "deb") next
+      key = ""; bad = 0
+      if ($0 ~ /^[ \t]*deb[ \t]+\[/) {        # deb [ opt=val ... ] uri suite components
+        line = $0; sub(/^[ \t]*deb[ \t]+\[/, "", line); c = index(line, "]")
+        if (!c) next
+        no = split(substr(line, 1, c - 1), o, /[ \t]+/)
+        for (j = 1; j <= no; j++) {
+          if (o[j] == "") continue
+          e = index(o[j], "="); if (!e) { bad = 1; continue }
+          ok_ = tolower(substr(o[j], 1, e - 1)); v = substr(o[j], e + 1)
+          if (ok_ ~ /[+-]$/) { sub(/[+-]$/, "", ok_); if (ok_ == "signed-by" || insecure(ok_)) bad = 1; continue }
+          if (ok_ == "signed-by") { if (key != "" || v ~ /,/ || v == "") bad = 1; key = v }
+          else if (insecure(ok_) && (ok_ == "check-valid-until" ? isfalse(v) : !isfalse(v))) bad = 1
+        }
+        nr = split(substr(line, c + 1), r, /[ \t]+/); k = 1; while (k <= nr && r[k] == "") k++
+        uri = r[k]; su = r[k + 1]
+      } else { uri = $2; su = $3 }
+      out(uri, su, bad ? "!" : key); next
+    }
+    /^[ \t]*$/ { stanza(); reset(); next }
+    /^[ \t]/ {                                # a continuation line: lists go on; an inline key is refused
+      lf = tolower(st_field); v = $0; sub(/^[ \t]+/, "", v)
+      if (lf == "signed-by") st_bad = 1
+      else if (lf == "types") st_types = st_types " " v; else if (lf == "uris") st_uris = st_uris " " v
+      else if (lf == "suites") st_suites = st_suites " " v
+      next
+    }
+    {
+      f = $0; sub(/:.*/, "", f); v = $0; sub(/^[^:]*:[ \t]*/, "", v); sub(/[ \t]+$/, "", v); st_field = f
+      lf = tolower(f)
+      if (lf == "types") st_types = v; else if (lf == "uris") st_uris = v; else if (lf == "suites") st_suites = v
+      else if (lf == "enabled") st_enabled = v
+      else if (lf == "signed-by") { if (st_key != "" || v == "") st_bad = 1; st_key = v }
+      else if (insecure(lf) && (lf == "check-valid-until" ? isfalse(v) : !isfalse(v))) st_bad = 1
+    }
+    END { if (deb822) stanza() }' "${files[@]}" 2>/dev/null
+}
+MIRROR_OK=""   # " uri|suite ..." pairs judged as the distro archive; set once in the main shell (mirror_trust_init)
+apt_conf_insecure(){  # apt.conf turns signature checks off, or moves the sources apt reads: then no mirror is trusted
+  local d
+  command -v apt-config >/dev/null 2>&1 || return 0   # cannot tell: treat as insecure (fail closed)
+  d=$(tmo apt-config dump 2>/dev/null) || return 0
+  [ -n "$d" ] || return 0
+  printf '%s\n' "$d" | awk '
+    { k = tolower($1); v = $0; sub(/^[^ ]+ /, "", v); gsub(/[";]/, "", v); v = tolower(v) }
+    k ~ /^(acquire::allowinsecurerepositories|acquire::allowweakrepositories|acquire::allowdowngradetoinsecurerepositories|apt::get::allowunauthenticated|acquire::allowunsizedpackages)$/ && v !~ /^(no|false|off|0|without|disable)$/ { bad = 1 }
+    k == "acquire::check-valid-until" && v ~ /^(no|false|off|0|without|disable)$/ { bad = 1 }
+    k == "dir" && v != "/" { bad = 1 }
+    k == "dir::etc" && v != "etc/apt/" && v != "/etc/apt/" { bad = 1 }
+    k == "dir::etc::sourcelist" && v != "sources.list" { bad = 1 }
+    k == "dir::etc::sourceparts" && v != "sources.list.d" { bad = 1 }
+    END { exit bad ? 0 : 1 }'
+}
+mirror_trust_init(){
+  local want u s k bad=" " pairs=" " p arr
+  command -v dpkg >/dev/null 2>&1 || return 0
+  [ -n "${AGENTTEAMS_L1_ROOT:-}" ] && [ "${EUID:-$(id -u)}" -eq 0 ] && return 0   # the test prefix never as root
+  if apt_conf_insecure; then info "apt mirrors: apt.conf relaxes signature checks or moves the sources; mirrors stay judged upstream"; return 0; fi
+  want=$(distro_keyring); [ -n "$want" ] || return 0
+  keyring_ok "$want" || return 0
+  while IFS=$'\t' read -r u s k; do
+    [ -n "$u" ] || continue
+    distro_host "$(printf '%s' "$u" | sed -E 's#^[a-z+]+://##; s#[/:].*$##' | tr 'A-Z' 'a-z')" && continue
+    p="$u|$s"
+    if [ "$k" = "$want" ]; then case "$pairs" in *" $p "*) ;; *) pairs="$pairs$p ";; esac
+    else bad="$bad$p "; fi
+  done < <(apt_entries)
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    case "$bad" in *" $p "*) continue;; esac   # every entry for the pair must pin the keyring
+    MIRROR_OK="$MIRROR_OK $p"
+    info "apt mirror $(printf '%s' "${p%%|*}" | tr -cd 'A-Za-z0-9:/._-') $(printf '%s' "${p##*|}" | tr -cd 'A-Za-z0-9._-'): every entry is signed by $want (judged as the distro archive)"
+  done < <(read -r -a arr <<<"$pairs"; [ "${#arr[@]}" -gt 0 ] && printf '%s\n' "${arr[@]}")
+}
+mirror_ok(){ case " $MIRROR_OK " in *" ${1%/}|$2 "*) return 0;; esac; return 1; }   # mirror_ok <uri> <suite>
+apt_sources(){  # "host component uri suite" per archive serving the installed version: the `***` block of apt-cache policy
   tmo apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy "$1" 2>/dev/null | awk '
     /^ \*\*\* /{inb=1; next}
     inb && $1 ~ /^-?[0-9]+$/ && ($2 ~ /^\// || $2 ~ /:/) {   # a source line, not the next version
       if ($2 ~ /^\//) next                                   # /var/lib/dpkg/status: installed, origin unknown
       h = "unknown"
       if ($2 ~ /^[a-z+]+:\/\//) { h = $2; sub(/^[a-z+]+:\/\//, "", h); sub(/[\/:].*$/, "", h); if (h == "") h = "unknown" }
-      n = split($3, s, "/"); print tolower(h), (n > 1 ? s[2] : "-"); next }
+      n = split($3, s, "/"); print tolower(h), (n > 1 ? s[2] : "-"), $2, (n > 0 && s[1] != "" ? s[1] : "-"); next }
     inb {exit}'
 }
 rpm_repo(){  # repo id the installed rpm came from (cache only, never the network), or nothing
@@ -166,9 +297,9 @@ pkg_origin(){  # pkg:<name>[:universe] for an allowlisted distro archive; else r
   local p="$1" h c bad="" uni="" any=0 r v
   if command -v dpkg >/dev/null 2>&1; then
     if command -v apt-cache >/dev/null 2>&1; then
-      while read -r h c; do
+      while read -r h c u s; do
         [ -n "$h" ] || continue
-        any=1; distro_host "$h" || { [ -n "$bad" ] || bad="$h"; }
+        any=1; distro_host "$h" || mirror_ok "$u" "$s" || { [ -n "$bad" ] || bad="$h"; }
         case "$c" in universe|multiverse) uni=":universe";; esac
       done < <(apt_sources "$p")
     fi
@@ -307,6 +438,7 @@ os_section(){
   ID=$(osrel_get ID); VERSION_ID=$(osrel_get VERSION_ID); PRETTY_NAME=$(osrel_get PRETTY_NAME)
   echo "host: $(hostname)  os: ${PRETTY_NAME:-unknown}  kernel: $(uname -r)  arch: $(uname -m)  at: $(date -u +%FT%TZ)"
   printf 'OSREL\t%s\t%s\t%s\n' "${ID:-unknown}" "$VERSION_ID" "${PRETTY_NAME:-${ID:-unknown}}"
+  mirror_trust_init
   [ "$ID" = ubuntu ] && esm_line
   if command -v apt-get >/dev/null 2>&1; then
     local stamp age n

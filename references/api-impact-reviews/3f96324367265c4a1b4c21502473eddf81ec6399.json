@@ -1,0 +1,8 @@
+{
+  "patch_id": "3f96324367265c4a1b4c21502473eddf81ec6399",
+  "commit": "82dfb33ab2a4048c590e7d0d1ac5ff01e246af41",
+  "subject": "feat(codex): DRAFT opt-in codex:wasm-auto-approve for the agentteams_wasm table (WP-C, row 648 gap 4)",
+  "impact": "1 symbols added",
+  "note": "WP-C + WP-C2 reviewed 2026-11-09: first_party_approval_mode documented in docs_src/api-reference/codex-mcp-emit.md; mcp_approval_auto, SandboxExceptions.to_record (optional mcp_approval_auto key) and team-manifest schema documented in docs_src/api-reference/sandbox-state.md; __all__ additions are the new kind constant and helper; CHANGELOG [Unreleased] entry; @security PASS-WITH-FIXES (F1-F3 applied c3cff625)",
+  "recorded_at": "2026-11-10T00:57:32Z"
+}

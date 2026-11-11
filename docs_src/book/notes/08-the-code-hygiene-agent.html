@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliff Notes: Chapter 8: The Code-Hygiene Agent</title>
+</head>
+<body>
+  <article id="notes:the-code-hygiene-agent">
+    <h1>Cliff Notes: Chapter 8: The Code-Hygiene Agent</h1>
+    <p class="part-label">Part III: The Agents at Work</p>
+    <p class="notes-source">A summary of <a href="chapters/08-the-code-hygiene-agent.html#ch:code-hygiene">Chapter 8</a>, written to match the text as it describes agentteams 1.1.</p>
+
+    <section id="notes-08-thesis">
+      <h2>Thesis</h2>
+      <p>The chapter argues that technical claims in a book about a system must answer to the system's files on disk, and that a read-only auditor with typed rules is the right instrument for enforcing that. The code-hygiene agent compares what chapters say against what source files contain, reports each divergence under a rule code and leaves correction to other agents. Its governing commitment is stated simply. "The truth condition is correspondence." A chapter's description matches the source it describes, or it does not.</p>
+    </section>
+
+    <section id="notes-08-covers">
+      <h2>What the chapter covers</h2>
+      <p>The first section presents twenty audit rules in six thematic groups. The rules accumulated inductively from production, so each code names a class of error that actually appeared and needed structured repair. The groups cover file hygiene (CH-01 to CH-04, including source fidelity and verbatim agent excerpts), modularity and structure (CH-05 to CH-08), configuration and cross-references (CH-09 to CH-11), quality and semantics (CH-12 to CH-15), import and dependency integrity (CH-16 to CH-18) and documentation integrity (CH-19 and CH-20). Slots from CH-21 upward are reserved for project-specific checks. The chapter lists the errors common to documentation projects, such as dead paths, refactored code and hallucinated function names, and those peculiar to multi-agent production, such as template residue, unreplaced placeholders and inconsistent terminology.</p>
+      <p>The second section separates detection from remediation. Like the security agent, the code-hygiene agent is read-only. It reports the code, file, line, expected content and actual content, and the report is routed to the agent responsible for correction. The chapter argues that auditing and fluent writing are different competences, and that the wish for readable prose can conflict with reporting every deviation. The split also creates an audit trail, since the orchestrator can re-invoke the auditor on revised files to confirm each fix.</p>
+      <p>The third section addresses self-referential enforcement. The agent audits chapters that describe the team, including the chapter about itself. If a chapter stated a rule count that differed from the rule reference, CH-05 would fire. The loop does not become circular because the detecting and correcting agents differ. As the chapter puts it, "The system being described contains the mechanism for checking its own descriptions." The framework turns the same self-reference on itself through a feature registry that marks a feature proven only when a named test demonstrates it. At the 1.1 release "6 of its 151 features are marked proven," and the chapter reads the low count as "the instrument working." The framework's repository also carries ratchets, tests that fail when a module outgrows its size ceiling, when a remediation record closes without evidence or when a test silently alters a tracked file.</p>
+      <p>The fourth section places the agent in the production workflow. The author recommends putting it at the front of quality assurance so its findings set the correction agenda. In Workflow 5 it audits first, the book-content-expert makes corrections, and those edits pass through the expert-critic, argument-weaver and voice-style agent before documentation upkeep and a closing consistency check. In Workflow 6 it runs after the conflict-auditor and before the bibliography-manager. Consistency and accuracy are independent properties, so the two checks complement each other. Workflows 3 and 4 carry no dedicated hygiene step, the first because the chapter does not yet exist and the second because revision addresses earlier findings.</p>
+      <p>The fifth section treats source files as ground truth. The agent counts what a source file contains and compares the count to the chapter's claim. It distinguishes analytical paraphrase, which is legitimate, from representation of what a file says, which must be accurate. When the two conflict, "the disk wins." Revising agent files to match chapter prose would invert the authority hierarchy. The framework applies the same commitment to code. At the anchor, the generated instructions require the agent updater to decide before closeout whether a session's changes call for documentation or API documentation updates. In release 1.2 a hook will report each changed module, public name and command-line option to an API Impact Review, which the chapter assigns to Chapter 12.</p>
+    </section>
+
+    <section id="notes-08-concepts">
+      <h2>Key concepts and mechanisms</h2>
+      <ul>
+        <li>Typed audit rules. Twenty codes in six groups, each naming an error class seen in production.</li>
+        <li>Extension slots. CH-21 and above for checks that do not belong in the portable baseline.</li>
+        <li>Detection without remediation. The auditor reports, and prose and bibliography specialists correct.</li>
+        <li>Self-referential audit. The agent checks chapters that describe the team and itself.</li>
+        <li>Feature registry and ratchets. The registry counts a feature as proven only when a named test demonstrates it. The ratchets are tests in the framework's own repository that fail when a module outgrows its size ceiling, when a remediation record is closed without evidence or when a test silently alters a tracked file.</li>
+        <li>Front-of-pipeline placement. Findings set the agenda for downstream agents.</li>
+        <li>Paraphrase versus representation. Only claims about what a file says must match it exactly.</li>
+        <li>API Impact Review hook. Arriving in release 1.2, not present at the 1.1 anchor.</li>
+      </ul>
+    </section>
+
+    <section id="notes-08-frames">
+      <h2>Theoretical frames</h2>
+      <p>The chapter compares typed violation codes to type systems in programming. Its main theoretical frame is Hayek (1945). The chapter reads Hayek on knowledge of particular circumstances and draws a corollary of its own, that a reliable claim about the environment must correspond to conditions that exist apart from the knower's deliberation. A chapter that describes an agent file must match the file, not because the drafter is suspected of dishonesty, but because the file is the only anchor that makes the claim verifiable. The inductive origin of the rules fits Hayek's account of habits and institutions that "have proved successful in their own sphere" (Hayek 1945, 528).</p>
+    </section>
+
+    <section id="notes-08-matters">
+      <h2>Why it matters</h2>
+      <p>The code-hygiene agent is where the book's claim to describe a real system becomes testable. Because the auditor checks the chapters that describe it, the book carries within its own production the means of catching its own errors. The feature registry extends that discipline from the book to the framework, and the chapter's frank reading of a low proven count shows the instrument doing its job. The note on the 1.2 hook marks the line between what the framework's instructions require of agents now and what a hook will report automatically later.</p>
+    </section>
+
+    <section id="notes-08-currency">
+      <h2>Currency</h2>
+      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags one item for release 1.2, the hook that will report changed modules, public names and command-line options to an API Impact Review.</p>
+    </section>
+  </article>
+</body>
+</html>

@@ -292,15 +292,16 @@ openssl pkey -in ~/.config/agentteams/keys/decision-signing-<key-id>.pem -pubout
 chmod 644 ~/.config/agentteams/verify-keys/<key-id>.pub.pem
 ```
 
-The script ends by printing the per-command form for `grant sign` and `agentteams --sign-decision`,
-and "Do NOT export AGENTTEAMS_DECISION_ED25519_KEYFILE".
+The script ends by printing the signing commands for `grant sign` and `agentteams --sign-decision`
+(they find the key by its key id, so they name no key file) and "Do NOT export
+AGENTTEAMS_DECISION_ED25519_KEYFILE".
 
-!!! danger "Name the private key per command; never export it"
-    Signing reads the key file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`. Set it on the signing
-    command itself, as every signing command on this page does
-    (`AGENTTEAMS_DECISION_ED25519_KEYFILE=<path> <command>`), so no later process in that shell (an
-    agent session, a goose or claude run) inherits it. Never `export` it, never put it in a shell
-    profile, and never copy the private key elsewhere.
+!!! danger "Never export the private key's path"
+    Signing finds your key from the spec's key id: `~/.config/agentteams/keys/decision-signing-<key-id>.pem`,
+    where this script puts it, so the signing commands on this page name no key. Only a key kept somewhere
+    else needs `AGENTTEAMS_DECISION_ED25519_KEYFILE=<path>`, set on the signing command itself so that no
+    later process in that shell (an agent session, a goose or claude run) inherits it. Never `export` it,
+    never put it in a shell profile, and never copy the private key elsewhere.
 
 ### Step 6: Configure agent mode
 
@@ -471,7 +472,6 @@ The first grant lets the agents stage fixes in **one** repository for **one** da
 else. They cannot push or open pull requests yet.
 
 ```bash
-AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
 python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 1 --max-uses 5 \
     --op stage-fix --repo-root ~/code/shop-api \
     --governance-dir ~/ops-team/.goose/recipes
@@ -631,7 +631,6 @@ repository of the agentteams installation it runs from, of `agent.team_dir`, of 
 governance directory and of the publish ops repository (worktrees included), whatever the grant says.
 
 ```bash
-AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
 python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 14 --max-uses 50 \
     --op stage-fix --op open-pr --op close-superseded --repo-root ~/code/shop-api --repo-root ~/code/billing \
     --governance-dir ~/ops-team/.goose/recipes
@@ -774,13 +773,12 @@ python -m agentteams.vulnscan halts
   it as an incident first. To resume, resolve it with your signature:
 
   ```bash
-  AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
   python -P -m agentteams.vulnscan resolve ve-<id> --evidence "<what you checked>" --key-id <key-id>
   ```
 
 - **A `@security` HALT:** `halts` prints a `HALT-RETRACTED` spec. Fill in the evidence, save it, and
   sign it with
-  `AGENTTEAMS_DECISION_ED25519_KEYFILE=<key file> agentteams --sign-decision <spec.json> --output <governance dir>`.
+  `agentteams --sign-decision <spec.json> --output <governance dir>`.
   Nothing else clears a HALT.
 
 ### Talking to the agents
@@ -913,7 +911,6 @@ and both grants are refused.
 
 ```bash
 python -m agentteams.vulnscan grant revoke --grant-id <old server grant id>
-AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
 python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 30 --max-uses 20 --max-read-uses 500 \
     --governance-dir <the old grant's governance_dir> --ancestor <old server grant id> \
     --op server-audit --op server-dryrun --op server-apply --host web1 \
@@ -1037,7 +1034,6 @@ gh api users/<owner> --jq .id                           # a number
 Then sign:
 
 ```bash
-AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
 python -P -m agentteams.vulnscan publish-grant sign --ops-repo ~/ops-reports \
     --node-id "$(gh repo view <owner>/ops-reports --json id --jq .id)" \
     --owner-id "$(gh api users/<owner> --jq .id)" \
@@ -1080,6 +1076,7 @@ mode, and it is recorded in `operator-clearances.log`. It also loads the same-da
 | `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date. `--verify` is the verification job's entry: Docker, then `verify` |
 | `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster. Both are operator-only: in auto mode it only reports what is missing, because a roster is a trust root and the brief is drafted from README text |
 | `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
+| `vulnscan-git-lib.sh` | Hardened git (`hgit` / `hgit_net`), sourced by the other scripts: the vulnscan executor's git flags, a pinned upload-pack/receive-pack, the gh credential helper for github.com only, and a refusal of any repository whose own config could run code (filter, http, url, pager, credential, ... keys, apart from an exact allowlist of harmless ones) |
 | `vulnscan-install-guard.sh` | Sourced first by the daily wrapper and the remediation runner: refuses a venv without `agentteams.vulnscan` or not installed from the commit `vulnscan-deploy.sh` recorded (exit 4, a notification at most every 6 hours) |
 | `vulnscan-deploy.sh` | Reinstalls the package from a commit; see [Deploying a new version](#deploying-a-new-version) |
 

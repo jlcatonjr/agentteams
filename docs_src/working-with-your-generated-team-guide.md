@@ -74,6 +74,32 @@ python -m agentteams.parallel_plan tmp/by-week/YYYY-Www/<plan-slug>.steps.csv
 
 Independence is conservative and fail-safe: steps share a wave only when their read/write footprints are disjoint and neither touches shared mutable state (git, databases, locks, the network, migrations). Destructive, cross-repository, and `--bridge-refresh` steps always run alone. Actual concurrency happens only where the host runtime supports concurrent subagents (e.g. Claude's `agent` tool); elsewhere the independent set is surfaced as an "any-order" recommendation. The per-step `@conflict-auditor` cadence is preserved (run per member at wave join). Full contract: `references/parallelization.reference.md`.
 
+### Ordering Items by Net Benefit
+
+When a plan or metaplan holds two or more development or remediation items, each item is rated
+1–5 for **severity** (how bad it is to leave the gap open), **breadth** (how much it touches) and
+**cost** (what fixing it takes), plus an optional **confidence** p. Each rating gets a one-line
+rationale. The items then run in descending expected net benefit, `p·S·B − cost_points(C)`, where
+the cost points are 1, 2, 4, 8 and 16. Dependencies still come first.
+
+Add `severity`, `breadth`, `cost` and `confidence` columns, with a rationale column for each
+(`rationale_s`, `rationale_b`, `rationale_c`, `rationale_p`), to the steps CSV. Mark integration and
+closeout rows `kind=closing`. Then run:
+
+```bash
+python -m agentteams.plan_priority tmp/by-week/YYYY-Www/<plan-slug>.steps.csv
+python -m agentteams.parallel_plan tmp/by-week/YYYY-Www/<plan-slug>.steps.csv --priority
+```
+
+- **Safety floor.** An item rated severity 5 is never pushed below the `next` band, however costly
+  it is.
+- **Pins.** Only you, the operator, can pin an item ahead of the computed order: write
+  `operator:<YYYY-MM-DD>:<reason>` in the `pin` column.
+- **Ratings freeze.** Ratings and the dependency edges between rated items are frozen when the
+  plan's pre-execution audit closes. A later change is recorded in `notes`.
+
+Full rubric: `references/net-benefit-prioritization.reference.md`.
+
 ### Complex Requests: Item Plans and a Metaplan
 
 When a request bundles two or more separable items (several features, defects, or audit findings), the orchestrator runs Workflow 0C. It writes one development or remediation plan per item, then a metaplan, `tmp/by-week/YYYY-Www/<meta-slug>.plan.md` + `.steps.csv`, with one row per item plan, and schedules them with `agentteams.parallel_plan`. `@adversarial` and `@conflict-auditor` audit the metaplan and every item plan, and the plans are revised on their findings before any implementation starts. Implementation then runs in rounds: independent items advance together, and a destructive, cross-repository, shared-state or operator step runs alone.

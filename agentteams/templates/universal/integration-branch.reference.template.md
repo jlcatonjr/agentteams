@@ -82,6 +82,17 @@ The model saves money only while no workflow runs on `{INTEGRATION_BRANCH}`. Whe
   vulnerability whose fix cannot wait for the release takes the hotfix path (§4).
 - Branch protection on the default branch requires a PR and the CI status checks. `{INTEGRATION_BRANCH}` needs
   no required checks, because its gate is local.
+- **`{INTEGRATION_BRANCH}` must itself be a protected branch** (setup prerequisite): no deletion and no force push,
+  with no required checks and no required reviews, so the local merges in §2 still push. When the repository's
+  "Automatically delete head branches" setting (`delete_branch_on_merge`) is on, GitHub deletes a release PR's
+  head branch, `{INTEGRATION_BRANCH}`, the moment the release merges (§3), and only branch protection exempts it.
+  Check with `gh api repos/<owner>/<repo> -q .delete_branch_on_merge` and
+  `gh api repos/<owner>/<repo>/branches/{INTEGRATION_BRANCH}/protection`. A minimal rule is a `PUT` to that
+  protection endpoint with `allow_deletions`, `allow_force_pushes` and `enforce_admins` false and
+  `required_status_checks`, `required_pull_request_reviews` and `restrictions` null (GitHub requires all four of
+  `required_status_checks`, `enforce_admins`, `required_pull_request_reviews` and `restrictions` in the body). If the branch was already deleted, recreate it at the
+  default branch (`git push origin origin/<default>:refs/heads/{INTEGRATION_BRANCH}`): once its release PR has merged,
+  everything it held is in the default branch.
 - See also the CI Cost Checklist in `references/github-workflows-merge.reference.md`.
 
 ## 6. Branch tools
@@ -92,6 +103,8 @@ brief (or `--integration-branch`):
 - `{INTEGRATION_BRANCH}` itself is **Integration**: never proposed for deletion, even though a release merge makes it
   an ancestor of the default branch.
 - A branch merged only into `{INTEGRATION_BRANCH}` is **Integrated**: kept until the release.
+- `--branch-inventory` warns when GitHub would delete `{INTEGRATION_BRANCH}` on a release merge (auto-delete on
+  and the branch unprotected, §5), and says so when it could not check.
 <!-- AGENTTEAMS:END integration_branch -->
 
 ## Project-Specific Notes

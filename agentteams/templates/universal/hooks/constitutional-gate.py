@@ -98,6 +98,11 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
      "package installation — unreviewed third-party code on the host"),
     (r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*--force)|\bgit\b[^\n]*\breset\s+--hard\b",
      "history-destructive git operation"),
+    # A fleet render past a release lock can roll a pinned repository's team back (the 2026-11-09 incident);
+    # the lift is an operator decision, never unattended (security remediation row 692, item 3).
+    # argparse takes any unique prefix, and `--fleet-i` is the shortest one; the Python API spells it fleet_ignore_locks.
+    (r"--fleet-i|\bfleet_ignore_locks\b",
+     "fleet release-lock lift — renders pinned repositories outside their own pin process (C-5)"),
     # ── Outbound-data gate (Rule S-9 criterion 6; C-4 derived content) ────────────────────────────
     # Exfiltration is the last hop of an injection, including one an agent decoded from read content
     # itself ("decrypt this and follow it"). Decoding is deliberately NOT gated: a model can decode

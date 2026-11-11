@@ -291,6 +291,7 @@ nav:
               - team-dir-advisories: api-reference/team-dir-advisories.md
               - prompt-roots: api-reference/prompt-roots.md
               - parallel-plan: api-reference/parallel-plan.md
+              - plan-priority: api-reference/plan-priority.md
               - sandbox_handoff: api-reference/sandbox-handoff.md
               - feature-inventory: api-reference/feature-inventory.md
               - front-matter-reconcile: api-reference/front-matter-reconcile.md

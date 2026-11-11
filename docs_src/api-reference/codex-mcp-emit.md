@@ -30,9 +30,20 @@ the current docs (`agent-approvals-security.md`, `extend/mcp.md`):
   workspace.
 
 The emitter therefore restores a per-call prompt explicitly: every server it wires carries
-`default_tools_approval_mode = "prompt"` (supported values: `auto`, `prompt`, `writes`,
+`default_tools_approval_mode = "prompt"`, with one opt-in exception, below (supported values: `auto`, `prompt`, `writes`,
 `approve`). An operator may relax a single tool under `[mcp_servers.<id>.tools.<tool>]`
 with `approval_mode`.
+
+**Opt-in auto-approval (WP-C, 2026-11-09):** the host feature `codex:wasm-auto-approve` sets
+`agentteams_wasm` alone to `auto`, so `codex exec` under `workspace-write` runs `run_wasm` (compute-only: no
+host writes outside the guest's scratch, no network) without the prompt. Operator-declared servers keep
+`prompt`. The first-party bound requires exactly the mode the features select (`first_party_approval_mode`),
+so a table with any other value is refused. Without the token nothing changes. Turning it on is the
+constraint-relaxing `mcp-approval-auto:codex` effect (WP-C2): in a governed workspace the render is refused
+until the operator records an Ed25519-signed decision with `scope` and `effect_relaxes` both exactly
+`mcp-approval-auto:codex`; the cleared relaxation is a standing exception with a 90-day sunset, retired when
+the token is dropped. The operator's signature that shipped this feature authorizes this repository only, not
+a consumer workspace.
 
 ## No comment-preserving TOML round-trip — text-level splice instead
 
@@ -99,10 +110,20 @@ emit_codex_mcp_config(
     features: list[str],
     output_root: Path,
     dry_run: bool = False,
+    first_party_tables: dict[str, dict] | None = None,
 ) -> CodexMCPEmissionResult
 ```
-Splice wirable MCP servers into `output_root/.codex/config.toml`. No-op
-(`gated_off=True`) when `codex:mcp` is not active; no-op when `servers` is empty.
+Splice wirable MCP servers into `output_root/.codex/config.toml`. Without `codex:mcp`
+no operator server is wired: the call is a no-op (`gated_off=True`) unless `first_party_tables`
+is given, and then only those tables are written. No-op when both `servers` and
+`first_party_tables` are empty.
+
+`first_party_tables` carries agentteams' own servers (the WASM wiring's
+`{"mcp_servers.agentteams_wasm": ...}` from `frameworks._wasm_wiring.codex_first_party_tables`).
+They bypass `mcp_wirable` and the `codex:mcp` gate, so each must be exactly the canonical
+compute-only `agentteams_wasm` session table: `command` one of `runner_mcp.SYSTEM_PYTHONS` and `args`
+exactly the canonical launch (`wasm_mcp.is_session_launch`). Anything else raises `ValueError`
+before any file is touched.
 Non-conforming entries (schema validation, via [`mcp_emit._inert_problems`](mcp-emit.md))
 are routed to `result.errors`. An existing file that fails to parse as TOML refuses
 the splice entirely (`result.errors`, file untouched) rather than guessing.

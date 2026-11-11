@@ -40,7 +40,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--security-offline] [--security-max-items N] [--security-no-nvd]
            [--migrate] [--revert-migration]
            [--fleet DIR] [--fleet-frameworks {github,claude,goose,both,all}] [--fleet-report DIR]
-           [--fleet-allow-no-verify]
+           [--fleet-exclude GLOB] [--fleet-skip-parent] [--fleet-ignore-locks GLOB] [--fleet-allow-no-verify]
            [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH]
            [--version]
 ```
@@ -69,7 +69,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar). **Beta** — see the feature-support matrix below |
 | `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. Generate-only for convert/bridge; the CAI interop path supports it as a target (best-effort: its rendered output carries no front matter). |
 | `codex` | TOML `.toml` | OpenAI Codex CLI. Emits Codex custom agents as `.codex/agents/<slug>.toml` (`name`, `description`, `developer_instructions`, `sandbox_mode = "read-only"` for read-only roles; no model/provider/approval keys). The repo-root `AGENTS.md` is written only when absent or already Codex-generated; a shared or project-owned one is skipped with a notice. Under `write_policy: "orchestrator-only"`, a goose-generated `AGENTS.md` gets only the `codex_write_policy` block (the top-level session's "Write Policy: You Are the Orchestrator" section), and goose's re-render keeps it; a hand-written one is never written, and the block goes to `.codex/examples/AGENTS.codex-write-policy-block.md` with a notice. `config.toml` MCP server emission is opt-in via `--target-host-features codex:mcp` (see [`codex_mcp_emit`](api-reference/codex-mcp-emit.md)). Same generate-only convert/bridge posture as `agents-md`. |
-| `grok` **(beta)** | Claude-compatible front matter `.md` | xAI Grok Build (`grok` CLI). Emits custom agents as `.grok/agents/<slug>.md` with `name`, `description`, `tools` (Claude tool vocabulary; `Task`→`Agent`, `TodoWrite` dropped, an unknown name refuses the render) plus `injectDefaultTools: false` and `mcpInheritance: none`, which make `tools:` the declared exact limit (no live negative test yet; see STABILITY section 6). `name:` values match the Claude render (whether a `.grok/agents` file shadows its `.claude/agents` twin is not confirmed). A scoped tool entry and `MCPTool` are dropped (each makes Grok Build discard the list and widen the agent); because Grok Build ignores `disallowedTools`, every denied tool is left out of `tools:`; a `[GROK-SCOPE]` notice names each change. Run an agent as `grok --agent .grok/agents/<slug>.md`: custom agents are not resolved by name and cannot be spawned as subagents in the pinned release. The repo-root `AGENTS.md` is co-owned: written in full only when absent or Grok-generated; in a Codex/goose/agents-md/fenced file only the `grok_runtime` block is added or refreshed; a hand-written file is never written (the block goes to `.grok/examples/AGENTS.grok-block.md`). Codex posture: an interop target and source and an absorb source; convert and bridge refuse `grok`. Pinned to Grok Build `FORMAT_SPECS["grok"].pinned_version`; see `references/grok-agent-infrastructure-expert.md`. |
+| `grok` **(beta)** | Claude-compatible front matter `.md` | xAI Grok Build (`grok` CLI). Emits custom agents as `.grok/agents/<slug>.md` with `name`, `description`, `tools` (Claude tool vocabulary; `Task`→`Agent`, `TodoWrite` dropped, an unknown name refuses the render) plus `injectDefaultTools: false` and `mcpInheritance: none`, which make `tools:` the declared exact limit for built-in tools (no live negative test yet; see STABILITY section 6); MCP servers are not limited: an agent run with `grok --agent` reaches every configured one, since `mcpInheritance` limits only subagents (live, 2026-11-10). `name:` values match the Claude render (whether a `.grok/agents` file shadows its `.claude/agents` twin is not confirmed). A scoped tool entry and `MCPTool` are dropped (each makes Grok Build discard the list and widen the agent); because Grok Build ignores `disallowedTools`, every denied tool is left out of `tools:`; a `[GROK-SCOPE]` notice names each change. Run an agent as `grok --agent .grok/agents/<slug>.md`: custom agents are not resolved by name and cannot be spawned as subagents in the pinned release. The repo-root `AGENTS.md` is co-owned: written in full only when absent or Grok-generated; in a Codex/goose/agents-md/fenced file only the `grok_runtime` block is added or refreshed; a hand-written file is never written (the block goes to `.grok/examples/AGENTS.grok-block.md`). Codex posture: an interop target and source and an absorb source; convert and bridge refuse `grok`. Pinned to Grok Build `FORMAT_SPECS["grok"].pinned_version`; see `references/grok-agent-infrastructure-expert.md`. |
 | `wasm` **(beta)** | Strict front matter `.md` | agentteams' own WASM agent runtime (no vendor CLI). Emits `.agentteams-wasm/agents/<slug>.md` (`name`, `description`, `tools` in the runtime vocabulary, `model` = a tier, `delegates`), `.agentteams-wasm/TEAM.md`, `grants.json`, `runtime.json` and `README.md`, and hashes them into the control-plane lock `.agentteams/wasm-team.lock.json`. The framework choice turns WASM confinement on (reason `framework`); an explicit `--wasm-sandbox off` or `wasm_sandbox.enabled: false` refuses. Run an agent with `--run-wasm-agent`. Generate-only. See [WASM agent runtime](wasm-agent-runtime.md). |
 | `canonical` | Exploded CAI directory | Durable on-disk canonical format (`team.cai.json` + `agents/<slug>.md` + `skills/<slug>/SKILL.md` + `references/**`), default `<project>/.agentteams/canonical/`. Interop-only: there is no generate/convert/bridge path for it. |
 
@@ -1114,7 +1114,7 @@ sealed, through the session-readable `.agentteams-status/` tree (see [proposal-r
 ### `--sign-mcp-direct-grant AGENT`
 
 Operator only (R5); run it outside every agent session. It signs a direct-write grant for `AGENT`, whose brief
-`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`, or, when that is unset, from `~/.config/agentteams/keys/decision-signing-<key_id>.pem` for `--key-id`,
 as for every operator signature. Name it with `--key-id ID`. The integrity and install-location checks run first,
 with the key unread. The full grant is then shown with a review digest, and it is signed only once that digest is
 confirmed: a terminal y/N, or `--confirm-review-sha256`. The digest covers what you chose (the agent, the binding,
@@ -1303,7 +1303,7 @@ from a trusted install (see `SECURITY.md`, "Signing from a trusted install").
 
 ### `--sign-grant SPEC.json`
 
-**Operator-only.** Mint an **Ed25519-signed** cross-workspace capability grant from a JSON spec (the `--issue-grant` fields plus `key_id`, and optionally `issuer_root`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD). It is the only minter of a grant that can widen the holder's sandbox `allowWrite`, which happens the next time the holder team is generated/updated (a grant is inert until then). The operator private key is read from the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` (the same key file and warnings as `--sign-decision`; keep it in `~/.config/agentteams/keys/`). The signed payload begins with the purpose tag `agentteams-grant-v1`, so a grant signature can never be replayed as a decision signature, or the reverse. Before appending, the row is verified against the holder **team dir** — the directory `--update` with the same `--framework`/`--output` writes (for `--framework claude --project P`, `P/.claude/agents`): its `references/authorized-verify-keys/<key_id>.pub.pem` must hold the matching public key, and its `references/security-approvers.txt` must name the approver. In a multi-framework project, the team whose `--output` the update targets is the one that verifies. There is no project-root roster fallback.
+**Operator-only.** Mint an **Ed25519-signed** cross-workspace capability grant from a JSON spec (the `--issue-grant` fields plus `key_id`, and optionally `issuer_root`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD). It is the only minter of a grant that can widen the holder's sandbox `allowWrite`, which happens the next time the holder team is generated/updated (a grant is inert until then). The operator private key is read from the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`, or, when that is unset, from `~/.config/agentteams/keys/decision-signing-<key_id>.pem` (the same key file, lookup and warnings as `--sign-decision`; keep it in `~/.config/agentteams/keys/`). The signed payload begins with the purpose tag `agentteams-grant-v1`, so a grant signature can never be replayed as a decision signature, or the reverse. Before appending, the row is verified against the holder **team dir** — the directory `--update` with the same `--framework`/`--output` writes (for `--framework claude --project P`, `P/.claude/agents`): its `references/authorized-verify-keys/<key_id>.pub.pem` must hold the matching public key, and its `references/security-approvers.txt` must name the approver. In a multi-framework project, the team whose `--output` the update targets is the one that verifies. There is no project-root roster fallback.
 
 ### `--verify-directives`
 
@@ -1366,7 +1366,7 @@ Read-only: list every entry in `references/exception-registry.json` under `--out
 
 ### `--sign-decision`
 
-**Operator-only.** Mint an **Ed25519-signed** constraint-relaxing security decision from a JSON spec (`date`, `action_reviewed`, `verdict`, the structured `effect_*` fields, `derives_from`, `key_id`, `author`) and append it to `references/security-decisions.log.csv` under `--output`/`--project` (else CWD), which must be a **team dir** — it must hold `references/agent-privilege.json` or `references/build-log.json` (e.g. `--output .claude/agents`); anything else is refused, because the gate never reads a log outside the team dir (F-2; `--project .` always names the project root and is therefore refused). The new signature is verified against that team's `references/authorized-verify-keys/<key_id>.pub.pem` before the row is appended, so a key provisioned into the wrong dir fails at mint time. When the log has a `text_digest` column (a new log does; `--migrate-decision-log` adds it), the row's `text_digest` is computed from its `conditions` and `evidence` (a spec cannot supply one) and signed, so editing that text later makes the row fail verification; into a log without the column a **constraint-relaxing** row is refused, naming `--migrate-decision-log` (so deleting the column cannot downgrade a relaxing row to an unbound one), and any other row signs as before with a one-line notice that its text is not bound. The operator private key is read from the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` — never from an agent environment. Before writing, it refuses a categorically non-eligible decision (one that would write a governance/trust root, such as the verify-key store) and prints the row's full **derived material effect** for a deliberate second look. This is the *only* minter of Ed25519 relaxing rows. Keep the key in `~/.config/agentteams/keys/` (the provisioning script's default; `--migrate` moves keys from the old `~/.config/agentteams/` location): every emitted sandbox read-denies that directory, so once the key lives there the key **file** is unreadable in-sandbox and running `--sign-decision` there fails closed. For the Claude arm on Linux that was verified on 2026-09-30 (PF1; Claude Code 2.1.251, Ubuntu, with Claude Code's documented bwrap AppArmor profile installed), and it holds only for the file: the environment variables `AGENTTEAMS_DECISION_ED25519_KEYFILE` and `AGENTTEAMS_*_SIGNING_KEY` **are inherited** by Claude-sandboxed commands (only `sandbox/confine-run.sh` scrubs the environment), so never export them into the shell that launches an agent. A keyfile outside `keys/`, symlinked, or wider than mode 600 draws a warning but still signs. A relaxing authorization is *valid-but-insufficient* under HMAC — only this Ed25519 signature, verified against the public key in the team's `references/authorized-verify-keys/<key-id>.pub.pem` (provisioned with the operator helper's `--team-dir`), clears the elevated path in a governed workspace. Since rc.11 the gate also dispatches on the row's signed `sig_scheme` everywhere else: a row declaring `ed25519` — any authorizing verdict, `PASS`, `CONDITIONAL PASS` or `HALT-RETRACTED`, with `enforce_decision_signing` on or off — is verified against that team's public key and never falls back to HMAC, so an operator-signed retraction clears its HALT and no `AGENTTEAMS_DECISION_SIGNING_KEY` is needed in the render environment. A failed Ed25519 check fails closed; `text_digest`, the author roster and the retraction evidence rule still apply, and HMAC rows are unchanged.
+**Operator-only.** Mint an **Ed25519-signed** constraint-relaxing security decision from a JSON spec (`date`, `action_reviewed`, `verdict`, the structured `effect_*` fields, `derives_from`, `key_id`, `author`) and append it to `references/security-decisions.log.csv` under `--output`/`--project` (else CWD), which must be a **team dir** — it must hold `references/agent-privilege.json` or `references/build-log.json` (e.g. `--output .claude/agents`); anything else is refused, because the gate never reads a log outside the team dir (F-2; `--project .` always names the project root and is therefore refused). The new signature is verified against that team's `references/authorized-verify-keys/<key_id>.pub.pem` before the row is appended, so a key provisioned into the wrong dir fails at mint time. When the log has a `text_digest` column (a new log does; `--migrate-decision-log` adds it), the row's `text_digest` is computed from its `conditions` and `evidence` (a spec cannot supply one) and signed, so editing that text later makes the row fail verification; into a log without the column a **constraint-relaxing** row is refused, naming `--migrate-decision-log` (so deleting the column cannot downgrade a relaxing row to an unbound one), and any other row signs as before with a one-line notice that its text is not bound. The operator private key is read from the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` — never from an agent environment. When the variable is unset, the key for the spec's `key_id` is taken from `~/.config/agentteams/keys/decision-signing-<key_id>.pem` (the provisioning script's name), and that path is printed before the confirm gate; a set variable always wins. Before writing, it refuses a categorically non-eligible decision (one that would write a governance/trust root, such as the verify-key store) and prints the row's full **derived material effect** for a deliberate second look. This is the *only* minter of Ed25519 relaxing rows. Keep the key in `~/.config/agentteams/keys/` (the provisioning script's default; `--migrate` moves keys from the old `~/.config/agentteams/` location): every emitted sandbox read-denies that directory, so once the key lives there the key **file** is unreadable in-sandbox and running `--sign-decision` there fails closed. For the Claude arm on Linux that was verified on 2026-09-30 (PF1; Claude Code 2.1.251, Ubuntu, with Claude Code's documented bwrap AppArmor profile installed), and it holds only for the file: the environment variables `AGENTTEAMS_DECISION_ED25519_KEYFILE` and `AGENTTEAMS_*_SIGNING_KEY` **are inherited** by Claude-sandboxed commands (only `sandbox/confine-run.sh` scrubs the environment), so never export them into the shell that launches an agent. A keyfile outside `keys/`, symlinked, or wider than mode 600 draws a warning but still signs. A relaxing authorization is *valid-but-insufficient* under HMAC — only this Ed25519 signature, verified against the public key in the team's `references/authorized-verify-keys/<key-id>.pub.pem` (provisioned with the operator helper's `--team-dir`), clears the elevated path in a governed workspace. Since rc.11 the gate also dispatches on the row's signed `sig_scheme` everywhere else: a row declaring `ed25519` — any authorizing verdict, `PASS`, `CONDITIONAL PASS` or `HALT-RETRACTED`, with `enforce_decision_signing` on or off — is verified against that team's public key and never falls back to HMAC, so an operator-signed retraction clears its HALT and no `AGENTTEAMS_DECISION_SIGNING_KEY` is needed in the render environment. A failed Ed25519 check fails closed; `text_digest`, the author roster and the retraction evidence rule still apply, and HMAC rows are unchanged.
 
 ### `--write-integrity-manifest`
 
@@ -1533,7 +1533,7 @@ Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `
 
 ### `--fleet DIR`
 
-Update every agent-infrastructure workspace under `DIR` and its subfolders. Requires `--update --merge`. Defaults to a dry-run preview; pass `--yes` to apply.
+Update every agent-infrastructure workspace under `DIR` and its subfolders, except `--fleet-exclude` matches and release-locked workspaces (see `--fleet-ignore-locks`). Requires `--update --merge`. Defaults to a dry-run preview; pass `--yes` to apply.
 
 ### `--fleet-frameworks {github,claude,goose,both,all}`
 
@@ -1548,9 +1548,43 @@ Which infrastructures to update per workspace. Default: `both`.
 
 Directory for the fleet report. Default: `<DIR>/.agentteams-fleet/<run-id>/`.
 
+### `--fleet-exclude GLOB`
+
+Skip folders under `DIR` that match `GLOB`. Repeatable. A pattern matches the folder's path relative to `DIR`
+(`visualknowledge/old-*`) or the folder's own name (`agentteams*`), case-sensitively. A matched folder is
+neither updated nor descended into, and the report shows it as a `SKIP` row with target `(excluded)`. `DIR`
+itself is never excluded.
+
+### `--fleet-skip-parent`
+
+When `DIR` is itself a workspace (under the chosen `--fleet-frameworks`), do not update it; the report gives it a
+`SKIP` row with target `(parent-skipped)`, which also covers a release-locked `DIR`. Otherwise the flag does nothing.
+Workspaces below `DIR` are unaffected. Use it when `DIR` is a folder of repositories that also carries agent files of its
+own, typically a non-git folder with no snapshot rollback, which `--fleet-exclude` cannot name.
+
+### `--fleet-ignore-locks GLOB`
+
+Render the workspaces of release-locked repositories matching `GLOB` anyway. Repeatable; `GLOB` matches the
+folder holding the lock (the locked repository), by its path relative to `DIR` or its name, never the workspace's
+own name; `'*'` renders every locked workspace. Scoping it keeps one deliberate exception from lifting every lock in the run. By
+default a workspace is skipped, with a `SKIP` row whose target is
+`(release-locked)`, when its repository's `toolchain.lock` pins agentteams (an `agentteams=<repo>@<commit>` or
+`agentteams.tag=<tag>` line). The skip happens before the snapshot or any write. Such a repository moves only
+through its own pin process; a fleet render with a different build would roll its team back. The governing lock
+is the nearest `toolchain.lock` naming agentteams from the workspace up to its repository's git toplevel, even when
+`DIR` is below that toplevel; a lock without an agentteams line is passed over. Only for a workspace outside git
+does the search stop at `DIR`. A nested workspace inherits its repository's lock; a submodule does not inherit its
+superproject's.
+
 ---
 
 ## Output Safety
+
+Each workspace a glob lifts gets a `REVIEW` row with target `(lock-lifted)`, naming the pattern and the lock file,
+so it is never auto-committed as OK. A lock that cannot be trusted counts as a lock: a `toolchain.lock` that is a
+directory, a dangling or looping symlink, unreadable, not UTF-8, or has a non-comment line without `=`. A `.git`
+marks a repository toplevel only as a directory or a `gitdir:` file. The constitutional gate routes any command
+using this flag (or a prefix of it, down to `--fleet-i`) to the operator ("ask").
 
 ### `--allow-foreign-output`
 
@@ -2041,6 +2075,30 @@ With `--verify-wasm-run`: treat the run as the root of a delegation tree and ver
 each transcript chain, each parent `delegate-start` / child `run-start` / parent `delegate-end` binding, and the
 child budgets. A run dir naming a run of the tree as its parent without being referenced (an orphan or a forged
 link) fails it. Exit 0 when the whole tree verifies, 1 otherwise.
+
+## Plan Ordering Helpers
+
+Two module CLIs read a plan's `.steps.csv`. Both are **compute-only** and never write the CSV.
+Their exit codes are their own; the table under **Exit Codes** is for the `agentteams` CLI.
+
+```
+python -m agentteams.parallel_plan PLAN.steps.csv [MORE ...] [--json] [--priority]
+python -m agentteams.plan_priority PLAN.steps.csv [MORE ...] [--json] [--require]
+```
+
+- **`parallel_plan`** computes Workflow 0A's fail-safe waves from `depends_on` and the read/write
+  footprints.
+  - `--priority` lists each wave's members in net-benefit rank order, and breaks write-write
+    conflicts in favour of the higher-ranked step. It exits 2 when the plan fails `plan_priority`'s
+    validation (bad ratings, a duplicate id or a cycle). Without the flag a cycle exits 1.
+- **`plan_priority`** orders rated items by expected net benefit, `p·S·B − cost_points(C)`. It
+  applies the bands, the S=5 safety floor, operator pins and priority inheritance, and it never
+  reorders across a dependency edge (`references/net-benefit-prioritization.reference.md`).
+  - `--require` makes unrated rows, missing or empty rationales and stale computed columns errors. Use it as a
+    pre-dispatch or CI gate.
+  - Exit status: 0 when the order is usable, 1 when a file is missing or has no `step`/`id` column,
+    2 on a validation error or a cycle.
+  - API: [`plan_priority`](api-reference/plan-priority.md).
 
 ## Exit Codes
 

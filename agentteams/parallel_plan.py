@@ -31,6 +31,10 @@ CLI
 ---
     python -m agentteams.parallel_plan PLAN.steps.csv [MORE.steps.csv ...]
     python -m agentteams.parallel_plan PLAN.steps.csv --json
+    python -m agentteams.parallel_plan PLAN.steps.csv --priority
+
+``--priority`` orders wave members and breaks write-write ties by net-benefit
+rank (:mod:`agentteams.plan_priority`); it can change which steps share a wave.
 """
 
 from __future__ import annotations
@@ -304,12 +308,63 @@ def read_steps(csv_path: Path | str) -> list[PlanStep]:
 # Wave computation
 # ---------------------------------------------------------------------------
 
-def compute_waves(steps: list[PlanStep]) -> WaveSchedule:
+def footprint_edges(steps: list[PlanStep]) -> list[tuple[str, str, str]]:
+    """Derive implicit ordering facts between steps from their footprints.
+
+    Args:
+        steps: Plan steps in CSV order (duplicate ids after the first are skipped).
+
+    Returns:
+        list[tuple[str, str, str]]: At most one ``(first, second, kind)`` per pair:
+        ``"raw"`` (read-after-write; the writer is ``first`` and must run first) or
+        ``"ww"`` (both write a path: a tie that only forbids sharing a wave;
+        ``first`` is the CSV-earlier step).
+
+    Raises:
+        None.
+    """
+    seen: dict[str, PlanStep] = {}
+    for s in steps:
+        seen.setdefault(s.step, s)
+    ordered = list(seen.values())
+    edges: list[tuple[str, str, str]] = []
+    for ai in range(len(ordered)):
+        for bi in range(ai + 1, len(ordered)):
+            a, b = ordered[ai], ordered[bi]
+            wa, wb = a.write_tokens(), b.write_tokens()
+            ra, rb = a.read_tokens(), b.read_tokens()
+            if _sets_overlap(wa, rb):  # b reads what a writes -> a before b
+                edges.append((a.step, b.step, "raw"))
+            elif _sets_overlap(ra, wb):  # a reads what b writes -> b before a
+                edges.append((b.step, a.step, "raw"))
+            elif _sets_overlap(wa, wb):  # both write -> a tie to serialize
+                edges.append((a.step, b.step, "ww"))
+    return edges
+
+
+def compute_waves(
+    steps: list[PlanStep],
+    priority: dict[str, int] | None = None,
+) -> WaveSchedule:
     """Compute fail-safe parallel waves from a list of plan steps.
 
     Steps without a satisfied dependency wait; independent steps with disjoint
     footprints and no shared-state contact are grouped into the same wave.
     See the module docstring for the full contract.
+
+    Args:
+        steps: Plan steps in CSV order.
+        priority: Optional step id → execution position map (lower first), from
+            :func:`agentteams.plan_priority.priority_map`. It orients write-write
+            ties and orders wave members; unmapped steps sort last in CSV order.
+            ``None`` keeps the historical schedule exactly.
+
+    Returns:
+        WaveSchedule: The schedule, or one carrying only ``errors`` when the
+        combined dependency graph has a cycle.
+
+    Raises:
+        None.
     """
     result = WaveSchedule()
     if not steps:
@@ -322,6 +377,13 @@ def compute_waves(steps: list[PlanStep]) -> WaveSchedule:
             continue
         by_id[s.step] = s
     ids = list(by_id)
+    csv_pos = {sid: i for i, sid in enumerate(ids)}
+
+    def _prio_key(sid: str) -> tuple:
+        if priority is None:
+            return (sid,)
+        pos = priority.get(sid)
+        return (0, pos, csv_pos[sid]) if pos is not None else (1, csv_pos[sid], 0)
 
     # 1) Declared dependency edges (predecessor -> successor).
     succ: dict[str, set[str]] = {i: set() for i in ids}
@@ -342,41 +404,40 @@ def compute_waves(steps: list[PlanStep]) -> WaveSchedule:
                 continue
             _add_edge(dep, node)
 
-    # 2) Implicit ordering edges inferred from footprints (fail-safe). Iterate
-    #    ordered pairs deterministically by id position.
-    for ai in range(len(ids)):
-        for bi in range(ai + 1, len(ids)):
-            a, b = by_id[ids[ai]], by_id[ids[bi]]
-            wa, wb = a.write_tokens(), b.write_tokens()
-            ra, rb = a.read_tokens(), b.read_tokens()
-            if _sets_overlap(wa, rb):  # b reads what a writes -> a before b
-                if b.step not in succ[a.step]:
-                    _add_edge(a.step, b.step)
-                    result.warnings.append(
-                        f"inferred order {a.step} -> {b.step} "
-                        f"(read-after-write on shared path)"
-                    )
-            elif _sets_overlap(ra, wb):  # a reads what b writes -> b before a
-                if a.step not in succ[b.step]:
-                    _add_edge(b.step, a.step)
-                    result.warnings.append(
-                        f"inferred order {b.step} -> {a.step} "
-                        f"(read-after-write on shared path)"
-                    )
-            elif _sets_overlap(wa, wb):  # both write -> serialize by id order
-                if b.step not in succ[a.step] and a.step not in succ[b.step]:
-                    _add_edge(a.step, b.step)
-                    result.warnings.append(
-                        f"serialized {a.step} before {b.step} "
-                        f"(write-write conflict on shared path)"
-                    )
+    # 2) Implicit ordering edges inferred from footprints (fail-safe). Pairs are
+    #    visited deterministically by id position (see footprint_edges).
+    for first, second, kind in footprint_edges(steps):
+        if kind == "raw":
+            if second not in succ[first]:
+                _add_edge(first, second)
+                result.warnings.append(
+                    f"inferred order {first} -> {second} "
+                    f"(read-after-write on shared path)"
+                )
+            continue
+        # Write-write tie: either order is correct; only the choice differs.
+        if second in succ[first] or first in succ[second]:
+            continue
+        if priority is not None and _prio_key(second) < _prio_key(first):
+            first, second = second, first
+            how = "by priority rank"
+        else:
+            how = "by CSV order" if priority is not None else ""
+        _add_edge(first, second)
+        suffix = f"; {how}" if how else ""
+        result.warnings.append(
+            f"serialized {first} before {second} "
+            f"(write-write conflict on shared path{suffix})"
+        )
 
     # 3) Kahn layering on the combined graph. A cycle leaves nodes unprocessed.
     remaining = dict(indeg)
     processed: set[str] = set()
     layers: list[list[str]] = []
     while True:
-        ready = sorted(i for i in ids if i not in processed and remaining[i] == 0)
+        ready = sorted(
+            (i for i in ids if i not in processed and remaining[i] == 0), key=_prio_key
+        )
         if not ready:
             break
         layers.append(ready)
@@ -421,7 +482,7 @@ def compute_waves(steps: list[PlanStep]) -> WaveSchedule:
             else:
                 safe_group.append(sid)
         if safe_group:
-            result.waves.append(sorted(safe_group))
+            result.waves.append(sorted(safe_group, key=_prio_key))
         for sid in singletons:
             result.waves.append([sid])
 
@@ -778,6 +839,9 @@ Or from the shell:
 - If the schedule reports a **cycle error**, the plan's ``depends_on`` is
   inconsistent: fix it before executing.
 
+**Rated plans** (``severity``/``breadth``/``cost`` columns): add ``--priority`` to
+list wave members in rank order and give write-write ties to the higher rank.
+
 **Cross-plan (any-order, not concurrency):**
 
     python -m agentteams.parallel_plan PLAN_A.steps.csv PLAN_B.steps.csv
@@ -812,6 +876,10 @@ def main(argv: list[str] | None = None) -> int:
         "--json", action="store_true",
         help="Emit JSON instead of Markdown.",
     )
+    parser.add_argument(
+        "--priority", action="store_true",
+        help="Order wave members and write-write ties by net-benefit rank (exit 2 on bad ratings).",
+    )
     args = parser.parse_args(argv)
 
     paths = [Path(p) for p in args.csv]
@@ -824,10 +892,21 @@ def main(argv: list[str] | None = None) -> int:
     payloads: list[dict] = []
     for p in paths:
         steps = read_steps(p)
-        schedule = compute_waves(steps)
+        priority: dict[str, int] | None = None
+        if args.priority:
+            from agentteams.plan_priority import analyze_priority, priority_map
+
+            ranked = analyze_priority(p)
+            if ranked.errors:
+                for e in ranked.errors:
+                    print(f"Error ({p.name}): {e}", file=sys.stderr)
+                exit_code = 2
+                continue
+            priority = priority_map(ranked)
+        schedule = compute_waves(steps, priority=priority)
         groups = coordination_candidates(steps)
         if schedule.errors:
-            exit_code = 1
+            exit_code = max(exit_code, 1)
         if args.json:
             payloads.append({"plan": str(p), "schedule": json.loads(to_json(schedule, groups))})
         else:
@@ -860,6 +939,7 @@ __all__ = [
     "CoordinationGroup",
     "read_steps",
     "compute_waves",
+    "footprint_edges",
     "analyze_plan",
     "coordination_candidates",
     "plan_footprint",

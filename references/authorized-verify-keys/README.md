@@ -38,7 +38,8 @@ references/authorized-verify-keys/provision-operator-signing-key.sh --team-dir .
 It generates the private key **outside** the repo in `~/.config/agentteams/keys/` (directory
 mode 700, file mode 600), writes the public key into each `--team-dir`'s
 `references/authorized-verify-keys/<key-id>.pub.pem` (repeat `--team-dir` for several teams), and
-prints the `AGENTTEAMS_DECISION_ED25519_KEYFILE` export line. `--team-dir` is required: without it
+prints the signing commands, which name no key: the signers find
+`decision-signing-<key-id>.pem` there by the spec's `key_id`. `--team-dir` is required: without it
 the helper refuses (exit 2) and lists the team dirs it finds, because the gate never reads a
 repository-root store. A `--team-dir` must hold `references/agent-privilege.json` or
 `references/build-log.json`. Commit the `.pub.pem` if the team dir is tracked; in this repository
@@ -46,9 +47,12 @@ repository-root store. A `--team-dir` must hold `references/agent-privilege.json
 private key. Then, to sign a relaxing decision:
 
 ```
-export AGENTTEAMS_DECISION_ED25519_KEYFILE="$HOME/.config/agentteams/keys/decision-signing-op-2026.pem"
 agentteams --sign-decision path/to/decision-spec.json --output .claude/agents
 ```
+
+With `AGENTTEAMS_DECISION_ED25519_KEYFILE` unset, the signer uses
+`~/.config/agentteams/keys/decision-signing-<key_id>.pem` for the spec's `key_id` and prints that path.
+Set the variable only for a key kept elsewhere, and only on the signing command itself.
 
 `--sign-decision` refuses an `--output` that is not a team dir (no `agent-privilege.json` or
 `build-log.json` under `references/`), and verifies the new signature against that team's

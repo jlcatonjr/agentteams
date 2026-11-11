@@ -176,6 +176,10 @@ def convert_team(
     # then install the readfs server), and every agent is rendered and checked BEFORE anything is written.
     if target_framework == "goose":
         manifest["goose_tool_scoping"] = "grant"
+    # A Claude source's model ids mean nothing to Copilot: _render drops them so the Copilot default applies.
+    from agentteams.interop_helpers import detect_framework, drops_source_model
+
+    manifest["_drop_source_model"] = drops_source_model(detect_framework(source_dir), target_framework)
     _refuse_widening(source_dir, target_framework, adapter, manifest)
 
     # Walk source directory shallowly first, then handle subdirs explicitly
@@ -386,6 +390,10 @@ def _render(source_path: Path, file_type: str, adapter: FrameworkAdapter, manife
     from agentteams.interop_grant_check import canonical_tools_header
 
     content = canonical_tools_header(source_path.read_text(encoding="utf-8"))
+    if manifest.get("_drop_source_model"):
+        from agentteams.interop_helpers import strip_front_matter_model
+
+        content = strip_front_matter_model(content)
     if file_type == "builder":
         # F5 — frameworks whose agent files are not plain markdown (goose recipes)
         # wrap the builder differently from a specialist agent.

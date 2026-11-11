@@ -116,6 +116,9 @@ docs_src/book/figures/*.svg
 !docs_src/book/figures/agent-team-structure.svg
 !docs/book/figures/workflow-12-adaptive-plan-execution.svg
 !docs_src/book/figures/workflow-12-adaptive-plan-execution.svg
+# Part VI chapter figures (hand-authored in jameslcaton; synced by sync_manuscript.yml)
+!docs/book/figures/part6-*.svg
+!docs_src/book/figures/part6-*.svg
 
 # memory-index validation sidecar cache — machine-specific local cache, never committed
 # (added with the validation-cache perf fix; keeps test_root_doc_hygiene / untracked-artifact checks clean)
@@ -200,6 +203,10 @@ references/runtime-handoffs.json
 .goose/
 .agents/
 .codex/
+# The agent-surface matrix (surface_matrix.py) is rendered from the ignored team directories above
+# on every generate and --update, so it enumerates the same unpublished team; a clone or CI renders
+# "No agent files found". Keep it local, like its sources.
+/references/agent-surface-matrix.md
 # NOTE: do NOT re-ignore .github/agents/_build-description.json here. It is deliberately
 # un-ignored at the top of this file (see the "so CI can run security-maintenance" comment)
 # so the daily Security Maintenance workflow scans the REAL self-team. A 2026-08-29 scrub

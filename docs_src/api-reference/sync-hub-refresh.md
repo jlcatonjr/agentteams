@@ -15,7 +15,8 @@ a projection lowering a fence, but cannot catch stale same-version values (`src/
 ## Public types
 
 - `HubRefreshResult`: `pin`, `refreshed` (fences replaced from the pin), `added` (fences only the
-  pin had), `notices`, `changed`, `dry_run`.
+  pin had), `notices`, `changed`, `dry_run`, `replaced_fenceless` (the hub's instruction content had no
+  fences and was replaced wholesale by the pin's).
 
 ## Public functions
 
@@ -26,7 +27,10 @@ a projection lowering a fence, but cannot catch stale same-version values (`src/
 Fence-merges the pin framework's deployed instruction file into the hub. A fence another framework
 in the sync set deploys at a higher `v=` is taken from that framework instead (a sync from before the
 guard lowered the pin's own file too). Only fenced regions move;
-the hub's text outside fences is kept. A hub fence with a higher `v=` than the pin's is kept and
+the hub's text outside fences is kept. A hub whose instruction content has no fences at all can't be
+fence-merged, so it is replaced by the pin's file; before the save, its `team.cai.json` is backed up to
+`agents/.agentteams-backups/<timestamp>/__external__/`, so `--restore-backup` on the hub's agents dir
+recovers the old text (a notice names the backup). A hub fence with a higher `v=` than the pin's is kept and
 reported, so the hub never lowers either. No shrink-preserve: the operator asked for the pin's
 bodies. A hub fence still below the newest shipped template's version afterwards is reported: every
 copy is stale, so regenerate the pin natively (`--update`) and refresh again. With `dry_run` nothing is
@@ -65,7 +69,8 @@ Raises `ValueError` carrying `pin_instruction_problem`'s text. `run_sync` and `s
 `refresh_hub_for_projection(root, pin_doc, hub, canonical_dir, *, dry_run, notices) -> None`
 
 `run_sync`'s pre-projection step: `refresh_hub_binding` from the pin alone, reported in `notices`, saved unless
-`dry_run`.
+`dry_run`. When it replaces a fence-less hub's instruction text, it first backs up `team.cai.json` (as
+`refresh_hub_instructions` does) and names the backup in `notices`.
 
 ## The projection guard
 
@@ -76,4 +81,8 @@ is higher than the incoming one and returns one notice per kept fence (starting
 against every later update. `merge_instruction_file`, which every `preserve_existing` projection of
 an instruction file uses (pinned `--sync` and the Grok path included), runs it first. The guard cannot
 tell a stale same-version body from a deliberate one, and it protects only fences that already exist;
-the refresh and `pin_instruction_problem` cover the rest.
+the refresh and `pin_instruction_problem` cover the rest. `template_fence_versions()` reads literal
+`AGENTTEAMS:BEGIN <id> v=N` markers only, so the fences code builds by f-string (`wasm_sandbox`,
+`codex_translation`, `grok_runtime`, `constitutional_rules_baseline`, `codex_write_policy`, and
+`fence_inject`'s runtime `content`/`content_N`) have no ceiling. `tests/test_sync_low_severity.py` lists
+each site with its `v=`, so a new site or a version bump fails until it is listed and its ceiling decided.

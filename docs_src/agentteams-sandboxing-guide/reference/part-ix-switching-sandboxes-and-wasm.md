@@ -83,7 +83,7 @@ in place as the floor. See [`sandbox_projection`](../../api-reference/sandbox-pr
 
 ## SB26 — Turning a sandbox off is governed (D7)  ✅
 
-Five transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule). Each has a gate action id:
+Six transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule). Each has a gate action id:
 
 | Effect kind | When | Action id |
 |---|---|---|
@@ -92,6 +92,7 @@ Five transitions are **constraint-relaxing** (see the constraint-relaxing-author
 | `wasm-grant-widen` | a per-agent grant gains read paths or a scratch dir | `wasm-grant-widen:<framework>` (tokens `wasm:<agent>:read:<rel>`, `wasm:<agent>:scratch`) |
 | `native-exec-keep` | a WASM-eligible agent keeps native exec while WASM is on | `native-exec-keep:<framework>` (tokens `native-exec:<agent>`) |
 | `wasm-to-os-switch` | a runner `confined_programs` entry moves from `sandbox: wasm` back to `os` | `wasm-to-os-switch:<agent>` |
+| `mcp-approval-auto` | a Codex render with WASM on turns on the opt-in `codex:wasm-auto-approve` host feature, so the shared `agentteams_wasm` table gets `default_tools_approval_mode = "auto"` and `run_wasm` runs without the per-call prompt | `mcp-approval-auto:codex` |
 
 **"Governed" is the default.** A workspace is governed when strict decision signing is on
 (`enforce_decision_signing`), and that defaults to true: the first render writes it into
@@ -103,13 +104,15 @@ operator's **Ed25519** key (`--sign-decision`). An HMAC signature is valid but i
 HALT on the instance, a lineage ancestor or the whole family blocks it (C-2). All checks run before
 anything is consumed.
 
-**Standing exceptions.** OS off, a grant widening, a native-exec keep and a runner switch are standing:
+**Standing exceptions.** OS off, a grant widening, a native-exec keep, a runner switch and MCP auto-approval are
+standing:
 each is registered in the exception registry with a 90-day sunset (`SANDBOX_EXCEPTION_TTL_DAYS`) and bound
 to the decision row that cleared it. A later render carries it over only while that row still verifies;
 otherwise it lapses and a fresh signed decision is needed. They share the registry's aggregate cap
 (default one active relaxing exception), so a workspace that needs, say, an OS-off and a grant widening at
 once must raise the cap in the registry (a visible, git-tracked decision). `sandbox-wasm-off` is not
-standing.
+standing. Whether auto-approval is on is recorded in the build-log's `sandbox_exceptions` (`mcp_approval_auto: "on"`,
+written only when on; a record without it reads as off), and dropping the token retires its exception.
 
 **Carve-out: an OS-off state that predates governance.** A continuing `sandbox-os-off` (the previous
 render already had the OS boundary off and this one keeps it off) with no exception ever recorded for its
@@ -166,7 +169,7 @@ explicit list replaces the default (`[]` keeps none).
 | goose | `wired-per-agent` (grant mode); `not-wired` under legacy scoping | recipe extensions, honoured on a direct `goose run --recipe`; a delegate cannot add the server |
 | codex | `wired-shared` | one compute-only instance in `.codex/config.toml` (loaded for a trusted project), approval mode `prompt` |
 | copilot-vscode / copilot-cli | `example-only` | inert `.vscode/` / `.github/mcp.agentteams-wasm.example.json`; no `run_wasm` in agent tools |
-| grok | `example-only` | inert `.grok/mcp.agentteams-wasm.example.toml`; the operator merges its table into `.grok/config.toml`, outside the agentteams-managed block |
+| grok | `example-only` | inert `.grok/mcp.agentteams-wasm.example.toml`; the operator merges its table into `.grok/config.toml`, outside the agentteams-managed block. Write-protected only inside the agentteams launcher; in profile mode neither file is, so merge from a fresh render after a diff |
 | agents-md | `instructions-only` | no MCP channel |
 
 **Operator spike B.** Run on the operator's macOS host on 2026-11-01 with the development wasmtime 36.0.16

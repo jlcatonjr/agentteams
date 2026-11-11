@@ -105,6 +105,16 @@ def test_integration_reference_template_uses_only_known_placeholders():
     assert "Never squash or rebase the release PR" in text
 
 
+def test_integration_reference_requires_protecting_the_integration_branch():
+    """Row 675: a release merge deletes an unprotected integration branch when delete_branch_on_merge is on."""
+    text = (TEMPLATES / bm.REFERENCE_TEMPLATE).read_text(encoding="utf-8")
+    fenced = text.split("<!-- AGENTTEAMS:BEGIN integration_branch", 1)[1].split("<!-- AGENTTEAMS:END", 1)[0]
+    assert "**`{INTEGRATION_BRANCH}` must itself be a protected branch**" in fenced
+    for needle in ("delete_branch_on_merge", "allow_deletions", "allow_force_pushes", "enforce_admins",
+                   "refs/heads/{INTEGRATION_BRANCH}"):
+        assert needle in fenced, needle
+
+
 def test_analyze_adds_the_reference_and_record_only_for_integration():
     from agentteams import analyze, ingest
 
@@ -241,3 +251,85 @@ def test_this_repos_workflows_never_trigger_on_the_integration_branch():
                 f"{path.name}: push triggers on dev"
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8").split("\njobs:", 1)[0]
     assert re.search(r"pull_request:\s*\n\s*branches:\s*\[\s*main\b", ci), "ci.yml PR runs must be filtered"
+
+
+# --- row 675 (optional): warn when a release merge would delete the integration branch ----------------------
+
+class _RepoAPI(FakeAPI):
+    """FakeAPI that also answers the repository endpoint (``delete_branch_on_merge``)."""
+
+    def __init__(self, *, auto_delete=True, repo_verdict="ok", **kw) -> None:
+        super().__init__(**kw)
+        self.auto_delete = auto_delete
+        self.repo_verdict = repo_verdict
+
+    def get(self, path: str):
+        if path == f"/repos/{self.repo}":
+            self.calls.append(path)
+            if self.repo_verdict != "ok":
+                return self.repo_verdict, None
+            return "ok", ({} if self.auto_delete is None else {"delete_branch_on_merge": self.auto_delete})
+        return super().get(path)
+
+
+def _warnings(notes):
+    return [n for n in notes if n.startswith("WARNING: integration branch")]
+
+
+def _unknown(notes):
+    return [n for n in notes if n.startswith("could not check whether integration branch")]
+
+
+def test_unprotected_integration_branch_with_auto_delete_warns():
+    notes = bi.integration_protection_notes(_RepoAPI(auto_delete=True), "dev")
+    assert len(_warnings(notes)) == 1 and "merging the release PR will delete dev" in notes[0]
+
+
+def test_a_non_dict_repo_body_is_unknown():
+    class _ListBody(_RepoAPI):
+        def get(self, path):
+            if path == f"/repos/{self.repo}":
+                return "ok", ["not", "a", "dict"]
+            return super().get(path)
+    notes = bi.integration_protection_notes(_ListBody(), "dev")
+    assert _unknown(notes) and not _warnings(notes)
+
+
+def test_protected_integration_branch_or_auto_delete_off_is_silent():
+    assert bi.integration_protection_notes(_RepoAPI(auto_delete=True, protected={"dev"}), "dev") == []
+    api = _RepoAPI(auto_delete=False)
+    assert bi.integration_protection_notes(api, "dev") == []
+    assert not any(c.startswith("branches/") for c in api.calls)  # protection not even looked up
+
+
+@pytest.mark.parametrize("kw", [
+    {"auto_delete": None},                       # field missing (e.g. no permission): unknown, not false
+    {"repo_verdict": bi.API_UNKNOWN},            # repo endpoint failed
+    {"repo_verdict": bi.API_NOT_FOUND},
+    {"auto_delete": True, "rules_verdict": bi.API_UNKNOWN},  # protection not readable
+    {"auto_delete": "true"},                     # non-bool field: unknown, never read as on/off
+])
+def test_unknown_facts_give_a_could_not_check_note_never_a_warning(kw):
+    notes = bi.integration_protection_notes(_RepoAPI(**kw), "dev")
+    assert _warnings(notes) == [] and len(_unknown(notes)) == 1
+
+
+def test_inventory_carries_the_warning_and_it_does_not_touch_the_plan(repo):
+    _integration_repo(repo)
+    base = inventory(repo, integration_branch="dev", api=_RepoAPI(auto_delete=False))
+    inv = inventory(repo, integration_branch="dev", api=_RepoAPI(auto_delete=True))
+    assert len(_warnings(inv["meta"]["notes"])) == 1
+    assert _warnings(base["meta"]["notes"]) == []
+    assert inv["plan"]["sha256"] == base["plan"]["sha256"]  # a note, never a plan change
+    assert rec(inv, "dev")["action"] == "keep"
+
+
+def test_trunk_model_and_no_api_make_no_protection_call(repo):
+    _integration_repo(repo)
+    api = _RepoAPI(auto_delete=True)
+    inventory(repo, integration_branch="", api=api)
+    assert f"/repos/{api.repo}" not in api.calls
+    api2 = _RepoAPI(auto_delete=True)
+    cfg = bi.InventoryConfig(repo=repo.work, now=NOW, integration_branch="dev", use_api=False)
+    inv = bi.build_inventory(cfg, api=api2)
+    assert api2.calls == [] and _warnings(inv["meta"]["notes"]) == []
