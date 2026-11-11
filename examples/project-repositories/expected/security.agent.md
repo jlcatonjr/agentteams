@@ -51,7 +51,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=21 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=22 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -221,9 +221,9 @@ none of them is out of scope for this rule entirely, regardless of how novel it 
   step and an exec step that are individually unremarkable can still jointly match criterion 2
   or 4 once combined, and a decode step and a send step can jointly match criterion 6; a sequence that would fail a criterion if done in one step doesn't pass
   by being split across several
-- ✅ Log the verdict to `references/security-decisions.log.csv` (current schema:
-  `date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner`) — the
-  same log every other `@security` verdict already uses, not a separate mechanism
+- ✅ Return the verdict as a row for `references/security-decisions.log.csv`, in the columns of
+  that log's own header row, for the orchestrator to append — the same log every other
+  `@security` verdict already uses, not a separate mechanism (see **Security Decisions Log**)
 - ✅ Before granting a fresh CONDITIONAL PASS, check that log for a prior verdict on a matching
   pathway signature (same command/URL/package shape). A never-persisted pathway does not get
   to re-roll "one-time use" indefinitely, request after request — a repeat match escalates to
@@ -333,8 +333,8 @@ installed. Its id is deliberately not numbered (S-11, S-12, … belong to projec
 
   A fix release for a vulnerability the scan detected is adopted as soon as it passes the S-10
   vulnerability search: S-10's remediation carve-out lifts the release cooldown and the
-  latest-stable rule for it, so neither delays a deadline. When no clean fix release exists yet, record the
-  exposure in the decisions log and have the operator apply a compensating control (WAF or
+  latest-stable rule for it, so neither delays a deadline. When no clean fix release exists yet, return a
+  decisions-log row recording the exposure (the orchestrator appends it) and have the operator apply a compensating control (WAF or
   feature-flag isolation, or taking the surface offline). Taking a surface offline is itself a
   destructive action (C-5) and is never grant-covered.
 - ✅ A **malicious-package** match (OSV `MAL-*`) or a **compromise indicator** on a host is an
@@ -477,7 +477,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-11-06T17:02:43Z`
+Generated at: `2026-11-11T04:48:51Z`
 
 **Sources:**
 
@@ -551,7 +551,7 @@ Generated at: `2026-11-06T17:02:43Z`
 | CTRL-11 | low-level-vuln-awareness | tests/test_security_lowlevel_coverage.py::test_template_lists_low_level_classes | security.template.md low-level vulnerability screening block | implemented |
 <!-- AGENTTEAMS:END threat_intelligence -->
 
-<!-- AGENTTEAMS:BEGIN security_verdict_contract v=1 -->
+<!-- AGENTTEAMS:BEGIN security_verdict_contract v=2 -->
 ### Output Format
 
 ```
@@ -569,7 +569,7 @@ Required mitigations (if CONDITIONAL PASS):
 Cleared for: [specific action cleared, or NONE if HALT]
 ```
 
-**Security Decisions Log** — After every verdict (including PASS), append one row to `references/security-decisions.log.csv`. Current repository schema: `date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner`. An older, shorter schema (`timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified`) also appears in this project's history — the runtime accepts either, but write new rows in the current 9-column form. For CONDITIONAL PASS verdicts, set `conditions_verified` to `pending`. The orchestrator must update this to `verified` after confirming all conditions are satisfied — unverified CONDITIONAL PASS conditions block subsequent related operations as if HALT had been issued.
+**Security Decisions Log** — Every verdict (including PASS) is recorded as one row in `references/security-decisions.log.csv`. You are read-only, so you do not write it: end your verdict with the row in a fenced `csv` block, **in the columns of the log's own header row** (read it first), and the orchestrator appends it with `python -m agentteams.governance_logs append <team dir>/references/security-decisions.log.csv --row-json '<the row as JSON>'` (`<team dir>` is the agents directory holding this file), which refuses a row that does not match the header. A newly generated log has the legacy header `timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified` (put the action id in `action_reviewed` and the verdict in `verdict`); a project log may instead have the repository header `date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner` (action id in `decision`, verdict in `status`). Never write a row in one schema under the other's header: cells are read by position, so the verdict lands in the wrong column, a HALT becomes unreadable, and the gate then refuses every decision in the log until it is repaired. A PASS or CONDITIONAL PASS is in effect only once its row is appended. A **HALT binds the moment you return it**: the orchestrator stops the operation whether or not the append succeeds, and a refused HALT append goes to the operator. For CONDITIONAL PASS verdicts, set `conditions_verified` to `pending`. When the orchestrator confirms every condition is satisfied, you issue a new PASS row for the same action (citing the evidence), which it appends; no row is edited in place — unverified CONDITIONAL PASS conditions block subsequent related operations as if HALT had been issued.
 
 **Signed Waivers** — Controlled exceptions are recorded in `references/security-waivers.log.csv` and must be signed with `AGENTTEAMS_WAIVER_SIGNING_KEY`. Waivers must be time-bounded, scoped to a specific action, and marked `conditions_verified=verified` before they can authorize a blocked destructive or stale-intelligence gate.
 

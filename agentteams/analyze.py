@@ -225,6 +225,33 @@ _LIST_PASSTHROUGH_KEYS = ("memory_index_extra_dirs", "memory_index_extra_files",
                           "code_index_extra_dirs", "frozen_surfaces", "s10_cooldown_exempt_repos")
 
 
+def conflict_log_path_for(framework: str) -> str:
+    """Return the project-relative conflict log path for a framework's team.
+
+    The log is seeded in the team's own ``references/`` directory (``liaison_logs.init_csv_stubs``),
+    which lives under that framework's agents directory. The path used to be the Copilot literal
+    ``.github/agents/references/conflict-log.csv`` on every surface, so on Claude and the other
+    surfaces the orchestrator's validated append found no log and the auditor's rows were lost
+    (item 06, G-09-2).
+
+    Args:
+        framework: A registered framework id; an unknown id falls back to the Copilot layout.
+
+    Returns:
+        str: e.g. ``.claude/agents/references/conflict-log.csv``.
+
+    Raises:
+        None.
+    """
+    from agentteams.frameworks.registry import agents_dir_for
+
+    try:
+        agents_dir = agents_dir_for(framework, Path(".")).as_posix()
+    except ValueError:
+        agents_dir = ".github/agents"
+    return f"{agents_dir}/references/conflict-log.csv"
+
+
 def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vscode") -> dict[str, Any]:
     """Build and return a team manifest from a normalized project description.
 
@@ -459,7 +486,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         agent_slug_list=_format_agent_list(all_slugs),
         domain_agent_slugs=_format_agent_list(domain_agent_slugs),
         workstream_expert_slugs=_format_agent_list(workstream_expert_slugs),
-        conflict_log_path=".github/agents/references/conflict-log.csv",
+        conflict_log_path=conflict_log_path_for(framework),
         workstream_source_map=_format_workstream_source_map(components),
         style_rules_summary=_format_style_rules(description.get("style_rules", [])),
         domain_agent_list=_format_domain_agent_list(ALWAYS_INCLUDED_DOMAIN_AGENTS + list(archetypes)),
