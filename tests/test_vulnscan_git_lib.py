@@ -112,3 +112,14 @@ def test_an_unreadable_config_is_refused(repo: Path) -> None:
         f.write("[core\n\tbare = maybe\n")
     r = _bash('hgit -C "$PWD" status', repo)
     assert r.returncode == 128 and "could not be checked" in r.stderr
+
+
+def test_a_crashing_config_parser_refuses_instead_of_reading_as_clean(repo: Path, tmp_path: Path) -> None:
+    crash = tmp_path / "crashpy"
+    crash.write_text("#!/bin/sh\ncat >/dev/null\nexit 1\n")   # exit 1 is also git config's "no key": must not mix
+    crash.chmod(0o755)
+    _git("config", "http.proxy", "http://evil", cwd=repo)
+    env = {**os.environ, "PY": str(crash), "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    for script in ('git_config_refusal "$PWD"', 'git config --unset http.proxy; git_config_refusal "$PWD"'):
+        r = subprocess.run(["bash", "-c", f'. "{LIB}"\n{script}'], cwd=repo, env=env, capture_output=True, text=True)
+        assert r.returncode != 0 and "could not be checked" in r.stderr, r.stderr

@@ -1,6 +1,6 @@
 # Hardened git for the vulnscan remediation scripts (sourced, not run): vulnscan-handoff-lib.sh, vulnscan-deploy.sh and
 # the site-local vulnscan-operator-actions.sh source it; --install copies it with the other tracked scripts.
-# git_config_refusal needs a python3 >= 3.4 (-I): $PY when executable, else python3 on PATH (a first deploy, before
+# git_config_refusal needs a python3 >= 3.6 (-I; f-strings): $PY when executable, else python3 on PATH (a first deploy, before
 # the pipx venv exists). See docs_src/vulnscan-automation-walkthrough.md (Files installed).
 PY="${PY:-$HOME/.local/pipx/venvs/agentteams/bin/python}"
 # Hardened git for every call these scripts make (they run unconfined, with the operator's credentials, in repositories
@@ -19,11 +19,11 @@ _git_raw() { GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_NO_REPLACE_OBJECTS=
 # runs it), and a remote's proxy or vcs helper. A repository
 # whose own (local or worktree) config sets any of them is refused before any command runs in it.
 git_config_refusal() {   # git_config_refusal <dir>: prints the offending keys and fails, or prints nothing
-  local bad rc py="$PY"
+  local res bad py="$PY"
   [[ -x "$py" ]] || py="$(command -v python3)" || { echo "refusing git in $1: no python3 to check its config" >&2; return 1; }
   # -z: each entry is "scope<NUL>key<LF>value<NUL>", so a value with a newline in it is judged whole (a line-based
   # read would see a stock first line and miss the command after it).
-  bad="$(set -o pipefail; _git_raw -C "$1" config -z --show-scope --get-regexp \
+  res="$(_git_raw -C "$1" config -z --show-scope --get-regexp \
     '^(filter|lfs|gpg|http|url|include|includeif|credential|pager)\.|^core\.(worktree|attributesfile|alternaterefscommand|alternaterefsprefixes)$|^remote\..*\.(proxy|vcs)$' \
     2>/dev/null | "$py" -I -c '
 import re, sys
@@ -58,10 +58,15 @@ for i in range(0, len(parts), 2):
         continue
     bad.add(key.encode("unicode_escape").decode()[:120])
 print(" ".join(sorted(bad)[:5]))
-sys.exit(3 if bad else 0)' "$(_git_raw -C "$1" config --get remote.origin.url 2>/dev/null)")"; rc=$?
-  if (( rc == 0 || rc == 1 )); then return 0; fi   # 1: git config found no matching key
-  if (( rc == 3 )); then echo "refusing git in $1: its own config sets $bad" >&2; return 1; fi
-  echo "refusing git in $1: its config could not be checked (exit $rc)" >&2; return 1
+sys.exit(3 if bad else 0)' "$(_git_raw -C "$1" config --get remote.origin.url 2>/dev/null)"
+    printf '\n%s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")"
+  # git: 0 keys matched, 1 none matched, else error. python: 0 clean, 3 bad keys, anything else (a crash) error.
+  # Each status is judged on its own: a crashing parser must never read as "no key".
+  local st="${res##*$'\n'}" grc prc
+  bad="${res%$'\n'*}"; grc="${st% *}"; prc="${st#* }"
+  if [[ "$prc" == 0 && ( "$grc" == 0 || "$grc" == 1 ) ]]; then return 0; fi
+  if [[ "$prc" == 3 && "$grc" == 0 ]]; then echo "refusing git in $1: its own config sets $bad" >&2; return 1; fi
+  echo "refusing git in $1: its config could not be checked (git exit $grc, parser exit $prc)" >&2; return 1
 }
 hgit() {   # hgit [-C <dir>] <subcommand> ...: hardened git, refused in a repository whose config could run code
   local dir="$PWD"
