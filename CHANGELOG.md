@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (governance logs: `repair`, an approved and backed-up fix for malformed rows)
+
+- `python -m agentteams.governance_logs repair LOG` previews a fix for rows whose field count differs from the
+  header, and writes nothing. Since item 06, the security gate refuses every decision in such a decisions log.
+- It proposes a fix only for the shape seen in the field: an unquoted comma in free text, where each extra
+  fragment starts with a space and is re-joined to the cell before it. Every other shape is listed for a hand
+  fix.
+- `repair LOG --apply DIGEST` writes only that exact preview. It writes a `LOG.bak-<timestamp>` backup first,
+  replaces only the bad rows, and re-checks the result, restoring the backup if the result is still malformed.
+- It refuses chained (`prev_digest`) logs and signed malformed rows.
+- Operator decision, 2026-11-11. The release of items 00 and 06 waits until `governance_logs check` passes.
+
 ### security (vulnscan remediation scripts: hardened git; repository config can no longer run code)
 
 - The remediation scripts run unconfined, with the operator's credentials, in repositories whose git data a confined

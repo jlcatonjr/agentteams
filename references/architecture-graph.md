@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **445**
+- Modules mapped: **446**
 - Packages: **14**
-- Internal import edges: **1676**
+- Internal import edges: **1678**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 185 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 186 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 58 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -243,7 +243,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.gitdirs` | `agentteams.atomicio` | `agentteams.update_lock` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
-| `agentteams.governance_logs` | `agentteams.cli.decision_chain`, `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.interop_grant_check` |
+| `agentteams.governance_log_repair` | `agentteams.governance_logs` | `agentteams.governance_logs` |
+| `agentteams.governance_logs` | `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.governance_log_repair` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.governance_log_repair`, `agentteams.interop_grant_check` |
 | `agentteams.graph` | `agentteams.graph_inputs`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
 | `agentteams.graph_inputs` | `agentteams.yaml_frontmatter` | `agentteams.graph` |
 | `agentteams.grok_config_emit` | `agentteams.codex_mcp_emit`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._sandbox_emit`, `agentteams.mcp_emit`, `agentteams.toml_write`, `agentteams.wasm_mcp` | `agentteams.cli.artifacts`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.mcp_catalog` |
@@ -3106,13 +3107,24 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.governance_log_repair": {
+      "package": "agentteams",
+      "path": "agentteams/governance_log_repair.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.governance_logs"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.governance_logs": {
       "package": "agentteams",
       "path": "agentteams/governance_logs.py",
       "is_package": false,
       "imports_internal": [
         "agentteams.cli.decision_chain",
-        "agentteams.cli.decision_log"
+        "agentteams.cli.decision_log",
+        "agentteams.governance_log_repair"
       ],
       "external": [],
       "repo_local": []
@@ -9446,12 +9458,20 @@ digraph "agentteams architecture" {
       "target": "agentteams.atomicio"
     },
     {
+      "source": "agentteams.governance_log_repair",
+      "target": "agentteams.governance_logs"
+    },
+    {
       "source": "agentteams.governance_logs",
       "target": "agentteams.cli.decision_chain"
     },
     {
       "source": "agentteams.governance_logs",
       "target": "agentteams.cli.decision_log"
+    },
+    {
+      "source": "agentteams.governance_logs",
+      "target": "agentteams.governance_log_repair"
     },
     {
       "source": "agentteams.graph",

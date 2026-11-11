@@ -206,7 +206,7 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: ``check [ROOT]`` reports malformed logs; ``append LOG --row-json JSON`` appends one row.
+    """CLI: ``check [ROOT]``, ``append LOG --row-json JSON``, and ``repair LOG [--apply DIGEST]``.
 
     ``append`` is how the orchestrator records a row that a read-only agent (``@security``,
     ``@conflict-auditor``) returned: the agent cannot write, so it hands back the row and the
@@ -216,7 +216,9 @@ def main(argv: list[str] | None = None) -> int:
         argv: Arguments (defaults to ``sys.argv[1:]``).
 
     Returns:
-        int: 0 on success, 1 when ``check`` finds a problem or ``append`` refuses the row.
+        int: 0 on success, 1 when ``check`` finds a problem, ``append`` refuses the row, or ``repair`` refuses or
+        has nothing it can safely fix. ``repair`` without ``--apply`` only previews (see
+        :mod:`agentteams.governance_log_repair`).
 
     Raises:
         None.
@@ -226,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     import sys
 
     parser = argparse.ArgumentParser(prog="python -m agentteams.governance_logs",
-                                     description="Check or append to the append-only governance CSV logs.")
+                                     description="Check, append to, or repair the append-only governance CSV logs.")
     sub = parser.add_subparsers(dest="cmd", required=True)
     chk = sub.add_parser("check", help="Report malformed governance logs under ROOT.")
     chk.add_argument("root", nargs="?", default=".", help="Project root or team dir (default: .).")
@@ -234,8 +236,26 @@ def main(argv: list[str] | None = None) -> int:
     app.add_argument("log", help="Path to the log (it must exist and have a header row).")
     app.add_argument("--row-json", required=True,
                      help="The row as a JSON object keyed by the log's header names (or a list in header order).")
+    rep = sub.add_parser("repair", help="Preview (or, with --apply DIGEST, apply) a fix for malformed rows.")
+    rep.add_argument("log", help="Path to the log.")
+    rep.add_argument("--apply", metavar="DIGEST", default="",
+                     help="Apply exactly the previewed repair whose digest the preview printed (backup written first).")
     args = parser.parse_args(argv)
 
+    if args.cmd == "repair":
+        from agentteams.governance_log_repair import apply_repair, plan_repair, render_plan
+
+        try:
+            if args.apply:
+                backup = apply_repair(Path(args.log), args.apply)
+                print(f"repaired {args.log}; backup: {backup}")
+                return 0
+            plan = plan_repair(Path(args.log))
+        except (ValueError, OSError, UnicodeDecodeError) as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 1
+        print(render_plan(plan))
+        return 0 if (plan.fixable or not plan.items) else 1
     if args.cmd == "check":
         problems = check_logs(Path(args.root))
         for p in problems:
