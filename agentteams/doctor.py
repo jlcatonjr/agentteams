@@ -12,6 +12,8 @@ the project's providers see the same rules, the same memory, and the same agents
   :mod:`agentteams.surface_matrix`.
 * **Shared AGENTS.md** (WARN): an ``AGENTS.md`` whose constitutional core is older than the other entry files' (it
   was frozen with Codex while the others moved on, P11).
+* **Backup stubs** (WARN, warn-first): a backed-up agent file under any runtime dir's ``.agentteams-backups/`` that
+  a runtime would still load as a live agent (IM item 01) — :func:`agentteams.backup.runtime_loadable_backups`.
 
 Exit code 1 when any FAIL is reported.
 
@@ -131,13 +133,17 @@ def _shared_agents_md(root: Path) -> list[str]:
 
 
 def _backup_stubs(root: Path) -> tuple[list[str], int]:
-    """FAIL per backed-up agent file a runtime would still load (IM item 01): it shadows a live agent."""
+    """WARN per backed-up agent file a runtime would still load (IM item 01): it shadows a live agent.
+
+    Warn-first (the item's rollback note): a WARN, not a FAIL, for this release, so teams that passed before do
+    not start failing; the next --update/--bridge-merge with a backup renames the file.
+    """
     from agentteams.backup import runtime_loadable_backups
 
     stubs = runtime_loadable_backups(root)
-    lines = [f"  ✗  FAIL {p.relative_to(root)} loads as a live agent; run any --update/--bridge-merge (it is "
+    lines = [f"  !  WARN {p.relative_to(root)} loads as a live agent; run --update --merge or --bridge-merge (it is "
              "renamed inert, never deleted) or rename it to *.agentteams-bak" for p in stubs]
-    return lines, len(stubs)
+    return lines, 0
 
 
 def run_doctor(project: str | None) -> int:

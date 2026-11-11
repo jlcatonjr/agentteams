@@ -12,6 +12,7 @@ project's providers see the same rules, the same memory and the same agents? It 
 | Copilot body limit | FAIL | Operator notes past 30,000 characters ([`copilot_body_limit`](copilot-body-limit.md)). |
 | Agents | INFO | Agents missing on a surface, notes that differ by surface ([`surface_matrix`](surface-matrix.md)). |
 | Shared AGENTS.md | WARN | A root `AGENTS.md` whose `constitutional_core` is older than the other entry files' (frozen with Codex while they moved on). |
+| Backup stubs | WARN | A backed-up agent file under any runtime dir's `.agentteams-backups/` that a runtime would still load as a live agent ([`backup.runtime_loadable_backups`](backup.md)); warn-first this release. |
 
 `run_doctor(project) -> int` prints the report for `--project` (else the working directory), using the brief found
 there for `project_rules_source` and `frozen_surfaces`. It returns 1 when any FAIL is reported.

@@ -850,7 +850,7 @@ def _handle_check(
     """Step 4c: --check — content drift + structural diff + enforcement-integrity, no write.
 
     Returns the process exit code (1 when any drift/structural/integrity change is present,
-    else 0). Carved from _run_generate_inner (CH-07); behavior byte-for-byte preserved.
+    else 0). Carved from _run_generate_inner (CH-07); also WARNs on loadable backup stubs (IM item 01).
     """
     from agentteams import backup, drift
     backup.warn_runtime_backups(output_dir)  # IM item 01: a loadable backup shadows a live agent (warn-first)

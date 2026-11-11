@@ -63,11 +63,13 @@ def test_the_manifest_points_at_the_renamed_file(tmp_path):
     assert backup.inert_backup_name("x.md") == "x.md.agentteams-bak"
 
 
-def test_doctor_fails_on_a_loadable_stub(tmp_path, capsys):
+def test_doctor_warns_on_a_loadable_stub(tmp_path, capsys):
+    """Warn-first (the item's rollback note): reported, exit unchanged."""
     _consumer(tmp_path)
-    assert doctor.run_doctor(str(tmp_path)) == 1
+    doctor.run_doctor(str(tmp_path))
     out = capsys.readouterr().out
-    assert "Backup stubs" in out and "loads as a live agent" in out
+    assert "Backup stubs" in out and "WARN" in out and "loads as a live agent" in out
+    assert "FAIL .claude/agents/.agentteams-backups" not in out
 
 
 def test_check_warns_on_a_loadable_stub(tmp_path, capsys):
@@ -80,3 +82,63 @@ def test_a_clean_project_reports_nothing(tmp_path, capsys):
     (tmp_path / ".claude" / "agents").mkdir(parents=True)
     assert backup.runtime_loadable_backups(tmp_path) == []
     assert backup.warn_runtime_backups(tmp_path / ".claude" / "agents") == []
+
+
+
+def test_a_real_bridge_merge_neutralizes_the_stub(tmp_path):
+    """The plan's acceptance: after a real --bridge-merge the planted .claude stub is renamed inert."""
+    import shutil
+
+    from agentteams.bridge import run_bridge
+
+    repo = Path(__file__).resolve().parents[1]
+    src = tmp_path / ".github" / "agents"
+    shutil.copytree(repo / "examples" / "software-project" / "expected", src)
+    stub = tmp_path / ".claude/agents/.agentteams-backups/20260806-164702/adversarial.md"
+    stub.parent.mkdir(parents=True)
+    stub.write_text(_STUB)
+    run_bridge(source_dir=src, target_framework="claude", output_root=tmp_path)            # creates the targets
+    run_bridge(source_dir=src, target_framework="claude", output_root=tmp_path, merge_only=True)
+    assert not stub.exists()
+    assert stub.with_name(backup.inert_backup_name(stub.name)).read_text() == _STUB
+
+
+def test_a_dry_run_renames_nothing(tmp_path):
+    stub = _consumer(tmp_path)
+    backup.backup_output_dir(tmp_path, files_to_backup=["CLAUDE.md"], dry_run=True)
+    assert stub.exists()
+
+
+def test_a_runtime_dir_symlinked_outside_the_project_is_skipped(tmp_path):
+    """@security: output_dir = ~/.claude/agents would make $HOME the root; a symlinked runtime dir must not
+    carry the rename out of the project."""
+    shared = tmp_path / "shared" / "agents"
+    stub = shared / ".agentteams-backups" / "20260806-164702" / "adversarial.md"
+    stub.parent.mkdir(parents=True)
+    stub.write_text(_STUB)
+    proj = tmp_path / "proj"
+    (proj / ".github" / "agents").mkdir(parents=True)
+    (proj / ".claude").mkdir()
+    (proj / ".claude" / "agents").symlink_to(shared, target_is_directory=True)
+    (proj / "CLAUDE.md").write_text("# entry\n")
+    backup.backup_output_dir(proj, files_to_backup=["CLAUDE.md"])
+    assert stub.exists()
+
+
+def test_project_root_derivation(tmp_path):
+    (tmp_path / ".claude" / "agents").mkdir(parents=True)
+    assert backup._project_root_of(tmp_path) == tmp_path                         # bridge: the root itself
+    assert backup._project_root_of((tmp_path / ".claude" / "agents").resolve()) == tmp_path.resolve()
+    assert backup._project_root_of(tmp_path / "somewhere" / "else") is None      # non-default layout
+
+
+def test_skip_leaves_the_already_neutralized_dir_alone(tmp_path):
+    stub = _consumer(tmp_path)
+    assert backup.neutralize_runtime_backups(tmp_path, skip=tmp_path / ".claude" / "agents") == []
+    assert stub.exists()
+
+
+def test_runtime_dirs_are_known_team_dirs():
+    from agentteams.prompt_roots import TEAM_AGENT_GLOBS
+
+    assert set(backup.RUNTIME_AGENT_DIRS) <= set(TEAM_AGENT_GLOBS)

@@ -428,6 +428,9 @@ The gate also fires when `--output` names the framework's agents directory itsel
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
 
+It prints a WARNING (no exit change) for each backed-up agent file a runtime would still load, in the output dir or any
+runtime dir of the project.
+
 It also exits `1` when a projected Project-Specific Rules copy or notes pointer is out of date or refused (see
 `--sync-project-rules`). Operator text in a `## Project-Specific Notes` or `## Project-Specific Rules` region is
 not drift: when the manifest fingerprint moves, each file is compared with a fresh render after its user regions are
@@ -463,6 +466,9 @@ else the working directory, and the brief found there. The report covers:
 - **Agents (INFO):** agents missing on some surface (the full list is in `references/agent-surface-matrix.md`, written on
   every generate and `--update`), and notes that differ by surface.
 - **Shared AGENTS.md (WARN):** a root `AGENTS.md` whose `constitutional_core` is older than the other entry files'.
+- **Backup stubs (WARN):** a backed-up agent file under any runtime dir's `.agentteams-backups/` (`.claude/agents`,
+  `.goose/recipes`, `.codex/agents`, `.grok/agents`) that the runtime would still load as a live agent: a copy made
+  before 2026-10-12. The next `--update --merge` or `--bridge-merge` that takes a backup renames it inert.
 
 Exits `1` when any FAIL is reported.
 
@@ -909,7 +915,7 @@ stderr.
 
 ### `--list-backups`
 
-Backups live in `<agents dir>/.agentteams-backups/<timestamp>/`. Backed-up agent files (`.md`, `.yaml`, `.yml`, `.toml`) are stored with an `.agentteams-bak` suffix, so no agent runtime loads a backup as an agent; `--restore-backup` maps the names back. Each backup run also neutralizes loadable files left by older backups (renamed in place, manifest kept consistent).
+Backups live in `<agents dir>/.agentteams-backups/<timestamp>/`. Backed-up agent files (`.md`, `.yaml`, `.yml`, `.toml`) are stored with an `.agentteams-bak` suffix, so no agent runtime loads a backup as an agent; `--restore-backup` maps the names back. Copies made before 2026-10-12 kept loadable names: every backup renames them (never deletes) in the output dir and in every agent-runtime dir of the same project (`.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`), skipping any that resolves outside the project; `--doctor` and `--check` report any left. Each backup run also neutralizes loadable files left by older backups (renamed in place, manifest kept consistent).
 
 List all available backups for the output directory (newest first) and exit. Prints timestamp, path, and file count for each backup.
 
