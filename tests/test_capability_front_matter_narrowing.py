@@ -109,3 +109,89 @@ def test_no_baseline_means_nothing_is_applied():
     merged, applied, _ = _merge_front_matter(rendered, disk, None)
     assert merged["tools"] == "['read', 'search', 'edit']"
     assert not applied
+
+
+# --- IM item 02 (G-04-1): a grant beyond the template is flagged even when it is no superset ---------
+
+def test_a_non_superset_grant_beyond_the_template_is_flagged():
+    """`Bash, Read, Write, Edit` vs `Read, Grep, Glob`: no superset, yet it grants Bash/Edit/Write."""
+    disk = _fm(name="security", tools="Bash, Read, Write, Edit")
+    rendered = _fm(name="security", tools="Read, Grep, Glob")
+    baseline = {"name": "security", "tools": "Read, Grep, Glob"}
+    merged, applied, proposals = _merge_front_matter(rendered, disk, baseline)
+    assert merged["tools"] == "Bash, Read, Write, Edit", "the value is never rewritten without consent"
+    hit = [p for p in proposals if "GRANTS MORE" in p]
+    assert hit and "['Bash', 'Edit', 'Write']" in hit[0], proposals
+    assert "`agentteams --reconcile-front-matter`" in hit[0] and "`--reconcile-apply` applies ALL" in hit[0]
+
+
+@pytest.mark.parametrize("legacy", ["Bash, Edit", "Bash, Read, Write, Edit"])
+def test_a_renamed_legacy_grant_is_flagged_whatever_its_provenance(legacy):
+    """The VK pattern: `allowed-tools` was ignored; renamed to `tools` it is enforced. Flag it, even untouched."""
+    disk = _fm(name="security", **{"allowed-tools": legacy})
+    rendered = _fm(name="security", tools="Read, Grep, Glob")
+    baseline = {"name": "security", "allowed-tools": legacy}          # untouched since generation
+    merged, applied, proposals = _merge_front_matter(rendered, disk, baseline)
+    assert merged["tools"] == legacy and "allowed-tools" not in merged
+    hit = [p for p in proposals if "GRANTS MORE" in p]
+    assert hit, proposals
+    assert "ENFORCED from now on" in hit[0]
+    assert "`agentteams --reconcile-front-matter`" in hit[0] and "`--reconcile-apply` applies ALL" in hit[0]
+
+
+def test_a_renamed_grant_within_the_template_is_not_flagged():
+    disk = _fm(name="security", **{"allowed-tools": "Read, Grep"})
+    rendered = _fm(name="security", tools="Read, Grep, Glob")
+    merged, applied, proposals = _merge_front_matter(rendered, disk, {"name": "security", "allowed-tools": "Read, Grep"})
+    assert not any("GRANTS MORE" in p for p in proposals)
+
+
+# --- IM item 02 (G-04-2): no Claude template declares the retired key -------------------------------
+
+def test_no_template_declares_the_retired_allowed_tools_key():
+    import pathlib
+    import re
+
+    templates = pathlib.Path(__file__).resolve().parents[1] / "agentteams" / "templates"
+    hits = [str(p.relative_to(templates)) for p in templates.rglob("*.md")
+            if re.search(r"^allowed-tools:", p.read_text(encoding="utf-8"), re.MULTILINE)]
+    assert not hits, f"templates still declare `allowed-tools:` (Claude Code ignores it): {hits}"
+    guide = (templates / "AUTHORING-GUIDE.md").read_text(encoding="utf-8")
+    # The Claude adapter DOES fall back to `Bash, Read, Write, Edit` for an agent with no `tools:`; the guide
+    # must say so, and must not claim the bridge's warn-only behaviour for the adapter.
+    row = next(ln for ln in guide.splitlines() if ln.startswith("| `tools` | **Mapped**"))
+    assert "falls back to `Bash, Read, Write, Edit`" in row and "bridge" in row
+
+
+def test_an_unparseable_capability_value_is_reported_not_skipped():
+    disk = _fm(name="security", tools="Read, Grep, Glob # plus Bash later")
+    rendered = _fm(name="security", tools="['read', 'search']")
+    merged, applied, proposals = _merge_front_matter(rendered, disk, {"name": "security", "tools": "['read', 'search']"})
+    assert any("could not be parsed" in p for p in proposals) or any("GRANTS MORE" in p for p in proposals), proposals
+
+
+def test_a_capability_key_only_the_file_declares_is_reported():
+    disk = _fm(name="security", tools="['read', 'search']", permissionMode="bypassPermissions")
+    rendered = _fm(name="security", tools="['read', 'search']")
+    merged, applied, proposals = _merge_front_matter(rendered, disk, {"name": "security", "tools": "['read', 'search']"})
+    assert any("'permissionMode'" in p and "GRANTS MORE" in p for p in proposals), proposals
+    assert merged["permissionMode"] == "bypassPermissions"
+
+
+def test_a_shrunken_deny_list_is_reported():
+    disk = _fm(name="security", tools="['read']", disallowedTools="Bash")
+    rendered = _fm(name="security", tools="['read']", disallowedTools="Bash, Write")
+    merged, applied, proposals = _merge_front_matter(rendered, disk, {"name": "security", "disallowedTools": "Bash, Write",
+                                                                       "tools": "['read']"})
+    assert any("'disallowedTools'" in p and "GRANTS MORE" in p and "Write" in p for p in proposals), proposals
+
+
+def test_grant_notices_print_under_their_own_heading(capsys):
+    from agentteams.front_matter_merge import print_merge_notices
+
+    print_merge_notices(["a.md: front matter: 'tools' on disk GRANTS MORE than the template — extra: ['Bash']",
+                         "b.md: some region shrank"])
+    err = capsys.readouterr().err
+    assert "1 capability grant(s) beyond the template" in err
+    assert "1 fenced region(s) shrank" in err
+    assert err.index("GRANTS MORE") < err.index("fenced region(s) shrank")

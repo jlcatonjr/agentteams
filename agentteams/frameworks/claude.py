@@ -70,7 +70,7 @@ from ._claude_model import (  # noqa: F401  (constants re-exported for importers
     CLAUDE_ORCHESTRATOR_MODEL_DEFAULT,
     resolve_claude_model as _resolve_claude_model,
 )
-from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+from agentteams.yaml_frontmatter import FRONT_MATTER_MODEL_LINE_RE, parse_yaml_front_matter as _parse_yaml_front_matter
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ _CLAUDE_DEFAULT_ALLOWED_TOOLS = "Bash, Read, Write, Edit"
 # or that a template author opted in deliberately.
 _RETRIEVAL_CLI_SCOPE = "Bash(python -m agentteams.research:*)"
 
-# VS Code Copilot tool → Claude Code allowed-tools. Per-agent scoping matters:
+# VS Code Copilot tool → Claude Code `tools:` names. Per-agent scoping matters:
 # read-only governance/audit agents (tools: ['read','search']) must NOT receive
 # Bash/Write/Edit, or their template-declared read-only invariant becomes false
 # in generated Claude teams (least-privilege regression).
@@ -195,27 +195,36 @@ class ClaudeAdapter(FrameworkAdapter):
     def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
         """Keep the Claude-shaped team-builder as is, mapping a canonical ``tools: [...]`` line to Claude names.
 
-        The builder template is authored with Claude's ``tools``/``allowed-tools`` spelling, so it normally passes
-        through unchanged. Under ``write_policy: "orchestrator-only"``, narrowing replaces that grant with a
+        The Claude builder template declares a canonical ``tools: [...]`` list (it used the retired
+        ``allowed-tools`` key until IM item 02), which is mapped here to Claude names. Under ``write_policy: "orchestrator-only"``, narrowing replaces that grant with a
         canonical flow list (``tools: ['read', 'search']``). Claude Code can't launch a sub-agent whose tool
         names don't resolve, so the list is mapped like an agent file's (``Read, Grep, Glob``). Reported from
         mathAgents' P5 render (2026-10-07).
+
+        A ``model:`` Claude cannot read (a converted Copilot builder's list form) becomes the agent default, like
+        an agent file's (``_claude_model.resolve_claude_model``); a valid Claude model and an absent key are kept.
 
         Args:
             content: The rendered builder file.
             manifest: The team manifest (unused).
 
         Returns:
-            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names.
+            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names and any
+            unreadable ``model:`` replaced by the Claude default.
 
         Raises:
             Nothing.
         """
         yaml_text, body = _parse_yaml_front_matter(content)
-        if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
+        if yaml_text is None:
             return content
         head = content[: len(content) - len(body)]  # the parser's own front-matter span: never touch the body
-        head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
+        source_model = _extract_claude_optional_keys(content)[0]
+        model = _resolve_claude_model(content, source_model, "team-builder")
+        if model is not None and model != source_model:
+            head = FRONT_MATTER_MODEL_LINE_RE.sub(f"model: {model}\n", head, count=1)
+        if _YAML_TOOLS_RE.search(yaml_text):
+            head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
         return head + body
 
     def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
@@ -827,7 +836,7 @@ def claude_tool_names(tokens: list[str] | tuple[str, ...]) -> list[str]:
 
 
 def _map_allowed_tools(content: str) -> str:
-    """Map an agent's VS Code ``tools:`` list to a Claude ``allowed-tools`` value.
+    """Map an agent's VS Code ``tools:`` list to a Claude ``tools:`` value.
 
     Falls back to the blanket default only when no recognizable ``tools:`` block
     is present, so an agent authored without a tool scope keeps working.
