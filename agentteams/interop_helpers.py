@@ -18,6 +18,7 @@ from typing import Any
 
 from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS
 from agentteams.yaml_frontmatter import (
+    FRONT_MATTER_MODEL_LINE_RE,
     parse_yaml_front_matter as _parse_yaml_front_matter,
 )
 
@@ -322,9 +323,6 @@ def drops_source_model(source_framework: str | None, target_framework: str) -> b
     return source_framework == "claude" and target_framework in _COPILOT_MODEL_TARGETS
 
 
-_FM_MODEL_LINE_RE = re.compile(r"^model\s*:.*\n(?:[ \t]+-.*\n)*", re.MULTILINE)
-
-
 def strip_front_matter_model(content: str) -> str:
     """Remove a top-level ``model:`` key (and any block-list items under it) from the leading front matter.
 
@@ -345,7 +343,7 @@ def strip_front_matter_model(content: str) -> str:
     if end == -1:
         return content
     head = content[: end + 1]
-    return _FM_MODEL_LINE_RE.sub("", head) + content[end + 1:]
+    return FRONT_MATTER_MODEL_LINE_RE.sub("", head) + content[end + 1:]
 
 
 def merge_sidecar_handoffs(agents: list[dict[str, Any]], source_dir: Path) -> None:
