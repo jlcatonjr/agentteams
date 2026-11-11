@@ -42,7 +42,7 @@ def _fill_conversion_pipeline(manifest: dict[str, Any]) -> str:
 
 def _fill_conflict_log_path(manifest: dict[str, Any]) -> str:
     """Return the conflict log path in the team's own references dir for the manifest's framework."""
-    from agentteams.analyze import conflict_log_path_for
+    from agentteams.frameworks.registry import conflict_log_path_for
 
     return conflict_log_path_for(str(manifest.get("framework") or "copilot-vscode"))
 

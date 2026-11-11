@@ -272,7 +272,7 @@ def test_pre_execution_check_appends_a_new_pass_rather_than_editing():
     ("codex", ".codex/agents/references/conflict-log.csv"),
 ])
 def test_g09_2_the_conflict_log_path_is_the_teams_own_references_dir(framework, path):
-    from agentteams.analyze import conflict_log_path_for
+    from agentteams.frameworks.registry import conflict_log_path_for
     from agentteams.enrich._fills import _fill_conflict_log_path
 
     assert conflict_log_path_for(framework) == path
