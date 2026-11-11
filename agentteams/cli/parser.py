@@ -517,8 +517,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="check_wiring",
         help="P1-3: verify an emitted workspace-confinement sandbox block was actually "
-        "merged into the live .claude/settings.json (it is inert until merged). Read-only, "
-        "output-only; exits non-zero when a confinement was emitted but is not live. Also "
+        "merged into the live .claude/settings.json (it is inert until merged), together with "
+        "the PreToolUse constitutional-gate hook and every emitted permissions.deny rule. "
+        "Read-only, output-only; exits non-zero when a confinement was emitted but any of "
+        "these is not live (warns only when no confinement was requested). Also "
         "checks that the constitutional gate's interpreter pin (<hooks>/agentteams-python) or "
         "plain python3 can import agentteams, and fails with the fix when neither can.",
     )
