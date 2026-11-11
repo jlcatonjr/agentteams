@@ -283,3 +283,18 @@ def test_c4_only_governance_logs_are_repaired(tmp_path):
     p.write_text(HEADER + "\n" + SPLIT + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="not a governance log"):
         apply_repair(p, plan_repair(p).digest, confirm=_yes)
+
+
+def test_the_guarantee_decision_cells_identical_and_conditions_verified_keeps_its_prefix(tmp_path):
+    """The exact guarantee (IM, 2026-11-11): decision/status byte-identical; conditions_verified keeps its original
+    text as a prefix, so its leading verified/pending token never changes."""
+    header = HEADER.split(",")
+    log = _log(tmp_path, GOOD, SPLIT, SPLIT2)
+    for item in plan_repair(log).items:
+        assert item.fixed is not None
+        for col in ("decision", "status"):
+            i = header.index(col)
+            assert item.fixed[i] == item.original[i], col
+        cv = header.index("conditions_verified")
+        assert item.fixed[cv].startswith(item.original[cv] + ",")
+        assert item.fixed[cv].split()[0].rstrip(":") == item.original[cv].split()[0].rstrip(":")

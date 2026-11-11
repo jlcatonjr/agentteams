@@ -30,8 +30,7 @@ This module fixes such rows under three rules the operator set on 2026-11-11.
   - `repair LOG --apply DIGEST` writes only when the recomputed digest equals the approved one.
   - By default `apply_repair` also needs an interactive terminal, where the operator retypes the digest's first
     8 characters. That is a speed-bump against an unattended apply, not a security boundary: an agent can
-    allocate a pseudo-terminal. What makes any repair harmless is the column rules: no proposal can change or
-    move a decision cell or `conditions_verified`.
+    allocate a pseudo-terminal. What makes any repair harmless is the column rules: the decision cells (`decision`/`action_reviewed`, `status`/`verdict`, `scope`) stay byte-identical, and `conditions_verified` keeps its original text as a prefix (a re-join only appends `,<fragment>` to it), so its leading `verified`/`pending` token never changes.
 - **Everything else stays byte-identical, and no concurrent append is lost.**
   - The log is locked and read once, and the plan is computed from exactly those bytes.
   - A backup `LOG.bak-<UTC timestamp>` is written first (exclusive create, fsync). Remove it once the log has

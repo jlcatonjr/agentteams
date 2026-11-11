@@ -19,8 +19,7 @@ rows under the operator's constraints (2026-11-11) and @security's conditions (H
   ``repair LOG --apply DIGEST``) writes only when the recomputed digest equals the approved one, and by default
   only after the operator retypes the digest's first 8 characters on an interactive terminal. That prompt is a
   speed-bump against an unattended apply, not a security boundary (an agent can allocate a pseudo-terminal).
-  What makes any repair harmless is the column rules above: no proposal can change or move a decision cell or
-  ``conditions_verified``.
+  What makes any repair harmless is the column rules above: the decision cells (``decision``/``action_reviewed``, ``status``/``verdict``, ``scope``) stay byte-identical, and ``conditions_verified`` keeps its original text as a prefix (a re-join only appends ``,<fragment>`` to it), so its leading ``verified``/``pending`` token never changes.
 * **Everything else stays byte-identical, and no concurrent append is lost.**
   - The file is locked and read once, and the plan is computed from exactly those bytes.
   - A backup ``LOG.bak-<UTC timestamp>`` is written atomically (exclusive create, fsync).

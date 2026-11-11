@@ -16,8 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would move, and no fragment is a verdict word. Everything else is listed for a hand fix, as are open-quote
   and swallowed-row problems.
 - **`--apply DIGEST`.** It writes only the exact preview, after the operator retypes the digest on an
-  interactive terminal. That is a speed-bump, not a boundary. What makes any repair harmless is that no
-  proposal can change or move a decision cell or `conditions_verified`.
+  interactive terminal. That is a speed-bump, not a boundary. What makes any repair harmless is that the decision cells (`decision`/`action_reviewed`, `status`/`verdict`, `scope`) stay byte-identical, and `conditions_verified` keeps its original text as a prefix (a re-join only appends `,<fragment>` to it), so its leading `verified`/`pending` token never changes.
   - It writes a `LOG.bak-<timestamp>` backup first.
   - It rewrites the log in place under its lock (write, then truncate, then a full flush), so a concurrent append
     is not lost.
