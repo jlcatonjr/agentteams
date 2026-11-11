@@ -72,6 +72,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`memory-index-store`](memory-index-store.md) | On-disk layout of the committed index: compact lines, size-capped native shards read without reassembly |
 | [`memory-index-surfaces`](memory-index-surfaces.md) | The index across a project's surfaces: all-surface refresh, query fallback, finding the brief, coverage report |
 | [`rules-projection`](rules-projection.md) | One project's Project-Specific Rules in every provider's entry file, and a pointer in the key agents' notes |
+| [`carveout-checks`](carveout-checks.md) | The carve-out registry's team-directory, rule-number, rollback, HALT, lineage, clearance and cap checks |
+| [`carveouts`](carveouts.md) | Operator-signed, workspace-scoped carve-outs: one signed, committed registry, machine-checked bounds, rendered into every entry file |
 | [`surface-matrix`](surface-matrix.md) | Which agents exist on which provider, their declared tools, notes and skills parity |
 | [`doctor`](doctor.md) | `--doctor`: one read-only report on whether the project's providers agree |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |

@@ -1570,6 +1570,62 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--sync-carveouts",
+        action="store_true",
+        dest="sync_carveouts",
+        default=False,
+        help=(
+            "Render the carve-outs in .agentteams/carveouts.json that bind this workspace into the Project-Specific "
+            "Rules region of every enabled entry file (copilot-instructions, CLAUDE.md, AGENTS.md, .goosehints), as "
+            "a hash-stamped block; a block that binds nothing any more is removed. The registry is an operator-"
+            "edited trust root and must be committed; an invalid registry or a hand-edited block is refused. Runs "
+            "in the working directory only; with --dry-run it writes nothing."
+        ),
+    )
+    parser.add_argument(
+        "--sign-carveouts",
+        action="store_true",
+        dest="sign_carveouts",
+        default=False,
+        help=(
+            "Operator-only: sign .agentteams/carveouts.json with the operator Ed25519 key (the file named by "
+            "AGENTTEAMS_DECISION_ED25519_KEYFILE) and --key-id, after the same preflight, integrity check, review "
+            "digest and confirmation (--confirm-review-sha256 without a terminal) as --sign-decision. The signature "
+            "is verified against <decision_log>/references/authorized-verify-keys/<key-id>.pub.pem before the "
+            "registry is rewritten. Every carve-out relaxes a rule clause, so an unsigned registry renders nothing."
+        ),
+    )
+    parser.add_argument(
+        "--verify-carveouts",
+        action="store_true",
+        dest="verify_carveouts",
+        default=False,
+        help=(
+            "Read-only: check .agentteams/carveouts.json (shape, exact workspace scope, required expiry within 90 "
+            "days, lapsed entries, the active cap, the derived effect class, hard limits on C-1..C-5, lineage HALTs, "
+            "sha-bound clearances, committed state) and that every entry file's carve-out block is current. Exits "
+            "non-zero on any problem. Uses --project (else the working directory)."
+        ),
+    )
+    parser.add_argument(
+        "--check-clearance",
+        dest="check_clearance",
+        metavar="SCOPE",
+        default=None,
+        help=(
+            "Read-only, spends nothing: exit 0 when the decisions log under --output (else the working directory) "
+            "holds a verified @security PASS for action SCOPE:sha256-<hex of --clearance-file>, else 1. For "
+            "operator scripts that must run only as reviewed."
+        ),
+    )
+    parser.add_argument(
+        "--clearance-file",
+        dest="clearance_file",
+        metavar="PATH",
+        default=None,
+        help="With --check-clearance: the file whose exact bytes the clearance must be bound to.",
+    )
+    parser.add_argument(
         "--list-exceptions",
         action="store_true",
         dest="list_exceptions",

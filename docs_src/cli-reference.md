@@ -1313,6 +1313,49 @@ Read-only: report the validity (signature, expiry, use-limit, manager roster, an
 
 Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change.
 
+### `--sign-carveouts`
+
+**Operator-only.** Sign `.agentteams/carveouts.json` with the operator Ed25519 key (the file named by
+`AGENTTEAMS_DECISION_ED25519_KEYFILE`) and `--key-id`. It runs the same preflight, integrity check, review digest and
+confirmation as `--sign-decision` (`--confirm-review-sha256` without a terminal; `--allow-checkout-signing` as there).
+The registry is validated first. The signature covers the domain tag `agentteams-carveouts-v1`, the key id and the
+canonical registry, and is verified against `<decision_log>/references/authorized-verify-keys/<key-id>.pub.pem` before
+the file is rewritten. Every carve-out relaxes a rule clause (Rule 15(b)), so an unsigned registry renders nothing.
+Commit the registry afterwards.
+
+### `--sync-carveouts`
+
+Render the carve-outs in `.agentteams/carveouts.json` that bind this workspace into the `## Project-Specific Rules`
+region of every enabled entry file, as a hash-stamped `CARVEOUTS` block ([`carveouts`](api-reference/carveouts.md)).
+The registry is a trust root: it must be operator-signed (`--sign-carveouts`) and committed. An invalid registry, a
+lineage HALT, an uncleared clearance, a breach of the aggregate cap or a hand-edited block is refused: nothing is
+rendered, and the blocks it rendered earlier are removed. It also runs after every generate and `--update`. A block that binds nothing any more is removed. Runs in the working directory only;
+with `--dry-run` it writes nothing and exits `1` when a copy is out of date.
+
+### `--verify-carveouts`
+
+Read-only. It checks the registry and exits `1` on any problem:
+- the operator signature, and that the registry is committed byte for byte;
+- the shape;
+- exact workspace scope;
+- an expiry no more than 90 days after `added`, and active entries past it;
+- the active cap;
+- the derived effect class;
+- the hard limits (no rendered string names C-1..C-5 or a HALT; no relaxed clause names the mechanism or Rule 15's
+  own bounds; no capability grant, destructive effect or trust-anchor target);
+- the aggregate cap shared with the Rule 15 exception registry;
+- lineage HALTs;
+- sha-bound clearances;
+- that every entry file's block is current.
+
+### `--check-clearance` / `--clearance-file`
+
+Read-only; spends nothing. `--check-clearance SCOPE --clearance-file PATH` exits `0` only when the decisions log under
+`--output` (else the working directory) holds a verified @security PASS for the action `SCOPE:sha256-<hex of PATH>`.
+A HALT on the bare `SCOPE` blocks it, and HALT, author, signature and chain checks all apply. Use the same bytes
+afterwards. It exits `1` otherwise, naming the action id a clearance row
+must use. Operator scripts call it before doing anything, instead of hand-rolling a sha-bound gate.
+
 ### `--audit-exceptions`
 
 Read-only: report the health of the **constraint-relaxing exception registry** (`references/exception-registry.json`) under `--output`/`--project` (else CWD) — every *lapsed* (still `active` but past its expiry/sunset) exception and any breach of the aggregate cap (`cap.max_active_relaxing`). Never mints or activates. Exits non-zero if the registry is unhealthy, so an aggregate/proliferation problem (impact-report finding G1) surfaces in CI rather than accumulating silently.
