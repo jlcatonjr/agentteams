@@ -242,6 +242,16 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Net-benefit prioritization (always — the plan rule's prioritization clause and
+    # @orchestrator Workflow 0C steps 1/3/6 + Workflow 10 step 2a). The S/B/C/p rubric, bands,
+    # safety floor, pins and rating governance; backed by agentteams.plan_priority.
+    files.append({
+        "path": "references/net-benefit-prioritization.reference.md",
+        "template": f"{agents_dir}net-benefit-prioritization.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Sandbox operator handoff (always — @orchestrator's Sandbox Operator Handoff sub-protocol,
     # Workflow 0's capability-gap check, Workflow 11's closeout gates, @git-operations). How a
     # sandboxed agent hands refused work to the operator as a reviewable .sh script plus the complete

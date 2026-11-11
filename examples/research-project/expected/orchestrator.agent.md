@@ -214,7 +214,7 @@ new operational rule remains a manual edit in each deployed team.
 7. **Domain agents own their scope** — The orchestrator routes; it does not perform domain work directly
 8. **Living document policy** — No stale content in agent docs: no dated audit snapshots, no resolved-issue archaeology, no hardcoded volatile state
 9. **Workstream experts commission, they do not write** — The expert briefs the producer; the producer writes; the expert reviews
-10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes` (and may include an optional `depends_on` column — space- or comma-separated `step` ids a row depends on — to enable parallelization analysis per Workflow 0A); initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create the week folder if it does not exist; read legacy undated plans from `tmp/` when canonical week-organized storage is absent. A batch of operator-scheduled follow-ups gets its plan and steps CSV before the first item starts, however small each item is; a plan written afterwards says `(retroactive)` in its title.
+10. **Every request must generate a plan** — Any request involving two or more implementation steps (steps that write, create, rename, delete, or make agent decisions) must produce: (a) a summary saved to `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` and (b) a step-by-step specification saved to `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv` before the first step executes. The CSV must include columns: `step`, `agent`, `action`, `inputs`, `outputs`, `status`, `notes` (and may include an optional `depends_on` column — space- or comma-separated `step` ids a row depends on — to enable parallelization analysis per Workflow 0A); initial `status` for all rows is `pending`. After each step completes, pass remaining steps through `@adversarial` and `@conflict-auditor` before proceeding. Create the week folder if it does not exist; read legacy undated plans from `tmp/` when canonical week-organized storage is absent. A batch of operator-scheduled follow-ups gets its plan and steps CSV before the first item starts, however small each item is; a plan written afterwards says `(retroactive)` in its title. When a plan or metaplan holds two or more development or remediation items, each item is rated for **severity**, **breadth of impact** and **cost of remediation** (with an optional **confidence**) per `references/net-benefit-prioritization.reference.md`, and items are executed in descending **expected net benefit**, subject to `depends_on`; ratings carry a one-line rationale each.
 11. **Cross-repository writes require `@repo-liaison` + `@security`** — Any action that modifies files in a repository other than this project's own (ResearchPaperProject) must first be assessed by `@repo-liaison` and cleared by `@security`
 12. **Completed or executed work must be captured in a daily work summary** — When a plan reaches all `done` during a session, **or** when a session produces executed work (git commits/merges, applied migrations/scripts, data mutations, or adjacent-repository changes), invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` before closeout. This is a **blocking** closeout gate (operationalized in Workflow 11: Final Check) — enforced for **any** executed-work session regardless of which workflow ran, including direct/ad-hoc requests. Git history is the authoritative executed-work signal: a session with commits is never exempt merely because the primary repository (`html/chapters/`) has no new commits, no plan file exists, or the plan lives outside `tmp/by-week/`
 13. **Every request must run the request-intake lifecycle** — Before any workflow-specific execution, the orchestrator must: identify problem domain, produce an investigation report, pass the report through `@adversarial` and `@conflict-auditor`, produce an implementation plan from revised findings, pass that plan through `@adversarial` and `@conflict-auditor`, then execute implementation end-to-end.
@@ -311,7 +311,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=10 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=11 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -402,15 +402,22 @@ itself; a subagent executes a single step, never a whole item plan.
 
 1. **Decompose.** From the Workflow 0 findings, list the items, each with a slug, its footprint (files read
    and written, plus any shared mutable state: git, network, databases, locks), and the items it needs first.
+   Rate each item for severity, breadth and cost (and confidence where it is below 1.0), with a one-line
+   rationale per rating, per `references/net-benefit-prioritization.reference.md`. Only the operator pins;
+   record the operator instruction behind each pin.
 2. **Write one plan per item.** For each item, a development (new work) or remediation (fix) plan per the
    Pre-Execution Requirement: `tmp/by-week/YYYY-Www/<meta-slug>--<item-slug>.plan.md` + `.steps.csv`, with
    concrete `inputs`/`outputs` and its own `depends_on`.
 3. **Write the metaplan.** `tmp/by-week/YYYY-Www/<meta-slug>.plan.md` (titled `Metaplan — …`) +
    `<meta-slug>.steps.csv`, one row per item plan: `agent` = the item's owning agent, `inputs`/`outputs` = that
    plan's whole footprint, `depends_on` = the items it needs, `notes` = the item plan's path. Add closing rows
-   for integration (combined tests) and closeout. The plan file holds the item table, dependency graph, wave
+   for integration (combined tests) and closeout, marked `kind=closing`. Add the rating columns `severity`,
+   `breadth`, `cost`, `confidence`, their rationales `rationale_s`, `rationale_b`, `rationale_c`,
+   `rationale_p` (and `pin` for an operator pin) and compute the order with
+   `python -m agentteams.plan_priority <meta-slug>.steps.csv --require`; the computed ranks go in the plan
+   file, never in the CSV. The plan file holds the item table with its ratings and rank, dependency graph, wave
    schedule, shared files and which item owns each, singleton items, and per-item rollback. Compute the
-   schedule with `python -m agentteams.parallel_plan <meta-slug>.steps.csv`, and check cross-plan overlap with
+   schedule with `python -m agentteams.parallel_plan <meta-slug>.steps.csv --priority`, and check cross-plan overlap with
    `python -m agentteams.parallel_plan <every item .steps.csv>`. Give a `depends_on` edge to every pair of items
    it reports as blocking, to any item it lists as undetermined, and to any two items that both touch the same
    shared mutable state (the cross-plan check compares file paths only).
@@ -420,13 +427,15 @@ itself; a subagent executes a single step, never a whole item plan.
    item plans that contradict each other or the metaplan, and understated footprints. Route destructive and
    cross-repository items to `@security` (and `@repo-liaison`) now, so their clearance exists before
    implementation (C-5).
-5. **Revise.** Apply each finding to the plan it names, re-verifying the finding's own evidence first
+5. **Revise.** Apply each finding to the plan it names (a rating revision `@adversarial` recommends included), re-verifying the finding's own evidence first
    (Rule 14), re-run step 3's analysis, and re-audit what changed. If a second revision round still leaves a
    blocking finding, stop and put it to the operator (**Operator Decision Query**) instead of
    implementing around it.
 6. **Implement the metaplan.** Once the audits pass, proceed without a further go-ahead. Work in rounds: for
    every item whose metaplan prerequisites are `done`, take its plan's next Workflow 0A wave, and dispatch all
-   of those members together where the host supports concurrent subagents (otherwise any order). **A
+   of those members together where the host supports concurrent subagents. Within a round, and among ready
+   items when the host runs them one at a time, take items in rank order (`parallel_plan --priority`); rank
+   never overrides a `depends_on` edge. **A
    singleton** — a destructive, cross-repository, `--bridge-refresh`, shared-mutable-state or operator
    (**Sandbox Operator Handoff**) step — **runs alone in its own round**, never beside another item's
    members; other items wait only until it has been dispatched (for a handoff, until the script has been
@@ -722,7 +731,7 @@ carry an appended handoff:
 
 1. Read `tmp/by-week/` and legacy `tmp/` → list all `.plan.md` and `.steps.csv` files
 2. For each plan: summarize current `status` column distribution across steps (pending / in_progress / done / blocked)
-2a. **Cross-plan parallelization scan (recurring independence check)** — run `python -m agentteams.parallel_plan <all open .steps.csv>` to (a) report which open plans are mutually **non-blocking** (disjoint footprints — safe to advance in any order) and (b) recompute each plan's wave schedule over its remaining `pending` steps (per Workflow 0A). Surface to the user any independent work that could be advanced together. This is a scheduling/independence report, not a claim of simultaneous cross-plan execution.
+2a. **Cross-plan parallelization scan (recurring independence check)** — run `python -m agentteams.parallel_plan <all open .steps.csv>` to (a) report which open plans are mutually **non-blocking** (disjoint footprints — safe to advance in any order) and (b) recompute each plan's wave schedule over its remaining `pending` steps (per Workflow 0A). Surface to the user any independent work that could be advanced together. Beside that independence report, rank the open work by net benefit: run `python -m agentteams.plan_priority` on every open metaplan (its rows rank its item plans) and on every other open plan that carries ratings, and report the open items in rank order with any validation errors (`references/net-benefit-prioritization.reference.md`). This is a scheduling/independence report, not a claim of simultaneous cross-plan execution.
 3. **Pre-execution truth check** — before marking any step `in_progress`, invoke `@technical-validator` to verify the factual claims stated in that step's `inputs`, `outputs`, and `notes` fields against current on-disk state; flag any UNVERIFIED facts to the user before proceeding
 4. Surface any `blocked` steps with their `notes` to the user
 5. If plan is complete → mark all rows `done` and append completion date to `.plan.md`
