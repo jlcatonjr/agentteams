@@ -18,6 +18,7 @@ from typing import Any
 
 from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS
 from agentteams.yaml_frontmatter import (
+    FRONT_MATTER_MODEL_LINE_RE,
     parse_yaml_front_matter as _parse_yaml_front_matter,
 )
 
@@ -295,6 +296,54 @@ def serialize_raw_fm_key(key: str, value: Any) -> str:
         return "\n".join(lines)
     # Fallback: JSON-encode complex values
     return f"{key}: {json.dumps(value)}"
+
+
+#: Targets whose ``model:`` vocabulary is Copilot's, not Claude's.
+_COPILOT_MODEL_TARGETS = frozenset({"copilot-vscode", "copilot-cli"})
+
+
+def drops_source_model(source_framework: str | None, target_framework: str) -> bool:
+    """Whether a source agent's ``model:`` must be dropped rather than carried to the target.
+
+    Generated Claude agents carry Claude model ids (``opus``, ``claude-fable-5-2``). Copilot reads its own model
+    names, so carrying one across writes a value Copilot cannot use; dropping it lets the Copilot adapter write its
+    default. The decision is by source framework, never by the value's shape: Copilot's own ids can be bare tokens
+    too (``gpt-5``), and a Copilot-to-Copilot import must keep them.
+
+    Args:
+        source_framework: The source framework id (``"claude"``, ``"copilot-vscode"``, …), or ``None`` if unknown.
+        target_framework: The target framework id.
+
+    Returns:
+        True when the source is Claude and the target is copilot-vscode or copilot-cli.
+
+    Raises:
+        Nothing.
+    """
+    return source_framework == "claude" and target_framework in _COPILOT_MODEL_TARGETS
+
+
+def strip_front_matter_model(content: str) -> str:
+    """Remove a top-level ``model:`` key (and any block-list items under it) from the leading front matter.
+
+    The body is never touched, and content without a leading ``---`` front matter is returned unchanged.
+
+    Args:
+        content: An agent or builder file.
+
+    Returns:
+        The content without the front-matter ``model:`` key.
+
+    Raises:
+        Nothing.
+    """
+    if not content.startswith("---\n"):
+        return content
+    end = content.find("\n---", 4)
+    if end == -1:
+        return content
+    head = content[: end + 1]
+    return FRONT_MATTER_MODEL_LINE_RE.sub("", head) + content[end + 1:]
 
 
 def merge_sidecar_handoffs(agents: list[dict[str, Any]], source_dir: Path) -> None:

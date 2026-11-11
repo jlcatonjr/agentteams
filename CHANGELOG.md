@@ -35,6 +35,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     column, and a split with no space) need hand fixes.
 - Operator decision, 2026-11-11. The release of items 00 and 06 waits until `governance_logs check` passes.
 
+### changed (Claude teams: the orchestrator runs on Fable 5.2, every other agent on Opus)
+
+- **Before**, no generated `.claude/agents/*.md` file carried a `model:` key. Templates declare Copilot's list form
+  (`model: ["Claude Opus 4.8 (copilot)"]`), which Claude Code cannot read, so the adapter dropped it. Every
+  subagent then inherited the session model, and a Fable session spawned Fable subagents.
+- **Now**, the Claude adapter writes `model: claude-fable-5-2` for the orchestrator (`orchestrator`,
+  `bridge-orchestrator`) and `model: opus` for every other agent. Fable is pinned because the model picker offers
+  Fable 5.2 and 5.1 side by side; Opus uses the alias, which follows the newest Opus. A template or CAI source that
+  already sets a valid Claude model (`opus`, `claude-sonnet-5-5`, `opus[1m]`) keeps it. A source with no `model:` key at
+  all, such as an imported Claude team, still inherits the session model.
+- New teams get the defaults at once. **Existing teams do not change silently**: `model:` is a privileged
+  capability key, so `--update --merge` reports each file's proposed `model:` line as a notice rather than writing
+  it. To adopt, add the line yourself or run `--update --overwrite` with a `@security` clearance. Claude Code's
+  built-in subagents (`Explore`, `general-purpose`, `Plan`) are not generated files and still inherit the session
+  model; set `CLAUDE_CODE_SUBAGENT_MODEL=opus` to pin those too.
+- **Claude model ids stay out of Copilot files.** Converting or importing (`--convert-from`, `--interop-from`) a
+  Claude team to copilot-vscode or copilot-cli drops each agent's Claude `model:`, so the Copilot default model
+  applies; an import says so in a notice. The decision is by source framework: a Copilot team's own model values,
+  bare ids such as `gpt-5` included, are kept. A Copilot builder converted to Claude gets `model: opus`, and the
+  Claude team-builder template now pins `model: opus` like every other non-orchestrator agent.
+
 ### fixed (merge: a capability grant beyond the template is reported even when it is no superset)
 
 - **The bug.** `--update --merge` warned about a wider-than-template grant only when the disk set was a *strict
