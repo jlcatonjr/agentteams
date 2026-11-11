@@ -6,16 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### added (governance logs: `repair`, an approved and backed-up fix for malformed rows)
+### added (governance logs: `repair`, an operator-approved, backed-up fix for malformed rows)
 
 - `python -m agentteams.governance_logs repair LOG` previews a fix for rows whose field count differs from the
-  header, and writes nothing. Since item 06, the security gate refuses every decision in such a decisions log.
-- It proposes a fix only for the shape seen in the field: an unquoted comma in free text, where each extra
-  fragment starts with a space and is re-joined to the cell before it. Every other shape is listed for a hand
-  fix.
-- `repair LOG --apply DIGEST` writes only that exact preview. It writes a `LOG.bak-<timestamp>` backup first,
-  replaces only the bad rows, and re-checks the result, restoring the backup if the result is still malformed.
-- It refuses chained (`prev_digest`) logs and signed malformed rows.
+  header, and writes nothing. Since item 06 the security gate refuses every decision in such a decisions log.
+- **What it proposes.** It re-joins fragments of the one shape seen in the field: an unquoted comma in prose,
+  where each fragment starts with a space. It does so only when the fragment lands in a free-text column, the
+  cells before it are unchanged, no decision column (`decision`, `action_reviewed`, `status`, `verdict`, `scope`)
+  would move, and no fragment is a verdict word. Everything else is listed for a hand fix, as are open-quote
+  and swallowed-row problems.
+- **`--apply DIGEST`.** It writes only the exact preview, from an interactive terminal on which the operator
+  retypes the digest; an agent cannot approve its own preview.
+  - It writes a `LOG.bak-<timestamp>` backup first.
+  - It rewrites the log in place under its lock, so a concurrent append is not lost.
+  - It re-checks the result and restores the original bytes on failure.
+- **Refused:** signed, chained or digested logs (`signature`, `sig_scheme`, `key_id`, `derives_from`,
+  `prev_digest`, `text_digest`).
+- **Reviews.** @security first HALTed the apply path and gave conditions, all met here. A row like
+  `act-x, HALT,PASS,…` could have become a PASS; a concurrent append could have been lost; any caller could
+  approve; whitespace in the header slipped past the refusals; and the line spans were inconsistent.
+- **Today's real cases.**
+  - agentteams' `security-decisions.log.csv`: records 710, 713 and 772 get proposals.
+  - infrastructureManagement: of its 8 rows, only remediation-log record 1 gets one. The other 7 (an extra path
+    column, and a split with no space) need hand fixes.
 - Operator decision, 2026-11-11. The release of items 00 and 06 waits until `governance_logs check` passes.
 
 ### security (vulnscan remediation scripts: hardened git; repository config can no longer run code)

@@ -32,7 +32,7 @@ def test_preview_proposes_the_comma_split_fix_and_writes_nothing(tmp_path):
     assert plan.items[1].fixed[6] == "verified: conflict resolved (both kept), 9/9 CI, merged e87bf3a0"
     assert plan.items[1].fixed[7] == "" and plan.items[1].fixed[8] == "operator"
     out = render_plan(plan)
-    assert "Nothing written" in out and f"--apply {plan.digest}" in out
+    assert "Nothing written" in out and f"--apply {plan.digest}" in out and "as read (by position)" in out
 
 
 def test_apply_repairs_only_the_bad_rows_and_keeps_a_backup(tmp_path):
@@ -77,29 +77,115 @@ def test_no_guess_for_any_other_shape(tmp_path, row, why):
 def test_a_chained_log_is_refused(tmp_path):
     log = _log(tmp_path, GOOD + ",", SPLIT + ",", header=HEADER + ",prev_digest")
     plan = plan_repair(log)
-    assert "hash-chained" in plan.refusal and not plan.fixable
-    with pytest.raises(ValueError, match="hash-chained"):
+    assert "signed or chained" in plan.refusal and not plan.fixable
+    with pytest.raises(ValueError, match="signed or chained"):
         apply_repair(log, plan.digest)
 
 
-def test_a_signed_malformed_row_is_refused(tmp_path):
-    log = _log(tmp_path, GOOD + ",", SPLIT + ",sig==", header=HEADER + ",signature")
+@pytest.mark.parametrize("col", ["signature", " signature", "prev_digest ", "key_id", "text_digest"])
+def test_a_signed_chained_or_digested_log_is_refused(tmp_path, col):
+    log = _log(tmp_path, GOOD + ",", SPLIT + ",", header=HEADER + "," + col)
     plan = plan_repair(log)
-    assert plan.items[0].fixed is None and "signature" in plan.items[0].reason
+    assert plan.refusal and not plan.fixable
 
 
 def test_a_well_formed_log_has_nothing_to_repair(tmp_path, capsys):
     log = _log(tmp_path, GOOD)
     assert plan_repair(log).items == []
     assert governance_logs.main(["repair", str(log)]) == 0
-    assert "nothing to repair" in capsys.readouterr().out
+    assert "nothing to repair (check_log is clean)" in capsys.readouterr().out
 
 
-def test_cli_preview_then_apply(tmp_path, capsys):
+def test_cli_apply_needs_an_interactive_terminal_and_a_matching_confirmation(tmp_path, capsys, monkeypatch):
+    import sys
+
     log = _log(tmp_path, GOOD, SPLIT)
     assert governance_logs.main(["repair", str(log)]) == 0
-    out = capsys.readouterr().out
-    digest = out.rsplit("--apply ", 1)[1].strip()
-    assert governance_logs.main(["repair", str(log), "--apply", "0" * 64]) == 1
+    digest = capsys.readouterr().out.rsplit("--apply ", 1)[1].strip()
+    before = log.read_bytes()
+    # No TTY (an agent): refused.
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False, raising=False)
+    assert governance_logs.main(["repair", str(log), "--apply", digest]) == 1
+    assert "interactive terminal" in capsys.readouterr().err and log.read_bytes() == before
+    # TTY, wrong confirmation: refused.
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "deadbeef")
+    assert governance_logs.main(["repair", str(log), "--apply", digest]) == 1
+    assert log.read_bytes() == before
+    # TTY, matching confirmation: applied.
+    monkeypatch.setattr("builtins.input", lambda _prompt="": digest[:8])
     assert governance_logs.main(["repair", str(log), "--apply", digest]) == 0
     assert governance_logs.main(["check", str(tmp_path)]) == 0
+
+
+# --------------------------------------------------------------------------- @security HALT conditions
+
+
+def test_a_halt_is_never_turned_into_a_pass(tmp_path):
+    """@security's repro: the only space-led fragment is the HALT; re-joining it would shift PASS into status."""
+    log = _log(tmp_path, GOOD, "2026-11-11,s,1,act-x, HALT,PASS,once verified,pending,ev,me")
+    plan = plan_repair(log)
+    assert plan.items[0].fixed is None and not plan.fixable
+
+
+def test_a_fragment_that_would_land_in_a_decision_column_is_not_joined(tmp_path):
+    log = _log(tmp_path, GOOD, "2026-11-11,s,1,act-x, extra words,PASS,c,verified,ev,me")
+    plan = plan_repair(log)
+    assert plan.items[0].fixed is None and "decision" in plan.items[0].reason
+
+
+def test_apply_rewrites_in_place_so_a_waiting_append_lands_in_the_repaired_file(tmp_path):
+    log = _log(tmp_path, GOOD, SPLIT)
+    inode = log.stat().st_ino
+    apply_repair(log, plan_repair(log).digest)
+    assert log.stat().st_ino == inode, "the log was replaced, not rewritten in place"
+    governance_logs.append_row(log, ["2026-11-12", "p", "9", "prune", "HALT", "x", "", "e", "security"])
+    assert governance_logs.check_log(log) == [] and log.read_text().rstrip().endswith("HALT,x,,e,security")
+
+
+def test_line_spans_ignore_characters_splitlines_would_split_on(tmp_path):
+    odd = "2026-11-01,p,1,prune,PASS,a\x85b\u2028c,verified,ev,security"
+    log = _log(tmp_path, odd, SPLIT)
+    apply_repair(log, plan_repair(log).digest)
+    text = log.read_text(encoding="utf-8")
+    assert "a\x85b\u2028c" in text and governance_logs.check_log(log) == []
+
+
+def test_numbering_matches_check_log_with_blank_rows(tmp_path):
+    log = _log(tmp_path, GOOD, "", SPLIT)
+    plan = plan_repair(log)
+    assert any(f"record {plan.items[0].record} has 10 fields" in p for p in governance_logs.check_log(log))
+
+
+def test_an_open_quote_is_reported_not_called_clean(tmp_path, capsys):
+    log = tmp_path / "security-decisions.log.csv"
+    log.write_text(HEADER + "\n" + GOOD + "\n" + '2026-11-02,p,2,prune,PASS,"open\n', encoding="utf-8")
+    plan = plan_repair(log)
+    assert not plan.clean and not plan.fixable and plan.other_problems
+    assert governance_logs.main(["repair", str(log)]) == 1
+
+
+def test_a_failed_recheck_restores_the_original_bytes(tmp_path, monkeypatch):
+    import agentteams.governance_log_repair as glr
+
+    log = _log(tmp_path, GOOD, SPLIT)
+    before = log.read_bytes()
+    digest = plan_repair(log).digest
+    calls = {"n": 0}
+    real = glr.check_log
+
+    def flaky(path):
+        calls["n"] += 1
+        return real(path) if calls["n"] == 1 else ["forced failure"]
+
+    monkeypatch.setattr(glr, "check_log", flaky)
+    with pytest.raises(ValueError, match="original restored"):
+        apply_repair(log, digest)
+    assert log.read_bytes() == before
+
+
+def test_apply_rejects_a_malformed_digest(tmp_path):
+    log = _log(tmp_path, GOOD, SPLIT)
+    with pytest.raises(ValueError, match="64-character"):
+        apply_repair(log, "abc")

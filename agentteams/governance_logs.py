@@ -14,6 +14,8 @@ and was rebuilt from session transcripts.
   memory, confirms it round-trips, and appends under a lock in one write. It never opens the file for rewriting.
   (A rewrite goes through :func:`agentteams.atomicio.atomic_rewrite_csv_rows`.) Rows written by hand bypass it;
   :func:`check_logs` is what catches those.
+* ``python -m agentteams.governance_logs repair LOG`` previews a fix for malformed rows, and ``--apply DIGEST``
+  (operator, interactive terminal) applies exactly that preview: see :mod:`agentteams.governance_log_repair`.
 """
 
 from __future__ import annotations
@@ -216,8 +218,9 @@ def main(argv: list[str] | None = None) -> int:
         argv: Arguments (defaults to ``sys.argv[1:]``).
 
     Returns:
-        int: 0 on success, 1 when ``check`` finds a problem, ``append`` refuses the row, or ``repair`` refuses or
-        has nothing it can safely fix. ``repair`` without ``--apply`` only previews (see
+        int: 0 on success, 1 when ``check`` finds a problem, ``append`` refuses the row, or ``repair`` refuses,
+        finds something it cannot safely fix, or (with ``--apply``) has no interactive terminal or the operator's
+        confirmation does not match. ``repair`` without ``--apply`` only previews (see
         :mod:`agentteams.governance_log_repair`).
 
     Raises:
@@ -247,15 +250,25 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             if args.apply:
+                # Operator approval: an interactive terminal on which the digest's first 8 characters are
+                # retyped. An agent running the tool has no TTY, so it cannot approve its own preview.
+                if not (sys.stdin.isatty() and sys.stdout.isatty()):
+                    print("refused: --apply needs an interactive terminal; the operator runs it", file=sys.stderr)
+                    return 1
+                print(render_plan(plan_repair(Path(args.log))))
+                typed = input(f"\nType the first 8 characters of the digest to apply it: ").strip()
+                if typed != args.apply[:8]:
+                    print("refused: confirmation did not match; nothing written", file=sys.stderr)
+                    return 1
                 backup = apply_repair(Path(args.log), args.apply)
-                print(f"repaired {args.log}; backup: {backup}")
+                print(f"repaired {args.log}; backup: {backup} (remove it once you have checked the log)")
                 return 0
             plan = plan_repair(Path(args.log))
-        except (ValueError, OSError, UnicodeDecodeError) as exc:
+        except (ValueError, TypeError, OSError, UnicodeDecodeError) as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 1
         print(render_plan(plan))
-        return 0 if (plan.fixable or not plan.items) else 1
+        return 0 if (plan.fixable or plan.clean) else 1
     if args.cmd == "check":
         problems = check_logs(Path(args.root))
         for p in problems:
