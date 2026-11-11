@@ -72,7 +72,9 @@ class FormatSpec:
             code-quoted `` `key` `` (schema tables). Off for YAML providers, whose
             watch keeps the stricter ``key:`` match.
         emitted_front_matter_keys: The front-matter keys this project's adapter
-            actually WRITES. Cross-checked against the adapter's
+            actually WRITES on every agent file. Optional keys it writes only in some
+            cases (claude's ``model``, ``disallowedTools``, ``permissionMode``) are not
+            listed. Cross-checked against the adapter's
             ``required_front_matter_keys()`` by the single-source guard test.
             Empty for frameworks whose agent files carry no front matter
             (goose recipes, codex custom-agent TOML, agents-md plain Markdown).
