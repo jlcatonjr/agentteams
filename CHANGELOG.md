@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (governance logs: `repair`, an operator-approved, backed-up fix for malformed rows)
+
+- `python -m agentteams.governance_logs repair LOG` previews a fix for rows whose field count differs from the
+  header, and writes nothing. Since item 06 the security gate refuses every decision in such a decisions log.
+- **What it proposes.** It re-joins fragments of the one shape seen in the field: an unquoted comma in prose,
+  where each fragment starts with a space. It does so only when the fragment lands in a free-text column, the
+  cells before it are unchanged, no decision column (`decision`, `action_reviewed`, `status`, `verdict`, `scope`)
+  would move, and no fragment is a verdict word. Everything else is listed for a hand fix, as are open-quote
+  and swallowed-row problems.
+- **`--apply DIGEST`.** It writes only the exact preview, after the operator retypes the digest on an
+  interactive terminal. That is a speed-bump, not a boundary. What makes any repair harmless is that the decision cells (`decision`/`action_reviewed`, `status`/`verdict`, `scope`) stay byte-identical, and `conditions_verified` keeps its original text as a prefix (a re-join only appends `,<fragment>` to it), so its leading `verified`/`pending` token never changes.
+  - It writes a `LOG.bak-<timestamp>` backup first.
+  - It rewrites the log in place under its lock (write, then truncate, then a full flush), so a concurrent append
+    is not lost.
+  - The gate's decisions-log reader now takes a shared lock, so it never reads a log mid-repair. Only
+    `LOG_NAMES` files are repaired.
+  - It re-checks the result and restores the original bytes on failure.
+- **Refused:** signed, chained or digested logs (`signature`, `sig_scheme`, `key_id`, `derives_from`,
+  `prev_digest`, `text_digest`).
+- **Reviews.** @security first HALTed the apply path. Its re-review gave a CONDITIONAL PASS (C1 to C4), and
+  every condition is met here. A row like
+  `act-x, HALT,PASS,…` could have become a PASS; a concurrent append could have been lost; any caller could
+  approve; whitespace in the header slipped past the refusals; and the line spans were inconsistent.
+- **Today's real cases.**
+  - agentteams' `security-decisions.log.csv`: records 710, 713 and 772 get proposals.
+  - infrastructureManagement: of its 8 rows, only remediation-log record 1 gets one. The other 7 (an extra path
+    column, and a split with no space) need hand fixes.
+- Operator decision, 2026-11-11. The release of items 00 and 06 waits until `governance_logs check` passes.
+
 ### changed (Claude teams: the orchestrator runs on Fable 5.2, every other agent on Opus)
 
 - **Before**, no generated `.claude/agents/*.md` file carried a `model:` key. Templates declare Copilot's list form

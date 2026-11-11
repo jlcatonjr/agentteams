@@ -805,10 +805,27 @@ def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[st
             or ``check_log`` reports a problem (wrong width, open quote, swallowed rows).
     """
     from agentteams.governance_logs import check_log
+    from agentteams.governance_logs import fcntl as _fcntl
 
     log_path = output_dir / "references" / "security-decisions.log.csv"
     if not log_path.exists():
         return None
+    # A shared lock for the whole read, so a `governance_logs repair` (exclusive lock, in-place rewrite) is
+    # never observed half-written (@security re-review C2). Appenders take the same exclusive lock.
+    try:
+        lock_fd = os.open(log_path, os.O_RDONLY)
+    except OSError as exc:
+        raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
+    try:
+        if _fcntl is not None:
+            _fcntl.flock(lock_fd, _fcntl.LOCK_SH)
+        return _read_decision_rows_locked(log_path, check_log)
+    finally:
+        os.close(lock_fd)
+
+
+def _read_decision_rows_locked(log_path: Path, check_log) -> tuple[list[dict[str, str]], list[str]]:
+    """Body of :func:`_read_decision_rows`, run while the caller holds a shared lock on the log."""
     # check_log: a record of the wrong width, a quote left open (strict parse), or a field that has
     # swallowed later dated rows. The last two hide a HALT without changing any field count.
     problems = check_log(log_path)
