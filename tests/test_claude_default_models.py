@@ -47,3 +47,102 @@ def test_valid_claude_model_is_kept(value):
 
 def test_no_model_key_keeps_inheriting():
     assert _model_lines("", "security") == []
+
+
+# --- R1: Claude model ids never leak into Copilot headers; the builder is pinned too -----------------------------
+
+from pathlib import Path  # noqa: E402
+
+from agentteams.convert import convert_team  # noqa: E402
+from agentteams.interop import import_from_cai  # noqa: E402
+from agentteams.interop_helpers import drops_source_model, strip_front_matter_model  # noqa: E402
+
+
+def _cai(source_framework: str, model, slug: str = "security") -> dict:
+    return {
+        "schema_version": "2.0",
+        "created_at": "2026-11-11T00:00:00+00:00",
+        "source_framework": source_framework,
+        "source_dir": "seed",
+        "instructions_binding": {"source_name": "CLAUDE.md", "content": "# I\n"},
+        "agents": [{
+            "slug": slug, "name": "S", "description": "d.", "body_markdown": "# S\n\nbody\n",
+            "capabilities": {"tool_scopes": ["read"]}, "handoffs": [], "invariant_core_markdown": None,
+            "raw_front_matter": {"model": model}, "source_path": f"{slug}.md",
+        }],
+        "skills": [], "mcp_servers": [], "references": [], "framework_extensions": {},
+    }
+
+
+def _front(path: Path) -> str:
+    return path.read_text(encoding="utf-8").split("---", 2)[1]
+
+
+def test_drops_source_model_is_by_source_framework_not_value_shape():
+    assert drops_source_model("claude", "copilot-vscode")
+    assert drops_source_model("claude", "copilot-cli")
+    assert not drops_source_model("copilot-vscode", "copilot-vscode")
+    assert not drops_source_model("claude", "claude")
+    assert not drops_source_model(None, "copilot-vscode")
+
+
+def test_strip_front_matter_model_leaves_the_body_alone():
+    text = "---\nname: X\nmodel: opus\ntools: Read\n---\nmodel: stays in body\n"
+    assert strip_front_matter_model(text) == "---\nname: X\ntools: Read\n---\nmodel: stays in body\n"
+    block = "---\nname: X\nmodel:\n  - a\n  - b\ntools: Read\n---\nbody\n"
+    assert strip_front_matter_model(block) == "---\nname: X\ntools: Read\n---\nbody\n"
+    assert strip_front_matter_model("no front matter\nmodel: x\n") == "no front matter\nmodel: x\n"
+
+
+@pytest.mark.parametrize("target", ["copilot-vscode", "copilot-cli"])
+def test_interop_claude_model_is_dropped_for_copilot(tmp_path, target):
+    result = import_from_cai(_cai("claude", "opus"), target, tmp_path, overwrite=True)
+    assert result.errors == []
+    out = next(tmp_path.rglob("security*.md"))
+    model_lines = [ln for ln in _front(out).splitlines() if ln.startswith("model:")]
+    assert model_lines and "opus" not in model_lines[0] and "(copilot)" in model_lines[0]
+    assert any("is a Claude model" in n for n in result.notices)
+
+
+def test_interop_copilot_bare_model_survives_copilot_import(tmp_path):
+    result = import_from_cai(_cai("copilot-vscode", "gpt-5"), "copilot-vscode", tmp_path, overwrite=True)
+    assert result.errors == []
+    assert "model: gpt-5" in _front(next(tmp_path.rglob("security*.md")))
+
+
+@pytest.mark.parametrize("slug,expected", [("security", "opus"), ("orchestrator", "claude-fable-5-2")])
+def test_interop_copilot_list_model_becomes_claude_default(tmp_path, slug, expected):
+    cai = _cai("copilot-vscode", ["Claude Sonnet 4.6 (copilot)"], slug)
+    result = import_from_cai(cai, "claude", tmp_path, overwrite=True)
+    assert result.errors == []
+    assert f"model: {expected}\n" in _front(tmp_path / f"{slug}.md") + "\n"
+
+
+def test_convert_claude_team_to_copilot_drops_claude_models(tmp_path):
+    src = tmp_path / "proj" / ".claude" / "agents"
+    src.mkdir(parents=True)
+    (src / "security.md").write_text("---\nname: S\ndescription: \"d\"\ntools: Read, Grep\nmodel: opus\n---\n# S\n")
+    (src / "orchestrator.md").write_text(
+        "---\nname: O\ndescription: \"d\"\ntools: Read, Task\nmodel: claude-fable-5-2\n---\n# O\n")
+    out = tmp_path / "out"
+    result = convert_team(src, out, "copilot-vscode")
+    assert result.errors == []
+    headers = "".join(_front(p) for p in out.rglob("*.md") if p.read_text().startswith("---"))
+    assert "opus" not in headers and "claude-fable" not in headers
+
+
+def test_claude_builder_render_replaces_unreadable_model_and_keeps_valid_one():
+    adapter = ClaudeAdapter()
+    copilot_builder = "---\nname: B\ndescription: \"d\"\ntools: ['read']\nmodel: [\"Claude Opus 4.8 (copilot)\"]\n---\nbody\n"
+    assert "model: opus\n" in adapter.render_builder_file(copilot_builder, {})
+    kept = "---\nname: B\nallowed-tools: Read\nmodel: claude-sonnet-5-5\n---\nbody\n"
+    assert adapter.render_builder_file(kept, {}) == kept
+    absent = "---\nname: B\nallowed-tools: Read\n---\nbody\n"
+    assert adapter.render_builder_file(absent, {}) == absent
+
+
+def test_claude_builder_template_pins_opus():
+    import agentteams
+
+    template = Path(agentteams.__file__).parent / "templates" / "builder" / "team-builder-claude.template.md"
+    assert "\nmodel: opus\n" in template.read_text(encoding="utf-8").split("---", 2)[1] + "\n"

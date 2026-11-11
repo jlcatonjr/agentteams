@@ -592,6 +592,10 @@ def import_from_cai(
                     if narrowed and _iwp.withheld(rfm_key, rfm_val):  # a capability key the switch forbids
                         result.notices.append(f"{slug}: source `{rfm_key}` withheld (write_policy orchestrator-only)")
                         continue
+                    if rfm_key == "model" and _drops_source_model(manifest["interop_source_framework"], target_framework):
+                        result.notices.append(f"{slug}: source model {rfm_val!r} is a Claude model; the "
+                                              f"{target_framework} default model applies")
+                        continue
                     header.append(_serialize_raw_fm_key(rfm_key, rfm_val))
             header.append("---")
             body = "\n".join(header) + "\n\n" + body
@@ -949,6 +953,7 @@ from agentteams._interop_grok import (  # noqa: E402
 from agentteams.interop_helpers import (
     agent_unchanged as _agent_unchanged,
     detect_framework,
+    drops_source_model as _drops_source_model,
     raw_scopes as _raw_scopes,
     import_skills as _import_skills,
     require_safe_slug as _require_safe_slug,
