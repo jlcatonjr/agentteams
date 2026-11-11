@@ -918,14 +918,9 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
     # summary. Real-run channel; dry-run notices are folded into the dry-run
     # report instead (so the JSON payload carries them).
     if result.notices and not result.dry_run:
-        print(f"\n  Notice: {len(result.notices)} fenced region(s) shrank during merge:", file=sys.stderr)
-        for note in result.notices:
-            print(f"    Notice: {note}", file=sys.stderr)
-        print(
-            "     Review whether the source description needs to be expanded "
-            "before re-running, or use --overwrite if the shrink is intended.",
-            file=sys.stderr,
-        )
+        from agentteams.front_matter_merge import print_merge_notices
+
+        print_merge_notices(result.notices)
 
     manual_count = len(manifest.get("manual_required_placeholders", []))
     if manual_count > 0:
