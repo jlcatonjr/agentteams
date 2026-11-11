@@ -113,7 +113,7 @@ def test_workflow_0b_fences_are_at_v3():
     spawn-authority query funnel added its routing rows + Workflows 12/13 to the same fences."""
     orch = _orch()
     assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=6" in orch
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=10" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query; v=10: API Impact Review
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=11" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query; v=10: API Impact Review; v=11: net-benefit ordering in Workflow 0C/10
 
 
 def test_reference_template_has_coordinated_concurrency_sections():
@@ -194,3 +194,56 @@ def test_operator_decision_reference_is_emitted_and_fenced():
         assert tool in ref
     assert "numbered list" in ref and "needs_user_review=yes" in ref
     assert "references/operator-decision.reference.md" in Path(output_plan.__file__).read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- net-benefit ordering
+
+_NB_CLAUSE = (
+    "each item is rated for **severity**, **breadth of impact** and **cost of remediation** "
+    "(with an optional **confidence**) per `references/net-benefit-prioritization.reference.md`, "
+    "and items are executed in descending **expected net benefit**, subject to `depends_on`; "
+    "ratings carry a one-line rationale each"
+)
+
+
+def test_plan_rule_carries_the_net_benefit_clause_in_both_constitution_templates():
+    """Rule 9 (instructions) and Rule 10 (orchestrator) are the same rule; both carry the clause,
+    as an extension of the rule — no new rule number."""
+    instr = (TEMPLATES / "copilot-instructions.template.md").read_text(encoding="utf-8")
+    orch = _orch()
+    rule9 = next(ln for ln in instr.splitlines() if ln.startswith("9. **Every request must generate a plan**"))
+    rule10 = next(ln for ln in orch.splitlines() if ln.startswith("10. **Every request must generate a plan**"))
+    assert _NB_CLAUSE in rule9
+    assert _NB_CLAUSE in rule10
+    assert not any(ln.startswith("18. ") for ln in orch.splitlines())
+
+
+def test_workflow_0c_rates_orders_and_dispatches_by_rank():
+    orch = _orch()
+    wf = orch[orch.index("### Workflow 0C"):orch.index("### Pre-Execution Security Check")]
+    step1 = wf[wf.index("1. **Decompose.**"):wf.index("2. **Write one plan per item.**")]
+    step3 = wf[wf.index("3. **Write the metaplan.**"):wf.index("4. **Audit the metaplan")]
+    step6 = wf[wf.index("6. **Implement the metaplan.**"):wf.index("7. **Integrate and close.**")]
+    assert "net-benefit-prioritization.reference.md" in step1 and "Only the operator pins" in step1
+    assert "python -m agentteams.plan_priority" in step3 and "`kind=closing`" in step3
+    assert "never in the CSV" in step3 and "--priority" in step3
+    assert "rank order (`parallel_plan --priority`)" in step6
+    assert "rank\n   never overrides a `depends_on` edge" in step6
+
+
+def test_workflow_10_step_2a_ranks_open_plans():
+    orch = _orch()
+    line = next(ln for ln in orch.splitlines() if ln.startswith("2a. **Cross-plan parallelization scan"))
+    assert "python -m agentteams.plan_priority" in line and "rank the open work by net benefit" in line
+
+
+def test_net_benefit_reference_is_emitted_and_fenced():
+    from agentteams import output_plan
+
+    src = (TEMPLATES / "universal" / "net-benefit-prioritization.reference.template.md").read_text(encoding="utf-8")
+    assert "<!-- AGENTTEAMS:BEGIN net_benefit_rubric v=1 -->" in src
+    assert "<!-- AGENTTEAMS:END net_benefit_rubric -->" in src
+    for needle in ("net_benefit      = expected_benefit − cost_points(C)", "Safety floor", "Agents never pin",
+                   "python -m agentteams.plan_priority", "frozen", "| 5 | Cross-surface redesign"):
+        assert needle in src, needle
+    assert "references/net-benefit-prioritization.reference.md" in Path(output_plan.__file__).read_text(encoding="utf-8")

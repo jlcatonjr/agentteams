@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (plans: order items by expected net benefit — `plan_priority`)
+
+- New `python -m agentteams.plan_priority` (`agentteams/plan_priority.py`, stdlib-only, compute-only).
+  - **Ratings and score.** It rates each plan or metaplan item for severity, breadth and cost (1–5), plus an
+    optional confidence (0.25–1.0). Net benefit is `p·S·B − cost_points(C)`, with cost points 1/2/4/8/16.
+  - **Order.** Items are ordered by band (`do-now` ≥ 10, `next` ≥ 4, `later` ≥ 0, `reconsider`). An S=5 safety
+    floor puts a severe item at the head of `next`. Operator-only pins (`operator:<date>:<reason>`) go first.
+  - **Dependencies.** It never reorders across a `depends_on` or implicit read-after-write edge. Priority
+    inheritance keeps a cheap prerequisite from starving.
+  - **Validation.** Bad ratings exit 2 with every bad row listed. `--require` also rejects unrated rows, empty
+    rationales (including a rated CSV with no `rationale_*` columns) and stale computed columns. `--json` emits
+    `{plan, items, pins, warnings, errors}`.
+- `python -m agentteams.parallel_plan --priority` lists wave members in rank order and breaks write-write
+  conflicts by rank instead of CSV order. This can change which items share a wave. The default schedule is
+  unchanged. `compute_waves` gains an optional `priority=` map, and the footprint-edge derivation is now the
+  public `footprint_edges()`.
+- **Templates.**
+  - The plan rule (instructions Rule 9, orchestrator Rule 10) gains the prioritization clause, as an extension
+    with no renumbering.
+  - Workflow 0C steps 1, 3 and 6 rate, compute and dispatch by rank. Workflow 10 step 2a reports open plans by
+    net benefit.
+  - The `available_workflows` fence is now v=11.
+  - New always-emitted `references/net-benefit-prioritization.reference.md`, which holds the rubric, the rating
+    governance (author proposes, `@adversarial` recommends, the orchestrator applies, then ratings and edges freeze)
+    and a user-editable project-anchors section.
+- **Not updated automatically on existing teams.** The rule lines sit outside every fence, so
+  `--update --merge` does not rewrite them on an existing team. Rolling them out to existing teams is a
+  separate, reviewed step.
+- Requested by the operator via infrastructuremanagement-59 (2026-11-10).
+
 ### fixed (server kit: a provider mirror signed by the distro archive keyring is the distro archive)
 
 - L1 graded every package from a provider mirror upstream, because only canonical archive hostnames counted as the

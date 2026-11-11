@@ -2033,6 +2033,30 @@ each transcript chain, each parent `delegate-start` / child `run-start` / parent
 child budgets. A run dir naming a run of the tree as its parent without being referenced (an orphan or a forged
 link) fails it. Exit 0 when the whole tree verifies, 1 otherwise.
 
+## Plan Ordering Helpers
+
+Two module CLIs read a plan's `.steps.csv`. Both are **compute-only** and never write the CSV.
+Their exit codes are their own; the table under **Exit Codes** is for the `agentteams` CLI.
+
+```
+python -m agentteams.parallel_plan PLAN.steps.csv [MORE ...] [--json] [--priority]
+python -m agentteams.plan_priority PLAN.steps.csv [MORE ...] [--json] [--require]
+```
+
+- **`parallel_plan`** computes Workflow 0A's fail-safe waves from `depends_on` and the read/write
+  footprints.
+  - `--priority` lists each wave's members in net-benefit rank order, and breaks write-write
+    conflicts in favour of the higher-ranked step. It exits 2 when the plan fails `plan_priority`'s
+    validation (bad ratings, a duplicate id or a cycle). Without the flag a cycle exits 1.
+- **`plan_priority`** orders rated items by expected net benefit, `p·S·B − cost_points(C)`. It
+  applies the bands, the S=5 safety floor, operator pins and priority inheritance, and it never
+  reorders across a dependency edge (`references/net-benefit-prioritization.reference.md`).
+  - `--require` makes unrated rows, missing or empty rationales and stale computed columns errors. Use it as a
+    pre-dispatch or CI gate.
+  - Exit status: 0 when the order is usable, 1 when a file is missing or has no `step`/`id` column,
+    2 on a validation error or a cycle.
+  - API: [`plan_priority`](api-reference/plan-priority.md).
+
 ## Exit Codes
 
 | Code | Meaning |

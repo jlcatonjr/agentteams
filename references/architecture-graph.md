@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **444**
+- Modules mapped: **445**
 - Packages: **14**
-- Internal import edges: **1669**
+- Internal import edges: **1671**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 184 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 185 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 58 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -290,7 +290,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.multi_sync` | `agentteams.backup`, `agentteams.canonical`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.fleet`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.registry`, `agentteams.git_exec`, `agentteams.host_features`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.sync_baseline`, `agentteams.sync_classifier`, `agentteams.sync_hub_refresh`, `agentteams.sync_pin`, `agentteams.sync_roster`, `agentteams.wasm_config` | `agentteams.cli.sync_switch`, `agentteams.stale_detector` |
 | `agentteams.orphan_advisory` | `agentteams.bridge_subagents_goose`, `agentteams.cli.adopt_merge_gate` | — |
 | `agentteams.output_plan` | `agentteams.analyze`, `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.analyze` |
-| `agentteams.parallel_plan` | — | `agentteams.bridge` |
+| `agentteams.parallel_plan` | `agentteams.plan_priority` | `agentteams.bridge`, `agentteams.plan_priority` |
+| `agentteams.plan_priority` | `agentteams.parallel_plan` | `agentteams.parallel_plan` |
 | `agentteams.plan_steps` | — | `agentteams.session_scan` |
 | `agentteams.plan_steps_todo` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.pr_management` | — | — |
@@ -3673,7 +3674,19 @@ digraph "agentteams architecture" {
       "package": "agentteams",
       "path": "agentteams/parallel_plan.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.plan_priority"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.plan_priority": {
+      "package": "agentteams",
+      "path": "agentteams/plan_priority.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.parallel_plan"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -10010,6 +10023,14 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.output_plan",
       "target": "agentteams.frameworks.registry"
+    },
+    {
+      "source": "agentteams.parallel_plan",
+      "target": "agentteams.plan_priority"
+    },
+    {
+      "source": "agentteams.plan_priority",
+      "target": "agentteams.parallel_plan"
     },
     {
       "source": "agentteams.plan_steps_todo",
