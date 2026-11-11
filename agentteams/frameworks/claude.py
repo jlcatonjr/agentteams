@@ -67,7 +67,7 @@ from ._claude_model import (  # noqa: F401  (constants re-exported for importers
     CLAUDE_ORCHESTRATOR_MODEL_DEFAULT,
     resolve_claude_model as _resolve_claude_model,
 )
-from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+from agentteams.yaml_frontmatter import FRONT_MATTER_MODEL_LINE_RE, parse_yaml_front_matter as _parse_yaml_front_matter
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +209,7 @@ class ClaudeAdapter(FrameworkAdapter):
         source_model = _extract_claude_optional_keys(content)[0]
         model = _resolve_claude_model(content, source_model, "team-builder")
         if model is not None and model != source_model:
-            head = re.sub(r"^model\s*:.*\n(?:[ \t]+-.*\n)*", f"model: {model}\n", head, count=1, flags=re.MULTILINE)
+            head = FRONT_MATTER_MODEL_LINE_RE.sub(f"model: {model}\n", head, count=1)
         if _YAML_TOOLS_RE.search(yaml_text):
             head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
         return head + body

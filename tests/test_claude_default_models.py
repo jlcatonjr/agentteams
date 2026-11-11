@@ -92,6 +92,10 @@ def test_strip_front_matter_model_leaves_the_body_alone():
     block = "---\nname: X\nmodel:\n  - a\n  - b\ntools: Read\n---\nbody\n"
     assert strip_front_matter_model(block) == "---\nname: X\ntools: Read\n---\nbody\n"
     assert strip_front_matter_model("no front matter\nmodel: x\n") == "no front matter\nmodel: x\n"
+    unindented = "---\nname: X\nmodel:\n- a\n- b\ntools: Read\n---\nbody\n"
+    assert strip_front_matter_model(unindented) == "---\nname: X\ntools: Read\n---\nbody\n"
+    last = "---\nname: X\nmodel: opus\n---\nbody\n"
+    assert strip_front_matter_model(last) == "---\nname: X\n---\nbody\n"
 
 
 @pytest.mark.parametrize("target", ["copilot-vscode", "copilot-cli"])

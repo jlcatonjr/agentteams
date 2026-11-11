@@ -7,6 +7,7 @@ scanner that correctly handles YAML block-scalar values containing bare '---' li
 Public API
 ----------
 parse_yaml_front_matter(content) -> (yaml_text | None, body)
+FRONT_MATTER_MODEL_LINE_RE — a top-level ``model:`` key with its block-list items or continuation lines
 """
 
 from __future__ import annotations
@@ -22,6 +23,11 @@ import re
 # scalar content contains an unindented bare '---' line the closing-delimiter
 # check will fire prematurely. This edge case is uncommon in agent front matter
 # but callers should be aware of it.
+#: A top-level ``model:`` key plus whatever belongs to it: block-list items (indented or not, ``- x``) and
+#: indented continuation lines. Apply it to a front-matter span only, never to a body. Shared by
+#: ``interop_helpers.strip_front_matter_model`` and ``ClaudeAdapter.render_builder_file``.
+FRONT_MATTER_MODEL_LINE_RE = re.compile(r"^model\s*:.*\n(?:[ \t]*-.*\n|[ \t]+\S.*\n)*", re.MULTILINE)
+
 _BLOCK_SCALAR_START_RE = re.compile(
     r"^(\s*)[\w][\w-]*\s*:\s*[|>][|>0-9+-]*\s*$"
 )
