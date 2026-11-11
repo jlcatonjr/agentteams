@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
+
+- **The bug.** Claude Code loads every `*.md` under `.claude/agents/`, dot-directories included. Backups made
+  before 2026-10-12 kept loadable names. `neutralize_legacy_backups` renamed them only inside `backup_output_dir`
+  for the directory being backed up, and a Copilot-primary repo with a Claude bridge never backs up
+  `.claude/agents/`, because the bridge backs up the project root. So an old stub with no `tools:` line kept
+  loading with every tool (IM evaluation item 01, G-14-1; the VK finding, 19 repos).
+- **The fix.** `backup_output_dir` now also neutralizes every agent-runtime dir of the same project
+  (`.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`) through the new
+  `backup.neutralize_runtime_backups`. The bridge, `--update` and fleet paths all call it.
+  - It renames each file to `*.agentteams-bak` and never deletes one.
+  - Each backup's `_manifest.json` `backup_path` is rewritten, so `--verify-backup` and `--restore-backup` keep
+    working.
+- **Reporting.** `--doctor` gets a "Backup stubs" section that reports each loadable backup copy as a FAIL.
+  `--check` prints a WARNING for each one (warn-first).
+- **Grok.** `.grok/agents` is included as a precaution. Grok Build loads `.grok/agents/*.md`; whether it walks
+  dot-subdirectories is unmeasured, and the rename never deletes anything.
+
 ### fixed (`--check-wiring`: the gate hook and `permissions.deny` must be merged, not only the sandbox block)
 
 - **The bug.** `--check-wiring` compared only the Claude `sandbox` block. A `.claude/settings.json` holding that

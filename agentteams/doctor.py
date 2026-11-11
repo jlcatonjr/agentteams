@@ -130,6 +130,16 @@ def _shared_agents_md(root: Path) -> list[str]:
     return []
 
 
+def _backup_stubs(root: Path) -> tuple[list[str], int]:
+    """FAIL per backed-up agent file a runtime would still load (IM item 01): it shadows a live agent."""
+    from agentteams.backup import runtime_loadable_backups
+
+    stubs = runtime_loadable_backups(root)
+    lines = [f"  ✗  FAIL {p.relative_to(root)} loads as a live agent; run any --update/--bridge-merge (it is "
+             "renamed inert, never deleted) or rename it to *.agentteams-bak" for p in stubs]
+    return lines, len(stubs)
+
+
 def run_doctor(project: str | None) -> int:
     """``--doctor``: print the cross-surface report for the project at *project* (else the working directory).
 
@@ -148,7 +158,7 @@ def run_doctor(project: str | None) -> int:
     print(f"agentteams doctor — {root}")
     sections = (("Rules projection", lambda: _rules(root, brief)), ("Memory index", lambda: (_indexes(root, brief), 0)),
                 ("Copilot body limit", lambda: _body_limit(root)), ("Agents", lambda: (_agents(root), 0)),
-                ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)))
+                ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)))
     for title, section in sections:
         try:
             lines, failed = section()
