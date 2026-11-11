@@ -1,5 +1,7 @@
 # Hardened git for the vulnscan remediation scripts (sourced, not run): vulnscan-handoff-lib.sh, vulnscan-deploy.sh and
-# the site-local vulnscan-operator-actions.sh source it; --install copies it with the other tracked scripts. Requires $PY (any python3 >= 3.8) for git_config_refusal.
+# the site-local vulnscan-operator-actions.sh source it; --install copies it with the other tracked scripts.
+# git_config_refusal needs a python3 >= 3.4 (-I): $PY when executable, else python3 on PATH (a first deploy, before
+# the pipx venv exists). See docs_src/vulnscan-automation-walkthrough.md (Files installed).
 PY="${PY:-$HOME/.local/pipx/venvs/agentteams/bin/python}"
 # Hardened git for every call these scripts make (they run unconfined, with the operator's credentials, in repositories
 # whose git data a review agent may have written): the vulnscan executor's _GIT_HARDENING flags, so repository config
@@ -17,19 +19,20 @@ _git_raw() { GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_NO_REPLACE_OBJECTS=
 # runs it), and a remote's proxy or vcs helper. A repository
 # whose own (local or worktree) config sets any of them is refused before any command runs in it.
 git_config_refusal() {   # git_config_refusal <dir>: prints the offending keys and fails, or prints nothing
-  local bad rc
+  local bad rc py="$PY"
+  [[ -x "$py" ]] || py="$(command -v python3)" || { echo "refusing git in $1: no python3 to check its config" >&2; return 1; }
   # -z: each entry is "scope<NUL>key<LF>value<NUL>", so a value with a newline in it is judged whole (a line-based
   # read would see a stock first line and miss the command after it).
   bad="$(set -o pipefail; _git_raw -C "$1" config -z --show-scope --get-regexp \
     '^(filter|lfs|gpg|http|url|include|includeif|credential|pager)\.|^core\.(worktree|attributesfile|alternaterefscommand|alternaterefsprefixes)$|^remote\..*\.(proxy|vcs)$' \
-    2>/dev/null | "$PY" -P -c '
+    2>/dev/null | "$py" -I -c '
 import re, sys
 raw = sys.stdin.buffer.read()
 url = sys.argv[1]
 m = re.fullmatch(r"(?:git@github\.com:|ssh://git@github\.com/|https://github\.com/)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?", url)
 lfs = f"https://github.com/{m.group(1)}.git/info/lfs" if m else None
-# Known-harmless keys tools write into a repository'"'"'s own config (2026-11-10 scan of the VK checkouts:
-# http.postbuffer, git-lfs'"'"'s stock `git lfs install --local`). Allowed only by exact key, or exact key and value;
+# Known-harmless keys that tools write into the repository config (2026-11-10 scan of the VK checkouts:
+# http.postbuffer, the git-lfs stock `git lfs install --local`). Allowed only by exact key, or exact key and value;
 # every other key the pattern matches stays refused (Rule 12: what an exclusion permits is itself audited).
 STOCK = {"filter.lfs.clean": "git-lfs clean -- %f", "filter.lfs.smudge": "git-lfs smudge -- %f",
          "filter.lfs.process": "git-lfs filter-process", "filter.lfs.required": "true"}
