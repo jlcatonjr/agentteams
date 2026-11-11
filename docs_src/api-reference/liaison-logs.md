@@ -22,6 +22,7 @@ Provides utilities to initialize, migrate, and maintain machine-readable CSV log
 | `COORD_LOG_CSV` | `adjacent-repos-coordination-log.csv` | Cross-orchestrator coordination records |
 | `SECURITY_DECISIONS_CSV` | `security-decisions.log.csv` | Security decision audit trail |
 | `AGENTTEAMS_REMEDIATION_CSV` | `agentteams-remediation-log.csv` | AgentTeamsModule-itself remediation backlog (Post-Deliverable Retrospective findings) |
+| `CONFLICT_LOG_CSV` | `conflict-log.csv` | `@conflict-auditor` findings, appended by the orchestrator from the rows the auditor returns; read by `@conflict-resolution` |
 
 ### Column Headers
 
@@ -31,6 +32,7 @@ Provides utilities to initialize, migrate, and maintain machine-readable CSV log
 | **Coordination Log** | `date`, `adjacent_repo`, `direction`, `outcome` |
 | **Security Decisions** | `timestamp`, `requesting_agent`, `action_reviewed`, `verdict`, `conditions`, `conditions_verified` |
 | **AgentTeamsModule Remediation** | `date`, `source_repo`, `category`, `summary`, `proposed_touch_points`, `status`, `resolved_date`, `resolved_evidence` |
+| **Conflict Log** | `date`, `category`, `code`, `severity`, `file`, `description`, `status`, `resolution` |
 
 ---
 

@@ -309,7 +309,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=11 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=12 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -347,7 +347,19 @@ Before executing Step 1 of any such plan:
 
 The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`). Legacy undated plans already present in `tmp/` remain readable and should be considered fallback inputs during review and summary workflows.
 
-Prefer generating or editing `.steps.csv`/`.github/agents/references/conflict-log.csv` rows programmatically (`agentteams.plan_steps.write_steps()` / `update_step()` for steps CSVs, `agentteams.atomicio.atomic_rewrite_csv_rows()`, or an equivalent verify-then-commit CSV writer, not a raw `csv.writer`/`open(path, "w")`) over manual text edits. When a manual edit is unavoidable, re-parse the file with `agentteams.plan_steps.read_steps()` (or an equivalent real CSV parser) before considering it final — an unquoted embedded comma or a stray quote can silently shift every subsequent column in a way visual inspection won't reliably catch.
+Prefer generating or editing `.steps.csv` rows programmatically (`agentteams.plan_steps.write_steps()` / `update_step()` for steps CSVs, `agentteams.atomicio.atomic_rewrite_csv_rows()`, or an equivalent verify-then-commit CSV writer, not a raw `csv.writer`/`open(path, "w")`) over manual text edits; governance-log rows (`.github/agents/references/conflict-log.csv`, `references/security-decisions.log.csv`) are only ever appended, with `governance_logs append` (below). When a manual edit is unavoidable, re-parse the file with `agentteams.plan_steps.read_steps()` (or an equivalent real CSV parser) before considering it final — an unquoted embedded comma or a stray quote can silently shift every subsequent column in a way visual inspection won't reliably catch.
+
+**Rows returned by read-only agents.** `@security` and `@conflict-auditor` cannot write files, so each ends its report with
+its rows in a fenced `csv` block: `@security` one verdict row for `references/security-decisions.log.csv`, in the columns of
+that log's own header row; `@conflict-auditor` one row per finding (or one `CLEAN` row) for `.github/agents/references/conflict-log.csv`. Append each
+row yourself, before acting on it, with
+`python -m agentteams.governance_logs append <log> --row-json '<the row as JSON keyed by the log's header names>'`, giving
+`<log>` as a path from where you run it (the team's `references/` dir is inside its agents directory). It refuses a row
+whose width or column names do not match the header, and a row that would break a chained decisions log (use
+`agentteams --sign-decision` there); fix the row, never the header. A `@security` PASS or
+CONDITIONAL PASS is not in effect, and a step it clears does not start, until its row is appended. A HALT binds the moment
+`@security` returns it: stop the operation whether or not its append succeeds, and take a refused HALT append to the
+operator. After appending `@conflict-auditor` rows, route the `open` ones to `@conflict-resolution`.
 
 ---
 
@@ -452,10 +464,10 @@ itself; a subagent executes a single step, never a whole item plan.
 
 Before executing any such step:
 
-1. Read `references/security-decisions.log.csv` — locate the row for the relevant clearance
+1. Read `references/security-decisions.log.csv` — locate the row for the relevant clearance; no row means no clearance (treat as HALT)
 2. Verify every condition in the `conditions` column has been addressed — each mitigation must have confirmable evidence
 3. If any condition is unverified (`conditions_verified = pending`): treat as HALT and surface to the user; do not proceed
-4. If all conditions are verified: update `conditions_verified` to `verified` in the log and proceed
+4. If all conditions are verified: give `@security` the evidence and append the new PASS row it returns for the same action (`governance_logs append`; never edit the existing row), then proceed
 
 > This check is not optional. An unverified CONDITIONAL PASS blocks the operation as if HALT had been issued.
 
@@ -791,7 +803,7 @@ carry an appended handoff:
    - `.github/agents/references/conflict-log.csv` → any row with `status=open` lacking a `resolution` — handled separately by step 2 below, not part of `scan_repo_issues`
 2. For each at-large issue found: write a one-paragraph summary — what it is, why it matters, which files or commits are involved. **Exception:** for issues found via `.github/agents/references/conflict-log.csv`, invoke `@conflict-resolution`'s ACCEPT/REJECT/REVISE decision instead — unlike the other three sources (summarized and presented only), "was it actually fixed already?" has a concrete, checkable answer available at closeout time
 3. Invoke `@adversarial` → audit the summaries and conflict-log decisions for false assumptions (e.g., "this is truly unresolved", "this git status entry is not legitimately in-progress work", "this conflict-log row was genuinely fixed on disk")
-4. Invoke `@conflict-auditor` → verify summaries and conflict-log decisions do not contradict authority sources
+4. Invoke `@conflict-auditor` → verify summaries and conflict-log decisions do not contradict authority sources — append the rows it returns (`governance_logs append`, see **Rows returned by read-only agents**) before acting on them
 5. Present audited summaries as a numbered list to the user
 6. If no at-large issues are found: note "No at-large issues detected"
 6b. **API impact (closeout gate; runs before step 7 pushes).** *Only when this session committed.* Run `python -m agentteams.api_impact status`. Any unreviewed impactful commit runs the **API Impact Review** before closeout; exit 2 (no branch base) means re-run with `--range BASE..HEAD`, never a pass. The session closes as **API review pending**, never as complete, while one remains.

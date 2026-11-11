@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (security: a HALT written in the other log schema no longer vanishes; read-only auditors return their log rows)
+
+- **The bug.** A HALT written in the 9-column form the `@security` template asked for, under the 6-column header
+  that new teams are seeded with, was read into the wrong columns. The gate saw no HALT, and a later PASS in the
+  header's own form cleared the action, a C-2 bypass (IM evaluation item 06, G-07-1).
+- **The gate's decision-log reader now fails closed on width.** If any record's field count differs from the
+  header's, the gate refuses every decision in that log and names the row. Malformed logs that used to be read
+  with shifted columns are now refused. So is a log where an open quote has swallowed later rows. To repair one,
+  rewrite each row in the columns of the log's own header (back the file up first), then confirm the fix with
+  `python -m agentteams.governance_logs check`. This applies at once, with no warn-only release: a log the gate
+  cannot read must not clear anything.
+- **`@security` and `@conflict-auditor` no longer write the logs.** Both are read-only. They now end their reports
+  with their rows in a `csv` block, written in the log's own header columns, and the orchestrator appends each row
+  with the new `python -m agentteams.governance_logs append LOG --row-json …`. That command validates every row
+  against the header. A `@security` verdict takes effect only once its row is appended. A clean conflict audit
+  returns one `CLEAN` row (G-07-2, G-09-1, G-21-2).
+- **The security template no longer says to "write new rows in the current 9-column form".** It now names both
+  headers and says to write rows in the log's own one. The seeded header stays at 6 columns. The code writers
+  adapt to whatever header exists, and the signed append writes legacy-led columns.
+- **A HALT binds when `@security` returns it**, even if its append fails; a refused HALT append goes to the operator.
+  Only a PASS or CONDITIONAL PASS waits for its row. A CONDITIONAL PASS is completed by a new PASS row, never by
+  editing the old row in place.
+- **`append` refuses a decision row with no action id or no verdict**, and refuses a row that would break a
+  chained decisions log's hash chain (use `agentteams --sign-decision` there). The gate also refuses a header that names a
+  column twice.
+- **`conflict-log.csv` is now seeded** with the auditor's columns, next to the other logs (G-09-2). `{CONFLICT_LOG_PATH}`
+  now names the team's own `references/` dir on every surface: for example `.claude/agents/references/conflict-log.csv`
+  on Claude. It used to be the Copilot literal `.github/agents/references/conflict-log.csv`, where nothing was
+  seeded and every append was refused. A clean conflict audit's `CLEAN` row is `closed`, so it never waits on
+  `@conflict-resolution`.
+- **Fence versions:** `security_rules_invariant` v=22, `security_verdict_contract` v=2; in the conflict auditor,
+  `invariant_core` v=2, `rules` v=2 and a new `conflict_log_format` fence; in the orchestrator, `available_workflows`
+  v=12.
+- **Integrity manifest.** `references/enforcement-integrity.json` re-pins `agentteams/cli/decision_log.py`.
+
 ### added (plans: order items by expected net benefit — `plan_priority`)
 
 - New `python -m agentteams.plan_priority` (`agentteams/plan_priority.py`, stdlib-only, compute-only).
