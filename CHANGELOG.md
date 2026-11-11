@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--check-wiring`: the gate hook and `permissions.deny` must be merged, not only the sandbox block)
+
+- **The bug.** `--check-wiring` compared only the `sandbox` block. A `.claude/settings.json` holding that block alone
+  printed "OK: sandbox confinement is merged" and exited 0, with no `PreToolUse` gate and no `permissions.deny`
+  (IM evaluation item 03, G-22-1, reproduced on `70b2c4aa`).
+- **What it checks now:**
+  - the live `hooks.PreToolUse` has an entry running `constitutional-gate.py` whose matcher covers every tool the
+    emitted matcher names (`*` covers all);
+  - the live `permissions.deny` contains every emitted rule, the `Read(...)` key denies included.
+- **When it fails.** Either gap fails the check when a sandbox boundary was requested. On a cooperative team it is
+  a WARNING with exit 0, so teams that passed before do not start failing (warn-first). Live values are never
+  echoed.
+- **Moved code.** The check moved from `frameworks/claude.py` to `frameworks/_claude_wiring_check.py`.
+  `claude._verify_emitted_sandbox_merged` remains as an alias.
+- **Grok:** no change. Its wiring check already compares the managed `[permission]` block and the sandbox profile,
+  and the Grok gate is not a settings-merged hook.
+
 ### added (governance logs: `repair`, an operator-approved, backed-up fix for malformed rows)
 
 - `python -m agentteams.governance_logs repair LOG` previews a fix for rows whose field count differs from the

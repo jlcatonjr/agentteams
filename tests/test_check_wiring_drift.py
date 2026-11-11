@@ -264,3 +264,81 @@ def test_drift_helpers_accept_none_and_non_states():
     off = ss.effective_sandbox_state({"privilege_profile": "cooperative"})
     assert not d.switched_off(off) and d.switched_off(off, previous_boundary=True)
     assert d.goose_control_plane_ok(None, "", lambda p: p, [])
+
+
+# --- IM item 03 (G-22-1): the gate hook and permissions.deny must be merged, not only the sandbox block ------
+
+_GATE_CMD = 'python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/constitutional-gate.py"'
+_MATCHER = "Write|Edit|NotebookEdit|MultiEdit|Bash"
+_DENY = ["Read(~/.config/agentteams/keys/**)", "Edit(/.agentteams/**)"]
+_SANDBOX = {"enabled": True, "allowUnsandboxedCommands": False, "filesystem": {"allowWrite": ["."]}}
+
+
+def _example(root: Path, *, sandbox: bool = True) -> None:
+    (root / ".claude").mkdir(parents=True, exist_ok=True)
+    ex = {"hooks": {"PreToolUse": [{"matcher": _MATCHER, "hooks": [{"type": "command", "command": _GATE_CMD}]}]},
+          "permissions": {"deny": list(_DENY)}}
+    if sandbox:
+        ex["sandbox"] = dict(_SANDBOX)
+    (root / ".claude" / "settings.hooks.example.json").write_text(json.dumps(ex))
+
+
+def _gate(matcher: str = _MATCHER) -> dict:
+    return {"PreToolUse": [{"matcher": matcher, "hooks": [{"type": "command", "command": _GATE_CMD}]}]}
+
+
+def test_g22_1_sandbox_only_live_settings_no_longer_pass(tmp_path):
+    """The repro: only the sandbox block merged printed 'OK … merged' and exited 0 on 70b2c4aa."""
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as verify_emitted_sandbox_merged
+
+    _example(tmp_path)
+    _live(tmp_path, {"sandbox": dict(_SANDBOX)})
+    ok, msgs = verify_emitted_sandbox_merged(tmp_path)
+    assert not ok
+    text = " ".join(msgs)
+    assert "constitutional gate is NOT wired" in text and "permissions.deny is missing 2" in text
+    assert _SECRET not in text
+
+
+def test_g22_1_everything_merged_passes(tmp_path):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as verify_emitted_sandbox_merged
+
+    _example(tmp_path)
+    _live(tmp_path, {"sandbox": dict(_SANDBOX), "hooks": _gate(), "permissions": {"deny": [*_DENY, "Extra(x)"]}})
+    ok, msgs = verify_emitted_sandbox_merged(tmp_path)
+    assert ok, msgs
+    assert any("gate hook and the permission denies are merged" in m for m in msgs)
+
+
+@pytest.mark.parametrize("live_extra, needle", [
+    ({"hooks": _gate("Write|Edit"), "permissions": {"deny": list(_DENY)}}, "constitutional gate is NOT wired"),
+    ({"hooks": _gate(), "permissions": {"deny": _DENY[1:]}}, "missing 1 emitted rule"),
+    ({"hooks": {"PreToolUse": [{"matcher": _MATCHER, "hooks": [{"type": "command", "command": "echo hi"}]}]},
+      "permissions": {"deny": list(_DENY)}}, "constitutional gate is NOT wired"),
+])
+def test_g22_1_a_narrower_matcher_a_missing_read_deny_or_another_hook_fails(tmp_path, live_extra, needle):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as verify_emitted_sandbox_merged
+
+    _example(tmp_path)
+    _live(tmp_path, {"sandbox": dict(_SANDBOX), **live_extra})
+    ok, msgs = verify_emitted_sandbox_merged(tmp_path)
+    assert not ok and any(needle in m for m in msgs), msgs
+
+
+def test_g22_1_a_wildcard_matcher_covers_the_emitted_tools(tmp_path):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as verify_emitted_sandbox_merged
+
+    _example(tmp_path)
+    _live(tmp_path, {"sandbox": dict(_SANDBOX), "hooks": _gate("*"), "permissions": {"deny": list(_DENY)}})
+    assert verify_emitted_sandbox_merged(tmp_path)[0]
+
+
+def test_g22_1_cooperative_team_is_warned_not_failed(tmp_path):
+    """Warn-first: a cooperative team passed before; it now sees the warning but keeps exit 0."""
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as verify_emitted_sandbox_merged
+
+    _example(tmp_path, sandbox=False)
+    _live(tmp_path, {})
+    ok, msgs = verify_emitted_sandbox_merged(tmp_path)
+    assert ok
+    assert any("constitutional gate is NOT wired" in m for m in msgs)
