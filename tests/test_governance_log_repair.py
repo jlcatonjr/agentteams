@@ -16,6 +16,10 @@ SPLIT = "2026-11-06,p,2,prune,PASS,cond,verified 2026-11-09: all branches absent
 SPLIT2 = "2026-11-11,p,3,merge,PASS,pinned,verified: conflict resolved (both kept), 9/9 CI, merged e87bf3a0,,operator"
 
 
+def _yes(plan, digest):
+    return True
+
+
 def _log(tmp_path: Path, *rows: str, header: str = HEADER, ending: str = "\n") -> Path:
     p = tmp_path / "security-decisions.log.csv"
     p.write_bytes((ending.join([header, *rows]) + ending).encode("utf-8"))
@@ -38,7 +42,7 @@ def test_preview_proposes_the_comma_split_fix_and_writes_nothing(tmp_path):
 def test_apply_repairs_only_the_bad_rows_and_keeps_a_backup(tmp_path):
     log = _log(tmp_path, GOOD, SPLIT, GOOD.replace(",1,", ",4,"), ending="\r\n")
     before = log.read_bytes()
-    backup = apply_repair(log, plan_repair(log).digest)
+    backup = apply_repair(log, plan_repair(log).digest, confirm=_yes)
     assert backup.read_bytes() == before
     assert governance_logs.check_log(log) == []
     after = log.read_bytes().decode()
@@ -55,7 +59,7 @@ def test_apply_refuses_a_stale_or_wrong_digest(tmp_path):
         fh.write(GOOD.replace(",1,", ",9,") + "\n")                                # file changed after preview
     before = log.read_bytes()
     with pytest.raises(ValueError, match="digest does not match"):
-        apply_repair(log, digest)
+        apply_repair(log, digest, confirm=_yes)
     assert log.read_bytes() == before
     assert not list(tmp_path.glob("*.bak-*"))
 
@@ -71,7 +75,7 @@ def test_no_guess_for_any_other_shape(tmp_path, row, why):
     assert plan.items[0].fixed is None and why in plan.items[0].reason
     assert not plan.fixable
     with pytest.raises(ValueError, match="has a safe fix; nothing written"):
-        apply_repair(log, plan.digest)
+        apply_repair(log, plan.digest, confirm=_yes)
 
 
 def test_a_chained_log_is_refused(tmp_path):
@@ -79,7 +83,7 @@ def test_a_chained_log_is_refused(tmp_path):
     plan = plan_repair(log)
     assert "signed or chained" in plan.refusal and not plan.fixable
     with pytest.raises(ValueError, match="signed or chained"):
-        apply_repair(log, plan.digest)
+        apply_repair(log, plan.digest, confirm=_yes)
 
 
 @pytest.mark.parametrize("col", ["signature", " signature", "prev_digest ", "key_id", "text_digest"])
@@ -138,7 +142,7 @@ def test_a_fragment_that_would_land_in_a_decision_column_is_not_joined(tmp_path)
 def test_apply_rewrites_in_place_so_a_waiting_append_lands_in_the_repaired_file(tmp_path):
     log = _log(tmp_path, GOOD, SPLIT)
     inode = log.stat().st_ino
-    apply_repair(log, plan_repair(log).digest)
+    apply_repair(log, plan_repair(log).digest, confirm=_yes)
     assert log.stat().st_ino == inode, "the log was replaced, not rewritten in place"
     governance_logs.append_row(log, ["2026-11-12", "p", "9", "prune", "HALT", "x", "", "e", "security"])
     assert governance_logs.check_log(log) == [] and log.read_text().rstrip().endswith("HALT,x,,e,security")
@@ -147,7 +151,7 @@ def test_apply_rewrites_in_place_so_a_waiting_append_lands_in_the_repaired_file(
 def test_line_spans_ignore_characters_splitlines_would_split_on(tmp_path):
     odd = "2026-11-01,p,1,prune,PASS,a\x85b\u2028c,verified,ev,security"
     log = _log(tmp_path, odd, SPLIT)
-    apply_repair(log, plan_repair(log).digest)
+    apply_repair(log, plan_repair(log).digest, confirm=_yes)
     text = log.read_text(encoding="utf-8")
     assert "a\x85b\u2028c" in text and governance_logs.check_log(log) == []
 
@@ -181,11 +185,101 @@ def test_a_failed_recheck_restores_the_original_bytes(tmp_path, monkeypatch):
 
     monkeypatch.setattr(glr, "check_log", flaky)
     with pytest.raises(ValueError, match="original restored"):
-        apply_repair(log, digest)
+        apply_repair(log, digest, confirm=_yes)
     assert log.read_bytes() == before
 
 
 def test_apply_rejects_a_malformed_digest(tmp_path):
     log = _log(tmp_path, GOOD, SPLIT)
     with pytest.raises(ValueError, match="64-character"):
-        apply_repair(log, "abc")
+        apply_repair(log, "abc", confirm=_yes)
+
+
+# --------------------------------------------------------------------------- @security re-review conditions
+
+
+def test_c1_conditions_verified_never_moves(tmp_path):
+    """A fragment re-joined into `conditions` would shift "verified" from evidence into conditions_verified."""
+    log = _log(tmp_path, GOOD, "2026-11-11,s,1,act-x,CONDITIONAL PASS,cond, more,verified,ev,own")
+    plan = plan_repair(log)
+    assert plan.items[0].fixed is None and "conditions_verified" in plan.items[0].reason
+
+
+def test_c1_a_rejoin_into_conditions_verified_itself_is_allowed(tmp_path):
+    log = _log(tmp_path, GOOD, SPLIT)
+    assert plan_repair(log).fixable
+
+
+def test_c2_a_failed_write_restores_the_original(tmp_path, monkeypatch):
+    import agentteams.governance_log_repair as glr
+
+    log = _log(tmp_path, GOOD, SPLIT)
+    before = log.read_bytes()
+    digest = plan_repair(log).digest
+    real = glr._write_in_place
+    calls = {"n": 0}
+
+    def failing(fd, data):
+        calls["n"] += 1
+        if calls["n"] == 2:            # 1st: the backup; 2nd: the log rewrite
+            raise OSError("disk full")
+        return real(fd, data)
+
+    monkeypatch.setattr(glr, "_write_in_place", failing)
+    with pytest.raises(OSError):
+        apply_repair(log, digest, confirm=_yes)
+    assert log.read_bytes() == before
+
+
+def test_c2_write_then_truncate_never_leaves_a_shorter_valid_file(tmp_path):
+    import os
+
+    from agentteams.governance_log_repair import _write_in_place
+
+    p = tmp_path / "f"
+    p.write_bytes(b"0123456789")
+    fd = os.open(p, os.O_RDWR)
+    try:
+        _write_in_place(fd, b"abc")
+    finally:
+        os.close(fd)
+    assert p.read_bytes() == b"abc"
+
+
+def test_c2_the_gate_reader_takes_a_shared_lock(tmp_path, monkeypatch):
+    from agentteams import governance_logs as gl
+    from agentteams.cli import decision_log as dl
+
+    if gl.fcntl is None:
+        pytest.skip("no flock on this platform")
+    seen = []
+    real = gl.fcntl.flock
+
+    def spy(fd, op):
+        seen.append(op)
+        return real(fd, op)
+
+    monkeypatch.setattr(gl.fcntl, "flock", spy)
+    out = tmp_path / "team"
+    (out / "references").mkdir(parents=True)
+    (out / "references" / "security-decisions.log.csv").write_text(HEADER + "\n" + GOOD + "\n", encoding="utf-8")
+    dl._read_decision_rows(out)
+    assert gl.fcntl.LOCK_SH in seen
+
+
+def test_c3_apply_without_confirm_needs_a_terminal(tmp_path, monkeypatch):
+    import sys
+
+    log = _log(tmp_path, GOOD, SPLIT)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False, raising=False)
+    with pytest.raises(ValueError, match="interactive terminal"):
+        apply_repair(log, plan_repair(log).digest)
+    with pytest.raises(ValueError, match="confirmation did not match"):
+        apply_repair(log, plan_repair(log).digest, confirm=lambda plan, digest: False)
+
+
+def test_c4_only_governance_logs_are_repaired(tmp_path):
+    p = tmp_path / "other.csv"
+    p.write_text(HEADER + "\n" + SPLIT + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not a governance log"):
+        apply_repair(p, plan_repair(p).digest, confirm=_yes)

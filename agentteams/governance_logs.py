@@ -15,7 +15,7 @@ and was rebuilt from session transcripts.
   (A rewrite goes through :func:`agentteams.atomicio.atomic_rewrite_csv_rows`.) Rows written by hand bypass it;
   :func:`check_logs` is what catches those.
 * ``python -m agentteams.governance_logs repair LOG`` previews a fix for malformed rows, and ``--apply DIGEST``
-  (operator, interactive terminal) applies exactly that preview: see :mod:`agentteams.governance_log_repair`.
+  (operator, interactive terminal; a speed-bump, not a security boundary) applies exactly that preview: see :mod:`agentteams.governance_log_repair`.
 """
 
 from __future__ import annotations
@@ -250,16 +250,7 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             if args.apply:
-                # Operator approval: an interactive terminal on which the digest's first 8 characters are
-                # retyped. An agent running the tool has no TTY, so it cannot approve its own preview.
-                if not (sys.stdin.isatty() and sys.stdout.isatty()):
-                    print("refused: --apply needs an interactive terminal; the operator runs it", file=sys.stderr)
-                    return 1
-                print(render_plan(plan_repair(Path(args.log))))
-                typed = input(f"\nType the first 8 characters of the digest to apply it: ").strip()
-                if typed != args.apply[:8]:
-                    print("refused: confirmation did not match; nothing written", file=sys.stderr)
-                    return 1
+                # apply_repair asks the operator on an interactive terminal (a speed-bump, not a boundary).
                 backup = apply_repair(Path(args.log), args.apply)
                 print(f"repaired {args.log}; backup: {backup} (remove it once you have checked the log)")
                 return 0

@@ -16,9 +16,11 @@ rows under the operator's constraints (2026-11-11) and @security's conditions (H
   not a field-count mismatch (an open quote, swallowed rows).
 * **The operator approves it.** :func:`plan_repair` (CLI ``repair LOG``) only previews: each record before and
   after, cell by cell under its header, and a digest of the whole proposal. :func:`apply_repair` (CLI
-  ``repair LOG --apply DIGEST``) writes only when the recomputed digest equals the approved one. The CLI also
-  requires an interactive terminal on which the operator retypes the digest's first 8 characters, so an agent
-  cannot approve its own preview.
+  ``repair LOG --apply DIGEST``) writes only when the recomputed digest equals the approved one, and by default
+  only after the operator retypes the digest's first 8 characters on an interactive terminal. That prompt is a
+  speed-bump against an unattended apply, not a security boundary (an agent can allocate a pseudo-terminal).
+  What makes any repair harmless is the column rules above: no proposal can change or move a decision cell or
+  ``conditions_verified``.
 * **Everything else stays byte-identical, and no concurrent append is lost.**
   - The file is locked and read once, and the plan is computed from exactly those bytes.
   - A backup ``LOG.bak-<UTC timestamp>`` is written atomically (exclusive create, fsync).
@@ -43,7 +45,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from agentteams.governance_logs import check_log, fcntl
+import sys
+
+from agentteams.governance_logs import LOG_NAMES, check_log, fcntl
 
 #: Columns whose cells are prose, so a fragment of one may be re-joined into it. Never a verdict, action, date,
 #: owner, id or signing column.
@@ -53,6 +57,8 @@ FREE_TEXT_COLUMNS: frozenset[str] = frozenset({
 })
 #: Columns whose value decides a gate outcome; a repair must leave their position and content alone.
 DECISION_COLUMNS: frozenset[str] = frozenset({"decision", "action_reviewed", "status", "verdict", "scope"})
+#: Columns a gate reads by exact value: a re-join may land in one but must never move it.
+POSITIONED_COLUMNS: frozenset[str] = frozenset({"conditions_verified"})
 #: A log with any of these is signed or chained; a repair would void or break it.
 SIGNING_COLUMNS: frozenset[str] = frozenset({
     "signature", "sig_scheme", "key_id", "derives_from", "prev_digest", "text_digest",
@@ -156,8 +162,11 @@ def _propose(cells: list[str], header: list[str]) -> tuple[list[str] | None, str
     if fixed[:first] != cells[:first]:
         return None, "the cells before the first re-join would change: repair by hand"
     moved = [c for c in DECISION_COLUMNS & set(header) if header.index(c) >= first]
+    # conditions_verified decides whether a CONDITIONAL PASS clears (the gate compares it to "verified"): a
+    # re-join may land IN it (the added comma means it can never read "verified"), but it must not move.
+    moved += [c for c in POSITIONED_COLUMNS & set(header) if header.index(c) > first]
     if moved:
-        return None, f"decision column(s) {sorted(moved)} sit after a re-join and would move: repair by hand"
+        return None, f"column(s) {sorted(moved)} sit after a re-join and would move: repair by hand"
     return fixed, f"re-joined {extra} fragment(s) split by an unquoted comma into {sorted(set(landed))}"
 
 
@@ -247,14 +256,30 @@ def render_plan(plan: RepairPlan) -> str:
     return "\n".join(lines)
 
 
+def _full_fsync(fd: int) -> None:
+    """fsync, and on macOS F_FULLFSYNC (plain fsync there does not reach the platter)."""
+    if sys.platform == "darwin" and fcntl is not None and hasattr(fcntl, "F_FULLFSYNC"):
+        try:
+            fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+        except OSError:
+            os.fsync(fd)          # the filesystem refused F_FULLFSYNC; a plain fsync is the best left
+        return
+    os.fsync(fd)
+
+
 def _write_in_place(fd: int, data: bytes) -> None:
+    """Overwrite from offset 0, THEN truncate to the new length, then flush.
+
+    Writing before truncating means a crash part-way leaves the old tail or a partial row, which ``check_log``
+    rejects, never a shorter well-formed file that silently drops later rows (a HALT among them).
+    """
     os.lseek(fd, 0, os.SEEK_SET)
-    os.ftruncate(fd, 0)
     view = memoryview(data)
     while view:
         n = os.write(fd, view)
         view = view[n:]
-    os.fsync(fd)
+    os.ftruncate(fd, len(data))
+    _full_fsync(fd)
 
 
 def _write_backup(path: Path, raw: bytes) -> Path:
@@ -266,34 +291,72 @@ def _write_backup(path: Path, raw: bytes) -> Path:
         _write_in_place(bfd, raw)
     finally:
         os.close(bfd)
+    dfd = os.open(backup.parent, os.O_RDONLY)
+    try:
+        _full_fsync(dfd)
+    except OSError as exc:        # some filesystems refuse fsync on a directory: say so, don't fail the repair
+        import warnings
+
+        warnings.warn(f"could not fsync {backup.parent} after writing the backup: {exc}", RuntimeWarning,
+                      stacklevel=2)
+    finally:
+        os.close(dfd)
     return backup
 
 
-def apply_repair(path: Path, digest: str) -> Path:
+def _tty_confirm(plan: RepairPlan, digest: str) -> bool:
+    """Show the plan and ask the operator to retype the digest prefix; requires an interactive terminal.
+
+    A speed-bump against an unattended apply, not a security boundary: an agent can allocate a pseudo-terminal
+    or call :func:`apply_repair` with its own ``confirm``. What makes an agent-run repair harmless is that no
+    proposal can change a decision cell (the column rules in :func:`_propose`).
+    """
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        raise ValueError("--apply needs an interactive terminal; the operator runs it. Nothing written")
+    print(render_plan(plan))
+    typed = input("\nType the first 8 characters of the digest to apply it: ").strip()
+    return typed == digest[:8]
+
+
+def _read_fd(fd: int) -> bytes:
+    os.lseek(fd, 0, os.SEEK_SET)
+    chunks = []
+    while chunk := os.read(fd, 1 << 16):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def apply_repair(path: Path, digest: str, *, confirm=None) -> Path:
     """Apply the previewed repair, bound to ``digest``, in place under the log's lock; return the backup path.
 
     Args:
-        path: The log file.
+        path: The log file; its name must be one of :data:`agentteams.governance_logs.LOG_NAMES`.
         digest: The digest the preview printed (64 lowercase hex characters).
+        confirm: ``(plan, digest) -> bool`` called under the lock after the digest matches; defaults to an
+            interactive-terminal prompt (:func:`_tty_confirm`). Nothing is written unless it returns True.
 
     Returns:
         Path: The backup written before the change.
 
     Raises:
         TypeError: ``path`` is not a ``Path`` or ``digest`` is not a ``str``.
-        ValueError: The digest is malformed or does not match the current preview, the plan is refused or not
-            fully fixable, or the repaired log still fails ``check_log`` (the original bytes are restored first).
-        OSError: The file or the backup cannot be written.
+        ValueError: The file is not a governance log, the digest is malformed or does not match the current
+            preview, the plan is refused or not fully fixable, confirmation is refused, or the repaired log still
+            fails ``check_log`` (the original bytes are restored first).
+        OSError: The file or the backup cannot be written (the original bytes are restored first when the log
+            itself was being written).
     """
     if not isinstance(path, Path) or not isinstance(digest, str):
         raise TypeError("path must be a pathlib.Path and digest a str")
+    if path.name not in LOG_NAMES:
+        raise ValueError(f"{path.name} is not a governance log ({', '.join(LOG_NAMES)}); nothing written")
     if not _DIGEST_RE.match(digest):
         raise ValueError("digest must be the 64-character hex value the preview printed")
     fd = os.open(path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
     try:
         if fcntl is not None:
             fcntl.flock(fd, fcntl.LOCK_EX)
-        raw = path.read_bytes()
+        raw = _read_fd(fd)
         plan = _plan_from_bytes(path, raw)
         if plan.refusal:
             raise ValueError(f"refused: {plan.refusal}")
@@ -302,6 +365,8 @@ def apply_repair(path: Path, digest: str) -> Path:
         if plan.digest != digest:
             raise ValueError("the digest does not match the current preview (the file or the proposal changed); "
                              "preview again and approve the new digest. Nothing written")
+        if not (confirm or _tty_confirm)(plan, digest):
+            raise ValueError("confirmation did not match; nothing written")
         lines = _lines(raw.decode("utf-8"))
         for item in sorted(plan.items, key=lambda i: i.first_line, reverse=True):
             old_last = lines[item.last_line - 1]
@@ -312,7 +377,11 @@ def apply_repair(path: Path, digest: str) -> Path:
             rendered = buf.getvalue() if ending else buf.getvalue().rstrip("\n")
             lines[item.first_line - 1:item.last_line] = [rendered]
         backup = _write_backup(path, raw)
-        _write_in_place(fd, "".join(lines).encode("utf-8"))
+        try:
+            _write_in_place(fd, "".join(lines).encode("utf-8"))
+        except OSError:
+            _write_in_place(fd, raw)
+            raise
         problems = check_log(path)
         if problems:
             _write_in_place(fd, raw)
@@ -322,5 +391,5 @@ def apply_repair(path: Path, digest: str) -> Path:
         os.close(fd)
 
 
-__all__ = ["DECISION_COLUMNS", "FREE_TEXT_COLUMNS", "SIGNING_COLUMNS", "RepairItem", "RepairPlan",
+__all__ = ["DECISION_COLUMNS", "FREE_TEXT_COLUMNS", "POSITIONED_COLUMNS", "SIGNING_COLUMNS", "RepairItem", "RepairPlan",
            "apply_repair", "plan_repair", "render_plan"]

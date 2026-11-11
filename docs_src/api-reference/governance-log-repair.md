@@ -18,7 +18,8 @@ This module fixes such rows under three rules the operator set on 2026-11-11.
   - every re-join lands in a free-text column (`FREE_TEXT_COLUMNS`: `conditions`, `conditions_verified`,
     `evidence`, `notes`, `description`, `summary`, `resolution`, and so on);
   - every cell before the first re-join keeps its position and content;
-  - no decision column (`decision`, `action_reviewed`, `status`, `verdict`, `scope`) sits after a re-join;
+  - no decision column (`decision`, `action_reviewed`, `status`, `verdict`, `scope`) sits at or after a re-join,
+    and `conditions_verified` (which the gate compares to `verified`) does not move;
   - no fragment is a bare verdict word.
 
   Anything else gets no proposal and is listed for a hand fix. So are `check_log` problems other than field
@@ -27,14 +28,19 @@ This module fixes such rows under three rules the operator set on 2026-11-11.
   - `repair LOG` previews each record twice, cell by cell under its header: as read (by position) and as
     proposed. It ends with a digest of the whole proposal.
   - `repair LOG --apply DIGEST` writes only when the recomputed digest equals the approved one.
-  - The CLI also needs an interactive terminal, where the operator retypes the digest's first 8 characters. An
-    agent has no terminal, so it cannot approve its own preview.
+  - By default `apply_repair` also needs an interactive terminal, where the operator retypes the digest's first
+    8 characters. That is a speed-bump against an unattended apply, not a security boundary: an agent can
+    allocate a pseudo-terminal. What makes any repair harmless is the column rules: no proposal can change or
+    move a decision cell or `conditions_verified`.
 - **Everything else stays byte-identical, and no concurrent append is lost.**
   - The log is locked and read once, and the plan is computed from exactly those bytes.
   - A backup `LOG.bak-<UTC timestamp>` is written first (exclusive create, fsync). Remove it once the log has
     been checked.
-  - The log is rewritten in place through the locked descriptor, so an `append_row` waiting on the lock appends
-    to the repaired file.
+  - The log is rewritten in place through the locked descriptor, writing first and truncating after, with a full
+    flush (`F_FULLFSYNC` on macOS). An `append_row` waiting on the lock appends to the repaired file, and the
+    gate's reader takes a shared lock, so it never sees a half-written log. A write error restores the original
+    bytes.
+  - Only files named in `LOG_NAMES` are repaired.
   - Lines are counted the way the csv module counts them.
   - The result is re-checked with [`governance_logs.check_log`](governance-logs.md), and the original bytes are
     restored on failure.

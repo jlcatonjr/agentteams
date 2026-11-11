@@ -15,14 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cells before it are unchanged, no decision column (`decision`, `action_reviewed`, `status`, `verdict`, `scope`)
   would move, and no fragment is a verdict word. Everything else is listed for a hand fix, as are open-quote
   and swallowed-row problems.
-- **`--apply DIGEST`.** It writes only the exact preview, from an interactive terminal on which the operator
-  retypes the digest; an agent cannot approve its own preview.
+- **`--apply DIGEST`.** It writes only the exact preview, after the operator retypes the digest on an
+  interactive terminal. That is a speed-bump, not a boundary. What makes any repair harmless is that no
+  proposal can change or move a decision cell or `conditions_verified`.
   - It writes a `LOG.bak-<timestamp>` backup first.
-  - It rewrites the log in place under its lock, so a concurrent append is not lost.
+  - It rewrites the log in place under its lock (write, then truncate, then a full flush), so a concurrent append
+    is not lost.
+  - The gate's decisions-log reader now takes a shared lock, so it never reads a log mid-repair. Only
+    `LOG_NAMES` files are repaired.
   - It re-checks the result and restores the original bytes on failure.
 - **Refused:** signed, chained or digested logs (`signature`, `sig_scheme`, `key_id`, `derives_from`,
   `prev_digest`, `text_digest`).
-- **Reviews.** @security first HALTed the apply path and gave conditions, all met here. A row like
+- **Reviews.** @security first HALTed the apply path. Its re-review gave a CONDITIONAL PASS (C1 to C4), and
+  every condition is met here. A row like
   `act-x, HALT,PASS,…` could have become a PASS; a concurrent append could have been lost; any caller could
   approve; whitespace in the header slipped past the refusals; and the line spans were inconsistent.
 - **Today's real cases.**
