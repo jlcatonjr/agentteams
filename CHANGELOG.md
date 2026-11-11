@@ -27,6 +27,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bare ids such as `gpt-5` included, are kept. A Copilot builder converted to Claude gets `model: opus`, and the
   Claude team-builder template now pins `model: opus` like every other non-orchestrator agent.
 
+### fixed (merge: a capability grant beyond the template is reported even when it is no superset)
+
+- **The bug.** `--update --merge` warned about a wider-than-template grant only when the disk set was a *strict
+  superset* of the template's. A legacy read-only agent with `allowed-tools: Bash, Read, Write, Edit` is no
+  superset of `Read, Grep, Glob`. The `allowed-tools` → `tools` rename then carried it across. The only notices
+  were the rename ("value preserved") and a generic "capability declaration … set it to adopt" note. From then on, `@security` held an enforced Write and
+  Bash grant (IM evaluation item 02, G-04-1).
+- **A capability on disk that the template lacks is now reported** as `GRANTS MORE than the template`, with the
+  extra tools listed.
+  - **When:** whenever the file was edited since generation or has no baseline, and always after a key rename,
+    because the old grant was never enforced and now is.
+  - **Not reported:** an untouched file whose template moved keeps the generic capability proposal, since its
+    grant came from an earlier render.
+  - **Also reported now:** a capability value that cannot be parsed; a capability key only the file declares
+    (`hooks`, `mcpServers`, `permissionMode`, `skills`, `memory`, `agents`, `capabilities`); and a
+    `disallowedTools` deny list that is shorter than the template's.
+  - **Where:** on the console, grant notices now print under their own heading instead of "fenced region(s)
+    shrank".
+  - **The notice** says what `--reconcile-front-matter` lists and that `--reconcile-apply` applies every
+    divergence. The value is still never rewritten without consent.
+- **The Claude team-builder template no longer declares the retired `allowed-tools:` key.** It uses the
+  canonical `tools:` list, which the Claude adapter maps to `Read, Edit, Write, Grep, Glob, Bash` (the same
+  grant). AUTHORING-GUIDE §6 now documents `tools:` and says what actually happens with no `tools:` block. The
+  Claude adapter falls back to `Bash, Read, Write, Edit`, and every shipped template declares `tools:`. The
+  bridge path writes no key and warns (G-04-2).
+- **New `tests/test_read_only_roles_render.py`.** It renders the read-only roles (security, adversarial,
+  code-hygiene, conflict-auditor, quality-auditor, technical-validator) on Copilot, Claude and Grok, and checks
+  that none grants write or execute (G-04-8).
+  - **Goose:** strict `xfail`. Its read-only recipes still get the builtin `developer` extension; that is IM
+    item 14.
+  - **Codex:** `sandbox_mode = "read-only"` is checked as a declaration only.
+- **Integrity manifest.** `references/enforcement-integrity.json` re-pins `agentteams/front_matter_merge.py`.
+
 ### security (vulnscan remediation scripts: hardened git; repository config can no longer run code)
 
 - The remediation scripts run unconfined, with the operator's credentials, in repositories whose git data a confined
