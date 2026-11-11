@@ -10,47 +10,91 @@ with no gate and no denies (IM item 03, G-22-1, reproduced on 70b2c4aa).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 #: The hook script whose PreToolUse entry must be merged.
 GATE_SCRIPT = "constitutional-gate.py"
+#: The floor, required whatever the (editable) emitted example says (@security C4): the gate command and the
+#: tools its matcher must cover. Mirrors templates/universal/hooks/settings.hooks.example.json.
+GATE_COMMAND = 'python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/constitutional-gate.py"'
+GATE_TOOLS: frozenset[str] = frozenset({"Write", "Edit", "NotebookEdit", "MultiEdit", "Bash"})
+_PLAIN_MATCHER = re.compile(r"^[A-Za-z0-9_|]*$")
 
 
-def _read_live(live: Path) -> dict[str, Any]:
-    """The live settings as a dict, or ``{}`` when absent or unreadable (callers report that separately)."""
+def _read_live(live: Path) -> dict[str, Any] | None:
+    """The live settings as a dict; ``{}`` when absent, ``None`` when present but unreadable or not an object."""
+    if not live.is_file():
+        return {}
     try:
         data = json.loads(live.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def _matcher_tools(matcher: Any) -> set[str] | None:
-    """Tool names an alternation matcher covers; ``None`` means every tool (empty or ``*``)."""
-    if not isinstance(matcher, str) or matcher.strip() in ("", "*", ".*"):
         return None
-    return {t.strip() for t in matcher.split("|") if t.strip()}
+    return data if isinstance(data, dict) else None
 
 
-def _gate_entries(settings: dict[str, Any]) -> list[dict[str, Any]]:
+def _str_rules(value: Any) -> set[str]:
+    """String entries of a deny list; anything that is not a list (or a non-string entry) contributes nothing."""
+    return {r for r in value if isinstance(r, str)} if isinstance(value, list) else set()
+
+
+def _covers(matcher: Any, tools: set[str]) -> bool:
+    """Whether a Claude ``matcher`` (a regex) matches every tool in ``tools``.
+
+    ``""`` and ``*`` match every tool. A plain alternation (``^[A-Za-z0-9_|]*$``) is compared as a set; anything
+    else is compiled as a regex and must fullmatch each tool. A non-string, or a regex that does not compile,
+    covers nothing (@security C3).
+    """
+    if not isinstance(matcher, str):
+        return False
+    if matcher in ("", "*"):
+        return True
+    if _PLAIN_MATCHER.match(matcher):
+        return tools <= set(matcher.split("|"))
+    try:
+        rx = re.compile(matcher)
+    except re.error:
+        return False
+    return all(rx.fullmatch(t) for t in tools)
+
+
+def _gate_entries(settings: dict[str, Any], command: str) -> list[dict[str, Any]]:
+    """``PreToolUse`` entries with a ``type: command`` hook whose command is exactly ``command`` (@security C2)."""
     hooks = settings.get("hooks") if isinstance(settings.get("hooks"), dict) else {}
     out = []
     for entry in hooks.get("PreToolUse") or []:
         if not isinstance(entry, dict):
             continue
-        commands = [h.get("command", "") for h in entry.get("hooks") or [] if isinstance(h, dict)]
-        if any(GATE_SCRIPT in str(cmd) for cmd in commands):
-            out.append(entry)
+        for h in entry.get("hooks") or []:
+            if isinstance(h, dict) and h.get("type") == "command" and str(h.get("command", "")).strip() == command:
+                out.append(entry)
+                break
     return out
 
 
-def gate_and_deny_merged(example: dict[str, Any], live: dict[str, Any]) -> tuple[bool, list[str]]:
-    """Check the live settings carry the emitted gate hook and every emitted permission deny.
+def _example_gate(example: dict[str, Any]) -> tuple[str, set[str]]:
+    """The gate command and tools to require: the example's gate entry, never narrower than the floor."""
+    command, tools = GATE_COMMAND, set(GATE_TOOLS)
+    hooks = example.get("hooks") if isinstance(example.get("hooks"), dict) else {}
+    for entry in hooks.get("PreToolUse") or []:
+        for h in (entry.get("hooks") or []) if isinstance(entry, dict) else []:
+            if isinstance(h, dict) and GATE_SCRIPT in str(h.get("command", "")):
+                command = str(h.get("command", "")).strip() or command
+                matcher = entry.get("matcher")
+                if isinstance(matcher, str) and _PLAIN_MATCHER.match(matcher):
+                    tools |= {t for t in matcher.split("|") if t}
+    return command, tools
+
+
+def gate_and_deny_merged(example: dict[str, Any], live: dict[str, Any],
+                         local: dict[str, Any] | None = None) -> tuple[bool, list[str]]:
+    """Check the live settings carry the gate hook (never narrower than the floor) and every emitted deny.
 
     Args:
         example: The emitted ``settings.hooks.example.json``.
-        live: The live ``.claude/settings.json`` (``{}`` when absent or unreadable).
+        live: The live ``.claude/settings.json`` (``{}`` when absent).
+        local: The live ``.claude/settings.local.json``, also read by Claude Code (``{}``/None when absent).
 
     Returns:
         ``(ok, messages)``: False with a WARNING per gap; live values are never echoed, only emitted ones.
@@ -60,24 +104,23 @@ def gate_and_deny_merged(example: dict[str, Any], live: dict[str, Any]) -> tuple
     """
     ok = True
     msgs: list[str] = []
-    for want in _gate_entries(example):
-        need = _matcher_tools(want.get("matcher"))
-        covered = False
-        for have in _gate_entries(live):
-            got = _matcher_tools(have.get("matcher"))
-            if got is None or (need is not None and need <= got):
-                covered = True
-                break
-        if not covered:
-            ok = False
-            msgs.append(
-                f"WARNING: the constitutional gate is NOT wired — .claude/settings.json has no hooks.PreToolUse entry "
-                f"running {GATE_SCRIPT} for matcher {want.get('matcher')!r}. Without it no content-bearing write is "
-                "checked. Merge the hooks block from .claude/settings.hooks.example.json."
-            )
+    local = local or {}
+    if any(s.get("disableAllHooks") is True for s in (live, local)):
+        ok = False
+        msgs.append("WARNING: disableAllHooks is true in the live Claude settings, so the constitutional gate never "
+                    "runs. Remove it (settings.json / settings.local.json).")
+    command, tools = _example_gate(example)
+    entries = _gate_entries(live, command) + _gate_entries(local, command)
+    if not any(_covers(e.get("matcher"), tools) for e in entries):
+        ok = False
+        msgs.append(
+            f"WARNING: the constitutional gate is NOT wired — no hooks.PreToolUse entry runs exactly {command!r} "
+            f"(type command) with a matcher covering {sorted(tools)}. Without it no content-bearing write is "
+            "checked. Merge the hooks block from .claude/settings.hooks.example.json."
+        )
     ex_perm = example.get("permissions") if isinstance(example.get("permissions"), dict) else {}
     lv_perm = live.get("permissions") if isinstance(live.get("permissions"), dict) else {}
-    missing = sorted(set(ex_perm.get("deny") or []) - set(lv_perm.get("deny") or []))
+    missing = sorted(_str_rules(ex_perm.get("deny")) - _str_rules(lv_perm.get("deny")))
     if missing:
         ok = False
         msgs.append(
@@ -116,8 +159,12 @@ def verify_emitted_sandbox_merged(project_root: Path) -> tuple[bool, list[str]]:
         return True, [f"could not read {example} as JSON — skipping wiring check."]
     ex_sandbox = ex.get("sandbox") if isinstance(ex, dict) else None
     if not (isinstance(ex_sandbox, dict) and ex_sandbox.get("enabled")):
-        _ok, gate_msgs = gate_and_deny_merged(ex, _read_live(live))
-        return True, ["no sandbox confinement was requested for this team (cooperative).", *gate_msgs]
+        note = "no sandbox confinement was requested for this team (cooperative)."
+        if live.is_file() and _read_live(live) is None:
+            return True, [note, "WARNING: .claude/settings.json is unreadable or invalid JSON; cannot confirm the "
+                                "gate hook is wired."]
+        _ok, gate_msgs = gate_and_deny_merged(ex, _read_live(live) or {}, _read_live(live.with_name("settings.local.json")))
+        return True, [note, *gate_msgs]
     if not live.is_file():
         return False, [
             "WARNING: unmerged boundary — NOT enforced. A sandbox confinement was emitted "
@@ -182,7 +229,7 @@ def verify_emitted_sandbox_merged(project_root: Path) -> tuple[bool, list[str]]:
                 f"expects ({sorted(missing)!r}) — re-merge so the boundary matches; a dropped "
                 f"{key} weakens the boundary while it still looks enabled."
             )
-    gate_ok, gate_msgs = gate_and_deny_merged(ex, lv)
+    gate_ok, gate_msgs = gate_and_deny_merged(ex, lv, _read_live(live.with_name("settings.local.json")))
     msgs += gate_msgs
     ok = ok and gate_ok
     if ok:
@@ -191,4 +238,29 @@ def verify_emitted_sandbox_merged(project_root: Path) -> tuple[bool, list[str]]:
     return ok, msgs
 
 
-__all__ = ["GATE_SCRIPT", "gate_and_deny_merged", "verify_emitted_sandbox_merged"]
+def gate_warnings(project_root: Path) -> list[str]:
+    """The gate/deny WARNINGs for a team without a boundary (cooperative or switched off); never a failure.
+
+    Args:
+        project_root: The generated project root.
+
+    Returns:
+        The warning lines (empty when the gate and denies are merged, or no example was emitted).
+
+    Raises:
+        None.
+    """
+    claude_dir = project_root / ".claude"
+    example = claude_dir / "settings.hooks.example.json"
+    ex = _read_live(example)
+    if not ex:
+        return []
+    live = claude_dir / "settings.json"
+    lv = _read_live(live)
+    if lv is None:
+        return ["WARNING: .claude/settings.json is unreadable or invalid JSON; cannot confirm the gate hook is wired."]
+    return gate_and_deny_merged(ex, lv, _read_live(claude_dir / "settings.local.json"))[1]
+
+
+__all__ = ["GATE_COMMAND", "GATE_SCRIPT", "GATE_TOOLS", "gate_and_deny_merged", "gate_warnings",
+           "verify_emitted_sandbox_merged"]

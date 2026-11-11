@@ -46,6 +46,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ._claude_wiring_check import gate_warnings
+from ._claude_wiring_check import verify_emitted_sandbox_merged as _verify_emitted_sandbox_merged
 from .base import FrameworkAdapter, inject_skill_front_matter, skill_description
 from ._sandbox_emit import (  # re-exported so existing importers keep resolving these from claude
     _DEFAULT_PROTECTED_READ_PATHS,
@@ -704,7 +706,7 @@ def verify_sandbox_wiring(project_root: Path,
     # a cooperative team that never had one keeps today's check below.
     if switched_off(state, previous_boundary=previous_boundary_recorded(team_dir)):
         ok, msgs = claude_off_drift(project_root, state)
-        return (ok and not unprotected), [*msgs, *unprotected]
+        return (ok and not unprotected), [*msgs, *gate_warnings(project_root), *unprotected]
     ok, msgs = _verify_emitted_sandbox_merged(project_root)
     if unprotected:
         ok, msgs = False, [*msgs, *unprotected]
@@ -719,7 +721,6 @@ def verify_sandbox_wiring(project_root: Path,
     return ok, msgs
 
 
-from ._claude_wiring_check import verify_emitted_sandbox_merged as _verify_emitted_sandbox_merged  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Claude Code front matter helpers

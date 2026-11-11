@@ -168,11 +168,21 @@ def test_grok_off_clean_is_ok(grok_root):
     assert ok and "nothing to verify" in msgs[0]
 
 
+def _grok_gate(root: Path) -> None:
+    hooks = root / ".grok" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    (hooks / "agentteams-gate.json").write_text('{"hooks": {"PreToolUse": [{"hooks": [{"type": "command", '
+                                                '"command": "./agentteams-gate-shim.py"}]}]}}')
+    (hooks / "agentteams-gate-shim.py").write_text("#")
+    (hooks / "constitutional-gate.py").write_text("#")
+
+
 def test_grok_on_needs_both_files(grok_root):
     ok, msgs = verify_grok_sandbox_wiring(grok_root, {"privilege_profile": "confined"})
-    assert not ok and len(msgs) == 2
+    assert not ok and len(msgs) == 3
     _grok_config(grok_root, permission=True)
     (grok_root / ".grok" / "sandbox.toml").write_text("x")
+    _grok_gate(grok_root)
     ok, msgs = verify_grok_sandbox_wiring(grok_root, {"privilege_profile": "confined"})
     assert ok and msgs[0].startswith("OK")
 
@@ -342,3 +352,126 @@ def test_g22_1_cooperative_team_is_warned_not_failed(tmp_path):
     ok, msgs = verify_emitted_sandbox_merged(tmp_path)
     assert ok
     assert any("constitutional gate is NOT wired" in m for m in msgs)
+
+
+
+# --- IM item 03 on Grok: the managed [permission] deny rules and the advisory gate files are checked by content ------
+
+
+def _drop_one_grok_deny(root: Path) -> str:
+    from agentteams.grok_config_emit import GROK_CONFIG_REL, grok_permission_table
+
+    cfg = root / GROK_CONFIG_REL
+    rule = grok_permission_table([])["deny"][0]
+    text = cfg.read_text(encoding="utf-8")
+    assert f'"{rule}"' in text
+    cfg.write_text(text.replace(f'"{rule}",', "", 1).replace(f'"{rule}"', "", 1), encoding="utf-8")
+    return rule
+
+
+def test_grok_a_permission_block_missing_an_emitted_deny_fails(grok_root):
+    _grok_config(grok_root, permission=True)
+    (grok_root / ".grok" / "sandbox.toml").write_text("x")
+    _grok_gate(grok_root)
+    assert verify_grok_sandbox_wiring(grok_root, {"privilege_profile": "confined"})[0]
+    rule = _drop_one_grok_deny(grok_root)
+    ok, msgs = verify_grok_sandbox_wiring(grok_root, {"privilege_profile": "confined"})
+    assert not ok and any("missing 1 emitted deny rule" in m and rule in m for m in msgs), msgs
+
+
+def test_grok_a_missing_profile_or_gate_file_fails(grok_root):
+    _grok_config(grok_root, permission=True)
+    _grok_gate(grok_root)
+    ok, msgs = verify_grok_sandbox_wiring(grok_root, {"privilege_profile": "confined"})
+    assert not ok and any("sandbox.toml is missing" in m for m in msgs)
+    (grok_root / ".grok" / "sandbox.toml").write_text("x")
+    (grok_root / ".grok" / "hooks" / "agentteams-gate-shim.py").unlink()
+    ok, msgs = verify_grok_sandbox_wiring(grok_root, {"privilege_profile": "confined"})
+    assert not ok and any("advisory Grok gate is incomplete" in m for m in msgs)
+
+
+# --- @security conditions on the Claude check -----------------------------------------------------------------
+
+
+def _full_live(**over) -> dict:
+    return {"sandbox": dict(_SANDBOX), "hooks": _gate(), "permissions": {"deny": list(_DENY)}, **over}
+
+
+def test_disable_all_hooks_fails_in_settings_or_local(tmp_path):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as check
+
+    _example(tmp_path)
+    _live(tmp_path, _full_live(disableAllHooks=True))
+    ok, msgs = check(tmp_path)
+    assert not ok and any("disableAllHooks" in m for m in msgs)
+    _live(tmp_path, _full_live())
+    (tmp_path / ".claude" / "settings.local.json").write_text(json.dumps({"disableAllHooks": True}))
+    assert not check(tmp_path)[0]
+
+
+@pytest.mark.parametrize("command", [
+    'echo constitutional-gate.py',
+    'python3 /tmp/x/constitutional-gate.py',
+    _GATE_CMD + " || true",
+])
+def test_only_the_exact_gate_command_counts(tmp_path, command):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as check
+
+    _example(tmp_path)
+    hooks = {"PreToolUse": [{"matcher": _MATCHER, "hooks": [{"type": "command", "command": command}]}]}
+    _live(tmp_path, _full_live(hooks=hooks))
+    ok, msgs = check(tmp_path)
+    assert not ok and any("constitutional gate is NOT wired" in m for m in msgs)
+
+
+@pytest.mark.parametrize("matcher, covered", [
+    (_MATCHER + "|[", False),          # does not compile
+    ("Write |Edit|NotebookEdit|MultiEdit|Bash", False),   # padded: matches nothing as a regex
+    (None, False),
+    (".*", True),
+    ("(Write|Edit|NotebookEdit|MultiEdit|Bash)", True),
+    ("Write|Edit", False),
+])
+def test_matchers_are_read_as_regexes(tmp_path, matcher, covered):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as check
+
+    _example(tmp_path)
+    hooks = {"PreToolUse": [{"matcher": matcher, "hooks": [{"type": "command", "command": _GATE_CMD}]}]}
+    _live(tmp_path, _full_live(hooks=hooks))
+    assert check(tmp_path)[0] is covered
+
+
+def test_the_gate_is_required_even_when_the_example_omits_it(tmp_path):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as check
+
+    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".claude" / "settings.hooks.example.json").write_text(json.dumps({"sandbox": dict(_SANDBOX)}))
+    _live(tmp_path, {"sandbox": dict(_SANDBOX)})
+    ok, msgs = check(tmp_path)
+    assert not ok and any("constitutional gate is NOT wired" in m for m in msgs)
+
+
+def test_a_malformed_live_deny_list_does_not_crash():
+    from agentteams.frameworks._claude_wiring_check import gate_and_deny_merged
+
+    ex = {"permissions": {"deny": list(_DENY)}}
+    for bad in ([{"x": 1}, *_DENY[:1]], "Read(x)", None):
+        ok, msgs = gate_and_deny_merged(ex, {"hooks": _gate(), "permissions": {"deny": bad}})
+        assert not ok and any("permissions.deny is missing" in m for m in msgs)
+
+
+def test_a_switched_off_team_still_gets_the_gate_warnings(tmp_path):
+    from agentteams.frameworks._claude_wiring_check import gate_warnings
+
+    _example(tmp_path, sandbox=False)
+    _live(tmp_path, {})
+    assert any("constitutional gate is NOT wired" in m for m in gate_warnings(tmp_path))
+
+
+def test_an_unreadable_live_settings_is_reported_as_unreadable(tmp_path):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as check
+
+    _example(tmp_path, sandbox=False)
+    (tmp_path / ".claude" / "settings.json").write_text("{not json")
+    ok, msgs = check(tmp_path)
+    assert ok and any("unreadable or invalid JSON" in m for m in msgs)
