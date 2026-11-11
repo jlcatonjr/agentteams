@@ -223,7 +223,7 @@ none of them is out of scope for this rule entirely, regardless of how novel it 
   by being split across several
 - ✅ Return the verdict as a row for `references/security-decisions.log.csv`, in the columns of
   that log's own header row, for the orchestrator to append — the same log every other
-  `@security` verdict already uses, not a separate mechanism (see **Security Decisions Log**)
+  `@security` verdict already uses, not a separate mechanism (see the Security Decisions Log paragraph)
 - ✅ Before granting a fresh CONDITIONAL PASS, check that log for a prior verdict on a matching
   pathway signature (same command/URL/package shape). A never-persisted pathway does not get
   to re-roll "one-time use" indefinitely, request after request — a repeat match escalates to
@@ -477,7 +477,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-11-11T04:48:51Z`
+Generated at: `2026-11-11T05:12:56Z`
 
 **Sources:**
 

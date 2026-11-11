@@ -449,6 +449,13 @@
      "text": "### Behavioral spec cross-check *(applies when `references/eval-suite.json` is present)*\n\nWhen `references/eval-suite.json` exists, treat its `scenarios[].predicate` entries as **authoritative behavioral assertions about the team**. During a routine audit:\n\n1. For every `category: routing` scenario — verify the predicate against the emitted `orchestrator.agent.md` (agents list, expert count). Mismatch → `CLAIM_CONFLICT` keyed to the scenario id.\n2. For every `category: handoff` scenario — verify the chain agents all exist and that the chain's `returns_to` is referenced in each chain member's body. Mismatch → `CLAIM_CONFLICT`.\n3. For every `category: governance` scenario — verify the `agents_contains_all` set and the `body_contains` string. Mismatch → `CLAIM_CONFLICT`.\n\nIf `eval-suite.json` is absent or empty (older team): skip this section silently — do not fabricate findings against a missing artifact.\n\n"
     }
    ],
+   "### Conflict Log Format": [
+    {
+     "commit": "9de6c64b93b1ed83068ce47f633060b7a1590d14",
+     "path": "templates/universal/conflict-auditor.template.md",
+     "text": "### Conflict Log Format\n\nAppend to `{CONFLICT_LOG_PATH}` with columns:\n`date,category,code,severity,file,description,status,resolution`\n\n---\n\n"
+    }
+   ],
    "### Typed-handoff audit *(applies when a plan `.steps.csv` carries `payload_schema_in/out` columns)*": [
     {
      "commit": "a924616b256b6f0dd5501f544d59aeab8222ccd9",
