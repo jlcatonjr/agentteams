@@ -852,6 +852,112 @@ def test_n5_l1_probes_server_software_and_records_package_origin(kit: Kit) -> No
     assert not [ln for ln in out.splitlines() if "docker" in ln and ln.startswith(("HOSTCHECK", "ACTION"))]
 
 
+# T10 (operator ruling 2026-11-10): a provider mirror counts as the distro archive only when every apt entry for its URI
+# and suite pins Signed-By to the distro's own archive keyring (a root-owned, non-writable file of the keyring package).
+KEYRING = "/usr/share/keyrings/ubuntu-archive-keyring.gpg"
+DO = "http://mirrors.digitalocean.com/ubuntu"
+MIRROR_APT_CACHE = r"""#!/bin/bash
+[ "$*" = "-o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy $6" ] || exit 1
+shift 4
+echo "$2:"; echo "  Installed: 3.0.13-0ubuntu3.4"; echo "  Version table:"
+[ "$2" = openssl ] && printf ' *** 3.0.13-0ubuntu3.4 500\n        500 http://mirrors.digitalocean.com/ubuntu noble-updates/main amd64 Packages\n        100 /var/lib/dpkg/status\n'
+"""
+DEB822_SIGNED = f"Types: deb\nURIs: {DO}/\nSuites: noble noble-updates noble-backports\nComponents: main universe\nSigned-By: {KEYRING}\n"
+
+
+def _mirror_dpkg(keypkg: str) -> str:
+    return f"""#!/bin/bash
+[ "$1" = -S ] || exit 1
+case "$2" in {KEYRING}) echo "{keypkg}: $2";; */openssl) echo "openssl: $2";; *) exit 1;; esac
+"""
+
+
+APT_CONF_DEFAULT = ('Dir "/";\nDir::Etc "etc/apt/";\nDir::Etc::sourcelist "sources.list";\n'
+                    'Dir::Etc::sourceparts "sources.list.d";\nAcquire::AllowInsecureRepositories "false";\n')
+
+
+def _mirror_origin(kit: Kit, sources: dict[str, str], *, keypkg: str = "ubuntu-keyring", os_id: str = "ubuntu",
+                   keyring: str = "file", apt_conf: str | None = APT_CONF_DEFAULT) -> tuple[str, str]:
+    extra = dict(SERVER_TOOLS)
+    if apt_conf is not None:
+        extra["apt-config"] = f"#!/bin/sh\n[ \"$1\" = dump ] || exit 1\nprintf '%s' '{apt_conf}'\n"
+    extra.update({"dpkg": _mirror_dpkg(keypkg), "apt-cache": MIRROR_APT_CACHE,
+                  "stat": f'#!/bin/sh\nexec "{shutil.which("stat", path="/usr/bin:/bin")}" "$@"\n'})
+    hb = _host(kit, extra=extra)
+    root = kit.root / "hostroot"
+    (root / "etc/apt/sources.list.d").mkdir(parents=True, exist_ok=True)
+    (root / "etc/os-release").write_text(f'PRETTY_NAME="X 24.04"\nVERSION_ID="24.04"\nID={os_id}\n')
+    for rel, text in sources.items():
+        (root / "etc/apt" / rel).write_text(text)
+    k = root / KEYRING.lstrip("/")
+    k.parent.mkdir(parents=True, exist_ok=True)
+    if keyring == "symlink":
+        (k.parent / "real.gpg").write_bytes(b"key")
+        k.symlink_to(k.parent / "real.gpg")
+    else:
+        k.write_bytes(b"key")
+        k.chmod(0o664 if keyring == "group-writable" else 0o644)
+    out = _l1(hb, root).stdout
+    real = os.path.realpath(hb)
+    got = [ln.split("\t")[-1] for ln in out.splitlines() if ln.startswith(f"RUNTIME\topenssl\t3.0.2\t{real}/openssl\t")]
+    assert len(got) == 1, out
+    return got[0], out
+
+
+@pytest.mark.parametrize("sources", [
+    {"sources.list.d/ubuntu.sources": DEB822_SIGNED},
+    {"sources.list": f"deb [arch=amd64 signed-by={KEYRING}] {DO}/ noble-updates main restricted\n"},
+    {"sources.list": f"deb [ signed-by={KEYRING} ] {DO} noble-updates main\n",
+     "sources.list.d/extra.list": f"# deb {DO} noble-updates main\n"},            # a comment is no entry
+    {"sources.list.d/ubuntu.sources": DEB822_SIGNED.replace("\n", "\r\n")},        # CRLF
+    {"sources.list.d/ubuntu.sources": DEB822_SIGNED.replace("Suites: noble noble-updates noble-backports",
+                                                            "Suites: noble\n noble-updates\n noble-backports")},
+    {"sources.list.d/ubuntu.sources": DEB822_SIGNED + "Enabled: yes\nTrusted: no\n"},
+])
+def test_t10_a_mirror_signed_by_the_distro_keyring_is_the_distro_archive(kit: Kit, sources: dict[str, str]) -> None:
+    origin, out = _mirror_origin(kit, sources)
+    assert origin == "pkg:openssl", out
+    assert f"INFO        apt mirror {DO} noble-updates: every entry is signed by {KEYRING} (judged as the distro archive)" in out
+
+
+@pytest.mark.parametrize(("sources", "kw"), [
+    ({"sources.list": f"deb {DO} noble-updates main\n"}, {}),                                   # no Signed-By
+    ({"sources.list": f"deb [signed-by=/etc/apt/keyrings/do.gpg] {DO} noble-updates main\n"}, {}),   # another key
+    ({"sources.list": f"deb [signed-by={KEYRING},/etc/apt/keyrings/x.gpg] {DO} noble-updates main\n"}, {}),
+    ({"sources.list": f"deb [signed-by={KEYRING} trusted=yes] {DO} noble-updates main\n"}, {}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED,                                          # a second, unpinned entry
+      "sources.list.d/do.list": f"deb {DO} noble-updates main\n"}, {}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED.replace(f"Signed-By: {KEYRING}\n",
+                                                             "Signed-By:\n -----BEGIN PGP PUBLIC KEY BLOCK-----\n .\n")}, {}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED + "Enabled: no\n"}, {}),                  # no enabled entry
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED.replace("noble-updates ", "")}, {}),      # not this suite
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED}, {"keypkg": "evil-keyring"}),           # not the package's file
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED}, {"keyring": "group-writable"}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED}, {"keyring": "symlink"}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED}, {"os_id": "debian"}),                  # another distro's key
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED + "Trusted: true\n"}, {}),               # apt StringToBool
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED + "Allow-Insecure: on\n"}, {}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED + "Enabled: false\n"}, {}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED + "Check-Valid-Until: no\n"}, {}),
+    ({"sources.list": f"deb [signed-by={KEYRING} TRUSTED=yes] {DO} noble-updates main\n"}, {}),
+    ({"sources.list": f"deb [signed-by={KEYRING} check-valid-until=no] {DO} noble-updates main\n"}, {}),
+    ({"sources.list": f"deb [signed-by+={KEYRING}] {DO} noble-updates main\n"}, {}),
+    ({"sources.list": f"deb [signed-by={KEYRING} arch] {DO} noble-updates main\n"}, {}),        # not opt=value
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED},
+     {"apt_conf": APT_CONF_DEFAULT.replace('AllowInsecureRepositories "false"', 'AllowInsecureRepositories "true"')}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED},
+     {"apt_conf": APT_CONF_DEFAULT + 'APT::Get::AllowUnauthenticated "1";\n'}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED},
+     {"apt_conf": APT_CONF_DEFAULT.replace('sourceparts "sources.list.d"', 'sourceparts "/srv/apt.d"')}),
+    ({"sources.list.d/ubuntu.sources": DEB822_SIGNED}, {"apt_conf": None}),                   # no apt-config
+])
+def test_t10_anything_short_of_the_pinned_distro_keyring_stays_upstream(kit: Kit, sources: dict[str, str],
+                                                                       kw: dict[str, str]) -> None:
+    origin, out = _mirror_origin(kit, sources, **kw)
+    assert origin == "repo:mirrors.digitalocean.com:openssl", out
+    assert f"apt mirror {DO} noble-updates:" not in out   # other suites of a stanza may still be pinned
+
+
 def test_n5_l1_inventory_is_judged_by_the_engine(kit: Kit, monkeypatch: pytest.MonkeyPatch) -> None:
     from agentteams.vulnscan import _http, engine, runtimes
     cycles = {"ubuntu": [{"cycle": "20.04", "eol": "2025-05-31", "is_eol": True, "latest": "20.04.6",

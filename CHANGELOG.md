@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (server kit: a provider mirror signed by the distro archive keyring is the distro archive)
+
+- L1 graded every package from a provider mirror upstream, because only canonical archive hostnames counted as the
+  distro. On jlc-prod (Ubuntu 24.04 on DigitalOcean, `mirrors.digitalocean.com`) this left 26 PyPI findings open
+  that Ubuntu had already fixed, such as pyasn1 after `0.4.8-4ubuntu0.4`. That error was on the safe side.
+  Operator ruling (2026-11-10): trust the signing key, never a hostname. A mirror (URI and suite) now counts as the
+  distro archive only when every enabled apt entry for it pins `Signed-By` to the distro's own archive keyring,
+  and that keyring is the keyring package's regular, root-owned, not group- or world-writable file. Anything else
+  is still judged upstream. Each accepted mirror prints an `INFO apt mirror ...` line. Reported by
+  infrastructuremanagement-fe (T10).
+
 ### fixed (docs: Grok `tools:` is the exact limit for built-in tools only, not for MCP servers)
 
 - A live check (Grok Build 1.0.52, 2026-11-10) found that a generated Grok custom agent run with `grok --agent`

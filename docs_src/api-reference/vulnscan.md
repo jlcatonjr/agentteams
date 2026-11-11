@@ -1395,7 +1395,13 @@ A `RUNTIME` manager says where a package-manager install came from. `pkg:<packag
 allowlisted distribution archive: `*archive.ubuntu.com`, `security.ubuntu.com`, `esm.ubuntu.com`,
 `*ports.ubuntu.com`, `deb.debian.org`, `security.debian.org`, the Amazon Linux repositories
 (`amazonlinux*.amazonaws.com`, `al2023-repos-*.amazonaws.com`, `cdn.amazonlinux.com`), `cdn.redhat.com`,
-`*.rockylinux.org` and `*.almalinux.org`. Any other origin is `repo:<host>:<package>`, and an unreadable one
+`*.rockylinux.org` and `*.almalinux.org`. On Ubuntu and Debian, a provider mirror (such as
+`mirrors.digitalocean.com`) also counts when every enabled apt entry for its URI and suite pins `Signed-By` to
+the distribution's own archive keyring (`/usr/share/keyrings/ubuntu-archive-keyring.gpg` or
+`debian-archive-keyring.gpg`), and that keyring is the keyring package's regular, root-owned file with no group
+or world write bit. An entry with no `Signed-By`, several keys, an inline key or `trusted=yes` keeps the mirror
+upstream, and each accepted mirror is reported as an `INFO apt mirror ...` line. Any other origin is
+`repo:<host>:<package>`, and an unreadable one
 (including an installed version only `/var/lib/dpkg/status` knows, such as a local `.deb`) is
 `repo:unknown:<package>`. On apt hosts the origin is the `***` block of `apt-cache policy`; on dnf hosts it is
 `dnf -C repoquery --installed --qf '%{from_repo}'` (or `yumdb`), resolved to a host through
