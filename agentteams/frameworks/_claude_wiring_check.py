@@ -74,13 +74,14 @@ def _gate_entries(settings: dict[str, Any], command: str) -> list[dict[str, Any]
 
 
 def _example_gate(example: dict[str, Any]) -> tuple[str, set[str]]:
-    """The gate command and tools to require: the example's gate entry, never narrower than the floor."""
+    """The gate command (always :data:`GATE_COMMAND`) and the tools to require (the floor, widened by the example)."""
     command, tools = GATE_COMMAND, set(GATE_TOOLS)
     hooks = example.get("hooks") if isinstance(example.get("hooks"), dict) else {}
     for entry in hooks.get("PreToolUse") or []:
         for h in (entry.get("hooks") or []) if isinstance(entry, dict) else []:
             if isinstance(h, dict) and GATE_SCRIPT in str(h.get("command", "")):
-                command = str(h.get("command", "")).strip() or command
+                # The command is always GATE_COMMAND: the example is editable, so it may widen the tools
+                # required but never change (e.g. append `|| true` to) the command (@security re-check).
                 matcher = entry.get("matcher")
                 if isinstance(matcher, str) and _PLAIN_MATCHER.match(matcher):
                     tools |= {t for t in matcher.split("|") if t}

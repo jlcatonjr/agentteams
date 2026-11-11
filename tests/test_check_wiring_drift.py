@@ -475,3 +475,28 @@ def test_an_unreadable_live_settings_is_reported_as_unreadable(tmp_path):
     (tmp_path / ".claude" / "settings.json").write_text("{not json")
     ok, msgs = check(tmp_path)
     assert ok and any("unreadable or invalid JSON" in m for m in msgs)
+
+
+
+def test_an_example_cannot_relax_the_gate_command(tmp_path):
+    """An edited example whose gate command ends in `|| true` must not make that the requirement."""
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as check
+
+    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
+    weak = _GATE_CMD + " || true"
+    ex = {"sandbox": dict(_SANDBOX), "permissions": {"deny": list(_DENY)},
+          "hooks": {"PreToolUse": [{"matcher": _MATCHER, "hooks": [{"type": "command", "command": weak}]}]}}
+    (tmp_path / ".claude" / "settings.hooks.example.json").write_text(json.dumps(ex))
+    hooks = {"PreToolUse": [{"matcher": _MATCHER, "hooks": [{"type": "command", "command": weak}]}]}
+    _live(tmp_path, _full_live(hooks=hooks))
+    assert not check(tmp_path)[0]
+
+
+def test_a_hook_that_is_not_type_command_does_not_count(tmp_path):
+    from agentteams.frameworks.claude import _verify_emitted_sandbox_merged as check
+
+    _example(tmp_path)
+    hooks = {"PreToolUse": [{"matcher": _MATCHER, "hooks": [{"type": "prompt", "command": _GATE_CMD}]}]}
+    _live(tmp_path, _full_live(hooks=hooks))
+    ok, msgs = check(tmp_path)
+    assert not ok and any("constitutional gate is NOT wired" in m for m in msgs)
