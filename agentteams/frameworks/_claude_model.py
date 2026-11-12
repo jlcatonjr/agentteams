@@ -7,6 +7,7 @@ Split from ``claude.py`` (CH-07 line ceiling). ``claude.py`` re-exports the cons
 from __future__ import annotations
 
 import re
+from typing import TypeGuard
 
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -25,11 +26,11 @@ CLAUDE_AGENT_MODEL_DEFAULT = "opus"
 _CLAUDE_MODEL_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[1m\])?$")
 
 
-def is_claude_model_value(value: str | None) -> bool:
+def is_claude_model_value(value: object) -> TypeGuard[str]:
     """Return True when ``value`` is a ``model:`` value Claude Code can read.
 
     Args:
-        value: A scalar front-matter value, or ``None``.
+        value: A scalar front-matter value; anything that is not a ``str`` is not a model value.
 
     Returns:
         True for an alias or model id (``opus``, ``inherit``, ``claude-fable-5-2``, ``opus[1m]``).
@@ -37,7 +38,7 @@ def is_claude_model_value(value: str | None) -> bool:
     Raises:
         Nothing.
     """
-    return bool(value) and _CLAUDE_MODEL_VALUE_RE.match(value) is not None
+    return isinstance(value, str) and _CLAUDE_MODEL_VALUE_RE.match(value) is not None
 
 
 def default_claude_model(agent_slug: str) -> str:

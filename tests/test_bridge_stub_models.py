@@ -89,3 +89,66 @@ def test_dry_run_reports_without_writing(tmp_path: Path) -> None:
     result = bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path, dry_run=True)
     assert len(result.models_defaulted) == 3
     assert not (tmp_path / ".claude" / "agents").exists()
+
+
+def test_trailing_comment_on_model_is_ignored(tmp_path: Path) -> None:
+    src = _team(tmp_path)
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    p = tmp_path / ".claude" / "agents" / "security.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("model: opus", "model: 'sonnet'  # cheap"), encoding="utf-8")
+    result = bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    assert _model(p) == ["sonnet"]
+    assert result.models_defaulted == []
+
+
+def test_refresh_over_a_native_body_keeps_its_model(tmp_path: Path) -> None:
+    src = _team(tmp_path)
+    out = tmp_path / ".claude" / "agents"
+    out.mkdir(parents=True)
+    (out / "security.md").write_text("---\nname: security\nmodel: haiku\n---\n\nnative\n", encoding="utf-8")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)  # refresh semantics: replaces native bodies
+    assert _model(out / "security.md") == ["haiku"]
+
+
+def test_bridge_orchestrator_slug_gets_the_orchestrator_default(tmp_path: Path) -> None:
+    src = tmp_path / ".github" / "agents"
+    _src(src, "bridge-orchestrator")
+    bs.emit_subagent_stubs(source_dir=src, output_root=tmp_path)
+    assert _model(tmp_path / ".claude" / "agents" / "bridge-orchestrator.md") == ["claude-fable-5-2"]
+
+
+def test_notice_names_the_defaults_and_says_would_on_dry_run() -> None:
+    from agentteams.frameworks._claude_model import CLAUDE_AGENT_MODEL_DEFAULT, CLAUDE_ORCHESTRATOR_MODEL_DEFAULT
+
+    live = bs.models_defaulted_notice([".claude/agents/a.md"], dry_run=False)
+    dry = bs.models_defaulted_notice([".claude/agents/a.md"], dry_run=True)
+    assert live.startswith("Gave 1 ") and dry.startswith("Would give 1 ")
+    for text in (live, dry):
+        assert CLAUDE_ORCHESTRATOR_MODEL_DEFAULT in text and CLAUDE_AGENT_MODEL_DEFAULT in text
+        assert text.endswith(".claude/agents/a.md")
+
+
+def test_model_helpers() -> None:
+    from agentteams.frameworks._claude_model import default_claude_model, is_claude_model_value
+
+    assert default_claude_model("orchestrator") == "claude-fable-5-2"
+    assert default_claude_model("bridge-orchestrator") == "claude-fable-5-2"
+    assert default_claude_model("security") == "opus"
+    for ok in ("opus", "inherit", "claude-fable-5-2", "opus[1m]"):
+        assert is_claude_model_value(ok)
+    for bad in (None, "", 5, "Claude Opus 4.8 (copilot)", "['opus']", "opus\nx: y"):
+        assert not is_claude_model_value(bad)
+
+
+def test_bridge_merge_reports_the_defaulted_stubs(tmp_path: Path) -> None:
+    """End to end through bridge.run_bridge: the notice is on the BridgeResult."""
+    from agentteams.bridge import run_bridge
+
+    src = _team(tmp_path)
+    result = run_bridge(
+        source_dir=src, source_framework="copilot-vscode", target_framework="claude", output_root=tmp_path,
+        merge_only=True, emit_skills=False, host_features=["bridge:copilot-vscode-to-claude:subagents"],
+    )
+    notes = [n for n in result.notices if "default `model:`" in n]
+    assert len(notes) == 1 and notes[0].startswith("Gave 3 ")
+    assert _model(tmp_path / ".claude" / "agents" / "orchestrator.md") == ["claude-fable-5-2"]
