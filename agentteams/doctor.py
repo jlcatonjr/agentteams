@@ -12,6 +12,8 @@ the project's providers see the same rules, the same memory, and the same agents
   :mod:`agentteams.surface_matrix`.
 * **Shared AGENTS.md** (WARN): an ``AGENTS.md`` whose constitutional core is older than the other entry files' (it
   was frozen with Codex while the others moved on, P11).
+* **Hygiene rule ids** (WARN): a ``### CH-…`` heading repeated in a ``code-hygiene-rules.reference.md`` (file and
+  both lines), or a project rule using a framework-range id — :mod:`agentteams.hygiene_rules` (IM item 26).
 * **Backup stubs** (WARN, warn-first): a backed-up agent file under any runtime dir's ``.agentteams-backups/`` that
   a runtime would still load as a live agent (IM item 01) — :func:`agentteams.backup.runtime_loadable_backups`.
 
@@ -146,6 +148,25 @@ def _backup_stubs(root: Path) -> tuple[list[str], int]:
     return lines, 0
 
 
+def _hygiene_rule_ids(root: Path) -> tuple[list[str], int]:
+    """WARN on a repeated ``### CH-…`` heading, or a framework-range id among the project's own rules (IM item 26)."""
+    from agentteams.hygiene_rules import HYGIENE_REF_NAME, duplicate_rule_ids, framework_ids_outside_fence
+    from agentteams.prompt_roots import TEAM_AGENT_GLOBS
+
+    lines: list[str] = []
+    for team in TEAM_AGENT_GLOBS:
+        ref = root / team / "references" / HYGIENE_REF_NAME
+        if not ref.is_file():
+            continue
+        text = ref.read_text(encoding="utf-8", errors="replace")
+        rel = ref.relative_to(root)
+        lines += [f"  !  WARN {rel}: {rid} appears twice (lines {a} and {b}); rule ids must be unique"
+                  for rid, a, b in duplicate_rule_ids(text)]
+        lines += [f"  !  WARN {rel}:{n}: project rule uses the framework id {rid}; renumber it CH-P01, CH-P02, … "
+                  "(framework ids CH-01 onward can collide with a later release)" for rid, n in framework_ids_outside_fence(text)]
+    return lines, 0
+
+
 def run_doctor(project: str | None) -> int:
     """``--doctor``: print the cross-surface report for the project at *project* (else the working directory).
 
@@ -164,7 +185,8 @@ def run_doctor(project: str | None) -> int:
     print(f"agentteams doctor — {root}")
     sections = (("Rules projection", lambda: _rules(root, brief)), ("Memory index", lambda: (_indexes(root, brief), 0)),
                 ("Copilot body limit", lambda: _body_limit(root)), ("Agents", lambda: (_agents(root), 0)),
-                ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)))
+                ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)),
+                ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)))
     for title, section in sections:
         try:
             lines, failed = section()

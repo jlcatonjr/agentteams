@@ -24,6 +24,7 @@ from typing import Any
 
 # Atomic primitives extracted to agentteams/atomicio.py (CH-07); imported here
 # for emit_all + re-exported so emit._atomic_write_text / emit._resolve_path stay stable.
+from agentteams.hygiene_rules import HYGIENE_REF_NAME, migrate_project_rules
 from agentteams.atomicio import (  # noqa: F401 — re-exported for callers/tests
     _atomic_copy,
     _atomic_write_text,
@@ -640,6 +641,9 @@ def emit_all(
                 twin_source=(twin_sources or {}).get(rel_path), twin_drop=twin_drop is not False and backup_path is not None,
                 fence_baseline=_fence_bl.get(rel_path))
             _sa.track(_allow_used, _pinned, rel_path, existing_text, merge_result)
+            if rel_path.endswith(HYGIENE_REF_NAME):  # IM item 26: project rules leave the managed fence, never dropped
+                merge_result.merged_content, _moved = migrate_project_rules(existing_text, merge_result.merged_content)
+                result.notices += [f"{rel_path}: {n}" for n in _moved]
             # Front-matter drift: the template's front matter moved on while this file kept its
             # own. Merge cannot fix it — front matter lies outside every fence and is preserved
             # deliberately — so the remediation is to say so. Without this, a template `tools:`

@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
+
+- **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
+  of `references/code-hygiene-rules.reference.md`. The framework's own rules already run to CH-31, so a project rule
+  could share a framework id, and `--update --merge` overwrote it with no notice (IM evaluation item 26).
+  - Project rules now go in a new user-owned **Project Extension Rules (CH-P01+)** section after the fence, numbered
+    `CH-P01`, `CH-P02`, …. The framework never uses that namespace. The `@code-hygiene` agent's Extension Point says
+    the same, and its rule table now lists CH-29, CH-30 and CH-31.
+  - Framework ids are unchanged: CH-01 to CH-31 keep their numbers and titles.
+- **Migration.** On `--update --merge`, each rule section of the old managed region that the new render does not
+  carry is moved, verbatim, into Project Extension Rules, and the update report names it
+  (`moved N project rule(s) …`). This includes a local rule that reuses a framework id with its own title (for
+  example a local `CH-29`). Nothing is dropped, and a second merge moves nothing. After updating, renumber the moved
+  rules `CH-P01`, `CH-P02`, … and update any citations of them.
+- **`--doctor`** has a new **Hygiene rule ids** WARN section (`agentteams.hygiene_rules`). It names the file and both
+  lines of a repeated `### CH-…` heading, and the line of any project rule that uses a framework-range id.
+  `--check` does not report these yet; that is deferred.
+- Tests: rule ids are checked for uniqueness as a list (a repeat fails), and every catalogue rule must appear in the
+  agent's rule table (previously only CH-26 to CH-28 were checked).
+
 ### changed (`parallel_plan` schedules only the remaining steps; the steps-CSV contract is checked)
 
 - **Behaviour change.** `python -m agentteams.parallel_plan` now schedules only the remaining steps, as Workflows

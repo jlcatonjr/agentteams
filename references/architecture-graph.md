@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **452**
+- Modules mapped: **453**
 - Packages: **14**
-- Internal import edges: **1713**
+- Internal import edges: **1716**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 188 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 189 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 60 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -176,9 +176,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.data.vulnscan_tools.selftest` | — | — |
 | `agentteams.data.wasm_agent_guest` | — | — |
 | `agentteams.data.wasm_probes.probe` | — | — |
-| `agentteams.doctor` | `agentteams.backup`, `agentteams.copilot_body_limit`, `agentteams.memory_index_surfaces`, `agentteams.rules_projection`, `agentteams.surface_matrix` | `agentteams.cli.app` |
+| `agentteams.doctor` | `agentteams.backup`, `agentteams.copilot_body_limit`, `agentteams.hygiene_rules`, `agentteams.memory_index_surfaces`, `agentteams.prompt_roots`, `agentteams.rules_projection`, `agentteams.surface_matrix` | `agentteams.cli.app` |
 | `agentteams.drift` | `agentteams.emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.fence_baseline`, `agentteams.framework_freshness`, `agentteams.front_matter_baseline`, `agentteams.signing_switch`, `agentteams.stale_detector` |
-| `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_baseline`, `agentteams.fence_inject`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.structural_merge`, `agentteams.front_matter_baseline`, `agentteams.front_matter_merge`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
+| `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_baseline`, `agentteams.fence_inject`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.structural_merge`, `agentteams.front_matter_baseline`, `agentteams.front_matter_merge`, `agentteams.hygiene_rules`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
 | `agentteams.enrich` | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.cli.generate` |
 | `agentteams.enrich._audit` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._tools`, `agentteams.tool_metadata_catalog` | `agentteams.enrich` |
 | `agentteams.enrich._enrich` | `agentteams.atomicio`, `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` | `agentteams.enrich` |
@@ -257,6 +257,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.handoff_payloads` | — | `agentteams.behavioral_drift` |
 | `agentteams.hooks_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.host_features` | — | `agentteams.analyze`, `agentteams.cli.app`, `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.multi_sync`, `agentteams.wasm_config` |
+| `agentteams.hygiene_rules` | — | `agentteams.doctor`, `agentteams.emit` |
 | `agentteams.ingest` | `agentteams._utils`, `agentteams.tool_version_source` | `agentteams.cli.app`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate`, `agentteams.cli.mcp_grant_commands`, `agentteams.cli.proposal_commands` |
 | `agentteams.instructions_split` | — | `agentteams.bridge` |
 | `agentteams.integrity` | `agentteams.git_exec` | `agentteams.cli.commands`, `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.redteam.checks_static`, `agentteams.redteam.runner` |
@@ -304,7 +305,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.pr_management` | — | — |
 | `agentteams.project_notes` | `agentteams.fences`, `agentteams.user_regions` | `agentteams.emit` |
 | `agentteams.projection_marker` | `agentteams`, `agentteams.control_plane_io`, `agentteams.frameworks._sandbox_emit`, `agentteams.signing_switch` | `agentteams._fleet_grok`, `agentteams.bridge`, `agentteams.cli.generate_helpers`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync` |
-| `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.backup`, `agentteams.cli.generate_helpers`, `agentteams.cli.post_build`, `agentteams.cli.s10_exempt_gate` |
+| `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.backup`, `agentteams.cli.generate_helpers`, `agentteams.cli.post_build`, `agentteams.cli.s10_exempt_gate`, `agentteams.doctor` |
 | `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.proposal_commands`, `agentteams.cli.standalone_modes`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_run`, `agentteams.proposal_staging`, `agentteams.proposals`, `agentteams.runner_wasm` |
 | `agentteams.proposal_run` | `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.runner_wasm` | `agentteams.proposals` |
 | `agentteams.proposal_runner` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.mcp_direct_grants`, `agentteams.proposal_staging`, `agentteams.proposals`, `agentteams.runner_mcp`, `agentteams.runner_wasm`, `agentteams.sealed_result` | `agentteams.cli.proposal_commands` |
@@ -2314,7 +2315,9 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.backup",
         "agentteams.copilot_body_limit",
+        "agentteams.hygiene_rules",
         "agentteams.memory_index_surfaces",
+        "agentteams.prompt_roots",
         "agentteams.rules_projection",
         "agentteams.surface_matrix"
       ],
@@ -2350,6 +2353,7 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.structural_merge",
         "agentteams.front_matter_baseline",
         "agentteams.front_matter_merge",
+        "agentteams.hygiene_rules",
         "agentteams.learned_blocks",
         "agentteams.project_notes",
         "agentteams.shrink_allow",
@@ -3280,6 +3284,14 @@ digraph "agentteams architecture" {
     "agentteams.host_features": {
       "package": "agentteams",
       "path": "agentteams/host_features.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.hygiene_rules": {
+      "package": "agentteams",
+      "path": "agentteams/hygiene_rules.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -8685,7 +8697,15 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.doctor",
+      "target": "agentteams.hygiene_rules"
+    },
+    {
+      "source": "agentteams.doctor",
       "target": "agentteams.memory_index_surfaces"
+    },
+    {
+      "source": "agentteams.doctor",
+      "target": "agentteams.prompt_roots"
     },
     {
       "source": "agentteams.doctor",
@@ -8754,6 +8774,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.emit",
       "target": "agentteams.front_matter_merge"
+    },
+    {
+      "source": "agentteams.emit",
+      "target": "agentteams.hygiene_rules"
     },
     {
       "source": "agentteams.emit",
