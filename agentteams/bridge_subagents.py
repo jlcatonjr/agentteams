@@ -36,7 +36,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from agentteams.frameworks._claude_model import default_claude_model, is_claude_model_value
+from agentteams.frameworks._claude_model import (
+    CLAUDE_AGENT_MODEL_DEFAULT,
+    CLAUDE_ORCHESTRATOR_MODEL_DEFAULT,
+    default_claude_model,
+    is_claude_model_value,
+)
 from agentteams.frameworks.claude import CLAUDE_CAPABILITY_KEY
 
 # Mapping from copilot-vscode tools declaration to Claude subagent tool names.
@@ -131,15 +136,38 @@ def _file_sha256(path: Path) -> str:
 def _stub_model(out_path: Path, slug: str) -> tuple[str, bool]:
     """Return ``(model, defaulted)`` for the stub about to be written at ``out_path``.
 
-    An existing bridge stub's readable ``model:`` is kept, so an operator's choice survives every
-    re-emit. Otherwise the slug's default applies and ``defaulted`` is True.
+    The readable ``model:`` of the file already at ``out_path`` is kept (a stub's, or, when
+    ``--bridge-refresh`` replaces a native body, that body's), so an operator's choice survives
+    every re-emit. A trailing ``# comment`` on the line is ignored. Otherwise the slug's default
+    applies and ``defaulted`` is True.
     """
-    if out_path.is_file() and _is_bridge_stub(out_path):
+    if out_path.is_file():
         meta, _ = _parse_front_matter(out_path.read_text(encoding="utf-8", errors="ignore"))
-        current = meta.get("model")
+        current = re.sub(r"\s+#.*$", "", meta.get("model", "")).strip().strip("'\"")
         if is_claude_model_value(current):
-            return current, False  # type: ignore[return-value]
+            return current, False
     return default_claude_model(slug), True
+
+
+def models_defaulted_notice(paths: list[str], *, dry_run: bool) -> str:
+    """Return the bridge notice naming the stubs that get a default ``model:``.
+
+    Args:
+        paths: The stub paths, already made project-relative by the caller.
+        dry_run: Whether the run writes nothing (the notice then says "would").
+
+    Returns:
+        One notice line.
+
+    Raises:
+        Nothing.
+    """
+    verb = "Would give" if dry_run else "Gave"
+    return (
+        f"{verb} {len(paths)} Claude stub(s) the default `model:` (orchestrator "
+        f"{CLAUDE_ORCHESTRATOR_MODEL_DEFAULT}, others {CLAUDE_AGENT_MODEL_DEFAULT}; a readable "
+        "existing model is kept): " + ", ".join(paths)
+    )
 
 
 def _parse_front_matter(text: str) -> tuple[dict[str, str], str]:
@@ -460,19 +488,19 @@ def emit_subagent_stubs(
         result.experts_collapsed = expert_slugs
         tools_union = _union_tools_from_sources(experts)
         out_path = target_dir / "workstream-expert.md"
-        model, defaulted = _stub_model(out_path, "workstream-expert")
-        stub_content = _render_workstream_expert_stub(
-            expert_count=len(experts),
-            source_dir_rel=source_dir_rel,
-            tools_union=tools_union,
-            model=model,
-        )
         if out_path.exists() and preserve_non_stubs and not _is_bridge_stub(out_path):
             result.skipped.append(str(out_path))
             result.preserved_native.append(str(out_path))
         elif out_path.exists() and not overwrite:
             result.skipped.append(str(out_path))
         else:
+            model, defaulted = _stub_model(out_path, "workstream-expert")
+            stub_content = _render_workstream_expert_stub(
+                expert_count=len(experts),
+                source_dir_rel=source_dir_rel,
+                tools_union=tools_union,
+                model=model,
+            )
             if not dry_run:
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(stub_content, encoding="utf-8")
@@ -550,4 +578,5 @@ __all__ = [
     "collect_source_agents",
     "detect_stub_drift",
     "emit_subagent_stubs",
+    "models_defaulted_notice",
 ]

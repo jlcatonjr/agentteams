@@ -606,7 +606,7 @@ def run_bridge(
         and src_fw == "copilot-vscode"
         and "bridge:copilot-vscode-to-claude:subagents" in features
     ):
-        from agentteams.bridge_subagents import emit_subagent_stubs
+        from agentteams.bridge_subagents import emit_subagent_stubs, models_defaulted_notice
 
         stub_result = emit_subagent_stubs(
             source_dir=source_dir,
@@ -627,11 +627,8 @@ def run_bridge(
                 + ", ".join(rel_to_root(p, output_root) for p in stub_result.preserved_native)
             )
         if stub_result.models_defaulted:
-            result.notices.append(
-                f"Gave {len(stub_result.models_defaulted)} Claude stub(s) the default `model:` "
-                "(orchestrator claude-fable-5-2, others opus; a stub's existing model is kept): "
-                + ", ".join(rel_to_root(p, output_root) for p in stub_result.models_defaulted)
-            )
+            result.notices.append(models_defaulted_notice(
+                [rel_to_root(p, output_root) for p in stub_result.models_defaulted], dry_run=dry_run))
         if stub_result.experts_collapsed:
             result.notices.append(
                 f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert "
