@@ -156,8 +156,8 @@ def _hygiene_rule_ids(root: Path) -> tuple[list[str], int]:
     lines: list[str] = []
     for team in TEAM_AGENT_GLOBS:
         ref = root / team / "references" / HYGIENE_REF_NAME
-        if not ref.is_file():
-            continue
+        if not ref.is_file() or not ref.resolve().is_relative_to(root.resolve()):
+            continue  # @security: a symlinked team dir is not followed out of the project
         text = ref.read_text(encoding="utf-8", errors="replace")
         rel = ref.relative_to(root)
         lines += [f"  !  WARN {rel}: {rid} appears twice (lines {a} and {b}); rule ids must be unique"

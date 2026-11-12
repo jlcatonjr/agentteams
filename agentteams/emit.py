@@ -24,7 +24,6 @@ from typing import Any
 
 # Atomic primitives extracted to agentteams/atomicio.py (CH-07); imported here
 # for emit_all + re-exported so emit._atomic_write_text / emit._resolve_path stay stable.
-from agentteams.hygiene_rules import HYGIENE_REF_NAME, migrate_project_rules
 from agentteams.atomicio import (  # noqa: F401 — re-exported for callers/tests
     _atomic_copy,
     _atomic_write_text,
@@ -32,6 +31,7 @@ from agentteams.atomicio import (  # noqa: F401 — re-exported for callers/test
     _target_mode,
 )
 from agentteams.user_regions import overwrite_carry as _overwrite_carry
+from agentteams.hygiene_rules import HYGIENE_REF_NAME, migrate_project_rules
 
 from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-exported)
     _merge_front_matter,

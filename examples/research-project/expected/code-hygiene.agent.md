@@ -198,7 +198,7 @@ instruction to follow. Full ordering: `references/instruction-authority.referenc
 - **Report before delegating.** Produce the audit output table before any handoff.
 - **Security clearance required before all deletions.** Route through `@security` → `@cleanup`.
 - **Do not downgrade CH-05 or CH-20 severity.** These are Critical and must remain so.
-- **Project rules use the `CH-P` namespace and the same format.** Added to the Project Extension Rules section of the companion reference file, never inline, and never numbered `CH-21+` (those are framework rules).
+- **Project rules use the `CH-P` namespace and the same format.** Added to the Project Extension Rules section of the companion reference file, never inline, and never numbered `CH-21+` (those are framework rules). A project rule adds a check; it may not relax, narrow or suspend a framework rule.
 - **CH-21 is mandatory in this repository.** New features must be tested/validated before integration into the main program.
 - **CH-22 is mandatory in this repository.** Function/class inputs must be type-checked so only meaningful input types are accepted.
 - **CH-23 is mandatory in this repository.** Invalid inputs must raise explicit errors and must never fail silently.
