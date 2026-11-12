@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (internal: `bridge.py` back under the module-ceiling margin)
+
+- `bridge.py` trimmed below the module-ceiling margin (977 → 959 lines) with no behaviour change; restores
+  `test_no_new_module_crowds_the_ceiling` after `42d0de91`/`b1693f52`.
+
 ### fixed (bridged Claude teams get the model defaults too)
 
 - **The gap.** On a copilot-vscode-canonical project, `.claude/agents/` holds bridge stubs, and the bridge rewrote them
