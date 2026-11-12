@@ -582,10 +582,7 @@ _PROTECTED_WRITE_PATHS: tuple[str, ...] = protected_write_paths("claude")
 #: per-file entry for a missing roster would stop bwrap initializing.
 _GOVERNED_ROSTER_NAMES: tuple[str, ...] = (
     "security-approvers.txt", "authorized-managers.txt", "management-authority.json",
-    # The Rule 15 exception registry (``exception_registry.EXCEPTION_REGISTRY_REL``): it sets its own aggregate cap,
-    # so a confined process must not raise it. The carve-out high-water mark (``carveout_checks.HIGH_WATER_REL``): a
-    # confined process must not lower it to restore an older carve-out registry. Both are stubbed like the rosters but
-    # protect-if-present in ``confine-run.sh`` (2026-11-12), so a team rendered before them still launches.
+    # 2026-11-12: Rule 15's cap registry and the carve-out rollback mark (stubbed; protect-if-present in the launcher).
     "exception-registry.json", "carveout-high-water.json",
 )
 
@@ -608,11 +605,9 @@ OPERATOR_EXAMPLE_PATHS: tuple[str, ...] = (
     ".codex/confined-run.example.sh", ".grok/confined-run.example.sh",
 )
 
-#: FROZEN stub texts (comment-only rosters; JSON for the exception registry and the high-water mark), written
-#: write-if-absent (never overwritten) for a sandboxed team so every launcher/Seatbelt entry exists. A stub reads
-#: exactly like an absent file in every reader (default approvers; no manager; no management authority; the default
-#: cap; no high-water mark), except ``carveout_checks.team_dir_problem``'s presence check for the exception
-#: registry, which a stub satisfies: ``tests/test_prd_trust_roots.py``.
+#: FROZEN stub texts, written write-if-absent (never overwritten) for a sandboxed team so every launcher/Seatbelt
+#: entry exists. A stub reads like an absent file in every reader (``tests/test_prd_trust_roots.py``) except
+#: ``carveout_checks.team_dir_problem``'s presence check, which the exception-registry stub satisfies.
 CONTROL_PLANE_STUB_TEXT: dict[str, str] = {
     "security-approvers.txt": (
         "# security-approvers.txt: operator-only approver roster (one author per line).\n"
@@ -630,12 +625,8 @@ CONTROL_PLANE_STUB_TEXT: dict[str, str] = {
         "note": "stub: written by agentteams so the sandbox can write-protect this path; "
                 "declares no management authority (same as absent).",
     }, indent=2) + "\n",
-    # Byte-for-byte what ``exception_registry.write_registry`` writes for the absent skeleton, which
-    # ``load_registry`` returns for a missing file: the stub reads exactly like an absent registry.
-    "exception-registry.json": json.dumps({"cap": {}, "exceptions": [], "version": 1}, indent=2, sort_keys=True) + "\n",
-    # Sequence 0 refuses nothing (a registry's sequence is a positive integer) and is raised on the first render,
-    # exactly as an absent mark: ``carveout_checks._high_water`` / ``record_high_water``.
-    "carveout-high-water.json": json.dumps({"sequence": 0}) + "\n",
+    "exception-registry.json": json.dumps({"cap": {}, "exceptions": [], "version": 1}, indent=2) + "\n",  # = absent
+    "carveout-high-water.json": json.dumps({"sequence": 0}) + "\n",  # 0 is below every registry sequence
 }
 
 
