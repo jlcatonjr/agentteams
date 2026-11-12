@@ -246,7 +246,8 @@ Two properties matter for the privilege model:
   mount-protected, i.e. Seatbelt).
 - **Sibling team dirs: `.github/agents` (copilot) and `.codex/agents` (codex), 2026-09-30.**
   These dirs hold the same trust roots as `.claude/agents`: the switch, the verify-key store, the
-  three rosters and the `build-log.json` team marker. They emit no sandbox of their own, so the
+  three rosters, the exception registry and carve-out high-water mark (2026-11-12), and the
+  `build-log.json` team marker. They emit no sandbox of their own, so the
   other arms protect them:
 
   | Arm | What it protects | Status |
@@ -332,11 +333,11 @@ Two properties matter for the privilege model:
   `carveout-high-water.json` (the carve-out rollback mark) join the same set, with stubs that read
   as absent. In the launcher they are protect-if-present, not required, so a team rendered before
   them still launches; they are protected from its next `--update`, which writes the stubs.
-  So that every entry exists, a sandboxed claude or goose team gets **comment-only stubs** of the
-  three files, written only when absent (`O_CREAT|O_EXCL|O_NOFOLLOW`: an existing roster or a
+  So that every entry exists, a sandboxed claude or goose team gets stubs of the five files
+  (three comment-only rosters, plus the JSON registry and mark), written only when absent (`O_CREAT|O_EXCL|O_NOFOLLOW`: an existing roster or a
   planted symlink is never touched, and the stubs never go through the overwrite path). A stub
   reads exactly like an absent file in every reader (default approvers; no manager; no
-  management authority). A team with no sandbox, and no management settings, gets no new file.
+  management authority; the default cap; no high-water mark), except one: `carveout_checks.team_dir_problem`'s `no-exception-registry` check, which a stub satisfies. A team with no sandbox, and no management settings, gets no new file.
 - **In-sandbox `--update` refuses before writing (3b).** A sandboxed session sees the team dir
   read-only, so an `--update` there used to fail file by file and leave a partial tree. It now
   probes the team dir first (a create+unlink of a temp file, plus a non-truncating,

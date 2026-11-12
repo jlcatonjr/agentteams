@@ -469,7 +469,7 @@ With \-\-issue\-directive: positive use ceiling for the directive.
 With \-\-issue\-directive: the principal who approved the directive (recorded for audit).
 .TP
 .B \-\-audit\-exceptions
-Read\-only: report the health of the constraint\-relaxing exception registry (references/exception\-registry.json) under \-\-output/\-\-project (else CWD) — every active\-but\-expired (lapsed) exception and any breach of the aggregate cap, which the active carve\-outs pinned to the team count against too. Never mints or activates. Exits non\-zero if the registry is unhealthy.
+Read\-only: report the health of the constraint\-relaxing exception registry (references/exception\-registry.json) under \-\-output/\-\-project (else CWD) — every active\-but\-expired (lapsed) exception and any breach of the aggregate cap, which the active carve\-outs pinned to the team count against too, and a note when the cap is not the default. Never mints or activates. Exits non\-zero if the registry is unhealthy.
 .TP
 .B \-\-sync\-carveouts
 Render the carve\-outs in .agentteams/carveouts.json that bind this workspace into the Project\-Specific Rules region of every enabled entry file (copilot\-instructions, CLAUDE.md, AGENTS.md, .goosehints), as a hash\-stamped block; a block that binds nothing any more is removed. The registry is an operator\-edited trust root and must be committed; an invalid registry or a hand\-edited block is refused. Runs in the working directory only; with \-\-dry\-run it writes nothing.

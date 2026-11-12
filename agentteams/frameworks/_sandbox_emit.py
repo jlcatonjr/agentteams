@@ -608,9 +608,11 @@ OPERATOR_EXAMPLE_PATHS: tuple[str, ...] = (
     ".codex/confined-run.example.sh", ".grok/confined-run.example.sh",
 )
 
-#: FROZEN comment-only stub texts, written write-if-absent (never overwritten) for a sandboxed team
-#: so every launcher/Seatbelt entry exists. A stub reads exactly like an absent file in every reader
-#: (default approvers; no manager; no management authority): ``tests/test_prd_trust_roots.py``.
+#: FROZEN stub texts (comment-only rosters; JSON for the exception registry and the high-water mark), written
+#: write-if-absent (never overwritten) for a sandboxed team so every launcher/Seatbelt entry exists. A stub reads
+#: exactly like an absent file in every reader (default approvers; no manager; no management authority; the default
+#: cap; no high-water mark), except ``carveout_checks.team_dir_problem``'s presence check for the exception
+#: registry, which a stub satisfies: ``tests/test_prd_trust_roots.py``.
 CONTROL_PLANE_STUB_TEXT: dict[str, str] = {
     "security-approvers.txt": (
         "# security-approvers.txt: operator-only approver roster (one author per line).\n"

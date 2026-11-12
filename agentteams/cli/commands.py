@@ -1085,8 +1085,9 @@ def _run_audit_exceptions(args: argparse.Namespace) -> int:
 
     Resolves the workspace root from ``--output``/``--project`` (else CWD) and reports every lapsed
     (active-but-expired) exception and any aggregate-cap breach in
-    ``references/exception-registry.json`` without activating anything. Returns 0 when the registry
-    is healthy (or absent), 1 otherwise. Mirrors :func:`_run_verify_directives`.
+    ``references/exception-registry.json`` (active carve-outs pinned to the team count too), and notes a
+    non-default cap, without activating anything. Returns 0 when the registry is healthy (or absent with the
+    carve-outs within the default cap), 1 otherwise. Mirrors :func:`_run_verify_directives`.
 
     Args:
         args: Parsed CLI namespace.

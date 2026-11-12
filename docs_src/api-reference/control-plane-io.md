@@ -16,12 +16,13 @@ True iff that framework's own sandbox predicate is on: `_sandbox_feature_enabled
 
 ### `write_control_plane_stubs(output_dir, framework, manifest, *, dry_run=False) -> list[Path]`
 
-Writes comment-only stubs of `references/security-approvers.txt`,
+Writes stubs of `references/security-approvers.txt`,
 `references/authorized-managers.txt` and `references/management-authority.json`, plus (2026-11-12)
 `references/exception-registry.json` (the empty registry) and `references/carveout-high-water.json`
 (`{"sequence": 0}`), into a sandboxed team, **only when absent**. Each file is created with `O_CREAT|O_EXCL|O_NOFOLLOW`, so an existing
 roster or a planted symlink (even a dangling one) is never touched. The stub texts are
-`_sandbox_emit.CONTROL_PLANE_STUB_TEXT`; a stub reads exactly like an absent file in every reader.
+`_sandbox_emit.CONTROL_PLANE_STUB_TEXT` (the three rosters are comment-only; the registry and the mark are JSON);
+a stub reads exactly like an absent file in every reader, except one: `carveout_checks.team_dir_problem`'s `no-exception-registry` check, which a stub satisfies.
 Deliberately not routed through `extra_output_files`/`emit_all`, which overwrite. Called from the
 single `generate_helpers._emit_privilege_artifacts` wrapper and from `multi_sync` projection.
 Returns the paths created (or that would be). Raises `OSError` on a create failure other than

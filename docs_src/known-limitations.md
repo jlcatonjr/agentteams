@@ -183,7 +183,7 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ### The carve-out high-water mark can be rolled back with the team dir
 
-- **What:** every sandboxed team now has `references/carveout-high-water.json`. In a project that commits its team
+- **What:** every sandboxed team rendered or updated since 2026-11-12 has `references/carveout-high-water.json`. In a project that commits its team
   dir, a `git checkout` or `git reset` of the team dir lowers the mark with it.
 - **Who:** projects that commit `.github/agents` or another team dir.
 - **Mitigation:** the registry's own history check (the last 500 commits) still refuses a re-used or lower sequence;
@@ -505,7 +505,8 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
 ### Several standing sandbox exceptions can hit the aggregate cap
 
 - **What:** each standing relaxation (OS off, a grant widening, a native-exec keep, a runner switch) is one active
-  exception in the registry, and the registry's aggregate cap defaults to one. A governed workspace that needs two
+  exception in the registry, and the registry's aggregate cap defaults to one (active carve-outs pinned to the
+  team count against it too). A governed workspace that needs two
   at once (for example the default `native_exec_keep` and a widened grant) is refused until the cap is raised.
 - **Who:** governed workspaces with WASM on and more than one exception.
 - **Workaround:** raise `max_active_relaxing` in the exception registry deliberately (it is git-tracked).

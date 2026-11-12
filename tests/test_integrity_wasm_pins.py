@@ -141,8 +141,9 @@ SUPERSEDED: tuple[str, ...] = (
 #: Superseded by name anywhere in the package.
 SUPERSEDED_NAMES: tuple[str, ...] = ("wasm-nest.json", "agentteams_wasm_core.py", "wasm_grant_spec.json")
 
-#: sha256 of the neutral launcher and the macOS deny-test gate at the program's base (43f435f4). The program
-#: must leave both byte-identical, so their downstream pins (baseAgent's parity test, launcher_lineage) hold.
+#: sha256 of the neutral launcher and the macOS deny-test gate at the program's base (43f435f4), except
+#: confine-run.sh, re-pinned once (below). The program must leave both byte-identical, so their downstream pins
+#: (baseAgent's parity test, launcher_lineage) hold.
 #: Re-pinned once outside the program: confine-run.sh on 2026-11-12 (cd992652, carve-out follow-ups: the exception
 #: registry and the carve-out high-water mark protect-if-present; the downstream re-pin is coordinated outside this
 #: repository, by the operator's infrastructure-management workspace).
