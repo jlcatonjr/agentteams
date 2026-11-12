@@ -100,6 +100,9 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(/.claude/agents/references/security-approvers.txt)",
         "Edit(/.claude/agents/references/authorized-managers.txt)",
         "Edit(/.claude/agents/references/management-authority.json)",
+        # 2026-11-12: the Rule 15 exception registry and the carve-out high-water mark.
+        "Edit(/.claude/agents/references/exception-registry.json)",
+        "Edit(/.claude/agents/references/carveout-high-water.json)",
         "Edit(/references/security-approvers.txt)",
         "Edit(/.claude/settings.json)",
         "Edit(/.claude/settings.local.json)",
@@ -126,7 +129,8 @@ def _sibling_rules(agents: str) -> list[str]:
     refs = f"{agents}/references"
     return [f"Edit(/{refs}/agent-privilege.json)", f"Edit(/{refs}/authorized-verify-keys/**)",
             f"Edit(/{refs}/security-approvers.txt)", f"Edit(/{refs}/authorized-managers.txt)",
-            f"Edit(/{refs}/management-authority.json)", f"Edit(/{refs}/build-log.json)"]
+            f"Edit(/{refs}/management-authority.json)", f"Edit(/{refs}/exception-registry.json)",
+            f"Edit(/{refs}/carveout-high-water.json)", f"Edit(/{refs}/build-log.json)"]
 
 
 def test_control_plane_ancestors_are_top_down_and_deduplicated():

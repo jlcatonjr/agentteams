@@ -582,6 +582,11 @@ _PROTECTED_WRITE_PATHS: tuple[str, ...] = protected_write_paths("claude")
 #: per-file entry for a missing roster would stop bwrap initializing.
 _GOVERNED_ROSTER_NAMES: tuple[str, ...] = (
     "security-approvers.txt", "authorized-managers.txt", "management-authority.json",
+    # The Rule 15 exception registry (``exception_registry.EXCEPTION_REGISTRY_REL``): it sets its own aggregate cap,
+    # so a confined process must not raise it. The carve-out high-water mark (``carveout_checks.HIGH_WATER_REL``): a
+    # confined process must not lower it to restore an older carve-out registry. Both are stubbed like the rosters but
+    # protect-if-present in ``confine-run.sh`` (2026-11-12), so a team rendered before them still launches.
+    "exception-registry.json", "carveout-high-water.json",
 )
 
 #: The project-root approver roster the grant path reads (``grants.held_grants``). Protected where
@@ -623,6 +628,12 @@ CONTROL_PLANE_STUB_TEXT: dict[str, str] = {
         "note": "stub: written by agentteams so the sandbox can write-protect this path; "
                 "declares no management authority (same as absent).",
     }, indent=2) + "\n",
+    # Byte-for-byte what ``exception_registry.write_registry`` writes for the absent skeleton, which
+    # ``load_registry`` returns for a missing file: the stub reads exactly like an absent registry.
+    "exception-registry.json": json.dumps({"cap": {}, "exceptions": [], "version": 1}, indent=2, sort_keys=True) + "\n",
+    # Sequence 0 refuses nothing (a registry's sequence is a positive integer) and is raised on the first render,
+    # exactly as an absent mark: ``carveout_checks._high_water`` / ``record_high_water``.
+    "carveout-high-water.json": json.dumps({"sequence": 0}) + "\n",
 }
 
 
@@ -633,8 +644,8 @@ def governed_roster_paths(framework: str) -> tuple[str, ...]:
         framework: A team key of :data:`ALL_TEAM_FRAMEWORKS`.
 
     Returns:
-        The approver roster, the authorized-manager roster and ``management-authority.json``,
-        derived from the switch's ``references/`` dir.
+        The approver roster, the authorized-manager roster, ``management-authority.json``, the exception
+        registry and the carve-out high-water mark, derived from the switch's ``references/`` dir.
 
     Raises:
         KeyError: ``framework`` is not a protected team key.
