@@ -12,8 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 agentteams 1.1.1-rc.2 is the second release candidate for 1.1.1. It is 1.1.1-rc.1 plus two changes backported from
 `dev`: generated Claude teams now pin each agent's model (the orchestrator on `claude-fable-5-2`, every other agent on
-`opus`), and the signing docs and messages say the key is found from `key_id`. Existing teams are not changed by
-`--update --merge`; it reports the proposed `model:` lines as notices, because `model` is a privileged key.
+`opus`), and the signing docs and messages say the key is found from `key_id`. Bridged Claude teams (`.claude/agents/`
+stubs over a copilot-vscode team, as in researchteam-derived repositories) get the defaults on their next
+`--bridge-merge`, keeping any model a stub already declares. Native Claude files are not changed by `--update --merge`;
+it reports the proposed `model:` lines as notices, because `model` is a privileged key.
+
+### fixed (bridged Claude teams get the model defaults too)
+
+- **The gap.** On a copilot-vscode-canonical project, `.claude/agents/` holds bridge stubs, and the bridge rewrote them
+  without a `model:`. The Claude adapter's new defaults never reached them, and a `model:` added by hand was wiped by
+  the next `--bridge-merge` (every `researchteam update` and autosync run).
+- **Now** every stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub declares
+  (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
+  `claude-fable-5-2` for the orchestrator, `opus` for every other stub, the parametric workstream expert included.
+  The bridge lists every stub that received a default in a notice. Native (non-stub) agent bodies are untouched.
 
 ### changed (Claude teams: the orchestrator runs on Fable 5.2, every other agent on Opus)
 
