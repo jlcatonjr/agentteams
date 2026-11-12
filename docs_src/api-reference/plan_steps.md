@@ -66,7 +66,7 @@ Checks a steps CSV against the Rule 9 contract.
   - a row wider than the header;
   - an empty file, or the legacy `step_id` schema.
 
-CLI: `python -m agentteams.plan_steps --check STEPS.csv [...]` prints `ERROR`/`WARNING` lines and exits 1 only on an
+CLI (`main(argv)`): `python -m agentteams.plan_steps --check STEPS.csv [...]` prints `ERROR`/`WARNING` lines and exits 1 only on an
 error. Workflow 11 Part A runs it on the session's steps CSVs.
 
 ### `runnable(steps) -> (remaining, waiting, warnings)`
