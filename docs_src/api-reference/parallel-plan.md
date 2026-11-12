@@ -10,8 +10,8 @@ under a conservative heuristic so under-declaration fails *safe* (sequential).
 
 Activates the long-dormant dependency concept in agentteams plans. Targets the
 runtime plan-steps schema (`step,agent,action,inputs,outputs,status,notes` + optional
-`depends_on`) — it does **not** reuse the strict 11-column parser in
-[`plan-steps-todo`](plan-steps-todo.md) (which raises on a 7-column CSV). The
+`depends_on`). [`plan-steps-todo`](plan-steps-todo.md) reads the same Rule 9 schema into todo items, with the
+older 11-column form as a fallback. The
 dict-row reader for that same runtime schema is [`plan_steps`](plan_steps.md), and
 typed handoffs over those rows are validated by [`handoff_payloads`](handoff_payloads.md).
 
@@ -41,7 +41,11 @@ typed handoffs over those rows are validated by [`handoff_payloads`](handoff_pay
 - `render_skill()` — the `parallelize-plan` Claude skill (emitted via `bridge.py`,
   gated by the `bridge:copilot-vscode-to-claude:parallelize` host-feature token; no
   direct/non-bridge consumer exists).
-- `main(argv)` — CLI: `python -m agentteams.parallel_plan STEPS.csv [...] [--json] [--priority]`.
+- `main(argv)` — CLI: `python -m agentteams.parallel_plan STEPS.csv [...] [--json] [--priority] [--all]`. By default
+  only the remaining steps are scheduled ([`plan_steps.runnable`](plan_steps.md)). `done` (or `completed`) rows are
+  dropped and satisfy their dependents. A `blocked` or `in_progress` row is held (never dispatched twice), its
+  dependents wait, and each is reported in `warnings` instead of being placed in a wave. `--all` schedules every row, as before. A CSV without a `step` column is an `Error:` line and
+  exit 1, not a traceback.
   `--priority` ranks the plan with [`plan_priority`](plan-priority.md), lists each wave's members
   in rank order and breaks write-write ties by rank; it exits 2 when the plan's ratings, ids or
   dependencies fail `plan_priority`'s validation.
