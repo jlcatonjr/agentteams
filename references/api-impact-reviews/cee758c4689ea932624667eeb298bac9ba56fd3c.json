@@ -1,0 +1,8 @@
+{
+  "patch_id": "cee758c4689ea932624667eeb298bac9ba56fd3c",
+  "commit": "b6b315e177727ef302598b2ee7236549857e0f92",
+  "subject": "fix(plans): audit fixes for item 09",
+  "impact": "2 symbols changed",
+  "note": "IM item 09 audit fixes: plan_steps.__all__ adds DEPENDS_SPLIT_RE, HOLDING_STATUSES and KNOWN_STATUSES; runnable now types Sequence and holds in_progress as well as blocked (documented in plan_steps.md, parallel-plan.md, the parallelization reference and the CHANGELOG). Reviewed by agentteams-d5.",
+  "recorded_at": "2026-11-12T02:14:05Z"
+}
