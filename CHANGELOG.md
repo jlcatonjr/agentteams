@@ -12,13 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0A and 10 always said. `--all` restores the old schedule, and `compute_waves` itself is unchanged
   (IM evaluation item 09, G-05-5).
   - A `done` (or legacy `completed`) row is dropped and satisfies its dependents.
-  - A `blocked` row is not scheduled, and neither is any step that depends on it, directly or transitively.
-    Each such step is reported in `warnings` as waiting on the blocked step.
+  - A `blocked` or `in_progress` row is held: it is not scheduled (a running step is never dispatched twice),
+    and neither is any step that depends on one, directly or transitively. Each held and waiting step is reported
+    in `warnings`. A blocked operator handoff step is listed as held until its handoff reports `ok`.
   - A row with an unknown status is scheduled as pending and reported.
   - A CSV with no `step` column now gives an `Error:` line and exit 1 instead of a traceback.
 - **New `plan_steps.validate()` and `python -m agentteams.plan_steps --check`** (G-05-1).
   - It checks the Rule 9 columns, the status vocabulary (`pending|in_progress|done|blocked`, with `completed`
-    accepted as a legacy synonym for `done`), the `depends_on` ids and empty footprints.
+    accepted without a warning as the legacy synonym of `done`; compared case-insensitively), the `depends_on` ids
+    and empty footprints.
   - Warn-first: only a file with no `step` (or legacy `step_id`) column is an error. All 699 steps CSVs in
     agentteams' own `tmp/` give warnings only.
   - Workflow 11 Part A runs it, and its step 1 now lists every row that is not done (`in_progress` and unknown

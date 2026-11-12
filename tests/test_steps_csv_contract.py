@@ -36,7 +36,7 @@ def test_validate_reports_warnings_and_the_one_hard_error(tmp_path):
     errors, warns = plan_steps.validate(bad)
     assert errors == []                                                    # warn-first
     text = " ".join(warns)
-    assert "status 'todo'" in text and "no inputs/outputs" in text
+    assert "status 'todo'" in text and "no inputs/outputs" in text and "status 'done'" not in text
     assert "depends on unknown step '9'" in text and "duplicate step id '2'" in text
     missing = _csv(tmp_path / "missing.steps.csv", "1,write", header="step,action")
     assert any("missing required column 'agent'" in w for w in plan_steps.validate(missing)[1])
@@ -120,7 +120,7 @@ def test_done_rows_are_not_scheduled_and_satisfy_their_dependents(tmp_path, caps
     assert "1" not in scheduled and "2" in scheduled                       # done dropped, its dependent runs
     assert "3" not in scheduled and "4" not in scheduled                   # blocked, and its dependent waits
     warns = " ".join(sched["warnings"])
-    assert "step '4' waits on blocked step '3'" in warns
+    assert "step '4' waits on held step '3'" in warns and "step '3' is held" in warns
     assert "status 'done-ish'" in warns and "5" in scheduled               # unknown status reported, kept
 
 
@@ -148,3 +148,29 @@ def test_final_check_part_a_runs_the_validator():
     part_a = orch[orch.index("#### Part A — Within-Plan Issues"):orch.index("#### Part B")]
     assert "python -m agentteams.plan_steps --check" in part_a
     assert "`in_progress`" in part_a and "`pending` or `blocked`" not in part_a
+
+
+
+def test_in_progress_is_held_and_completed_is_finished(tmp_path, capsys):
+    """A running step is never dispatched twice; `completed` is the legacy synonym of `done` (no warning)."""
+    path = _csv(tmp_path / "p.steps.csv", "1,a,run,src/a.md,out/a.md,in_progress,,", "2,a,next,out/a.md,out/b.md,pending,,1",
+                "3,a,old,src/c.md,out/c.md,Completed,,", "4,a,after,out/c.md,out/d.md,pending,,3")
+    assert parallel_main([str(path), "--json"]) == 0
+    sched = json.loads(capsys.readouterr().out)[0]["schedule"]
+    scheduled = [s for w in sched["waves"] for s in w]
+    assert scheduled == ["4"]
+    warns = " ".join(sched["warnings"])
+    assert "step '1' is held" in warns and "step '2' waits on held step '1'" in warns
+    assert "Completed" not in warns and "completed" not in warns
+    assert plan_steps.validate(path) == ([], [])
+
+
+def test_update_status_writes_done_into_a_rule_9_csv(tmp_path):
+    path = _csv(tmp_path / "p.steps.csv", "1,a,Write,src/a.md,out/a.md,pending,,")
+    assert plan_steps_todo.update_status(path, "1", "completed") is True
+    assert ",done," in path.read_text() and plan_steps.validate(path) == ([], [])
+
+
+def test_the_vocabularies_are_derived_not_copied():
+    assert plan_steps_todo._VALID_STATUSES == plan_steps.KNOWN_STATUSES
+    assert session_scan._OPEN_STATUSES == plan_steps.STATUSES - plan_steps.DONE_STATUSES

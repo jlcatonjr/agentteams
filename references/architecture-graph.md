@@ -5,7 +5,7 @@
 
 - Modules mapped: **452**
 - Packages: **14**
-- Internal import edges: **1711**
+- Internal import edges: **1712**
 - Distinct external dependencies: **11**
 
 ---
@@ -299,8 +299,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.output_plan` | `agentteams.analyze`, `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.analyze` |
 | `agentteams.parallel_plan` | `agentteams.plan_priority`, `agentteams.plan_steps` | `agentteams.bridge`, `agentteams.plan_priority` |
 | `agentteams.plan_priority` | `agentteams.parallel_plan` | `agentteams.parallel_plan` |
-| `agentteams.plan_steps` | — | `agentteams.parallel_plan`, `agentteams.session_scan` |
-| `agentteams.plan_steps_todo` | `agentteams.atomicio` | `agentteams.bridge` |
+| `agentteams.plan_steps` | — | `agentteams.parallel_plan`, `agentteams.plan_steps_todo`, `agentteams.session_scan` |
+| `agentteams.plan_steps_todo` | `agentteams.atomicio`, `agentteams.plan_steps` | `agentteams.bridge` |
 | `agentteams.pr_management` | — | — |
 | `agentteams.project_notes` | `agentteams.fences`, `agentteams.user_regions` | `agentteams.emit` |
 | `agentteams.projection_marker` | `agentteams`, `agentteams.control_plane_io`, `agentteams.frameworks._sandbox_emit`, `agentteams.signing_switch` | `agentteams._fleet_grok`, `agentteams.bridge`, `agentteams.cli.generate_helpers`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync` |
@@ -3816,7 +3816,8 @@ digraph "agentteams architecture" {
       "path": "agentteams/plan_steps_todo.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams.atomicio"
+        "agentteams.atomicio",
+        "agentteams.plan_steps"
       ],
       "external": [],
       "repo_local": []
@@ -10312,6 +10313,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.plan_steps_todo",
       "target": "agentteams.atomicio"
+    },
+    {
+      "source": "agentteams.plan_steps_todo",
+      "target": "agentteams.plan_steps"
     },
     {
       "source": "agentteams.project_notes",

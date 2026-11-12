@@ -61,7 +61,8 @@ Checks a steps CSV against the Rule 9 contract.
   - a missing required column (`step,agent,action,inputs,outputs,status,notes`);
   - a duplicate `step` id;
   - a `depends_on` id that names no row;
-  - a status outside `pending|in_progress|done|blocked` (`completed` is accepted as a legacy synonym for `done`);
+  - a status outside `pending|in_progress|done|blocked`, compared case-insensitively (`completed` is accepted,
+    without a warning, as the legacy synonym of `done`);
   - a row with no inputs and no outputs;
   - a row wider than the header;
   - an empty file, or the legacy `step_id` schema.
@@ -74,8 +75,9 @@ error. Workflow 11 Part A runs it on the session's steps CSVs.
 The steps still to schedule. `parallel_plan` uses this by default.
 
 - A `done` row (or `completed`) is dropped and counts as a satisfied predecessor.
-- A `blocked` row is not scheduled, and neither is any step that depends on it, directly or transitively. Such a
-  step is *waiting* (`waiting[step] = blocked step`).
+- A `blocked` or `in_progress` row is held: it is not scheduled (a running step is never dispatched twice), and
+  neither is any step that depends on one, directly or transitively. Such a step is *waiting*
+  (`waiting[step] = held step`; a held step maps to itself).
 - A row with an unknown status is kept, scheduled as pending, and reported.
 
 ## See Also

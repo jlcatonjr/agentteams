@@ -26,13 +26,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-from agentteams.plan_steps import DONE_STATUSES, read_steps
+from agentteams.plan_steps import DONE_STATUSES, STATUSES, read_steps
 
 _KNOWN_ISSUES_HEADING_RE = re.compile(r"^#{1,6}\s*.*Known Issues.*$", re.IGNORECASE)
 _HEADING_RE = re.compile(r"^#{1,6}\s")
 _STRUCK_BULLET_RE = re.compile(r"^-\s*~~")
 
-_OPEN_STATUSES = frozenset({"pending", "in_progress", "blocked"})
+_OPEN_STATUSES = STATUSES - DONE_STATUSES
 
 
 @dataclass

@@ -345,7 +345,7 @@ Before executing Step 1 of any such plan:
 4. **Run Workflow 0A (Parallelization Analysis)** on the freshly written plan to compute the wave schedule before executing Step 1 (see Workflow 0A for the per-wave audit cadence).
 5. As each step completes: mark its `status` `done`, then pass the remaining `pending` steps through `@adversarial` and `@conflict-auditor` in light of any learning from the completed step; revise affected rows (including `depends_on`) before proceeding to the next step or wave
 6. Mark steps `blocked` with a note if they cannot proceed; surface blocked steps to the user
-7. A step that must run outside the agent sandbox is an **operator step**: `agent` = `operator`, `status` = `blocked`, `notes` = `handoff: <script path>` until its handoff log reports `ok` (see **Sandbox Operator Handoff**). Workflow 0A schedules it as a singleton; only the steps that depend on it wait
+7. A step that must run outside the agent sandbox is an **operator step**: `agent` = `operator`, `status` = `blocked`, `notes` = `handoff: <script path>` until its handoff log reports `ok` (see **Sandbox Operator Handoff**). Workflow 0A does not schedule it while it is `blocked` (it is listed as held), and only the steps that depend on it wait; once the operator reports `ok`, mark it `done` and its dependents are scheduled
 
 The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`). Legacy undated plans already present in `tmp/` remain readable and should be considered fallback inputs during review and summary workflows.
 
@@ -800,7 +800,7 @@ carry an appended handoff:
 
 1. Scan issue sources. `agentteams.session_scan.scan_repo_issues(repo_root, exclude_steps_paths={<this plan's .steps.csv>}, known_output_paths=<this plan's declared outputs>)` (or `python -m agentteams.session_scan` for a shell-only runtime) computes the first three sources below in one call — invoke it instead of re-deriving each by hand when engineering integration is available:
    - `CHANGELOG.md` → any heading matching `Known Issues` (regex)
-   - `tmp/by-week/` and legacy `tmp/` → any `.steps.csv` files with `pending` or `blocked` rows (excluding the current plan)
+   - `tmp/by-week/` and legacy `tmp/` → any `.steps.csv` files with rows not `done` (`pending`, `in_progress`, `blocked`, or a value outside that vocabulary, listed as `not a Rule 9 status`; excluding the current plan)
    - `git status --short` in the current repo → untracked files in `tmp/` or modified files outside the current plan's known output set; present as repo-relative paths only (never absolute filesystem paths)
    - `.github/agents/references/conflict-log.csv` → any row with `status=open` lacking a `resolution` — handled separately by step 2 below, not part of `scan_repo_issues`
 2. For each at-large issue found: write a one-paragraph summary — what it is, why it matters, which files or commits are involved. **Exception:** for issues found via `.github/agents/references/conflict-log.csv`, invoke `@conflict-resolution`'s ACCEPT/REJECT/REVISE decision instead — unlike the other three sources (summarized and presented only), "was it actually fixed already?" has a concrete, checkable answer available at closeout time
