@@ -34,7 +34,7 @@ import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 from agentteams.frameworks._claude_model import (
     CLAUDE_AGENT_MODEL_DEFAULT,
@@ -387,6 +387,37 @@ def _render_workstream_expert_stub(
     return "\n".join(fm_lines) + body
 
 
+def stub_notices(result: StubEmissionResult, *, rel: Callable[[str], str], dry_run: bool) -> list[str]:
+    """Return the bridge notices for one stub-emission run, in display order.
+
+    Args:
+        result: The emission result.
+        rel: Turns a written path into the project-relative form shown to the user.
+        dry_run: Whether the run writes nothing.
+
+    Returns:
+        Notices for kept native bodies, stubs given a default ``model:``, and collapsed experts.
+
+    Raises:
+        Nothing.
+    """
+    notices: list[str] = []
+    if result.preserved_native:
+        notices.append(
+            f"Kept {len(result.preserved_native)} existing non-stub file(s) in "
+            ".claude/agents/ (native agent bodies; --bridge-merge never replaces them "
+            "with stubs): " + ", ".join(rel(p) for p in result.preserved_native)
+        )
+    if result.models_defaulted:
+        notices.append(models_defaulted_notice([rel(p) for p in result.models_defaulted], dry_run=dry_run))
+    if result.experts_collapsed:
+        notices.append(
+            f"Collapsed {len(result.experts_collapsed)} workstream-expert "
+            f"agent(s) into a single parametric stub: {', '.join(result.experts_collapsed)}"
+        )
+    return notices
+
+
 def collect_source_agents(source_dir: Path) -> list[Path]:
     """Return canonical ``*.agent.md`` files from the source directory."""
     if not source_dir.is_dir():
@@ -579,4 +610,5 @@ __all__ = [
     "detect_stub_drift",
     "emit_subagent_stubs",
     "models_defaulted_notice",
+    "stub_notices",
 ]
