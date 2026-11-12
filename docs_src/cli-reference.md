@@ -428,6 +428,9 @@ The gate also fires when `--output` names the framework's agents directory itsel
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
 
+It prints a WARNING (no exit change) for each backed-up agent file a runtime would still load, in the output dir or any
+runtime dir of the project.
+
 It also exits `1` when a projected Project-Specific Rules copy or notes pointer is out of date or refused (see
 `--sync-project-rules`). Operator text in a `## Project-Specific Notes` or `## Project-Specific Rules` region is
 not drift: when the manifest fingerprint moves, each file is compared with a fresh render after its user regions are
@@ -463,6 +466,9 @@ else the working directory, and the brief found there. The report covers:
 - **Agents (INFO):** agents missing on some surface (the full list is in `references/agent-surface-matrix.md`, written on
   every generate and `--update`), and notes that differ by surface.
 - **Shared AGENTS.md (WARN):** a root `AGENTS.md` whose `constitutional_core` is older than the other entry files'.
+- **Backup stubs (WARN):** a backed-up agent file under any runtime dir's `.agentteams-backups/` (`.claude/agents`,
+  `.goose/recipes`, `.codex/agents`, `.grok/agents`) that the runtime would still load as a live agent: a copy made
+  before 2026-10-12. The next `--update --merge` or `--bridge-merge` that takes a backup renames it inert.
 
 Exits `1` when any FAIL is reported.
 
@@ -644,7 +650,7 @@ The blocking (opt-in) disposition of `--check-rank`: runs the identical rank-con
 
 ### `--check-wiring`
 
-P1-3 verification that an emitted workspace-confinement `sandbox` block was actually **merged into the live `.claude/settings.json`** — the emitted block is inert until the operator merges it, and nothing else confirms the boundary took effect. Read-only and **output-only** (it reports booleans and the expected write roots, never echoes values from the operator's live settings, which may hold secrets). Exits non-zero when a confinement was emitted but is not live (missing, disabled, an open `allowUnsandboxedCommands` escape hatch, or mismatched write roots); exits `0` when the boundary is merged and enabled, or when no confinement was requested.
+P1-3 verification that an emitted workspace-confinement `sandbox` block was actually **merged into the live `.claude/settings.json`** — the emitted block is inert until the operator merges it, and nothing else confirms the boundary took effect. Read-only and **output-only** (it reports booleans and the expected write roots, never echoes values from the operator's live settings, which may hold secrets). Exits non-zero when a confinement was emitted but is not live: missing, disabled, an open `allowUnsandboxedCommands` escape hatch, or mismatched write roots. It also exits non-zero when the merge left out the rest of the boundary: no `hooks.PreToolUse` entry running `constitutional-gate.py` for every tool the emitted matcher names, or a `permissions.deny` missing an emitted rule (the `Read(...)` key denies included; the built-in tools are bound by permissions, not by the sandbox). It exits `0` when all of that is merged. The gate entry must be `type: command` with exactly the emitted command and a matcher (read as a regex) covering every gate tool; `disableAllHooks: true` fails, and `settings.local.json` is read too. When no confinement was requested (cooperative, or switched off after having one), a missing gate hook or deny rule is printed as a WARNING and the exit stays `0`. For Grok, the managed `[permission]` block must carry every emitted deny rule and the advisory gate files must be in place.
 
 It also checks the **constitutional gate's interpreter** wherever the framework installs the gate
 (`.claude/hooks/`, `.grok/hooks/`, `.github/hooks/`). The hook command is plain `python3`, and the
@@ -909,7 +915,7 @@ stderr.
 
 ### `--list-backups`
 
-Backups live in `<agents dir>/.agentteams-backups/<timestamp>/`. Backed-up agent files (`.md`, `.yaml`, `.yml`, `.toml`) are stored with an `.agentteams-bak` suffix, so no agent runtime loads a backup as an agent; `--restore-backup` maps the names back. Each backup run also neutralizes loadable files left by older backups (renamed in place, manifest kept consistent).
+Backups live in `<agents dir>/.agentteams-backups/<timestamp>/`. Backed-up agent files (`.md`, `.yaml`, `.yml`, `.toml`) are stored with an `.agentteams-bak` suffix, so no agent runtime loads a backup as an agent; `--restore-backup` maps the names back. Copies made before 2026-10-12 kept loadable names: every backup renames them (never deletes) in the output dir and in every agent-runtime dir of the same project (`.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`), skipping any that resolves outside the project; `--doctor` and `--check` report any left. Each backup run also neutralizes loadable files left by older backups (renamed in place, manifest kept consistent).
 
 List all available backups for the output directory (newest first) and exit. Prints timestamp, path, and file count for each backup.
 
@@ -1312,6 +1318,49 @@ Read-only: report the validity (signature, expiry, use-limit, manager roster, an
 ### `--issue-directive`
 
 Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change.
+
+### `--sign-carveouts`
+
+**Operator-only.** Sign `.agentteams/carveouts.json` with the operator Ed25519 key (the file named by
+`AGENTTEAMS_DECISION_ED25519_KEYFILE`) and `--key-id`. It runs the same preflight, integrity check, review digest and
+confirmation as `--sign-decision` (`--confirm-review-sha256` without a terminal; `--allow-checkout-signing` as there).
+The registry is validated first. The signature covers the domain tag `agentteams-carveouts-v1`, the key id and the
+canonical registry, and is verified against `<decision_log>/references/authorized-verify-keys/<key-id>.pub.pem` before
+the file is rewritten. Every carve-out relaxes a rule clause (Rule 15(b)), so an unsigned registry renders nothing.
+Commit the registry afterwards.
+
+### `--sync-carveouts`
+
+Render the carve-outs in `.agentteams/carveouts.json` that bind this workspace into the `## Project-Specific Rules`
+region of every enabled entry file, as a hash-stamped `CARVEOUTS` block ([`carveouts`](api-reference/carveouts.md)).
+The registry is a trust root: it must be operator-signed (`--sign-carveouts`) and committed. An invalid registry, a
+lineage HALT, an uncleared clearance, a breach of the aggregate cap or a hand-edited block is refused: nothing is
+rendered, and the blocks it rendered earlier are removed. It also runs after every generate and `--update`. A block that binds nothing any more is removed. Runs in the working directory only;
+with `--dry-run` it writes nothing and exits `1` when a copy is out of date.
+
+### `--verify-carveouts`
+
+Read-only. It checks the registry and exits `1` on any problem:
+- the operator signature, and that the registry is committed byte for byte;
+- the shape;
+- exact workspace scope;
+- an expiry no more than 90 days after `added`, and active entries past it;
+- the active cap;
+- the derived effect class;
+- the hard limits (no rendered string names C-1..C-5 or a HALT; no relaxed clause names the mechanism or Rule 15's
+  own bounds; no capability grant, destructive effect or trust-anchor target);
+- the aggregate cap shared with the Rule 15 exception registry;
+- lineage HALTs;
+- sha-bound clearances;
+- that every entry file's block is current.
+
+### `--check-clearance` / `--clearance-file`
+
+Read-only; spends nothing. `--check-clearance SCOPE --clearance-file PATH` exits `0` only when the decisions log under
+`--output` (else the working directory) holds a verified @security PASS for the action `SCOPE:sha256-<hex of PATH>`.
+A HALT on the bare `SCOPE` blocks it, and HALT, author, signature and chain checks all apply. Use the same bytes
+afterwards. It exits `1` otherwise, naming the action id a clearance row
+must use. Operator scripts call it before doing anything, instead of hand-rolling a sha-bound gate.
 
 ### `--audit-exceptions`
 

@@ -258,6 +258,8 @@ nav:
               - memory-index-store: api-reference/memory-index-store.md
               - memory-index-surfaces: api-reference/memory-index-surfaces.md
               - rules-projection: api-reference/rules-projection.md
+              - carveouts: api-reference/carveouts.md
+              - carveout-checks: api-reference/carveout-checks.md
               - surface-matrix: api-reference/surface-matrix.md
               - doctor: api-reference/doctor.md
               - fence-inject: api-reference/fence-inject.md
@@ -281,6 +283,7 @@ nav:
               - mcp_need: api-reference/mcp-need.md
               - mcp_catalog: api-reference/mcp-catalog.md
               - governance_logs: api-reference/governance-logs.md
+              - governance_log_repair: api-reference/governance-log-repair.md
               - mcp_servers: api-reference/mcp-servers.md
               - mcp_need_report: api-reference/mcp-need-report.md
               - control-plane-io: api-reference/control-plane-io.md

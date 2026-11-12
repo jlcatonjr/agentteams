@@ -310,8 +310,16 @@ def test_verify_wiring_ok_when_fully_merged(tmp_path):
     fs = {"allowWrite": ["."], "denyWrite": ["references/agent-privilege.json"],
           "denyRead": ["~/.ssh"]}
     _write_claude_settings(tmp_path, fs, dict(fs))
+    # "Fully merged" includes the constitutional gate hook (IM item 03: the gate is always required).
+    import json as _json
+    from agentteams.frameworks._claude_wiring_check import GATE_COMMAND, GATE_TOOLS
+    live = tmp_path / ".claude" / "settings.json"
+    data = _json.loads(live.read_text())
+    data["hooks"] = {"PreToolUse": [{"matcher": "|".join(sorted(GATE_TOOLS)),
+                                     "hooks": [{"type": "command", "command": GATE_COMMAND}]}]}
+    live.write_text(_json.dumps(data))
     ok, msgs = verify_sandbox_wiring(tmp_path)
-    assert ok is True
+    assert ok is True, msgs
     assert any("OK" in m for m in msgs)
 
 

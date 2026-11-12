@@ -22,7 +22,9 @@ Recognised front matter keys (all optional, but name + description are strongly 
                  slash-command key and is ignored here — emitting it was finding
                  F-1 of the 2026-08-06 constitutional audit.
   disallowedTools: Comma-separated deny list, subtracted from the inherited pool
-  model:         Claude model variant (e.g. claude-opus-4-5, claude-sonnet-4-5)
+  model:         Claude model alias or id (e.g. opus, claude-fable-5-2). Rendered
+                 teams default to `claude-fable-5-2` for the orchestrator and `opus` for every other
+                 agent (see _claude_model.py)
 
 VS Code Copilot keys (user-invocable:, agents:) are NOT recognised by Claude Code and
 must NOT be passed through. `tools:` IS recognised, but its VALUE FORMAT differs: copilot
@@ -44,6 +46,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ._claude_wiring_check import gate_warnings
+from ._claude_wiring_check import verify_emitted_sandbox_merged as _verify_emitted_sandbox_merged
 from .base import FrameworkAdapter, inject_skill_front_matter, skill_description
 from ._sandbox_emit import (  # re-exported so existing importers keep resolving these from claude
     _DEFAULT_PROTECTED_READ_PATHS,
@@ -63,7 +67,12 @@ from . import _wasm_wiring
 from ._sandbox_drift import verify_control_plane_merged  # noqa: F401  (re-export: P13 reads it from here)
 from ._prompt_root_protect import prompt_roots_enabled
 from ._write_roots import project_root_of
-from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+from ._claude_model import (  # noqa: F401  (constants re-exported for importers of claude)
+    CLAUDE_AGENT_MODEL_DEFAULT,
+    CLAUDE_ORCHESTRATOR_MODEL_DEFAULT,
+    resolve_claude_model as _resolve_claude_model,
+)
+from agentteams.yaml_frontmatter import FRONT_MATTER_MODEL_LINE_RE, parse_yaml_front_matter as _parse_yaml_front_matter
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +179,7 @@ class ClaudeAdapter(FrameworkAdapter):
             mcp_block = (mcp_block or "mcpServers:\n") + wasm_mcp.claude_entry(wasm_args, wasm_mcp.interpreter())
         # A.5: Extract optional Claude-specific keys before stripping front matter.
         model, disallowed_tools, permission_mode = _extract_claude_optional_keys(content)
+        model = _resolve_claude_model(content, model, agent_slug)
         content = self._strip_yaml_front_matter(content)
         content = self._strip_handoffs_section(content)
         content = _inject_claude_front_matter(
@@ -193,21 +203,30 @@ class ClaudeAdapter(FrameworkAdapter):
         names don't resolve, so the list is mapped like an agent file's (``Read, Grep, Glob``). Reported from
         mathAgents' P5 render (2026-10-07).
 
+        A ``model:`` Claude cannot read (a converted Copilot builder's list form) becomes the agent default, like
+        an agent file's (``_claude_model.resolve_claude_model``); a valid Claude model and an absent key are kept.
+
         Args:
             content: The rendered builder file.
             manifest: The team manifest (unused).
 
         Returns:
-            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names.
+            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names and any
+            unreadable ``model:`` replaced by the Claude default.
 
         Raises:
             Nothing.
         """
         yaml_text, body = _parse_yaml_front_matter(content)
-        if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
+        if yaml_text is None:
             return content
         head = content[: len(content) - len(body)]  # the parser's own front-matter span: never touch the body
-        head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
+        source_model = _extract_claude_optional_keys(content)[0]
+        model = _resolve_claude_model(content, source_model, "team-builder")
+        if model is not None and model != source_model:
+            head = FRONT_MATTER_MODEL_LINE_RE.sub(f"model: {model}\n", head, count=1)
+        if _YAML_TOOLS_RE.search(yaml_text):
+            head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
         return head + body
 
     def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
@@ -244,7 +263,7 @@ class ClaudeAdapter(FrameworkAdapter):
         return False
 
     def required_front_matter_keys(self) -> tuple[str, ...]:
-        """Claude subagent headers carry `tools`, not copilot-vscode's `tools`/`model` pair.
+        """Claude subagent headers require `tools`; `model` is optional here (copilot-vscode requires both).
 
         The key is `tools` and not `allowed-tools`: Claude Code's subagent front-matter
         schema defines `name`, `description`, `tools`, `disallowedTools`, `model` and
@@ -687,7 +706,7 @@ def verify_sandbox_wiring(project_root: Path,
     # a cooperative team that never had one keeps today's check below.
     if switched_off(state, previous_boundary=previous_boundary_recorded(team_dir)):
         ok, msgs = claude_off_drift(project_root, state)
-        return (ok and not unprotected), [*msgs, *unprotected]
+        return (ok and not unprotected), [*msgs, *gate_warnings(project_root), *unprotected]
     ok, msgs = _verify_emitted_sandbox_merged(project_root)
     if unprotected:
         ok, msgs = False, [*msgs, *unprotected]
@@ -701,88 +720,6 @@ def verify_sandbox_wiring(project_root: Path,
             ok, msgs = False, [*msgs, f"WASM CONTROL PLANE NOT MERGED: {', '.join(missing)}"]
     return ok, msgs
 
-
-def _verify_emitted_sandbox_merged(project_root: Path) -> tuple[bool, list[str]]:
-    """The P1-3 check proper: is the emitted example's sandbox block merged into the live settings."""
-    claude_dir = project_root / ".claude"
-    example = claude_dir / "settings.hooks.example.json"
-    live = claude_dir / "settings.json"
-    if not example.is_file():
-        return True, ["no emitted settings example found — nothing to verify."]
-    try:
-        ex = json.loads(example.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return True, [f"could not read {example} as JSON — skipping wiring check."]
-    ex_sandbox = ex.get("sandbox") if isinstance(ex, dict) else None
-    if not (isinstance(ex_sandbox, dict) and ex_sandbox.get("enabled")):
-        return True, ["no sandbox confinement was requested for this team (cooperative)."]
-    if not live.is_file():
-        return False, [
-            "WARNING: unmerged boundary — NOT enforced. A sandbox confinement was emitted "
-            "but .claude/settings.json does not exist. Merge the emitted example block."
-        ]
-    try:
-        lv = json.loads(live.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False, [
-            "WARNING: .claude/settings.json is unreadable or invalid JSON; cannot confirm "
-            "the boundary is live."
-        ]
-    lv_sandbox = lv.get("sandbox") if isinstance(lv, dict) else None
-    if not (isinstance(lv_sandbox, dict) and lv_sandbox.get("enabled") is True):
-        return False, [
-            "WARNING: unmerged boundary — NOT enforced. .claude/settings.json has no "
-            "enabled sandbox block. Merge the emitted example block."
-        ]
-    msgs: list[str] = []
-    ok = True
-    if lv_sandbox.get("allowUnsandboxedCommands") is not False:
-        ok = False
-        msgs.append(
-            "WARNING: sandbox.allowUnsandboxedCommands is not false in the live settings — "
-            "the unsandboxed-command escape hatch is open, so confinement can be bypassed."
-        )
-    ex_fs = ex_sandbox.get("filesystem") or {}
-    lv_fs = lv_sandbox.get("filesystem") or {}
-    ex_roots = ex_fs.get("allowWrite")
-    lv_roots = lv_fs.get("allowWrite")
-    if ex_roots != lv_roots:
-        ok = False
-        # Follow-up #2: a WIDENING (the emitted example adds roots) must not be waved through as
-        # "re-merge": the brief is agent-writable. Only emitted values are echoed, never live ones.
-        live_set = set(lv_roots) if isinstance(lv_roots, list) else set()
-        added = [r for r in (ex_roots or []) if r not in live_set]
-        if added:
-            msgs.append(
-                f"WARNING: the emitted sandbox block WIDENS allowWrite by {added!r} "
-                f"(expected allowWrite={ex_roots!r}). Review where each root came from before "
-                "re-merging: an agent-writable brief can add roots (generation prints the source)."
-            )
-        else:
-            msgs.append(
-                "WARNING: the live sandbox write roots differ from the emitted expectation "
-                f"(expected allowWrite={ex_roots!r}) — re-merge so the boundary matches."
-            )
-    # denyWrite (control-plane protection) + denyRead (exclusive read-exclusion) must not be
-    # dropped/shortened on merge (audit 2026-W39, security F4). A merge that keeps the block
-    # but strips denyWrite re-enables the in-sandbox agent to edit its own gate/switch; a
-    # shortened denyRead silently un-seals credential paths. Compare as sets (order-agnostic)
-    # and require the live set to be a SUPERSET of the emitted expectation.
-    for key, label in (("denyWrite", "control-plane denyWrite"), ("denyRead", "read-exclusion denyRead")):
-        ex_vals = ex_fs.get(key)
-        if not ex_vals:
-            continue  # not emitted for this profile (e.g. denyRead only for exclusive)
-        missing = set(ex_vals) - set(lv_fs.get(key) or [])
-        if missing:
-            ok = False
-            msgs.append(
-                f"WARNING: the live sandbox {label} is missing entries the emitted block "
-                f"expects ({sorted(missing)!r}) — re-merge so the boundary matches; a dropped "
-                f"{key} weakens the boundary while it still looks enabled."
-            )
-    if ok:
-        msgs.append("OK: sandbox confinement is merged and enabled in .claude/settings.json.")
-    return ok, msgs
 
 
 # ---------------------------------------------------------------------------

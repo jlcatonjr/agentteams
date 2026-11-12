@@ -344,6 +344,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
     "agentteams/cli/frozen_surfaces.py",        # Rule 15: frozen-surface owned paths + unfreeze vocabulary
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
+    "agentteams/carveouts.py",                  # Rule 15: the carve-out registry's hard limits, signature and scope
+    "agentteams/carveout_checks.py",            # Rule 15: the carve-outs' HALT, lineage, rollback and cap checks
+    "agentteams/cli/carveout_commands.py",      # Rule 15: the carve-out signer and the post-build hook
+    "agentteams/cli/clearance_binding.py",      # the sha-bound clearance check operator scripts gate on
     "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the six sandbox-relaxation kinds + token vocabulary
     "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening

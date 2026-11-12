@@ -670,6 +670,21 @@ def _main_dispatch(
     if getattr(args, "doctor", False):
         from agentteams.doctor import run_doctor
         return run_doctor(getattr(args, "project", None))
+    if getattr(args, "sync_carveouts", False):
+        from agentteams.cli.carveout_commands import run_sync_carveouts
+        return run_sync_carveouts(getattr(args, "project", None), dry_run=bool(getattr(args, "dry_run", False)))
+    if getattr(args, "sign_carveouts", False):
+        from agentteams.cli.carveout_commands import run_sign_carveouts
+        return run_sign_carveouts(getattr(args, "project", None), getattr(args, "key_id", None),
+                                  confirm_sha256=getattr(args, "confirm_review_sha256", None),
+                                  allow_checkout=bool(getattr(args, "allow_checkout_signing", False)))
+    if getattr(args, "verify_carveouts", False):
+        from agentteams.cli.carveout_commands import run_verify_carveouts
+        return run_verify_carveouts(getattr(args, "project", None))
+    if getattr(args, "check_clearance", None):
+        from agentteams.cli.carveout_commands import run_check_clearance
+        return run_check_clearance(args.check_clearance, getattr(args, "clearance_file", None),
+                                   getattr(args, "output", None))
     if getattr(args, "sync_project_rules", False):
         from agentteams.cli.post_build import run_sync_project_rules
         return run_sync_project_rules(getattr(args, "project", None), dry_run=bool(getattr(args, "dry_run", False)))

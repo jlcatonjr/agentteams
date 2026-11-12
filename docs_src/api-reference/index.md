@@ -72,6 +72,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`memory-index-store`](memory-index-store.md) | On-disk layout of the committed index: compact lines, size-capped native shards read without reassembly |
 | [`memory-index-surfaces`](memory-index-surfaces.md) | The index across a project's surfaces: all-surface refresh, query fallback, finding the brief, coverage report |
 | [`rules-projection`](rules-projection.md) | One project's Project-Specific Rules in every provider's entry file, and a pointer in the key agents' notes |
+| [`carveout-checks`](carveout-checks.md) | The carve-out registry's team-directory, rule-number, rollback, HALT, lineage, clearance and cap checks |
+| [`carveouts`](carveouts.md) | Operator-signed, workspace-scoped carve-outs: one signed, committed registry, machine-checked bounds, rendered into every entry file |
 | [`surface-matrix`](surface-matrix.md) | Which agents exist on which provider, their declared tools, notes and skills parity |
 | [`doctor`](doctor.md) | `--doctor`: one read-only report on whether the project's providers agree |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
@@ -103,6 +105,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`mcp_need`](mcp-need.md) | Agent MCP-need protocol under the orchestrator-only switch: the procedure reference and the need register |
 | [`mcp_catalog`](mcp-catalog.md) | The catalogue of foundational MCP servers (`agentteams/templates/mcp/`) and its expansion into `mcp_servers` |
 | [`governance_logs`](governance-logs.md) | Well-formedness check (`--verify-integrity`) and the validated, append-only `append_row` for the governance CSV logs |
+| [`governance_log_repair`](governance-log-repair.md) | Operator-approved, backed-up repair of malformed governance-log rows (`governance_logs repair`) |
 | [`mcp_servers`](mcp-servers.md) | `--serve-mcp`: the first-party read-only servers `recall` and `gitread` |
 | [`mcp_need_report`](mcp-need-report.md) | `--mcp-need-report`: read-only per-agent summary of the runner ledger and the need register (protocol phase N3) |
 | [`control_plane_io`](control-plane-io.md) | Write-if-absent sandbox roster stubs and the in-sandbox write preflight |

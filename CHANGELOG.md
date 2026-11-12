@@ -6,6 +6,142 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
+
+- **The bug.** Claude Code loads every `*.md` under `.claude/agents/`, dot-directories included. Backups made before
+  2026-10-12 kept loadable names. `neutralize_legacy_backups` renamed them only inside `backup_output_dir` for the
+  directory being backed up, and a Copilot-primary repo with a Claude bridge never backs up `.claude/agents/`. So an
+  old stub with no `tools:` line kept loading with every tool (IM evaluation item 01, G-14-1; the VK finding,
+  19 repos).
+- **The fix.** Every `backup_output_dir` call now also neutralizes every agent-runtime dir of the same project
+  (`.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`) through
+  `backup.neutralize_runtime_backups`.
+  - **When it runs:** whenever a backup is actually taken, on any `--bridge-merge`/`--bridge-refresh` with existing
+    target files, `--update --merge`/`--overwrite`, and fleet runs through those. The same goes for the other
+    callers: adopt-only, adopt-merge, the decision-log migration, the roster prune and stale-agent removal.
+  - **When it doesn't:** on a dry run, with `--no-backup`, or on a run that takes no backup.
+  - **Safety.** Files are renamed to `*.agentteams-bak`, never deleted, and each manifest's `backup_path` is
+    rewritten. A runtime dir or backup root that resolves outside the project is skipped. Each renamed path is
+    printed.
+- **Reporting.** `--doctor` (new "Backup stubs" section) and `--check` WARN on any backed-up agent file that is
+  still loadable. They warn first, per the item's rollback note, rather than fail.
+- **Deferred.** The fleet run has no finding of its own (`fleet.py` is at the size ceiling). It reaches the rename
+  through `--update`, and `--doctor` reports.
+- **Grok.** `.grok/agents` is included as a precaution. Grok Build loads `.grok/agents/*.md`; whether it walks
+  dot-subdirectories is unmeasured, and the rename never deletes.
+- **Dry run.** `backup_output_dir(dry_run=True)` no longer renames anything, its own dir included.
+
+### fixed (`--check-wiring`: the gate hook and `permissions.deny` must be merged, not only the sandbox block)
+
+- **The bug.** `--check-wiring` compared only the Claude `sandbox` block. A `.claude/settings.json` holding that
+  block alone printed "OK: sandbox confinement is merged" and exited 0, with no `PreToolUse` gate and no
+  `permissions.deny`. Grok's check looked only for the presence of `[permission]` and the profile (IM evaluation
+  item 03, G-22-1).
+- **Claude, what it checks now.**
+  - A `PreToolUse` hook of `type: command` whose command is exactly the emitted gate command (no added
+    `|| true`), with a matcher that covers every gate tool. Matchers are read as regexes; one that does not
+    compile, or is not a string, covers nothing.
+  - The gate is always required, even if the emitted example leaves it out.
+  - Every emitted `permissions.deny` rule, the `Read(...)` key denies included.
+  - `disableAllHooks: true` fails the check.
+  - `settings.local.json` is read too.
+- **Grok, what it checks now.**
+  - The managed `[permission]` block must hold every emitted deny rule.
+  - The advisory gate files (`agentteams-gate.json`, the shim, `constitutional-gate.py`) must exist, and the JSON
+    must still run the shim. Grok hooks fail open, so this confirms a declared control.
+- **Upgrade note.** A confined (boundary-requested) team that merged only the sandbox block, or whose deny rules
+  or gate drifted, now exits non-zero. That is deliberate: those teams were wrongly reported OK, and failing them
+  is the point of the fix. It departs from the item's warn-first rollback note, which is aimed at teams that
+  could break.
+- **No boundary requested** (cooperative, or switched off after having one): a missing gate or deny rule is a
+  WARNING and the exit stays 0. A follow-up is proposed to make that fail in the next release.
+- **Other changes.**
+  - Live values are never echoed.
+  - The Claude check moved from `frameworks/claude.py` to `frameworks/_claude_wiring_check.py`.
+    `claude._verify_emitted_sandbox_merged` stays as an alias.
+  - The `--help` text and the man page are updated.
+
+### added (governance logs: `repair`, an operator-approved, backed-up fix for malformed rows)
+
+- `python -m agentteams.governance_logs repair LOG` previews a fix for rows whose field count differs from the
+  header, and writes nothing. Since item 06 the security gate refuses every decision in such a decisions log.
+- **What it proposes.** It re-joins fragments of the one shape seen in the field: an unquoted comma in prose,
+  where each fragment starts with a space. It does so only when the fragment lands in a free-text column, the
+  cells before it are unchanged, no decision column (`decision`, `action_reviewed`, `status`, `verdict`, `scope`)
+  would move, and no fragment is a verdict word. Everything else is listed for a hand fix, as are open-quote
+  and swallowed-row problems.
+- **`--apply DIGEST`.** It writes only the exact preview, after the operator retypes the digest on an
+  interactive terminal. That is a speed-bump, not a boundary. What makes any repair harmless is that the decision cells (`decision`/`action_reviewed`, `status`/`verdict`, `scope`) stay byte-identical, and `conditions_verified` keeps its original text as a prefix (a re-join only appends `,<fragment>` to it), so its leading `verified`/`pending` token never changes.
+  - It writes a `LOG.bak-<timestamp>` backup first.
+  - It rewrites the log in place under its lock (write, then truncate, then a full flush), so a concurrent append
+    is not lost.
+  - The gate's decisions-log reader now takes a shared lock, so it never reads a log mid-repair. Only
+    `LOG_NAMES` files are repaired.
+  - It re-checks the result and restores the original bytes on failure.
+- **Refused:** signed, chained or digested logs (`signature`, `sig_scheme`, `key_id`, `derives_from`,
+  `prev_digest`, `text_digest`).
+- **Reviews.** @security first HALTed the apply path. Its re-review gave a CONDITIONAL PASS (C1 to C4), and
+  every condition is met here. A row like
+  `act-x, HALT,PASS,…` could have become a PASS; a concurrent append could have been lost; any caller could
+  approve; whitespace in the header slipped past the refusals; and the line spans were inconsistent.
+- **Today's real cases.**
+  - agentteams' `security-decisions.log.csv`: records 710, 713 and 772 get proposals.
+  - infrastructureManagement: of its 8 rows, only remediation-log record 1 gets one. The other 7 (an extra path
+    column, and a split with no space) need hand fixes.
+- Operator decision, 2026-11-11. The release of items 00 and 06 waits until `governance_logs check` passes.
+
+### added (carve-out registry: operator-signed, workspace-scoped carve-outs)
+
+- **`.agentteams/carveouts.json`**, read by the new `agentteams.carveouts` module. An operator declares which rule
+  clauses don't refuse one bounded activity, in an exact list of workspaces (`repo:<owner>/<name>`, `team:<slug>`),
+  until a date. The operator signs the registry (**`--sign-carveouts`**, Ed25519, the `--sign-decision` preflight), and
+  it must be committed byte for byte; unsigned, it renders nothing. Machine-checked, and refused when broken:
+  - `added` is not in the future, and `expires` is required and at most 90 days after it. A lapsed entry stops binding
+    and leaves every copy;
+  - the cap defaults to 1 active entry, with a ceiling of 3, and counts against the Rule 15 exception-registry cap;
+  - lineage in the signed, pinned decision log must carry no unretracted HALT;
+  - no rendered string names C-1..C-5 or a HALT (after NFKC folding), and no relaxed clause names the mechanism,
+    lineage, the cap, sunset or expiry;
+  - an entry never grants a capability or clears a destructive action, and no target or rendered string names a
+    trust root (keys, integrity manifest, decisions log, approvers, privilege and signing markers, rosters,
+    management-authority, directive ledger, waivers, constitution files, registries);
+  - a whole rule is never lifted, and of the constraint-relaxing rule only (b), by number (refused when the
+    constitution doesn't number it); strings other than `text` are ASCII, with no invisible format characters;
+  - `decision_log` must be a generated team directory (with its build log, so the sandbox protects its key store);
+    `sequence` must rise on every re-sign, checked against the last 500 commits of full history (shallow clones refused) and a high-water
+    mark; a HALT on `carveout:<id>` stops it; a refused registry's blocks are removed.
+- The registry is a trust root (`carveouts-json` / `carve-outs-json` governance stems; a handoff trust-root token), and the module
+  is integrity-pinned.
+- **`--sync-carveouts`** renders the binding entries into every enabled entry file's Project-Specific Rules region as a
+  hash-stamped block, after every generate and `--update` too (it survives `--update --merge`; a hand-edited block is
+  refused). **`--verify-carveouts`** reports
+  every problem and every drifted copy.
+- **`--check-clearance SCOPE --clearance-file PATH`**: a read-only check that a verified @security PASS exists for
+  `SCOPE` bound to the file's sha256, with no HALT on `SCOPE`. Operator scripts no longer hand-roll that gate.
+- Motivation: the manager-roster rollout's Rule 11(e) in infrastructureManagement (2026-11-08) had three hand-pasted
+  copies that drifted, prose-only expiry and cap checks, and a sha-bound gate that took twelve review rounds.
+
+### changed (Claude teams: the orchestrator runs on Fable 5.2, every other agent on Opus)
+
+- **Before**, no generated `.claude/agents/*.md` file carried a `model:` key. Templates declare Copilot's list form
+  (`model: ["Claude Opus 4.8 (copilot)"]`), which Claude Code cannot read, so the adapter dropped it. Every
+  subagent then inherited the session model, and a Fable session spawned Fable subagents.
+- **Now**, the Claude adapter writes `model: claude-fable-5-2` for the orchestrator (`orchestrator`,
+  `bridge-orchestrator`) and `model: opus` for every other agent. Fable is pinned because the model picker offers
+  Fable 5.2 and 5.1 side by side; Opus uses the alias, which follows the newest Opus. A template or CAI source that
+  already sets a valid Claude model (`opus`, `claude-sonnet-5-5`, `opus[1m]`) keeps it. A source with no `model:` key at
+  all, such as an imported Claude team, still inherits the session model.
+- New teams get the defaults at once. **Existing teams do not change silently**: `model:` is a privileged
+  capability key, so `--update --merge` reports each file's proposed `model:` line as a notice rather than writing
+  it. To adopt, add the line yourself or run `--update --overwrite` with a `@security` clearance. Claude Code's
+  built-in subagents (`Explore`, `general-purpose`, `Plan`) are not generated files and still inherit the session
+  model; set `CLAUDE_CODE_SUBAGENT_MODEL=opus` to pin those too.
+- **Claude model ids stay out of Copilot files.** Converting or importing (`--convert-from`, `--interop-from`) a
+  Claude team to copilot-vscode or copilot-cli drops each agent's Claude `model:`, so the Copilot default model
+  applies; an import says so in a notice. The decision is by source framework: a Copilot team's own model values,
+  bare ids such as `gpt-5` included, are kept. A Copilot builder converted to Claude gets `model: opus`, and the
+  Claude team-builder template now pins `model: opus` like every other non-orchestrator agent.
+
 ### fixed (merge: a capability grant beyond the template is reported even when it is no superset)
 
 - **The bug.** `--update --merge` warned about a wider-than-template grant only when the disk set was a *strict

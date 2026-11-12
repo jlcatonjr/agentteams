@@ -149,8 +149,11 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ### The aggregate cap (constraint-relaxing-authorizations rule, clause d) is not consulted for operator-signed relaxing decisions
 
-- **What:** `exception_registry.assert_within_aggregate_cap` runs only on the adopt-merge path. Other
-  Ed25519-signed relaxing decisions (cross-repo actions, grants) are bounded only by their own expiry.
+- **What:** `exception_registry.assert_within_aggregate_cap` runs on the adopt-merge, sandbox-relaxation and S-10
+  paths, and carve-outs (`.agentteams/carveouts.json`) count against the same cap when they render. Other
+  Ed25519-signed relaxing decisions (cross-repo actions, grants) are bounded only by their own expiry. The count is
+  one-way: minting an exception and `--audit-exceptions` don't count active carve-outs, so a team at its cap can
+  still mint an exception, after which its carve-outs stop rendering.
 - **Who:** operators of signing-governed workspaces who sign relaxing decisions.
 - **Mitigation:** give every signed relaxing decision a short expiry, and review the decision log's open relaxing
   rows at each release or fleet round. `--audit-exceptions` covers only `references/exception-registry.json`, so it
