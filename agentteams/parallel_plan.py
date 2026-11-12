@@ -32,6 +32,7 @@ CLI
     python -m agentteams.parallel_plan PLAN.steps.csv [MORE.steps.csv ...]
     python -m agentteams.parallel_plan PLAN.steps.csv --json
     python -m agentteams.parallel_plan PLAN.steps.csv --priority
+    python -m agentteams.parallel_plan PLAN.steps.csv --all      # every row, done and blocked included
 
 ``--priority`` orders wave members and breaks write-write ties by net-benefit
 rank (:mod:`agentteams.plan_priority`); it can change which steps share a wave.
@@ -868,18 +869,12 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m agentteams.parallel_plan",
         description="Derive fail-safe parallel waves from plan-steps CSV(s).",
     )
-    parser.add_argument(
-        "csv", nargs="+", metavar="STEPS_CSV",
-        help="One or more runtime-schema plan-steps CSV files.",
-    )
-    parser.add_argument(
-        "--json", action="store_true",
-        help="Emit JSON instead of Markdown.",
-    )
-    parser.add_argument(
-        "--priority", action="store_true",
-        help="Order wave members and write-write ties by net-benefit rank (exit 2 on bad ratings).",
-    )
+    parser.add_argument("csv", nargs="+", metavar="STEPS_CSV", help="One or more runtime-schema plan-steps CSV files.")
+    parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown.")
+    parser.add_argument("--priority", action="store_true",
+                        help="Order wave members and write-write ties by net-benefit rank (exit 2 on bad ratings).")
+    parser.add_argument("--all", action="store_true", help="Schedule every row, done and blocked ones included "
+                        "(the default schedules only the remaining steps; see plan_steps.runnable).")
     args = parser.parse_args(argv)
 
     paths = [Path(p) for p in args.csv]
@@ -891,7 +886,18 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = 0
     payloads: list[dict] = []
     for p in paths:
-        steps = read_steps(p)
+        try:
+            steps = read_steps(p)
+        except ValueError as exc:  # no `step` column: an error line, never a traceback (IM item 09)
+            print(f"Error: {exc}", file=sys.stderr)
+            exit_code = max(exit_code, 1)
+            continue
+        notes: list[str] = []
+        if not args.all:  # Workflow 0A schedules the remaining steps: done dropped, blocked and dependents wait
+            from agentteams.plan_steps import runnable
+
+            steps, waiting, notes = runnable(steps)
+            notes += [f"step {w!r} waits on blocked step {b!r} (not scheduled)" for w, b in waiting.items() if w != b]
         priority: dict[str, int] | None = None
         if args.priority:
             from agentteams.plan_priority import analyze_priority, priority_map
@@ -904,6 +910,7 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             priority = priority_map(ranked)
         schedule = compute_waves(steps, priority=priority)
+        schedule.warnings = notes + schedule.warnings
         groups = coordination_candidates(steps)
         if schedule.errors:
             exit_code = max(exit_code, 1)

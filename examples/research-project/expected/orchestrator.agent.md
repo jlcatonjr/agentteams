@@ -311,7 +311,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=12 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=13 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -784,7 +784,7 @@ carry an appended handoff:
 #### Part A — Within-Plan Issues
 *(Skip Part A if no plan was active for the current session.)*
 
-1. Read the current plan steps file from `tmp/by-week/YYYY-Www/<current-plan-slug>.steps.csv` when present, otherwise from legacy `tmp/<current-plan-slug>.steps.csv` → list all rows where `status` is `pending` or `blocked`
+1. Read the current plan steps file from `tmp/by-week/YYYY-Www/<current-plan-slug>.steps.csv` when present, otherwise from legacy `tmp/<current-plan-slug>.steps.csv` → list all rows whose `status` is not `done` (or the legacy `completed`): `pending`, `in_progress`, `blocked`, and any value outside that vocabulary, which is itself a finding to fix. First run `python -m agentteams.plan_steps --check <the steps CSV>` and record each WARNING (a missing Rule 9 column, an unknown status, an unknown `depends_on` id, an empty footprint) as a Part A item; an ERROR means the CSV has no `step` column and must be repaired before anything else
    - **A plan file with no steps CSV is a Rule 9 finding, not an absent plan.** Distinguish the two before skipping Part A: if no plan was written, Part A does not apply; if a `*.plan.md` exists for this session without its `*.steps.csv`, the obligation was incurred and not met — record it and create the CSV before closing. Skipping Part A because the CSV is missing suppresses the only check that would catch its absence.
 2. For each open item:
    a. Investigate: read relevant files, verify facts on disk

@@ -41,7 +41,11 @@ typed handoffs over those rows are validated by [`handoff_payloads`](handoff_pay
 - `render_skill()` — the `parallelize-plan` Claude skill (emitted via `bridge.py`,
   gated by the `bridge:copilot-vscode-to-claude:parallelize` host-feature token; no
   direct/non-bridge consumer exists).
-- `main(argv)` — CLI: `python -m agentteams.parallel_plan STEPS.csv [...] [--json] [--priority]`.
+- `main(argv)` — CLI: `python -m agentteams.parallel_plan STEPS.csv [...] [--json] [--priority] [--all]`. By default
+  only the remaining steps are scheduled ([`plan_steps.runnable`](plan_steps.md)). `done` rows are dropped and
+  satisfy their dependents. A `blocked` row and its dependents wait, and are reported in `warnings` instead of being
+  placed in a wave. `--all` schedules every row, as before. A CSV without a `step` column is an `Error:` line and
+  exit 1, not a traceback.
   `--priority` ranks the plan with [`plan_priority`](plan-priority.md), lists each wave's members
   in rank order and breaks write-write ties by rank; it exits 2 when the plan's ratings, ids or
   dependencies fail `plan_priority`'s validation.

@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`parallel_plan` schedules only the remaining steps; the steps-CSV contract is checked)
+
+- **Behaviour change.** `python -m agentteams.parallel_plan` now schedules only the remaining steps, as Workflows
+  0A and 10 always said. `--all` restores the old schedule, and `compute_waves` itself is unchanged
+  (IM evaluation item 09, G-05-5).
+  - A `done` (or legacy `completed`) row is dropped and satisfies its dependents.
+  - A `blocked` row is not scheduled, and neither is any step that depends on it, directly or transitively.
+    Each such step is reported in `warnings` as waiting on the blocked step.
+  - A row with an unknown status is scheduled as pending and reported.
+  - A CSV with no `step` column now gives an `Error:` line and exit 1 instead of a traceback.
+- **New `plan_steps.validate()` and `python -m agentteams.plan_steps --check`** (G-05-1).
+  - It checks the Rule 9 columns, the status vocabulary (`pending|in_progress|done|blocked`, with `completed`
+    accepted as a legacy synonym for `done`), the `depends_on` ids and empty footprints.
+  - Warn-first: only a file with no `step` (or legacy `step_id`) column is an error. All 699 steps CSVs in
+    agentteams' own `tmp/` give warnings only.
+  - Workflow 11 Part A runs it, and its step 1 now lists every row that is not done (`in_progress` and unknown
+    values included). The `available_workflows` fence is now v=13.
+- **`session_scan` (Final Check Part B)** treats every status but `done`/`completed` as open. An `in_progress` row
+  no longer disappears, and an unknown value is listed as `not a Rule 9 status`.
+- **The `todo-from-plan` skill** (`plan_steps_todo`) reads the Rule 9 runtime schema (`step,action,…`), with the
+  11-column form as a fallback. It used to reject every Rule 9 CSV (G-05-4).
+- **Deferred.** Adding steps CSVs to `--verify-integrity`: they are local, gitignored and often legacy, so a
+  warn-first validator there would only add noise. `--check` and Part A cover it.
+
 ### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
 
 - **The bug.** Claude Code loads every `*.md` under `.claude/agents/`, dot-directories included. Backups made before

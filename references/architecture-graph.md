@@ -5,7 +5,7 @@
 
 - Modules mapped: **452**
 - Packages: **14**
-- Internal import edges: **1710**
+- Internal import edges: **1711**
 - Distinct external dependencies: **11**
 
 ---
@@ -297,9 +297,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.multi_sync` | `agentteams.backup`, `agentteams.canonical`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.fleet`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.registry`, `agentteams.git_exec`, `agentteams.host_features`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.sync_baseline`, `agentteams.sync_classifier`, `agentteams.sync_hub_refresh`, `agentteams.sync_pin`, `agentteams.sync_roster`, `agentteams.wasm_config` | `agentteams.cli.sync_switch`, `agentteams.stale_detector` |
 | `agentteams.orphan_advisory` | `agentteams.bridge_subagents_goose`, `agentteams.cli.adopt_merge_gate` | — |
 | `agentteams.output_plan` | `agentteams.analyze`, `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.analyze` |
-| `agentteams.parallel_plan` | `agentteams.plan_priority` | `agentteams.bridge`, `agentteams.plan_priority` |
+| `agentteams.parallel_plan` | `agentteams.plan_priority`, `agentteams.plan_steps` | `agentteams.bridge`, `agentteams.plan_priority` |
 | `agentteams.plan_priority` | `agentteams.parallel_plan` | `agentteams.parallel_plan` |
-| `agentteams.plan_steps` | — | `agentteams.session_scan` |
+| `agentteams.plan_steps` | — | `agentteams.parallel_plan`, `agentteams.session_scan` |
 | `agentteams.plan_steps_todo` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.pr_management` | — | — |
 | `agentteams.project_notes` | `agentteams.fences`, `agentteams.user_regions` | `agentteams.emit` |
@@ -3787,7 +3787,8 @@ digraph "agentteams architecture" {
       "path": "agentteams/parallel_plan.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams.plan_priority"
+        "agentteams.plan_priority",
+        "agentteams.plan_steps"
       ],
       "external": [],
       "repo_local": []
@@ -10299,6 +10300,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.parallel_plan",
       "target": "agentteams.plan_priority"
+    },
+    {
+      "source": "agentteams.parallel_plan",
+      "target": "agentteams.plan_steps"
     },
     {
       "source": "agentteams.plan_priority",
