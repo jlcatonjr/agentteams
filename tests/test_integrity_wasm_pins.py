@@ -143,9 +143,12 @@ SUPERSEDED_NAMES: tuple[str, ...] = ("wasm-nest.json", "agentteams_wasm_core.py"
 
 #: sha256 of the neutral launcher and the macOS deny-test gate at the program's base (43f435f4). The program
 #: must leave both byte-identical, so their downstream pins (baseAgent's parity test, launcher_lineage) hold.
+#: Re-pinned once outside the program: confine-run.sh on 2026-11-12 (cd992652, carve-out follow-ups: the exception
+#: registry and the carve-out high-water mark protect-if-present; the downstream re-pin is coordinated outside this
+#: repository, by the operator's infrastructure-management workspace).
 _LAUNCHERS_AT_BASE: dict[str, str] = {
     "agentteams/templates/universal/sandbox/confine-run.sh":
-        "37e852098a5e6b92aeaf8f61ae087c8580631cfbe86a0907884edf0d58ec06b1",
+        "e22910653d00a516773f0d6e72b256474ab58e2c32a88c56e2770b2c7f4727d7",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh":
         "369ca51f0388d18a12e2bd1503f4efec0a36f61e03d4820256b1307ca59295ed",
 }

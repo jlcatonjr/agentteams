@@ -34,7 +34,8 @@ A JSON object with these keys. Any other key is refused, and so is a boolean fie
 **Refused:**
 
 - a spec whose commands or `touches` name a trust root or capability grant (`cli/governance_targets`
-  stems plus settings/hook files, `management-authority.json`, `AGENTS.md` and signing-key names);
+  stems plus settings/hook files, `management-authority.json`, `AGENTS.md`, signing-key names, the carve-out
+  registry and `exception-registry.json`);
 - credential-shaped text (`scan`'s credential patterns plus literal `TOKEN=`/`--token` values; `$VAR`
   references are fine);
 - a script that fails `bash -n`.

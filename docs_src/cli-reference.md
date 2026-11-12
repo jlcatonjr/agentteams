@@ -1364,7 +1364,7 @@ must use. Operator scripts call it before doing anything, instead of hand-rollin
 
 ### `--audit-exceptions`
 
-Read-only: report the health of the **constraint-relaxing exception registry** (`references/exception-registry.json`) under `--output`/`--project` (else CWD) — every *lapsed* (still `active` but past its expiry/sunset) exception and any breach of the aggregate cap (`cap.max_active_relaxing`). Never mints or activates. Exits non-zero if the registry is unhealthy, so an aggregate/proliferation problem (impact-report finding G1) surfaces in CI rather than accumulating silently.
+Read-only: report the health of the **constraint-relaxing exception registry** (`references/exception-registry.json`) under `--output`/`--project` (else CWD) — every *lapsed* (still `active` but past its expiry/sunset) exception and any breach of the aggregate cap (`cap.max_active_relaxing`), which the active carve-outs pinned to the team (`.agentteams/carveouts.json`) count against too. Never mints or activates. Exits non-zero if the registry is unhealthy, so an aggregate/proliferation problem (impact-report finding G1) surfaces in CI rather than accumulating silently.
 
 ### `--list-exceptions`
 

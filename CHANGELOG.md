@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (sandbox: the exception registry and the carve-out high-water mark are protected; carve-outs count in the exception cap)
+
+- **Before**, a sandboxed agent could rewrite two Rule 15 files in its team's `references/`:
+  - `exception-registry.json`, which sets its own aggregate cap (`cap.max_active_relaxing`);
+  - `carveout-high-water.json`, which stops an older carve-out registry being restored.
+
+  The cap was also counted one way: carve-outs counted exceptions when they rendered, but minting an exception and
+  `--audit-exceptions` ignored active carve-outs.
+- **Now** both files are governed control-plane files, like the approver and manager rosters:
+  - protected by Claude `permissions.deny`, the Goose Seatbelt profile, the sibling-team rules and `confine-run.sh`;
+  - stubbed write-if-absent (the empty registry, and `{"sequence": 0}`), and every reader treats a stub exactly as
+    a missing file;
+  - in the launcher they are protect-if-present, so a team rendered before this change still launches. It is
+    protected from its next `--update`, which writes the stubs.
+- **The exception registry is a trust root:** governance stem `exception-registry-json` and a handoff trust-root
+  token. A decision row or handoff naming it is refused like one naming a roster.
+- **The cap now counts carve-outs both ways.** `assert_within_aggregate_cap` and `--audit-exceptions` count the
+  active carve-outs pinned to the same team dir (`carveout_checks.active_carveouts_for`). An unreadable carve-out
+  registry refuses minting and is reported by the audit.
+- **Launcher re-pin.** `confine-run.sh` changed for the first time since 2026-10-14, so its sha256 is now
+  `e22910653d00…`. Consumers that pin it (baseAgent's parity test) re-pin when they take this version; the lineage
+  entry is `security: true`.
+
 ### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
 
 - **The bug.** Claude Code loads every `*.md` under `.claude/agents/`, dot-directories included. Backups made before

@@ -137,3 +137,12 @@ def test_a_handoff_or_decision_row_naming_the_exception_registry_is_refused():
     row = {"action_reviewed": "edit", "verdict": "PASS", "scope": "edit",
            "effect_targets": ".claude/agents/references/exception-registry.json"}
     assert non_eligibility_reason(row, kind="decision")
+
+
+def test_the_cli_audit_reports_carve_outs_without_a_registry(tmp_path, capsys):
+    """Two active carve-outs breach the default cap of 1 even before any exception registry exists."""
+    import build_team
+
+    team = _project(tmp_path, [_entry("a"), _entry("b")]) / ".claude" / "agents"
+    assert build_team.main(["--audit-exceptions", "--output", str(team)]) == 1
+    assert "active carve-outs (2)" in capsys.readouterr().err

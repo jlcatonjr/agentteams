@@ -328,6 +328,10 @@ Two properties matter for the privilege model:
   added to the control-plane deny (**unverified**, no macOS host; a deny on a missing path also
   stops the agent creating it; the project-root roster gets no ancestor rule, so a goose agent
   can still create a project `references/` dir); Linux launcher — added to its control plane.
+  **2026-11-12:** the team's `exception-registry.json` (it sets its own aggregate cap) and
+  `carveout-high-water.json` (the carve-out rollback mark) join the same set, with stubs that read
+  as absent. In the launcher they are protect-if-present, not required, so a team rendered before
+  them still launches; they are protected from its next `--update`, which writes the stubs.
   So that every entry exists, a sandboxed claude or goose team gets **comment-only stubs** of the
   three files, written only when absent (`O_CREAT|O_EXCL|O_NOFOLLOW`: an existing roster or a
   planted symlink is never touched, and the stubs never go through the overwrite path). A stub
@@ -804,7 +808,8 @@ installs the `socat` that Claude Code's own sandbox needs) and refuses to launch
 `--coord-root`) the launcher `--ro-bind`s each agentteams control-plane path that exists there
 (the `enforce_decision_signing` switch, the gate hook, the verify-key store and — PR-D — the
 `security-approvers.txt` / `authorized-managers.txt` / `management-authority.json` rosters for
-claude and goose, `.goose/sandbox.sb`, the project-root `references/security-approvers.txt`, and
+claude and goose, each team's `exception-registry.json` and `carveout-high-water.json` (2026-11-12;
+protect-if-present), `.goose/sandbox.sb`, the project-root `references/security-approvers.txt`, and
 each team's `references/build-log.json`), and gives each ancestor directory below the root a
 read-write self-bind so it becomes a mount point: `mv .claude .claude.old` fails `EBUSY`, while
 writes inside `.claude/` still work. The order is rw roots, ancestor self-binds, read-only binds,
