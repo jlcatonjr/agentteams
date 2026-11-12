@@ -582,6 +582,8 @@ _PROTECTED_WRITE_PATHS: tuple[str, ...] = protected_write_paths("claude")
 #: per-file entry for a missing roster would stop bwrap initializing.
 _GOVERNED_ROSTER_NAMES: tuple[str, ...] = (
     "security-approvers.txt", "authorized-managers.txt", "management-authority.json",
+    # 2026-11-12: Rule 15's cap registry and the carve-out rollback mark (stubbed; protect-if-present in the launcher).
+    "exception-registry.json", "carveout-high-water.json",
 )
 
 #: The project-root approver roster the grant path reads (``grants.held_grants``). Protected where
@@ -603,9 +605,9 @@ OPERATOR_EXAMPLE_PATHS: tuple[str, ...] = (
     ".codex/confined-run.example.sh", ".grok/confined-run.example.sh",
 )
 
-#: FROZEN comment-only stub texts, written write-if-absent (never overwritten) for a sandboxed team
-#: so every launcher/Seatbelt entry exists. A stub reads exactly like an absent file in every reader
-#: (default approvers; no manager; no management authority): ``tests/test_prd_trust_roots.py``.
+#: FROZEN stub texts, written write-if-absent (never overwritten) for a sandboxed team so every launcher/Seatbelt
+#: entry exists. A stub reads like an absent file in every reader (``tests/test_prd_trust_roots.py``) except
+#: ``carveout_checks.team_dir_problem``'s presence check, which the exception-registry stub satisfies.
 CONTROL_PLANE_STUB_TEXT: dict[str, str] = {
     "security-approvers.txt": (
         "# security-approvers.txt: operator-only approver roster (one author per line).\n"
@@ -623,6 +625,8 @@ CONTROL_PLANE_STUB_TEXT: dict[str, str] = {
         "note": "stub: written by agentteams so the sandbox can write-protect this path; "
                 "declares no management authority (same as absent).",
     }, indent=2) + "\n",
+    "exception-registry.json": json.dumps({"cap": {}, "exceptions": [], "version": 1}, indent=2) + "\n",  # = absent
+    "carveout-high-water.json": json.dumps({"sequence": 0}) + "\n",  # 0 is below every registry sequence
 }
 
 
@@ -633,8 +637,8 @@ def governed_roster_paths(framework: str) -> tuple[str, ...]:
         framework: A team key of :data:`ALL_TEAM_FRAMEWORKS`.
 
     Returns:
-        The approver roster, the authorized-manager roster and ``management-authority.json``,
-        derived from the switch's ``references/`` dir.
+        The approver roster, the authorized-manager roster, ``management-authority.json``, the exception
+        registry and the carve-out high-water mark, derived from the switch's ``references/`` dir.
 
     Raises:
         KeyError: ``framework`` is not a protected team key.

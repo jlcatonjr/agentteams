@@ -1085,8 +1085,9 @@ def _run_audit_exceptions(args: argparse.Namespace) -> int:
 
     Resolves the workspace root from ``--output``/``--project`` (else CWD) and reports every lapsed
     (active-but-expired) exception and any aggregate-cap breach in
-    ``references/exception-registry.json`` without activating anything. Returns 0 when the registry
-    is healthy (or absent), 1 otherwise. Mirrors :func:`_run_verify_directives`.
+    ``references/exception-registry.json`` (active carve-outs pinned to the team count too), and notes a
+    non-default cap, without activating anything. Returns 0 when the registry is healthy (or absent with the
+    carve-outs within the default cap), 1 otherwise. Mirrors :func:`_run_verify_directives`.
 
     Args:
         args: Parsed CLI namespace.
@@ -1099,7 +1100,9 @@ def _run_audit_exceptions(args: argparse.Namespace) -> int:
     output_dir = _resolve_output_dir(args)
     log_path = output_dir / er.EXCEPTION_REGISTRY_REL
     problems = er.audit_exceptions(output_dir)
-    if not log_path.exists():
+    if (notice := er.cap_notice(output_dir)):  # 2026-11-12: a raised cap may predate the registry's protection
+        print(f"  [NOTE] {notice}", file=sys.stderr)
+    if not log_path.exists() and not problems:  # active carve-outs can breach the default cap without a registry
         print(f"No exception registry found at {log_path}")
         return 0
     if not problems:

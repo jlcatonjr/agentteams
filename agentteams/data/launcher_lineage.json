@@ -171,6 +171,14 @@
    "security": true,
    "sha256": "37e852098a5e6b92aeaf8f61ae087c8580631cfbe86a0907884edf0d58ec06b1",
    "subject": "fix(grok): Phase 2 conflict-audit close-out (Rule 8)"
+  },
+  {
+   "commit": "cd9926521406440d6a7c42c6cffb8bece8412c07",
+   "date": "2026-11-12T10:29:05-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "e22910653d00a516773f0d6e72b256474ab58e2c32a88c56e2770b2c7f4727d7",
+   "subject": "fix(sandbox): protect the exception registry and the carve-out high-water mark; count carve-outs in the exception cap"
   }
  ]
 }
