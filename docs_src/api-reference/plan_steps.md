@@ -52,9 +52,9 @@ for finding in findings:
 
 ---
 
-### `validate(path) -> (errors, warnings)`
+### `validate(path)`
 
-Checks a steps CSV against the Rule 9 contract.
+Checks a steps CSV against the Rule 9 contract and returns `(errors, warnings)`.
 
 - **Errors**, only when the file is unusable: no `step` column and no legacy `step_id` either.
 - **Warnings**, under warn-first:
@@ -70,9 +70,9 @@ Checks a steps CSV against the Rule 9 contract.
 CLI (`main(argv)`): `python -m agentteams.plan_steps --check STEPS.csv [...]` prints `ERROR`/`WARNING` lines and exits 1 only on an
 error. Workflow 11 Part A runs it on the session's steps CSVs.
 
-### `runnable(steps) -> (remaining, waiting, warnings)`
+### `runnable(steps)`
 
-The steps still to schedule. `parallel_plan` uses this by default.
+The steps still to schedule, returned as `(remaining, waiting, warnings)`. `parallel_plan` uses this by default.
 
 - A `done` row (or `completed`) is dropped and counts as a satisfied predecessor.
 - A `blocked` or `in_progress` row is held: it is not scheduled (a running step is never dispatched twice), and
