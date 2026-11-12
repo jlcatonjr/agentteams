@@ -529,6 +529,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # Release locks (2026-11-09, security row 692). _fleet_locks decides which workspaces fleet must not render
     # because their repository pins agentteams; an unpinned edit could quietly lift every lock.
     "agentteams/_fleet_locks.py",
+    # Scanner public-hash exemptions (2026-11-12, #460). _scan_public_hashes decides which high-entropy tokens
+    # the C-4 credential detector suppresses (lockfile SRI bodies, GitHub commit-URL SHAs); an unpinned edit could
+    # widen it into a blanket credential exemption.
+    "agentteams/_scan_public_hashes.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

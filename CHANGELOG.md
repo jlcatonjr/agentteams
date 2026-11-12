@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (`agentteams.scan` no longer flags public lockfile hashes or commit-URL SHAs, #460)
+
+- The context-free high-entropy detector no longer reports two kinds of public value as credentials:
+  - the base64 body of a Subresource Integrity item (`sha1-`, `sha256-`, `sha384-` or `sha512-`, with the body length
+    bound to the algorithm) inside an `integrity` value in `package-lock.json`, `npm-shrinkwrap.json` or `yarn.lock`;
+  - the 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
+- Each exemption covers the exact token only, never the line or a path glob alone:
+  - every other token on a minified lockfile line is still scanned;
+  - a secret in a commit URL's owner or repo segment still fires;
+  - an integrity value with any malformed item exempts nothing;
+  - pattern credentials, such as AWS keys, and the keyword-context detector are unchanged.
+- The exemption lives in the new integrity-pinned module `agentteams/_scan_public_hashes.py`, with a verifier-ledger row.
+- **Accepted residue:**
+  - a secret shaped exactly like one of these public hashes, in exactly that position, is not reported;
+  - a secret of 23 characters or fewer in a commit URL's owner or repo segment is not re-flagged, the same length
+    floor the path guard already applies.
+
 ### changed (`parallel_plan` schedules only the remaining steps; the steps-CSV contract is checked)
 
 - **Behaviour change.** `python -m agentteams.parallel_plan` now schedules only the remaining steps, as Workflows
