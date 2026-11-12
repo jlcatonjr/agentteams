@@ -630,20 +630,14 @@ def run_bridge(
             result.notices.append(models_defaulted_notice(
                 [rel_to_root(p, output_root) for p in stub_result.models_defaulted], dry_run=dry_run))
         if stub_result.experts_collapsed:
-            result.notices.append(
-                f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert "
-                f"agent(s) into a single parametric stub: "
-                f"{', '.join(stub_result.experts_collapsed)}"
-            )
+            result.notices.append(f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert agent(s) into a "
+                                  f"single parametric stub: {', '.join(stub_result.experts_collapsed)}")
 
     # P3: emit Goose subagent-stub recipes (one per source agent) into
     # .goose/recipes/. Opt-in via bridge:<src>-to-goose:subagents; default off so
     # the pointer bridge stays byte-identical. Reserved/bridge-owned slugs are
     # skipped and existing recipes are never overwritten (see bridge_subagents_goose).
-    if (
-        target_framework == "goose"
-        and f"bridge:{src_fw}-to-goose:subagents" in features
-    ):
+    if target_framework == "goose" and f"bridge:{src_fw}-to-goose:subagents" in features:
         from agentteams.bridge_subagents_goose import emit_goose_subagent_stubs
 
         goose_stub_result = emit_goose_subagent_stubs(
@@ -664,11 +658,8 @@ def run_bridge(
 
     # Phase 1: emit the todo-from-plan skill so the bridged orchestrator
     # can project the canonical plan-steps CSV into TodoWrite on activation.
-    if (
-        target_framework == "claude"
-        and src_fw == "copilot-vscode"
-        and "bridge:copilot-vscode-to-claude:todo-projection" in features
-    ):
+    if (target_framework == "claude" and src_fw == "copilot-vscode"
+            and "bridge:copilot-vscode-to-claude:todo-projection" in features):
         from agentteams.plan_steps_todo import render_skill as _render_todo_skill
 
         skill_path = output_root / ".claude" / "skills" / "todo-from-plan" / "SKILL.md"
@@ -684,11 +675,8 @@ def run_bridge(
     # fail-safe parallel waves from a plan-steps CSV's optional depends_on
     # (Workflow 0A). The reference doc + CLI reach every team unconditionally;
     # this skill is the Claude-only deterministic affordance.
-    if (
-        target_framework == "claude"
-        and src_fw == "copilot-vscode"
-        and "bridge:copilot-vscode-to-claude:parallelize" in features
-    ):
+    if (target_framework == "claude" and src_fw == "copilot-vscode"
+            and "bridge:copilot-vscode-to-claude:parallelize" in features):
         from agentteams.parallel_plan import render_skill as _render_parallelize_skill
 
         skill_path = output_root / ".claude" / "skills" / "parallelize-plan" / "SKILL.md"
@@ -703,11 +691,8 @@ def run_bridge(
     # Phase 3: emit Claude hooks example + recursion-guarded guard script.
     # Opt-in; emits .claude/settings.agentteams.example.json (user merges
     # into their own settings.json) and .claude/hook-guard.sh.
-    if (
-        target_framework == "claude"
-        and src_fw == "copilot-vscode"
-        and "bridge:copilot-vscode-to-claude:hooks" in features
-    ):
+    if (target_framework == "claude" and src_fw == "copilot-vscode"
+            and "bridge:copilot-vscode-to-claude:hooks" in features):
         from agentteams.hooks_emit import emit_hooks_artifacts
 
         hook_result = emit_hooks_artifacts(
@@ -727,11 +712,8 @@ def run_bridge(
             )
 
     # Phase 5: emit recurring routine specs for Claude's /schedule skill.
-    if (
-        target_framework == "claude"
-        and src_fw == "copilot-vscode"
-        and "bridge:copilot-vscode-to-claude:schedule" in features
-    ):
+    if (target_framework == "claude" and src_fw == "copilot-vscode"
+            and "bridge:copilot-vscode-to-claude:schedule" in features):
         from agentteams.schedule_emit import emit_schedule_artifact
 
         sched_result = emit_schedule_artifact(
