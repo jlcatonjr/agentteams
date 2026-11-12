@@ -103,6 +103,21 @@ def _configured_cap(registry: dict) -> int:
     return value
 
 
+def _carveouts_counted(root: Path, now: datetime | None) -> int:
+    """The active carve-outs pinned to this team dir, which count against the same cap (fail-closed on a bad registry).
+
+    Raises:
+        ExceptionRegistryError: The project's carve-out registry exists but can't be read.
+    """
+    from agentteams.carveout_checks import active_carveouts_for
+    from agentteams.carveouts import CarveoutError
+
+    try:
+        return active_carveouts_for(root, today=_now(now).astimezone().date())  # local date, as carve-outs use
+    except CarveoutError as exc:
+        raise ExceptionRegistryError(f"the carve-out registry can't be counted against the cap: {exc}") from exc
+
+
 def _is_relaxing_entry(entry: dict) -> bool:
     """Return True when a registry entry represents a constraint-relaxing exception.
 
@@ -195,7 +210,9 @@ def assert_within_aggregate_cap(
 
     * any active exception has lapsed past its sunset/expiry (the registry is stale — its counts
       are untrustworthy until the lapsed entry is retired); or
-    * the count of active relaxing exceptions plus ``adding`` exceeds ``cap.max_active_relaxing``.
+    * the count of active relaxing exceptions, plus the active carve-outs pinned to this team dir
+      (``carveout_checks.active_carveouts_for``), plus ``adding`` exceeds ``cap.max_active_relaxing``; or
+    * the project's carve-out registry exists but can't be read.
 
     Args:
         root: The workspace root.
@@ -222,13 +239,13 @@ def assert_within_aggregate_cap(
             f"(flip to a terminal status) before activating another — an aggregate guard cannot "
             f"trust a stale registry (fail-closed)."
         )
-    current = len(active_relaxing_exceptions(registry, now=now))
+    current = len(active_relaxing_exceptions(registry, now=now)) + _carveouts_counted(root, now)
     if current + adding > cap:
         raise ExceptionRegistryError(
             f"activating {adding} more relaxing exception(s) would bring the active total to "
             f"{current + adding}, over the cap of {cap} ({EXCEPTION_REGISTRY_REL} "
-            f"cap.max_active_relaxing). Raise the cap deliberately in the registry or retire an "
-            f"existing exception (fail-closed)."
+            f"cap.max_active_relaxing; active carve-outs pinned to this team count too, signed or not). Raise the cap "
+            f"deliberately in the registry or retire an existing exception or carve-out (fail-closed)."
         )
 
 
@@ -236,7 +253,8 @@ def audit_exceptions(root: Path, *, now: datetime | None = None) -> list[str]:
     """Return a read-only list of problems with the registry (empty when clean).
 
     Mirrors ``verify_directives``/``verify_grants``: consumes nothing, reports every lapsed active
-    exception and a cap breach, plus a whole-registry parse/shape error.
+    exception and a cap breach (active carve-outs pinned to this team dir count against the cap), plus a
+    whole-registry parse/shape error and an unreadable carve-out registry.
 
     Args:
         root: The workspace root.
@@ -258,11 +276,13 @@ def audit_exceptions(root: Path, *, now: datetime | None = None) -> list[str]:
                 f"({entry.get('expires')}) — retire it to a terminal status"
             )
         active = active_relaxing_exceptions(registry, now=now)
+        carveouts = _carveouts_counted(root, now)
     except ExceptionRegistryError as exc:
         return problems + [str(exc)]
-    if len(active) > cap:
+    if len(active) + carveouts > cap:
         problems.append(
-            f"active relaxing exceptions ({len(active)}) exceed the cap ({cap})"
+            f"active relaxing exceptions ({len(active)}) plus active carve-outs ({carveouts}) exceed the cap ({cap})"
+            if carveouts else f"active relaxing exceptions ({len(active)}) exceed the cap ({cap})"
         )
     return problems
 
@@ -442,6 +462,30 @@ def retire_exception(root: Path, exception_id: str, *, reason: str) -> dict:
     return registry
 
 
+def cap_notice(root: Path) -> str | None:
+    """A note when the registry's cap is not the default, so the operator confirms they set it.
+
+    A team rendered before the registry was sandbox-protected (2026-11-12) could have had it created by a confined
+    process with a raised cap; the stub writer never overwrites it, and the sandbox then protects it.
+
+    Args:
+        root: The team directory.
+
+    Returns:
+        The note, or ``None`` when the registry is absent, unreadable (``audit_exceptions`` reports that) or at the
+        default cap.
+    """
+    path = root / EXCEPTION_REGISTRY_REL
+    try:
+        cap = _configured_cap(load_registry(root)) if path.exists() else _DEFAULT_MAX_ACTIVE_RELAXING
+    except ExceptionRegistryError:
+        return None
+    if cap == _DEFAULT_MAX_ACTIVE_RELAXING:
+        return None
+    return (f"cap.max_active_relaxing is {cap} (the default is {_DEFAULT_MAX_ACTIVE_RELAXING}). Confirm you set it: "
+            f"`git log -p -- {path}` (a confined process could have written it before the file was protected).")
+
+
 def list_exceptions(root: Path) -> list[dict]:
     """Return every registry entry (for ``--list-exceptions``), or an empty list when absent."""
     return list(load_registry(root).get("exceptions", []))
@@ -468,6 +512,7 @@ __all__ = [
     "active_relaxing_exceptions",
     "assert_within_aggregate_cap",
     "audit_exceptions",
+    "cap_notice",
     "entries_for",
     "lapsed_active_exceptions",
     "list_exceptions",

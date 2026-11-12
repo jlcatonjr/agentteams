@@ -13,9 +13,11 @@ import csv
 import json
 from pathlib import Path
 
+import datetime as _dt
+
 from agentteams.carveouts import (
-    _CLAUSE_RE, GATE_FAMILY, REGISTRY_REL, RELAXABLE_RULE15_CLAUSES, _RULE15_HEADING_RE, Problem, _git, _str_list,
-    decision_dir)
+    _CLAUSE_RE, GATE_FAMILY, REGISTRY_REL, RELAXABLE_RULE15_CLAUSES, _RULE15_HEADING_RE, TEAM_DIRS, Problem, _date, _git,
+    _str_list, decision_dir, load_registry)
 
 
 def team_dir_problem(root: Path, registry: dict) -> Problem | None:
@@ -266,6 +268,40 @@ def check_aggregate_cap(root: Path, registry: dict, entries: list[dict]) -> list
         return [Problem("registry", "aggregate-cap", f"{held} active relaxing exception(s) plus {len(entries)} "
                                                      f"carve-out(s) exceed the Rule 15 aggregate cap of {cap}")]
     return []
+
+
+def active_carveouts_for(team_dir: Path, *, today: _dt.date | None = None) -> int:
+    """How many carve-outs count against *team_dir*'s Rule 15 exception cap: those its project's registry pins there.
+
+    Counts every entry whose status is ``active`` and whose ``expires`` is not past, valid or not and signed or not:
+    counting more is the fail-closed direction for a cap. An entry with no readable ``expires`` counts.
+
+    Args:
+        team_dir: A team directory (one of :data:`~agentteams.carveouts.TEAM_DIRS` under a project root).
+        today: The current date (default: today).
+
+    Returns:
+        The count; 0 when *team_dir* is not a team directory, the project has no registry, or the registry pins
+        another team directory.
+
+    Raises:
+        CarveoutError: The registry exists but can't be read (callers refuse: a guard never treats it as empty).
+    """
+    team = Path(team_dir).resolve()
+    root = team.parent.parent  # every TEAM_DIRS entry is two levels below the project root
+    if not any((root / rel).resolve() == team for rel in TEAM_DIRS):
+        return 0
+    registry = load_registry(root)
+    if registry is None or decision_dir(root, registry).resolve() != team:
+        return 0
+    today = today or _dt.date.today()
+    count = 0
+    for entry in registry["carveouts"]:
+        if not isinstance(entry, dict) or entry.get("status") != "active":
+            continue
+        expires = _date(entry.get("expires"))
+        count += expires is None or expires >= today
+    return count
 
 
 def check_clearances(root: Path, registry: dict, entries: list[dict]) -> list[Problem]:

@@ -47,7 +47,8 @@
 # CONTROL PLANE (F-4, 2026-09-30 Linux/bwrap; macOS Seatbelt 2026-10-07): inside every writable root (--scratch,
 #   --writable, --coord-root) each EXISTING agentteams control-plane path (CONTROL_PLANE_REL below:
 #   the enforce_decision_signing switch, the gate hook, the verify-key store, the approver/manager
-#   rosters and management config (PR-D), the goose profile, and each team's build-log marker) is
+#   rosters and management config (PR-D), the exception registry and carve-out high-water mark
+#   (2026-11-12; protect-if-present), the goose profile, and each team's build-log marker) is
 #   --ro-bind'ed, and each of its ancestor dirs below the root gets a read-write SELF-bind so it
 #   becomes a mount point: renaming it away (`mv .claude .claude.old`, then plant a tree) fails
 #   EBUSY, while writes inside it still work. Order: rw roots, ancestor self-binds, ro-binds, masks.
@@ -122,18 +123,23 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
                     .claude/agents/references/authorized-verify-keys
                     .claude/agents/references/security-approvers.txt .claude/agents/references/authorized-managers.txt
                     .claude/agents/references/management-authority.json
+                    .claude/agents/references/exception-registry.json .claude/agents/references/carveout-high-water.json
                     .goose/recipes/references/agent-privilege.json .goose/recipes/references/authorized-verify-keys
                     .goose/recipes/references/security-approvers.txt .goose/recipes/references/authorized-managers.txt
                     .goose/recipes/references/management-authority.json
+                    .goose/recipes/references/exception-registry.json .goose/recipes/references/carveout-high-water.json
                     .github/agents/references/agent-privilege.json .github/agents/references/authorized-verify-keys
                     .github/agents/references/security-approvers.txt .github/agents/references/authorized-managers.txt
                     .github/agents/references/management-authority.json
+                    .github/agents/references/exception-registry.json .github/agents/references/carveout-high-water.json
                     .codex/agents/references/agent-privilege.json .codex/agents/references/authorized-verify-keys
                     .codex/agents/references/security-approvers.txt .codex/agents/references/authorized-managers.txt
-                    .codex/agents/references/management-authority.json .codex/config.toml
+                    .codex/agents/references/management-authority.json
+                    .codex/agents/references/exception-registry.json .codex/agents/references/carveout-high-water.json .codex/config.toml
                     .grok/agents/references/agent-privilege.json .grok/agents/references/authorized-verify-keys
                     .grok/agents/references/security-approvers.txt .grok/agents/references/authorized-managers.txt
-                    .grok/agents/references/management-authority.json .grok/config.toml .grok/sandbox.toml
+                    .grok/agents/references/management-authority.json
+                    .grok/agents/references/exception-registry.json .grok/agents/references/carveout-high-water.json .grok/config.toml .grok/sandbox.toml
                     .goose/sandbox.sb references/security-approvers.txt .goose/confined-run.example.sh
                     .codex/confined-run.example.sh .grok/confined-run.example.sh )
 # Whole directories read-only wherever they exist under a writable root (follow-up #2, 2026-09-30):
@@ -290,6 +296,7 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
     .codex/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
     .grok/confined-run.example.sh) return 0 ;;   # operator-run example: protect-if-present
     .grok/config.toml|.grok/sandbox.toml) return 0 ;;  # Grok's permission/MCP config + sandbox profiles: protect-if-present
+    */exception-registry.json|*/carveout-high-water.json) return 0 ;;  # Rule 15 cap + carve-out mark: protect-if-present
     .claude/*) team="$r/.claude/agents" ;;
     .goose/*) team="$r/.goose/recipes" ;;
     .github/agents/*) team="$r/.github/agents" ;;   # never .github/* (workflows stay unprotected)

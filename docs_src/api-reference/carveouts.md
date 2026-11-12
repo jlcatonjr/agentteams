@@ -99,8 +99,10 @@ These are accepted and bounded by the operator signature, the 90-day expiry and 
   agentteams can't tell how old that directory is. So every verify and render prints the signing team, key id and
   the public key's sha256 fingerprint: check that it is your key.
 - **History.** A reset or rewritten history can lower what git shows. The high-water mark in the team dir catches a
-  sequence lower than one already rendered, but the mark is not in the sandbox's protected set, so a sandboxed agent
-  can lower or delete it too (a follow-up: add it to the protected paths).
+  sequence lower than one already rendered. Since 2026-11-12 the mark is a governed control-plane file: stubbed at
+  sequence 0 (which reads as absent) and protected wherever it exists, by Claude's `permissions.deny`, the Goose
+  Seatbelt profile and `confine-run.sh`. A team rendered before then has no stub until its next `--update`; until
+  then a sandboxed agent that can write the team dir can create or lower the mark.
 - **Wording.** A restatement that names nothing on the lists (for example "the reviewer's stop verdict") can't be
   caught by word lists.
 - **A forged block.** The copy hash is unkeyed, so a block rewritten with a recomputed hash is caught only by

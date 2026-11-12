@@ -76,7 +76,8 @@ reviewable shape:
 
 `write` validates `bash -n`, and **refuses** a spec that is destructive without a `clearance`, names a
 trust root or capability grant (settings/hook files, approver or manager rosters,
-`management-authority.json`, the integrity manifest, signing keys — the operator changes those by hand),
+`management-authority.json`, the integrity manifest, signing keys, the carve-out registry,
+`exception-registry.json`, `carveout-high-water.json` — the operator changes those by hand),
 or carries credential-shaped text. Scripts reference credentials through variables the operator already
 has (`"$GITHUB_TOKEN"`), never literal values.
 

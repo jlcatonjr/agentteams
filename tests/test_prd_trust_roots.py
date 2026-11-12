@@ -32,7 +32,10 @@ from agentteams import control_plane_io as cpio
 from agentteams import integrity
 from agentteams.cli import decision_log as dl
 from agentteams.cli import management_directives as md
+from agentteams.carveout_checks import HIGH_WATER_REL
 from agentteams.cli.artifacts import MANAGEMENT_AUTHORITY_REL_PATH
+from agentteams.cli import exception_registry as _er
+from agentteams.cli.exception_registry import EXCEPTION_REGISTRY_REL
 from agentteams.cli.generate_helpers import (
     _emit_privilege_artifacts,
     _preflight_sandboxed_write,
@@ -74,6 +77,8 @@ def test_roster_names_are_locked_to_their_readers():
     assert dl._DECISION_AUTHORS_FILE in names
     assert md.AUTHORIZED_MANAGERS_REL.rsplit("/", 1)[1] in names
     assert MANAGEMENT_AUTHORITY_REL_PATH.rsplit("/", 1)[1] in names
+    assert EXCEPTION_REGISTRY_REL.rsplit("/", 1)[1] in names
+    assert HIGH_WATER_REL.rsplit("/", 1)[1] in names
     assert set(CONTROL_PLANE_STUB_TEXT) == names
     assert governed_roster_paths("goose")[0].startswith(".goose/recipes/references/")
     assert GRANT_ROSTER_PROJECT_REL == f"references/{dl._DECISION_AUTHORS_FILE}"
@@ -140,6 +145,10 @@ READERS = {
     "manager_roster": lambda r: md._read_manager_roster(r),
     "roster_names_a_manager": lambda r: md._roster_names_a_manager(r),
     "manager_on_roster": lambda r: md._manager_on_roster("@ops", r),
+    # 2026-11-12: the exception registry stub reads exactly like an absent registry.
+    "exception_registry": lambda r: _er.load_registry(r),
+    "exception_cap": lambda r: _er.assert_within_aggregate_cap(r),
+    "exception_audit": lambda r: _er.audit_exceptions(r),
 }
 from agentteams.cli import grants as _grants  # noqa: E402
 
@@ -158,6 +167,25 @@ def test_stub_equals_absent(tmp_path, reader, layout):
     fn = READERS[reader]
     assert _outcome(lambda: fn(_team(tmp_path, True, layout))) == \
         _outcome(lambda: fn(_team(tmp_path, False, layout)))
+
+
+def test_high_water_stub_behaves_as_absent(tmp_path):
+    """The carve-out high-water stub (sequence 0) refuses no registry and is raised on the first render, as absent."""
+    from agentteams import carveout_checks as cc
+
+    results = []
+    for stub in (True, False):
+        root = tmp_path / ("stub" if stub else "absent")
+        refs = root / ".claude" / "agents" / "references"
+        refs.mkdir(parents=True)
+        if stub:
+            (refs / "carveout-high-water.json").write_text(CONTROL_PLANE_STUB_TEXT["carveout-high-water.json"])
+        registry = {"decision_log": ".claude/agents", "sequence": 1}
+        high = cc._high_water(root, registry)
+        refused = high is not None and 1 < high
+        assert cc.record_high_water(root, registry) is None
+        results.append((refused, json.loads((refs / "carveout-high-water.json").read_text())))
+    assert results[0] == results[1] == (False, {"sequence": 1})
 
 
 def test_management_authority_stub_declares_nothing():
@@ -180,12 +208,16 @@ def test_stub_never_overwrites_operator_roster_or_follows_a_symlink(tmp_path):
     outside.write_text("untouched\n", encoding="utf-8")
     (refs / "authorized-managers.txt").symlink_to(outside)
     (refs / "management-authority.json").symlink_to(tmp_path / "dangling.json")
+    (refs / "exception-registry.json").write_text('{"cap": {"max_active_relaxing": 2}, "exceptions": []}\n')
+    (refs / "carveout-high-water.json").write_text('{"sequence": 7}\n')
     for _ in range(2):
         assert cpio.write_control_plane_stubs(team, "claude", _CLAUDE_ON) == []
     assert (refs / "security-approvers.txt").read_text() == populated
     assert outside.read_text() == "untouched\n"
     assert not (tmp_path / "dangling.json").exists()
     assert (refs / "management-authority.json").is_symlink()
+    assert "max_active_relaxing" in (refs / "exception-registry.json").read_text()
+    assert (refs / "carveout-high-water.json").read_text() == '{"sequence": 7}\n'
 
 
 def test_create_exclusive_refuses_a_planted_symlink_even_if_raced(tmp_path):

@@ -71,6 +71,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `claude-fable-5-2` for the orchestrator, `opus` for every other stub, the parametric workstream expert included.
   The bridge lists every stub that received a default in a notice. Native (non-stub) agent bodies are untouched.
 
+### fixed (sandbox: the exception registry and the carve-out high-water mark are protected; carve-outs count in the exception cap)
+
+- **Before**, a sandboxed agent could rewrite two Rule 15 files in its team's `references/`:
+  - `exception-registry.json`, which sets its own aggregate cap (`cap.max_active_relaxing`);
+  - `carveout-high-water.json`, which stops an older carve-out registry being restored.
+
+  The cap was also counted one way: carve-outs counted exceptions when they rendered, but minting an exception and
+  `--audit-exceptions` ignored active carve-outs.
+- **Now** both files are governed control-plane files, like the approver and manager rosters:
+  - protected by Claude `permissions.deny`, the Goose Seatbelt profile, the sibling-team rules and `confine-run.sh`;
+  - stubbed write-if-absent (the empty registry, and `{"sequence": 0}`). The cap, audit and high-water readers
+    treat a stub exactly as a missing file. One check does not: a carve-out registry whose pinned team had no
+    exception registry was refused (`no-exception-registry`); with the stub it passes the check at the default cap;
+  - in the launcher they are protect-if-present, so a team rendered before this change still launches. Its next
+    `--update` writes the stubs, which the sandbox then protects. A file already there is kept, including one a
+    confined process created before then (known limitation);
+- **The exception registry is a trust root:** governance stem `exception-registry-json` (and `carveout-high-water`
+  for the mark) and a handoff trust-root token. A decision row or handoff naming it is refused like one naming a
+  roster.
+- **`--audit-exceptions` notes a non-default cap.** In a team rendered before this change, a confined process could
+  have created the registry with a raised cap, which the stub writer keeps; the note asks you to confirm it (known
+  limitation).
+- **The cap now counts carve-outs both ways.** `assert_within_aggregate_cap` and `--audit-exceptions` count the
+  active carve-outs pinned to the same team dir (`carveout_checks.active_carveouts_for`), signed or not, valid or
+  not. An unreadable carve-out registry refuses minting and is reported by the audit. A draft (unsigned) registry
+  therefore already takes cap room, and a sandboxed agent that can write `.agentteams/` can block minting (known
+  limitation).
+- **Launcher re-pin.** `confine-run.sh` changed for the first time since 2026-10-14, so its sha256 is now
+  `e22910653d00…`. Consumers that pin it (baseAgent's parity test) re-pin when they take this version; the lineage
+  entry is `security: true`.
+
 ### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
 
 - **The bug.** Claude Code loads every `*.md` under `.claude/agents/`, dot-directories included. Backups made before

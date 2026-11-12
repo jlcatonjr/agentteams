@@ -1567,8 +1567,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Read-only: report the health of the constraint-relaxing exception registry "
             "(references/exception-registry.json) under --output/--project (else CWD) — every "
-            "active-but-expired (lapsed) exception and any breach of the aggregate cap. Never "
-            "mints or activates. Exits non-zero if the registry is unhealthy."
+            "active-but-expired (lapsed) exception and any breach of the aggregate cap, which "
+            "the active carve-outs pinned to the team count against too, and a note when the cap "
+            "is not the default. Never mints or activates. Exits non-zero if the registry is unhealthy."
         ),
     )
     parser.add_argument(

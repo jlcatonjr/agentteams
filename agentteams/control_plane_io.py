@@ -2,13 +2,15 @@
 
 Two small, stdlib-only I/O helpers for the sandbox control plane (PR-D, 2026-09-30):
 
-* :func:`write_control_plane_stubs` writes comment-only stubs of the operator-only rosters
-  (``security-approvers.txt``, ``authorized-managers.txt``, ``management-authority.json``) into a
+* :func:`write_control_plane_stubs` writes stubs of the operator-only rosters (comment-only:
+  ``security-approvers.txt``, ``authorized-managers.txt``, ``management-authority.json``) and, since 2026-11-12,
+  of ``exception-registry.json`` and ``carveout-high-water.json`` (JSON) into a
   SANDBOXED team's ``references/`` so every launcher/Seatbelt entry exists (the launcher refuses
   to start when a required entry is missing; a missing Seatbelt literal cannot be ro-bound). It
   never overwrites: each file is created with ``O_CREAT|O_EXCL|O_NOFOLLOW``, so an existing
   roster, or a planted symlink (even a dangling one), is left untouched. A stub reads exactly like
-  an absent file in every reader (``tests/test_prd_trust_roots.py``).
+  an absent file in every reader except ``carveout_checks.team_dir_problem``'s exception-registry presence
+  check (``tests/test_prd_trust_roots.py``).
 * :func:`probe_team_write_denied` detects a write-denied team dir BEFORE an ``--update`` writes
   anything, so an in-sandbox run refuses cleanly instead of leaving a partial tree.
 
@@ -74,7 +76,7 @@ def _create_exclusive(path: Path, text: str) -> bool:
 def write_control_plane_stubs(
     output_dir: Path, framework: str, manifest: dict[str, Any], *, dry_run: bool = False
 ) -> list[Path]:
-    """Write the comment-only roster stubs that are absent (write-if-absent, never overwrite).
+    """Write the control-plane stubs that are absent (write-if-absent, never overwrite).
 
     Args:
         output_dir: The team's agents dir.

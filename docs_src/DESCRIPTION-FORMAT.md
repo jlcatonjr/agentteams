@@ -254,7 +254,8 @@ WASM is off. See [`wasm_config`](api-reference/wasm-config.md).
 **The example needs two standing exceptions in a governed workspace.** Each of those decisions also registers a
 standing exception in `references/exception-registry.json`: one `wasm-grant-widen:<framework>` and one
 `native-exec-keep:<framework>` (one per framework, however many agents or paths it lists). Both count toward
-`cap.max_active_relaxing`, which defaults to `1` when the registry sets none. With the default cap, the example above
+`cap.max_active_relaxing`, which defaults to `1` when the registry sets none; active carve-outs
+(`.agentteams/carveouts.json`) pinned to the team count toward it too. With the default cap, the example above
 (a widening plus a keep list, and the default keep counts too) is refused before anything is consumed: `activating 2
 more relaxing exception(s) would bring the active total to 2, over the cap of 1 ...`. Signing them one at a time does
 not help: once the first is active, the second is refused the same way. Either raise `cap.max_active_relaxing`
