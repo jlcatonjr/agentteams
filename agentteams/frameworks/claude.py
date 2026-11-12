@@ -22,7 +22,9 @@ Recognised front matter keys (all optional, but name + description are strongly 
                  slash-command key and is ignored here — emitting it was finding
                  F-1 of the 2026-08-06 constitutional audit.
   disallowedTools: Comma-separated deny list, subtracted from the inherited pool
-  model:         Claude model variant (e.g. claude-opus-4-5, claude-sonnet-4-5)
+  model:         Claude model alias or id (e.g. opus, claude-fable-5-2). Rendered
+                 teams default to `claude-fable-5-2` for the orchestrator and `opus` for every other
+                 agent (see _claude_model.py)
 
 VS Code Copilot keys (user-invocable:, agents:) are NOT recognised by Claude Code and
 must NOT be passed through. `tools:` IS recognised, but its VALUE FORMAT differs: copilot
@@ -60,7 +62,12 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
 )
 from ._prompt_root_protect import prompt_roots_enabled
 from ._write_roots import project_root_of
-from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+from ._claude_model import (  # noqa: F401  (constants re-exported for importers of claude)
+    CLAUDE_AGENT_MODEL_DEFAULT,
+    CLAUDE_ORCHESTRATOR_MODEL_DEFAULT,
+    resolve_claude_model as _resolve_claude_model,
+)
+from agentteams.yaml_frontmatter import FRONT_MATTER_MODEL_LINE_RE, parse_yaml_front_matter as _parse_yaml_front_matter
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +164,7 @@ class ClaudeAdapter(FrameworkAdapter):
                                                 runner_mcp.interpreter())
         # A.5: Extract optional Claude-specific keys before stripping front matter.
         model, disallowed_tools, permission_mode = _extract_claude_optional_keys(content)
+        model = _resolve_claude_model(content, model, agent_slug)
         content = self._strip_yaml_front_matter(content)
         content = self._strip_handoffs_section(content)
         content = _inject_claude_front_matter(
@@ -180,21 +188,30 @@ class ClaudeAdapter(FrameworkAdapter):
         names don't resolve, so the list is mapped like an agent file's (``Read, Grep, Glob``). Reported from
         mathAgents' P5 render (2026-10-07).
 
+        A ``model:`` Claude cannot read (a converted Copilot builder's list form) becomes the agent default, like
+        an agent file's (``_claude_model.resolve_claude_model``); a valid Claude model and an absent key are kept.
+
         Args:
             content: The rendered builder file.
             manifest: The team manifest (unused).
 
         Returns:
-            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names.
+            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names and any
+            unreadable ``model:`` replaced by the Claude default.
 
         Raises:
             Nothing.
         """
         yaml_text, body = _parse_yaml_front_matter(content)
-        if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
+        if yaml_text is None:
             return content
         head = content[: len(content) - len(body)]  # the parser's own front-matter span: never touch the body
-        head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
+        source_model = _extract_claude_optional_keys(content)[0]
+        model = _resolve_claude_model(content, source_model, "team-builder")
+        if model is not None and model != source_model:
+            head = FRONT_MATTER_MODEL_LINE_RE.sub(f"model: {model}\n", head, count=1)
+        if _YAML_TOOLS_RE.search(yaml_text):
+            head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
         return head + body
 
     def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
@@ -231,7 +248,7 @@ class ClaudeAdapter(FrameworkAdapter):
         return False
 
     def required_front_matter_keys(self) -> tuple[str, ...]:
-        """Claude subagent headers carry `tools`, not copilot-vscode's `tools`/`model` pair.
+        """Claude subagent headers require `tools`; `model` is optional here (copilot-vscode requires both).
 
         The key is `tools` and not `allowed-tools`: Claude Code's subagent front-matter
         schema defines `name`, `description`, `tools`, `disallowedTools`, `model` and

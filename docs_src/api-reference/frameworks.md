@@ -155,7 +155,7 @@ Project-root-relative prefix of this framework's root dir. **Default implementat
 
 #### `required_front_matter_keys()`
 
-Front-matter keys every agent file of this framework must declare. **Default implementation:** empty tuple — this framework asserts no front-matter contract. Every adapter overrides this explicitly so "examined, and the answer is none" is distinguishable from "not yet examined": `CopilotVSCodeAdapter` → `(name, description, user-invocable, tools, model)`; `ClaudeAdapter` → `(name, description, tools)`; `CopilotCLIAdapter`, `GooseAdapter`, and `AgentsMdAdapter` → `()` (no front matter at all). `CodexAdapter` inherits `AgentsMdAdapter`'s override. `GrokAdapter` → `(name, description, tools, injectDefaultTools, mcpInheritance)`: the last two make `tools:` the declared exact limit (no live negative test yet; see STABILITY section 6).
+Front-matter keys every agent file of this framework must declare. **Default implementation:** empty tuple — this framework asserts no front-matter contract. Every adapter overrides this explicitly so "examined, and the answer is none" is distinguishable from "not yet examined": `CopilotVSCodeAdapter` → `(name, description, user-invocable, tools, model)`; `ClaudeAdapter` → `(name, description, tools)` (it also writes an optional `model`: `claude-fable-5-2` for the orchestrator and `opus` for other template-rendered agents); `CopilotCLIAdapter`, `GooseAdapter`, and `AgentsMdAdapter` → `()` (no front matter at all). `CodexAdapter` inherits `AgentsMdAdapter`'s override. `GrokAdapter` → `(name, description, tools, injectDefaultTools, mcpInheritance)`: the last two make `tools:` the declared exact limit (no live negative test yet; see STABILITY section 6).
 
 **Returns:** `tuple[str, ...]`
 
@@ -261,6 +261,7 @@ Strips YAML front matter and inline handoff blocks to produce plain Markdown sys
 > *Source: `agentteams/frameworks/claude.py`*
 
 - `render_builder_file` maps a canonical builder `tools:` line (written by `write_policy` narrowing) to Claude names, e.g. `Read, Grep, Glob`. Claude Code can't launch a sub-agent whose tool names don't resolve.
+- Agent files get a default `model:` (`_claude_model.resolve_claude_model`): `claude-fable-5-2` for `orchestrator` and `bridge-orchestrator`, `opus` for every other agent, when the source declares a model Claude cannot read (the templates' Copilot list form). A valid Claude model is kept and an absent key stays absent. `render_builder_file` applies the same rule to the team-builder, so a converted Copilot builder gets `model: opus`.
 
 Adapter for Claude Projects.
 
