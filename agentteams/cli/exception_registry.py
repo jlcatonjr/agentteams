@@ -113,7 +113,7 @@ def _carveouts_counted(root: Path, now: datetime | None) -> int:
     from agentteams.carveouts import CarveoutError
 
     try:
-        return active_carveouts_for(root, today=_now(now).date())
+        return active_carveouts_for(root, today=_now(now).astimezone().date())  # local date, as carve-outs use
     except CarveoutError as exc:
         raise ExceptionRegistryError(f"the carve-out registry can't be counted against the cap: {exc}") from exc
 
@@ -244,7 +244,7 @@ def assert_within_aggregate_cap(
         raise ExceptionRegistryError(
             f"activating {adding} more relaxing exception(s) would bring the active total to "
             f"{current + adding}, over the cap of {cap} ({EXCEPTION_REGISTRY_REL} "
-            f"cap.max_active_relaxing; active carve-outs pinned to this team count too). Raise the cap "
+            f"cap.max_active_relaxing; active carve-outs pinned to this team count too, signed or not). Raise the cap "
             f"deliberately in the registry or retire an existing exception or carve-out (fail-closed)."
         )
 
@@ -462,6 +462,30 @@ def retire_exception(root: Path, exception_id: str, *, reason: str) -> dict:
     return registry
 
 
+def cap_notice(root: Path) -> str | None:
+    """A note when the registry's cap is not the default, so the operator confirms they set it.
+
+    A team rendered before the registry was sandbox-protected (2026-11-12) could have had it created by a confined
+    process with a raised cap; the stub writer never overwrites it, and the sandbox then protects it.
+
+    Args:
+        root: The team directory.
+
+    Returns:
+        The note, or ``None`` when the registry is absent, unreadable (``audit_exceptions`` reports that) or at the
+        default cap.
+    """
+    path = root / EXCEPTION_REGISTRY_REL
+    try:
+        cap = _configured_cap(load_registry(root)) if path.exists() else _DEFAULT_MAX_ACTIVE_RELAXING
+    except ExceptionRegistryError:
+        return None
+    if cap == _DEFAULT_MAX_ACTIVE_RELAXING:
+        return None
+    return (f"cap.max_active_relaxing is {cap} (the default is {_DEFAULT_MAX_ACTIVE_RELAXING}). Confirm you set it: "
+            f"`git log -p -- {path}` (a confined process could have written it before the file was protected).")
+
+
 def list_exceptions(root: Path) -> list[dict]:
     """Return every registry entry (for ``--list-exceptions``), or an empty list when absent."""
     return list(load_registry(root).get("exceptions", []))
@@ -488,6 +512,7 @@ __all__ = [
     "active_relaxing_exceptions",
     "assert_within_aggregate_cap",
     "audit_exceptions",
+    "cap_notice",
     "entries_for",
     "lapsed_active_exceptions",
     "list_exceptions",

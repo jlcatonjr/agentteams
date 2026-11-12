@@ -159,6 +159,36 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   carve-outs pinned to the team, so it does not see these rows.
 - **Tracking:** remediation log row 337.
 
+### A cap planted before the exception registry was protected stays in place
+
+- **What:** since 2026-11-12 a sandboxed team's `references/exception-registry.json` is stubbed and write-protected.
+  In a team rendered before then, a confined process could have created the file with a raised
+  `cap.max_active_relaxing`. The stub writer never overwrites an existing file, so the next `--update` keeps it, and
+  the sandbox then protects it. A raised cap grants nothing by itself (each exception still needs an operator-signed
+  decision), but it loosens the aggregate cap.
+- **Who:** operators of sandboxed teams created before 2026-11-12.
+- **Mitigation:** `--audit-exceptions` prints a note whenever the cap is not the default; check the file's history
+  (`git log -p`) and restore the default if you didn't set it.
+
+### Any carve-out entry takes exception-cap room, signed or not
+
+- **What:** minting an exception and `--audit-exceptions` count every active, unexpired entry in
+  `.agentteams/carveouts.json`, whether or not the registry is signed or valid, and refuse when the file can't be
+  read. A draft registry therefore takes cap room before the operator signs it, and a sandboxed agent that can write
+  `.agentteams/` (protected only when prompt-root protection is on) can block minting with a planted or malformed
+  file. Rendering counts only valid, signed entries, so the two counts can differ.
+- **Who:** operators who use carve-outs and also mint exceptions.
+- **Mitigation:** the refusal names the carve-out registry; remove or fix the entry. Counting more is the
+  fail-closed direction for a cap.
+
+### The carve-out high-water mark can be rolled back with the team dir
+
+- **What:** every sandboxed team now has `references/carveout-high-water.json`. In a project that commits its team
+  dir, a `git checkout` or `git reset` of the team dir lowers the mark with it.
+- **Who:** projects that commit `.github/agents` or another team dir.
+- **Mitigation:** the registry's own history check (the last 500 commits) still refuses a re-used or lower sequence;
+  the mark only adds to it. Leave the mark uncommitted (gitignore it) if your team dir is tracked.
+
 ### Generation-time grant widening does not consume `max_uses`
 
 - **What:** a capability grant that permits `write` widens the holder's sandbox `allowWrite` when the holder team

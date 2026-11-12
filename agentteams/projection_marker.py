@@ -438,7 +438,7 @@ def write_projection_marker(
         return result
     hole = _control_plane_hole(agents_dir)
     if hole:
-        result.error = f"refusing the projection marker: {hole} (the launcher would refuse it)"
+        result.error = f"refusing the projection marker: {hole} (the launcher would refuse it or leave it unprotected)"
         return result
     payload = _marker_payload(agents_dir, framework, source_dir, source_framework,
                               files_written, agent_slugs)

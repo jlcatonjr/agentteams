@@ -1099,6 +1099,8 @@ def _run_audit_exceptions(args: argparse.Namespace) -> int:
     output_dir = _resolve_output_dir(args)
     log_path = output_dir / er.EXCEPTION_REGISTRY_REL
     problems = er.audit_exceptions(output_dir)
+    if (notice := er.cap_notice(output_dir)):  # 2026-11-12: a raised cap may predate the registry's protection
+        print(f"  [NOTE] {notice}", file=sys.stderr)
     if not log_path.exists() and not problems:  # active carve-outs can breach the default cap without a registry
         print(f"No exception registry found at {log_path}")
         return 0

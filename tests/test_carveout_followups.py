@@ -146,3 +146,29 @@ def test_the_cli_audit_reports_carve_outs_without_a_registry(tmp_path, capsys):
     team = _project(tmp_path, [_entry("a"), _entry("b")]) / ".claude" / "agents"
     assert build_team.main(["--audit-exceptions", "--output", str(team)]) == 1
     assert "active carve-outs (2)" in capsys.readouterr().err
+
+
+def test_a_non_default_cap_is_noted(tmp_path, capsys):
+    """@security 2026-11-12: a cap planted before the registry was protected is kept by the stub writer."""
+    import build_team
+
+    team = _project(tmp_path, None) / ".claude" / "agents"
+    assert er.cap_notice(team) is None
+    er.write_registry(team, {"version": 1, "cap": {}, "exceptions": []})
+    assert er.cap_notice(team) is None
+    er.write_registry(team, {"version": 1, "cap": {"max_active_relaxing": 5}, "exceptions": []})
+    assert "is 5" in er.cap_notice(team)
+    assert build_team.main(["--audit-exceptions", "--output", str(team)]) == 0
+    assert "[NOTE] cap.max_active_relaxing is 5" in capsys.readouterr().err
+
+
+def test_the_high_water_mark_is_a_governance_root():
+    from agentteams.cli.governance_targets import target_is_governance_root
+
+    assert target_is_governance_root(".github/agents/references/carveout-high-water.json")
+
+
+def test_a_handoff_naming_the_high_water_mark_is_refused():
+    from agentteams.sandbox_handoff import EXTRA_TRUST_ROOT_TOKENS
+
+    assert "carveout-high-water.json" in EXTRA_TRUST_ROOT_TOKENS
