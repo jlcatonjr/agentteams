@@ -606,7 +606,7 @@ def run_bridge(
         and src_fw == "copilot-vscode"
         and "bridge:copilot-vscode-to-claude:subagents" in features
     ):
-        from agentteams.bridge_subagents import emit_subagent_stubs, models_defaulted_notice
+        from agentteams.bridge_subagents import emit_subagent_stubs, stub_notices
 
         stub_result = emit_subagent_stubs(
             source_dir=source_dir,
@@ -619,22 +619,9 @@ def run_bridge(
         result.written.extend(stub_result.written)
         result.skipped.extend(stub_result.skipped)
         result.errors.extend(stub_result.errors)
-        if stub_result.preserved_native:
-            result.notices.append(
-                f"Kept {len(stub_result.preserved_native)} existing non-stub file(s) in "
-                ".claude/agents/ (native agent bodies; --bridge-merge never replaces them "
-                "with stubs): "
-                + ", ".join(rel_to_root(p, output_root) for p in stub_result.preserved_native)
-            )
-        if stub_result.models_defaulted:
-            result.notices.append(models_defaulted_notice(
-                [rel_to_root(p, output_root) for p in stub_result.models_defaulted], dry_run=dry_run))
-        if stub_result.experts_collapsed:
-            result.notices.append(
-                f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert "
-                f"agent(s) into a single parametric stub: "
-                f"{', '.join(stub_result.experts_collapsed)}"
-            )
+        result.notices.extend(
+            stub_notices(stub_result, rel=lambda p: rel_to_root(p, output_root), dry_run=dry_run)
+        )
 
     # P3: emit Goose subagent-stub recipes (one per source agent) into
     # .goose/recipes/. Opt-in via bridge:<src>-to-goose:subagents; default off so
