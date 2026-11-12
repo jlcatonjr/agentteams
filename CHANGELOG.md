@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     accepted without a warning as the legacy synonym of `done`; compared case-insensitively), the `depends_on` ids
     and empty footprints.
   - Warn-first: only a file with no `step` (or legacy `step_id`) column is an error. All 699 steps CSVs in
-    agentteams' own `tmp/` give warnings only.
+    agentteams' own local plans give warnings only.
   - Workflow 11 Part A runs it, and its step 1 now lists every row that is not done (`in_progress` and unknown
     values included). The `available_workflows` fence is now v=13.
 - **`session_scan` (Final Check Part B)** treats every status but `done`/`completed` as open. An `in_progress` row
