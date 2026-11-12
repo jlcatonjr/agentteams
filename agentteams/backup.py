@@ -212,6 +212,87 @@ def loadable_backup_files(output_dir: Path) -> list[Path]:
                   and p.name.endswith(_LOADABLE_BACKUP_EXTENSIONS))
 
 
+#: Agent-runtime dirs whose loaders read agent files beneath them, dot-directories included (measured for
+#: Claude Code and Codex; see the comment above). Grok Build loads `.grok/agents/*.md` (and `.claude/agents`);
+#: whether it walks dot-subdirectories is unmeasured, so it is included: the rename never deletes, so the
+#: fail-safe choice costs nothing (IM item 01 review).
+RUNTIME_AGENT_DIRS: tuple[str, ...] = (".claude/agents", ".goose/recipes", ".codex/agents", ".grok/agents")
+
+
+def _project_root_of(output_dir: Path) -> Path | None:
+    """The project root an output dir belongs to: the dir itself when it holds a runtime dir (a bridge backs
+    up the project root), else :func:`agentteams.prompt_roots.team_project_root`, else ``None``."""
+    from agentteams.prompt_roots import team_project_root
+
+    if any((output_dir / rel).is_dir() for rel in RUNTIME_AGENT_DIRS):
+        return output_dir
+    found = team_project_root(output_dir)
+    return found[0] if found else None
+
+
+def runtime_loadable_backups(project_root: Path) -> list[Path]:
+    """Backed-up files an agent runtime would still load, across every runtime dir of a project.
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        :func:`loadable_backup_files` over each existing :data:`RUNTIME_AGENT_DIRS` entry, in order.
+
+    Raises:
+        OSError: An unreadable backup tree.
+    """
+    return [p for rel in RUNTIME_AGENT_DIRS for p in loadable_backup_files(project_root / rel)]
+
+
+def neutralize_runtime_backups(project_root: Path, *, skip: Path | None = None) -> list[str]:
+    """Run :func:`neutralize_legacy_backups` on every existing agent-runtime dir of a project.
+
+    Args:
+        project_root: The project root.
+        skip: An agents dir already neutralized by the caller.
+
+    Returns:
+        The renamed files, as ``<runtime dir>/<backup root>/<path>``.
+
+    Raises:
+        OSError: When a rename or manifest write fails.
+    """
+    out: list[str] = []
+    root = project_root.resolve()
+    for rel in RUNTIME_AGENT_DIRS:
+        agents = project_root / rel
+        if not agents.is_dir() or (skip is not None and agents.resolve() == skip.resolve()):
+            continue
+        # Never leave the project (@security): a symlinked runtime dir or backup root pointing at a shared or
+        # user-global location (e.g. output_dir = ~/.claude/agents makes $HOME the root) is skipped.
+        backups = agents / _BACKUP_DIR_NAME
+        if root not in agents.resolve().parents or (backups.exists() and root not in backups.resolve().parents):
+            continue
+        out += [f"{rel}/{_BACKUP_DIR_NAME}/{r}" for r in neutralize_legacy_backups(agents)]
+    return out
+
+
+def warn_runtime_backups(output_dir: Path) -> list[Path]:
+    """Print a WARNING per backed-up agent file a runtime would still load, for ``--check`` (warn-first).
+
+    Args:
+        output_dir: The agents dir ``--check`` runs on; the project's other runtime dirs are checked too.
+
+    Returns:
+        The loadable files found (the output dir's own tree and the project's runtime dirs, de-duplicated).
+
+    Raises:
+        OSError: An unreadable backup tree.
+    """
+    root = _project_root_of(output_dir.resolve()) or output_dir
+    found = list(dict.fromkeys([*loadable_backup_files(output_dir), *runtime_loadable_backups(root)]))
+    for p in found:
+        print(f"  WARNING: {p} loads as a live agent (a backup copy made before 2026-10-12); the next "
+              "--update/--bridge-merge renames it *.agentteams-bak, never deletes it.", file=sys.stderr)
+    return found
+
+
 def neutralize_legacy_backups(output_dir: Path) -> list[str]:
     """Rename loadable files in existing backups to their inert names, keeping each manifest consistent.
 
@@ -377,16 +458,25 @@ def backup_output_dir(
         result.skipped = True
         return result
 
-    # Legacy backups (before .md/.yaml became inert) can shadow live agents: neutralize them first.
+    # Legacy backups (before .md/.yaml became inert) can shadow live agents: neutralize them first, in this
+    # dir AND in every agent-runtime dir of the same project. A Copilot-primary repo with a Claude bridge
+    # never backs up .claude/agents itself, so its old stubs were never renamed (IM item 01, G-14-1).
+    renamed: list[str] = []
     try:
-        renamed = neutralize_legacy_backups(output_dir)
+        if not dry_run:  # a dry run writes nothing, renames included (@security)
+            renamed = neutralize_legacy_backups(output_dir)
+            project_root = _project_root_of(output_dir)
+            if project_root is not None:
+                renamed += neutralize_runtime_backups(project_root, skip=output_dir)
     except OSError as exc:
         print(f"  WARNING: couldn't neutralize loadable files in {output_dir / _BACKUP_DIR_NAME}: {exc}",
               file=sys.stderr)
     else:
         if renamed:
             print(f"  ✓  Neutralized {len(renamed)} loadable backup file(s) under {_BACKUP_DIR_NAME}/ "
-                  f"(renamed *{_INERT_BACKUP_SUFFIX}) so no agent runtime loads them as agents", file=sys.stderr)
+                  f"(renamed *{_INERT_BACKUP_SUFFIX}) so no agent runtime loads them as agents:", file=sys.stderr)
+            for rel in renamed:
+                print(f"       {rel}", file=sys.stderr)
 
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_path = output_dir / _BACKUP_DIR_NAME / ts

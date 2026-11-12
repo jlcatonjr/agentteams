@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
+
+- **The bug.** Claude Code loads every `*.md` under `.claude/agents/`, dot-directories included. Backups made before
+  2026-10-12 kept loadable names. `neutralize_legacy_backups` renamed them only inside `backup_output_dir` for the
+  directory being backed up, and a Copilot-primary repo with a Claude bridge never backs up `.claude/agents/`. So an
+  old stub with no `tools:` line kept loading with every tool (IM evaluation item 01, G-14-1; the VK finding,
+  19 repos).
+- **The fix.** Every `backup_output_dir` call now also neutralizes every agent-runtime dir of the same project
+  (`.claude/agents`, `.goose/recipes`, `.codex/agents`, `.grok/agents`) through
+  `backup.neutralize_runtime_backups`.
+  - **When it runs:** whenever a backup is actually taken, on any `--bridge-merge`/`--bridge-refresh` with existing
+    target files, `--update --merge`/`--overwrite`, and fleet runs through those. The same goes for the other
+    callers: adopt-only, adopt-merge, the decision-log migration, the roster prune and stale-agent removal.
+  - **When it doesn't:** on a dry run, with `--no-backup`, or on a run that takes no backup.
+  - **Safety.** Files are renamed to `*.agentteams-bak`, never deleted, and each manifest's `backup_path` is
+    rewritten. A runtime dir or backup root that resolves outside the project is skipped. Each renamed path is
+    printed.
+- **Reporting.** `--doctor` (new "Backup stubs" section) and `--check` WARN on any backed-up agent file that is
+  still loadable. They warn first, per the item's rollback note, rather than fail.
+- **Deferred.** The fleet run has no finding of its own (`fleet.py` is at the size ceiling). It reaches the rename
+  through `--update`, and `--doctor` reports.
+- **Grok.** `.grok/agents` is included as a precaution. Grok Build loads `.grok/agents/*.md`; whether it walks
+  dot-subdirectories is unmeasured, and the rename never deletes.
+- **Dry run.** `backup_output_dir(dry_run=True)` no longer renames anything, its own dir included.
+
 ### fixed (`--check-wiring`: the gate hook and `permissions.deny` must be merged, not only the sandbox block)
 
 - **The bug.** `--check-wiring` compared only the Claude `sandbox` block. A `.claude/settings.json` holding that
