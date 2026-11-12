@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The context-free high-entropy detector no longer reports two kinds of public value as credentials:
   - the base64 body of a Subresource Integrity item (`sha1-`, `sha256-`, `sha384-` or `sha512-`, with the body length
     bound to the algorithm) inside an `integrity` value in `package-lock.json`, `npm-shrinkwrap.json` or `yarn.lock`;
-  - the 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
+  - the lowercase 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
 - Each exemption covers the exact token only, never the line or a path glob alone:
   - every other token on a minified lockfile line is still scanned;
   - a secret in a commit URL's owner or repo segment still fires;

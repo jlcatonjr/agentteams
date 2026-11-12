@@ -126,12 +126,13 @@ security issues.
       `package-lock.json`, `npm-shrinkwrap.json` or `yarn.lock`. The algorithm must be
       `sha1`, `sha256`, `sha384` or `sha512`, the body length must match its digest, and
       every item in the value must be well formed;
-    - the 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
+    - the lowercase 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
       The owner and repo segments are still tested on their own.
 
     Other tokens on the same line are still scanned. Keyword-context lines and pattern
     credentials are unchanged. A secret shaped exactly like one of these hashes, in exactly
-    that position, is not reported.
+    that position, is not reported. Nor is a secret of 23 characters or fewer in a commit
+    URL's owner or repo segment, the same length floor the path guard uses.
 
 **Returns:** `ScanReport`
 
