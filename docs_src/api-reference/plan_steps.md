@@ -6,7 +6,7 @@ Plans in `tmp/by-week/<ISO-week>/<slug>.steps.csv` describe sequenced handoffs b
 
 Introduced alongside [`handoff_payloads`](handoff_payloads.md) so the chain comparator can operate on dict rows.
 
-> **Sibling readers.** Three modules define a `read_steps`/`PlanStep` pair over related-but-different schemas: this one returns plain **dict rows** keyed by the CSV header; [`plan_steps_todo`](plan-steps-todo.md) parses the **strict 11-column** todo-projection schema into `PlanStep` dataclasses; and [`parallel_plan`](parallel-plan.md) uses a **tolerant 7-column** runtime reader. Pick by which schema your CSV follows.
+> **Sibling readers.** Three modules define a `read_steps`/`PlanStep` pair over related-but-different schemas: this one returns plain **dict rows** keyed by the CSV header; [`plan_steps_todo`](plan-steps-todo.md) parses the Rule 9 runtime schema or the 11-column todo-projection schema into `PlanStep` dataclasses; and [`parallel_plan`](parallel-plan.md) uses a **tolerant 7-column** runtime reader. Pick by which schema your CSV follows.
 
 ## Readers at a glance
 
@@ -51,6 +51,34 @@ for finding in findings:
 ```
 
 ---
+
+### `validate(path)`
+
+Checks a steps CSV against the Rule 9 contract and returns `(errors, warnings)`.
+
+- **Errors**, only when the file is unusable: no `step` column and no legacy `step_id` either.
+- **Warnings**, under warn-first:
+  - a missing required column (`step,agent,action,inputs,outputs,status,notes`);
+  - a duplicate `step` id;
+  - a `depends_on` id that names no row;
+  - a status outside `pending|in_progress|done|blocked`, compared case-insensitively (`completed` is accepted,
+    without a warning, as the legacy synonym of `done`);
+  - a row with no inputs and no outputs;
+  - a row wider than the header;
+  - an empty file, or the legacy `step_id` schema.
+
+CLI (`main(argv)`): `python -m agentteams.plan_steps --check STEPS.csv [...]` prints `ERROR`/`WARNING` lines and exits 1 only on an
+error. Workflow 11 Part A runs it on the session's steps CSVs.
+
+### `runnable(steps)`
+
+The steps still to schedule, returned as `(remaining, waiting, warnings)`. `parallel_plan` uses this by default.
+
+- A `done` row (or `completed`) is dropped and counts as a satisfied predecessor.
+- A `blocked` or `in_progress` row is held: it is not scheduled (a running step is never dispatched twice), and
+  neither is any step that depends on one, directly or transitively. Such a step is *waiting*
+  (`waiting[step] = held step`; a held step maps to itself).
+- A row with an unknown status is kept, scheduled as pending, and reported.
 
 ## See Also
 

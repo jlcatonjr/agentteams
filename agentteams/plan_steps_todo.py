@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.atomicio import atomic_rewrite_csv_rows
+from agentteams.plan_steps import KNOWN_STATUSES
 
 _REQUIRED_COLUMNS = (
     "phase_id",
@@ -43,7 +44,7 @@ _REQUIRED_COLUMNS = (
     "status",
 )
 
-_VALID_STATUSES = frozenset({"pending", "in_progress", "completed", "done", "blocked"})
+_VALID_STATUSES = KNOWN_STATUSES
 
 # Map CSV status → Claude TodoWrite status. "done" is a legacy synonym
 # present in older CSVs; project it as "completed".
@@ -74,7 +75,7 @@ class PlanStep:
 
     def to_todo(self) -> dict[str, str]:
         """Project to a Claude TodoWrite item."""
-        projected_status = _STATUS_PROJECTION.get(self.status, "pending")
+        projected_status = _STATUS_PROJECTION.get(self.status.strip().lower(), "pending")
         content = f"{self.step_id}: {self.step_title}"
         # Active form: present-continuous of the step_title verb. Heuristic
         # only — TodoWrite tolerates any string and the orchestrator can
@@ -93,24 +94,55 @@ class PlanStep:
         }
 
 
-def _validate_columns(field_names: list[str] | None, csv_path: Path) -> None:
+#: The Rule 9 runtime columns (``agentteams.plan_steps.RUNTIME_COLUMNS``); a CSV carrying ``step`` and
+#: ``status`` is read in this schema (IM item 09, G-05-4: the skill used to reject every Rule 9 CSV).
+_RUNTIME_KEY_COLUMNS = ("step", "status")
+
+
+def _schema(field_names: list[str] | None, csv_path: Path) -> str:
+    """``"legacy"`` (the 11-column form), ``"runtime"`` (Rule 9), or raise ValueError."""
     if not field_names:
         raise ValueError(f"plan-steps CSV {csv_path} has no header row")
+    if all(c in field_names for c in _REQUIRED_COLUMNS):
+        return "legacy"
+    if all(c in field_names for c in _RUNTIME_KEY_COLUMNS):
+        return "runtime"
     missing = [c for c in _REQUIRED_COLUMNS if c not in field_names]
-    if missing:
-        raise ValueError(
-            f"plan-steps CSV {csv_path} is missing required columns: {missing}"
-        )
+    raise ValueError(f"plan-steps CSV {csv_path} is missing required columns: {missing} (the 11-column form), "
+                     "and it is not the Rule 9 form either (step,agent,action,inputs,outputs,status,notes)")
+
+
+def _from_runtime(row: dict[str, str]) -> PlanStep:
+    """Map a Rule 9 row onto :class:`PlanStep` (the action is the title; outputs are the deliverable)."""
+    def get(k: str) -> str:
+        return (row.get(k) or "").strip()
+
+    return PlanStep(phase_id="", step_id=get("step"), phase_name="", step_title=get("action"),
+                    description=get("action"), deliverable=get("outputs"), dependencies=get("depends_on"),
+                    priority="", effort="", notes=get("notes"), status=get("status"))
 
 
 def read_steps(csv_path: Path) -> list[PlanStep]:
-    """Read a plan-steps CSV; return a list of :class:`PlanStep`."""
+    """Read a plan-steps CSV, Rule 9 (runtime) or 11-column form; return a list of :class:`PlanStep`.
+
+    Args:
+        csv_path: The CSV path.
+
+    Returns:
+        The rows as :class:`PlanStep` (runtime rows mapped by :func:`_from_runtime`).
+
+    Raises:
+        FileNotFoundError: The file is absent.
+        ValueError: The header matches neither schema.
+    """
     csv_path = Path(csv_path)
     if not csv_path.exists():
         raise FileNotFoundError(f"plan-steps CSV not found: {csv_path}")
     with csv_path.open("r", encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
-        _validate_columns(reader.fieldnames, csv_path)
+        schema = _schema(reader.fieldnames, csv_path)
+        if schema == "runtime":
+            return [_from_runtime(row) for row in reader if (row.get("step") or "").strip()]
         steps = [PlanStep(**{col: (row.get(col) or "") for col in _REQUIRED_COLUMNS}) for row in reader]
     return steps
 
@@ -138,13 +170,15 @@ def update_status(csv_path: Path, step_id: str, new_status: str) -> bool:
     with csv_path.open("r", encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         fieldnames = list(reader.fieldnames or [])
-        _validate_columns(fieldnames, csv_path)
+        runtime = _schema(fieldnames, csv_path) == "runtime"
+        key = "step" if runtime else "step_id"
         rows = list(reader)
 
     updated = False
     for row in rows:
-        if row.get("step_id") == step_id:
-            row["status"] = new_status
+        if (row.get(key) or "").strip() == step_id:
+            # A Rule 9 CSV takes the Rule 9 word: `completed` is written as `done` (plan_steps.STATUSES).
+            row["status"] = "done" if (runtime and new_status == "completed") else new_status
             updated = True
             break
 
