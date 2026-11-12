@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1-rc.2] - 2026-11-12
+
+### release notes
+
+agentteams 1.1.1-rc.2 is the second release candidate for 1.1.1. It is 1.1.1-rc.1 plus two changes backported from
+`dev`: generated Claude teams now pin each agent's model (the orchestrator on `claude-fable-5-2`, every other agent on
+`opus`), and the signing docs and messages say the key is found from `key_id`. Existing teams are not changed by
+`--update --merge`; it reports the proposed `model:` lines as notices, because `model` is a privileged key.
+
 ### changed (Claude teams: the orchestrator runs on Fable 5.2, every other agent on Opus)
 
 - **Before**, no generated `.claude/agents/*.md` file carried a `model:` key. Templates declare Copilot's list form
