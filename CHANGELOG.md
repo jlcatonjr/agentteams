@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the pre-commit hook no longer skips the API impact check silently; #447 a, c)
+
+- **The hook resolves its own interpreter** (`agentteams._hook_python`). It used to test `python3` on PATH and, on an
+  older interpreter (macOS `/usr/bin/python3` is 3.9), print one line and let the commit through unchecked. Now:
+  - **In a release-locked repository** (`toolchain.lock` has an `agentteams=` pin), it uses the locked installation,
+    `<root>/.venv/bin/python -I`. That interpreter must import agentteams on 3.11+ and `.venv` must be untracked.
+    It never falls back to the agentteams checkout, which would run unreleased code.
+  - **Otherwise**, it uses the interpreter recorded at install time, then `python3.14` … `python3.11`, then `python3`.
+    A candidate must be 3.11+ and outside the working tree.
+- **A skip is recorded.** It appends to `agentteams-api-impact-skipped` in the git directory.
+  `python -m agentteams.api_impact status` prints the skips (`hook_skips` in `--json`) and exits 1 until a hook run
+  that reaches the API impact step clears them. The commit still succeeds.
+- Re-run `agentteams --update` (or `--install-git-hooks`) to get the new hook block.
+
 ### changed (`parallel_plan` schedules only the remaining steps; the steps-CSV contract is checked)
 
 - **Behaviour change.** `python -m agentteams.parallel_plan` now schedules only the remaining steps, as Workflows

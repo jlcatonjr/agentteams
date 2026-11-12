@@ -856,8 +856,8 @@ def main(argv: list[str] | None = None) -> int:
 
     Returns:
         Exit code: ``--pre-commit`` 3 when strict mode blocks the commit (``--strict-capable`` only), else 0;
-        ``status`` 0 when everything is reviewed, 1 when a commit is
-        pending, 2 when no base could be resolved; ``record`` 0, or 2 on a refused note or missing base.
+        ``status`` 0 when everything is reviewed, 1 when a commit is pending or the hook recorded a skip
+        (:mod:`agentteams._hook_python`), 2 when no base could be resolved; ``record`` 0, or 2 on a refused note or missing base.
     """
     import argparse
 
@@ -902,14 +902,22 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(asdict(imp), indent=2) if args.json else imp.summary())
         return 0
     if args.cmd == "status":
+        from agentteams._hook_python import read_skips
+
         used, commits = status(repo, args.rev_range)
+        skips = read_skips(repo)
         if args.json:
-            print(json.dumps({"range": used, "commits": [asdict(c) for c in commits]}, indent=2))
+            print(json.dumps({"range": used, "commits": [asdict(c) for c in commits], "hook_skips": skips}, indent=2))
         else:
             _print_status(used, commits)
+            if skips:
+                print(f"\nHOOK SKIPPED {len(skips)} time(s): the pre-commit hook could not run the API impact check, so "
+                      "those commits were not checked when made (cleared by the next hook run that reaches it):")
+                for line in skips[-5:]:
+                    print(f"  {line}")
         if used is None:
             return 2
-        return 1 if any(not c.reviewed for c in commits) else 0
+        return 1 if skips or any(not c.reviewed for c in commits) else 0
     if args.cmd == "record":
         try:
             written = record(repo, args.note, args.rev_range)

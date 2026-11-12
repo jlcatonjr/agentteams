@@ -17,7 +17,14 @@ Two maps are refreshed, each under its own guard, plus an optional cache warm-up
 - agent files staged → `<agent-dir>/references/pipeline-graph.md` (agent topology, kept *with the team* — same location `--update`/emit writes — via [`graph`](graph.md))
 - `*.py` files staged → `references/architecture-graph.md` (repo-level module architecture, via [`architecture`](architecture.md))
 - (opt-in via `--code-index-hook`) script/dependency files staged → warm the [code & API index cache](code-index.md) (`references/code-index/`, gitignored — never staged) via `refresh_code_index()`
-- anything staged (deletions included) → `python3 -P -m agentteams.api_impact --pre-commit --strict-capable` ([`api-impact`](api-impact.md)): a one-line summary of the staged API impact, a line for each module whose API page needs attention, and in the agentteams repository with `git config agentteams.regenerateMan true` a regenerated, staged `agentteams.1`. Needs Python 3.11+; otherwise it prints `api-impact unavailable`. The hook captures the step's exit code (`|| _at_api=$?`, safe under `set -e`). Exit 3 fails the commit, which happens only when the operator has opted in with `git config agentteams.apiDocsStrict true` ([strict mode](api-impact.md#strict-mode)); any other non-zero exit is ignored.
+- anything staged (deletions included) → `python -P -m agentteams.api_impact --pre-commit --strict-capable` ([`api-impact`](api-impact.md)): a one-line summary of the staged API impact, a line for each module whose API page needs attention, and in the agentteams repository with `git config agentteams.regenerateMan true` a regenerated, staged `agentteams.1`. The hook captures the step's exit code (`|| _at_api=$?`, safe under `set -e`). Exit 3 fails the commit, which happens only when the operator has opted in with `git config agentteams.apiDocsStrict true` ([strict mode](api-impact.md#strict-mode)); any other non-zero exit is ignored.
+
+**Interpreter.** The block resolves its own Python (`agentteams._hook_python`, #447):
+
+- **Release-locked repository** (`toolchain.lock` has an `agentteams=` pin): the locked installation, `<root>/.venv/bin/python`, run with `-I`. It must import `agentteams` on Python 3.11+, and `.venv` must be untracked. Otherwise the hook skips; it never falls back to the agentteams checkout, which would run unreleased code in a repository that pins a release.
+- **Otherwise:** the interpreter recorded at install time (`agentteams --install-git-hooks` / `--update`), then `python3.14` … `python3.11`, then `python3` on PATH, with the checkout on `PYTHONPATH`. A candidate must be 3.11+ and must not resolve inside the working tree.
+
+When none qualifies, every step is skipped: the hook prints `agentteams: hooks SKIPPED, API impact not checked: <reason>` and appends `<UTC time>\t<reason>` to `agentteams-api-impact-skipped` in the git directory. `python -m agentteams.api_impact status` prints those lines and exits 1 until a hook run that reaches the API impact step removes the marker. The commit itself still succeeds; a skip is recorded, not blocking.
 
 > *Source: `agentteams/git_hooks.py`*
 
