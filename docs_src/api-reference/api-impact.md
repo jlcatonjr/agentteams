@@ -31,9 +31,9 @@ Nothing is stored between runs. `status` walks the non-merge commits from the br
 - **Base:** on a feature branch, the merge-base with the default branch (`origin/HEAD`, `origin/main`,
   `origin/master`, else a local `main`/`master`); on the default branch, `@{upstream}`. No base means
   **pending** (exit 2), never a pass; pass `--range BASE..HEAD`.
-- **Hook skips:** when the pre-commit hook found no usable interpreter it records the skip in the git directory
-  ([git-hooks](git-hooks.md)). `status` prints those lines (`hook_skips` in `--json`) and exits 1 until a hook
-  run that reaches the API impact step clears them.
+- **Hook skips:** when the pre-commit hook found no usable interpreter, or its API impact step failed, it records
+  that in the git directory ([git-hooks](git-hooks.md)). `status` prints those lines (`hook_skips` in `--json`) and
+  exits 1 until a hook run whose API impact step completes clears them.
 - **Reviewed:** the commit's stable patch-id has a ledger file,
   `references/api-impact-reviews/<patch-id>.json`, committed at `HEAD`. The root `references/` is used when
   it exists, else the agent directory's. Patch-ids survive rebase and cherry-pick; a squash merge makes a new

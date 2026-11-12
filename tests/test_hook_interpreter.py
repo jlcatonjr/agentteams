@@ -175,3 +175,64 @@ def test_status_without_a_marker_is_unchanged(tmp_path: Path):
     repo = _repo(tmp_path, env)
     assert _hook_python.read_skips(repo) == []
     assert api_impact.main(["--repo", str(repo), "status", "--range", "HEAD..HEAD"]) == 0
+
+
+@pytest.mark.parametrize("lock", ["agentteams.tag=v1.1.0\n", "tool=x\nnot a key value line\n", None])
+def test_a_tag_only_unparsable_or_non_file_lock_counts_as_locked(tmp_path: Path, lock: str | None):
+    """The same decision as agentteams._fleet_locks: in doubt, the repository is locked (no checkout fallback)."""
+    env = _env([Path(sys.executable).parent])
+    repo = _repo(tmp_path, env)
+    if lock is None:
+        (repo / "toolchain.lock").mkdir()
+    else:
+        (repo / "toolchain.lock").write_text(lock)
+    _install(repo, recorded=sys.executable)
+    assert "toolchain.lock pins agentteams" in _change(repo, env).stderr
+
+
+def test_a_lock_without_an_agentteams_key_is_not_locked(tmp_path: Path):
+    env = _env([_fake_bin(tmp_path)])
+    repo = _repo(tmp_path, env)
+    (repo / "toolchain.lock").write_text("# pins\nresearchteam=jlcatonjr/researchteam@abc\n")
+    _install(repo, recorded=sys.executable)
+    proc = _change(repo, env)
+    assert _SKIPPED not in proc.stderr and "API impact" in proc.stderr
+
+
+def test_a_symlink_outside_the_tree_pointing_into_it_is_refused(tmp_path: Path):
+    env = _env([_fake_bin(tmp_path)])
+    repo = _repo(tmp_path, env)
+    planted = repo / "python3.12"
+    planted.write_text(f"#!/bin/sh\ntouch {repo}/PLANTED_RAN\nexec {sys.executable} \"$@\"\n")
+    planted.chmod(0o755)
+    link = tmp_path / "outside" / "python3.12"
+    link.parent.mkdir()
+    link.symlink_to(planted)
+    _install(repo, recorded=str(link))
+    proc = _change(repo, env)
+    assert _SKIPPED in proc.stderr and not (repo / "PLANTED_RAN").exists()
+
+
+def test_a_crashing_check_is_recorded_and_does_not_clear_the_marker(tmp_path: Path):
+    env = _env([_fake_bin(tmp_path)])
+    repo = _repo(tmp_path, env)
+    _install(repo, recorded="")
+    _change(repo, env)
+    fake = tmp_path / "fake-at" / "agentteams"
+    fake.mkdir(parents=True)
+    (fake / "__init__.py").write_text("")
+    (fake / "api_impact.py").write_text("raise RuntimeError('simulated crash')\n")
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\n" + git_hooks._render_hook_block(str(fake.parent), recorded_python=sys.executable))
+    proc = _change(repo, env, "def a(x, y):\n    pass\n")
+    assert proc.returncode == 0, proc.stderr
+    skips = _hook_python.read_skips(repo)
+    assert len(skips) == 2 and "failed (exit 1)" in skips[1]
+
+
+def test_an_import_path_inside_the_repository_is_not_put_on_pythonpath(tmp_path: Path):
+    inner = tmp_path / ".venv" / "lib" / "site-packages"
+    inner.mkdir(parents=True)
+    assert _hook_python.checkout_path(str(inner), tmp_path) == ""
+    assert _hook_python.checkout_path(str(tmp_path), tmp_path) == str(tmp_path)  # the agentteams repo itself
+    assert _hook_python.checkout_path("/opt/agentteams", tmp_path) == "/opt/agentteams"

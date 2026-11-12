@@ -421,13 +421,13 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
     """
     from agentteams._hook_python import render_resolver
 
-    pp = "_at_run"
+    run = "_at_run"
     code_index_clause = ""
     if code_index_hook:
         code_index_clause = (
             "        if printf '%s\\n' \"$_staged\" | grep -qE "
             "'\\.(py|sh|bash)$|(^|/)(pyproject\\.toml|requirements[^/]*\\.txt|poetry\\.lock|Pipfile\\.lock|uv\\.lock)$'; then\n"
-            f'            {pp} -m agentteams.git_hooks --refresh-code-index --repo "$_at_root" >/dev/null 2>&1 || echo "agentteams: code-index warm-up failed (gitignored cache; self-heals on next --query-code)" >&2\n'
+            f'            {run} -m agentteams.git_hooks --refresh-code-index --repo "$_at_root" >/dev/null 2>&1 || echo "agentteams: code-index warm-up failed (gitignored cache; self-heals on next --query-code)" >&2\n'
             "        fi\n"
         )
     # `_at_rc=$?` captures the exit status of whatever ran before this block (a
@@ -458,14 +458,14 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
         '        fi\n'
         '    elif [ -n "$_at_root" ]; then\n'
         "        if printf '%s\\n' \"$_staged\" | grep -qE '(^|/)\\.(github|claude)/agents/[^/]*\\.agent\\.md$'; then\n"
-        f'            if {pp} -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1; then\n'
+        f'            if {run} -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1; then\n'
         '                git -C "$_at_root" add references/pipeline-graph.md references/pipeline-graph.svg references/pipeline-handoffs.svg >/dev/null 2>&1 || true\n'
         "            else\n"
         '                echo "agentteams: pipeline-graph refresh failed; references/pipeline-graph.md may be stale (run: agentteams --refresh-graph)" >&2\n'
         "            fi\n"
         "        fi\n"
         "        if printf '%s\\n' \"$_staged\" | grep -qE '\\.py$'; then\n"
-        f'            if {pp} -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1; then\n'
+        f'            if {run} -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1; then\n'
         '                git -C "$_at_root" add references/architecture-graph.md references/architecture-graph.svg references/architecture-modules.svg >/dev/null 2>&1 || true\n'
         "            else\n"
         '                echo "agentteams: architecture-graph refresh failed; references/architecture-graph.md may be stale (run: agentteams --refresh-architecture)" >&2\n'
@@ -473,14 +473,18 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
         "        fi\n"
         f"{code_index_clause}"
         "        # API impact: report what the staged diff changes in the API (deletions and renames\n"
-        "        # included) and regenerate built-in derived artifacts. `-P` keeps the working tree off\n"
-        "        # sys.path. Exit 3 (strict mode, git config agentteams.apiDocsStrict) fails the commit;\n"
-        "        # any other failure does not. Reaching this step clears a skip marker.\n"
+        "        # included) and regenerate built-in derived artifacts. Exit 3 (strict mode, git config\n"
+        "        # agentteams.apiDocsStrict) fails the commit. Any other failure does not, but it is recorded\n"
+        "        # in the skip marker; a completed check (exit 0 or 3) clears the marker.\n"
         "        if [ -n \"$(git diff --cached --name-only 2>/dev/null)\" ]; then\n"
         "            _at_api=0\n"
-        f'            {pp} -P -m agentteams.api_impact --pre-commit --strict-capable --repo "$_at_root" || _at_api=$?\n'
+        f'            {run} -m agentteams.api_impact --pre-commit --strict-capable --repo "$_at_root" || _at_api=$?\n'
         '            if [ "$_at_api" -eq 3 ]; then _at_rc=1; fi\n'
-        '            if [ -n "$_at_mark" ]; then rm -f "$_at_mark" 2>/dev/null || true; fi\n'
+        '            if [ "$_at_api" -eq 0 ] || [ "$_at_api" -eq 3 ]; then\n'
+        '                if [ -n "$_at_mark" ]; then rm -f "$_at_mark" 2>/dev/null || true; fi\n'
+        '            elif [ -n "$_at_mark" ]; then\n'
+        '                printf \'%s\\t%s\\n\' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "the API impact step failed (exit $_at_api) with $_at_py" >> "$_at_mark" 2>/dev/null || true\n'
+        '            fi\n'
         "        fi\n"
         "    fi\n"
         "fi\n"
@@ -594,6 +598,8 @@ def install_pre_commit_hook(
                          from the running agentteams install when omitted.
         hooks_dir:       Explicit hooks directory (mainly for tests); resolved
                          via git when omitted.
+        code_index_hook: Also warm the code & API index cache when scripts or
+                         dependency files are staged (off by default).
 
     Returns:
         An :class:`InstallResult`.
@@ -609,10 +615,11 @@ def install_pre_commit_hook(
     target_dir = hooks_dir if hooks_dir is not None else _resolve_hooks_dir(repo_root)
     hook_path = target_dir / "pre-commit"
 
-    from agentteams._hook_python import recorded_interpreter
+    from agentteams._hook_python import checkout_path, recorded_interpreter
 
     block = _render_env_guard_block() + _render_hook_block(
-        at_path, code_index_hook=code_index_hook, recorded_python=recorded_interpreter(repo_root))
+        checkout_path(at_path, repo_root), code_index_hook=code_index_hook,
+        recorded_python=recorded_interpreter(repo_root))
     existing = hook_path.read_text(encoding="utf-8") if hook_path.is_file() else None
     merged = _merge_hook_content(existing, block)
 

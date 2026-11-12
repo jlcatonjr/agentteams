@@ -9,11 +9,15 @@ from a GUI client or a shell without the venv. The hook now resolves an interpre
    untracked, so a commit cannot plant it. When it is unusable the hook skips: it never falls back to the agentteams
    checkout, which would run unreleased code in a repository that pins a release.
 2. **Otherwise:** the interpreter recorded when the hook was installed, then ``python3.14`` … ``python3.11``, then
-   ``python3`` on PATH, with the agentteams checkout on ``PYTHONPATH``. A candidate must be 3.11+ and must not resolve
-   inside the working tree.
+   ``python3`` on PATH, with the agentteams checkout on ``PYTHONPATH``. A candidate must be 3.11+, and neither its path
+   nor its ``readlink -f`` target (where ``readlink -f`` exists) may be inside the working tree.
+
+A repository counts as release-locked the way :func:`agentteams._fleet_locks.read_release_lock` decides it at the
+toplevel: an ``agentteams=`` or ``agentteams.tag=`` key, and, failing closed, a ``toolchain.lock`` that is not a readable
+regular file or has a non-comment line without ``=``.
 
 A skip appends a line to :data:`MARKER` in the git directory. ``python -m agentteams.api_impact status`` prints it and
-exits non-zero until a hook run that does reach the API impact step removes it.
+exits non-zero until a hook run whose API impact step completes (exit 0, or 3 in strict mode) removes it.
 """
 from __future__ import annotations
 
@@ -36,6 +40,9 @@ def recorded_interpreter(repo_root: Path) -> str:
 
     Returns:
         An absolute path, or ``""`` when the running interpreter does not qualify.
+
+    Raises:
+        Nothing.
     """
     if sys.version_info < (3, 11) or not sys.executable:
         return ""
@@ -46,6 +53,31 @@ def recorded_interpreter(repo_root: Path) -> str:
     except OSError:
         return ""
     return str(exe)
+
+
+def checkout_path(agentteams_path: str, repo_root: Path) -> str:
+    """The agentteams import path the hook may put on ``PYTHONPATH`` for ``repo_root``.
+
+    A path strictly inside the repository (agentteams installed into the repository's own ``.venv``, say) would put
+    files any writer of the working tree controls on ``sys.path``, so it is dropped: the hook then relies on its
+    interpreter importing agentteams by itself. The repository root itself is kept, because that is the agentteams
+    source repository running its own hook.
+
+    Args:
+        agentteams_path: The directory that makes ``import agentteams`` work.
+        repo_root: The repository the hook is installed into.
+
+    Returns:
+        ``agentteams_path``, or ``""`` when it resolves strictly inside ``repo_root``.
+
+    Raises:
+        Nothing.
+    """
+    try:
+        path, root = Path(agentteams_path).resolve(), repo_root.resolve()
+    except OSError:
+        return agentteams_path
+    return "" if path != root and path.is_relative_to(root) else agentteams_path
 
 
 def render_resolver(recorded: str, checkout: str) -> str:
@@ -59,14 +91,22 @@ def render_resolver(recorded: str, checkout: str) -> str:
 
     Returns:
         The shell text.
+
+    Raises:
+        Nothing.
     """
     cands = " ".join(shlex.quote(c) for c in ((recorded,) if recorded else ()) + PATH_CANDIDATES)
     return (
         "        # Interpreter (agentteams._hook_python): the locked installation in a release-locked repository,\n"
         "        # else the recorded interpreter or python3.14..3.11/python3 on PATH; 3.11+, never inside the tree.\n"
-        "        _at_py=\"\"; _at_mode=\"\"\n"
+        "        _at_py=\"\"; _at_mode=\"\"; _at_phys=\"$(cd \"$_at_root\" 2>/dev/null && pwd -P)\"\n"
         f"        _at_pp={shlex.quote(checkout)}\n"
-        "        if [ -f \"$_at_root/toolchain.lock\" ] && grep -qE '^[[:space:]]*agentteams[[:space:]]*=' \"$_at_root/toolchain.lock\" 2>/dev/null; then\n"
+        "        # Locked when toolchain.lock pins agentteams (agentteams= or agentteams.tag=), and, failing closed as\n"
+        "        # agentteams._fleet_locks does, when it is not a readable regular file or has a line without '='.\n"
+        "        _at_lock=\"$_at_root/toolchain.lock\"\n"
+        "        if { [ -e \"$_at_lock\" ] || [ -L \"$_at_lock\" ]; } && { [ ! -f \"$_at_lock\" ] || [ ! -r \"$_at_lock\" ] || \\\n"
+        "           grep -qE '^[[:space:]]*agentteams(\\.tag)?[[:space:]]*=' \"$_at_lock\" 2>/dev/null || \\\n"
+        "           grep -vE '^[[:space:]]*(#|$)' \"$_at_lock\" 2>/dev/null | grep -qv '='; }; then\n"
         "            _at_why=\"toolchain.lock pins agentteams, but $_at_root/.venv/bin/python cannot import it on Python 3.11+ (the checkout is not used in a locked repository)\"\n"
         "            if [ -z \"$(git -C \"$_at_root\" ls-files -- .venv 2>/dev/null | head -n 1)\" ] && \\\n"
         "               \"$_at_root/.venv/bin/python\" -I -c 'import sys, agentteams; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then\n"
@@ -77,15 +117,19 @@ def render_resolver(recorded: str, checkout: str) -> str:
         f"            for _at_c in {cands}; do\n"
         "                _at_p=\"$(command -v \"$_at_c\" 2>/dev/null)\" || continue\n"
         "                case \"$_at_p\" in /*) ;; *) continue ;; esac\n"
-        "                case \"$_at_p\" in \"$_at_root\"/*) continue ;; esac\n"
+        "                _at_r=\"$(readlink -f \"$_at_p\" 2>/dev/null)\" || _at_r=\"$_at_p\"\n"
+        "                case \"$_at_p\" in \"$_at_root\"/*|\"$_at_phys\"/*) continue ;; esac\n"
+        "                case \"$_at_r\" in \"$_at_root\"/*|\"$_at_phys\"/*) continue ;; esac\n"
         "                if \"$_at_p\" -I -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then\n"
         "                    _at_py=\"$_at_p\"; _at_mode=checkout; break\n"
         "                fi\n"
         "            done\n"
         "        fi\n"
+        "        # -I (locked) and -P (checkout) keep the working tree off sys.path for every step.\n"
         "        _at_run() {\n"
         "            if [ \"$_at_mode\" = locked ]; then \"$_at_py\" -I \"$@\"\n"
-        "            else PYTHONPATH=\"$_at_pp${PYTHONPATH:+:$PYTHONPATH}\" \"$_at_py\" \"$@\"; fi\n"
+        "            elif [ -n \"$_at_pp\" ]; then PYTHONPATH=\"$_at_pp${PYTHONPATH:+:$PYTHONPATH}\" \"$_at_py\" -P \"$@\"\n"
+        "            else \"$_at_py\" -P \"$@\"; fi\n"
         "        }\n"
         f"        _at_mark=\"$(git rev-parse --git-path {MARKER} 2>/dev/null)\"\n"
     )
@@ -98,10 +142,16 @@ def marker_path(repo: Path) -> Path | None:
         repo: Repository root.
 
     Returns:
-        The path, or ``None`` when git cannot resolve the git directory.
+        The path, or ``None`` when git is missing or cannot resolve the git directory.
+
+    Raises:
+        Nothing.
     """
-    proc = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-path", MARKER],
-                          capture_output=True, text=True, check=False)
+    try:
+        proc = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-path", MARKER],
+                              capture_output=True, text=True, check=False)
+    except OSError:
+        return None
     rel = proc.stdout.strip()
     if proc.returncode != 0 or not rel:
         return None
@@ -117,6 +167,9 @@ def read_skips(repo: Path) -> list[str]:
 
     Returns:
         The lines; empty when there is no marker or it cannot be read.
+
+    Raises:
+        Nothing.
     """
     path = marker_path(repo)
     if path is None or not path.is_file():
