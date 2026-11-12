@@ -5,7 +5,7 @@
 
 - Modules mapped: **452**
 - Packages: **14**
-- Internal import edges: **1712**
+- Internal import edges: **1713**
 - Distinct external dependencies: **11**
 
 ---
@@ -89,7 +89,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.bridge_refresh` | `agentteams.bridge` | `agentteams.bridge` |
 | `agentteams.bridge_skills` | — | `agentteams.bridge` |
 | `agentteams.bridge_sources` | `agentteams.canonical`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.redteam.instantiate` |
-| `agentteams.bridge_subagents` | `agentteams.frameworks.claude` | `agentteams.bridge`, `agentteams.bridge_subagents_goose` |
+| `agentteams.bridge_subagents` | `agentteams.frameworks._claude_model`, `agentteams.frameworks.claude` | `agentteams.bridge`, `agentteams.bridge_subagents_goose` |
 | `agentteams.bridge_subagents_goose` | `agentteams.bridge_subagents`, `agentteams.frameworks.goose` | `agentteams.bridge`, `agentteams.frameworks.goose`, `agentteams.orphan_advisory` |
 | `agentteams.budget` | — | `agentteams.cli.standalone_modes` |
 | `agentteams.canonical` | `agentteams.atomicio`, `agentteams.interop`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_pair_docs`, `agentteams.bridge_sources`, `agentteams.cli.commands`, `agentteams.interop`, `agentteams.interop_helpers`, `agentteams.multi_sync`, `agentteams.sync_hub_refresh`, `agentteams.team_package` |
@@ -205,7 +205,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks` | — | — |
 | `agentteams.frameworks._agents_md_ownership` | `agentteams.fences` | `agentteams._fleet_grok`, `agentteams._interop_grok`, `agentteams.convert`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.grok_config_emit`, `agentteams.interop` |
 | `agentteams.frameworks._agents_md_rules` | `agentteams.render` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.frameworks.structural_merge`, `agentteams.frameworks.wasm` |
-| `agentteams.frameworks._claude_model` | `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.claude` |
+| `agentteams.frameworks._claude_model` | `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.frameworks.claude` |
 | `agentteams.frameworks._claude_wiring_check` | — | `agentteams.frameworks.claude` |
 | `agentteams.frameworks._codex_role_gate_emit` | `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.write_policy` | `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks.codex`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.wasm_enforcement` |
 | `agentteams.frameworks._codex_sandbox_emit` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks.codex`, `agentteams.interop_write_policy`, `agentteams.wasm_enforcement` |
@@ -1083,6 +1083,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/bridge_subagents.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.frameworks._claude_model",
         "agentteams.frameworks.claude"
       ],
       "external": [],
@@ -6881,6 +6882,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.bridge_sources",
       "target": "agentteams.yaml_frontmatter"
+    },
+    {
+      "source": "agentteams.bridge_subagents",
+      "target": "agentteams.frameworks._claude_model"
     },
     {
       "source": "agentteams.bridge_subagents",

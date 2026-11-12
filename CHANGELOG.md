@@ -32,6 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deferred.** Adding steps CSVs to `--verify-integrity`: they are local, gitignored and often legacy, so a
   warn-first validator there would only add noise. `--check` and Part A cover it.
 
+### fixed (bridged Claude teams get the model defaults too)
+
+- **The gap.** On a copilot-vscode-canonical project, `.claude/agents/` holds bridge stubs, and the bridge rewrote them
+  without a `model:`. The Claude adapter's new defaults never reached them, and a `model:` added by hand was wiped by
+  the next `--bridge-merge` (every `researchteam update` and autosync run).
+- **Now** every stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub declares
+  (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
+  `claude-fable-5-2` for the orchestrator, `opus` for every other stub, the parametric workstream expert included.
+  The bridge lists every stub that received a default in a notice. Native (non-stub) agent bodies are untouched.
+
 ### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
 
 - **The bug.** Claude Code loads every `*.md` under `.claude/agents/`, dot-directories included. Backups made before
