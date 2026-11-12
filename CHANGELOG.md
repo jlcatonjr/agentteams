@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-12
+
+### release notes
+
+agentteams 1.1.1 is 1.1.1-rc.2 with no code change. Against 1.1.0 it adds:
+- **Claude model defaults.** Generated Claude teams pin the orchestrator to `claude-fable-5-2` and every other agent to
+  `opus`, so a Fable session does not spawn Fable subagents. Bridged teams (`.claude/agents/` stubs) get the defaults on
+  their next `--bridge-merge`, keeping any model a stub already declares; native Claude files of existing teams get a
+  notice from `--update --merge` (`model` is a privileged key). See [1.1.1-rc.2].
+- **Operator signing finds its own key** from the spec's `key_id`, and the docs and messages say so. See [1.1.1-rc.1].
+
 ## [1.1.1-rc.2] - 2026-11-12
 
 ### release notes
