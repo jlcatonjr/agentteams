@@ -20,6 +20,10 @@ Design constraints
   argument. The N copilot expert files remain as briefs on disk.
 - Slug stability: stub filename mirrors the source slug (with the
   ``.agent.md`` suffix stripped to ``.md``).
+- Every stub carries a Claude ``model:``. Re-emitting a stub keeps the model its
+  existing stub already declares (an operator's choice, ``inherit`` included);
+  a stub with none gets the default: ``claude-fable-5-2`` for the orchestrator,
+  ``opus`` for every other agent (see :mod:`agentteams.frameworks._claude_model`).
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from agentteams.frameworks._claude_model import default_claude_model, is_claude_model_value
 from agentteams.frameworks.claude import CLAUDE_CAPABILITY_KEY
 
 # Mapping from copilot-vscode tools declaration to Claude subagent tool names.
@@ -90,6 +95,8 @@ class StubEmissionResult:
     experts_collapsed: list[str] = field(default_factory=list)
     #: Existing non-stub files left in place because ``preserve_non_stubs`` was set.
     preserved_native: list[str] = field(default_factory=list)
+    #: Stubs written with a default ``model:`` because the existing stub (if any) declared none.
+    models_defaulted: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -119,6 +126,20 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _stub_model(out_path: Path, slug: str) -> tuple[str, bool]:
+    """Return ``(model, defaulted)`` for the stub about to be written at ``out_path``.
+
+    An existing bridge stub's readable ``model:`` is kept, so an operator's choice survives every
+    re-emit. Otherwise the slug's default applies and ``defaulted`` is True.
+    """
+    if out_path.is_file() and _is_bridge_stub(out_path):
+        meta, _ = _parse_front_matter(out_path.read_text(encoding="utf-8", errors="ignore"))
+        current = meta.get("model")
+        if is_claude_model_value(current):
+            return current, False  # type: ignore[return-value]
+    return default_claude_model(slug), True
 
 
 def _parse_front_matter(text: str) -> tuple[dict[str, str], str]:
@@ -265,6 +286,7 @@ def _render_subagent_stub(
     source_rel_path: str,
     source_sha256: str,
     tools_raw: str | None = None,
+    model: str | None = None,
 ) -> str:
     """Render a complete Claude subagent stub file."""
     fm_lines = [
@@ -283,6 +305,8 @@ def _render_subagent_stub(
             _warn_no_capability_key(slug, source_rel_path, reason="its tools list mapped to nothing")
     else:
         _warn_no_capability_key(slug, source_rel_path, reason="it declares no `tools:` block")
+    if model:
+        fm_lines.append(f"model: {model}")
     fm_lines += ["---", ""]
     body = _stub_body(
         source_rel_path=source_rel_path,
@@ -292,7 +316,11 @@ def _render_subagent_stub(
 
 
 def _render_workstream_expert_stub(
-    *, expert_count: int, source_dir_rel: str, tools_union: list[str] | None = None
+    *,
+    expert_count: int,
+    source_dir_rel: str,
+    tools_union: list[str] | None = None,
+    model: str | None = None,
 ) -> str:
     """Render the single parametric workstream-expert stub.
 
@@ -310,6 +338,8 @@ def _render_workstream_expert_stub(
     ]
     if tools_union:
         fm_lines.append(f"{CLAUDE_CAPABILITY_KEY}: {', '.join(tools_union)}")
+    if model:
+        fm_lines.append(f"model: {model}")
     fm_lines += ["---", ""]
     body = (
         "# Workstream Expert (parametric, bridged)\n\n"
@@ -396,13 +426,6 @@ def emit_subagent_stubs(
             source_rel = rel.as_posix()
         except ValueError:
             source_rel = src.as_posix()
-        stub_content = _render_subagent_stub(
-            slug=slug,
-            description=description,
-            source_rel_path=source_rel,
-            source_sha256=sha,
-            tools_raw=meta.get("tools"),
-        )
         out_path = target_dir / f"{slug}.md"
         if out_path.exists() and preserve_non_stubs and not _is_bridge_stub(out_path):
             result.skipped.append(str(out_path))
@@ -411,6 +434,17 @@ def emit_subagent_stubs(
         if out_path.exists() and not overwrite:
             result.skipped.append(str(out_path))
             continue
+        model, defaulted = _stub_model(out_path, slug)
+        stub_content = _render_subagent_stub(
+            slug=slug,
+            description=description,
+            source_rel_path=source_rel,
+            source_sha256=sha,
+            tools_raw=meta.get("tools"),
+            model=model,
+        )
+        if defaulted:
+            result.models_defaulted.append(str(out_path))
         if not dry_run:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(stub_content, encoding="utf-8")
@@ -425,12 +459,14 @@ def emit_subagent_stubs(
         expert_slugs = sorted(_slug_from_source(e.name) for e in experts)
         result.experts_collapsed = expert_slugs
         tools_union = _union_tools_from_sources(experts)
+        out_path = target_dir / "workstream-expert.md"
+        model, defaulted = _stub_model(out_path, "workstream-expert")
         stub_content = _render_workstream_expert_stub(
             expert_count=len(experts),
             source_dir_rel=source_dir_rel,
             tools_union=tools_union,
+            model=model,
         )
-        out_path = target_dir / "workstream-expert.md"
         if out_path.exists() and preserve_non_stubs and not _is_bridge_stub(out_path):
             result.skipped.append(str(out_path))
             result.preserved_native.append(str(out_path))
@@ -441,6 +477,8 @@ def emit_subagent_stubs(
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(stub_content, encoding="utf-8")
             result.written.append(str(out_path))
+            if defaulted:
+                result.models_defaulted.append(str(out_path))
 
     return result
 

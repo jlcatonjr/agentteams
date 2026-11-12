@@ -25,6 +25,41 @@ CLAUDE_AGENT_MODEL_DEFAULT = "opus"
 _CLAUDE_MODEL_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[1m\])?$")
 
 
+def is_claude_model_value(value: str | None) -> bool:
+    """Return True when ``value`` is a ``model:`` value Claude Code can read.
+
+    Args:
+        value: A scalar front-matter value, or ``None``.
+
+    Returns:
+        True for an alias or model id (``opus``, ``inherit``, ``claude-fable-5-2``, ``opus[1m]``).
+
+    Raises:
+        Nothing.
+    """
+    return bool(value) and _CLAUDE_MODEL_VALUE_RE.match(value) is not None
+
+
+def default_claude_model(agent_slug: str) -> str:
+    """Return the default Claude ``model:`` for ``agent_slug``.
+
+    Args:
+        agent_slug: The agent's slug.
+
+    Returns:
+        :data:`CLAUDE_ORCHESTRATOR_MODEL_DEFAULT` for the orchestrator slugs, else
+        :data:`CLAUDE_AGENT_MODEL_DEFAULT`.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.write_policy import ORCHESTRATOR_SLUGS
+
+    if agent_slug in ORCHESTRATOR_SLUGS:
+        return CLAUDE_ORCHESTRATOR_MODEL_DEFAULT
+    return CLAUDE_AGENT_MODEL_DEFAULT
+
+
 def resolve_claude_model(content: str, model: str | None, agent_slug: str) -> str | None:
     """Return the ``model:`` value to emit for a Claude agent file.
 
@@ -46,13 +81,9 @@ def resolve_claude_model(content: str, model: str | None, agent_slug: str) -> st
     Raises:
         Nothing.
     """
-    if model and _CLAUDE_MODEL_VALUE_RE.match(model):
+    if is_claude_model_value(model):
         return model
     yaml_body, _ = _parse_yaml_front_matter(content)
     if model is None and (yaml_body is None or not re.search(r"^model\s*:", yaml_body, re.MULTILINE)):
         return None
-    from agentteams.write_policy import ORCHESTRATOR_SLUGS
-
-    if agent_slug in ORCHESTRATOR_SLUGS:
-        return CLAUDE_ORCHESTRATOR_MODEL_DEFAULT
-    return CLAUDE_AGENT_MODEL_DEFAULT
+    return default_claude_model(agent_slug)
