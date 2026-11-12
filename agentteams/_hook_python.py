@@ -68,7 +68,7 @@ def checkout_path(agentteams_path: str, repo_root: Path) -> str:
         repo_root: The repository the hook is installed into.
 
     Returns:
-        ``agentteams_path``, or ``""`` when it resolves strictly inside ``repo_root``.
+        ``agentteams_path``, or ``""`` when it resolves strictly inside ``repo_root`` or cannot be resolved.
 
     Raises:
         Nothing.
@@ -76,7 +76,7 @@ def checkout_path(agentteams_path: str, repo_root: Path) -> str:
     try:
         path, root = Path(agentteams_path).resolve(), repo_root.resolve()
     except OSError:
-        return agentteams_path
+        return ""  # in doubt, nothing goes on PYTHONPATH
     return "" if path != root and path.is_relative_to(root) else agentteams_path
 
 
