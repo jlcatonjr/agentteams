@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the API impact checklist lists a symbol's users, not every file with the word; #451 b)
+
+- `status`'s audit checklist (`agentteams._api_impact_checklist`) used to search each changed name as a bare word over
+  the whole tree, so a re-signed `main` listed 341 files. It now lists module-qualified evidence: files that import
+  the module and mention the name, `module.name`, and `from module import name`. A removed module lists its
+  importers.
+- Only when that finds nothing does it fall back to the bare word, and the entry is then keyed
+  `"<name> (bare-word fallback)"`. This is a behaviour change for `--json` consumers that read checklist keys.
+- A committed `references/api-impact-reviews/CHECKLIST_EXCLUDES` (one glob per line) keeps record paths such as
+  ledgers and run reports out of the checklist. The review ledger itself is always left out.
+- The generated `api-impact.reference.md` fence `api_impact` is v=5.
+
 ### fixed (`api_impact` sees positional arguments, `choices` and `sys.argv` options; #451 a)
 
 - `add_argument` positionals are part of the surface (`cli-pos:<name>`). Their `choices`, and an option's `choices`,

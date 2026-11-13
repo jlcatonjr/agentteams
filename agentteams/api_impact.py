@@ -376,21 +376,30 @@ def patch_id(repo: Path, commit: str) -> str:
 
 
 def _checklist(repo: Path, imp: Impact) -> dict[str, list[str]]:
-    names: dict[str, set[str]] = {}
+    """Files to audit per changed name (:mod:`agentteams._api_impact_checklist`): module-qualified evidence first."""
+    from agentteams import _api_impact_checklist as ck
+
+    entries: dict[str, set[str]] = {}
+    symbols: dict[str, list[str]] = {}
+    modules: dict[str, list[str]] = {}
     for entry in (*imp.symbols_removed, *imp.symbols_changed):
         module, name = entry.split("::", 1)
-        names.setdefault(name.split(".")[-1], set()).add(module)
-    for path in (*imp.modules_removed, *(o for o, _ in imp.modules_renamed),
-                 *imp.structural_removed, *(o for o, _ in imp.structural_renamed)):
-        names.setdefault(PurePosixPath(path).stem if path.endswith(".py") else path, set()).add(path)
+        term = name.split(".")[-1]
+        entries.setdefault(term, set()).add(module)
+        symbols.setdefault(term, []).append(ck.dotted(module))
+    for path in (*imp.modules_removed, *(o for o, _ in imp.modules_renamed)):
+        term = PurePosixPath(path).stem
+        entries.setdefault(term, set()).add(path)
+        modules.setdefault(term, []).append(ck.dotted(path))
+    for path in (*imp.structural_removed, *(o for o, _ in imp.structural_renamed)):
+        entries.setdefault(path, set()).add(path)
     for opt in (*imp.cli_removed, *imp.cli_changed):
-        names.setdefault(cli_term(opt), set())
-    out: dict[str, list[str]] = {}
-    for term, own in sorted(names.items()):
-        hits = _git(repo, "grep", "-l", "-w", "-F", "-e", term, check=False).decode().splitlines()
-        hits = [h for h in hits if h not in own and not _is_test(h)]
-        out[term] = hits[:CHECKLIST_CAP] + ([f"... {len(hits)} files in all"] if len(hits) > CHECKLIST_CAP else [])
-    return out
+        entries.setdefault(cli_term(opt), set())
+    ledger = ledger_dir(repo)
+    ledger_prefix = ledger.relative_to(Path(repo).resolve()).as_posix().rstrip("/") + "/"
+    return ck.build(repo, entries, symbols=symbols, modules=modules,
+                    skip=lambda h: _is_test(h) or h.startswith(ledger_prefix),
+                    excludes=ck.read_excludes(ledger), cap=CHECKLIST_CAP)
 
 
 def status(repo: Path, rev_range: str | None = None, *, full: bool = False,
