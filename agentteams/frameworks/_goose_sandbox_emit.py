@@ -275,6 +275,7 @@ def _build_seatbelt_profile(
     from agentteams.frameworks._sandbox_emit import (
         CODEX_CONFIG_REL,
         GROK_CONFIG_RELS,
+        GOVERNED_MARKER_REL,
         GRANT_ROSTER_PROJECT_REL,
         assert_roots_clear_of_signing_keys,
         control_plane_ancestors,
@@ -282,8 +283,8 @@ def _build_seatbelt_profile(
         governed_roster_paths,
         protected_write_paths,
         signing_key_deny_read,
+        team_agents_dir,
         team_marker_path,
-        GOVERNED_MARKER_REL,
     )
     roots = list(write_roots) if write_roots else ["."]
     assert_roots_clear_of_signing_keys(roots)
@@ -354,11 +355,12 @@ def _build_seatbelt_profile(
     # on the `references` literal would stop a goose agent creating a project `references/` dir.
     # IM item 17: each team's signing-governed.marker too (deleting it turned governed signing off).
     control_plane = [*protected_write_paths("goose"), ".goose/sandbox.sb", *governed_roster_paths("goose"),
-                     team_marker_path("goose", GOVERNED_MARKER_REL)]
+                     f"{team_agents_dir('goose')}/{GOVERNED_MARKER_REL}"]
     # 2026-09-30: the copilot and codex team dirs' trust roots too (UNVERIFIED on a macOS host).
     # Unconditional: a deny on a missing path also stops the agent creating it. Their ancestor
     # rename literals: `.codex` always (like `.claude`); `.github` only with a copilot team present.
-    sib = {k: [*protected_write_paths(k), *governed_roster_paths(k), team_marker_path(k), team_marker_path(k, GOVERNED_MARKER_REL)]
+    sib = {k: [*protected_write_paths(k), *governed_roster_paths(k), team_marker_path(k),
+               f"{team_agents_dir(k)}/{GOVERNED_MARKER_REL}"]
            for k in ("copilot", "codex", "grok")}
     sib["codex"].append(CODEX_CONFIG_REL)
     sib["grok"].extend(GROK_CONFIG_RELS)

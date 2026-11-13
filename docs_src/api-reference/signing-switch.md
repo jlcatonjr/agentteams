@@ -74,16 +74,33 @@ non-regular file, malformed JSON or a non-boolean value. It never defaults to `f
 
 The ownership test above, the governed-marker test, and the switch file text.
 
-`is_governed` is the one governance test; `cli/decision_log` and `projection_marker` call it too. A dir is
-governed when its `signing-governed.marker` exists, **or** when git tracks the marker there in the index or in
-HEAD, so a deleted marker, or one whose deletion is staged, still governs (IM item 17). git runs hardened, as in
-`integrity`, so a planted `core.fsmonitor` or hooks path cannot run. If the team dir itself is gone, git is asked
-from the nearest existing ancestor. Only a committed deletion ends governance; that needs a commit and shows in
-history. Outside a git work tree, or without git, only the file counts.
+`is_governed` is the one governance test; `cli/decision_log` and `projection_marker` call it too (IM item 17).
+A dir is governed when its `signing-governed.marker` exists, or when git still tracks the marker there:
 
-Every emitted deny list protects the marker: the Claude `Edit(...)` rules (every team dir), the goose Seatbelt
-control-plane deny (every team dir; a deny on a missing path also stops an agent creating it), and the
-launcher's protect-if-present set. Claude's `denyWrite` covers it through the whole `.claude` dir.
+- in the index, or in the tree of HEAD, its upstream or `origin/HEAD`. So a deleted marker, one whose deletion
+  is staged, and one whose deletion is committed only on the current branch all still govern. Governance ends
+  only when the deletion has reached the upstream and default branches.
+- **Fail closed:** a git repository nested inside the project, between its root and the team dir (a planted
+  `.git`), counts as governed, and so does a git timeout.
+- **Fail open (existence only, as before):** outside a git work tree, without git, when git refuses the
+  repository (`safe.directory` ownership), and for a marker git never tracked (untracked or ignored).
+- git runs hardened (no fsmonitor or hooks from the repository's config), and inherited `GIT_DIR`,
+  `GIT_INDEX_FILE`, `GIT_WORK_TREE`, `GIT_CEILING_DIRECTORIES` and similar variables are removed. If the team dir
+  itself is gone, git is asked from the nearest existing ancestor. A non-governed team costs up to four git
+  calls per check; the callers are `--update`/projection writes and the decision-signing switch read when the
+  switch file is missing, not a per-tool-call path.
+
+Where the marker is write-protected:
+
+- the Claude `Edit(...)` rules, for every team dir (they bind the built-in Write/Edit tools; Grok inherits them);
+- Claude's Bash `denyWrite` covers it through the whole `.claude` dir, and a sibling team's marker only when that
+  team dir existed at generation;
+- the goose Seatbelt control-plane deny, for every team dir (a deny on a missing path also stops an agent
+  creating it);
+- the launcher's protect-if-present set, on Linux and macOS.
+
+Copilot and Codex emit no deny list of their own; their markers are protected by the arms above and the
+launcher.
 
 ### `review_lines(update_output) -> list[str]`, `review_reason(lines) -> str`
 

@@ -46,7 +46,7 @@ from agentteams.host_features import MAC_RESOURCE_CAPS, is_sandbox_capable
 # The canonical macOS-augmented launcher sha256. Handed back to baseAgent for its re-pin
 # (tests/test_confine_run_parity.py). A LITERAL pin (not a recompute) so any drift — a NETNS
 # rename, a UTF-8 re-encode, an accidental edit — fails loudly here.
-EXPECTED_LAUNCHER_SHA256 = "55b0d787df1ca01db76eb5177c1efa904cdda43e971aed21bc0f99731c3c681e"  # 2026-11-12 (c69bb9aa, IM item 17): signing-governed.marker protect-if-present
+EXPECTED_LAUNCHER_SHA256 = "026b5417af423125aedbae0ef5fc9299dc1441f2fe10823f6c68b734a2643f15"  # 2026-11-12 (IM item 17 + audit fixes): signing-governed.marker protect-if-present
 
 _TEMPLATES_UNIVERSAL = Path(__file__).resolve().parents[1] / "agentteams" / "templates" / "universal"
 _LAUNCHER_ASSET = _TEMPLATES_UNIVERSAL / _LAUNCHER_ASSET_REL

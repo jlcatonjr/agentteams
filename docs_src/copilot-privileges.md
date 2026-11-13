@@ -312,7 +312,8 @@ In repositories using the agentteams `copilot-vscode` framework, each agent role
 
 `.github/agents/references/` also holds the team's trust roots: the `enforce_decision_signing`
 switch (`agent-privilege.json`), the `authorized-verify-keys/` store, the approver and manager
-rosters, and `build-log.json`. agentteams emits no Copilot sandbox. Since 2026-09-30 the other
+rosters, `build-log.json`, and, in a governed team, `signing-governed.marker`. agentteams emits no Copilot
+sandbox. Since 2026-09-30 the other
 arms protect these files:
 - Claude-sandboxed agents in the same repo are covered by `denyWrite` of `.github/agents`, which
   keeps `.github` non-renameable and `.github/workflows` writable, plus `permissions.deny` `Edit`

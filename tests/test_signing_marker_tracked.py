@@ -57,7 +57,75 @@ def test_a_staged_deletion_still_governs_a_committed_one_does_not(tmp_path):
     _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
     assert signing_switch.is_governed(agents)               # index lost it, HEAD still has it
     _git(tmp_path, "commit", "-q", "-m", "ungovern")
-    assert not signing_switch.is_governed(agents)           # the honest limit: a committed deletion, in history
+    assert not signing_switch.is_governed(agents)           # no upstream, no origin/HEAD: the deletion is everywhere
+
+
+def _clone_with_upstream(tmp_path: Path) -> tuple[Path, Path]:
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _governed_repo(origin)
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+    return origin, work / ".claude" / "agents"
+
+
+@needs_git
+def test_a_deletion_committed_only_on_the_agents_branch_still_governs(tmp_path):
+    """@security item 17 condition 4: git commit is not gated, so HEAD alone cannot end governance."""
+    origin, agents = _clone_with_upstream(tmp_path)
+    work = agents.parents[1]
+    _git(work, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(work, "commit", "-q", "-m", "ungovern on my branch")
+    assert signing_switch.is_governed(agents)               # upstream / origin/HEAD still track it
+    _git(origin, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(origin, "commit", "-q", "-m", "operator ungoverns")
+    _git(work, "fetch", "-q")
+    assert not signing_switch.is_governed(agents)           # the deletion reached the upstream: governance ends
+
+
+@needs_git
+@pytest.mark.parametrize("var", ["GIT_INDEX_FILE", "GIT_DIR", "GIT_CEILING_DIRECTORIES"])
+def test_an_inherited_git_variable_cannot_redirect_the_check(tmp_path, monkeypatch, var):
+    agents = _governed_repo(tmp_path)
+    (agents / MARKER).unlink()
+    other = tmp_path.parent / f"{tmp_path.name}-other"
+    other.mkdir()
+    _git(other, "init", "-q")
+    value = {"GIT_INDEX_FILE": str(other / ".git" / "index"), "GIT_DIR": str(other / ".git"),
+             "GIT_CEILING_DIRECTORIES": str(tmp_path)}[var]
+    monkeypatch.setenv(var, value)
+    assert signing_switch.is_governed(agents)
+
+
+@needs_git
+def test_a_repository_planted_inside_the_project_fails_closed(tmp_path):
+    """@security: `git init` in the team dir would make the check ask an empty repo."""
+    agents = _governed_repo(tmp_path)
+    (agents / MARKER).unlink()
+    _git(agents, "init", "-q")
+    assert signing_switch.is_governed(agents)
+
+
+def test_a_git_timeout_fails_closed(tmp_path, monkeypatch):
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+
+    def hang(*_a, **_k):
+        raise subprocess.TimeoutExpired("git", 10)
+
+    monkeypatch.setattr(signing_switch.subprocess, "run", hang)
+    assert signing_switch.is_governed(agents)
+
+
+def test_no_git_falls_back_to_the_file(tmp_path, monkeypatch):
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+
+    def missing(*_a, **_k):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(signing_switch.subprocess, "run", missing)
+    assert not signing_switch.is_governed(agents)
 
 
 def test_outside_git_only_the_file_counts(tmp_path):
@@ -68,7 +136,7 @@ def test_outside_git_only_the_file_counts(tmp_path):
 
 @needs_git
 def test_a_planted_fsmonitor_is_not_run(tmp_path):
-    """The check runs from the gate hook in a repository the agent can write (integrity._manifest_expected)."""
+    """The check runs in a repository the agent can write: its config must not run code (as integrity does)."""
     agents = _governed_repo(tmp_path)
     (agents / MARKER).unlink()
     canary = tmp_path / "canary"
@@ -120,12 +188,11 @@ def test_one_predicate():
 # --------------------------------------------------------------------------- the deny lists
 
 
-@pytest.mark.parametrize("key", ALL_TEAM_FRAMEWORKS)
+@pytest.mark.parametrize("key", [k for k in ALL_TEAM_FRAMEWORKS if k != "claude"])  # claude: whole .claude, pre-existing
 def test_the_goose_profile_denies_writing_each_teams_marker(key):
     profile = _build_seatbelt_profile(None)
     deny = profile[profile.index(";; --- Control-plane protection"):]
-    rel = f"{team_agents_dir(key)}/{MARKER}"
-    assert rel in deny or (key == "claude" and '"/.claude"))' in deny), key   # claude: the whole .claude dir
+    assert f"/{team_agents_dir(key)}/{MARKER}" in deny, key
 
 
 @pytest.mark.parametrize("key", ALL_TEAM_FRAMEWORKS)
@@ -147,3 +214,18 @@ def test_the_comment_no_longer_says_the_marker_is_left_writable():
     text = (REPO / "agentteams/frameworks/_sandbox_emit.py").read_text(encoding="utf-8")
     assert "creating it only makes the workspace stricter" not in text
     assert signing_switch.GOVERNED_MARKER == "signing-governed.marker"
+
+
+@needs_git
+def test_a_staged_but_uncommitted_marker_still_governs_once_deleted(tmp_path):
+    """Only the index knows a marker that was `git add`ed and not yet committed."""
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "README.md").write_text("team\n")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "team")
+    (agents / MARKER).write_text("governed\n")
+    _git(tmp_path, "add", f".claude/agents/{MARKER}")
+    (agents / MARKER).unlink()
+    assert signing_switch.is_governed(agents)

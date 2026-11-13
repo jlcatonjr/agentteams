@@ -147,11 +147,11 @@ SUPERSEDED_NAMES: tuple[str, ...] = ("wasm-nest.json", "agentteams_wasm_core.py"
 #: Re-pinned once outside the program: confine-run.sh on 2026-11-12 (cd992652, carve-out follow-ups: the exception
 #: registry and the carve-out high-water mark protect-if-present; the downstream re-pin is coordinated outside this
 #: repository, by the operator's infrastructure-management workspace).
-#: Re-pinned again on 2026-11-12 (c69bb9aa, IM item 17: each team's signing-governed.marker protect-if-present; the
+#: Re-pinned again on 2026-11-12 (IM item 17 and its audit fixes: each team's signing-governed.marker protect-if-present; the
 #: downstream re-pin is coordinated the same way).
 _LAUNCHERS_AT_BASE: dict[str, str] = {
     "agentteams/templates/universal/sandbox/confine-run.sh":
-        "55b0d787df1ca01db76eb5177c1efa904cdda43e971aed21bc0f99731c3c681e",
+        "026b5417af423125aedbae0ef5fc9299dc1441f2fe10823f6c68b734a2643f15",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh":
         "369ca51f0388d18a12e2bd1503f4efec0a36f61e03d4820256b1307ca59295ed",
 }

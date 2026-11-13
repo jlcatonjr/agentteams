@@ -12,13 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<team>/signing-governed.marker` existed, and the sandbox left the marker writable. So an agent that deleted it
   turned fail-closed signing off: `enforce_decision_signing: false` applied again, and a missing
   `agent-privilege.json` reverted to legacy unsigned behaviour instead of raising.
-  - `signing_switch.is_governed` now also counts a marker that git tracks in the index or in HEAD, so a deleted
-    or deletion-staged tracked marker still governs. git runs hardened, so a planted `core.fsmonitor` cannot
-    run. Only a committed deletion ends governance, and that shows in history.
+  - `signing_switch.is_governed` now also counts a marker that git still tracks: in the index, or in HEAD, its
+    upstream or `origin/HEAD`. So a deleted marker, a staged deletion, and a deletion committed only on the
+    agent's own branch all still govern.
+    - git runs hardened, and inherited `GIT_DIR`, `GIT_INDEX_FILE` and similar variables are removed.
+    - A repository nested inside the project (a planted `.git`) and a git timeout count as governed.
+    - It still falls back to existence only outside a git work tree, without git, when git refuses the
+      repository (`safe.directory`), and for an untracked or ignored marker.
   - `cli/decision_log` and `projection_marker` use this same check instead of their own.
-  - The marker is now in every emitted deny list: the Claude `Edit` rules and the goose Seatbelt profile (every
-    team dir), and the launcher's protect-if-present set. Claude's `denyWrite` already covers it through the
-    whole `.claude` dir.
+  - The marker is now write-protected by:
+    - the Claude `Edit` rules for every team dir (Grok inherits them);
+    - the goose Seatbelt profile for every team dir;
+    - the launcher's protect-if-present set;
+    - Claude's Bash `denyWrite`, through the whole `.claude` dir.
+
+    Copilot and Codex emit no deny list of their own.
   - `confine-run.sh` changed, so its pins are updated (`EXPECTED_LAUNCHER_SHA256`, the WASM launcher pin, and
     `launcher_lineage.json`). The downstream re-pin of the parity test is coordinated outside this repository.
   - Effect on existing teams: a team whose tracked marker was deleted but not committed is governed again.

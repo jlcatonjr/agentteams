@@ -45,7 +45,7 @@ from pathlib import Path
 from agentteams.atomicio import replace_no_follow
 from agentteams.drift import is_interop_marker
 from agentteams.frameworks._sandbox_emit import GOVERNED_MARKER_REL, TEAM_MARKER_REL
-from agentteams.git_exec import run_git
+from agentteams.git_exec import HARDENED_ENV, git_argv
 
 #: The switch, relative to a team's agents dir.
 SWITCH_REL = "references/agent-privilege.json"
@@ -236,13 +236,38 @@ def owns_switch(agents_dir: Path) -> bool:
     return _has_team_marker(agents_dir) and data.get("note") in PIPELINE_NOTES
 
 
-def _marker_tracked(agents_dir: Path) -> bool:
-    """True when git tracks ``agents_dir/GOVERNED_MARKER`` in the index or in HEAD (IM item 17, G-22-7).
+#: Inherited variables that would point git at another repository or index (@security/@adversarial, item 17).
+_GIT_REDIRECT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CEILING_DIRECTORIES", "GIT_COMMON_DIR",
+                     "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
+                     "GIT_DISCOVERY_ACROSS_FILESYSTEM", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT")
+#: Refs whose tree keeps a team governed: the checkout, its upstream, and the remote default branch. A deletion
+#: committed on the agent's own branch alone does not end governance (@security item 17 condition 4).
+_GOVERNING_REFS = ("HEAD", "refs/remotes/origin/HEAD")  # + the upstream, resolved first (absent: skipped)
 
-    A deleted (or deletion-staged) tracked marker still governs: deleting it must not turn fail-closed
-    signing off. Only a committed deletion ends governance, and that needs a commit, visible in history.
-    Hardened git (``integrity._manifest_expected``): a planted ``core.fsmonitor`` or hooks path cannot run.
-    Not a work tree, no git, or a timeout: False (the existence test alone, as before).
+
+def _git(base: Path, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
+    """Hardened git in ``base``, with no inherited repository redirection (raises like ``subprocess.run``)."""
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_REDIRECT_ENV and not k.startswith("GIT_CONFIG_KEY_")
+           and not k.startswith("GIT_CONFIG_VALUE_")}
+    return subprocess.run(git_argv(base, *args, hardened=True), input=stdin, capture_output=True, text=True,
+                          env={**env, **HARDENED_ENV}, timeout=10, check=False, stdin=None if stdin else subprocess.DEVNULL)
+
+
+def _project_root(agents_dir: Path) -> Path:
+    """The project root a team dir belongs to (two levels up for a default team dir, else its parent)."""
+    posix = agents_dir.as_posix()
+    return agents_dir.parents[1] if any(posix.endswith("/" + t) for t in TEAM_DIRS) else agents_dir.parent
+
+
+def _marker_tracked(agents_dir: Path) -> bool:
+    """True when git still governs ``agents_dir`` through a tracked marker (IM item 17, G-22-7).
+
+    Governed when the marker is in the index, or in the tree of HEAD, its upstream, or ``origin/HEAD``. So a
+    deleted or deletion-staged marker still governs, and so does one whose deletion was committed only on the
+    current branch. Fail-closed cases (True): a git repository nested inside the project between its root and the
+    team dir (a planted ``.git``), and a git timeout. Not a work tree, no git, or git refusing the repository
+    (``safe.directory``): False, the existence test alone, as before. git runs hardened in a repository the agent
+    can write: no fsmonitor or hooks from its config, and no inherited ``GIT_DIR``/``GIT_INDEX_FILE``/… .
     """
     base, rel = agents_dir, Path(GOVERNED_MARKER)
     while not base.is_dir():  # a removed team dir (git rm of its last file) still counts: ask from an ancestor
@@ -250,13 +275,22 @@ def _marker_tracked(agents_dir: Path) -> bool:
             return False
         base, rel = base.parent, Path(base.name) / rel
     try:
-        index = run_git(base, "ls-files", "--error-unmatch", "--", str(rel), hardened=True, timeout=10)
-        if index.returncode == 0:
+        top = _git(base, "rev-parse", "--show-toplevel")
+        if top.returncode != 0:
+            return False
+        root, top_dir = _project_root(agents_dir).resolve(), Path(top.stdout.strip()).resolve()
+        if top_dir != root and top_dir.is_relative_to(root):
+            return True  # a repository nested inside the project answers for itself: fail closed
+        if _git(base, "ls-files", "--error-unmatch", "--", str(rel)).returncode == 0:
             return True
-        head = run_git(base, "ls-tree", "--name-only", "HEAD", "--", str(rel), hardened=True, timeout=10)
+        upstream = _git(base, "rev-parse", "--verify", "-q", "@{upstream}").stdout.strip()
+        refs = (*_GOVERNING_REFS, *((upstream,) if upstream else ()))
+        found = _git(base, "cat-file", "--batch-check", stdin="".join(f"{r}:./{rel.as_posix()}\n" for r in refs))
+    except subprocess.TimeoutExpired:
+        return True  # fail closed: a hung git must not read as "not governed"
     except (OSError, subprocess.SubprocessError, ValueError):
         return False
-    return head.returncode == 0 and bool(head.stdout.strip())
+    return found.returncode == 0 and any(" blob " in ln for ln in found.stdout.splitlines())
 
 
 def is_governed(*dirs: Path) -> bool:
