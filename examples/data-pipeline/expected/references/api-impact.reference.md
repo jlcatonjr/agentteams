@@ -5,7 +5,7 @@ SECTION MANIFEST
 | api_impact | FENCED      |
 -->
 
-<!-- AGENTTEAMS:BEGIN api_impact v=4 -->
+<!-- AGENTTEAMS:BEGIN api_impact v=5 -->
 # API Impact Review Reference — SalesDataPipeline
 
 How the team keeps its API and the infrastructure around it current whenever a commit makes a structural
@@ -93,9 +93,14 @@ python -m agentteams.api_impact record --note "<what the review covered and chan
   uncommitted record does not count). Patch-ids survive rebase and cherry-pick. Merge commits are
   skipped. A squash merge creates a new patch-id, so squashed commits on the default branch show as
   unreviewed.
-- **Audit checklist.** For each removed, renamed or re-signed name, `status` lists the tracked files that
-  mention it (whole-word `git grep`, the changed file and tests left out, at most 15 files plus the total).
-  That list is the scope of the infrastructure audit.
+- **Audit checklist.** For each removed, renamed or re-signed name, `status` lists the tracked files to audit
+  (at most 15 plus the total). For a symbol these are files with module-qualified evidence: they import its module
+  and mention it, write `<module>.<name>`, or import it from the module. A removed or renamed module lists its
+  importers. Only when that finds nothing is the whole word searched, and the entry is then marked
+  `(bare-word fallback)`: read those hits with care, since a common name matches unrelated code. The changed file,
+  tests, the review ledger and any glob listed in the committed `references/api-impact-reviews/CHECKLIST_EXCLUDES`
+  (one per line, for record paths such as ledgers and run reports) are left out. That list is the scope of the
+  infrastructure audit.
 - **API docs.** Under each unreviewed impactful commit with a module to report, `status` prints an
   `API docs:` block, one line per module: `<module>: <state> — <pages>`, plus `; undocumented: …` and
   `; stale: …` when present. The state is `updated` when a matching page changed in that commit or a later
