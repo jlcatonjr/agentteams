@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (placeholder docs: agent-updater mapping and a dead manual placeholder, #392 item 9)
+
+- `agent-updater`'s Change-to-Agent Mapping no longer says `@primary-producer` uses `{STYLE_REFERENCE_PATH}` or
+  `@output-compiler` uses `{REFERENCE_DB_PATH}`; neither template does. The rows now list the agents whose templates
+  reference each path. Teams pick this up on their next `--update`.
+- `PLACEHOLDER-CONVENTIONS.md` no longer documents `{MANUAL:STYLE_EXEMPLARS}`, which nothing emits.
+- New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
+  are pinned as exceptions), and every agent the mapping names must reference that placeholder.
+
 ### changed (`parallel_plan` schedules only the remaining steps; the steps-CSV contract is checked)
 
 - **Behaviour change.** `python -m agentteams.parallel_plan` now schedules only the remaining steps, as Workflows
