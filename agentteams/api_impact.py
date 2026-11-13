@@ -395,7 +395,9 @@ def resolve_base(repo: Path) -> str | None:
 
 
 def patch_id(repo: Path, commit: str) -> str:
-    """Return the commit's stable patch-id, with the review ledger left out of the diff.
+    """Return the commit's stable patch-id, with the review ledger's records (``*.json``) left out of the diff.
+
+    ``BASELINE`` stays in, so a commit that only moves the baseline has an id and can be recorded.
 
     Args:
         repo: Repository root.
@@ -417,7 +419,7 @@ def patch_id(repo: Path, commit: str) -> str:
     parent = _parent(repo, commit)
     base = [parent] if parent else ["--root"]
     diff = _git(repo, "diff-tree", "-p", "--no-ext-diff", "--no-textconv", "--no-color", *base, commit,
-                "--", ".", f":(exclude){ledger_rel}")
+                "--", ".", f":(exclude,glob){ledger_rel}/*.json")
     out = _git(repo, "patch-id", "--stable", stdin=diff).decode().split()
     return out[0] if out else ""
 

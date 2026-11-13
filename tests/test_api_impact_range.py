@@ -76,6 +76,15 @@ def test_a_committed_baseline_makes_the_default_range_push_independent(pushed: P
     assert _pending(pushed, full=True) == ["add api", "baseline"]
 
 
+def test_a_baseline_only_commit_can_be_recorded(pushed: Path):
+    first = _git(pushed, "rev-parse", "HEAD~1").stdout.strip()
+    _commit(pushed, "baseline", {"references/api-impact-reviews/BASELINE": first + "\n"})
+    assert api_impact.patch_id(pushed, "HEAD")  # not empty: BASELINE stays in the diff
+    api_impact.record(pushed, "reviewed: api and baseline")
+    _commit(pushed, "records", {})
+    assert _pending(pushed) == []
+
+
 def test_the_ledger_is_read_at_the_range_tip_not_at_head(pushed: Path):
     api_impact.record(pushed, "reviewed", "HEAD~1..HEAD")
     _commit(pushed, "record", {})

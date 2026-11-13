@@ -115,7 +115,7 @@ def commits(repo: Path, rev_args: list[str]) -> list[tuple[str, str]]:
 
 
 def patch_ids(repo: Path, shas: list[str], ledger_rel: str) -> dict[str, str]:
-    """Stable patch-ids of ``shas`` in one pipeline, the review ledger left out of every diff.
+    """Stable patch-ids of ``shas`` in one pipeline, the review ledger's records (``*.json``) left out of every diff.
 
     Args:
         repo: Repository root.
@@ -131,7 +131,7 @@ def patch_ids(repo: Path, shas: list[str], ledger_rel: str) -> dict[str, str]:
     if not shas:
         return {}
     _, diff = _git(repo, "diff-tree", "--stdin", "-p", "--root", "--no-ext-diff", "--no-textconv", "--no-color",
-                   "--", ".", f":(exclude){ledger_rel}", stdin=("\n".join(shas) + "\n").encode())
+                   "--", ".", f":(exclude,glob){ledger_rel}/*.json", stdin=("\n".join(shas) + "\n").encode())
     _, out = _git(repo, "patch-id", "--stable", stdin=diff)
     ids: dict[str, str] = {}
     for line in out.decode().splitlines():
