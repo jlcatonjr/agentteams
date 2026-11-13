@@ -46,7 +46,6 @@ _BASELINE: dict[str, int] = {
                                             # decision_log / signed_ledger / exception_registry), not
                                             # this prose, so an edited rule line cannot weaken it.
     "domain/agentteams-updater.template.md": 1,
-    "domain/code-hygiene-rules-reference.template.md": 16,
     "domain/cohesion-repairer.template.md": 1,
     "domain/content-enricher.template.md": 2,
     "domain/format-converter.template.md": 2,
