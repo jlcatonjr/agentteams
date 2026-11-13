@@ -15,6 +15,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
   are pinned as exceptions), and every agent the mapping names must reference that placeholder.
 
+### fixed (the pre-commit hook no longer skips the API impact check silently; #447 a, c)
+
+- **The hook resolves its own interpreter** (`agentteams._hook_python`). It used to test `python3` on PATH and, on an
+  older interpreter (macOS `/usr/bin/python3` is 3.9), print one line and let the commit through unchecked. Now:
+  - **In a release-locked repository** (`toolchain.lock` has an `agentteams=` or `agentteams.tag=` key, or fails
+    closed the way fleet release locks do), it uses the locked installation, `<root>/.venv/bin/python -I`. That
+    interpreter must import agentteams on 3.11+ and `.venv` must be untracked. It never falls back to the
+    agentteams checkout, which would run unreleased code.
+  - **Otherwise**, it uses the interpreter recorded at install time, then `python3.14` … `python3.11`, then `python3`,
+    run with `-P`. A candidate must be 3.11+, and neither its path nor its `readlink -f` target may be in the working
+    tree. An agentteams import path strictly inside the repository is not put on `PYTHONPATH`.
+- **A skip is recorded,** and so is an API impact step that fails. Both append to `agentteams-api-impact-skipped` in
+  the git directory.
+  `python -m agentteams.api_impact status` prints them (`hook_skips` in `--json`) and exits 1 until a hook run whose
+  API impact step completes (exit 0, or 3 in strict mode) clears them. The commit still succeeds.
+- Re-run `agentteams --update` (or `--install-git-hooks`) to get the new hook block.
+
+### security (`agentteams.scan` no longer flags public lockfile hashes or commit-URL SHAs, #460)
+
+- The context-free high-entropy detector no longer reports two kinds of public value as credentials:
+  - the base64 body of a Subresource Integrity item (`sha1-`, `sha256-`, `sha384-` or `sha512-`, with the body length
+    bound to the algorithm) inside an `integrity` value in `package-lock.json`, `npm-shrinkwrap.json` or `yarn.lock`;
+  - the lowercase 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
+- Each exemption covers the exact token only, never the line or a path glob alone:
+  - every other token on a minified lockfile line is still scanned;
+  - a secret in a commit URL's owner or repo segment still fires;
+  - an integrity value with any malformed item exempts nothing;
+  - pattern credentials, such as AWS keys, and the keyword-context detector are unchanged.
+- The exemption lives in the new integrity-pinned module `agentteams/_scan_public_hashes.py`, with a verifier-ledger row.
+- **Accepted residue:**
+  - a secret shaped exactly like one of these public hashes, in exactly that position, is not reported;
+  - a secret of 23 characters or fewer in a commit URL's owner or repo segment is not re-flagged, the same length
+    floor the path guard already applies.
+
+### added (CI fails on an unregistered verifier; #50)
+
+- `tests/test_redteam_ledger_gate.py` runs the red-team self-audit's source checks F-1 and F-3 in the required test
+  matrix. A PR that adds a verifier-shaped function (or a non-Python enforcement module) without a row in
+  `references/redteam-verifiers.csv`, or a hand-rolled target/descriptor/VCS resolution without an exemption row,
+  now fails CI with the remedy printed. Until now only the weekly audit reported them, and F-1 grew from 91 to 107
+  in a week. The backlog itself is cleared: 113 F-1 rows (verifier rows name a sensitivity test and a negative
+  control; new tests in `tests/test_redteam_verifiers_{cli,vulnscan,core,data}.py`) and four F-3 exemptions with
+  evidence tests. F-5 (probe intent) stays weekly; the 2026-11-12 re-validation is in
+  `references/redteam-probe-revalidation.md`.
+
 ### changed (CI runs on Ubuntu 26; #262)
 
 - Every CI job that ran on `ubuntu-24.04` now runs on `ubuntu-26.04`: the `test` matrix rows, `docs-build`,
@@ -24,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required on main. main's branch protection is updated by the operator when the release PR that carries this
   change opens. release/1.0 keeps `ubuntu-24.04`: the 1.0 line does not receive #405 (SECURITY.md: security fixes
   are backported only to the most recent minor), so users on 1.0.x should move to 1.1.
+
 ### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
 
 - **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
