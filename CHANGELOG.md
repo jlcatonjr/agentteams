@@ -137,12 +137,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### fixed (bridged Claude teams get the model defaults too)
 
 - **The gap.** On a copilot-vscode-canonical project, `.claude/agents/` holds bridge stubs, and the bridge rewrote them
-  without a `model:`. The Claude adapter's new defaults never reached them, and a `model:` added by hand was wiped by
-  the next `--bridge-merge` (every `researchteam update` and autosync run).
-- **Now** every stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub declares
-  (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
+  without a `model:`, so the Claude adapter's new defaults never reached them, and a `model:` added by hand was
+  wiped whenever the stubs were re-emitted.
+- **Now** every re-emitted stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub
+  declares (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
   `claude-fable-5-2` for the orchestrator, `opus` for every other stub, the parametric workstream expert included.
   The bridge lists every stub that received a default in a notice. Native (non-stub) agent bodies are untouched.
+- **When stubs are re-emitted.** Only a `--bridge-merge` that passes the `bridge:copilot-vscode-to-claude:subagents`
+  host feature rewrites `.claude/agents/` stubs. `researchteam update` and its autosync do not pass it, so their
+  existing stubs keep what they have (a `model:` added by hand included) and gain no default from an update. Add the
+  line once (infrastructureManagement's `scripts/operator/65-adopt-claude-model-lines.py`); a later re-emit keeps it.
 
 ### fixed (sandbox: the exception registry and the carve-out high-water mark are protected; carve-outs count in the exception cap)
 
