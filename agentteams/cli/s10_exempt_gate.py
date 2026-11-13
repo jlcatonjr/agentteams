@@ -387,11 +387,27 @@ def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str]
         return None
     if not result.present:
         return None
+    return drop_halted_members(result.repos, (governance, team_dir, *_surface_dirs(root)))
+
+
+def drop_halted_members(repos: list[str], halt_dirs: tuple[Path, ...]) -> list[str]:
+    """Return the group members no unretracted ``s10-cooldown-exempt`` HALT covers, reporting each one dropped.
+
+    C-2: a HALT on a member's per-repository exemption, or on its family, binds the group too. The render gate and the
+    ``--verify-toolchain-group``/``--verify-toolchain-pin`` verbs share this filter.
+
+    Args:
+        repos: The verified group.
+        halt_dirs: Every team dir whose HALTs bind.
+
+    Returns:
+        The members kept, in order.
+    """
     kept: list[str] = []
-    for repo in result.repos:   # C-2: a HALT on the per-repository exemption, or its family, binds the group too
+    for repo in repos:
         exempt_action, exempt_family = action_for(repo), S10_EXEMPT_KIND
         try:
-            for halt_dir in (governance, team_dir, *_surface_dirs(root)):
+            for halt_dir in dict.fromkeys(halt_dirs):
                 security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
                 security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
             kept.append(repo)

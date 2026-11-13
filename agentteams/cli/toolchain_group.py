@@ -375,9 +375,15 @@ def sign_group_file(path: Path, team_dir: Path, *, confirm_sha256: str | None = 
 
 
 def verify_group_command(project_root: Path, governance_dir: Path, team_id: str,
-                         halt_dirs: tuple[Path, ...] = ()) -> int:
-    """``--verify-toolchain-group``: print the verified group for this workspace (exit 0) or why not (exit 1)."""
+                         halt_dirs: tuple[Path, ...] = (), *, member_filter=None) -> int:
+    """``--verify-toolchain-group``: print the verified group for this workspace (exit 0) or why not (exit 1).
+
+    *member_filter* (the gate's per-member HALT filter) is applied to a verified group, so the verb reports exactly
+    what a render would.
+    """
     result = load_group(project_root, governance_dir, team_id=team_id, halt_dirs=halt_dirs, consume=False)
+    if member_filter is not None and result.present and not result.problem:
+        result.repos = member_filter(result.repos)
     if not result.present:
         print(f"No {GROUP_FILE_REL} in {project_root}: no toolchain group (the cooldown applies to every release).")
         return 1

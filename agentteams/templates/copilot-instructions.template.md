@@ -196,7 +196,8 @@ rule stands on its own, whatever number the project's constraint-relaxing rule c
   brief edit can widen it; changing the group or its workspaces needs a new operator signature.
 - **A trust root.** No decision row may target the file, and editing it by hand only stops it verifying.
 - **HALT ends it.** An unretracted HALT on the `s10-toolchain-group` family in any surface's decisions
-  log ends it at once (C-2), as does removing its key from the verify-key store.
+  log ends it at once (C-2), as does removing its key from the verify-key store. A HALT on any
+  `s10-cooldown-exempt` action (a member's exemption or that family) binds it too.
 - **No sunset and no cap slot.** Unlike every other relaxing exception, it does not expire and does not
   count against the aggregate exception cap (operator ruling). Every other relaxing exception keeps its
   cap and sunset, a project's own clauses included.

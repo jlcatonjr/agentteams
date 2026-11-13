@@ -420,3 +420,20 @@ def test_pins_checked_are_counted(tmp_path, signed_remote) -> None:
     checked: list[str] = []
     assert tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base), checked=checked) == []
     assert checked == ["tk"]
+
+
+def test_the_verify_verb_applies_the_member_halt_filter(tmp_path, stub_ed25519, capsys) -> None:
+    import argparse
+
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    args = argparse.Namespace(verify_toolchain_group=True, sign_toolchain_group=None, verify_toolchain_pin=None,
+                              output=str(team), project=None, team_id=_TEAM, description=None)
+    assert run_toolchain_group(args) == 0
+    assert "acme/toolkit, acme/builder" in capsys.readouterr().out
+    _log(team, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-13"))
+    run_toolchain_group(args)
+    out = capsys.readouterr()
+    assert "acme/toolkit" not in out.out and "::error title=S-10 toolchain group HALT::acme/toolkit" in out.err

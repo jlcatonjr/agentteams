@@ -52,6 +52,13 @@ def _resolve(args: argparse.Namespace) -> tuple[Path, Path, Path, tuple[Path, ..
     return team_dir, root, governance, (team_dir, *_surface_dirs(root))
 
 
+def _member_filter(governance: Path, halt_dirs: tuple[Path, ...]):
+    """The render gate's per-member HALT filter, bound to these dirs (C-2)."""
+    from agentteams.cli.s10_exempt_gate import drop_halted_members
+
+    return lambda repos: drop_halted_members(repos, (governance, *halt_dirs))
+
+
 def run_toolchain_group(args: argparse.Namespace) -> int:
     """Dispatch the toolchain-group verb named by *args*.
 
@@ -74,11 +81,14 @@ def run_toolchain_group(args: argparse.Namespace) -> int:
         print("Error: name this workspace's team id with --team-id (or --description <brief>).", file=sys.stderr)
         return 1
     if getattr(args, "verify_toolchain_group", False):
-        return tg.verify_group_command(root, governance, team_id, halt_dirs)
+        return tg.verify_group_command(root, governance, team_id, halt_dirs, member_filter=_member_filter(governance,
+                                                                                                          halt_dirs))
     if not getattr(args, "allowed_signers", None):
         print("Error: --verify-toolchain-pin needs --allowed-signers <file naming the release key>.", file=sys.stderr)
         return 1
     result = tg.load_group(root, governance, team_id=team_id, halt_dirs=halt_dirs, consume=False)
+    if result.present and not result.problem:
+        result.repos = _member_filter(governance, halt_dirs)(result.repos)
     if result.problem:
         tg.report(result)
         return 1
