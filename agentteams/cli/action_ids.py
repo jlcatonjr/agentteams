@@ -28,7 +28,7 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: test checks both directions against the call sites.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
                                  "branch-cleanup", "vulnscan-remediation", "vulnscan-publish",
-                                 "s10-cooldown-exempt")
+                                 "s10-cooldown-exempt", "s10-toolchain-group")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:

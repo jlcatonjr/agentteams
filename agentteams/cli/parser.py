@@ -1402,6 +1402,48 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--sign-toolchain-group",
+        dest="sign_toolchain_group",
+        default=None,
+        metavar="FILE",
+        help=(
+            "Operator-only (Rule 11(f)): sign the first-party toolchain group file (.agentteams/toolchain-group.json: "
+            "version, scope, group, workspaces, purpose, sequence, key_id) in place with the Ed25519 decision key, "
+            "after the same preflight, review digest and confirmation as --sign-decision. --output names a governed "
+            "team dir whose references/authorized-verify-keys holds <key_id>.pub.pem. Commit the same signed bytes "
+            "in every listed workspace."
+        ),
+    )
+    parser.add_argument(
+        "--verify-toolchain-group",
+        action="store_true",
+        dest="verify_toolchain_group",
+        default=False,
+        help=(
+            "Read-only: verify this workspace's .agentteams/toolchain-group.json (signature, workspace binding by git "
+            "origin and team id, HALTs, sequence) against --output's governed team dir, and print the group. "
+            "Exit 0 when it verifies, 1 otherwise. Team id from --team-id, else the brief (--description)."
+        ),
+    )
+    parser.add_argument(
+        "--verify-toolchain-pin",
+        dest="verify_toolchain_pin",
+        default=None,
+        metavar="LOCKFILE",
+        help=(
+            "Read-only, fail-closed (Rule S-9 for the toolchain group): every NAME=owner/repo@SHA pin in LOCKFILE to "
+            "a verified group member needs a NAME.tag=TAG line, and TAG must be an annotated tag that verifies "
+            "against --allowed-signers and peels to SHA. Exit 0 when every such pin verifies, 1 otherwise."
+        ),
+    )
+    parser.add_argument(
+        "--allowed-signers",
+        dest="allowed_signers",
+        default=None,
+        metavar="PATH",
+        help="With --verify-toolchain-pin: the ssh allowed_signers file naming the operator's release key.",
+    )
+    parser.add_argument(
         "--confirm-review-sha256",
         dest="confirm_review_sha256",
         default=None,

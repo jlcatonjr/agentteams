@@ -6,6 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-13
+
+### release notes
+
+agentteams 1.1.2 is a 1.1 patch carrying one governance feature, by operator ruling (T1, 2026-11-13: it overrides the
+rule that new features wait for the next minor release, for this change only), plus the agentteams#476 fix.
+
+### added (Rule 11(f): the first-party toolchain group)
+
+- **One signed file instead of per-repository cooldown rows.** A governed workspace may carry
+  `.agentteams/toolchain-group.json`: the repositories whose releases the operator cuts and signs, and the workspaces
+  (`repo:<git origin>` plus `team:<team id>`) it binds, signed once with the operator's Ed25519 decision key. Releases
+  of those repositories are exempt from Rule S-10's 14-day cooldown, and a pin move to one needs this repository's own
+  `@security` review and no per-release operator decision row (operator rulings R5 and T2). No sunset and no cap slot:
+  Rule 11(f) waives only clause (d) for the file (operator ruling, 2026-11-13). Clauses (a)–(c) still bind.
+- **Fail-closed, never fatal.** A tampered file, an unlisted workspace, an unknown or removed key, a missing Ed25519
+  backend, an unretracted HALT on `s10-toolchain-group` in any surface's decisions log, or a `sequence` older than the
+  one recorded each render an empty group with a notice and an `::error::` line; the render itself goes on.
+- **Rule S-9 in code.** `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>` refuses a pin to a group
+  member unless its `NAME.tag` is an annotated tag that verifies against the release key and peels to the locked
+  commit. `--verify-toolchain-group` checks the file for this workspace; `--sign-toolchain-group` (operator-only)
+  signs it, with `--sign-decision`'s preflight, review digest and confirmation.
+- **The file is a trust root** (`governance_targets`), and `--sign-decision` refuses a payload in its signing domain.
+- **Templates.** The constitution gains a fenced, template-authoritative `toolchain_group_rule` block (Rule 11(f)), so
+  `--update --merge` adds it to existing teams and restores it if edited; a project's own Rule 11 clauses are kept
+  verbatim. Rule S-10's carve-out bullet becomes the toolchain-group bullet (placeholder `{S10_TOOLCHAIN_GROUP}`), and
+  the `@security` and instruction-authority templates cite Rule 11 (they cited a Rule 15 no generated team has).
+- **Migration.** Legacy `s10-cooldown-exempt:<repo>` registry entries keep carrying over until they lapse; once the
+  group verifies, no new per-repository row is consumed. In a governed workspace the brief's
+  `s10_cooldown_exempt_repos` is a hint only (a notice names any repository the signed group lacks); an ungoverned
+  workspace keeps the brief-alone path (operator ruling T3).
+
+### fixed
+
+- **agentteams#476.** When a registered S-10 exemption does not carry over, the refusal now names why ("registered
+  exemption X did not carry over: …") instead of the generic "no unconsumed decision", and prints an `::error::` line;
+  a missing Ed25519 backend is reported as an environment error.
+
 ## [1.1.1] - 2026-11-12
 
 ### release notes
