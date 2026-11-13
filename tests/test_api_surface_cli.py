@@ -31,6 +31,17 @@ def test_a_literal_sys_argv_test_is_a_heuristic_option_unless_declared():
     assert "cli-argv:--json" not in s and "cli-argv:--x" not in s
 
 
+def test_a_dest_only_positional_and_non_literal_choices():
+    s = surface('ap.add_argument(dest="target", nargs="?")\nap.add_argument("--m", choices=MODES)\n'
+                'ap.add_argument("--r", choices=range(3))\n')
+    assert s["cli-pos:target"] == "" and s["cli:--m"] == "choices=MODES" and s["cli:--r"] == "choices=range(3)"
+
+
+def test_one_name_in_two_subparsers_keeps_both_values():
+    s = surface('a.add_argument("--level", choices=["x"])\nb.add_argument("--level", choices=["y", "z"])\n')
+    assert s["cli:--level"] == "choices=['x'] | choices=['y', 'z']"
+
+
 def test_labels_and_terms():
     assert cli_label("cli:--x") == "--x"
     assert cli_label("cli-pos:command") == "command (positional)"

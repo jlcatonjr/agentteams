@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `add_argument` positionals are part of the surface (`cli-pos:<name>`). Their `choices`, and an option's `choices`,
   are compared too, so adding or removing a subcommand-like choice is reported (new `Impact.cli_changed`).
-- A literal `"--x" in sys.argv` test is reported as `--x (sys.argv, heuristic)` unless a parser declares `--x`.
+- A literal `"--x" in sys.argv` test is reported as `--x (sys.argv, heuristic)` unless a parser in the same module
+  declares `--x`. Only literal `choices` are compared by their members; a name or call is compared by its source text.
 - `surface` moved to `agentteams._api_surface` (re-exported from `agentteams.api_impact`). The generated
   `api-impact.reference.md` fence `api_impact` is v=4.
 

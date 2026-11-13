@@ -5,11 +5,14 @@ Keys and values (a value is what a change is detected on):
 - public module-level functions and classes, and ``Class.method`` for public methods (and ``__init__``) of public
   classes: their signature;
 - ``__all__``: the sorted list;
-- ``cli:<option>`` for every ``add_argument`` option string: its ``choices`` (sorted), or ``""``;
-- ``cli-pos:<name>`` for every positional ``add_argument`` (#451 a): its ``choices`` (sorted), or ``""``, so adding or
-  removing a subcommand-like choice counts as a change;
-- ``cli-argv:<option>`` for a literal ``"--x" in sys.argv`` test (#451 a). This is a heuristic: it finds options read
-  straight from ``sys.argv`` that no parser declares, and may report a string that is not really an option;
+- ``cli:<option>`` for every ``add_argument`` option string: its literal ``choices`` (sorted), or ``""``;
+- ``cli-pos:<name>`` for every positional ``add_argument``, also ``add_argument(dest="name")`` (#451 a): its literal
+  ``choices`` (sorted), or ``""``, so adding or removing a subcommand-like choice counts as a change. ``choices``
+  given as a name or call is compared by its source text, not by what it evaluates to. A name declared twice in one
+  module (two subparsers) keeps both values joined with ``|``;
+- ``cli-argv:<option>`` for a literal ``"--x" in sys.argv`` test (#451 a), unless a parser in the same module declares
+  it. This is a heuristic: it misses ``from sys import argv`` and ``sys.argv[1] == "--x"``, and may report a string
+  that is not really an option;
 - ``cli-cmd:<name>`` for every ``add_parser`` subcommand.
 """
 from __future__ import annotations
@@ -28,9 +31,9 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 def _choices(call: ast.Call) -> str:
     for kw in call.keywords:
         if kw.arg == "choices":
-            try:
+            try:  # a literal is compared by its members; anything else (a name, a call) by its source text only
                 return "choices=" + repr(sorted(map(str, ast.literal_eval(kw.value))))
-            except (ValueError, TypeError, SyntaxError):
+            except (ValueError, TypeError):
                 return "choices=" + ast.unparse(kw.value)
     return ""
 
@@ -43,16 +46,28 @@ def _is_sys_argv(node: ast.expr) -> bool:
             and isinstance(node.value, ast.Name) and node.value.id == "sys")
 
 
+def _put(out: dict[str, str], key: str, value: str) -> None:
+    """Record ``key``; two declarations of one name (in two subparsers, say) keep both values, so neither hides."""
+    if key in out and out[key] != value:
+        value = " | ".join(sorted({*out[key].split(" | "), value}))
+    out[key] = value
+
+
 def _cli_entries(tree: ast.Module, out: dict[str, str]) -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
             strings = [a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
-            if node.func.attr == "add_argument" and strings:
+            if node.func.attr == "add_argument" and not strings:
+                dest = next((kw.value.value for kw in node.keywords if kw.arg == "dest"
+                             and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)), None)
+                if dest:  # add_argument(dest="x"): a positional named by keyword
+                    _put(out, f"cli-pos:{dest}", _choices(node))
+            elif node.func.attr == "add_argument":
                 if strings[0].startswith("-"):
                     for opt in strings:
-                        out[f"cli:{opt}"] = _choices(node)
+                        _put(out, f"cli:{opt}", _choices(node))
                 else:
-                    out[f"cli-pos:{strings[0]}"] = _choices(node)
+                    _put(out, f"cli-pos:{strings[0]}", _choices(node))
             elif node.func.attr == "add_parser" and strings:
                 out[f"cli-cmd:{strings[0]}"] = ""
         elif isinstance(node, ast.Compare) and isinstance(node.left, ast.Constant) \
