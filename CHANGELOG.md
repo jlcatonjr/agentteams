@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `python -m agentteams.api_impact status` prints them (`hook_skips` in `--json`) and exits 1 until a hook run whose
   API impact step completes (exit 0, or 3 in strict mode) clears them. The commit still succeeds.
 - Re-run `agentteams --update` (or `--install-git-hooks`) to get the new hook block.
+
 ### changed (CI runs on Ubuntu 26; #262)
 
 - Every CI job that ran on `ubuntu-24.04` now runs on `ubuntu-26.04`: the `test` matrix rows, `docs-build`,
