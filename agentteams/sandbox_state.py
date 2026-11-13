@@ -33,6 +33,7 @@ from agentteams.sandbox_tokens import native_exec_token, read_token, scratch_tok
 from agentteams.wasm_config import ON_OFF_VALUES, validate_on_off
 
 if TYPE_CHECKING:
+    from agentteams.gate_policy import RecordedPolicy
     from agentteams.wasm_exec import Grant, Limits
 
 #: The WASM guest languages, in order. Mirrors ``wasm_guests.LANGUAGES`` (P04, the single source that
@@ -337,12 +338,25 @@ class SandboxExceptions:
             ``default_tools_approval_mode = "auto"`` (a Codex render, WASM on, the opt-in ``codex:wasm-auto-approve``
             host feature; WP-C2). Recorded only when True, so a record without it (every record before WP-C2)
             reads as off, and turning it on is a new ``mcp-approval-auto`` relaxation.
+        gate_policy: The project gate verdict policy this render pins (#456): its sha256, deny set and
+            ``fail_closed_tools`` (``preset`` is not recorded; ``deny`` already holds the preset's classes). Recorded
+            only when the project has a policy, so a record without it (every record before #456, and every project
+            without a policy) reads as no policy, and re-pinning a weaker one is a ``gate-policy-weaken`` relaxation.
+        pinned_digests: Transient, never recorded (#456 fail-closed fallback): the non-empty policy digests every
+            installed constitutional gate under the project root pins, whatever framework emitted it (64-hex, or
+            :data:`MALFORMED_GATE_DIGEST` for a malformed sentinel line). A digest no reachable record explains
+            cannot be proved a tightening, so a render that does not reproduce it is gated.
+        other_policies: Transient, never recorded: the ``gate_policy`` records of the project's other team
+            directories' build-logs (another framework's render), each judged like the own record.
     """
 
     native_exec_keep: frozenset[str] = frozenset()
     wasm_programs: frozenset[str] = frozenset()
     os_programs: frozenset[str] = frozenset()
     mcp_approval_auto: bool = False
+    gate_policy: RecordedPolicy | None = None
+    pinned_digests: frozenset[str] = frozenset()
+    other_policies: frozenset[RecordedPolicy] = frozenset()
 
     def to_record(self) -> dict[str, object]:
         """Return the build-log record (sorted lists).
@@ -350,12 +364,16 @@ class SandboxExceptions:
         Returns:
             ``{"native_exec_keep": [...], "wasm_programs": [...], "os_programs": [...]}``, plus
             ``"mcp_approval_auto": "on"`` only when it is on (an off value is not written, so existing records stay
-            byte-identical).
+            byte-identical), and ``"gate_policy": {"sha256", "deny", "fail_closed_tools"}`` only when a policy is
+            recorded.
         """
         rec: dict[str, object] = {"native_exec_keep": sorted(self.native_exec_keep),
                                   "wasm_programs": sorted(self.wasm_programs), "os_programs": sorted(self.os_programs)}
         if self.mcp_approval_auto:
             rec["mcp_approval_auto"] = "on"
+        if self.gate_policy is not None:
+            rec["gate_policy"] = {"sha256": self.gate_policy.sha256, "deny": sorted(self.gate_policy.deny),
+                                  "fail_closed_tools": "on" if self.gate_policy.fail_closed_tools else "off"}
         return rec
 
     @classmethod
@@ -363,14 +381,14 @@ class SandboxExceptions:
         """Parse a record written by :meth:`to_record`.
 
         Args:
-            rec: The decoded record (``os_programs`` and ``mcp_approval_auto`` may be absent; an absent
-                ``mcp_approval_auto`` reads as off).
+            rec: The decoded record (``os_programs``, ``mcp_approval_auto`` and ``gate_policy`` may be absent; an
+                absent ``mcp_approval_auto`` reads as off, an absent ``gate_policy`` as no policy).
 
         Returns:
             The value, or None when malformed.
         """
         keys = ("native_exec_keep", "wasm_programs", "os_programs")
-        if not isinstance(rec, dict) or not set(keys[:2]) <= set(rec) <= {*keys, "mcp_approval_auto"}:
+        if not isinstance(rec, dict) or not set(keys[:2]) <= set(rec) <= {*keys, "mcp_approval_auto", "gate_policy"}:
             return None
         sets: list[frozenset[str]] = []
         for key in keys:
@@ -381,7 +399,33 @@ class SandboxExceptions:
         auto = rec.get("mcp_approval_auto", "off")
         if auto not in ON_OFF_VALUES:
             return None
-        return cls(*sets, mcp_approval_auto=auto == "on")
+        policy = None
+        if "gate_policy" in rec:
+            policy = _gate_policy_from_record(rec["gate_policy"])
+            if policy is None:
+                return None
+        return cls(*sets, mcp_approval_auto=auto == "on", gate_policy=policy)
+
+
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+#: The :attr:`SandboxExceptions.pinned_digests` entry when the installed gate's ``_GATE_POLICY_SHA256`` line is malformed.
+MALFORMED_GATE_DIGEST = "malformed"
+
+
+def _gate_policy_from_record(rec: object) -> RecordedPolicy | None:
+    """Parse a ``gate_policy`` record strictly (exact keys, a hex sha256, unique slug class ids, ``on``/``off``)."""
+    from agentteams.gate_policy import RecordedPolicy
+
+    if not isinstance(rec, dict) or set(rec) != {"sha256", "deny", "fail_closed_tools"}:
+        return None
+    sha, deny, closed = rec["sha256"], rec["deny"], rec["fail_closed_tools"]
+    if not isinstance(sha, str) or not _SHA256_RE.fullmatch(sha) or closed not in ON_OFF_VALUES:
+        return None
+    if (not isinstance(deny, list) or len(set(map(str, deny))) != len(deny)
+            or not all(isinstance(c, str) and _SLUG_RE.fullmatch(c) for c in deny)):
+        return None
+    return RecordedPolicy(sha, frozenset(deny), closed == "on")
 
 
 def mcp_approval_auto(manifest: Mapping[str, Any]) -> bool:
@@ -859,6 +903,7 @@ def keep_tokens(state: SandboxState | None, exceptions: SandboxExceptions | None
 __all__ = [
     "BUILD_LOG_EXCEPTIONS_KEY",
     "BUILD_LOG_STATE_KEY",
+    "MALFORMED_GATE_DIGEST",
     "EXPLICIT_SANDBOX_TOKENS_KEY",
     "OS_SANDBOX_CLI_KEY",
     "OS_SANDBOX_VALUES",

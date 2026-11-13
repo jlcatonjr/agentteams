@@ -167,6 +167,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # undetected. Pinning it lets E4/verify() flag a neutered gate and makes each edit git-visible.
     # (Generated *teams* carry their own emitted hook + manifest; this pins agentteams' own hooks.)
     "agentteams/templates/universal/hooks/constitutional-gate.py",  # the authoritative template
+    # #456: validates the project gate policy at render, pins its digest into the emitted gate and tells a weakening
+    # (a Rule 15 relaxation) from a tightening. A silent edit could record the wrong bytes or bless a weakening.
+    "agentteams/gate_policy.py",
     ".claude/hooks/constitutional-gate.py",                          # this repo's installed Claude hook
     ".github/hooks/constitutional-gate.py",                          # this repo's installed copilot hook
     # Exception-governance hardening (2026-W38). These carry constitutional weight now:
@@ -348,7 +351,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/carveout_checks.py",            # Rule 15: the carve-outs' HALT, lineage, rollback and cap checks
     "agentteams/cli/carveout_commands.py",      # Rule 15: the carve-out signer and the post-build hook
     "agentteams/cli/clearance_binding.py",      # the sha-bound clearance check operator scripts gate on
-    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the six sandbox-relaxation kinds + token vocabulary
+    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the seven sandbox-relaxation kinds + token vocabulary
     "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out

@@ -62,7 +62,7 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     _sandbox_feature_enabled,
     sibling_deny_dirs,
 )
-from ._control_plane_protect import control_plane_for, substrate_protect_paths
+from ._control_plane_protect import control_plane_for, gate_policy_protect_paths, substrate_protect_paths
 from . import _wasm_wiring
 from ._sandbox_drift import verify_control_plane_merged  # noqa: F401  (re-export: P13 reads it from here)
 from ._prompt_root_protect import prompt_roots_enabled
@@ -335,7 +335,7 @@ class ClaudeAdapter(FrameworkAdapter):
         example = _read_template_asset("hooks/settings.hooks.example.json")
         if not hook:
             return files
-        files.append(("../hooks/constitutional-gate.py", _apply_fail_closed_policy(hook, manifest)))
+        files.append(("../hooks/constitutional-gate.py", render_gate(hook, manifest)))
         files.extend(gate_interpreter_pin_files("../hooks"))
         from agentteams import runner_mcp  # R6: granted agents launch the installed agentteams_runner server
 
@@ -355,7 +355,8 @@ class ClaudeAdapter(FrameworkAdapter):
                     protect_prompt_roots=prompt_roots_enabled(manifest),  # #8 phase 2, opt-in
                     protect_ledger=manifest.get("write_policy") == "orchestrator-only",  # P4a
                     control_plane_protect=control_plane_for(manifest),  # METAPLAN R1: protect_ledger or wasm
-                    substrate_protect=substrate_protect_paths(manifest),  # P20 D5: the projected floor alone
+                    # P20 D5: the projected floor alone; #456: the gate, its pin and a recorded policy file.
+                    substrate_protect=substrate_protect_paths(manifest) + gate_policy_protect_paths(manifest),
                 )
                 # The denyWrite names the verify-key store DIRECTORY (bwrap cannot start on a
                 # missing deny path). Its frozen sentinel is emitted for every team by
@@ -545,6 +546,24 @@ def _apply_fail_closed_policy(hook_text: str, manifest: dict[str, Any]) -> str:
         # not in the (pinned) template, so every team without the switch keeps a byte-identical hook.
         flipped = flipped.replace(_PROFILE_CRASH_REASON, _SWITCH_CRASH_REASON, 1)
     return flipped
+
+
+def render_gate(hook_text: str, manifest: dict[str, Any]) -> str:
+    """Return the emitted constitutional gate: the fail-closed flip (CC-2), then the project policy digest (#456).
+
+    Args:
+        hook_text: The verbatim ``constitutional-gate.py`` template text.
+        manifest: The team manifest (its CLI project root locates ``.agentteams/gate-policy.json``).
+
+    Returns:
+        The hook text to install.
+
+    Raises:
+        GatePolicyRenderError: The project's policy file is invalid or not a regular file (the render stops).
+    """
+    from agentteams.gate_policy import apply_gate_policy, manifest_policy
+
+    return apply_gate_policy(_apply_fail_closed_policy(hook_text, manifest), manifest_policy(manifest))
 
 
 #: Where each framework installs the constitutional gate (project-relative), for ``--check-wiring``.
