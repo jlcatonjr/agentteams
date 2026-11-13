@@ -5,7 +5,7 @@ SECTION MANIFEST
 | api_impact | FENCED      |
 -->
 
-<!-- AGENTTEAMS:BEGIN api_impact v=2 -->
+<!-- AGENTTEAMS:BEGIN api_impact v=3 -->
 # API Impact Review Reference — SalesDataPipeline
 
 How the team keeps its API and the infrastructure around it current whenever a commit makes a structural
@@ -73,18 +73,22 @@ is computed from the commits themselves.
 
 ```
 python -m agentteams.api_impact status                    # this branch's commits since its base
+python -m agentteams.api_impact status --full             # every commit after the ledger's BASELINE (else all)
 python -m agentteams.api_impact status --range A..B       # an explicit range
 python -m agentteams.api_impact record --note "<what the review covered and changed>"
 ```
 
 - **Base.** On a feature branch, the merge-base of `HEAD` with the default branch (`origin/HEAD`,
-  `origin/main`, `origin/master`, else a local `main`/`master`). On the default branch itself, the unpushed
-  commits (`@{upstream}..HEAD`). `status` prints the range it used. With no resolvable base (no default
-  branch, the default branch without an upstream, a detached `HEAD` already on it) it reports **pending**
-  (exit 2) and never passes; pass `--range BASE..HEAD` to name the range.
+  `origin/main`, `origin/master`, else a local `main`/`master`). On the default branch itself, the commits
+  after the one named in the ledger's committed `BASELINE` file (`references/api-impact-reviews/BASELINE`,
+  first non-comment line), which does not depend on what has been pushed; without a baseline, only the
+  unpushed commits (`@{upstream}..HEAD`), so a commit pushed before its review drops out. Commit a
+  `BASELINE`, or run `status --full`, to close that gap. `status` prints the range it used. With no resolvable
+  base (no default branch, the default branch without an upstream or baseline, a detached `HEAD` already on
+  it) it reports **pending** (exit 2) and never passes; pass `--range BASE..HEAD` to name the range.
 - **Reviewed** means the commit's stable patch-id (`git patch-id --stable`) has a file in the ledger
-  `references/api-impact-reviews/<patch-id>.json` **committed at `HEAD`** (an uncommitted record does not
-  count). Patch-ids survive rebase and cherry-pick. Merge commits are
+  `references/api-impact-reviews/<patch-id>.json` **committed at the tip of the range checked** (an
+  uncommitted record does not count). Patch-ids survive rebase and cherry-pick. Merge commits are
   skipped. A squash merge creates a new patch-id, so squashed commits on the default branch show as
   unreviewed.
 - **Audit checklist.** For each removed, renamed or re-signed name, `status` lists the tracked files that
@@ -96,6 +100,12 @@ python -m agentteams.api_impact record --note "<what the review covered and chan
   commit in the range, `not-updated` when none did, or `no-page` (reported for new public modules only). `stale`
   also names a removed module's key while its page remains, and a renamed module's old key while its old
   page remains. `--json` lists every module. This block does not change the exit code.
+- **Hook skips.** When the pre-commit hook could not run the check (no usable Python 3.11+, or the check
+  failed), it records that in the git directory. `status` prints it and exits 1 until a later hook run
+  completes the check.
+- **Pre-push check (opt-in).** `git config agentteams.apiReviewPrePush warn` makes the pre-push hook list
+  impactful commits being pushed with no record at the pushed tip; `block` also fails the push (bypass once
+  with `git push --no-verify`). Unset, it does nothing.
 - **`record` is a self-attestation.** It writes one ledger file per unreviewed commit with the note; it
   refuses an empty note. It proves that someone recorded a review, not that the review happened. The
   ledger is committed, so every record is visible in the pull request.
