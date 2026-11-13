@@ -23,6 +23,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   API impact step completes (exit 0, or 3 in strict mode) clears them. The commit still succeeds.
 - Re-run `agentteams --update` (or `--install-git-hooks`) to get the new hook block.
 
+### security (`agentteams.scan` no longer flags public lockfile hashes or commit-URL SHAs, #460)
+
+- The context-free high-entropy detector no longer reports two kinds of public value as credentials:
+  - the base64 body of a Subresource Integrity item (`sha1-`, `sha256-`, `sha384-` or `sha512-`, with the body length
+    bound to the algorithm) inside an `integrity` value in `package-lock.json`, `npm-shrinkwrap.json` or `yarn.lock`;
+  - the lowercase 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
+- Each exemption covers the exact token only, never the line or a path glob alone:
+  - every other token on a minified lockfile line is still scanned;
+  - a secret in a commit URL's owner or repo segment still fires;
+  - an integrity value with any malformed item exempts nothing;
+  - pattern credentials, such as AWS keys, and the keyword-context detector are unchanged.
+- The exemption lives in the new integrity-pinned module `agentteams/_scan_public_hashes.py`, with a verifier-ledger row.
+- **Accepted residue:**
+  - a secret shaped exactly like one of these public hashes, in exactly that position, is not reported;
+  - a secret of 23 characters or fewer in a commit URL's owner or repo segment is not re-flagged, the same length
+    floor the path guard already applies.
+
 ### added (CI fails on an unregistered verifier; #50)
 
 - `tests/test_redteam_ledger_gate.py` runs the red-team self-audit's source checks F-1 and F-3 in the required test
@@ -43,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required on main. main's branch protection is updated by the operator when the release PR that carries this
   change opens. release/1.0 keeps `ubuntu-24.04`: the 1.0 line does not receive #405 (SECURITY.md: security fixes
   are backported only to the most recent minor), so users on 1.0.x should move to 1.1.
+
 ### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
 
 - **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
