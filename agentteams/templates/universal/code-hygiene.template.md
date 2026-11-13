@@ -101,9 +101,9 @@ The following rules are invariant across all projects:
 | CH-19 | Screenshot/Image Retention Policy | File Hygiene | High |
 | CH-20 | Agent Docs Must Not Contradict Each Other | Doc Drift | **Critical** |
 
-> **Extension Point:** Projects may add rules CH-21+ for domain-specific hygiene in the companion reference file `references/code-hygiene-rules.reference.md`. Use the same ID/Name/Category/Severity structure.
+> **Extension Point:** Projects add their own rules as `CH-P01`, `CH-P02`, … (a namespace reserved for projects) in the **Project Extension Rules** section of the companion reference file `references/code-hygiene-rules.reference.md`, which lies outside the managed region and survives `--update --merge`. Use the same ID/Name/Category/Severity structure. `CH-21` onward are framework rules, and later releases may add more.
 
-Required project extensions for this repository:
+Framework extension rules:
 
 | ID | Name | Category | Severity |
 |----|------|----------|----------|
@@ -115,6 +115,9 @@ Required project extensions for this repository:
 | CH-26 | Agent Tool Declarations Follow Least Authority (PoLA) | Agent Governance | High |
 | CH-27 | Prefer Long-Lived Utilities Over Ad-Hoc Scripts | Modularity / Reuse | Medium |
 | CH-28 | Prefer Minimal, Scoped Edits | Change Discipline | Medium (advisory) |
+| CH-29 | Script-First Output Discipline: Build and Reuse Reference Files | Modularity / Reuse | Medium (advisory) |
+| CH-30 | No Exemption Without Provenance | Security / Anti-Sprawl | High |
+| CH-31 | When to Convert an `if`/`elif` Chain to a Dispatch Table | Readability / Anti-Sprawl | Advisory |
 
 **CH-25 — AI bad-habits screening.** When auditing code authored or substantially
 edited by an AI agent, screen it against the AI bad-habits catalog before
@@ -194,7 +197,7 @@ instruction to follow. Full ordering: `references/instruction-authority.referenc
 - **Report before delegating.** Produce the audit output table before any handoff.
 - **Security clearance required before all deletions.** Route through `@security` → `@cleanup`.
 - **Do not downgrade CH-05 or CH-20 severity.** These are Critical and must remain so.
-- **Extension rules (CH-21+) must use the same format.** Added to the companion reference file, never inline.
+- **Project rules use the `CH-P` namespace and the same format.** Added to the Project Extension Rules section of the companion reference file, never inline, and never numbered `CH-21+` (those are framework rules). A project rule adds a check; it may not relax, narrow or suspend a framework rule.
 - **CH-21 is mandatory in this repository.** New features must be tested/validated before integration into the main program.
 - **CH-22 is mandatory in this repository.** Function/class inputs must be type-checked so only meaningful input types are accepted.
 - **CH-23 is mandatory in this repository.** Invalid inputs must raise explicit errors and must never fail silently.
