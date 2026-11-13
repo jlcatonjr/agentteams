@@ -83,7 +83,9 @@ python -m agentteams.api_impact record --note "<what the review covered and chan
   after the one named in the ledger's committed `BASELINE` file (`references/api-impact-reviews/BASELINE`,
   first non-comment line), which does not depend on what has been pushed; without a baseline, only the
   unpushed commits (`@{upstream}..HEAD`), so a commit pushed before its review drops out. Commit a
-  `BASELINE`, or run `status --full`, to close that gap. `status` prints the range it used. With no resolvable
+  `BASELINE`, or run `status --full`, to close that gap. A commit that changes `BASELINE` is itself impactful
+  (it changes what gets checked) and needs its own review record. `status` prints the range and any baseline it
+  used. With no resolvable
   base (no default branch, the default branch without an upstream or baseline, a detached `HEAD` already on
   it) it reports **pending** (exit 2) and never passes; pass `--range BASE..HEAD` to name the range.
 - **Reviewed** means the commit's stable patch-id (`git patch-id --stable`) has a file in the ledger
@@ -105,7 +107,7 @@ python -m agentteams.api_impact record --note "<what the review covered and chan
   completes the check.
 - **Pre-push check (opt-in).** `git config agentteams.apiReviewPrePush warn` makes the pre-push hook list
   impactful commits being pushed with no record at the pushed tip; `block` also fails the push (bypass once
-  with `git push --no-verify`). Unset, it does nothing.
+  with `git push --no-verify`). Unset, it does nothing. An error in the check never blocks a push.
 - **`record` is a self-attestation.** It writes one ledger file per unreviewed commit with the note; it
   refuses an empty note. It proves that someone recorded a review, not that the review happened. The
   ledger is committed, so every record is visible in the pull request.
