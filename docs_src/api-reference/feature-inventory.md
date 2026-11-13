@@ -197,7 +197,7 @@ The following eleven agents are included in every generated team, regardless of 
 
 76. **`@navigator`** — Project structure mapping, file location queries, dependency tracking (read-only)
 77. **`@security`** — Highest-priority sentinel; clears destructive operations, credential exposure, and external writes (read-only)
-78. **`@code-hygiene`** — Architecture auditor; file hygiene, duplication, script lifecycle, agent doc quality — invariant CH-01 through CH-20 plus project extension rules CH-21–CH-24 (Testing, Type Safety, Defensive Programming; CH-24: `try`/`except`/`finally` is a last resort — encode expected conditions in dictionaries/guards and fail hard, reinforcing CH-23 Fail Fast) (read-only)
+78. **`@code-hygiene`** — Architecture auditor; file hygiene, duplication, script lifecycle, agent doc quality — invariant CH-01 through CH-20 plus framework extension rules from CH-21 (CH-21–CH-24: Testing, Type Safety, Defensive Programming; CH-24: `try`/`except`/`finally` is a last resort — encode expected conditions in dictionaries/guards and fail hard, reinforcing CH-23 Fail Fast) (read-only)
 79. **`@adversarial`** — Presupposition critic; challenges plans and hidden assumptions before execution (read-only)
 80. **`@conflict-auditor`** — Detects logical inconsistencies across all output files; logs findings (read + log)
 81. **`@conflict-resolution`** — Makes ACCEPT/REJECT/REVISE decisions on flagged conflicts (read + edit)
@@ -220,7 +220,7 @@ Workflows are step sequences embedded in the generated Orchestrator agent. Every
 91. **Workflow 5 — Consistency Review** — `@adversarial` challenge → cross-file consistency audit → technical validation → `@agent-updater`
 92. **Workflow 6 — Documentation Maintenance** — Sync agent docs → refactor check → consistency audit
 93. **Workflow 7 — Cleanup** — Identify stale artifacts → `@adversarial` review → `@security` clearance → delete → update docs
-94. **Workflow 8 — Code Hygiene Audit** — CH-01–CH-24 audit (CH-01–CH-20 invariant + CH-21–CH-24 project extensions) → `@adversarial` guard before deletion plan → conditional cleanup/refactor
+94. **Workflow 8 — Code Hygiene Audit** — framework-rule audit (CH-01–CH-20 invariant + CH-21 onward framework extensions; project rules use CH-P01 onward) → `@adversarial` guard before deletion plan → conditional cleanup/refactor
 95. **Workflow 9 — Cross-Repository Coordination** — Impact assessment → approved updates → adjacent-repo writes (security-cleared) → consistency audit
 96. **Workflow 10 — Plan Documentation & Review** — Plan status scan → pre-execution truth check via `@technical-validator` → surface blocked steps
 97. **Workflow 10B — Work Summary Reporting** — Generate daily/weekly/monthly summaries from plan artifacts and git history, then audit them
