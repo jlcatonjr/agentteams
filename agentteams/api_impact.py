@@ -38,7 +38,6 @@ CLI::
 
 from __future__ import annotations
 
-import ast
 import json
 import os
 import re
@@ -48,6 +47,9 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+
+# surface() lives in agentteams._api_surface (CH-07 carve) and stays part of this module's API.
+from agentteams._api_surface import surface
 
 #: Review ledger, relative to the directory that holds the project's ``references/``.
 LEDGER_SUBDIR = "api-impact-reviews"
@@ -82,6 +84,8 @@ class Impact:
         structural_renamed: ``(old, new)`` pairs of other renamed files.
         unparseable: Python files whose old or new version does not parse.
         regenerated: Derived artifacts regenerated and staged (pre-commit only).
+        review_baseline_changed: The review ledger's ``BASELINE`` file, when the diff touches it. Moving the
+            baseline changes which commits a default-branch ``status`` checks, so that commit is itself reviewed.
     """
 
     modules_added: list[str] = field(default_factory=list)
@@ -98,6 +102,7 @@ class Impact:
     structural_renamed: list[tuple[str, str]] = field(default_factory=list)
     unparseable: list[str] = field(default_factory=list)
     regenerated: list[str] = field(default_factory=list)
+    review_baseline_changed: list[str] = field(default_factory=list)
 
     @property
     def impactful(self) -> bool:
@@ -168,11 +173,6 @@ def _name_status(raw: bytes) -> list[tuple[str, str, str]]:
     return out
 
 
-def _in_head(repo: Path, rel: str) -> bool:
-    return subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"HEAD:{rel}"],
-                          capture_output=True, check=False).returncode == 0
-
-
 def _has_head(repo: Path) -> bool:
     return bool(_git(repo, "rev-parse", "--verify", "-q", "HEAD", check=False))
 
@@ -181,68 +181,6 @@ def _parent(repo: Path, commit: str) -> str | None:
     """The commit's first parent, or ``None`` for a root commit."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).decode().split()
     return parents[1] if len(parents) > 1 else None
-
-
-def _changed_paths(repo: Path, commit: str) -> list[str]:
-    """Paths one commit changed, deletions and both sides of renames included."""
-    root = [] if _parent(repo, commit) else ["--root"]
-    raw = _git(repo, "diff-tree", "--no-commit-id", "-r", "--name-only", "-z", *root, commit)
-    return [p for p in raw.decode("utf-8", errors="replace").split("\0") if p]
-
-
-# ---------------------------------------------------------------------------
-# Public surface of a Python module
-# ---------------------------------------------------------------------------
-
-def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    returns = f" -> {ast.unparse(node.returns)}" if node.returns else ""
-    return f"({ast.unparse(node.args)}){returns}"
-
-
-def surface(source: str) -> dict[str, str] | None:
-    """Return the public API surface of one Python module.
-
-    Keys are public module-level functions and classes, ``Class.method`` for public methods (and ``__init__``)
-    of public classes, ``__all__``, ``cli:<option>`` for every ``add_argument`` option string and
-    ``cli-cmd:<name>`` for every ``add_parser`` subcommand. Values are signatures (``__all__``: the sorted list).
-
-    Args:
-        source: The module's source text.
-
-    Returns:
-        The surface map, or ``None`` when the source does not parse.
-    """
-    try:
-        tree = ast.parse(source)
-    except (SyntaxError, ValueError):
-        return None
-    out: dict[str, str] = {}
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_"):
-            out[node.name] = _signature(node)
-        elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
-            out[node.name] = f"({', '.join(ast.unparse(b) for b in node.bases)})"
-            for item in node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
-                        not item.name.startswith("_") or item.name == "__init__"):
-                    out[f"{node.name}.{item.name}"] = _signature(item)
-        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            if any(isinstance(t, ast.Name) and t.id == "__all__" for t in targets) and node.value is not None:
-                try:
-                    out["__all__"] = repr(sorted(ast.literal_eval(node.value)))
-                except (ValueError, TypeError):
-                    out["__all__"] = ast.unparse(node.value)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            strings = [a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
-            if node.func.attr == "add_argument":
-                for opt in strings:
-                    if opt.startswith("-"):
-                        out[f"cli:{opt}"] = ""
-            elif node.func.attr == "add_parser" and strings:
-                out[f"cli-cmd:{strings[0]}"] = ""
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +224,10 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
         raw = _git(repo, *args, *(["--root"] if old_ref is None else []), commit)
         new_ref = commit
     imp = Impact()
+    baseline_rel = f"{ledger_rel}/BASELINE"
     for status, old, new in _name_status(raw):
+        if baseline_rel in (old, new):
+            imp.review_baseline_changed.append(baseline_rel)
         if _excluded(new, ledger_rel) and _excluded(old, ledger_rel):
             continue
         if new.endswith(".schema.json") or old.endswith(".schema.json"):
@@ -365,8 +306,10 @@ def resolve_base(repo: Path) -> str | None:
     """Find where this branch's own commits start.
 
     On a feature branch: the merge-base of ``HEAD`` with the default branch (``origin/HEAD``, ``origin/main``,
-    ``origin/master``, else a local ``main``/``master``). On the default branch itself: ``@{upstream}``, so the
-    range is the unpushed commits. A detached ``HEAD`` that is already on the default branch has no base.
+    ``origin/master``, else a local ``main``/``master``). On the default branch itself: the commit named in the
+    ledger's committed ``BASELINE`` file (:func:`agentteams._api_impact_range.baseline`), which does not depend on
+    push state; without one, ``@{upstream}``, so the range is the unpushed commits only. A detached ``HEAD`` that is
+    already on the default branch has no base.
 
     Args:
         repo: Repository root.
@@ -374,6 +317,9 @@ def resolve_base(repo: Path) -> str | None:
     Returns:
         A commit-ish for the range start, or ``None`` when no base can be found (the caller reports the review
         as pending, never as passed).
+
+    Raises:
+        RuntimeError: When git fails reading ``HEAD``.
     """
     repo = Path(repo)
     if not _has_head(repo):
@@ -383,8 +329,11 @@ def resolve_base(repo: Path) -> str | None:
         return None
     current = _git(repo, "symbolic-ref", "--short", "-q", "HEAD", check=False).decode().strip()
     if current and current == default.split("/", 1)[-1]:
+        from agentteams._api_impact_range import baseline
+
+        base = baseline(repo, ledger_dir(repo).relative_to(repo.resolve()).as_posix())
         upstream = _git(repo, "rev-parse", "-q", "--verify", "@{upstream}", check=False).decode().strip()
-        return upstream or None
+        return base or upstream or None
     base = _git(repo, "merge-base", "HEAD", default, check=False).decode().strip()
     head = _git(repo, "rev-parse", "HEAD").decode().strip()
     if not base or (base == head and not current):
@@ -393,7 +342,9 @@ def resolve_base(repo: Path) -> str | None:
 
 
 def patch_id(repo: Path, commit: str) -> str:
-    """Return the commit's stable patch-id, with the review ledger left out of the diff.
+    """Return the commit's stable patch-id, with the review ledger's records (``*.json``) left out of the diff.
+
+    ``BASELINE`` stays in, so a commit that only moves the baseline has an id and can be recorded.
 
     Args:
         repo: Repository root.
@@ -401,6 +352,13 @@ def patch_id(repo: Path, commit: str) -> str:
 
     Returns:
         The patch-id, or ``""`` for a commit whose diff (ledger excluded) is empty.
+
+    Raises:
+        RuntimeError: When git fails (unknown commit).
+
+    Note:
+        ``status`` computes ids in one batch (:func:`agentteams._api_impact_range.patch_ids`); this single-commit
+        function is the reference those batched ids are tested against.
     """
     repo = Path(repo)
     ledger_rel = ledger_dir(repo).relative_to(repo.resolve()).as_posix()
@@ -408,7 +366,7 @@ def patch_id(repo: Path, commit: str) -> str:
     parent = _parent(repo, commit)
     base = [parent] if parent else ["--root"]
     diff = _git(repo, "diff-tree", "-p", "--no-ext-diff", "--no-textconv", "--no-color", *base, commit,
-                "--", ".", f":(exclude){ledger_rel}")
+                "--", ".", f":(exclude,glob){ledger_rel}/*.json")
     out = _git(repo, "patch-id", "--stable", stdin=diff).decode().split()
     return out[0] if out else ""
 
@@ -431,30 +389,57 @@ def _checklist(repo: Path, imp: Impact) -> dict[str, list[str]]:
     return out
 
 
-def status(repo: Path, rev_range: str | None = None) -> tuple[str | None, list[CommitStatus]]:
+def status(repo: Path, rev_range: str | None = None, *, full: bool = False,
+           rev_args: list[str] | None = None) -> tuple[str | None, list[CommitStatus]]:
     """Review state of every impactful non-merge commit in a range.
 
     Args:
         repo: Repository root.
         rev_range: ``BASE..HEAD``; defaults to ``<resolve_base()>..HEAD``.
+        full: Ignore the branch base: check every commit after the ledger's committed ``BASELINE``, or the whole
+            history when there is none. Independent of push state.
+        rev_args: Explicit revision arguments (the pre-push check), taking precedence over ``rev_range``; the
+            ledger is then read at the first argument's tip.
 
     Returns:
         ``(range_used, commits)``; ``range_used`` is ``None`` when no base could be resolved (``commits`` is then
-        empty and the review counts as pending).
+        empty and the review counts as pending). A commit counts as reviewed when its ledger file exists in the
+        tree of the range's tip, not of ``HEAD``.
+
+    Raises:
+        RuntimeError: When git rejects the range.
+        ValueError: When a ``rev_range`` token starts with ``-`` (it would reach git as an option).
     """
+    from agentteams import _api_impact_range as rng
+
+    if rev_range is not None and any(tok.startswith("-") for tok in rev_range.split()):
+        raise ValueError(f"refused range {rev_range!r}: a revision may not start with '-'")
     repo = Path(repo)
-    if rev_range is None:
-        base = resolve_base(repo)
-        if base is None:
-            return None, []
-        rev_range = f"{base}..HEAD"
-    shas = _git(repo, "rev-list", "--no-merges", "--reverse", rev_range).decode().split()
     ledger = ledger_dir(repo)
+    ledger_rel = ledger.relative_to(repo.resolve()).as_posix()
+    if rev_args is None:
+        if rev_range is None and full:
+            base = rng.baseline(repo, ledger_rel)
+            rev_range = f"{base}..HEAD" if base else "HEAD"
+        elif rev_range is None:
+            base = resolve_base(repo)
+            if base is None:
+                return None, []
+            rev_range = f"{base}..HEAD"
+        rev_args = [rev_range]
+    used = rev_range or " ".join(rev_args)
+    tip = rng.range_tip(rev_range if rev_range is not None else " ".join(rev_args))
+    listed = rng.commits(repo, rev_args)
+    shas = [sha for sha, _ in listed]
+    subjects = dict(listed)
+    ids = rng.patch_ids(repo, shas, ledger_rel)
+    paths = rng.changed_paths(repo, shas)
+    on_tip = rng.ledger_names(repo, tip, ledger_rel)
     # A page counts as updated for a commit when that commit or a later one in the range changed it.
     later: list[set[str]] = []
     acc: set[str] = set()
     for sha in reversed(shas):
-        acc = acc | set(_changed_paths(repo, sha))
+        acc = acc | set(paths.get(sha, []))
         later.append(acc)
     later.reverse()
     out: list[CommitStatus] = []
@@ -462,14 +447,12 @@ def status(repo: Path, rev_range: str | None = None) -> tuple[str | None, list[C
         imp = detect(repo, commit=sha)
         if not imp.impactful:
             continue
-        pid = patch_id(repo, sha)
-        subject = _git(repo, "log", "-1", "--format=%s", sha).decode().strip()
-        rel = (ledger / f"{pid}.json").relative_to(repo.resolve()).as_posix()
-        # Reviewed only when the ledger file is committed: an uncommitted record does not count.
-        reviewed = bool(pid) and _in_head(repo, rel)
-        out.append(CommitStatus(sha, subject, pid, imp, reviewed, {} if reviewed else _checklist(repo, imp),
-                                [] if reviewed else doc_status(repo, imp, later[i], ref="HEAD")))
-    return rev_range, out
+        pid = ids.get(sha, "")
+        # Reviewed only when the ledger file is committed at the range's tip (an uncommitted record does not count).
+        reviewed = bool(pid) and f"{pid}.json" in on_tip
+        out.append(CommitStatus(sha, subjects[sha], pid, imp, reviewed, {} if reviewed else _checklist(repo, imp),
+                                [] if reviewed else doc_status(repo, imp, later[i], ref=tip)))
+    return used, out
 
 
 def record(repo: Path, note: str, rev_range: str | None = None) -> list[Path]:
@@ -856,6 +839,7 @@ def main(argv: list[str] | None = None) -> int:
 
     Returns:
         Exit code: ``--pre-commit`` 3 when strict mode blocks the commit (``--strict-capable`` only), else 0;
+        ``--pre-push`` 3 when ``agentteams.apiReviewPrePush=block`` and a pushed commit is unreviewed, else 0;
         ``status`` 0 when everything is reviewed, 1 when a commit is pending or the hook recorded a skip
         (:mod:`agentteams._hook_python`), 2 when no base could be resolved; ``record`` 0, or 2 on a refused note or missing base.
     """
@@ -867,6 +851,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Run the pre-commit step (exit 3 only when strict mode blocks the commit).")
     parser.add_argument("--strict-capable", action="store_true",
                         help="With --pre-commit: the calling hook fails the commit on exit 3.")
+    parser.add_argument("--pre-push", metavar="REMOTE",
+                        help="Run the pre-push step on the ref updates read from stdin (exit 3 in block mode).")
     parser.add_argument("--repo", default=".", help="Repository root (default: current directory).")
     sub = parser.add_subparsers(dest="cmd")
     d = sub.add_parser("detect", help="Report one diff's impact.")
@@ -876,6 +862,8 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--json", action="store_true")
     s = sub.add_parser("status", help="Review state of the branch's commits.")
     s.add_argument("--range", dest="rev_range")
+    s.add_argument("--full", action="store_true",
+                   help="Every commit after the ledger's BASELINE (else all history).")
     s.add_argument("--json", action="store_true")
     r = sub.add_parser("record", help="Record the review of the range's unreviewed commits.")
     r.add_argument("--range", dest="rev_range")
@@ -897,6 +885,17 @@ def main(argv: list[str] | None = None) -> int:
         if msg:
             print(msg, file=sys.stderr)
         return 3 if blocked else 0
+    if args.pre_push:
+        from agentteams._api_impact_range import pre_push_check
+
+        try:
+            msg, blocked = pre_push_check(repo, args.pre_push, sys.stdin.read(), status)
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+            msg, blocked = (f"agentteams: api-impact pre-push check failed ({type(exc).__name__}: {exc}); "
+                            "push unaffected"), False
+        if msg:
+            print(msg, file=sys.stderr)
+        return 3 if blocked else 0
     if args.cmd == "detect":
         imp = detect(repo, commit=None if args.staged else args.commit)
         print(json.dumps(asdict(imp), indent=2) if args.json else imp.summary())
@@ -904,11 +903,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "status":
         from agentteams._hook_python import read_skips
 
-        used, commits = status(repo, args.rev_range)
+        from agentteams._api_impact_range import baseline
+
+        try:
+            used, commits = status(repo, args.rev_range, full=args.full)
+        except ValueError as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 2
         skips = read_skips(repo)
+        base = baseline(repo, ledger_dir(repo).relative_to(repo).as_posix()) if args.rev_range is None else None
         if args.json:
-            print(json.dumps({"range": used, "commits": [asdict(c) for c in commits], "hook_skips": skips}, indent=2))
+            print(json.dumps({"range": used, "baseline": base, "commits": [asdict(c) for c in commits],
+                              "hook_skips": skips}, indent=2))
         else:
+            if base:
+                print(f"baseline: {base[:12]} (committed BASELINE; commits before it are not checked)")
             _print_status(used, commits)
             if skips:
                 print(f"\nHOOK SKIPPED {len(skips)} time(s): the pre-commit hook could not run the API impact check, so "

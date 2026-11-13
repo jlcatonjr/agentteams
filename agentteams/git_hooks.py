@@ -67,7 +67,10 @@ _HOOK_END = "# <<< AGENTTEAMS:pipeline-graph-refresh <<<"
 # (its one exception is the API-impact step's opt-in strict mode).
 _ENV_GUARD_BEGIN = "# >>> AGENTTEAMS:env-file-guard >>>"
 _ENV_GUARD_END = "# <<< AGENTTEAMS:env-file-guard <<<"
-_BLOCK_SENTINELS = ((_ENV_GUARD_BEGIN, _ENV_GUARD_END), (_HOOK_BEGIN, _HOOK_END))
+# The pre-push API review check (#447 b) lives in the pre-push hook, off unless agentteams.apiReviewPrePush is set.
+_PRE_PUSH_BEGIN = "# >>> AGENTTEAMS:api-review-pre-push >>>"
+_PRE_PUSH_END = "# <<< AGENTTEAMS:api-review-pre-push <<<"
+_BLOCK_SENTINELS = ((_ENV_GUARD_BEGIN, _ENV_GUARD_END), (_HOOK_BEGIN, _HOOK_END), (_PRE_PUSH_BEGIN, _PRE_PUSH_END))
 
 # Recovers the project name the pipeline last wrote, so the refresh preserves it
 # rather than re-inferring (which could differ and cause churn).
@@ -493,6 +496,53 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
     )
 
 
+def _render_pre_push_block(agentteams_path: str, *, recorded_python: str = "") -> str:
+    """Render the sentinel-delimited API review block for a pre-push hook (#447 b).
+
+    It does nothing unless ``git config agentteams.apiReviewPrePush`` is set. Then it runs
+    ``python -m agentteams.api_impact --pre-push <remote>`` on the ref updates git passes on standard input, with the
+    interpreter :func:`agentteams._hook_python.render_resolver` picks: ``warn`` reports impactful commits pushed
+    without a review record at the pushed tip, and ``block`` also fails the push (exit 3). A missing interpreter is
+    reported and recorded in the skip marker. The block is appended last, so a preserved hook body that reads standard
+    input first leaves it nothing to check.
+
+    Args:
+        agentteams_path: Directory put on ``PYTHONPATH`` outside a release-locked repository.
+        recorded_python: The interpreter recorded at install time (may be ``""``).
+
+    Returns:
+        The block text.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams._hook_python import render_resolver
+
+    return (
+        f"{_PRE_PUSH_BEGIN}\n"
+        "_at_rc=$?\n"
+        "# Auto-installed by `agentteams --install-git-hooks`. Off unless git config\n"
+        "# agentteams.apiReviewPrePush is warn (report) or block (fail the push on an impactful commit\n"
+        "# without an API impact review record at the pushed tip). Bypass once: git push --no-verify.\n"
+        "if command -v git >/dev/null 2>&1 && [ -n \"$(git config --get agentteams.apiReviewPrePush 2>/dev/null)\" ]; then\n"
+        '    _at_root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
+        '    if [ -n "$_at_root" ]; then\n'
+        f"{render_resolver(recorded_python, agentteams_path)}"
+        '        if [ -z "$_at_py" ]; then\n'
+        '            echo "agentteams: pre-push API review SKIPPED: $_at_why" >&2\n'
+        '            if [ -n "$_at_mark" ]; then printf \'%s\\t%s\\n\' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "pre-push: $_at_why" >> "$_at_mark" 2>/dev/null || true; fi\n'
+        "        else\n"
+        "            _at_push=0\n"
+        '            _at_run -m agentteams.api_impact --pre-push "$1" --repo "$_at_root" || _at_push=$?\n'
+        '            if [ "$_at_push" -eq 3 ]; then _at_rc=1; fi\n'
+        "        fi\n"
+        "    fi\n"
+        "fi\n"
+        "exit $_at_rc\n"
+        f"{_PRE_PUSH_END}\n"
+    )
+
+
 def _render_env_guard_block() -> str:
     """Render the sentinel-delimited, **blocking** env-file guard for a pre-commit hook.
 
@@ -587,7 +637,10 @@ def install_pre_commit_hook(
     hooks_dir: Path | None = None,
     code_index_hook: bool = False,
 ) -> InstallResult:
-    """Install (or refresh) the agentteams pipeline-graph pre-commit hook.
+    """Install (or refresh) the agentteams pipeline-graph pre-commit hook, and the pre-push API review block.
+
+    The pre-push block (:func:`_render_pre_push_block`) is inert until ``git config agentteams.apiReviewPrePush``
+    is set; the returned result describes the pre-commit hook.
 
     Idempotent: re-running when the block is already present and identical
     returns ``action="unchanged"`` and writes nothing.
@@ -622,6 +675,15 @@ def install_pre_commit_hook(
         recorded_python=recorded_interpreter(repo_root))
     existing = hook_path.read_text(encoding="utf-8") if hook_path.is_file() else None
     merged = _merge_hook_content(existing, block)
+
+    push_path = target_dir / "pre-push"
+    push_existing = push_path.read_text(encoding="utf-8") if push_path.is_file() else None
+    push_merged = _merge_hook_content(push_existing, _render_pre_push_block(
+        checkout_path(at_path, repo_root), recorded_python=recorded_interpreter(repo_root)))
+    if push_existing != push_merged:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        push_path.write_text(push_merged, encoding="utf-8")
+        push_path.chmod(0o755)
 
     if existing == merged:
         return InstallResult(action="unchanged", hook_path=hook_path, agentteams_path=at_path)
