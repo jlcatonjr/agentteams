@@ -32,8 +32,10 @@ Nothing is stored between runs. `status` walks the non-merge commits from the br
   `origin/master`, else a local `main`/`master`); on the default branch, the commit named in the ledger's
   committed `BASELINE` file (first non-comment line; it must be an ancestor of `HEAD`), else `@{upstream}`. Only
   the baseline is independent of push state: with `@{upstream}`, a commit pushed before its review leaves the
-  range. `status --full` checks every commit after the baseline, or the whole history without one. No base means
-  **pending** (exit 2), never a pass; pass `--range BASE..HEAD`.
+  range. `status --full` checks every commit after the baseline, or the whole history without one. A commit that
+  changes `BASELINE` is impactful (`review_baseline_changed`), so moving the baseline is reviewed like any other
+  change, and `status` prints the baseline it used. No base means **pending** (exit 2), never a pass; pass
+  `--range BASE..HEAD`. A range token starting with `-` is refused (exit 2), so it never reaches git as an option.
 - **Hook skips:** when the pre-commit hook found no usable interpreter, or its API impact step failed, it records
   that in the git directory ([git-hooks](git-hooks.md)). `status` prints those lines (`hook_skips` in `--json`) and
   exits 1 until a hook run whose API impact step completes clears them.
@@ -142,7 +144,8 @@ The pre-commit install also adds a block to the `pre-push` hook. It does nothing
 
 - `warn`: for each pushed ref, list impactful commits that have no ledger file at the pushed tip
   (`<remote sha>..<local sha>`, or `<local sha> --not --remotes=<remote>` for a new ref).
-- `block`: the same, and the push fails (`--pre-push` exits 3). Bypass once with `git push --no-verify`.
+- `block`: the same, and the push fails (`--pre-push` exits 3). Bypass once with `git push --no-verify`. An
+  error in the check is reported and never blocks the push.
 
 The block resolves its interpreter like the pre-commit block ([git-hooks](git-hooks.md)) and records a skip in the
 same marker. It is appended last in the hook, so a preserved hook body that reads standard input first leaves it

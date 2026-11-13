@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     there.
   - `status --full` checks every commit after it, or the whole history without one.
   - Without a baseline, the default branch still uses `@{upstream}`.
+  - A commit that changes `BASELINE` is itself impactful (new `Impact.review_baseline_changed`), and `status` prints
+    the baseline it used. A `--range` token starting with `-` is refused.
 - **The ledger is read at the range tip**, not at `HEAD`.
 - **Batched git reads** (`agentteams._api_impact_range`): one call each for SHAs and subjects, patch-ids (the same
   ids as `patch_id`) and changed paths. That is a few git processes per commit instead of about a dozen.

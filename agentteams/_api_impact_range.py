@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Any, Callable
 
 #: The ledger file that names the commit a full check starts after (first token of its first non-comment line).
 BASELINE_FILE = "BASELINE"
@@ -50,6 +51,8 @@ def baseline(repo: Path, ledger_rel: str, tip: str = "HEAD") -> str | None:
     for line in raw.decode("utf-8", errors="replace").splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
+            if line.startswith("-"):  # never an option to git
+                return None
             rc, sha = _git(repo, "rev-parse", "-q", "--verify", f"{line.split()[0]}^{{commit}}")
             sha_s = sha.decode().strip()
             if rc == 0 and sha_s and _git(repo, "merge-base", "--is-ancestor", sha_s, tip)[0] == 0:
@@ -59,7 +62,11 @@ def baseline(repo: Path, ledger_rel: str, tip: str = "HEAD") -> str | None:
 
 
 def range_tip(rev_range: str) -> str:
-    """The commit a range ends at: the right side of ``A..B`` / ``A...B`` (``HEAD`` when empty), else the range.
+    """The commit a range ends at, where the review ledger is read.
+
+    ``A..B`` and ``A...B`` end at ``B`` (``HEAD`` when empty; for ``A...B`` that is also where the commits on ``A``'s
+    side are judged). A space-separated form (``B ^A``, ``B --not A``) ends at its last plain revision. A single
+    revision ends at itself.
 
     Args:
         rev_range: A revision range as ``status`` accepts it.
@@ -71,9 +78,15 @@ def range_tip(rev_range: str) -> str:
         Nothing.
     """
     for sep in ("...", ".."):
-        if sep in rev_range:
+        if sep in rev_range and " " not in rev_range.strip():
             return rev_range.rsplit(sep, 1)[1] or "HEAD"
-    return rev_range.split()[0] if rev_range.strip() else "HEAD"
+    plain: list[str] = []
+    for token in rev_range.split():
+        if token == "--not":
+            break
+        if not token.startswith(("^", "-")):
+            plain.append(token)
+    return plain[-1] if plain else "HEAD"
 
 
 def commits(repo: Path, rev_args: list[str]) -> list[tuple[str, str]]:
@@ -192,43 +205,48 @@ def pre_push_mode(repo: Path) -> str:
     return mode if mode in ("warn", "block") else "off"
 
 
-def pre_push_ranges(stdin_text: str, remote: str) -> list[tuple[list[str], str]]:
-    """Revision arguments and tip for each ref update git passes a pre-push hook.
+def pre_push_ranges(repo: Path, stdin_text: str, remote: str) -> list[list[str]]:
+    """Revision arguments for each ref update git passes a pre-push hook.
 
     Args:
+        repo: Repository root.
         stdin_text: The hook's standard input, ``<local ref> <local sha> <remote ref> <remote sha>`` per line.
         remote: The remote's name (the hook's first argument).
 
     Returns:
-        ``(rev_args, tip)`` per pushed ref: ``remote_sha..local_sha`` for an update, and ``local_sha --not
-        --remotes=<remote>`` for a new ref. Deletions are skipped.
+        One argument list per pushed ref, its first element the pushed tip: ``remote_sha..local_sha`` for an
+        update whose old remote tip is in this clone, and ``local_sha --not --remotes=<remote>`` for a new ref or
+        an old tip this clone lacks. Deletions, and lines that are not four fields of hex SHAs, are skipped.
 
     Raises:
         Nothing.
     """
-    out: list[tuple[list[str], str]] = []
+    out: list[list[str]] = []
     for line in stdin_text.splitlines():
         parts = line.split()
-        if len(parts) != 4 or set(parts[1]) == {"0"}:
+        if len(parts) != 4 or not all(_is_sha(p) for p in (parts[1], parts[3])) or set(parts[1]) == {"0"}:
             continue
         local_sha, remote_sha = parts[1], parts[3]
-        if set(remote_sha) == {"0"}:
-            out.append(([local_sha, "--not", f"--remotes={remote}"], local_sha))
-        else:
-            out.append(([f"{remote_sha}..{local_sha}"], local_sha))
+        known = set(remote_sha) != {"0"} and _git(repo, "cat-file", "-e", f"{remote_sha}^{{commit}}")[0] == 0
+        out.append([f"{remote_sha}..{local_sha}"] if known else [local_sha, "--not", f"--remotes={remote}"])
     return out
 
 
-def pre_push_check(repo: Path, remote: str, stdin_text: str) -> tuple[str, bool]:
+def _is_sha(text: str) -> bool:
+    return len(text) in (40, 64) and all(c in "0123456789abcdef" for c in text)
+
+
+def pre_push_check(repo: Path, remote: str, stdin_text: str,
+                   status_fn: Callable[..., tuple[str | None, list[Any]]]) -> tuple[str, bool]:
     """Run the pre-push step: report impactful commits being pushed without a review record at the pushed tip.
 
-    Off unless ``git config agentteams.apiReviewPrePush`` is ``warn`` or ``block``
-    (:func:`pre_push_mode`).
+    Off unless ``git config agentteams.apiReviewPrePush`` is ``warn`` or ``block`` (:func:`pre_push_mode`).
 
     Args:
         repo: Repository root.
         remote: The remote's name (the hook's first argument).
         stdin_text: The hook's standard input (one ``<local ref> <local sha> <remote ref> <remote sha>`` per line).
+        status_fn: :func:`agentteams.api_impact.status`, passed in so this module does not import it back.
 
     Returns:
         ``(message, blocked)``; ``blocked`` only in ``block`` mode with an unreviewed commit.
@@ -236,18 +254,14 @@ def pre_push_check(repo: Path, remote: str, stdin_text: str) -> tuple[str, bool]
     Raises:
         RuntimeError: When git fails.
     """
-    from agentteams.api_impact import CommitStatus, status
-
     mode = pre_push_mode(repo)
     if mode == "off":
         return "", False
-    pending: list[CommitStatus] = []
-    for rev_args, _tip in pre_push_ranges(stdin_text, remote):
-        try:
-            _, found = status(repo, rev_args=rev_args)
-        except RuntimeError:  # the remote's old tip is not in this clone: check what the remote does not have
-            _, found = status(repo, rev_args=[rev_args[0].split("..")[-1], "--not", f"--remotes={remote}"])
-        pending += [c for c in found if not c.reviewed and c.commit not in {p.commit for p in pending}]
+    pending: list[Any] = []
+    for rev_args in pre_push_ranges(repo, stdin_text, remote):
+        _, found = status_fn(repo, rev_args=rev_args)
+        seen = {p.commit for p in pending}
+        pending += [c for c in found if not c.reviewed and c.commit not in seen]
     if not pending:
         return "", False
     lines = [f"agentteams: {len(pending)} impactful commit(s) pushed without an API impact review record:"]

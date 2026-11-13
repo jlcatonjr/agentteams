@@ -82,6 +82,8 @@ class Impact:
         structural_renamed: ``(old, new)`` pairs of other renamed files.
         unparseable: Python files whose old or new version does not parse.
         regenerated: Derived artifacts regenerated and staged (pre-commit only).
+        review_baseline_changed: The review ledger's ``BASELINE`` file, when the diff touches it. Moving the
+            baseline changes which commits a default-branch ``status`` checks, so that commit is itself reviewed.
     """
 
     modules_added: list[str] = field(default_factory=list)
@@ -98,6 +100,7 @@ class Impact:
     structural_renamed: list[tuple[str, str]] = field(default_factory=list)
     unparseable: list[str] = field(default_factory=list)
     regenerated: list[str] = field(default_factory=list)
+    review_baseline_changed: list[str] = field(default_factory=list)
 
     @property
     def impactful(self) -> bool:
@@ -274,7 +277,10 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
         raw = _git(repo, *args, *(["--root"] if old_ref is None else []), commit)
         new_ref = commit
     imp = Impact()
+    baseline_rel = f"{ledger_rel}/BASELINE"
     for status, old, new in _name_status(raw):
+        if baseline_rel in (old, new):
+            imp.review_baseline_changed.append(baseline_rel)
         if _excluded(new, ledger_rel) and _excluded(old, ledger_rel):
             continue
         if new.endswith(".schema.json") or old.endswith(".schema.json"):
@@ -364,6 +370,9 @@ def resolve_base(repo: Path) -> str | None:
     Returns:
         A commit-ish for the range start, or ``None`` when no base can be found (the caller reports the review
         as pending, never as passed).
+
+    Raises:
+        RuntimeError: When git fails reading ``HEAD``.
     """
     repo = Path(repo)
     if not _has_head(repo):
@@ -394,6 +403,13 @@ def patch_id(repo: Path, commit: str) -> str:
 
     Returns:
         The patch-id, or ``""`` for a commit whose diff (ledger excluded) is empty.
+
+    Raises:
+        RuntimeError: When git fails (unknown commit).
+
+    Note:
+        ``status`` computes ids in one batch (:func:`agentteams._api_impact_range.patch_ids`); this single-commit
+        function is the reference those batched ids are tested against.
     """
     repo = Path(repo)
     ledger_rel = ledger_dir(repo).relative_to(repo.resolve()).as_posix()
@@ -443,9 +459,12 @@ def status(repo: Path, rev_range: str | None = None, *, full: bool = False,
 
     Raises:
         RuntimeError: When git rejects the range.
+        ValueError: When a ``rev_range`` token starts with ``-`` (it would reach git as an option).
     """
     from agentteams import _api_impact_range as rng
 
+    if rev_range is not None and any(tok.startswith("-") for tok in rev_range.split()):
+        raise ValueError(f"refused range {rev_range!r}: a revision may not start with '-'")
     repo = Path(repo)
     ledger = ledger_dir(repo)
     ledger_rel = ledger.relative_to(repo.resolve()).as_posix()
@@ -460,7 +479,7 @@ def status(repo: Path, rev_range: str | None = None, *, full: bool = False,
             rev_range = f"{base}..HEAD"
         rev_args = [rev_range]
     used = rev_range or " ".join(rev_args)
-    tip = rng.range_tip(rev_args[0]) if rev_range is None else rng.range_tip(rev_range)
+    tip = rng.range_tip(rev_range if rev_range is not None else " ".join(rev_args))
     listed = rng.commits(repo, rev_args)
     shas = [sha for sha, _ in listed]
     subjects = dict(listed)
@@ -921,7 +940,7 @@ def main(argv: list[str] | None = None) -> int:
         from agentteams._api_impact_range import pre_push_check
 
         try:
-            msg, blocked = pre_push_check(repo, args.pre_push, sys.stdin.read())
+            msg, blocked = pre_push_check(repo, args.pre_push, sys.stdin.read(), status)
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             msg, blocked = (f"agentteams: api-impact pre-push check failed ({type(exc).__name__}: {exc}); "
                             "push unaffected"), False
@@ -935,11 +954,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "status":
         from agentteams._hook_python import read_skips
 
-        used, commits = status(repo, args.rev_range, full=args.full)
+        from agentteams._api_impact_range import baseline
+
+        try:
+            used, commits = status(repo, args.rev_range, full=args.full)
+        except ValueError as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 2
         skips = read_skips(repo)
+        base = baseline(repo, ledger_dir(repo).relative_to(repo).as_posix()) if args.rev_range is None else None
         if args.json:
-            print(json.dumps({"range": used, "commits": [asdict(c) for c in commits], "hook_skips": skips}, indent=2))
+            print(json.dumps({"range": used, "baseline": base, "commits": [asdict(c) for c in commits],
+                              "hook_skips": skips}, indent=2))
         else:
+            if base:
+                print(f"baseline: {base[:12]} (committed BASELINE; commits before it are not checked)")
             _print_status(used, commits)
             if skips:
                 print(f"\nHOOK SKIPPED {len(skips)} time(s): the pre-commit hook could not run the API impact check, so "

@@ -71,8 +71,9 @@ def test_a_committed_baseline_makes_the_default_range_push_independent(pushed: P
     _commit(pushed, "baseline", {"references/api-impact-reviews/BASELINE": f"# reviews start after\n{first}\n"})
     _git(pushed, "push", "-q")
     assert api_impact.resolve_base(pushed) == first
-    assert _pending(pushed) == ["add api"]
-    assert _pending(pushed, full=True) == ["add api"]
+    # The commit that set the baseline is itself impactful: moving it changes what status checks.
+    assert _pending(pushed) == ["add api", "baseline"]
+    assert _pending(pushed, full=True) == ["add api", "baseline"]
 
 
 def test_the_ledger_is_read_at_the_range_tip_not_at_head(pushed: Path):
@@ -144,12 +145,42 @@ def test_pre_push_is_off_until_configured_then_warns_then_blocks(pushed: Path):
     assert _git(pushed, "push", "-q").returncode == 0
 
 
-def test_pre_push_ranges_for_new_updated_and_deleted_refs():
+def test_pre_push_ranges_for_new_updated_unknown_deleted_and_malformed_refs(pushed: Path):
     z = "0" * 40
-    got = rng.pre_push_ranges(f"refs/heads/x {'a' * 40} refs/heads/x {z}\n"
-                              f"refs/heads/y {'b' * 40} refs/heads/y {'c' * 40}\n"
-                              f"(delete) {z} refs/heads/z {'d' * 40}\n", "origin")
-    assert got == [(["a" * 40, "--not", "--remotes=origin"], "a" * 40), ([f"{'c' * 40}..{'b' * 40}"], "b" * 40)]
+    known = _git(pushed, "rev-parse", "HEAD~1").stdout.strip()
+    got = rng.pre_push_ranges(pushed, f"refs/heads/x {'a' * 40} refs/heads/x {z}\n"
+                                      f"refs/heads/y {'b' * 40} refs/heads/y {known}\n"
+                                      f"refs/heads/w {'e' * 40} refs/heads/w {'c' * 40}\n"
+                                      f"(delete) {z} refs/heads/z {'d' * 40}\n"
+                                      f"refs/heads/v --output=/tmp/x refs/heads/v {z}\n", "origin")
+    assert got == [["a" * 40, "--not", "--remotes=origin"], [f"{known}..{'b' * 40}"],
+                   ["e" * 40, "--not", "--remotes=origin"]]  # c… is not in this clone
+
+
+def test_a_range_starting_with_a_dash_is_refused(pushed: Path, capsys):
+    with pytest.raises(ValueError):
+        api_impact.status(pushed, "--output=/tmp/x")
+    assert api_impact.main(["--repo", str(pushed), "status", "--range=--output=x"]) == 2
+    assert "refused" in capsys.readouterr().err
+    assert not (pushed / "x").exists()
+
+
+def test_a_baseline_line_starting_with_a_dash_is_ignored(pushed: Path):
+    _commit(pushed, "bad baseline", {"references/api-impact-reviews/BASELINE": "--output=/tmp/x\n"})
+    assert rng.baseline(pushed, "references/api-impact-reviews") is None
+
+
+def test_status_prints_the_baseline_it_used(pushed: Path, capsys):
+    first = _git(pushed, "rev-parse", "HEAD~1").stdout.strip()
+    _commit(pushed, "baseline", {"references/api-impact-reviews/BASELINE": first + "\n"})
+    api_impact.main(["--repo", str(pushed), "status"])
+    assert f"baseline: {first[:12]}" in capsys.readouterr().out
+
+
+def test_range_tip_forms():
+    assert rng.range_tip("A..B") == "B" and rng.range_tip("A...B") == "B" and rng.range_tip("A..") == "HEAD"
+    assert rng.range_tip("B ^A") == "B" and rng.range_tip("B --not --remotes=origin") == "B"
+    assert rng.range_tip("HEAD") == "HEAD"
 
 
 def test_status_full_cli_json(pushed: Path, capsys):
