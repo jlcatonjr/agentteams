@@ -37,12 +37,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-24.04, not ubuntu-latest: GitHub moved ubuntu-latest to Ubuntu 26 from 2026-10-19, where the
-        # confinement tests' expectations (EPERM wording, survivor reporting, GNU coreutils) don't hold yet.
-        # Ubuntu 26 support is a 1.0.2 must-fix; move back to ubuntu-latest with it.
+        # ubuntu-26.04, named rather than ubuntu-latest: GitHub moved ubuntu-latest from 24 to 26 on 2026-10-19
+        # without notice and the confinement tests broke (#262, fixed by #405). A named image changes only in a PR,
+        # and the required-check names (main's branch protection) change with it.
         # macOS runs where it decides a merge (the PR, a tag, a manual dispatch), not again on the push that
         # merges an already-tested PR: macOS minutes bill at a multiple of Linux minutes on private repos.
-        os: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest"]') }}
+        os: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) && fromJSON('["ubuntu-26.04"]') || fromJSON('["ubuntu-26.04", "macos-latest"]') }}
         python-version: ["3.11", "3.12"]
 
     steps:
@@ -100,7 +100,7 @@ jobs:
   # README/man page/pyproject still resolving, and every page URL of the base build still existing
   # (deliberate removals go in .github/docs-removed-urls.txt).
   docs-build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -165,7 +165,7 @@ jobs:
   # archived pre-public history (not on origin, so unreadable here) must match the digest pinned in
   # tests/test_template_lineage.py. Full regeneration runs only where that archive is present.
   template-lineage:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -181,9 +181,9 @@ jobs:
       - name: Lineage corpus provenance and regeneration
         run: pytest tests/test_template_lineage.py -v
 
-  # #262: Ubuntu 26 evidence leg. NOT a required check (the release-lines ruleset requires only the six existing
-  # names), so a red result leaves a PR UNSTABLE, not blocked. It records os-release and the bwrap version, runs the
-  # confinement suites with bwrap required, and fails if the survivor test skipped instead of running.
+  # #262: Ubuntu 26 confinement leg, required on main with the test matrix. It records os-release and the bwrap
+  # version, runs the confinement suites with bwrap required, and fails if the survivor test skipped instead of
+  # running: the matrix runs the same suites but would pass with that test skipped.
   ubuntu-26-confinement:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
@@ -243,11 +243,11 @@ jobs:
   # Live WASM tests on Linux (WASM follow-up F2): the `test` matrix never installs wasmtime, so every live WASM test
   # skips there. This job installs bubblewrap and the pinned runtimes, then runs the live tests with wasmtime nested
   # under bwrap (os_confinement=nested, nested:bwrap). A skip guard fails the job if any test skips outside the
-  # allowlist below, so a missing precondition cannot leave it green for nothing. ubuntu-24.04 for the same reason as
+  # allowlist below, so a missing precondition cannot leave it green for nothing. ubuntu-26.04 for the same reason as
   # the test matrix. BLOCKING since 2026-11-05 (remediation row wasm-live-job-required; green on #367, #381 and main),
   # so a red result fails the run.
   wasm-live:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7

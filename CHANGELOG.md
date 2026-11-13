@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (CI runs on Ubuntu 26; #262)
+
+- Every CI job that ran on `ubuntu-24.04` now runs on `ubuntu-26.04`: the `test` matrix rows, `docs-build`,
+  `template-lineage`, `wasm-live` and the docs-links workflow. The image is named, not `ubuntu-latest`, so it changes
+  only in a PR. The Ubuntu rows of the required checks are renamed `test (ubuntu-26.04, 3.11)` and
+  `test (ubuntu-26.04, 3.12)`, and `ubuntu-26-confinement` (which fails if the survivor test skips) becomes
+  required on main. main's branch protection is updated by the operator when the release PR that carries this
+  change opens. release/1.0 keeps `ubuntu-24.04`: the 1.0 line does not receive #405 (SECURITY.md: security fixes
+  are backported only to the most recent minor), so users on 1.0.x should move to 1.1.
 ### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
 
 - **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
