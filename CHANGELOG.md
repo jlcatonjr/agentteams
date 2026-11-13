@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`api_impact` sees positional arguments, `choices` and `sys.argv` options; #451 a)
+
+- `add_argument` positionals are part of the surface (`cli-pos:<name>`). Their `choices`, and an option's `choices`,
+  are compared too, so adding or removing a subcommand-like choice is reported (new `Impact.cli_changed`).
+- A literal `"--x" in sys.argv` test is reported as `--x (sys.argv, heuristic)` unless a parser declares `--x`.
+- `surface` moved to `agentteams._api_surface` (re-exported from `agentteams.api_impact`). The generated
+  `api-impact.reference.md` fence `api_impact` is v=4.
+
 ### fixed (`api_impact status` no longer forgives pushed commits; #447 b)
 
 - **A push-independent range.** On the default branch, `status` used `@{upstream}`, so a commit pushed before its

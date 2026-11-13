@@ -6,8 +6,9 @@ reviewed. This module answers that from git alone:
 
 * :func:`detect` compares one diff (the staged index, or one commit) and reports what changed: Python modules
   added, removed or renamed; public module-level functions and classes, public methods of public classes and
-  ``__all__`` added, removed or re-signed; command-line options (``add_argument``) and subcommands
-  (``add_parser``) added or removed; ``*.schema.json`` files changed; and tracked files added, removed or renamed
+  ``__all__`` added, removed or re-signed; command-line options and positional arguments (``add_argument``,
+  with a change of ``choices`` reported as changed), options read straight from ``sys.argv`` (a heuristic) and
+  subcommands (``add_parser``) added or removed; ``*.schema.json`` files changed; and tracked files added, removed or renamed
   outside tests, docs and work records. Symbol-level detection is Python-only; other languages are covered at
   file level.
 * :func:`status` runs :func:`detect` on every non-merge commit since the branch base (:func:`resolve_base`) and
@@ -48,8 +49,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-# surface() lives in agentteams._api_surface (CH-07 carve) and stays part of this module's API.
-from agentteams._api_surface import surface
+# surface() lives in agentteams._api_surface (CH-07 carve, #451 a) and stays part of this module's API.
+from agentteams._api_surface import cli_label, cli_term, surface
 
 #: Review ledger, relative to the directory that holds the project's ``references/``.
 LEDGER_SUBDIR = "api-impact-reviews"
@@ -78,6 +79,7 @@ class Impact:
         symbols_changed: ``module::name`` entries whose signature changed.
         cli_added: Command-line options or subcommands added.
         cli_removed: Command-line options or subcommands removed.
+        cli_changed: Command-line options or positional arguments whose ``choices`` changed (#451 a).
         schemas_changed: ``*.schema.json`` files added, removed or modified.
         structural_added: Other tracked files added (outside :data:`STRUCTURAL_EXCLUDES`).
         structural_removed: Other tracked files removed.
@@ -96,6 +98,7 @@ class Impact:
     symbols_changed: list[str] = field(default_factory=list)
     cli_added: list[str] = field(default_factory=list)
     cli_removed: list[str] = field(default_factory=list)
+    cli_changed: list[str] = field(default_factory=list)
     schemas_changed: list[str] = field(default_factory=list)
     structural_added: list[str] = field(default_factory=list)
     structural_removed: list[str] = field(default_factory=list)
@@ -250,14 +253,15 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
                 continue
             module = new if status != "D" else old
             for name in sorted(after.keys() - before.keys()):
-                (imp.cli_added if name.startswith("cli:") else imp.symbols_added).append(
-                    name.split(":", 1)[1] if name.startswith("cli:") else f"{module}::{name}")
+                label = cli_label(name)
+                (imp.cli_added if label else imp.symbols_added).append(label or f"{module}::{name}")
             for name in sorted(before.keys() - after.keys()):
-                (imp.cli_removed if name.startswith("cli:") else imp.symbols_removed).append(
-                    name.split(":", 1)[1] if name.startswith("cli:") else f"{module}::{name}")
+                label = cli_label(name)
+                (imp.cli_removed if label else imp.symbols_removed).append(label or f"{module}::{name}")
             for name in sorted(before.keys() & after.keys()):
                 if before[name] != after[name]:
-                    imp.symbols_changed.append(f"{module}::{name}")
+                    label = cli_label(name)
+                    (imp.cli_changed if label else imp.symbols_changed).append(label or f"{module}::{name}")
         elif not is_py:
             new_counts = not (_excluded(new, ledger_rel) or _is_test(new))
             old_counts = not (_excluded(old, ledger_rel) or _is_test(old))
@@ -379,8 +383,8 @@ def _checklist(repo: Path, imp: Impact) -> dict[str, list[str]]:
     for path in (*imp.modules_removed, *(o for o, _ in imp.modules_renamed),
                  *imp.structural_removed, *(o for o, _ in imp.structural_renamed)):
         names.setdefault(PurePosixPath(path).stem if path.endswith(".py") else path, set()).add(path)
-    for opt in imp.cli_removed:
-        names.setdefault(opt, set())
+    for opt in (*imp.cli_removed, *imp.cli_changed):
+        names.setdefault(cli_term(opt), set())
     out: dict[str, list[str]] = {}
     for term, own in sorted(names.items()):
         hits = _git(repo, "grep", "-l", "-w", "-F", "-e", term, check=False).decode().splitlines()
