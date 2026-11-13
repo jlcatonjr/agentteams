@@ -76,6 +76,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`carveouts`](carveouts.md) | Operator-signed, workspace-scoped carve-outs: one signed, committed registry, machine-checked bounds, rendered into every entry file |
 | [`surface-matrix`](surface-matrix.md) | Which agents exist on which provider, their declared tools, notes and skills parity |
 | [`doctor`](doctor.md) | `--doctor`: one read-only report on whether the project's providers agree |
+| [`hygiene_rules`](hygiene-rules.md) | Project code-hygiene rules in the `CH-P` namespace: merge migration and the `--doctor` id checks |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
 | [`code-index`](code-index.md) | Code & API index over repository scripts and the external APIs they use (gitignored local cache) |
 | [`code-sources`](code-sources.md) | Source resolution and partitioning for the code & API index |

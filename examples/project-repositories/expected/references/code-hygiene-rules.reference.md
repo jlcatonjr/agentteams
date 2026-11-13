@@ -1,3 +1,11 @@
+<!--
+SECTION MANIFEST
+| section_id | designation  |
+|------------|--------------|
+| content    | FENCED       |
+The "Project Extension Rules (CH-P01+)" section after the fence is unfenced and user-owned.
+-->
+
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 # Code Hygiene Rules — Enforcement Catalog (ProjectRepositories)
 
@@ -103,9 +111,12 @@ No two agent files may make contradictory claims about the same fact (e.g., whic
 
 ---
 
-## Extension Rules (CH-21+)
+## Framework Extension Rules (CH-21 onward)
 
-> Add project-specific hygiene rules below using the same ID/Name/Category/Severity structure.
+> These are the framework's own rules beyond the invariant set; later releases may add more (CH-32, …).
+> Project rules do **not** go here: they use the reserved `CH-P` namespace in **Project Extension Rules** at
+> the end of this file, outside the managed region, so they never collide with a framework rule and survive
+> `--update --merge`. A project rule may add a check; it may not relax, narrow or suspend a framework rule.
 
 ### CH-21 — Validate New Features Before Mainline Integration
 
@@ -419,12 +430,20 @@ open-ended fan-out — not a general replacement for conditionals.
 preference. A chain is a CH-31 finding only if it passes all three flag conditions and matches
 none of the exclusions; otherwise it is CH-24-compliant as an `if`/`elif`.
 
+<!-- AGENTTEAMS:END content -->
+
+## Project Extension Rules (CH-P01+)
+
+> ⚙️ **USER-EDITABLE** — add this project's own hygiene rules here, numbered `CH-P01`, `CH-P02`, … (a namespace reserved
+> for projects), with the same ID/Name/Category/Severity structure. This section lies outside the managed
+> region, so `--update --merge` keeps it while framework rules above are updated. `--doctor` warns if a `CH-…` id
+> appears twice in this file, or if a rule here uses a framework id (`CH-01`, `CH-02`, …).
+
 <!-- Example:
-### CH-21 — Project-Specific Rule Name
+### CH-P01 — Project-Specific Rule Name
 
 **Category:** <category>
 **Severity:** <severity>
 
 Description and enforcement check.
 -->
-<!-- AGENTTEAMS:END content -->
