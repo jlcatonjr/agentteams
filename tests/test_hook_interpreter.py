@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,22 @@ _BASE_ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
 _BASE_ENV.update({"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid", "GIT_COMMITTER_NAME": "t",
                   "GIT_COMMITTER_EMAIL": "t@example.invalid", "GIT_CONFIG_GLOBAL": os.devnull,
                   "GIT_CONFIG_NOSYSTEM": "1"})
-_GIT_DIR = str(Path(shutil.which("git") or "/usr/bin/git").parent)
+#: Commands the hook and git need, linked into one directory so PATH holds no Python at all. A directory such as
+#: /usr/bin cannot be put on PATH: on a GitHub-hosted runner it holds real python3.1x interpreters.
+_TOOLS = ("git", "sh", "grep", "head", "date", "readlink", "rm", "awk", "sed", "cat", "tr", "touch", "mkdir",
+          "dirname", "basename", "env", "uname")
+_TOOL_DIR: Path | None = None
+
+
+def _tool_dir() -> Path:
+    global _TOOL_DIR
+    if _TOOL_DIR is None:
+        _TOOL_DIR = Path(tempfile.mkdtemp(prefix="hook-tools-"))
+        for name in _TOOLS:
+            found = shutil.which(name)
+            if found:
+                (_TOOL_DIR / name).symlink_to(Path(found).resolve() if name == "git" else found)
+    return _TOOL_DIR
 _SKIPPED = "hooks SKIPPED, API impact not checked"
 
 
@@ -41,7 +57,7 @@ def _fake_bin(tmp_path: Path) -> Path:
 
 def _env(path_dirs: list[Path]) -> dict[str, str]:
     # git and the core utilities stay reachable; no real python is on PATH.
-    return {**_BASE_ENV, "PATH": os.pathsep.join([*(str(p) for p in path_dirs), _GIT_DIR, "/usr/bin", "/bin"])}
+    return {**_BASE_ENV, "PATH": os.pathsep.join([*(str(p) for p in path_dirs), str(_tool_dir())])}
 
 
 def _run(repo: Path, env: dict[str, str], *args: str) -> subprocess.CompletedProcess:
@@ -236,3 +252,12 @@ def test_an_import_path_inside_the_repository_is_not_put_on_pythonpath(tmp_path:
     assert _hook_python.checkout_path(str(inner), tmp_path) == ""
     assert _hook_python.checkout_path(str(tmp_path), tmp_path) == str(tmp_path)  # the agentteams repo itself
     assert _hook_python.checkout_path("/opt/agentteams", tmp_path) == "/opt/agentteams"
+
+
+def test_the_fixture_path_exposes_no_real_python(tmp_path: Path):
+    """The skip tests mean something only when no real interpreter is reachable (GitHub runners have several)."""
+    fake = _fake_bin(tmp_path)
+    path = _env([fake])["PATH"]
+    for name in _hook_python.PATH_CANDIDATES:
+        found = shutil.which(name, path=path)
+        assert found is None or Path(found).parent == fake, found

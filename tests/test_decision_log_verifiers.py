@@ -11,8 +11,9 @@ the resolver:
 * ``_assert_decision_chain_intact`` — deletion/reorder detection on a chained log.
 * ``_assert_authorizing_row_is_authentic`` — a requesting agent cannot clear its own action (A4).
 
-The pure id-matcher ``_action_matches`` is registered ``not-a-verifier``; its match decision is
-exercised here through its caller ``_assert_no_unretracted_halt`` with both a matching action (which
+The id-matcher (now ``action_ids.action_matches``, re-exported as ``_action_matches``) is
+registered as a verifier with direct tests in ``tests/test_redteam_verifiers_cli.py``; its match
+decision is also exercised here through its caller ``_assert_no_unretracted_halt`` with both a matching action (which
 must refuse) and a non-matching action (which must accept), so a regression in it would break a
 security assertion rather than pass silently.
 """

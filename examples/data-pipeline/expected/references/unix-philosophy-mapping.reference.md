@@ -116,10 +116,10 @@ This principle insists on **discoverability and explicitness**. Hidden behaviors
 
 ---
 
-## Extension Rules (CH-21+) and Design Principles
+## Framework Extension Rules (CH-21 onward) and Design Principles
 
-The repository adds nine enforcement rules (CH-21 through CH-29). CH-21–CH-26 are
-largely **project-specific operational requirements** complementary to Unix
+The framework adds enforcement rules after CH-20; this mapping covers CH-21 through CH-29 (project rules use
+the separate `CH-P` namespace). CH-21–CH-26 are largely **operational requirements** complementary to Unix
 philosophy; CH-27, CH-28, and CH-29 align *directly* with it (Software Tools, the
 Rule of Simplicity, and Software Tools again, respectively):
 
@@ -146,7 +146,7 @@ Understanding the alignment between rules and design principles helps developers
 3. **Extend the rule set** — New rules should be grounded in principles or clearly justified as project-specific
 4. **Maintain over time** — Knowing *why* a rule exists makes it easier to keep it in sync as the project evolves
 
-**Caveat:** This mapping documents which rules *happen to align with* Unix principles. It does not claim that Unix philosophy is the only valid source of design wisdom, or that all project rules must derive from it. The code-hygiene agent also enforces project-specific rules (CH-21–CH-26) that serve operational needs independent of Unix philosophy, plus CH-27–CH-28 which align with it directly.
+**Caveat:** This mapping documents which rules *happen to align with* Unix principles. It does not claim that Unix philosophy is the only valid source of design wisdom, or that all project rules must derive from it. The code-hygiene agent also enforces operational framework rules (CH-21–CH-26) that serve operational needs independent of Unix philosophy, plus CH-27–CH-28 which align with it directly.
 
 ---
 

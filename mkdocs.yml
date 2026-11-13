@@ -262,6 +262,7 @@ nav:
               - carveout-checks: api-reference/carveout-checks.md
               - surface-matrix: api-reference/surface-matrix.md
               - doctor: api-reference/doctor.md
+              - hygiene-rules: api-reference/hygiene-rules.md
               - fence-inject: api-reference/fence-inject.md
               - code-index: api-reference/code-index.md
               - code-sources: api-reference/code-sources.md
