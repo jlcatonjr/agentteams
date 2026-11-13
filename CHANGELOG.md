@@ -15,6 +15,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
   are pinned as exceptions), and every agent the mapping names must reference that placeholder.
 
+### changed (CI runs on Ubuntu 26; #262)
+
+- Every CI job that ran on `ubuntu-24.04` now runs on `ubuntu-26.04`: the `test` matrix rows, `docs-build`,
+  `template-lineage`, `wasm-live` and the docs-links workflow. The image is named, not `ubuntu-latest`, so it changes
+  only in a PR. The Ubuntu rows of the required checks are renamed `test (ubuntu-26.04, 3.11)` and
+  `test (ubuntu-26.04, 3.12)`, and `ubuntu-26-confinement` (which fails if the survivor test skips) becomes
+  required on main. main's branch protection is updated by the operator when the release PR that carries this
+  change opens. release/1.0 keeps `ubuntu-24.04`: the 1.0 line does not receive #405 (SECURITY.md: security fixes
+  are backported only to the most recent minor), so users on 1.0.x should move to 1.1.
+### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
+
+- **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
+  of `references/code-hygiene-rules.reference.md`. The framework's own rules already run to CH-31, so a project rule
+  could share a framework id, and `--update --merge` overwrote it with no notice (IM evaluation item 26).
+  - Project rules now go in a new user-owned **Project Extension Rules (CH-P01+)** section after the fence, numbered
+    `CH-P01`, `CH-P02`, …. The framework does not use that namespace. A project rule may add a check; it may not
+    relax, narrow or suspend a framework rule. The `@code-hygiene` agent's Extension Point says the same, and its
+    rule table now lists CH-29, CH-30 and CH-31.
+  - Framework rule ids are unchanged: CH-01 to CH-31 keep their numbers and catalogue titles.
+- **Migration.** On `--update --merge`, each `### CH-…` rule section of the old managed region that is not a current
+  framework rule is moved, verbatim (comments and code blocks included), into Project Extension Rules. The update
+  report names each one and says the moved text is unreviewed and now kept across merges. This includes a local
+  rule that reuses a framework id with its own title (for example a local `CH-29`). A framework heading whose
+  placeholder renders differently (CH-03 names the output directory) is still recognised as framework. A second
+  merge moves nothing.
+  - What the notice can't tell apart: a framework rule that a later release renames or removes also lands there.
+    The notice says so; delete such a rule.
+  - Other old managed sections the new render lacks (not `CH-` rules) are named in a notice but not moved. Upgrading
+    from earlier releases names the old `Extension Rules (CH-21+)` heading this way.
+  - The security scan runs over moved text, and any high-severity finding is quoted in the notice.
+  - **After updating, renumber your moved project rules `CH-P01`, `CH-P02`, … and update any citations of them.**
+- **`--doctor`** has a new **Hygiene rule ids** WARN section (`agentteams.hygiene_rules`). It names the file and both
+  lines of a repeated `### CH-…` heading, and the line of any project rule that uses a framework-range id. A team
+  dir symlinked outside the project is skipped. `--check` does not report these yet; that is deferred.
+- Tests: rule ids are checked for uniqueness as a list (a repeat fails), and every catalogue rule must appear in the
+  agent's rule table (previously only CH-26 to CH-28 were checked). Stale "CH-21+ are project rules" text is fixed
+  in the orchestrator, Unix-mapping and feature-inventory pages.
+
 ### changed (`parallel_plan` schedules only the remaining steps; the steps-CSV contract is checked)
 
 - **Behaviour change.** `python -m agentteams.parallel_plan` now schedules only the remaining steps, as Workflows

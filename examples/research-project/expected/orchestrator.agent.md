@@ -718,7 +718,7 @@ carry an appended handoff:
 
 **Trigger:** "Run code hygiene audit" / "Pre-merge check" / "Check file hygiene"
 
-1. Invoke `@code-hygiene` → full audit against CH-01 through CH-20 (and any CH-21+ extensions)
+1. Invoke `@code-hygiene` → full audit against the framework rules (CH-01 onward) and any project rules (CH-P01 onward)
 2. Invoke `@adversarial` → challenge the presuppositions in the hygiene findings before acting (e.g., "this file is truly orphaned", "no other agent depends on this") — especially required before any step 3 deletion plan
 3. Review findings
 4. If deletions needed (CH-01, CH-15, CH-16, CH-18, CH-19) → invoke `@security` for clearance → invoke `@cleanup`
