@@ -23,6 +23,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - a secret of 23 characters or fewer in a commit URL's owner or repo segment is not re-flagged, the same length
     floor the path guard already applies.
 
+### added (CI fails on an unregistered verifier; #50)
+
+- `tests/test_redteam_ledger_gate.py` runs the red-team self-audit's source checks F-1 and F-3 in the required test
+  matrix. A PR that adds a verifier-shaped function (or a non-Python enforcement module) without a row in
+  `references/redteam-verifiers.csv`, or a hand-rolled target/descriptor/VCS resolution without an exemption row,
+  now fails CI with the remedy printed. Until now only the weekly audit reported them, and F-1 grew from 91 to 107
+  in a week. The backlog itself is cleared: 113 F-1 rows (verifier rows name a sensitivity test and a negative
+  control; new tests in `tests/test_redteam_verifiers_{cli,vulnscan,core,data}.py`) and four F-3 exemptions with
+  evidence tests. F-5 (probe intent) stays weekly; the 2026-11-12 re-validation is in
+  `references/redteam-probe-revalidation.md`.
+
+### changed (CI runs on Ubuntu 26; #262)
+
+- Every CI job that ran on `ubuntu-24.04` now runs on `ubuntu-26.04`: the `test` matrix rows, `docs-build`,
+  `template-lineage`, `wasm-live` and the docs-links workflow. The image is named, not `ubuntu-latest`, so it changes
+  only in a PR. The Ubuntu rows of the required checks are renamed `test (ubuntu-26.04, 3.11)` and
+  `test (ubuntu-26.04, 3.12)`, and `ubuntu-26-confinement` (which fails if the survivor test skips) becomes
+  required on main. main's branch protection is updated by the operator when the release PR that carries this
+  change opens. release/1.0 keeps `ubuntu-24.04`: the 1.0 line does not receive #405 (SECURITY.md: security fixes
+  are backported only to the most recent minor), so users on 1.0.x should move to 1.1.
+
 ### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
 
 - **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
