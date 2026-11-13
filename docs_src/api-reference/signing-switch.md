@@ -74,6 +74,17 @@ non-regular file, malformed JSON or a non-boolean value. It never defaults to `f
 
 The ownership test above, the governed-marker test, and the switch file text.
 
+`is_governed` is the one governance test; `cli/decision_log` and `projection_marker` call it too. A dir is
+governed when its `signing-governed.marker` exists, **or** when git tracks the marker there in the index or in
+HEAD, so a deleted marker, or one whose deletion is staged, still governs (IM item 17). git runs hardened, as in
+`integrity`, so a planted `core.fsmonitor` or hooks path cannot run. If the team dir itself is gone, git is asked
+from the nearest existing ancestor. Only a committed deletion ends governance; that needs a commit and shows in
+history. Outside a git work tree, or without git, only the file counts.
+
+Every emitted deny list protects the marker: the Claude `Edit(...)` rules (every team dir), the goose Seatbelt
+control-plane deny (every team dir; a deny on a missing path also stops an agent creating it), and the
+launcher's protect-if-present set. Claude's `denyWrite` covers it through the whole `.claude` dir.
+
 ### `review_lines(update_output) -> list[str]`, `review_reason(lines) -> str`
 
 Used by `fleet`. `review_lines` picks the `RELAXED_PREFIX` / `KEPT_PREFIX` lines out of a target's

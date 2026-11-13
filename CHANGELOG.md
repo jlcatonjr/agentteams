@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
+
+- **Security fix (IM evaluation item 17, G-22-7).** The governed check tested only that
+  `<team>/signing-governed.marker` existed, and the sandbox left the marker writable. So an agent that deleted it
+  turned fail-closed signing off: `enforce_decision_signing: false` applied again, and a missing
+  `agent-privilege.json` reverted to legacy unsigned behaviour instead of raising.
+  - `signing_switch.is_governed` now also counts a marker that git tracks in the index or in HEAD, so a deleted
+    or deletion-staged tracked marker still governs. git runs hardened, so a planted `core.fsmonitor` cannot
+    run. Only a committed deletion ends governance, and that shows in history.
+  - `cli/decision_log` and `projection_marker` use this same check instead of their own.
+  - The marker is now in every emitted deny list: the Claude `Edit` rules and the goose Seatbelt profile (every
+    team dir), and the launcher's protect-if-present set. Claude's `denyWrite` already covers it through the
+    whole `.claude` dir.
+  - `confine-run.sh` changed, so its pins are updated (`EXPECTED_LAUNCHER_SHA256`, the WASM launcher pin, and
+    `launcher_lineage.json`). The downstream re-pin of the parity test is coordinated outside this repository.
+  - Effect on existing teams: a team whose tracked marker was deleted but not committed is governed again.
+    Nothing changes for a team that never had a marker.
+
 ### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
 
 - **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence

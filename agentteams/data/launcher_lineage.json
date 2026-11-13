@@ -179,6 +179,14 @@
    "security": true,
    "sha256": "e22910653d00a516773f0d6e72b256474ab58e2c32a88c56e2770b2c7f4727d7",
    "subject": "fix(sandbox): protect the exception registry and the carve-out high-water mark; count carve-outs in the exception cap"
+  },
+  {
+   "commit": "c69bb9aa41a44c3ee6e30955bb0b7bfabccdc601",
+   "date": "2026-11-12T20:26:17-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": false,
+   "sha256": "55b0d787df1ca01db76eb5177c1efa904cdda43e971aed21bc0f99731c3c681e",
+   "subject": "fix(signing): a deleted git-tracked signing-governed.marker still governs; every deny list protects it (IM item 17)"
   }
  ]
 }
