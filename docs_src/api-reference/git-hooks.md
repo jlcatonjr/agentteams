@@ -26,6 +26,9 @@ Two maps are refreshed, each under its own guard, plus an optional cache warm-up
 
 When none qualifies, every step is skipped: the hook prints `agentteams: hooks SKIPPED, API impact not checked: <reason>` and appends `<UTC time>\t<reason>` to `agentteams-api-impact-skipped` in the git directory. An API impact step that fails (any exit other than 0 or 3) is appended there too. `python -m agentteams.api_impact status` prints those lines and exits 1 until a hook run whose API impact step completes (exit 0, or 3 in strict mode) removes the marker. The commit itself still succeeds; a skip is recorded, not blocking.
 
+**Pre-push block.** The same install adds an `api-review-pre-push` block to the `pre-push` hook. It is inert until
+`git config agentteams.apiReviewPrePush` is `warn` or `block` ([pre-push](api-impact.md#pre-push-opt-in)).
+
 > *Source: `agentteams/git_hooks.py`*
 
 ---

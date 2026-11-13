@@ -29,15 +29,20 @@ only.
 Nothing is stored between runs. `status` walks the non-merge commits from the branch base to `HEAD`:
 
 - **Base:** on a feature branch, the merge-base with the default branch (`origin/HEAD`, `origin/main`,
-  `origin/master`, else a local `main`/`master`); on the default branch, `@{upstream}`. No base means
+  `origin/master`, else a local `main`/`master`); on the default branch, the commit named in the ledger's
+  committed `BASELINE` file (first non-comment line; it must be an ancestor of `HEAD`), else `@{upstream}`. Only
+  the baseline is independent of push state: with `@{upstream}`, a commit pushed before its review leaves the
+  range. `status --full` checks every commit after the baseline, or the whole history without one. No base means
   **pending** (exit 2), never a pass; pass `--range BASE..HEAD`.
 - **Hook skips:** when the pre-commit hook found no usable interpreter, or its API impact step failed, it records
   that in the git directory ([git-hooks](git-hooks.md)). `status` prints those lines (`hook_skips` in `--json`) and
   exits 1 until a hook run whose API impact step completes clears them.
 - **Reviewed:** the commit's stable patch-id has a ledger file,
-  `references/api-impact-reviews/<patch-id>.json`, committed at `HEAD`. The root `references/` is used when
-  it exists, else the agent directory's. Patch-ids survive rebase and cherry-pick; a squash merge makes a new
-  one.
+  `references/api-impact-reviews/<patch-id>.json`, committed at the tip of the range checked (listed once
+  with `git ls-tree`). The root `references/` is used when it exists, else the agent directory's. Patch-ids
+  survive rebase and cherry-pick; a squash merge makes a new one. SHAs, subjects, patch-ids and changed paths are
+  read in one batched git call each (`agentteams._api_impact_range`), so a long range costs a few git processes
+  per commit rather than about a dozen.
 - **Checklist:** for each removed, renamed or re-signed name, the tracked files that mention it (whole-word,
   the changed file and tests left out, at most 15 plus the total).
 
@@ -129,6 +134,19 @@ agentteams: commit blocked (agentteams.apiDocsStrict) — stage the page(s) abov
   exit 0 with a "commit unaffected" note.
 
 ---
+
+## Pre-push (opt-in)
+
+The pre-commit install also adds a block to the `pre-push` hook. It does nothing until
+`git config agentteams.apiReviewPrePush` is set:
+
+- `warn`: for each pushed ref, list impactful commits that have no ledger file at the pushed tip
+  (`<remote sha>..<local sha>`, or `<local sha> --not --remotes=<remote>` for a new ref).
+- `block`: the same, and the push fails (`--pre-push` exits 3). Bypass once with `git push --no-verify`.
+
+The block resolves its interpreter like the pre-commit block ([git-hooks](git-hooks.md)) and records a skip in the
+same marker. It is appended last in the hook, so a preserved hook body that reads standard input first leaves it
+nothing to check.
 
 ## CLI
 
