@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **453**
+- Modules mapped: **454**
 - Packages: **14**
-- Internal import edges: **1720**
+- Internal import edges: **1721**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 189 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 190 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 60 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -63,6 +63,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams._interop_grok` | `agentteams.capability_map`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.grok`, `agentteams.interop`, `agentteams.interop_helpers` | `agentteams.interop` |
 | `agentteams._makefile_screen` | — | `agentteams.vscode_tasks` |
 | `agentteams._sandbox_profiles` | — | `agentteams._bwrap_survivors`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.confinement`, `agentteams.frameworks._wasm_team_docs`, `agentteams.runner_wasm`, `agentteams.sandbox_state`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.team`, `agentteams.wasm_config` |
+| `agentteams._scan_public_hashes` | — | `agentteams.scan` |
 | `agentteams._utils` | — | `agentteams.analyze`, `agentteams.analyze_tools`, `agentteams.branch_cleanup`, `agentteams.carveouts`, `agentteams.ingest` |
 | `agentteams._wasm_archive` | `agentteams.wasm_pins` | `agentteams._wasm_pin_update`, `agentteams.wasm_runtime` |
 | `agentteams._wasm_pin_update` | `agentteams._wasm_archive`, `agentteams.cli.security_gate`, `agentteams.git_exec`, `agentteams.wasm_pins`, `agentteams.wasm_runtime` | `agentteams.wasm_runtime` |
@@ -352,7 +353,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.sandbox_projection` | `agentteams`, `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit`, `agentteams.sandbox_state`, `agentteams.wasm_config` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.multi_sync` |
 | `agentteams.sandbox_state` | `agentteams._sandbox_profiles`, `agentteams.codex_mcp_emit`, `agentteams.frameworks._write_roots`, `agentteams.sandbox_tokens`, `agentteams.signing_switch`, `agentteams.wasm_config`, `agentteams.wasm_exec` | `agentteams.analyze`, `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_team_docs`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.claude`, `agentteams.frameworks.wasm`, `agentteams.multi_sync`, `agentteams.runner_wasm`, `agentteams.sandbox_projection`, `agentteams.wasm_agent.team`, `agentteams.wasm_config`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp` |
 | `agentteams.sandbox_tokens` | — | `agentteams.cli.sandbox_effects`, `agentteams.sandbox_state`, `agentteams.wasm_agent.team` |
-| `agentteams.scan` | `agentteams.backup`, `agentteams.scan_operational` | `agentteams._fleet_snapshot`, `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.hygiene_rules`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.research.screen`, `agentteams.sandbox_handoff`, `agentteams.vulnscan.publish`, `agentteams.whole_body_migration` |
+| `agentteams.scan` | `agentteams._scan_public_hashes`, `agentteams.backup`, `agentteams.scan_operational` | `agentteams._fleet_snapshot`, `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.hygiene_rules`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.research.screen`, `agentteams.sandbox_handoff`, `agentteams.vulnscan.publish`, `agentteams.whole_body_migration` |
 | `agentteams.scan_operational` | — | `agentteams.scan` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.sealed_result` | — | `agentteams.proposal_runner` |
@@ -768,6 +769,14 @@ digraph "agentteams architecture" {
     "agentteams._sandbox_profiles": {
       "package": "agentteams",
       "path": "agentteams/_sandbox_profiles.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams._scan_public_hashes": {
+      "package": "agentteams",
+      "path": "agentteams/_scan_public_hashes.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -4419,6 +4428,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/scan.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams._scan_public_hashes",
         "agentteams.backup",
         "agentteams.scan_operational"
       ],
@@ -10859,6 +10869,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.sandbox_state",
       "target": "agentteams.wasm_exec"
+    },
+    {
+      "source": "agentteams.scan",
+      "target": "agentteams._scan_public_hashes"
     },
     {
       "source": "agentteams.scan",

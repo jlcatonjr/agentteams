@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+from agentteams._scan_public_hashes import check_public_hash_exemption
 # Operational-JSON exemption (which pipeline-written JSON skips the absolute-path / entropy /
 # placeholder detectors): carved to the integrity-pinned ``scan_operational`` module.
 from agentteams.scan_operational import (  # noqa: F401  (re-exported)
@@ -742,6 +743,12 @@ def _check_line(
         # (a secret keyword is on the line) keeps its wider net deliberately.
         if not secret_context and _looks_like_filesystem_path(token):
             continue
+        # #460: a public lockfile SRI hash or GitHub commit-URL SHA, bound to this exact token
+        # span (never the line). Context-free branch only, like the path guard above.
+        if not secret_context and check_public_hash_exemption(
+            line, filepath, token_match.start(), token_match.end(), _is_opaque_segment
+        ):
+            continue
         severity = "high" if secret_context or entropy >= 4.2 else "medium"
         findings.append(ScanFinding(
             file=filepath,
@@ -831,13 +838,13 @@ def _looks_like_filesystem_path(token: str) -> bool:
     """
     if "/" not in token or "+" in token or "=" in token:
         return False
-    for segment in token.split("/"):
-        if not segment:
-            continue
-        match = _HIGH_ENTROPY_TOKEN_RE.search(segment)
-        if match is not None and _token_entropy(match.group(0)) >= _ENTROPY_MIN_BITS:
-            return False
-    return True
+    return not any(_is_opaque_segment(segment) for segment in token.split("/"))
+
+
+def _is_opaque_segment(segment: str) -> bool:
+    """True when one ``/``-delimited segment, re-tested alone, is a high-entropy opaque token."""
+    match = _HIGH_ENTROPY_TOKEN_RE.search(segment) if segment else None
+    return match is not None and _token_entropy(match.group(0)) >= _ENTROPY_MIN_BITS
 
 
 def _token_entropy(token: str) -> float:
