@@ -51,9 +51,11 @@ Policy-only refinements are evaluated only when a policy denies them, so a proje
 - `git-force-push-short` (`git push -f`, or a `+refspec`);
 - `git-alias-config` (`git -c` or `git config` for `alias.`, `push.`, `remote.` or `url.`).
 
-`strict` denies these classes:
+`strict` denies these classes. They are the downstream wrapper's list from issue #456, plus `command-too-long`:
 - `git-history-destructive`, `git-force-push-short`, `git-remote-delete`, `git-alias-config`;
-- `publication-channel`, `rm-recursive-force`, `remote-pipe-shell`, `db-delete`.
+- `publication-channel`, `rm-recursive-force`, `remote-pipe-shell`, `db-delete`;
+- `command-too-long`, so padding cannot hide a denied class. Under any non-empty policy an over-long command is
+  denied anyway.
 
 With a policy, the gate checks every class a command matches, not only the first. So `sudo rm a` is denied when
 `fs-delete` is denied.
@@ -75,6 +77,9 @@ The gate reads the file under its own project (the hook's `parents[2]`, never th
 
 Once a policy is recorded, three more protections apply:
 - The gate denies `Write`/`Edit` aimed at the policy file, at itself, or at its interpreter pin (`policy-protected`).
+  It also denies a Bash line that names one of them literally (case-insensitive) together with a redirect or any
+  of a broad list of commands: `git`, `sed`, `python`, `tar`, `cp`, `mv` and others. This is deliberately coarse,
+  so even `git diff` or `sed -n` on the gate is denied while a policy is recorded. Read them with the Read tool.
 - The Claude sandbox block adds `denyWrite` and `Edit` rules for the same three files
   (`_control_plane_protect.gate_policy_protect_paths`).
 - Recording a **weaker** policy (fewer denied classes, `fail_closed_tools` dropped, or the file removed) is a Rule 15

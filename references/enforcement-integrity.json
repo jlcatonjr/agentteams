@@ -101,7 +101,7 @@
     "agentteams/front_matter_baseline.py": "5ac5553a968cdd5517f56056edf57b562ce64feab8f582964beadd1ec763ef41",
     "agentteams/front_matter_merge.py": "069c197aecebcbc04cd617645a8cf000f7bf67f13c8e264c3d35581438f5a086",
     "agentteams/front_matter_reconcile.py": "e07758e1606ea49553959009d22698933fd9e0d0c3069a64d64096bb838140fe",
-    "agentteams/gate_policy.py": "165f69207b9cc0481109f4ca299bccb0fcc3e3077fd5a449722b099e96e6c9b4",
+    "agentteams/gate_policy.py": "018b18e03cc20f23e558156b2681a7c8cb45ed56430118132825aa174aa972a9",
     "agentteams/git_exec.py": "4ddf3486c7d54369907f2af17ad630d858fd6ab3dd2e6f8b0eeb402a965f7742",
     "agentteams/grok_config_emit.py": "6f713619f8ecbbae9d0f0e7d4eac367bdcb387743db2650236ac0ba6b31724ca",
     "agentteams/host_features.py": "e4e94c25a2b010fb4de46e2c652a06e399908a31db3945df2040fcdc839e03e0",

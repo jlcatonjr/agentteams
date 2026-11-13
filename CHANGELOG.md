@@ -15,14 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Policy-only classes.** `rm-recursive-force`, `git-force-push-short` (`-f` and `+refspec`) and `git-alias-config`
     are evaluated only when a policy denies them.
   - **`strict` preset.** Defined in the gate, it denies the force-push, remote-delete, git alias/remote config,
-    publication, `rm -rf`, pipe-to-shell and SQL-deletion classes.
+    publication, `rm -rf`, pipe-to-shell and SQL-deletion classes listed in #456, plus `command-too-long`.
+    Under any non-empty deny list an over-long command is denied, so padding cannot hide a denied class.
   - **`fail_closed_tools`.** A gate crash or a missing interpreter now denies every tool that is not read-only,
     whatever the `privilege_profile`.
 - **Pinned at render.** The file is validated (an invalid one stops the render) and its SHA-256 is written into the
   installed gate.
   - A recorded policy that is missing, altered, swapped for a symlink or invalid → `deny` for every tool that is not
     read-only (`policy-unverified`).
-  - No recorded digest → today's verdicts. Byte-identical against the previous template on the test corpus.
+  - No recorded policy → today's verdicts. A recorded policy, even an empty one, also adds the
+    write protection below. Byte-identical against the previous template on the test corpus.
   - The gate's own template pin moves once, for this change.
 - **Write-protected once recorded.** The gate refuses `Write`/`Edit` to the policy file, to itself and to its
   interpreter pin. The Claude sandbox block adds `denyWrite` and `Edit` rules for the same three files.

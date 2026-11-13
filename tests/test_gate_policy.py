@@ -97,14 +97,14 @@ def _full(gate, tool, ti):
         return (v.decision, v.reason, v.reason_id, v.checked)
 
 
-def test_empty_policy_matches_the_previous_template(tmp_path: Path) -> None:
-    old_text = subprocess.run(["git", "-C", str(REPO), "show", "origin/dev:" + str(TEMPLATE.relative_to(REPO))],
-                              capture_output=True, text=True, check=False)
-    if old_text.returncode != 0 or "_GATE_POLICY_SHA256" in old_text.stdout:
-        pytest.skip("origin/dev's gate is not the pre-#456 template (already merged or no origin/dev)")
+#: The gate as it was before #456 (dev 875d0315), frozen so the parity guard keeps running after the merge.
+PRE_456 = REPO / "tests" / "fixtures" / "constitutional-gate.pre-456.py.txt"
+
+
+def test_no_recorded_policy_matches_the_pre_456_gate(tmp_path: Path) -> None:
     old_path = tmp_path / "old" / "constitutional-gate.py"
     old_path.parent.mkdir()
-    old_path.write_text(old_text.stdout, encoding="utf-8")
+    old_path.write_text(PRE_456.read_text(encoding="utf-8"), encoding="utf-8")
     old = _load(old_path)
     new = install(tmp_path / "proj", None)
     assert _emit_all(new) == _emit_all(old)

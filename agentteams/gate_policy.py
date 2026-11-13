@@ -215,8 +215,8 @@ def wiring_lines(project_root: Path, gate_path: Path, *, advisory: bool) -> tupl
     """
     try:
         digest = recorded_digest(gate_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError):
-        return True, []
+    except (OSError, UnicodeDecodeError) as exc:
+        return True, [f"gate policy: no readable gate at {gate_path} ({type(exc).__name__}) — nothing to report."]
     path = project_root / GATE_POLICY_REL
     if digest is None:
         return False, [f"ERROR: gate policy: {gate_path} has no well-formed _GATE_POLICY_SHA256 line (altered?)"]
