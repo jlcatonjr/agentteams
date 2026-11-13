@@ -38,18 +38,20 @@ import json
 import os
 import re
 import stat
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.atomicio import replace_no_follow
 from agentteams.drift import is_interop_marker
-from agentteams.frameworks._sandbox_emit import TEAM_MARKER_REL
+from agentteams.frameworks._sandbox_emit import GOVERNED_MARKER_REL, TEAM_MARKER_REL
+from agentteams.git_exec import run_git
 
 #: The switch, relative to a team's agents dir.
 SWITCH_REL = "references/agent-privilege.json"
 
 #: A signing-governed team's assertion marker (``cli/decision_log``): its switch is always ``true``.
-GOVERNED_MARKER = "signing-governed.marker"
+GOVERNED_MARKER = GOVERNED_MARKER_REL  # one definition (_sandbox_emit), so the deny lists and the check agree
 
 #: Notice prefix for a ``true -> false`` change; a fleet REVIEW reason.
 RELAXED_PREFIX = "SIGNING SWITCH RELAXED"
@@ -234,16 +236,41 @@ def owns_switch(agents_dir: Path) -> bool:
     return _has_team_marker(agents_dir) and data.get("note") in PIPELINE_NOTES
 
 
+def _marker_tracked(agents_dir: Path) -> bool:
+    """True when git tracks ``agents_dir/GOVERNED_MARKER`` in the index or in HEAD (IM item 17, G-22-7).
+
+    A deleted (or deletion-staged) tracked marker still governs: deleting it must not turn fail-closed
+    signing off. Only a committed deletion ends governance, and that needs a commit, visible in history.
+    Hardened git (``integrity._manifest_expected``): a planted ``core.fsmonitor`` or hooks path cannot run.
+    Not a work tree, no git, or a timeout: False (the existence test alone, as before).
+    """
+    base, rel = agents_dir, Path(GOVERNED_MARKER)
+    while not base.is_dir():  # a removed team dir (git rm of its last file) still counts: ask from an ancestor
+        if base.parent == base:
+            return False
+        base, rel = base.parent, Path(base.name) / rel
+    try:
+        index = run_git(base, "ls-files", "--error-unmatch", "--", str(rel), hardened=True, timeout=10)
+        if index.returncode == 0:
+            return True
+        head = run_git(base, "ls-tree", "--name-only", "HEAD", "--", str(rel), hardened=True, timeout=10)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+    return head.returncode == 0 and bool(head.stdout.strip())
+
+
 def is_governed(*dirs: Path) -> bool:
-    """Return True when any of ``dirs`` holds :data:`GOVERNED_MARKER`.
+    """Return True when any of ``dirs`` holds :data:`GOVERNED_MARKER`, or git tracks it there.
+
+    The single governance predicate (``cli/decision_log`` and ``projection_marker`` call it too).
 
     Args:
         dirs: Team agents dirs.
 
     Returns:
-        True for a signing-governed team.
+        True for a signing-governed team, including one whose tracked marker was deleted.
     """
-    return any(os.path.lexists(d / GOVERNED_MARKER) for d in dirs)
+    return any(os.path.lexists(d / GOVERNED_MARKER) for d in dirs) or any(_marker_tracked(d) for d in dirs)
 
 
 def _replace_no_follow(path: Path, text: str) -> None:

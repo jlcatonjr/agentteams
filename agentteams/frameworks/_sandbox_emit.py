@@ -295,7 +295,7 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
         rules.append(f"Edit(/{path}/**)" if path == store else f"Edit(/{path})")
     # PR-D: the operator-only rosters (an Edit rule needs no existing path), then the settings
     # files and hooks the next session trusts. Emitted, product-UNVERIFIED.
-    rules += [f"Edit(/{p})" for p in (*governed_roster_paths(framework), GRANT_ROSTER_PROJECT_REL)]
+    rules += [f"Edit(/{p})" for p in (*governed_roster_paths(framework), GRANT_ROSTER_PROJECT_REL, team_marker_path(framework, GOVERNED_MARKER_REL))]
     rules += [f"Edit(/{p})" for p in _CLAUDE_SETTINGS_PATHS]
     # Follow-up #2 (2026-09-30): the operator-merged/-run EXAMPLES. An edited settings example or
     # goose/codex runner is what the operator next merges or executes unsandboxed. Product-UNVERIFIED.
@@ -317,7 +317,7 @@ def _sibling_permission_deny_rules() -> list[str]:
     for key in ("copilot", "codex", "goose", "grok"):
         store = _verify_key_store_path(key)
         rules += [f"Edit(/{_AGENT_PRIVILEGE_SWITCH[key]})", f"Edit(/{store}/**)"]
-        rules += [f"Edit(/{p})" for p in (*governed_roster_paths(key), team_marker_path(key))]
+        rules += [f"Edit(/{p})" for p in (*governed_roster_paths(key), team_marker_path(key), team_marker_path(key, GOVERNED_MARKER_REL))]
     rules += ["Edit(/.goose/sandbox.sb)", f"Edit(/{CODEX_CONFIG_REL})", *(f"Edit(/{p})" for p in GROK_CONFIG_RELS)]
     return rules
 
@@ -470,8 +470,8 @@ _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
 #:   sandboxed ``mv .claude`` fails — ``tests/test_os_sandbox_product_enforcement.py``, F-4). The goose Seatbelt arm relies on the existing
 #:   ``(subpath …)`` semantics (the directory and all its descendants).
 #: - DELIBERATELY NOT denied: the ledgers (``security-decisions.log.csv`` etc.; the in-sandbox gate
-#:   rewrites them to consume use counts, and their integrity is signatures + hash chains) and
-#:   ``signing-governed.marker`` (creating it only makes the workspace stricter).
+#:   rewrites them to consume use counts, and their integrity is signatures + hash chains). ``signing-governed.marker``
+#:   IS denied (item 17: deleting it turned signing off): Edit rules, goose profile, launcher, whole ``.claude``.
 #: - SIBLING team dirs (2026-09-30): the table below also maps the copilot and codex team keys.
 #:   Their trust roots reach the Claude ``denyWrite`` only as whole dirs, and only when present at
 #:   generation (:data:`SIBLING_DENY_DIRS`). ``permission_deny_rules`` covers their files always, and
@@ -566,9 +566,9 @@ def team_agents_dir(framework: str) -> str:
     return _AGENT_PRIVILEGE_SWITCH[framework].rsplit("/", 2)[0]
 
 
-def team_marker_path(framework: str) -> str:
-    """Return a team key's project-root-relative team marker (``<agents dir>/references/build-log.json``)."""
-    return f"{team_agents_dir(framework)}/{TEAM_MARKER_REL}"
+def team_marker_path(framework: str, rel: str | None = None) -> str:
+    """Return a team key's project-root-relative ``rel`` (default its team marker; or :data:`GOVERNED_MARKER_REL`)."""
+    return f"{team_agents_dir(framework)}/{rel or TEAM_MARKER_REL}"
 
 
 #: The Claude set (kept under its original name for existing importers).
@@ -594,6 +594,7 @@ GRANT_ROSTER_PROJECT_REL = "references/security-approvers.txt"
 #: The agentteams team marker, relative to an agents dir (``drift.load_build_log``). The launcher
 #: requires a framework's control-plane entries only when this marker is present.
 TEAM_MARKER_REL = "references/build-log.json"
+GOVERNED_MARKER_REL = "signing-governed.marker"  #: relative to an agents dir (``signing_switch.GOVERNED_MARKER``)
 
 #: Claude Code settings files the NEXT session trusts (hook wiring, permissions).
 _CLAUDE_SETTINGS_PATHS: tuple[str, ...] = (".claude/settings.json", ".claude/settings.local.json")

@@ -158,6 +158,7 @@ PROMPT_ROOTS_REL=( .github/copilot-instructions.md AGENTS.md AGENTS.override.md 
 PROTECT_PROMPT_ROOTS=0; PR_RO=()
 # The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
 TEAM_MARKER_REL=references/build-log.json
+GOVERNED_MARKER_REL=signing-governed.marker   # item 17: deleting it turned governed signing off
 TEAM_DIRS_REL=( .claude/agents .goose/recipes .github/agents .codex/agents .grok/agents )
 CP_ANC=(); CP_RO=(); CP_ROOTS=()
 # DEFAULT-DENY ENV ALLOWLIST (the private-key non-leak residual). The guest inherits NONE of the
@@ -403,15 +404,17 @@ grok_config_warn(){
   return 0
 }
 control_plane_collect() {   # -> CP_RO[] (protected paths) + CP_ANC[] (their ancestors below a root); both OSes
-  local roots=() prot=() anc=() r rel p a under t team
+  local roots=() prot=() anc=() r rel p a under t team m
   for r in "$SCRATCH" ${WRITABLES[@]+"${WRITABLES[@]}"} ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do
     [ -n "$r" ] && { p="$(phys_dir "$r")" || die "writable root '$r' does not resolve"; roots+=( "$p" ); }
   done
   for r in "${roots[@]}"; do
-    for t in "${TEAM_DIRS_REL[@]}"; do   # the marker itself: deleting it must not disable the check
-      cp_present "$r/$t/$TEAM_MARKER_REL" || continue
-      p="$(cp_real "$r/$t/$TEAM_MARKER_REL")" || exit 2
-      prot+=( "$p" )
+    for t in "${TEAM_DIRS_REL[@]}"; do   # the markers themselves: deleting either must not disable a check
+      for m in "$TEAM_MARKER_REL" "$GOVERNED_MARKER_REL"; do
+        cp_present "$r/$t/$m" || continue
+        p="$(cp_real "$r/$t/$m")" || exit 2
+        prot+=( "$p" )
+      done
     done
     for rel in "${CONTROL_PLANE_DIRS_REL[@]}"; do   # protect-if-present, whole dir
       cp_present "$r/$rel" || continue

@@ -470,10 +470,12 @@ def _enforce_decision_signing(output_dir: Path) -> bool:
     """
     config_path = output_dir / "references" / _AGENT_PRIVILEGE_CONFIG
     if not config_path.exists():
-        # GV1 fail-closed: a governed workspace asserts (via a git-tracked signing-governed.marker) that
+        # GV1 fail-closed: a governed workspace asserts (via a signing-governed.marker; a git-tracked one still counts once deleted) that
         # signing MUST be enforced. If the config is absent there, RAISE rather than silently reverting
         # to legacy OFF — renaming references/ must not disable strict enforcement.
-        if (output_dir / "signing-governed.marker").exists():
+        from agentteams.signing_switch import is_governed  # one predicate: a deleted tracked marker governs (item 17)
+
+        if is_governed(output_dir):
             raise RuntimeError(
                 f"governed workspace ({output_dir}) but {config_path} is absent — refusing to fall "
                 "back to legacy unsigned behaviour (fail-closed)."
