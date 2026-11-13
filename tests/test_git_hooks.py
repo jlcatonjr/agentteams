@@ -306,8 +306,9 @@ def test_maybe_refresh_architecture_map_no_package_is_quiet(tmp_path):
 def test_hook_block_has_sentinels_and_baked_path():
     block = gh._render_hook_block("/opt/agentteams")
     assert gh._HOOK_BEGIN in block and gh._HOOK_END in block
-    assert 'PYTHONPATH="/opt/agentteams' in block
-    assert "python3 -m agentteams.git_hooks --refresh" in block
+    assert "_at_pp=/opt/agentteams" in block
+    assert 'PYTHONPATH="$_at_pp${PYTHONPATH:+:$PYTHONPATH}"' in block
+    assert "_at_run -m agentteams.git_hooks --refresh" in block
     # The refresh clauses are non-blocking: each refresh runs as an `if` condition (a failure takes the
     # warning branch), and each staging step swallows its own failure.
     lines = block.splitlines()
