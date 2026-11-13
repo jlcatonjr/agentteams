@@ -187,6 +187,14 @@
    "security": false,
    "sha256": "55b0d787df1ca01db76eb5177c1efa904cdda43e971aed21bc0f99731c3c681e",
    "subject": "fix(signing): a deleted git-tracked signing-governed.marker still governs; every deny list protects it (IM item 17)"
+  },
+  {
+   "commit": "6e9193f353bd2855535d14ee6609c0fb7dd7e6c4",
+   "date": "2026-11-13T12:05:00-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": false,
+   "sha256": "026b5417af423125aedbae0ef5fc9299dc1441f2fe10823f6c68b734a2643f15",
+   "subject": "fix(signing): audit conditions for item 17 (env strip, nested repo and timeout fail closed, upstream refs)"
   }
  ]
 }
