@@ -167,7 +167,8 @@ python -m agentteams.api_impact record [--range BASE..HEAD] --note TEXT
 ### `surface(source: str) -> dict[str, str] | None`
 
 The public surface of one module: functions, classes, public methods, `__all__`, `cli:<option>` and
-`cli-cmd:<subcommand>` entries mapped to signatures. `None` when the source does not parse.
+`cli-cmd:<subcommand>` entries mapped to signatures. `None` when the source does not parse. Defined in
+`agentteams._api_surface` and re-exported here.
 
 ### `detect(repo: Path, *, commit: str | None = None) -> Impact`
 
