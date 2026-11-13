@@ -1290,7 +1290,7 @@ Read-only. Verify this workspace's `.agentteams/toolchain-group.json` against `-
 
 ### `--verify-toolchain-pin`
 
-Read-only, fail-closed: Rule S-9 for the first-party toolchain group. Every `NAME=owner/repo@SHA` line in the lockfile that pins a member of the verified group (the workspace's own repository excluded) needs a `NAME.tag=TAG` line, and `TAG` must be an annotated tag whose object names `TAG`, verifies against `--allowed-signers`, and peels to `SHA`. Uses `--output` and `--team-id` as `--verify-toolchain-group` does. Nothing runs it for you; a project's dependency gate should. **Exit code:** `0` when at least one group pin was checked and all verify; `1` on any failure, or when the lockfile pins no group member; `2` when the workspace has no group file (nothing is under the rule).
+Read-only, fail-closed: Rule S-9 for the first-party toolchain group. Every `NAME=owner/repo@SHA` line in the lockfile that pins a member of the verified group (the workspace's own repository excluded) needs a `NAME.tag=TAG` line, and `TAG` must be a final-release tag (`vX.Y.Z`; a pre-release needs a recorded `@security` clearance, which this check does not read) and an annotated tag whose object names `TAG`, carries an SSH signature that verifies against `--allowed-signers` (git runs with a private, empty `HOME` and `GNUPGHOME`), and peels to `SHA`. Uses `--output` and `--team-id` as `--verify-toolchain-group` does. Nothing runs it for you; a project's dependency gate should. **Exit code:** `0` when at least one group pin was checked and all verify; `1` on any failure, or when the lockfile pins no group member; `2` when the workspace has no group file (nothing is under the rule).
 
 ### `--allowed-signers`
 

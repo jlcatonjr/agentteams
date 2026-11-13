@@ -357,9 +357,10 @@ def authorize_into(manifest: dict, team_dir: Path, *, consume: bool) -> None:
 
 
 def _surface_dirs(root: Path) -> tuple[Path, ...]:
-    """Every team dir of the project at *root* that exists (each one's HALTs bind the group, C-2)."""
+    """Every team dir of the project at *root* that exists, symlinked ones included (each one's HALTs bind the
+    group, C-2: following a symlink can only add HALTs, never remove one)."""
     rels = (*TEAM_AGENT_GLOBS, *_OTHER_TEAM_DIRS)
-    return tuple(root / rel for rel in rels if (root / rel).is_dir() and not (root / rel).is_symlink())
+    return tuple(root / rel for rel in rels if (root / rel).is_dir())
 
 
 def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str] | None:

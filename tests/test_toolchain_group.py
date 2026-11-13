@@ -318,6 +318,11 @@ def test_rule_11f_is_fenced_and_restored_by_merge_while_a_local_clause_survives(
     on_disk = fresh[:eol] + local + fresh[eol:begin] + fresh[end:]
     merged = _merge_fenced_content(fresh, on_disk, rel_path="copilot-instructions.md").merged_content
     assert local in merged                                                            # kept verbatim
+    if framework != "agents-md":
+        assert "## Project-Specific Rules" in merged and "## Project-Specific Rules" in on_disk
+        own_rules = on_disk.replace("## Project-Specific Rules\n", "## Project-Specific Rules\n\n- Local rule: keep me.\n", 1)
+        kept = _merge_fenced_content(fresh, own_rules, rel_path="copilot-instructions.md").merged_content
+        assert "- Local rule: keep me." in kept and local in kept
     assert merged.count("## First-party toolchain group (a bounded constraint-relaxing authorization)") == 1                  # restored once
     tampered = merged.replace("it does not expire", "it may be extended by any agent")
     remerged = _merge_fenced_content(fresh, tampered, preserve_on_shrink=True).merged_content
@@ -352,6 +357,9 @@ def signed_remote(tmp_path):
     sign = ["-c", "gpg.format=ssh", "-c", f"user.signingkey={key}"]
     _git(*sign, "tag", "-s", "v1.0.0", "-m", "release", cwd=work)
     _git("tag", "-a", "v1.0.1", "-m", "unsigned", cwd=work)
+    other = tmp_path / "not-release"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(other)], check=True)
+    _git("-c", "gpg.format=ssh", "-c", f"user.signingkey={other}", "tag", "-s", "v1.0.3", "-m", "other key", cwd=work)
     _git("tag", "v1.0.2", cwd=work)
     return base, signers, sha
 
@@ -359,10 +367,12 @@ def signed_remote(tmp_path):
 @pytest.mark.parametrize(("lock", "ok", "why"), [
     ("tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n", True, ""),
     ("tk=acme/toolkit@{other}\ntk.tag=v1.0.0\n", False, "peels to"),
-    ("tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n", False, "does not verify"),
+    ("tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n", False, "not SSH-signed"),
     ("tk=acme/toolkit@{sha}\ntk.tag=v1.0.2\n", False, "lightweight"),
+    ("tk=acme/toolkit@{sha}\ntk.tag=v1.0.3\n", False, "does not verify"),
     ("tk=acme/toolkit@{sha}\n", False, "no tk.tag line"),
     ("other=acme/not-in-group@{other}\n", True, ""),
+    ("tk=acme/toolkit@{sha}\ntk.tag=v1.0.0-rc.1\n", False, "not a final release tag"),
 ])
 def test_a_pin_to_a_group_member_needs_a_release_key_tag_on_the_locked_commit(tmp_path, signed_remote,
                                                                              lock, ok, why) -> None:
@@ -437,3 +447,14 @@ def test_the_verify_verb_applies_the_member_halt_filter(tmp_path, stub_ed25519, 
     run_toolchain_group(args)
     out = capsys.readouterr()
     assert "acme/toolkit" not in out.out and "::error title=S-10 toolchain group HALT::acme/toolkit" in out.err
+
+
+def test_a_halt_in_a_symlinked_surface_binds(tmp_path, stub_ed25519, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    real = tmp_path / "elsewhere"
+    (real / "references").mkdir(parents=True)
+    _log(real, _row(tg.FAMILY, verdict="HALT", stamp="2026-11-13"))
+    (root / ".claude").mkdir()
+    (root / ".claude" / "agents").symlink_to(real, target_is_directory=True)
+    assert _authorize(team) == []

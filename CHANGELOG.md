@@ -28,8 +28,9 @@ rule that new features wait for the next minor release, for this change only), p
   backend, an unretracted HALT on `s10-toolchain-group` in any surface's decisions log, or a `sequence` older than the
   one recorded each render an empty group with a notice and an `::error::` line; the render itself goes on.
 - **A Rule S-9 check for group pins.** `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>` refuses
-  a pin to a group member unless its `NAME.tag` is an annotated tag that names itself, verifies against the release
-  key and peels to the locked commit; it refuses a lockfile with no group pin, and exits 2 when the workspace has no
+  a pin to a group member unless its `NAME.tag` is a final-release (`vX.Y.Z`) annotated tag that names itself, is
+  SSH-signed, verifies against the release key (with a private, empty `HOME`/`GNUPGHOME`) and peels to the locked
+  commit; it refuses a lockfile with no group pin, and exits 2 when the workspace has no
   group file. Nothing runs it automatically yet: a consumer's dependency gate should. `--verify-toolchain-group` checks the file for this workspace; `--sign-toolchain-group` (operator-only)
   signs it, with `--sign-decision`'s preflight, review digest and confirmation.
 - **The file is a trust root** (`governance_targets`), and `--sign-decision` refuses a payload in its signing domain.

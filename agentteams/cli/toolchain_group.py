@@ -7,23 +7,26 @@ and a pin move to one needs no per-release operator decision row (operator rulin
 else is lifted: the vulnerability search, Rule S-9's signed-tag check (:func:`verify_pins`, fail-closed) and the
 latest-stable rule all still apply.
 
-Rule 11(f) makes the file a constraint-relaxing authorization to which clauses (a)–(c) apply in full and only
-clause (d)'s cap and sunset are waived (operator ruling, 2026-11-13: no sunset). So:
+The constitution's "First-party toolchain group" section makes the file a bounded constraint-relaxing authorization:
+operator-signed, a trust root, ended by a HALT, and exempt only from the aggregate cap and sunset (operator ruling,
+2026-11-13: no sunset). It carries no ``derives_from`` lineage: it is not a decision row, so the lineage scan does not
+apply, and the HALTs below are its C-2 path. So:
 
-* **(b) operator-signed:** the signature is Ed25519 over :func:`signed_values`, verified against the governance
+* **Operator-signed:** the signature is Ed25519 over :func:`signed_values`, verified against the governance
   team's ``references/authorized-verify-keys/<key_id>.pub.pem``. A missing ``cryptography`` backend is reported as an
   environment error (``ENV``), distinct from a signature that does not verify.
-* **(a) traceable, C-2:** an unretracted HALT on the :data:`FAMILY` action in any surface's decisions log ends the
-  group. Removing the key's ``.pub.pem`` from the store revokes it (the file then cannot verify).
-* **(c) trust root:** the file is a governance target (``cli/governance_targets``); no decision row may target it.
+* **HALT, C-2:** an unretracted HALT on the :data:`FAMILY` action, or on any ``s10-cooldown-exempt`` action, in any
+  surface's decisions log (symlinked surfaces included) ends the group. Removing the key's ``.pub.pem`` from the store revokes it (the file then cannot verify).
+* **Trust root:** the file is a governance target (``cli/governance_targets``); no decision row may target it.
 * **Binding:** the file binds only the ``(repo:<git origin>, team:<team_id>)`` pairs it lists, so a copied file does
   not apply in an unlisted workspace. The binding is a guard against accidents, not a cryptographic one: the origin and
   the team id are local data, so a workspace that re-points both to a listed pair gets that pair's group (Rule 12). An unlisted workspace gets an empty group and an ``::error::`` line;
   its render still goes ahead (fail-closed for the relaxation, never for the team).
 * **Domain separation and rollback:** the payload starts with :data:`PURPOSE` (never a date, as a decision row's does,
   nor the grant tag), and ``sequence`` is monotonic: a file older than the highest sequence recorded in the
-  governance team's exception registry is refused. That mark is per workspace and unsigned, so it only stops a
-  rollback in a workspace that already saw the newer file; ending the group reliably takes a HALT on ``s10-toolchain-group``
+  governance team's exception registry is refused. That mark is per workspace and unsigned (deleting the
+  git-tracked registry resets it to 0, which shows in review), so it only stops a rollback in a workspace that already
+  saw the newer file; ending the group reliably takes a HALT on ``s10-toolchain-group``
   or on any ``s10-cooldown-exempt`` action (the gate checks both; the matcher over-matches, so either drops every
   member) or removing the key; dropping one member takes a new signed file.
 
@@ -294,7 +297,7 @@ def load_group(project_root: Path, governance_dir: Path, *, team_id: str, halt_d
             _record_high_water(governance_dir, doc["sequence"])
     except (OSError, ValueError, RuntimeError) as exc:
         return GroupResult(present=True, problem=f"the exception registry cannot be read or written ({exc})")
-    repos = [r for r in doc["group"] if r.lower() != own.lower()]
+    repos = [r.lower() for r in doc["group"] if r.lower() != own.lower()]   # the signed (lowercased) form
     return GroupResult(present=True, repos=repos, sequence=doc["sequence"])
 
 
@@ -408,10 +411,12 @@ def _git(*args: str, cwd: Path | None = None, timeout: int = 120) -> subprocess.
 
 
 def _run(argv: list[str], cwd: Path | None, timeout: int) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=timeout,
-                          check=False, env={"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-                                            "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
-                                            "HOME": tempfile.gettempdir()})
+    # A private, empty HOME and GNUPGHOME per call: no shared keyring, ssh config or git config can vouch for a tag.
+    with tempfile.TemporaryDirectory() as home:
+        return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False,
+                              env={"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+                                   "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+                                   "HOME": home, "GNUPGHOME": home})
 
 
 def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> str | None:
@@ -435,10 +440,12 @@ def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> st
             return f"tag {tag} cannot be fetched from {remote}: {fetched.stderr.strip()[:200]}"
         if _git("-C", str(repo), "cat-file", "-t", f"refs/tags/{tag}").stdout.strip() != "tag":
             return f"{tag} is a lightweight tag (not signed)"
-        header = _git("-C", str(repo), "cat-file", "tag", f"refs/tags/{tag}").stdout.splitlines()
-        if f"tag {tag}" not in header[:6]:
+        body = _git("-C", str(repo), "cat-file", "tag", f"refs/tags/{tag}").stdout
+        if f"tag {tag}" not in body.splitlines()[:6]:
             return f"the signed tag object fetched as {tag} names a different tag (a re-pushed tag is refused)"
-        check = _git("-C", str(repo), "-c", f"gpg.ssh.allowedSignersFile={allowed_signers}",
+        if "-----BEGIN SSH SIGNATURE-----" not in body:
+            return f"{tag} is not SSH-signed (only the release key's SSH signature is accepted)"
+        check = _git("-C", str(repo), "-c", "gpg.format=ssh", "-c", f"gpg.ssh.allowedSignersFile={allowed_signers}",
                      "verify-tag", f"refs/tags/{tag}")
         if check.returncode != 0:
             return f"{tag} does not verify against {allowed_signers}: {check.stderr.strip()[:200]}"
@@ -480,6 +487,10 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
         tag = tags.get(name)
         if not tag:
             problems.append(f"{name}: pins group member {repo} with no {name}.tag line (a signed tag is required)")
+            continue
+        if not re.fullmatch(r"v?\d+\.\d+\.\d+", tag):
+            problems.append(f"{name}: {tag} is not a final release tag (the latest-stable rule: a pre-release needs a "
+                            "recorded @security clearance, which this check does not read)")
             continue
         reason = verify_tag_pin(remote_base.rstrip("/") + "/" + repo, tag, sha, allowed_signers)
         if reason:
