@@ -1,0 +1,8 @@
+{
+  "patch_id": "f36aecc3813e37a5eeeefed0193d8182060d8a41",
+  "commit": "006af4769dac6335d00a9bda70b12b53cd4f3f7b",
+  "subject": "fix(hygiene): project rules use the CH-P namespace outside the managed fence (IM item 26)",
+  "impact": "1 modules added, 4 symbols added",
+  "note": "IM item 26: new module hygiene_rules (migrate_project_rules, duplicate_rule_ids, framework_ids_outside_fence); additive, documented in docs_src/api-reference/hygiene-rules.md; emit and doctor call it; no existing signature changed.",
+  "recorded_at": "2026-11-12T17:59:04Z"
+}

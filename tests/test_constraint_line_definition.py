@@ -185,7 +185,13 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # discarding commands there; no `git worktree prune` from any checkout); per-file baseline raised
     # 5 -> 6. Same reasoning as rules 8-10: the template is wrapped whole in the `content` fence at
     # emit. The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 177), (
+    # 177 -> 161, 43 -> 42 files (2026-11-12, IM item 26, CH-P namespace): -16 constraint lines, -1 file.
+    # code-hygiene-rules-reference.template.md now carries its own explicit `content` fence around the
+    # whole framework catalogue (so the user-owned Project Extension Rules section can sit after it),
+    # so its 16 rule lines are fenced in the source, not only by emit's whole-file wrap. They are
+    # exactly as module-owned as before; its baseline entry is removed. The new user-editable section
+    # carries no constraint line. The predicate did not move.
+    assert (len(current), sum(current.values())) == (42, 161), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
-        "it was 43 / 168 after the Rule-11 addition. Explain the move, do not re-baseline."
+        "it was 42 / 161 after item 26 (CH-P namespace). Explain the move, do not re-baseline."
     )
