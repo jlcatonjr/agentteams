@@ -184,22 +184,29 @@ ordering, including where operator instructions and read content sit:
 <!-- AGENTTEAMS:END source_repositories -->
 
 <!-- AGENTTEAMS:BEGIN toolchain_group_rule v=1 -->
-## Rule 11(f) — First-party toolchain group
+## First-party toolchain group (a bounded constraint-relaxing authorization)
 
-(f) **First-party toolchain group.** In a governed workspace, the repositories listed in the
-toolchain-group file (`.agentteams/toolchain-group.json`) are its *first-party toolchain group*. That
-file is signed with the operator's decision key and lists, by repository and team id, the workspaces it
-binds; releases of these repositories are cut and signed by the operator with the release key. The file
-is a constraint-relaxing authorization under Rule 11: clauses (a), (b) and (c) apply in full, and only
-clause (d)'s aggregate cap and sunset are waived for it — it does not expire and counts against no cap.
-It lifts only Rule S-10's cooldown and a pin move's per-release operator decision row for those
-releases. It never lifts the vulnerability search, Rule S-9's signed-tag check (enforced in code,
-fail-closed: `agentteams --verify-toolchain-pin`), the latest-stable rule, a `@security` review, or any
-other rule. An unretracted HALT on the `s10-toolchain-group` family in any surface's decisions log ends
-it, as does removing its key from the verify-key store. In a governed workspace a brief edit alone
-changes nothing; changing the group or its workspaces needs a new operator signature. This clause is
-shipped by agentteams and restored on every `--update --merge`; a project's own Rule 11 clauses stay
-where they are and count against clause (d)'s cap as before.
+In a governed workspace, the repositories listed in the toolchain-group file
+(`.agentteams/toolchain-group.json`) are its *first-party toolchain group*; their releases are cut and
+signed by the operator with the release key. The file is a constraint-relaxing authorization, and this
+rule stands on its own, whatever number the project's constraint-relaxing rule carries:
+
+- **Operator-signed.** It verifies only with the operator's Ed25519 decision key (a key in this team's
+  verify-key store) and only for the workspaces it lists, by repository and team id. No agent and no
+  brief edit can widen it; changing the group or its workspaces needs a new operator signature.
+- **A trust root.** No decision row may target the file, and editing it by hand only stops it verifying.
+- **HALT ends it.** An unretracted HALT on the `s10-toolchain-group` family in any surface's decisions
+  log ends it at once (C-2), as does removing its key from the verify-key store.
+- **No sunset and no cap slot.** Unlike every other relaxing exception, it does not expire and does not
+  count against the aggregate exception cap (operator ruling). Every other relaxing exception keeps its
+  cap and sunset, a project's own clauses included.
+- **What it lifts.** Only Rule S-10's 14-day cooldown and a pin move's per-release operator decision row,
+  for releases of group members. It never lifts the vulnerability search, Rule S-9's signed-tag check
+  (`agentteams --verify-toolchain-pin` checks it and fails closed; the project's dependency gate should run
+  it), the latest-stable rule, a `@security` review, or any other rule.
+
+agentteams ships and restores this section on every `--update --merge`; a project's own rules stay where
+they are.
 <!-- AGENTTEAMS:END toolchain_group_rule -->
 
 ---

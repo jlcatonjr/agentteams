@@ -83,19 +83,26 @@ def run_toolchain_group(args: argparse.Namespace) -> int:
         tg.report(result)
         return 1
     if not result.present:
-        print(f"Error: no {tg.GROUP_FILE_REL} here, so no pin is under the toolchain-group rule (fail-closed).",
-              file=sys.stderr)
-        return 1
+        print(f"No {tg.GROUP_FILE_REL} here: no pin is under the toolchain-group rule, so nothing was checked "
+              "(exit 2).", file=sys.stderr)
+        return 2
+    checked: list[str] = []
     try:
-        problems = tg.verify_pins(Path(args.verify_toolchain_pin), result.repos, Path(args.allowed_signers))
-    except OSError as exc:
+        problems = tg.verify_pins(Path(args.verify_toolchain_pin), result.repos, Path(args.allowed_signers),
+                                  checked=checked)
+    except (OSError, UnicodeDecodeError) as exc:
         print(f"Error: cannot read {args.verify_toolchain_pin}: {exc}", file=sys.stderr)
         return 1
     for problem in problems:
         print(f"::error title=Toolchain pin not verified::{problem}", file=sys.stderr)
     if problems:
         return 1
-    print(f"Every pin to a toolchain-group member in {args.verify_toolchain_pin} verifies.")
+    if not checked:
+        print(f"Error: {args.verify_toolchain_pin} pins no toolchain-group member, so nothing was verified "
+              "(fail-closed).", file=sys.stderr)
+        return 1
+    print(f"{len(checked)} pin(s) to toolchain-group members in {args.verify_toolchain_pin} verify: "
+          f"{', '.join(checked)}.")
     return 0
 
 

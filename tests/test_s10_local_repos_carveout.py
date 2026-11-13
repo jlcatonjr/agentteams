@@ -58,7 +58,7 @@ def test_a_bare_name_is_refused() -> None:
 def test_the_trigger_and_verdict_tables_know_the_carve_out() -> None:
     template = (TEMPLATES / "universal" / "security.template.md").read_text(encoding="utf-8")
     assert ("| Any change to `.agentteams/toolchain-group.json`, or any addition to the brief's "
-            "`s10_cooldown_exempt_repos` | Constraint relaxation (Rule 11)") in template
+            "`s10_cooldown_exempt_repos` | Constraint relaxation — widens Rule S-10's first-party toolchain group") in template
     verdict = next(line for line in template.splitlines() if "younger than the Rule S-10 cooldown" in line)
     assert "outside both the remediation and the local-repository carve-outs" in verdict
     assert "(for the cooldown only) that the release is of a repository the first-party toolchain group names" in verdict

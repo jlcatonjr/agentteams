@@ -304,7 +304,7 @@ def test_rule_11f_is_fenced_and_restored_by_merge_while_a_local_clause_survives(
     manifest, body = instructions
     fresh = body if framework == "copilot-vscode" else FRAMEWORKS[framework]().render_instructions_file(body, manifest)
     assert "toolchain_group_rule" in _TEMPLATE_AUTHORITATIVE_FENCES
-    assert "(f) **First-party toolchain group.**" in _extract_fenced_regions(fresh)["toolchain_group_rule"]
+    assert "## First-party toolchain group (a bounded constraint-relaxing authorization)" in _extract_fenced_regions(fresh)["toolchain_group_rule"]
     local = "    (e) **Carve-out: a local rollout** — project text, renewable term, counts against the cap.\n"
     if framework == "agents-md":  # AGENTS.md: the baseline list is fenced; a project extends it under its own heading
         from agentteams.frameworks._agents_md_rules import EXTENSIONS_HEADING
@@ -318,7 +318,7 @@ def test_rule_11f_is_fenced_and_restored_by_merge_while_a_local_clause_survives(
     on_disk = fresh[:eol] + local + fresh[eol:begin] + fresh[end:]
     merged = _merge_fenced_content(fresh, on_disk, rel_path="copilot-instructions.md").merged_content
     assert local in merged                                                            # kept verbatim
-    assert merged.count("(f) **First-party toolchain group.**") == 1                  # restored once
+    assert merged.count("## First-party toolchain group (a bounded constraint-relaxing authorization)") == 1                  # restored once
     tampered = merged.replace("it does not expire", "it may be extended by any agent")
     remerged = _merge_fenced_content(fresh, tampered, preserve_on_shrink=True).merged_content
     assert "it does not expire" in remerged and "any agent" not in remerged         # template wins
@@ -373,3 +373,50 @@ def test_a_pin_to_a_group_member_needs_a_release_key_tag_on_the_locked_commit(tm
     assert (problems == []) is ok, problems
     if why:
         assert why in problems[0]
+
+
+# --- @security re-review (2026-11-13) ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("action", ["s10-cooldown-exempt:acme/toolkit", "s10-cooldown-exempt"])
+def test_a_halt_on_the_per_repository_exemption_binds_the_group(tmp_path, stub_ed25519, capsys, action) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _log(team, _row(action, verdict="HALT", stamp="2026-11-13"))
+    # The HALT matcher over-matches on purpose (action_ids: "on the HALT side a false match only blocks"), so a HALT
+    # on one member's exemption also matches the family check and drops every member, as the legacy gate does.
+    assert _authorize(team) == []
+    assert "::error title=S-10 toolchain group HALT::acme/toolkit" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("url", "repo"), [
+    ("https://github.com/acme/consumer.git", "acme/consumer"),
+    ("git@github.com:acme/consumer.git", "acme/consumer"),
+    ("ssh://git@github.com/acme/consumer", "acme/consumer"),
+    ("https://evil.example/x/github.com/acme/consumer", None),
+    ("https://github.com.evil.example/acme/consumer", None),
+])
+def test_the_origin_must_be_github_itself(tmp_path, url, repo) -> None:
+    root = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "remote", "add", "origin", url], check=True)
+    assert tg.workspace_repo(root) == repo
+
+
+def test_a_signed_tag_re_pushed_under_another_name_is_refused(tmp_path, signed_remote) -> None:
+    base, signers, sha = signed_remote
+    work = base / "acme" / "toolkit"
+    obj = _git("rev-parse", "refs/tags/v1.0.0", cwd=work)
+    _git("update-ref", "refs/tags/v9.9.9", obj, cwd=work)       # the v1.0.0 tag object under a new name
+    lockfile = tmp_path / "toolchain.lock"
+    lockfile.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v9.9.9\n")
+    [problem] = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
+    assert "names a different tag" in problem
+
+
+def test_pins_checked_are_counted(tmp_path, signed_remote) -> None:
+    base, signers, sha = signed_remote
+    lockfile = tmp_path / "toolchain.lock"
+    lockfile.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\nx=acme/other@{'0' * 40}\n")
+    checked: list[str] = []
+    assert tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base), checked=checked) == []
+    assert checked == ["tk"]

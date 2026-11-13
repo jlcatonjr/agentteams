@@ -427,7 +427,7 @@ Operator\-only (Rule 11(f)): sign the first\-party toolchain group file (.agentt
 Read\-only: verify this workspace's .agentteams/toolchain\-group.json (signature, workspace binding by git origin and team id, HALTs, sequence) against \-\-output's governed team dir, and print the group. Exit 0 when it verifies, 1 otherwise. Team id from \-\-team\-id, else the brief (\-\-description).
 .TP
 .B \-\-verify\-toolchain\-pin LOCKFILE
-Read\-only, fail\-closed (Rule S\-9 for the toolchain group): every NAME=owner/repo@SHA pin in LOCKFILE to a verified group member needs a NAME.tag=TAG line, and TAG must be an annotated tag that verifies against \-\-allowed\-signers and peels to SHA. Exit 0 when every such pin verifies, 1 otherwise.
+Read\-only, fail\-closed (Rule S\-9 for the toolchain group): every NAME=owner/repo@SHA pin in LOCKFILE to a verified group member needs a NAME.tag=TAG line, and TAG must be an annotated tag that verifies against \-\-allowed\-signers, names itself, and peels to SHA. Exit 0 when at least one such pin was checked and every one verifies; 1 on any failure or when no pin to a group member was found; 2 when the workspace has no toolchain\-group file (nothing is under the rule).
 .TP
 .B \-\-allowed\-signers PATH
 With \-\-verify\-toolchain\-pin: the ssh allowed_signers file naming the operator's release key.

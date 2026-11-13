@@ -13,26 +13,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 agentteams 1.1.2 is a 1.1 patch carrying one governance feature, by operator ruling (T1, 2026-11-13: it overrides the
 rule that new features wait for the next minor release, for this change only), plus the agentteams#476 fix.
 
-### added (Rule 11(f): the first-party toolchain group)
+### added (the first-party toolchain group)
 
 - **One signed file instead of per-repository cooldown rows.** A governed workspace may carry
   `.agentteams/toolchain-group.json`: the repositories whose releases the operator cuts and signs, and the workspaces
   (`repo:<git origin>` plus `team:<team id>`) it binds, signed once with the operator's Ed25519 decision key. Releases
   of those repositories are exempt from Rule S-10's 14-day cooldown, and a pin move to one needs this repository's own
   `@security` review and no per-release operator decision row (operator rulings R5 and T2). No sunset and no cap slot:
-  Rule 11(f) waives only clause (d) for the file (operator ruling, 2026-11-13). Clauses (a)–(c) still bind.
+  the file is exempt only from the aggregate cap and sunset every other relaxing exception carries (operator ruling,
+  2026-11-13); it is still operator-signed, a trust root, and ended by a HALT. A HALT on any
+  `s10-cooldown-exempt` action (a member's exemption or the family) also binds it (C-2); the HALT matcher over-matches
+  on purpose, so such a HALT drops every member.
 - **Fail-closed, never fatal.** A tampered file, an unlisted workspace, an unknown or removed key, a missing Ed25519
   backend, an unretracted HALT on `s10-toolchain-group` in any surface's decisions log, or a `sequence` older than the
   one recorded each render an empty group with a notice and an `::error::` line; the render itself goes on.
-- **Rule S-9 in code.** `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>` refuses a pin to a group
-  member unless its `NAME.tag` is an annotated tag that verifies against the release key and peels to the locked
-  commit. `--verify-toolchain-group` checks the file for this workspace; `--sign-toolchain-group` (operator-only)
+- **A Rule S-9 check for group pins.** `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>` refuses
+  a pin to a group member unless its `NAME.tag` is an annotated tag that names itself, verifies against the release
+  key and peels to the locked commit; it refuses a lockfile with no group pin, and exits 2 when the workspace has no
+  group file. Nothing runs it automatically yet: a consumer's dependency gate should. `--verify-toolchain-group` checks the file for this workspace; `--sign-toolchain-group` (operator-only)
   signs it, with `--sign-decision`'s preflight, review digest and confirmation.
 - **The file is a trust root** (`governance_targets`), and `--sign-decision` refuses a payload in its signing domain.
-- **Templates.** The constitution gains a fenced, template-authoritative `toolchain_group_rule` block (Rule 11(f)), so
-  `--update --merge` adds it to existing teams and restores it if edited; a project's own Rule 11 clauses are kept
-  verbatim. Rule S-10's carve-out bullet becomes the toolchain-group bullet (placeholder `{S10_TOOLCHAIN_GROUP}`), and
-  the `@security` and instruction-authority templates cite Rule 11 (they cited a Rule 15 no generated team has).
+- **Templates.** The constitution gains a fenced, template-authoritative `toolchain_group_rule` section ("First-party
+  toolchain group"), self-contained so it holds whatever number a project's own constraint-relaxing rule carries (or
+  if it has none); `--update --merge` adds it to existing teams and restores it if edited, and a project's own rules
+  are kept verbatim. Rule S-10's carve-out bullet becomes the toolchain-group bullet (placeholder
+  `{S10_TOOLCHAIN_GROUP}`), and the `@security` and instruction-authority templates name the constitution's
+  constraint-relaxing authorization rule instead of "Rule 15", a number generated teams do not use for it.
 - **Migration.** Legacy `s10-cooldown-exempt:<repo>` registry entries keep carrying over until they lapse; once the
   group verifies, no new per-repository row is consumed. In a governed workspace the brief's
   `s10_cooldown_exempt_repos` is a hint only (a notice names any repository the signed group lacks); an ungoverned

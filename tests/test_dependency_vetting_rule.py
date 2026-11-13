@@ -97,7 +97,7 @@ def test_local_repository_carve_out_lifts_the_cooldown_only():
     carve = body[start: body.index("- ✅ Pin exact versions", start)]
     assert "{S10_TOOLCHAIN_GROUP}" in carve and "A brief edit alone exempts nothing in a governed workspace" in carve
     assert "Nothing else is lifted" in carve and "still pass the vulnerability search" in carve
-    assert "Rule S-9" in carve and "--verify-toolchain-pin" in carve and "fail-closed" in carve
+    assert "Rule S-9" in carve and "--verify-toolchain-pin" in carve and "fails closed" in carve
     assert "no per-release operator decision row" in carve and "own `@security`" in carve
     assert "latest-stable rule still applies" in carve and "release candidate still needs a recorded" in carve
     assert "Every other repository and package stays under the cooldown" in carve

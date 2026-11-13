@@ -377,12 +377,28 @@ def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str]
             return None
     except RuntimeError:
         return None  # authorized_exempt_repos reports an unreadable switch
-    result = toolchain_group.load_group(root, governance, team_id=str(manifest.get("team_id") or ""),
-                                        halt_dirs=(team_dir, *_surface_dirs(root)), consume=consume)
+    try:
+        result = toolchain_group.load_group(root, governance, team_id=str(manifest.get("team_id") or ""),
+                                            halt_dirs=(team_dir, *_surface_dirs(root)), consume=consume)
+    except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:   # never fatal for the render
+        result = toolchain_group.GroupResult(present=True, problem=f"it could not be checked ({exc})")
     if result.problem is not None:
         toolchain_group.report(result)
         return None
-    return result.repos if result.present else None
+    if not result.present:
+        return None
+    kept: list[str] = []
+    for repo in result.repos:   # C-2: a HALT on the per-repository exemption, or its family, binds the group too
+        exempt_action, exempt_family = action_for(repo), S10_EXEMPT_KIND
+        try:
+            for halt_dir in (governance, team_dir, *_surface_dirs(root)):
+                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
+                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
+            kept.append(repo)
+        except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
+            print(f"  ✗  S-10 toolchain group: {repo} is NOT exempted from the cooldown ({exc}).", file=sys.stderr)
+            print(f"::error title=S-10 toolchain group HALT::{repo}: {exc}", file=sys.stderr)
+    return kept
 
 
 __all__ = ["CANONICAL_TEAM_DIR", "S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorize_into",

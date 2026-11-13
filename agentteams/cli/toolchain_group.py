@@ -16,12 +16,16 @@ clause (d)'s cap and sunset are waived (operator ruling, 2026-11-13: no sunset).
 * **(a) traceable, C-2:** an unretracted HALT on the :data:`FAMILY` action in any surface's decisions log ends the
   group. Removing the key's ``.pub.pem`` from the store revokes it (the file then cannot verify).
 * **(c) trust root:** the file is a governance target (``cli/governance_targets``); no decision row may target it.
-* **Binding:** the file binds only the ``(repo:<git origin>, team:<team_id>)`` pairs it lists, so a copied file, or a
-  re-pointed origin, does not verify elsewhere. An unlisted workspace gets an empty group and an ``::error::`` line;
+* **Binding:** the file binds only the ``(repo:<git origin>, team:<team_id>)`` pairs it lists, so a copied file does
+  not apply in an unlisted workspace. The binding is a guard against accidents, not a cryptographic one: the origin and
+  the team id are local data, so a workspace that re-points both to a listed pair gets that pair's group (Rule 12). An unlisted workspace gets an empty group and an ``::error::`` line;
   its render still goes ahead (fail-closed for the relaxation, never for the team).
 * **Domain separation and rollback:** the payload starts with :data:`PURPOSE` (never a date, as a decision row's does,
   nor the grant tag), and ``sequence`` is monotonic: a file older than the highest sequence recorded in the
-  governance team's exception registry is refused.
+  governance team's exception registry is refused. That mark is per workspace and unsigned, so it only stops a
+  rollback in a workspace that already saw the newer file; ending the group reliably takes a HALT on ``s10-toolchain-group``
+  or on any ``s10-cooldown-exempt`` action (the gate checks both; the matcher over-matches, so either drops every
+  member) or removing the key; dropping one member takes a new signed file.
 
 No repository is named here or in any template (Rule 11: ship the machinery, never a specific exception).
 
@@ -54,7 +58,8 @@ HIGH_WATER_KEY = "toolchain_group_sequence"
 
 _TEAM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-_ORIGIN_RE = re.compile(r"github\.com[:/]+([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*?)(?:\.git)?/?$")
+_ORIGIN_RE = re.compile(r"^(?:https://(?:[^@/\s]+@)?github\.com/|ssh://git@github\.com/|git@github\.com:)"
+                        r"([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*?)(?:\.git)?/?$")
 _FIELDS = ("version", "scope", "group", "workspaces", "purpose", "sequence", "key_id", "signature")
 
 
@@ -214,7 +219,7 @@ def workspace_repo(project_root: Path) -> str | None:
                               capture_output=True, text=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
-    m = _ORIGIN_RE.search(proc.stdout.strip()) if proc.returncode == 0 else None
+    m = _ORIGIN_RE.match(proc.stdout.strip()) if proc.returncode == 0 else None
     return m.group(1) if m and _REPO_ID_RE.fullmatch(m.group(1)) else None
 
 
@@ -226,6 +231,8 @@ def _halted(halt_dirs: tuple[Path, ...]) -> str | None:
             security_gate._assert_no_unretracted_halt(d, action="s10-toolchain-group")  # == FAMILY
         except RuntimeError as exc:
             return f"a HALT on {FAMILY} ends it ({exc})"
+        except (OSError, UnicodeDecodeError, ValueError) as exc:  # an unreadable log fails closed, never fatally
+            return f"the decisions log in {d} cannot be read ({exc})"
     return None
 
 
@@ -383,12 +390,19 @@ def verify_group_command(project_root: Path, governance_dir: Path, team_id: str,
 
 #: Lock lines: ``<name>=<owner/repo>@<40-hex>`` and ``<name>.tag=<tag>``.
 _LOCK_PIN_RE = re.compile(r"^([A-Za-z0-9._-]+)=([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)@([0-9a-f]{40})$")
-_LOCK_TAG_RE = re.compile(r"^([A-Za-z0-9._-]+)\.tag=(v?[0-9A-Za-z.+-]+)$")
+_LOCK_TAG_RE = re.compile(r"^([A-Za-z0-9._-]+)\.tag=(v?[0-9][0-9A-Za-z.+-]*)$")
 
 
 def _git(*args: str, cwd: Path | None = None, timeout: int = 120) -> subprocess.CompletedProcess[str]:
     env_free = ["git", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
-    return subprocess.run([*env_free, *args], cwd=cwd, capture_output=True, text=True, timeout=timeout,
+    try:
+        return _run([*env_free, *args], cwd, timeout)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return subprocess.CompletedProcess(args, 1, "", f"git failed: {exc}")
+
+
+def _run(argv: list[str], cwd: Path | None, timeout: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=timeout,
                           check=False, env={"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
                                             "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
                                             "HOME": tempfile.gettempdir()})
@@ -415,6 +429,9 @@ def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> st
             return f"tag {tag} cannot be fetched from {remote}: {fetched.stderr.strip()[:200]}"
         if _git("-C", str(repo), "cat-file", "-t", f"refs/tags/{tag}").stdout.strip() != "tag":
             return f"{tag} is a lightweight tag (not signed)"
+        header = _git("-C", str(repo), "cat-file", "tag", f"refs/tags/{tag}").stdout.splitlines()
+        if f"tag {tag}" not in header[:6]:
+            return f"the signed tag object fetched as {tag} names a different tag (a re-pushed tag is refused)"
         check = _git("-C", str(repo), "-c", f"gpg.ssh.allowedSignersFile={allowed_signers}",
                      "verify-tag", f"refs/tags/{tag}")
         if check.returncode != 0:
@@ -426,7 +443,7 @@ def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> st
 
 
 def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
-                remote_base: str = "https://github.com/") -> list[str]:
+                remote_base: str = "https://github.com/", *, checked: list[str] | None = None) -> list[str]:
     """Check every lock pin to a group member: a tag line, a release-key signature, and the locked commit.
 
     Args:
@@ -434,6 +451,7 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
         group: The verified group (``owner/name``).
         allowed_signers: The release key's ``allowed_signers`` file.
         remote_base: URL prefix for ``owner/repo`` (tests pass a local directory).
+        checked: When given, the name of every pin to a group member is appended (verified or not).
 
     Returns:
         Problems, one per failing pin (empty: all pins to group members verify).
@@ -451,6 +469,8 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
     for name, (repo, sha) in pins.items():
         if repo.lower() not in members:
             continue
+        if checked is not None:
+            checked.append(name)
         tag = tags.get(name)
         if not tag:
             problems.append(f"{name}: pins group member {repo} with no {name}.tag line (a signed tag is required)")

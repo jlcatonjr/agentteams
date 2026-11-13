@@ -1433,7 +1433,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Read-only, fail-closed (Rule S-9 for the toolchain group): every NAME=owner/repo@SHA pin in LOCKFILE to "
             "a verified group member needs a NAME.tag=TAG line, and TAG must be an annotated tag that verifies "
-            "against --allowed-signers and peels to SHA. Exit 0 when every such pin verifies, 1 otherwise."
+            "against --allowed-signers, names itself, and peels to SHA. Exit 0 when at least one such pin was checked and "
+            "every one verifies; 1 on any failure or when no pin to a group member was found; 2 when the workspace "
+            "has no toolchain-group file (nothing is under the rule)."
         ),
     )
     parser.add_argument(
