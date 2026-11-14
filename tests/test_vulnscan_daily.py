@@ -68,27 +68,29 @@ def _cfg(**over: Any) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- G3: stale_warning never raises
 
-_NOW = dt.datetime.now(dt.UTC)
+# Heartbeats are built when each case runs (a callable of "now"), not at import: "Nh ago" is rounded to the
+# hour, so a value fixed at collection time reads N+1 once a long run reaches the case 30 minutes later.
 
 
 @pytest.mark.parametrize(("heartbeat", "config", "expect"), [
-    ({"last_run": (_NOW - dt.timedelta(hours=50)).replace(tzinfo=None).isoformat()}, {}, "50h ago"),   # naive = UTC
+    (lambda now: {"last_run": (now - dt.timedelta(hours=50)).replace(tzinfo=None).isoformat()},  # naive = UTC
+     {}, "50h ago"),
     ({"last_run": 1_700_000_000}, {}, "unreadable"),
     ({"last_run": None}, {}, "unreadable"),
     ({"last_run": "yesterday"}, {}, "unreadable"),
-    ([{"last_run": _NOW.isoformat()}], {}, "unreadable"),
+    (lambda now: [{"last_run": now.isoformat()}], {}, "unreadable"),
     ("just a string", {}, "unreadable"),
-    ({"last_run": _NOW.isoformat(), "exit": None}, {}, ""),
-    ({"last_run": _NOW.isoformat(), "exit": [3]}, {}, ""),
-    ({"last_run": (_NOW - dt.timedelta(hours=30)).isoformat()}, {"stale_after_hours": None}, "30h ago"),
-    ({"last_run": (_NOW - dt.timedelta(hours=30)).isoformat()}, {"stale_after_hours": "x"}, "30h ago"),
-    ({"last_run": _NOW.isoformat()}, "{not json", ""),
-    ({"last_run": _NOW.isoformat()}, [1, 2], ""),
+    (lambda now: {"last_run": now.isoformat(), "exit": None}, {}, ""),
+    (lambda now: {"last_run": now.isoformat(), "exit": [3]}, {}, ""),
+    (lambda now: {"last_run": (now - dt.timedelta(hours=30)).isoformat()}, {"stale_after_hours": None}, "30h ago"),
+    (lambda now: {"last_run": (now - dt.timedelta(hours=30)).isoformat()}, {"stale_after_hours": "x"}, "30h ago"),
+    (lambda now: {"last_run": now.isoformat()}, "{not json", ""),
+    (lambda now: {"last_run": now.isoformat()}, [1, 2], ""),
 ])
 def test_stale_warning_never_raises_on_odd_heartbeat_or_config(xdg: Path, heartbeat: Any, config: Any,
                                                               expect: str) -> None:
     _write_config(config)
-    _write_heartbeat(heartbeat)
+    _write_heartbeat(heartbeat(dt.datetime.now(dt.UTC)) if callable(heartbeat) else heartbeat)
     warning = daily.stale_warning()
     assert isinstance(warning, str) and expect in warning
     if not expect:
