@@ -634,3 +634,30 @@ def test_a_retracted_halt_does_not_disable_the_parent(tmp_path) -> None:
         __import__("agentteams.cli.decision_log", fromlist=["x"])._decision_signature_values(retract))
     _log(team, retract)
     assert _authorize(team) == ["acme/toolkit", "acme/builder"]
+
+
+# --- researchteam-f8: no group file -> exit 2 before any team-id lookup; the brief is found like analyze finds it ---
+
+def _verb_args(team, **kw):
+    import argparse
+
+    base = dict(verify_toolchain_group=False, sign_toolchain_group=None, verify_toolchain_pin=None, output=str(team),
+                project=None, team_id=None, description=None, allowed_signers="x")
+    return argparse.Namespace(**{**base, **kw})
+
+
+def test_no_group_file_is_exit_2_without_a_team_id(tmp_path) -> None:
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    _root, team, _private = _project(tmp_path)
+    assert run_toolchain_group(_verb_args(team, verify_toolchain_pin=str(tmp_path / "lock"))) == 2
+
+
+def test_the_team_id_comes_from_the_projects_own_brief(tmp_path, capsys) -> None:
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "team_id": _TEAM}))
+    assert run_toolchain_group(_verb_args(team, verify_toolchain_group=True)) == 0
+    assert "acme/toolkit" in capsys.readouterr().out

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   S-10 bullet becomes the toolchain-group bullet (`{S10_TOOLCHAIN_GROUP}`). Released as 1.1.2 (#481) and 1.1.3 (#485)
   on `release/1.1`; this brings them to `dev`.
 - **agentteams#476:** a registered S-10 exemption that does not carry over says why, with an `::error::` line.
+- **The verify verbs find the brief themselves** (researchteam-f8): with no `--team-id` or `--description`, the team id
+  comes from the project's own brief, as fleet discovery finds it; and a workspace with no group file reports that
+  (exit 2 for `--verify-toolchain-pin`) before any team-id lookup.
 - **`cryptography` 50.0.0 → 50.0.2** in the `signing` extra (latest stable, OSV none; sdist sha256 verified locally).
 
 ### fixed (the API impact checklist lists a symbol's users, not every file with the word; #451 b)

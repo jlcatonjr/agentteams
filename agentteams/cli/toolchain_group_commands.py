@@ -18,11 +18,20 @@ from agentteams.cli import toolchain_group as tg
 from agentteams.cli.commands_output import _resolve_output_dir
 
 
-def _team_id(args: argparse.Namespace) -> str | None:
-    """``--team-id``, else the brief's ``team_id``, else its slugified ``project_name`` (as ``analyze`` derives it)."""
+def _team_id(args: argparse.Namespace, root: Path) -> str | None:
+    """``--team-id``, else the brief's ``team_id``, else its slugified ``project_name`` (as ``analyze`` derives it).
+
+    The brief is ``--description``, else the project's own brief as fleet discovery finds it
+    (:func:`agentteams.memory_index_surfaces.resolve_brief`).
+    """
     if getattr(args, "team_id", None):
         return str(args.team_id).strip()
     brief = getattr(args, "description", None)
+    if not brief:
+        from agentteams.memory_index_surfaces import resolve_brief
+
+        found = resolve_brief(root)
+        brief = str(found) if found else None
     if not brief:
         return None
     try:
@@ -76,7 +85,14 @@ def run_toolchain_group(args: argparse.Namespace) -> int:
     if resolved is None:
         return 1
     _team_dir, root, governance, halt_dirs = resolved
-    team_id = _team_id(args)
+    if not (root / tg.GROUP_FILE_REL).exists() and not (root / tg.GROUP_FILE_REL).is_symlink():
+        if getattr(args, "verify_toolchain_pin", None):
+            print(f"No {tg.GROUP_FILE_REL} here: no pin is under the toolchain-group rule, so nothing was checked "
+                  "(exit 2).", file=sys.stderr)
+            return 2
+        print(f"No {tg.GROUP_FILE_REL} in {root}: no toolchain group (the cooldown applies to every release).")
+        return 1
+    team_id = _team_id(args, root)
     if not team_id:
         print("Error: name this workspace's team id with --team-id (or --description <brief>).", file=sys.stderr)
         return 1
