@@ -142,6 +142,11 @@ def validate(doc: object, *, signed: bool = True) -> dict:
     parents = _lineage(doc) if isinstance(doc.get("derives_from"), str) else []
     if not parents or not all(_ACTION_ID_RE.fullmatch(p) for p in parents):
         raise ToolchainGroupError("derives_from must name one or more recorded decision action ids (';'-separated)")
+    from agentteams.cli.governance_targets import target_is_governance_root
+
+    if any(target_is_governance_root(p) for p in parents):
+        raise ToolchainGroupError("derives_from names a trust-root id (for example one containing 'toolchain-group'); "
+                                  "a group file cannot derive from a decision about a trust root")
     seq = doc.get("sequence")
     if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
         raise ToolchainGroupError("sequence must be a positive integer")
@@ -278,6 +283,7 @@ def lineage_problem(doc: dict, governance_dir: Path, halt_dirs: tuple[Path, ...]
         rows, fieldnames = read
         dl._assert_decision_chain_intact(rows, fieldnames)
         lineage_map = _build_lineage_map(rows)
+        chain: list[str] = []
         for lineage_action in _lineage(doc):
             authorizing = [r for r in rows if _row_action_id(r) == lineage_action and (
                 (r.get("verdict") or "").strip().upper() == "PASS" or (
@@ -285,12 +291,17 @@ def lineage_problem(doc: dict, governance_dir: Path, halt_dirs: tuple[Path, ...]
                     and (r.get("conditions_verified") or "").strip().lower() == "verified"))]
             if not authorizing:
                 return f"derives_from names {lineage_action!r}, which no authorizing decision records"
+            if (authorizing[-1].get("sig_scheme") or "").strip().lower() != "ed25519":
+                return f"derives_from names {lineage_action!r}, whose authorizing row is not Ed25519-signed by the operator"
             dl._assert_authorizing_row_is_authentic(authorizing[-1], output_dir=governance_dir,
                                                     signing_active=dl._decision_signing_active(fieldnames),
                                                     action=lineage_action)
-            _transitive_ancestors(lineage_action, lineage_map)
+            chain += [lineage_action, *sorted(_transitive_ancestors(lineage_action, lineage_map))]
+        # C-2 along the whole chain, by exact id in every dir: a surface's own log rarely holds the parent row, so
+        # its ancestor walk would find nothing; the governance log's chain is checked id by id instead.
+        for lineage_action in dict.fromkeys(chain):
             for d in dict.fromkeys(halt_dirs):
-                dl._assert_no_unretracted_halt(d, action=lineage_action)   # follows its ancestors too
+                dl._assert_no_unretracted_halt(d, action=lineage_action)
     except RuntimeError as exc:
         return f"its derives_from lineage does not hold ({exc})"
     except (OSError, UnicodeDecodeError, ValueError) as exc:

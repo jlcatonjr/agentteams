@@ -547,3 +547,44 @@ def test_only_a_v_prefixed_ascii_final_tag_is_accepted(tmp_path, signed_remote, 
     lockfile.write_text(f"tk=acme/toolkit@{sha}\ntk.tag={tag}\n", encoding="utf-8")
     problems = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
     assert problems and ("not a final release tag" in problems[0] or "no tk.tag line" in problems[0])
+
+
+# --- @security v1.1.3 delta conditions ------------------------------------------------------------------------
+
+def test_a_halt_on_an_ancestor_only_in_a_surface_log_binds(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    native = root / ".claude" / "agents"
+    (native / "references").mkdir(parents=True)
+    _log(native, _row("approved-baseline", verdict="HALT", stamp="2026-11-13"))   # the parent's ancestor
+    assert _authorize(team) == []
+    assert "lineage does not hold" in capsys.readouterr().err
+
+
+def test_an_hmac_parent_row_is_refused(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _log(team, _row("hmac-policy", relaxes="", derives="", scheme=""))
+    _write(root, _doc(private, derives_from="hmac-policy"))
+    assert _authorize(team) == []
+    assert "not Ed25519-signed by the operator" in capsys.readouterr().err
+
+
+def test_a_non_relaxing_ed25519_root_parent_is_accepted(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    _log(team, _row("s10-first-party-releases-2026-11", relaxes="", derives=""))
+    _write(root, _doc(private, derives_from="s10-first-party-releases-2026-11"))
+    assert _authorize(team) == ["acme/toolkit", "acme/builder"]
+
+
+def test_every_listed_parent_must_resolve(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private, derives_from=f"{_POLICY};release-policy-1.0"))
+    assert _authorize(team) == []
+
+
+@pytest.mark.parametrize("parent", ["toolchain-group-policy", "s10-toolchain_group-x", "verify-key-rotation"])
+def test_a_trust_root_parent_id_is_refused(tmp_path, capsys, parent) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private, derives_from=parent))
+    assert _authorize(team) == []
+    assert "trust-root id" in capsys.readouterr().err
