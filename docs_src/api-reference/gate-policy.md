@@ -92,9 +92,12 @@ Once a policy is recorded, three more protections apply:
   is off, it is advisory, and `--check-wiring` says so.
 - **The hook's matcher limits the deny.** With `Write|Edit|NotebookEdit|MultiEdit|Bash`, a failed policy denies those
   tools; tools outside the matcher never reach the gate.
-- **The OS denies cover files, not directories.** Whether Seatbelt or bwrap also blocks renaming
-  `.claude/hooks/` or `.agentteams/` around a denied file has not been verified (@security F6, remediation row 700).
-  In the meantime, the gate's own `policy-protected` check denies Bash lines that name these files with a write verb.
+- **Renaming a parent directory is not a bypass** (@security F6, remediation row 700).
+  - The gate and its pin are under `.claude`, which the Claude block write-denies as a whole, with
+    `Edit(/.claude/hooks/**)` for the Write tool.
+  - Renaming `.agentteams/` moves the recorded policy away, so the gate locks.
+  - A planted replacement cannot unpin the policy: only the recorded bytes verify.
+  - The worst an agent can do is lock its own session.
 - **The harness's own fail-open is unchanged.** A harness timeout, or a hook that is removed from settings, still lets
   the call through; `fail_closed_tools` covers only the hook's own failures.
 
