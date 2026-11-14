@@ -167,7 +167,7 @@ the signature scheme; it is a statement about custody.
   replaced key file is refused. Every emitted sandbox read-denies `keys/`, no sandbox write root can
   reach either directory, and on macOS the Claude block and goose profile also write-deny both, so a
   sandboxed command fails closed instead of inheriting the key. The file is refused when it is a symlink, sits behind a symlinked `keys/`, is
-  readable by others, or would be read by an install an agent could edit (a checkout or an
+  readable by group or others, or would be read by an install an agent could edit (a checkout or an
   agent-writable root; see "Signing from a trusted install" in `SECURITY.md`). Otherwise hold it in an
   OS keychain and inject it only into the one command that needs it
   (`AGENTTEAMS_WAIVER_SIGNING_KEY=$(security find-generic-password …) agentteams …`). A set variable
@@ -196,7 +196,8 @@ the constitution actually claims to defend.
 ### Waiver Lifecycle
 
 **Prerequisites:**
-- `AGENTTEAMS_WAIVER_SIGNING_KEY` configured (the HMAC-SHA256 key) — see custody above.
+- The waiver HMAC-SHA256 key: `AGENTTEAMS_WAIVER_SIGNING_KEY`, or `~/.config/agentteams/keys/waiver-hmac.key` with its
+  fingerprint recorded (`agentteams --record-hmac-fingerprint waiver`) — see custody above.
 - A signed record in `references/security-waivers.log.csv`.
 - The `approver` value present in `references/security-approvers.txt`, when that roster exists.
 
@@ -230,9 +231,12 @@ waiver_id|action_reviewed|expires_at|max_uses|uses|approver|ticket_id|reason_cod
 
 **Mint a signed waiver (Python — mirrors `security_gate.py` exactly):**
 ```python
-import hashlib, hmac, os
+import hashlib, hmac
 
-key = os.environ["AGENTTEAMS_WAIVER_SIGNING_KEY"].encode("utf-8")
+from agentteams.cli.signed_ledger import load_hmac_key   # the variable, else the fingerprint-pinned key file
+
+key = load_hmac_key("AGENTTEAMS_WAIVER_SIGNING_KEY").encode("utf-8")
+assert key, "no waiver key: set AGENTTEAMS_WAIVER_SIGNING_KEY or record the key file's fingerprint"
 row = {
     "timestamp": "2026-05-10T15:30:00Z",
     "waiver_id": "waiver-freshness-001",

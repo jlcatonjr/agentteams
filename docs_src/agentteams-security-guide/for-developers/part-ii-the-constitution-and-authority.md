@@ -108,7 +108,7 @@ raises = deny (`agentteams/cli/security_gate.py:120-169`).
 
 **Waivers lift *gates*, never HALTs.** A gate waiver is **HMAC-SHA256-signed**,
 time-bounded (`expires_at`), use-counted (`max_uses`/`uses`), and **refuses when
-`AGENTTEAMS_WAIVER_SIGNING_KEY` is unset**. The signing is **symmetric** (one
+`AGENTTEAMS_WAIVER_SIGNING_KEY` (or its fingerprint-pinned key file) is absent**. The signing is **symmetric** (one
 shared key): honest ceiling — it defends a **keyless forger, not a key-holder**.
 `agentteams/cli/signed_ledger.py:9-92` is the documented **asymmetric swap
 point**.

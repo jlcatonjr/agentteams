@@ -167,7 +167,7 @@ Core; `agentteams/templates/universal/security.template.md`;
    unretracted HALT **first, over the whole decision log**, and no waiver passes it (fail-closed:
    every unresolved path raises = deny).
 2. Waivers that lift *gates* (not HALTs) are **HMAC-SHA256-signed**, time-bounded (`expires_at`),
-   use-counted (`max_uses`/`uses`), and refuse when `AGENTTEAMS_WAIVER_SIGNING_KEY` is unset. The
+   use-counted (`max_uses`/`uses`), and refuse when `AGENTTEAMS_WAIVER_SIGNING_KEY` (or its fingerprint-pinned key file) is absent. The
    signing is **symmetric** (one shared key): it defends against a *keyless* forger, not against one who
    holds the key — `agentteams/cli/signed_ledger.py` is the documented asymmetric swap point.
 3. **C-3 is enforced mechanically at merge time** (`front_matter_merge.py`): a `tools:` grant **wider
@@ -191,7 +191,7 @@ Core; `agentteams/templates/universal/security.template.md`;
    **grant** **widens a cross-workspace write boundary**. They are kept in **separate ledgers**.
 2. **None of the three overrides a HALT** (C-2): HALT is checked first and no instrument is consulted for it.
 3. All three share one **symmetric-HMAC trust model** (separate keys: `AGENTTEAMS_WAIVER_SIGNING_KEY`,
-   `AGENTTEAMS_GRANT_SIGNING_KEY`; decision-signing when active), **fail-closed when the key is unset**; the two
+   `AGENTTEAMS_GRANT_SIGNING_KEY`; decision-signing when active), **fail-closed when no key is available**; the two
    relaxing paths (a constraint-relaxing decision, a grant that widens `allowWrite`) require the operator's
    Ed25519 signature instead (PR-E for grants; `agentteams/cli/signed_ledger.py` `ed25519_sign`/
    `ed25519_verify`). Honest ceiling: symmetric signing stops a keyless forger, not a key-holder, and a

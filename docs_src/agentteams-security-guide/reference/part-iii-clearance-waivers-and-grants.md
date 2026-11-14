@@ -31,8 +31,8 @@ signed-ledger primitives (`agentteams/cli/signed_ledger.py:9-14`): a keyed
 HMAC-SHA256 over an ordered field list, an ISO-8601 expiry check, and a
 symlink/`..`-safe path-containment test. Each instrument uses its own key
 (`AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY`; decision-signing
-when active — `agentteams/cli/security_gate.py:39-69`). When the relevant signing key
-is unset the instrument **fails closed** — it refuses rather than proceeding
+when active — `agentteams/cli/security_gate.py:39-69`), or its fingerprint-pinned key file in
+`~/.config/agentteams/keys/`. When neither is available the instrument **fails closed** — it refuses rather than proceeding
 unsigned.
 
 **Honest ceiling.** The signing is *symmetric*: one shared key per instrument. It
