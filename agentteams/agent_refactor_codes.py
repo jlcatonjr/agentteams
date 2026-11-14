@@ -60,6 +60,10 @@ def manifest_fields(description: dict[str, Any]) -> dict[str, Any]:
     if settings.get("violation_codes") is not True:
         return {}
     budget = settings.get("line_budget", DEFAULT_LINE_BUDGET)
+    # The schema rejects these too; this guard keeps a brief that skipped validation from writing
+    # `True` or "200" into the agent file's text. bool is an int subclass, so test it first.
+    if isinstance(budget, bool) or not isinstance(budget, int) or budget < 1:
+        raise ValueError(f"agent_refactor.line_budget must be an integer >= 1, got {budget!r}")
     return {"agent_refactor": {"violation_codes": True, "line_budget": budget}}
 
 

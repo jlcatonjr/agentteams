@@ -119,6 +119,20 @@ def test_manifest_records_the_default_budget() -> None:
     assert manifest["agent_refactor"] == {"violation_codes": True, "line_budget": arc.DEFAULT_LINE_BUDGET}
 
 
+@pytest.mark.parametrize("bad", [True, False, "200", 0, -5, 2.5, None])
+def test_an_invalid_line_budget_is_refused_not_rendered(bad) -> None:
+    description = {"project_goal": "x", "agent_refactor": {"violation_codes": True, "line_budget": bad}}
+    with pytest.raises(ValueError, match="line_budget"):
+        arc.section(description)
+    with pytest.raises(ValueError, match="line_budget"):
+        arc.manifest_fields(description)
+
+
+def test_a_bad_line_budget_is_ignored_while_the_codes_are_off() -> None:
+    # line_budget takes effect only when the codes are on, so an off brief never raises.
+    assert arc.section({"agent_refactor": {"line_budget": "200"}}) == ""
+
+
 def _schema(name: str) -> dict:
     return json.loads((ROOT / "agentteams" / "schemas" / name).read_text(encoding="utf-8"))
 
