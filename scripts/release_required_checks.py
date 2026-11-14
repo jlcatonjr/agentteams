@@ -6,8 +6,9 @@ A release PR (``dev`` → ``main``) that renames a job main requires, such as a 
 produce. The required set has to change at the moment the PR's new checks are green, and no earlier, or every other PR
 into main waits on checks its own ``ci.yml`` never produces.
 
-**Operator-only.** Changing branch protection needs an admin token and changes what guards ``main``; agents prepare
-the command and never run ``--apply``.
+**Operator-approved per release.** Changing branch protection changes what guards ``main``. An agent may run
+``--apply`` only after the operator approves that run's fingerprint in the live session and ``@security`` clears it
+(git-procedures §I).
 
 Usage::
 

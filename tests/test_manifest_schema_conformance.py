@@ -189,6 +189,8 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # Framework-conformance ≤24h check opt-in: emitted only when the brief sets an explicit
         # bool; otherwise absent and cli/generate.py defaults it on for adapter-bearing teams.
         "framework_conformance_check",
+        # #453 opt-in: emitted only when the brief sets agent_refactor.violation_codes true.
+        "agent_refactor",
     }
     emitted: set[str] = set()
     for _, description in _DESCRIPTIONS:

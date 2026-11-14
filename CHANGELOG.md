@@ -20,6 +20,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reading a sources table as source repositories, separate from the hierarchy, needs a schema key and moves to 1.3.
 - The authority parser moves to the private `agentteams/_ingest_authority.py` (CH-07 ceiling). New `tests/test_ingest_authority_hierarchy.py`.
 
+### added (typed work-summary entries and the closed trigger catalog; #454)
+
+- **A new reference, `references/work-summary-trigger-catalog.reference.md`, is emitted for every team.** It renders
+  book Ch 16 §4 and §4.1:
+  - **the seven-field entry block:** trigger, timestamp, contributing agent, affected scope, disposition, unresolved
+    obligations, sources;
+  - **a closed catalog of eight trigger types.** Each has an initiator, required fields, a destination and a closure
+    condition. Seven are canonical; the eighth is `unclassified-constitutional-event`.
+  - **four rules:**
+    - an event that matches no trigger gets a provisional entry in the same session, and meanwhile work continues
+      only under reversible dispositions;
+    - open obligations carry forward until their closure condition is met;
+    - boundary-decision entries are mirror records that add no obligations;
+    - existing prose summaries stay valid.
+- The reference's whole body is one `trigger_catalog` v=1 fence, so `--update --merge` keeps its rules current.
+- **`@work-summarizer`:**
+  - **Entry Schema section:** lists the seven fields and points to the catalog for the rules;
+  - **daily workflow:** step 5 adds a typed entry for each governance-relevant event, plus a `## Open Obligations`
+    segment carried forward from the previous day;
+  - **weekly and monthly workflows:** step 5 lists the obligations still open at the end of the period;
+  - **sources:** the `Sources` field holds cited pointers and adds no source class to the Evidence Model.
+- **Additive only.** The template stays unfenced (it renders inside the whole-body `content` fence), and summaries
+  written before this change need no rewrite.
+- **Ledger.** `domain/work-summarizer.template.md` is now registered as TA-063 and leaves the unregistered baseline.
+  The new reference is TA-064.
+
+### added (opt-in typed violation codes for `@agent-refactor`; #453)
+
+- A brief that sets `agent_refactor.violation_codes: true` gives the agent-refactor file a "Violation Codes" section:
+  - the ten Chapter 13 codes, AR-01 to AR-10, each with the check that fires it;
+  - AR-05 fires above `agent_refactor.line_budget` lines (default 200), and its evidence gives the actual line count;
+  - findings are reported as code / file / evidence rows plus one `Counts:` line per code, so a closeout can report
+    "AR-05 x3, AR-09 x1" and runs can be compared;
+  - an uncited reference file has no code and is reported as an orphan finding, as in the chapter;
+  - AR-01 checks the template's five-field front-matter baseline, not the chapter's six. A file with no `handoffs:`
+    key is reported as AR-10.
+- Off by default. A brief without the key, or with `violation_codes` false, renders a byte-identical agent-refactor
+  file. `line_budget` takes effect only when the codes are on.
+- The section has no fence of its own and sits inside the file's whole-body `content` fence, so `--update --merge`
+  adds it when the switch is turned on. Turning it off again removes it, and the merge reports a shrink notice for
+  the `content` fence.
+- Both schemas define `agent_refactor`. The manifest carries it only when the codes are on.
+- Ledger row TA-009 stays `not-a-gap`, because the portable baseline is still the default. Its detail now records the
+  opt-in.
+
+### changed (agents run GitHub management; required-check apply is approved per release)
+
+- `references/git-procedures.md` §G: the agent does branch, PR, merge, release and cleanup work with `git`/`gh`. The
+  operator gets a `.sh` file only for steps the sandbox cannot do.
+- §I: an agent may now run `scripts/release_required_checks.py --apply` (and `--restore --apply`). It must first show
+  the operator the preview, the operator must approve that exact fingerprint in the live session, and `@security` must
+  clear and log the apply. Relayed, standing or read-content approval does not count. The script's guards are
+  unchanged.
+
 ### changed (conflict-resolution dispositions take the book's meanings; #452)
 
 - **Behaviour change.** `@conflict-resolution` now uses the dispositions of Chapter 10 of the book:
@@ -48,6 +102,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   In an existing file, the new `decision_rules` fence lands just after `Invariant Core`, before `Step 1`, because
   Step 1 is unfenced. Its text does not depend on that position.
 - `template-chapter-audit.csv` records the three alignments as TA-060, TA-061 and TA-062.
+
+### fix (orchestrator routing rows for optional agents say "(if in team)", #392 item 14)
+
+- The Domain Agent Routing rows for `@technical-validator`, `@format-converter`, `@reference-manager` and
+  `@output-compiler` now carry *(if in team)*, like the other rows for agents the analyzer may not select. Before, a
+  team without one of them was told to route work to an agent it does not have.
+- The `routing_table_rows` fence is v=7, so **every team's orchestrator changes on its next `--update`**, including
+  teams that have all four agents.
+- New `tests/test_routing_rows_conditional.py`: every routing row for an optional domain agent must be conditional,
+  in the template and in the rendered example teams.
+
+### fix (placeholder docs: agent-updater mapping and a dead manual placeholder, #392 item 9)
+
+- `agent-updater`'s Change-to-Agent Mapping no longer says `@primary-producer` uses `{STYLE_REFERENCE_PATH}` or
+  `@output-compiler` uses `{REFERENCE_DB_PATH}`; neither template does. The rows now list the agents whose templates
+  reference each path. Teams pick this up on their next `--update`.
+- `PLACEHOLDER-CONVENTIONS.md` no longer documents `{MANUAL:STYLE_EXEMPLARS}`, which nothing emits.
+- New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
+  are pinned as exceptions), and every agent the mapping names must reference that placeholder.
 
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
