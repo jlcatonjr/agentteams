@@ -64,8 +64,8 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 | Changed File Pattern | Agents to Update |
 |---------------------|-----------------|
 | `*/outputs/*` | `@conflict-auditor`, `@primary-producer`, `@style-guardian`, `@navigator` |
-| `.github/agents/references/project-references.bib` | `@reference-manager`, `@output-compiler` |
-| `PropertyTaxes/Whitepaper/` | `@style-guardian`, `@primary-producer` |
+| `.github/agents/references/project-references.bib` | `@reference-manager`, `@primary-producer`, `@conflict-auditor`, `@navigator`, `@cleanup` |
+| `PropertyTaxes/Whitepaper/` | `@style-guardian`, `@cleanup` |
 | `.github/agents/references/*` | All agents that reference that file |
 | `.github/workflows/*` | `@technical-validator`, `@orchestrator` (release/process docs impact) |
 | `copilot-instructions.md` | All agents |
