@@ -161,9 +161,11 @@ the signature scheme; it is a statement about custody.
 **Do:**
 
 - Keep the key in its key file, `~/.config/agentteams/keys/<kind>-hmac.key` (mode 600), where kind is
-  `waiver`, `decision`, `grant` or `management`. With the variable unset, agentteams reads the file, and
-  every emitted sandbox read-denies that directory, so a sandboxed command fails closed instead of
-  inheriting the key. The file is refused when it is a symlink, sits behind a symlinked `keys/`, is
+  `waiver`, `decision`, `grant` or `management`, then record its fingerprint with
+  `agentteams --record-hmac-fingerprint <kind>`. With the variable unset, agentteams reads the file only if
+  its fingerprint matches the one recorded in `~/.config/agentteams/verify-keys/`, so a planted or
+  replaced key file is refused. Every emitted sandbox read-denies `keys/` and write-denies both
+  directories, so a sandboxed command fails closed instead of inheriting the key. The file is refused when it is a symlink, sits behind a symlinked `keys/`, is
   readable by others, or would be read by an install an agent could edit (a checkout or an
   agent-writable root; see "Signing from a trusted install" in `SECURITY.md`). Otherwise hold it in an
   OS keychain and inject it only into the one command that needs it
@@ -257,8 +259,10 @@ print(",".join(row[c] for c in header))                  # append this row to th
 # the key the waivers were signed with: at least 32 bytes of random, never a placeholder.
 # First-time setup, into the key file agentteams reads when the variable is unset:
 #   (umask 077; python3 -c 'import secrets; print(secrets.token_hex(32))' > ~/.config/agentteams/keys/waiver-hmac.key)
-# Moving a Keychain key there:
+#   agentteams --record-hmac-fingerprint waiver      # from a trusted install; prints the fingerprint, not the key
+# Moving a Keychain key there (it leaves the Keychain's access control for a mode-600 file):
 #   (umask 077; security find-generic-password -s agentteams-waiver -w > ~/.config/agentteams/keys/waiver-hmac.key)
+#   agentteams --record-hmac-fingerprint waiver
 agentteams --verify-waivers --output /path/to/project
 #   [OK ] waiver-freshness-001 (action=security-intel-freshness)
 #   1 waiver(s): 1 valid, 0 invalid.

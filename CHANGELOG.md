@@ -11,14 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_DECISION_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY` or
   `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, agentteams reads `~/.config/agentteams/keys/<kind>-hmac.key`
   (`waiver`, `decision`, `grant`, `management`), so the key no longer has to be exported into a shell an agent
-  might inherit. Every emitted sandbox read-denies that directory, so a sandboxed command fails closed.
-  - A set variable still wins, and agentteams warns when the key file exists too.
+  might inherit. A key file is trusted only when its fingerprint matches one you record with the new
+  `--record-hmac-fingerprint KIND` (in `~/.config/agentteams/verify-keys/`), so a planted or replaced key file is
+  refused. Every emitted sandbox read-denies `keys/` and now also write-denies `keys/` and `verify-keys/`.
+  - A set variable still wins, and agentteams warns (saying whether the two match) when the key file exists too.
   - The file is refused when it is a symlink, sits behind a symlinked `keys/`, is readable by others, is empty,
     or would be read by an install an agent could edit.
   - A decision key file does not by itself switch on decision-signing enforcement; that stays tied to the variable
     and the log header.
   - One helper (`signed_ledger.load_hmac_key`) serves the waiver, decision, grant and directive paths
     (@security ruling, 5 conditions).
+- **Behavior change:** a `workspace_write_roots` entry (or grant) that sits *above* `~/.config/agentteams/keys` or
+  `~/.config/agentteams/verify-keys` (for example `~` or `~/.config`) is now refused at render, as entries at or
+  inside them already were. Narrow the root to the directories the agent needs.
 - `--sign-carveouts` now finds the Ed25519 key from `--key-id` like the other operator signers; it still required
   `AGENTTEAMS_DECISION_ED25519_KEYFILE`. The migrated-key warning and the vulnscan operator scripts no longer tell
   you to set or export that variable.
