@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changed when the assigned value changes.
 - `generated [glob ...]`: generated files added, modified, renamed, type-changed or deleted are listed in the new
   `Impact.generated_changed`: files under `.claude/hooks/`, `.github/hooks/`, `.grok/hooks/` and `.codex/hooks/`,
-  plus any listed globs. A body-only edit to a generated hook changes no signature and was not reported before.
+  `.agentteams/gate-policy.json`, `.agentteams/carveouts.json`, plus any listed globs. A body-only edit to a generated hook changes no signature and was not reported before.
 - A category counts when either side of the diff turns it on, and a change to `CATEGORIES` itself is reported
   under `review_baseline_changed`.
 - The generated `api-impact.reference.md` fence `api_impact` is v=6.

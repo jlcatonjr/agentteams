@@ -133,6 +133,13 @@ def test_generated_covers_every_status(repo: Path, change: str):
     assert api_impact.detect(repo, commit="HEAD").generated_changed == [expect]
 
 
+def test_generated_covers_the_gate_policy(repo: Path):
+    _commit(repo, {_CATS: "generated\n", ".agentteams/gate-policy.json": "{}\n",
+                   ".agentteams/proposal-ledger.jsonl": "{}\n"}, "opt in")
+    _commit(repo, {".agentteams/gate-policy.json": '{"weak": true}\n', ".agentteams/proposal-ledger.jsonl": "{}\n{}\n"})
+    assert api_impact.detect(repo, commit="HEAD").generated_changed == [".agentteams/gate-policy.json"]
+
+
 def test_a_commit_that_switches_a_category_off_is_still_checked_with_it(repo: Path):
     _commit(repo, {_CATS: "generated\n"}, "opt in")
     _commit(repo, {_CATS: "# off\n", ".claude/hooks/gate.py": "FAIL_CLOSED = False\n"}, "off and flip")

@@ -37,8 +37,11 @@ if TYPE_CHECKING:
 CATEGORIES_FILE = "CATEGORIES"
 #: The categories ``CATEGORIES`` may name.
 KNOWN = ("constants", "generated")
-#: Generated-file globs that ``generated`` always covers: the hook directories agentteams writes.
-DEFAULT_GENERATED = (".claude/hooks/*", ".github/hooks/*", ".grok/hooks/*", ".codex/hooks/*")
+#: Generated-file globs that ``generated`` always covers: the hook directories agentteams writes, and the gate policy
+#: and carve-out registry under ``.agentteams/``. The rest of ``.agentteams/`` (the append-only proposal ledger, the
+#: canonical export) changes on every run and is left out.
+DEFAULT_GENERATED = (".claude/hooks/*", ".github/hooks/*", ".grok/hooks/*", ".codex/hooks/*",
+                     ".agentteams/gate-policy.json", ".agentteams/carveouts.json")
 
 
 @dataclass
