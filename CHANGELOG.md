@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
   notification-only. Grok teams do not receive it.
 
+### docs (release guide names the 1.1 line)
+
+- `release-and-branching.md` was still written for 1.1's release candidates. It now names `v1.1.3` as the install and
+  verify example, describes `release/1.1` as the 1.1 patch line, and lists `release/1.0` as an older line.
+
 ### added (typed work-summary entries and the closed trigger catalog; #454)
 
 - **A new reference, `references/work-summary-trigger-catalog.reference.md`, is emitted for every team.** It renders
@@ -114,6 +119,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   In an existing file, the new `decision_rules` fence lands just after `Invariant Core`, before `Step 1`, because
   Step 1 is unfenced. Its text does not depend on that position.
 - `template-chapter-audit.csv` records the three alignments as TA-060, TA-061 and TA-062.
+
+### fix (orchestrator routing rows for optional agents say "(if in team)", #392 item 14)
+
+- The Domain Agent Routing rows for `@technical-validator`, `@format-converter`, `@reference-manager` and
+  `@output-compiler` now carry *(if in team)*, like the other rows for agents the analyzer may not select. Before, a
+  team without one of them was told to route work to an agent it does not have.
+- The `routing_table_rows` fence is v=7, so **every team's orchestrator changes on its next `--update`**, including
+  teams that have all four agents.
+- New `tests/test_routing_rows_conditional.py`: every routing row for an optional domain agent must be conditional,
+  in the template and in the rendered example teams.
+
+### fix (placeholder docs: agent-updater mapping and a dead manual placeholder, #392 item 9)
+
+- `agent-updater`'s Change-to-Agent Mapping no longer says `@primary-producer` uses `{STYLE_REFERENCE_PATH}` or
+  `@output-compiler` uses `{REFERENCE_DB_PATH}`; neither template does. The rows now list the agents whose templates
+  reference each path. Teams pick this up on their next `--update`.
+- `PLACEHOLDER-CONVENTIONS.md` no longer documents `{MANUAL:STYLE_EXEMPLARS}`, which nothing emits.
+- New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
+  are pinned as exceptions), and every agent the mapping names must reference that placeholder.
 
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
@@ -1030,7 +1054,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### docs (release branches are not merged back into `main`)
 
 - `release-and-branching.md` no longer says a release branch is merged forward into `main` after each tag. Every fix
-  lands on `main` first and is copied out with `git cherry-pick -x`, so `main` already has it. The status line now
+  lands on the development branch first (now `dev`) and is copied out with `git cherry-pick -x`, so `main` already
+  has it. The status line now
   names `v1.0.7` and `v1.1.0-rc.16`.
 
 ### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
