@@ -274,7 +274,7 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
                 imp.structural_removed.append(old)
             elif status == "R" and (old_counts or new_counts):
                 imp.structural_renamed.append((old, new))
-    cats = cat.read(repo, old_ref, new_ref, review_files[1])
+    cats = cat.read(repo, old_ref, new_ref, review_files[1], touched=review_files[1] in imp.review_baseline_changed)
     if cats:
         cat.apply(imp, changes, cats=cats, repo=repo, old_ref=old_ref, new_ref=new_ref,
                   counts=lambda p: not (_excluded(p, ledger_rel) or _is_test(p)))

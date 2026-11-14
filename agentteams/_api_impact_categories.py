@@ -88,7 +88,7 @@ def _blob(repo: Path, ref: str, path: str) -> str | None:
     return proc.stdout.decode("utf-8", errors="replace") if proc.returncode == 0 else None
 
 
-def read(repo: Path, old_ref: str | None, new_ref: str, rel: str) -> Categories | None:
+def read(repo: Path, old_ref: str | None, new_ref: str, rel: str, *, touched: bool = True) -> Categories | None:
     """The categories in force for one diff: those either side's ``CATEGORIES`` turns on.
 
     Args:
@@ -96,6 +96,8 @@ def read(repo: Path, old_ref: str | None, new_ref: str, rel: str) -> Categories 
         old_ref: The old side's commit, ``None`` when there is none.
         new_ref: The new side's commit, ``""`` for the index.
         rel: The ``CATEGORIES`` file's repo-relative path.
+        touched: Whether the diff changes ``rel``. When it does not, both sides hold the same file, so only the new
+            side is read (one git call per commit).
 
     Returns:
         The union, or ``None`` when neither side has the file.
@@ -107,7 +109,8 @@ def read(repo: Path, old_ref: str | None, new_ref: str, rel: str) -> Categories 
         raise TypeError(f"repo must be a Path, got {type(repo).__name__}")
     if not isinstance(new_ref, str) or not isinstance(rel, str) or not isinstance(old_ref, (str, type(None))):
         raise TypeError("old_ref, new_ref and rel must be str (old_ref may be None)")
-    sides = [t for t in (_blob(repo, old_ref, rel) if old_ref else None, _blob(repo, new_ref, rel)) if t]
+    old = _blob(repo, old_ref, rel) if old_ref and touched else None
+    sides = [t for t in (old, _blob(repo, new_ref, rel)) if t]
     if not sides:
         return None
     parsed = [parse(t) for t in sides]
