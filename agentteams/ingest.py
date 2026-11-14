@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from agentteams._utils import _slugify
+from agentteams._ingest_authority import has_list_or_table as _has_list_or_table
+from agentteams._ingest_authority import parse_authority_sources as _parse_authority_sources
 from agentteams.tool_version_source import version_source_errors
 
 
@@ -127,6 +129,7 @@ def _load_markdown(path: Path) -> dict[str, Any]:
     # (rank, body) for overview-style headings; lowest rank wins. Ties keep the
     # earliest in document order (dict preserves insertion order).
     overview_candidates: list[tuple[int, str]] = []
+    authority_from_heading = False
     _OVERVIEW_PRIORITY = (("overview", 0), ("purpose", 1), ("summary", 2), ("abstract", 2), ("about", 3))
 
     for heading, content in sections.items():
@@ -149,8 +152,18 @@ def _load_markdown(path: Path) -> dict[str, Any]:
             desc["figures_dir"] = _first_line(body)
         elif "existing project" in heading_l or heading_l in {"project path", "project location"}:
             desc["existing_project_path"] = _first_line(body)
-        elif "authority" in heading_l or ("source" in heading_l and "reference" not in heading_l):
-            desc["authority_sources"] = _parse_authority_sources(body)
+        elif "authority" in heading_l:
+            # An Authority heading that yields sources wins over any "source" heading, wherever each sits
+            # (#392 item 11). An empty one (its list under a sub-heading, say) claims nothing.
+            parsed = _parse_authority_sources(body)
+            if parsed and _has_list_or_table(body):
+                desc["authority_sources"] = parsed
+                authority_from_heading = True
+            elif parsed and "authority_sources" not in desc:  # prose only: a later sources list may replace it
+                desc["authority_sources"] = parsed
+        elif "source" in heading_l and "reference" not in heading_l:
+            if not authority_from_heading:
+                desc["authority_sources"] = _parse_authority_sources(body)
         elif "style reference" in heading_l or "style guide" in heading_l:
             desc["style_reference"] = _first_line(body) or None
         elif "tool" in heading_l or "technology" in heading_l or "tech stack" in heading_l:
@@ -263,25 +276,6 @@ def _parse_list(text: str) -> list[str]:
         if stripped:
             items.append(stripped)
     return items
-
-
-def _parse_authority_sources(text: str) -> list[dict[str, str]]:
-    sources = []
-    for i, item in enumerate(_parse_list(text), start=1):
-        # Try to split "Name: path — scope" or "name | path"
-        if ":" in item:
-            name, rest = item.split(":", 1)
-            path_scope = rest.strip().split(" — ", 1)
-            entry = {"name": name.strip(), "path": path_scope[0].strip(), "rank": i}
-            if len(path_scope) > 1:
-                entry["scope"] = path_scope[1].strip()
-        elif "|" in item:
-            parts = item.split("|")
-            entry = {"name": parts[0].strip(), "path": parts[1].strip() if len(parts) > 1 else "", "rank": i}
-        else:
-            entry = {"name": item, "path": item, "rank": i}
-        sources.append(entry)
-    return sources
 
 
 def _parse_tools(text: str) -> list[dict[str, Any]]:
