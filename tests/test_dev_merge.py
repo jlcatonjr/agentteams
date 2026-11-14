@@ -45,10 +45,10 @@ def _project(tmp_path: Path, *, governed: bool = True, key_id: str = "op-2026") 
 
 
 def _doc(private: str, *, branch: str = _BRANCH, workspaces=None, sequence: int = 1,
-         derives_from: str = _ROOT_ROW) -> dict:
+         derives_from: str = _ROOT_ROW, checks=("test",)) -> dict:
     from agentteams.cli import signed_ledger as sl
 
-    doc = {"version": dm.FORMAT_VERSION, "scope": dm.SCOPE, "branch": branch,
+    doc = {"version": dm.FORMAT_VERSION, "scope": dm.SCOPE, "branch": branch, "required_checks": list(checks),
            "workspaces": workspaces or [{"repo": f"repo:{_REPO}", "team": f"team:{_TEAM}"}],
            "purpose": dm.PURPOSE, "sequence": sequence, "key_id": "op-2026", "derives_from": derives_from}
     doc["signature"] = sl.ed25519_sign(private, dm.signed_values(doc))
@@ -77,6 +77,8 @@ def test_a_signed_file_verifies_for_its_workspace(tmp_path) -> None:
 
 @pytest.mark.parametrize("mutate", [
     lambda d: d.update(branch="staging"),
+    lambda d: d.update(required_checks=["lint"]),
+    lambda d: d["required_checks"].append("lint"),
     lambda d: d.update(sequence=2),
     lambda d: d["workspaces"].append({"repo": "repo:acme/other", "team": "team:other"}),
     lambda d: d.update(signature=("0" if d["signature"][0] != "0" else "1") + d["signature"][1:]),
@@ -179,9 +181,42 @@ def _view(**over) -> dict:
     return view
 
 
-def _problem(pull=None, view=None, required=None, files=None, default="main") -> str | None:
+_RUN = {"name": "CI", "status": "completed", "conclusion": "success"}
+
+
+def _problem(pull=None, view=None, required=None, files=None, default="main", signed=("test",),
+             runs=None) -> str | None:
     return dm.pr_problem(repo=_REPO, branch=_BRANCH, default_branch=default, pull=pull or _pull(),
-                         view=view or _view(), required=required or [], files=files or ["src/app.py"])
+                         view=view or _view(), required=required or [], files=files or ["src/app.py"],
+                         signed_checks=list(signed), runs=[_RUN] if runs is None else runs)
+
+
+def test_a_partial_rollup_is_not_the_full_ci() -> None:
+    """IM F1: right after a push only the fast jobs may have reported; the signed required set must all be there."""
+    assert "not reported yet" in _problem(signed=("test", "test (ubuntu-26.04, 3.12)"))
+
+
+@pytest.mark.parametrize("runs, why", [
+    ([], "no workflow run"),
+    ([_RUN, {"name": "CI full", "status": "in_progress", "conclusion": None}], "not completed with success"),
+    ([{"name": "CI", "status": "completed", "conclusion": "skipped"}], "not completed with success"),
+])
+def test_every_workflow_run_for_the_head_must_succeed(runs, why) -> None:
+    assert why in _problem(runs=runs)
+
+
+@pytest.mark.parametrize("checks", [[], ["test", "test"], [" test"], ["x" * 201], ["a\nb"]])
+def test_the_signed_required_checks_are_validated(tmp_path, checks) -> None:
+    root, team, private = _project(tmp_path)
+    with pytest.raises(dm.DevMergeError):
+        dm.validate({**_doc(private), "required_checks": checks})
+
+
+def test_check_names_with_commas_are_signed_unambiguously(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    a = dm.signed_values({**_doc(private), "required_checks": ["a, b"]})
+    b = dm.signed_values({**_doc(private), "required_checks": ["a", " b"]})
+    assert a != b
 
 
 def test_a_qualifying_pull_request_has_no_problem() -> None:
@@ -235,11 +270,12 @@ def test_governance_agent_and_workflow_paths_are_refused(path) -> None:
 # --- the verb, end to end with a fake gh --------------------------------------------------------------------------
 
 class _FakeGh:
-    def __init__(self, *, pull=None, view=None, files=None, parents=None, late_view=None):
+    def __init__(self, *, pull=None, view=None, files=None, parents=None, late_view=None, runs=None):
         self.calls: list[list[str]] = []
         self.pull, self.view, self.late_view = pull or _pull(), view or _view(), late_view
         self.files = files if files is not None else ["src/app.py"]
         self.parents = parents
+        self.runs = [_RUN] if runs is None else runs
         self.merged = False
         self.views = 0
 
@@ -255,6 +291,8 @@ class _FakeGh:
             if self.merged:
                 return out({**self.pull, "merged": True, "merge_commit_sha": "m" * 40})
             return out({**self.pull, "changed_files": self.pull.get("changed_files", len(self.files))})
+        if argv[0] == "api" and argv[1].startswith(f"repos/{_REPO}/actions/runs?head_sha="):
+            return out({"total_count": len(self.runs), "workflow_runs": self.runs})
         if argv[:2] == ["api", "--paginate"]:
             return subprocess.CompletedProcess(argv, 0, "\n".join(self.files) + "\n", "")
         if argv[:2] == ["pr", "view"]:
@@ -452,3 +490,12 @@ def test_the_verify_verb_reports_what_merge_pr_would_do(tmp_path, monkeypatch) -
     assert dm.verify_command(root, team, _TEAM, integration_branch=_BRANCH) == 0
     assert dm.verify_command(root, team, _TEAM, integration_branch="staging") == 1
     assert dm.verify_command(root, team, _TEAM, integration_branch=None) == 1
+
+
+def test_a_merge_waits_for_every_head_workflow_run(tmp_path, monkeypatch) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _pass(team)
+    gh = _FakeGh(runs=[_RUN, {"name": "CI", "status": "queued", "conclusion": None}])
+    assert _merge(root, team, monkeypatch, gh) == 2
+    assert not [c for c in gh.calls if c[:2] == ["pr", "merge"]]

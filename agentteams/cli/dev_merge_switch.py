@@ -28,7 +28,8 @@ def add_dev_merge_arguments(parser: argparse.ArgumentParser) -> None:
             "integration-branch merge authorization (.agentteams/dev-merge-authorization.json; the constitution's "
             "Integration-branch merge authorization section). Refuses (exit 2: ask the operator) unless the file verifies "
             "for this workspace and branch model, the PR is open, not a draft, not from a fork, based on the signed "
-            "branch, CLEAN, with every check passed (at least one) and no governance, agent or workflow path, and a "
+            "branch, CLEAN, with every check passed (at least one, the signed required_checks all reported, every "
+            "head workflow run completed with success) and no governance, agent or workflow path, and a "
             "recorded @security PASS names dev-merge:<owner/name>:pr-<N>-<head sha> (spent on use). Merges with "
             "--merge --match-head-commit. 0 merged; 1 an error or a post-merge alarm. --output names the team dir."
         ),
@@ -40,7 +41,7 @@ def add_dev_merge_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="FILE",
         help=(
             "Operator-only, refused inside an agent session: sign the integration-branch merge authorization file "
-            "(version, scope, branch, workspaces, purpose, sequence, key_id, derives_from) in place with the Ed25519 "
+            "(version, scope, branch, required_checks, workspaces, purpose, sequence, key_id, derives_from) in place with the Ed25519 "
             "decision key, after the same preflight, review digest and confirmation as --sign-decision. --output names "
             "a governed team dir whose references/authorized-verify-keys holds <key_id>.pub.pem."
         ),
