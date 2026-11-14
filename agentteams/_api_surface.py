@@ -156,9 +156,24 @@ def cli_term(label: str) -> str:
 _CONSTANT = re.compile(r"[A-Z][A-Z0-9_]*\Z")
 
 
+def _top_level(body: list[ast.stmt]) -> list[ast.stmt]:
+    """Module-level statements, including those inside top-level ``if`` / ``try`` blocks (where constants often are)."""
+    out: list[ast.stmt] = []
+    for node in body:
+        out.append(node)
+        if isinstance(node, ast.If):
+            out += _top_level(node.body) + _top_level(node.orelse)
+        elif isinstance(node, ast.Try):
+            out += _top_level(node.body) + [s for h in node.handlers for s in _top_level(h.body)]
+            out += _top_level(node.orelse) + _top_level(node.finalbody)
+    return out
+
+
 def constants(source: str) -> dict[str, str] | None:
     """Public module-level constants: ``UPPER_CASE`` names assigned at the top level, mapped to their value's source
     text (an annotation-only declaration maps to ``: <annotation>``), for the opt-in ``constants`` category (#451 c).
+    Assignments inside top-level ``if`` / ``try`` blocks and tuple targets count; when a name is assigned more than
+    once, the last assignment in source order is used. Augmented assignments and ``type`` aliases do not count.
 
     Args:
         source: The module's source text.
@@ -176,9 +191,9 @@ def constants(source: str) -> dict[str, str] | None:
     except (SyntaxError, ValueError):
         return None
     out: dict[str, str] = {}
-    for node in tree.body:
+    for node in _top_level(tree.body):
         if isinstance(node, ast.Assign):
-            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            names = [n.id for t in node.targets for n in ast.walk(t) if isinstance(n, ast.Name)]
             value = ast.unparse(node.value)
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             names = [node.target.id]

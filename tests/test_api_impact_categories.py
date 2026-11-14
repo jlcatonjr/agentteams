@@ -95,8 +95,10 @@ def test_parse_warns_on_unknown_lines(capsys: pytest.CaptureFixture[str]):
 
 
 def test_constants_surface():
-    assert constants('A = 1\nB: str\nC, d = 1, 2\nE = F = "x"\n_G = 1\n') == {"A": "1", "B": ": str", "E": "'x'",
-                                                                             "F": "'x'"}
+    assert constants('A = 1\nB: str\nC, d = 1, 2\nE = F = "x"\n_G = 1\n') == {
+        "A": "1", "B": ": str", "C": "(1, 2)", "E": "'x'", "F": "'x'"}
+    nested = "if True:\n    H = 1\nelse:\n    H = 2\ntry:\n    J = 1\nexcept ImportError:\n    J = 0\nK += 1\n"
+    assert constants(nested) == {"H": "2", "J": "0"}
     assert constants("def (") is None
     with pytest.raises(TypeError):
         constants(b"A = 1")  # type: ignore[arg-type]
@@ -105,3 +107,49 @@ def test_constants_surface():
 def test_text_report_unchanged_without_categories(repo: Path):
     imp = _edit(repo)
     assert "generated" not in imp.summary()
+
+
+@pytest.mark.parametrize("change", ["delete", "add", "rename-in", "symlink"])
+def test_generated_covers_every_status(repo: Path, change: str):
+    _commit(repo, {_CATS: "generated\n"}, "opt in")
+    hook = repo / ".claude/hooks/gate.py"
+    if change == "delete":
+        hook.unlink()
+        expect = ".claude/hooks/gate.py"
+    elif change == "add":
+        (repo / ".claude/hooks/new.sh").write_text("exit 0\n")
+        expect = ".claude/hooks/new.sh"
+    elif change == "rename-in":
+        (repo / "spare.sh").write_text("exit 0\n")
+        _commit(repo, {}, "spare")
+        (repo / "spare.sh").rename(repo / ".claude/hooks/spare.sh")
+        expect = ".claude/hooks/spare.sh"
+    else:
+        hook.unlink()
+        hook.symlink_to("/dev/null")
+        expect = ".claude/hooks/gate.py"
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "--no-verify", "-m", change)
+    assert api_impact.detect(repo, commit="HEAD").generated_changed == [expect]
+
+
+def test_a_commit_that_switches_a_category_off_is_still_checked_with_it(repo: Path):
+    _commit(repo, {_CATS: "generated\n"}, "opt in")
+    _commit(repo, {_CATS: "# off\n", ".claude/hooks/gate.py": "FAIL_CLOSED = False\n"}, "off and flip")
+    imp = api_impact.detect(repo, commit="HEAD")
+    assert imp.generated_changed == [".claude/hooks/gate.py"] and imp.review_baseline_changed == [_CATS]
+
+
+def test_a_root_commit_with_categories(tmp_path: Path):
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _commit(tmp_path, {_CATS: "constants\ngenerated\n", "pkg/c.py": "X = 1\n", ".claude/hooks/h.sh": "exit 0\n"})
+    imp = api_impact.detect(tmp_path, commit="HEAD")
+    assert imp.symbols_added == ["pkg/c.py::X"] and imp.generated_changed == [".claude/hooks/h.sh"]
+
+
+def test_read_and_apply_type_guards(repo: Path):
+    with pytest.raises(TypeError):
+        cat.read(str(repo), None, "", _CATS)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        cat.apply(object(), [], cats=cat.Categories(), repo=repo, old_ref=None, new_ref="",  # type: ignore[arg-type]
+                  counts=lambda _p: True)

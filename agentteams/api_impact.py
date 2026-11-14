@@ -274,10 +274,10 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
                 imp.structural_removed.append(old)
             elif status == "R" and (old_counts or new_counts):
                 imp.structural_renamed.append((old, new))
-    opted = _blob(repo, f"{new_ref}:{review_files[1]}")
-    if opted:
-        cat.apply(imp, changes, cats=cat.parse(opted), blob=lambda r, p: _blob(repo, f"{r}:{p}"), old_ref=old_ref,
-                  new_ref=new_ref, counts=lambda p: not (_excluded(p, ledger_rel) or _is_test(p)))
+    cats = cat.read(repo, old_ref, new_ref, review_files[1])
+    if cats:
+        cat.apply(imp, changes, cats=cats, repo=repo, old_ref=old_ref, new_ref=new_ref,
+                  counts=lambda p: not (_excluded(p, ledger_rel) or _is_test(p)))
     return imp
 
 

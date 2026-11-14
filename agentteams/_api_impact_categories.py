@@ -12,18 +12,26 @@ commit, or the index for a staged check). One category per line, ``#`` comments:
   category nothing reports it.
 
 Both are off by default, so without the file the report is what it was. An unknown category is ignored with a warning
-on standard error. A change to ``CATEGORIES`` itself is reported under ``review_baseline_changed``: switching a category
-off changes what later checks report, so that commit is reviewed too.
+on standard error. A category counts when either side of the diff turns it on, so the commit that switches one off is
+still checked with it, and a change to ``CATEGORIES`` itself is reported under ``review_baseline_changed``.
+
+``generated`` lists every added, modified, renamed, type-changed or deleted file that matches a glob (a deleted hook
+is listed by its old path), with no path left out: the globs are taken as given.
 """
 from __future__ import annotations
 
+import subprocess
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agentteams._api_surface import constants
+
+if TYPE_CHECKING:
+    from agentteams.api_impact import Impact
 
 #: The ledger file that opts a project into extra categories.
 CATEGORIES_FILE = "CATEGORIES"
@@ -74,8 +82,40 @@ def parse(text: str) -> Categories:
     return cats
 
 
-def apply(imp: Any, changes: Iterable[tuple[str, str, str]], *, cats: Categories,
-          blob: Callable[[str, str], str | None], old_ref: str | None, new_ref: str,
+def _blob(repo: Path, ref: str, path: str) -> str | None:
+    """``<ref>:<path>`` as text (``ref`` ``""`` is the index), ``None`` when absent."""
+    proc = subprocess.run(["git", "-C", str(repo), "cat-file", "-p", f"{ref}:{path}"], capture_output=True, check=False)
+    return proc.stdout.decode("utf-8", errors="replace") if proc.returncode == 0 else None
+
+
+def read(repo: Path, old_ref: str | None, new_ref: str, rel: str) -> Categories | None:
+    """The categories in force for one diff: those either side's ``CATEGORIES`` turns on.
+
+    Args:
+        repo: Repository root.
+        old_ref: The old side's commit, ``None`` when there is none.
+        new_ref: The new side's commit, ``""`` for the index.
+        rel: The ``CATEGORIES`` file's repo-relative path.
+
+    Returns:
+        The union, or ``None`` when neither side has the file.
+
+    Raises:
+        TypeError: When an argument has the wrong type.
+    """
+    if not isinstance(repo, Path):
+        raise TypeError(f"repo must be a Path, got {type(repo).__name__}")
+    if not isinstance(new_ref, str) or not isinstance(rel, str) or not isinstance(old_ref, (str, type(None))):
+        raise TypeError("old_ref, new_ref and rel must be str (old_ref may be None)")
+    sides = [t for t in (_blob(repo, old_ref, rel) if old_ref else None, _blob(repo, new_ref, rel)) if t]
+    if not sides:
+        return None
+    parsed = [parse(t) for t in sides]
+    return Categories(any(c.constants for c in parsed), list(dict.fromkeys(g for c in parsed for g in c.generated)))
+
+
+def apply(imp: Impact, changes: Iterable[tuple[str, str, str]], *, cats: Categories, repo: Path,
+          old_ref: str | None, new_ref: str,
           counts: Callable[[str], bool]) -> None:
     """Add the opted-in categories' entries to ``imp``.
 
@@ -83,7 +123,7 @@ def apply(imp: Any, changes: Iterable[tuple[str, str, str]], *, cats: Categories
         imp: The :class:`agentteams.api_impact.Impact` being built.
         changes: ``(status, old_path, new_path)`` per changed file.
         cats: The categories in force (:func:`parse`).
-        blob: ``(ref, path)`` → file text, ``None`` when unreadable (``ref`` ``""`` is the index).
+        repo: Repository root.
         old_ref: The old side's commit, ``None`` when there is none.
         new_ref: The new side's commit, ``""`` for the index.
         counts: Whether a path counts for constants (not a test, not excluded).
@@ -92,18 +132,20 @@ def apply(imp: Any, changes: Iterable[tuple[str, str, str]], *, cats: Categories
         Nothing; ``imp`` is updated in place.
 
     Raises:
-        TypeError: When ``cats`` is not a :class:`Categories`.
+        TypeError: When an argument has the wrong type.
     """
     if not isinstance(cats, Categories):
         raise TypeError(f"cats must be Categories, got {type(cats).__name__}")
+    if not isinstance(repo, Path) or not callable(counts) or not hasattr(imp, "generated_changed"):
+        raise TypeError("imp must be an Impact, repo a Path and counts callable")
     for status, old, new in changes:
-        if cats.generated and status in "MR" and any(fnmatchcase(new, g) for g in cats.generated):
-            if status == "M" or blob(old_ref or "", old) != blob(new_ref, new):
-                imp.generated_changed.append(new)
+        path = old if status == "D" else new
+        if any(fnmatchcase(path, g) or fnmatchcase(old, g) for g in cats.generated):
+            imp.generated_changed.append(path)
         if not cats.constants or not (new.endswith(".py") or old.endswith(".py")) or not (counts(new) or counts(old)):
             continue
-        old_src = blob(old_ref, old) if old_ref and status != "A" else ""
-        new_src = blob(new_ref, new) if status != "D" else ""
+        old_src = _blob(repo, old_ref, old) if old_ref and status != "A" else ""
+        new_src = _blob(repo, new_ref, new) if status != "D" else ""
         before = constants(old_src) if old_src is not None else None
         after = constants(new_src) if new_src is not None else None
         if before is None or after is None:
