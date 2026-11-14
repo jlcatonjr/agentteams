@@ -18,6 +18,7 @@ Keys and values (a value is what a change is detected on):
 from __future__ import annotations
 
 import ast
+import re
 
 #: Key prefix → how :func:`cli_label` labels the entry in a report.
 _CLI_PREFIXES = {"cli:": "", "cli-pos:": " (positional)", "cli-argv:": " (sys.argv, heuristic)"}
@@ -150,3 +151,41 @@ def cli_term(label: str) -> str:
         Nothing.
     """
     return label.split(" (", 1)[0]
+
+
+_CONSTANT = re.compile(r"[A-Z][A-Z0-9_]*\Z")
+
+
+def constants(source: str) -> dict[str, str] | None:
+    """Public module-level constants: ``UPPER_CASE`` names assigned at the top level, mapped to their value's source
+    text (an annotation-only declaration maps to ``: <annotation>``), for the opt-in ``constants`` category (#451 c).
+
+    Args:
+        source: The module's source text.
+
+    Returns:
+        Name → value text, or ``None`` when the source does not parse.
+
+    Raises:
+        TypeError: When ``source`` is not a string.
+    """
+    if not isinstance(source, str):
+        raise TypeError(f"source must be str, got {type(source).__name__}")
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return None
+    out: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            value = ast.unparse(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names = [node.target.id]
+            value = ast.unparse(node.value) if node.value is not None else f": {ast.unparse(node.annotation)}"
+        else:
+            continue
+        for name in names:
+            if _CONSTANT.match(name):
+                out[name] = value
+    return out

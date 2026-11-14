@@ -50,6 +50,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 # surface() lives in agentteams._api_surface (CH-07 carve, #451 a) and stays part of this module's API.
+from agentteams import _api_impact_categories as cat
 from agentteams._api_surface import cli_label, cli_term, surface
 
 #: Review ledger, relative to the directory that holds the project's ``references/``.
@@ -86,8 +87,9 @@ class Impact:
         structural_renamed: ``(old, new)`` pairs of other renamed files.
         unparseable: Python files whose old or new version does not parse.
         regenerated: Derived artifacts regenerated and staged (pre-commit only).
-        review_baseline_changed: The review ledger's ``BASELINE`` file, when the diff touches it. Moving the
-            baseline changes which commits a default-branch ``status`` checks, so that commit is itself reviewed.
+        review_baseline_changed: The review ledger's ``BASELINE`` or ``CATEGORIES`` file, when the diff touches it.
+            Either changes what later checks report, so that commit is itself reviewed.
+        generated_changed: Generated files whose content changed, when the ``generated`` category is on (#451 c).
     """
 
     modules_added: list[str] = field(default_factory=list)
@@ -106,6 +108,7 @@ class Impact:
     unparseable: list[str] = field(default_factory=list)
     regenerated: list[str] = field(default_factory=list)
     review_baseline_changed: list[str] = field(default_factory=list)
+    generated_changed: list[str] = field(default_factory=list)
 
     @property
     def impactful(self) -> bool:
@@ -227,10 +230,10 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
         raw = _git(repo, *args, *(["--root"] if old_ref is None else []), commit)
         new_ref = commit
     imp = Impact()
-    baseline_rel = f"{ledger_rel}/BASELINE"
-    for status, old, new in _name_status(raw):
-        if baseline_rel in (old, new):
-            imp.review_baseline_changed.append(baseline_rel)
+    review_files = (f"{ledger_rel}/BASELINE", f"{ledger_rel}/{cat.CATEGORIES_FILE}")
+    changes = _name_status(raw)
+    for status, old, new in changes:
+        imp.review_baseline_changed += [f for f in review_files if f in (old, new)]
         if _excluded(new, ledger_rel) and _excluded(old, ledger_rel):
             continue
         if new.endswith(".schema.json") or old.endswith(".schema.json"):
@@ -271,6 +274,10 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
                 imp.structural_removed.append(old)
             elif status == "R" and (old_counts or new_counts):
                 imp.structural_renamed.append((old, new))
+    opted = _blob(repo, f"{new_ref}:{review_files[1]}")
+    if opted:
+        cat.apply(imp, changes, cats=cat.parse(opted), blob=lambda r, p: _blob(repo, f"{r}:{p}"), old_ref=old_ref,
+                  new_ref=new_ref, counts=lambda p: not (_excluded(p, ledger_rel) or _is_test(p)))
     return imp
 
 

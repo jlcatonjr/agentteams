@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (opt-in `api_impact` categories for constants and generated files; #451 c)
+
+- A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
+  text report is unchanged (`--json` gains an empty `generated_changed` list).
+- `constants`: public module-level `UPPER_CASE` assignments count as symbols (`module::NAME`), added, removed, or
+  changed when the assigned value changes.
+- `generated [glob ...]`: generated files whose content changed are listed in the new `Impact.generated_changed`:
+  files under `.claude/hooks/`, `.github/hooks/`, `.grok/hooks/` and `.codex/hooks/`, plus any listed globs. A
+  body-only edit to a generated hook changes no signature and was not reported before.
+- A change to `CATEGORIES` itself is reported under `review_baseline_changed`.
+- The generated `api-impact.reference.md` fence `api_impact` is v=6.
+
 ### fixed (the API impact checklist lists a symbol's users, not every file with the word; #451 b)
 
 - `status`'s audit checklist (`agentteams._api_impact_checklist`) used to search each changed name as a bare word over
