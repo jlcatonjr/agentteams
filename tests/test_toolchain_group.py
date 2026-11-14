@@ -22,7 +22,7 @@ from agentteams.cli import s10_exempt_gate as gate
 from agentteams.cli import toolchain_group as tg
 from agentteams.fences import _TEMPLATE_AUTHORITATIVE_FENCES, _extract_fenced_regions, _merge_fenced_content
 from agentteams.frameworks.registry import FRAMEWORKS
-from tests._decision_gate_helpers import _log, _row
+from tests._sandbox_gate_helpers import _log, _row
 
 crypto = pytest.importorskip("cryptography")
 from cryptography.hazmat.primitives import serialization  # noqa: E402
@@ -630,7 +630,7 @@ def test_a_retracted_halt_does_not_disable_the_parent(tmp_path) -> None:
     assert _authorize(team) == []
     retract = _row(_POLICY, verdict="HALT-RETRACTED", stamp="2026-11-14")
     retract["conditions"] = "settled"
-    retract["signature"] = __import__("tests._decision_gate_helpers", fromlist=["_stub_sig"])._stub_sig(
+    retract["signature"] = __import__("tests._sandbox_gate_helpers", fromlist=["_stub_sig"])._stub_sig(
         __import__("agentteams.cli.decision_log", fromlist=["x"])._decision_signature_values(retract))
     _log(team, retract)
     assert _authorize(team) == ["acme/toolkit", "acme/builder"]
