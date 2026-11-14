@@ -53,7 +53,7 @@ from agentteams.manifest_format import _REPO_ID_RE
 GROUP_FILE_REL = ".agentteams/toolchain-group.json"
 #: The signing-domain tag: the first signed value of every group payload.
 PURPOSE = "agentteams-toolchain-group-v1"
-#: The only scope a version-1 file may carry.
+#: The only scope a group file may carry.
 SCOPE = "s10-cooldown"
 #: The HALT family that ends the group (C-2), in any surface's decisions log.
 FAMILY = "s10-toolchain-group"
@@ -104,8 +104,8 @@ def signed_values(doc: dict) -> list[str]:
         doc: A structurally valid group document (:func:`validate`).
 
     Returns:
-        ``[purpose, version, scope, sequence, key_id, group, workspaces]``, lists joined with ``,`` and each
-        workspace as ``repo:<owner/name>=team:<id>``.
+        ``[purpose, version, scope, sequence, key_id, group, workspaces, derives_from]``, lists joined with ``,``,
+        each workspace as ``repo:<owner/name>=team:<id>`` and the lineage lowercased.
     """
     group = ",".join(str(r).lower() for r in doc["group"])
     workspaces = ",".join(f"{w['repo'].lower()}={w['team']}" for w in doc["workspaces"])
@@ -463,12 +463,16 @@ def verify_group_command(project_root: Path, governance_dir: Path, team_id: str,
                          halt_dirs: tuple[Path, ...] = (), *, member_filter=None) -> int:
     """``--verify-toolchain-group``: print the verified group for this workspace (exit 0) or why not (exit 1).
 
-    *member_filter* (the gate's per-member HALT filter) is applied to a verified group, so the verb reports exactly
-    what a render would.
+    *member_filter* (the gate's per-member HALT filter) is applied to a verified group, so the verb reports what a
+    render would; when it drops every member (an ``s10-cooldown-exempt`` HALT, which over-matches), the verb exits 1.
     """
     result = load_group(project_root, governance_dir, team_id=team_id, halt_dirs=halt_dirs, consume=False)
     if member_filter is not None and result.present and not result.problem:
+        before = list(result.repos)
         result.repos = member_filter(result.repos)
+        if before and not result.repos:
+            print("Error: every group member is HALTed here, so a render applies no group (exit 1).", file=sys.stderr)
+            return 1
     if not result.present:
         print(f"No {GROUP_FILE_REL} in {project_root}: no toolchain group (the cooldown applies to every release).")
         return 1

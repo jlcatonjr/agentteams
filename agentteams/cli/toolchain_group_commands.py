@@ -45,6 +45,7 @@ def _team_id(args: argparse.Namespace, root: Path) -> str | None:
 
 def _resolve(args: argparse.Namespace) -> tuple[Path, Path, Path, tuple[Path, ...]] | None:
     """Return ``(team_dir, project_root, governance_dir, halt_dirs)``, or None with a message."""
+    from agentteams.cli.decision_log import _enforce_decision_signing
     from agentteams.cli.s10_exempt_gate import _project_root_of, _surface_dirs, governance_team_dir
 
     team_dir = _resolve_output_dir(args)
@@ -55,8 +56,13 @@ def _resolve(args: argparse.Namespace) -> tuple[Path, Path, Path, tuple[Path, ..
         return None
     try:
         governance = governance_team_dir(team_dir)
+        governed = _enforce_decision_signing(governance)
     except RuntimeError as exc:
         print(f"Error: the signing switch cannot be read: {exc}", file=sys.stderr)
+        return None
+    if not governed:
+        print(f"Error: {governance} is not governed (decision signing off), so a render never applies a toolchain "
+              "group here; the brief's s10_cooldown_exempt_repos applies instead.", file=sys.stderr)
         return None
     return team_dir, root, governance, (team_dir, *_surface_dirs(root))
 
@@ -75,7 +81,8 @@ def run_toolchain_group(args: argparse.Namespace) -> int:
         args: Parsed CLI namespace.
 
     Returns:
-        0 on success / verified, 1 otherwise (fail-closed).
+        0 signed / verified; 1 on any failure (fail-closed), including an ungoverned workspace, where a render never
+        applies the group; 2 from ``--verify-toolchain-pin`` when there is no group file.
     """
     if getattr(args, "sign_toolchain_group", None):
         return tg.sign_group_file(Path(args.sign_toolchain_group), _resolve_output_dir(args),

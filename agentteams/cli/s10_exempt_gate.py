@@ -333,7 +333,8 @@ def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str]
 def drop_halted_members(repos: list[str], halt_dirs: tuple[Path, ...]) -> list[str]:
     """Return the group members no unretracted ``s10-cooldown-exempt`` HALT covers, reporting each one dropped.
 
-    C-2: a HALT on a member's per-repository exemption, or on its family, binds the group too. The render gate and the
+    C-2: a HALT on a member's per-repository exemption, or on its family, binds the group too. The HALT matcher
+    over-matches on purpose (``action_ids``), so in practice either HALT drops every member, not only the one named. The render gate and the
     ``--verify-toolchain-group``/``--verify-toolchain-pin`` verbs share this filter.
 
     Args:
