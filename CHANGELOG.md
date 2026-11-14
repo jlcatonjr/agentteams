@@ -89,6 +89,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Step 1 is unfenced. Its text does not depend on that position.
 - `template-chapter-audit.csv` records the three alignments as TA-060, TA-061 and TA-062.
 
+### fix (orchestrator routing rows for optional agents say "(if in team)", #392 item 14)
+
+- The Domain Agent Routing rows for `@technical-validator`, `@format-converter`, `@reference-manager` and
+  `@output-compiler` now carry *(if in team)*, like the other rows for agents the analyzer may not select. Before, a
+  team without one of them was told to route work to an agent it does not have.
+- The `routing_table_rows` fence is v=7, so **every team's orchestrator changes on its next `--update`**, including
+  teams that have all four agents.
+- New `tests/test_routing_rows_conditional.py`: every routing row for an optional domain agent must be conditional,
+  in the template and in the rendered example teams.
+
 ### fix (placeholder docs: agent-updater mapping and a dead manual placeholder, #392 item 9)
 
 - `agent-updater`'s Change-to-Agent Mapping no longer says `@primary-producer` uses `{STYLE_REFERENCE_PATH}` or
