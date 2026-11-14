@@ -629,6 +629,13 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         print("Error: refusing to sign — this decision's payload begins with the toolchain-group purpose tag "
               "(use --sign-toolchain-group).", file=sys.stderr)
         return 1
+    from agentteams.cli.dev_merge import PURPOSE as _DEV_MERGE_PURPOSE
+
+    if "|".join(dl._decision_signature_values(row)).startswith(_DEV_MERGE_PURPOSE + "|"):
+        # Domain separation: a decision payload must never double as a dev-merge-authorization payload.
+        print("Error: refusing to sign — this decision's payload begins with the dev-merge-authorization purpose tag "
+              "(use --sign-dev-merge-authorization).", file=sys.stderr)
+        return 1
     preflight = _signing_preflight(_project_roots(output_dir), allow_checkout, str(row.get("key_id") or ""))
     if preflight is None:
         return 1

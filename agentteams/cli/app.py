@@ -321,6 +321,11 @@ def _main_dispatch(
         return _run_list_exceptions(args)
     if getattr(args, "sign_decision", None):
         return _run_sign_decision(args)
+    if (getattr(args, "merge_pr", None) is not None or getattr(args, "sign_dev_merge_authorization", None)
+            or getattr(args, "verify_dev_merge_authorization", False)):
+        from agentteams.cli.dev_merge_commands import run_dev_merge
+
+        return run_dev_merge(args)
     if (getattr(args, "sign_toolchain_group", None) or getattr(args, "verify_toolchain_group", False)
             or getattr(args, "verify_toolchain_pin", None)):
         from agentteams.cli.toolchain_group_commands import run_toolchain_group

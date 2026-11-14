@@ -19,6 +19,7 @@ from typing import Any
 from agentteams.write_policy import manifest_fields as _wp_manifest_fields
 from agentteams.write_policy import resolve as _wp_resolve
 from agentteams import branch_model as _branch_model
+from agentteams import github_management as _github_management
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
@@ -534,6 +535,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # WASM plan P14: wasm_policy.populate_placeholders fills these once the switch is resolved ("" while off).
     auto_resolved[SECURITY_ROWS_PLACEHOLDER] = auto_resolved[ROUTING_ROWS_PLACEHOLDER] = ""
     auto_resolved.update(_branch_model.default_placeholders())  # filled by branch_model at render time
+    auto_resolved.update(_github_management.placeholders(description))  # the GitHub management section
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)

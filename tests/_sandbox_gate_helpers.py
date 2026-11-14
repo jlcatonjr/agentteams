@@ -70,3 +70,16 @@ def _log(team: Path, *rows: dict[str, str]) -> Path:
         w.writeheader()
         w.writerows([*existing, *rows])
     return path
+
+
+def _keypair() -> tuple[str, str]:
+    """A fresh Ed25519 key pair as ``(private PKCS8 PEM, public SPKI PEM)`` (needs the ``signing`` extra)."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    key = Ed25519PrivateKey.generate()
+    private = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption()).decode()
+    public = key.public_key().public_bytes(serialization.Encoding.PEM,
+                                           serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+    return private, public
