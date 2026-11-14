@@ -12,11 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole tree, so a re-signed `main` listed 341 files. It now lists module-qualified evidence: files that import
   the module and mention the name, `module.name`, and `from module import name`, with relative imports resolved
   and a leading `src/` dropped from module names. A removed module lists its importers.
-- Only when the qualified search finds no file but the changed one does it fall back to the bare word, and the entry is then keyed
-  `"<name> (bare-word fallback)"`. This is a behaviour change for `--json` consumers that read checklist keys.
-- `references/api-impact-reviews/CHECKLIST_EXCLUDES`, read as committed at the range's tip (one glob per line), keeps record paths such as
-  ledgers and run reports out of the checklist. The review ledger itself is always left out.
+- Only when the qualified search finds no file but the changed one does it fall back to the bare word, and the
+  entry is then keyed `"<name> (bare-word fallback)"`. This is a behaviour change for `--json` consumers that read checklist keys.
+- `references/api-impact-reviews/CHECKLIST_EXCLUDES`, read as committed at the range's tip (one glob per line),
+  keeps record paths such as ledgers and run reports out of the checklist. The review ledger itself is always left out.
 - The generated `api-impact.reference.md` fence `api_impact` is v=5.
+
+### added (switching main's required checks when a release renames them)
+
+- **`scripts/release_required_checks.py`** (operator-only; `references/git-procedures.md` §I). When a release PR
+  renames a job `main` requires, such as the #262 runner bump, it proposes the new required set. A dry run shows the
+  change and a fingerprint; `--apply <fingerprint>` makes exactly that change once every proposed check is green on
+  the PR head, and saves the old protection for `--restore`. New jobs are required only with `--add`.
 
 ### fixed (`api_impact` sees positional arguments, `choices` and `sys.argv` options; #451 a)
 
@@ -89,6 +96,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control; new tests in `tests/test_redteam_verifiers_{cli,vulnscan,core,data}.py`) and four F-3 exemptions with
   evidence tests. F-5 (probe intent) stays weekly; the 2026-11-12 re-validation is in
   `references/redteam-probe-revalidation.md`.
+
+### added (project verdict policy for the constitutional gate, #456)
+
+- **New `.agentteams/gate-policy.json`.** It turns chosen `ask` classes into `deny`, for teams whose sessions run headless,
+  where an `ask` is not answered by anyone. Format: `{"version": 1, "preset": "strict", "deny": [...], "fail_closed_tools": true}`.
+  - **Tighten-only.** There is no `allow`. An unknown key, class or preset is a load error.
+  - **Class ids.** The gate gives each trigger a fixed class id, exported as `ASK_CLASSES` and `POLICY_ONLY_CLASSES`.
+  - **Policy-only classes.** `rm-recursive-force`, `git-force-push-short` (`-f` and `+refspec`) and `git-alias-config`
+    are evaluated only when a policy denies them.
+  - **`strict` preset.** Defined in the gate, it denies the force-push, remote-delete, git alias/remote config,
+    publication, `rm -rf`, pipe-to-shell and SQL-deletion classes listed in #456, plus `command-too-long`.
+    Under any non-empty deny list an over-long command is denied, so padding cannot hide a denied class.
+  - **`fail_closed_tools`.** A gate crash or a missing interpreter now denies every tool that is not read-only,
+    whatever the `privilege_profile`.
+- **Pinned at render.** The file is validated (an invalid one stops the render) and its SHA-256 is written into the
+  installed gate.
+  - A recorded policy that is missing, altered, swapped for a symlink or invalid → `deny` for every tool that is not
+    read-only (`policy-unverified`).
+  - No recorded policy → today's verdicts. A recorded policy, even an empty one, also adds the
+    write protection below. Byte-identical against the previous template on the test corpus.
+  - The gate's own template pin moves once, for this change.
+- **Write-protected once recorded.** The gate refuses `Write`/`Edit` to the policy file, to itself and to its
+  interpreter pin. The Claude sandbox block adds `denyWrite` and `Edit` rules for the same three files.
+- **Weakening is a Rule 15 relaxation.** Recording a weaker policy (fewer denied classes, `fail_closed_tools` dropped,
+  or the file removed) is the new relaxation kind `gate-policy-weaken:<framework>`. In a governed workspace it needs
+  the operator's Ed25519-signed decision.
+- **`--check-wiring` reports the policy.** It prints the active policy and its digest, and marks it ADVISORY where no
+  OS write deny covers the gate (Copilot, Grok, or the OS sandbox off).
+- **Decision log.** The log gains `policy_class` and `policy_sha256`.
+- **New pinned module:** `agentteams/gate_policy.py`. API page: `docs_src/api-reference/gate-policy.md`.
 
 ### changed (CI runs on Ubuntu 26; #262)
 

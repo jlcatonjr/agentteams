@@ -83,7 +83,7 @@ in place as the floor. See [`sandbox_projection`](../../api-reference/sandbox-pr
 
 ## SB26 — Turning a sandbox off is governed (D7)  ✅
 
-Six transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule). Each has a gate action id:
+Seven transitions are **constraint-relaxing** (see the constraint-relaxing-authorizations rule). Each has a gate action id:
 
 | Effect kind | When | Action id |
 |---|---|---|
@@ -93,6 +93,7 @@ Six transitions are **constraint-relaxing** (see the constraint-relaxing-authori
 | `native-exec-keep` | a WASM-eligible agent keeps native exec while WASM is on | `native-exec-keep:<framework>` (tokens `native-exec:<agent>`) |
 | `wasm-to-os-switch` | a runner `confined_programs` entry moves from `sandbox: wasm` back to `os` | `wasm-to-os-switch:<agent>` |
 | `mcp-approval-auto` | a Codex render with WASM on turns on the opt-in `codex:wasm-auto-approve` host feature, so the shared `agentteams_wasm` table gets `default_tools_approval_mode = "auto"` and `run_wasm` runs without the per-call prompt | `mcp-approval-auto:codex` |
+| `gate-policy-weaken` | the recorded project gate policy (`.agentteams/gate-policy.json`, #456) is weakened: a denied class dropped, `fail_closed_tools` turned off, or the policy removed | `gate-policy-weaken:<framework>` |
 
 **"Governed" is the default.** A workspace is governed when strict decision signing is on
 (`enforce_decision_signing`), and that defaults to true: the first render writes it into
