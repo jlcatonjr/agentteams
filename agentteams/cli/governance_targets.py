@@ -46,6 +46,7 @@ GOVERNANCE_TARGET_STEMS: tuple[str, ...] = (
     "carve-outs-json",             # the same, as CarveOuts.json / carve_outs.json fold (a filename, not a dir name)
     "exception-registry-json",     # the Rule 15 exception registry references/exception-registry.json (sets its own cap)
     "carveout-high-water",         # the carve-out rollback mark references/carveout-high-water.json
+    "toolchain-group",             # Rule 11(f): the operator-signed first-party toolchain group file
 )
 
 

@@ -39,15 +39,15 @@ def test_an_entry_that_could_carry_prose_is_dropped() -> None:
 
 def test_the_rendered_rule_names_only_what_the_gate_authorized() -> None:
     text = _security_text({}, authorized=["jlcatonjr/agentteams", "jlcatonjr/researchteam"])
-    assert "Local interdependent-repository carve-out" in text
-    assert "window:\n  `jlcatonjr/agentteams`, `jlcatonjr/researchteam`. Only a repository named here is exempt" in text
-    assert "{S10_COOLDOWN_EXEMPT_REPOS}" not in text
+    assert "First-party toolchain group — the 14-day cooldown does not apply" in text
+    assert "repositories: `jlcatonjr/agentteams`, `jlcatonjr/researchteam`. A repository is named here only" in text
+    assert "{S10_TOOLCHAIN_GROUP}" not in text
     assert "local-repository carve-outs) the cooldown" in text
 
 
 def test_without_the_key_the_rule_says_the_cooldown_applies_to_everything() -> None:
     text = _security_text({})
-    assert "window:\n  none for this project, so the cooldown applies to every release. Only a repository named" in text
+    assert "repositories: none for this project, so the cooldown applies to every release. A repository" in text
 
 
 def test_a_bare_name_is_refused() -> None:
@@ -57,11 +57,12 @@ def test_a_bare_name_is_refused() -> None:
 
 def test_the_trigger_and_verdict_tables_know_the_carve_out() -> None:
     template = (TEMPLATES / "universal" / "security.template.md").read_text(encoding="utf-8")
-    assert "| Any addition to the brief's `s10_cooldown_exempt_repos` | Constraint relaxation (constraint-relaxing-authorizations rule)" in template
+    assert ("| Any change to `.agentteams/toolchain-group.json`, or any addition to the brief's "
+            "`s10_cooldown_exempt_repos` | Constraint relaxation — widens Rule S-10's first-party toolchain group") in template
     verdict = next(line for line in template.splitlines() if "younger than the Rule S-10 cooldown" in line)
     assert "outside both the remediation and the local-repository carve-outs" in verdict
-    assert "(for the cooldown only) that the release is of a repository listed in `s10_cooldown_exempt_repos`" in verdict
-    assert "verifies\n  against the operator's release key" in template
+    assert "(for the cooldown only) that the release is of a repository the first-party toolchain group names" in verdict
+    assert "verifies against the operator's release key and peels to the locked commit" in template
 
 
 def test_the_raw_brief_list_never_renders_without_the_gate() -> None:

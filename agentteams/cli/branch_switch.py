@@ -81,7 +81,8 @@ def add_branch_arguments(parser: argparse.ArgumentParser) -> None:
              "first that exists). Any other path is refused.",
     )
     group.add_argument("--team-id", metavar="ID", dest="team_id", default=None,
-                       help="Grant holder id for --branch-post-merge (default: from build-log).")
+                       help="Grant holder id for --branch-post-merge (default: from build-log); this workspace's team id "
+                            "for --verify-toolchain-group/--verify-toolchain-pin (default: from the brief).")
 
 
 def branch_mode_active(args: argparse.Namespace) -> bool:

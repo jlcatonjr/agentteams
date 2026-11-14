@@ -299,6 +299,8 @@ _TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
     # unfenced rules/extensions sections), so a shrink-preserve must not pin a tampered copy.
     "constitutional_core",
     "constitutional_rules_baseline",
+    # Rule 11(f), the first-party toolchain group (v1.1.2): shipped governance text with no project extension.
+    "toolchain_group_rule",
     # Follow-up #25 (`codex-translation-shrink-guard`): machine-generated tool limit + hand-off
     # list in each .codex/agents/*.toml. A shorter render is a removed hand-off/tool, never lost
     # enrichment, so the template body always wins (no --shrink-policy=allow needed).

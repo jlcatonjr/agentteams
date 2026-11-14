@@ -22,8 +22,8 @@ def test_old_cryptography_warns_once(capsys, monkeypatch):
     signed_ledger._warn_if_old_cryptography("42.0.2")
     signed_ledger._warn_if_old_cryptography("42.0.2")
     err = capsys.readouterr().err
-    assert err.count("below the pinned 50.0.0") == 1
-    signed_ledger._warn_if_old_cryptography("50.0.1")
+    assert err.count("below the pinned 50.0.2") == 1
+    signed_ledger._warn_if_old_cryptography("50.0.2")
     assert capsys.readouterr().err == ""
 
 
