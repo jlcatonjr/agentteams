@@ -41,7 +41,7 @@ echo "== 1/4 sign the narrow grant (review every field, then answer y)"
 if "${VS[@]}" grant list 2>/dev/null | grep -q '"stage-fix"'; then
   echo "an active grant already exists:"; "${VS[@]}" grant list
 else
-  AGENTTEAMS_DECISION_ED25519_KEYFILE="$PRIV" "${VS[@]}" grant sign --key-id "$KEY_ID" --days 1 --max-uses 5 \
+  "${VS[@]}" grant sign --key-id "$KEY_ID" --days 1 --max-uses 5 \
     --op stage-fix --op open-pr --repo-root "$ROOT" --governance-dir "$GOV"
 fi
 

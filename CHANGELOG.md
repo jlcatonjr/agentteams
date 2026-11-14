@@ -37,6 +37,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ledger.** `domain/work-summarizer.template.md` is now registered as TA-063 and leaves the unregistered baseline.
   The new reference is TA-064.
 
+### changed (HMAC signing keys can live in key files)
+
+- With `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_DECISION_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY` or
+  `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, agentteams reads `~/.config/agentteams/keys/<kind>-hmac.key`
+  (`waiver`, `decision`, `grant`, `management`), so the key no longer has to be exported into a shell an agent
+  might inherit. A key file is trusted only when its fingerprint matches one you record with the new
+  `--record-hmac-fingerprint KIND` (in `~/.config/agentteams/verify-keys/`), so a planted or replaced key file is
+  refused. Every emitted sandbox read-denies `keys/`; the macOS Claude block and the goose Seatbelt profile now
+  also write-deny `keys/` and `verify-keys/` (on Linux, write roots cannot reach them).
+  - A set variable still wins, and agentteams warns (saying whether the two match) when the key file exists too.
+  - The file is refused when it is a symlink, sits behind a symlinked `keys/`, is readable by others, is empty,
+    or would be read by an install an agent could edit.
+  - A decision key file does not by itself switch on decision-signing enforcement; that stays tied to the variable
+    and the log header.
+  - One helper (`signed_ledger.load_hmac_key`) serves the waiver, decision, grant and directive paths
+    (@security ruling, 5 conditions).
+- `--sign-carveouts` now finds the Ed25519 key from `--key-id` like the other operator signers; it still required
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE`. The migrated-key warning and the vulnscan operator scripts no longer tell
+  you to set or export that variable.
+
 ### added (opt-in typed violation codes for `@agent-refactor`; #453)
 
 - A brief that sets `agent_refactor.violation_codes: true` gives the agent-refactor file a "Violation Codes" section:

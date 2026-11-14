@@ -282,6 +282,7 @@ def _build_seatbelt_profile(
         governed_roster_paths,
         protected_write_paths,
         signing_key_deny_read,
+        signing_key_deny_write,
         team_marker_path,
     )
     roots = list(write_roots) if write_roots else ["."]
@@ -429,6 +430,11 @@ def _build_seatbelt_profile(
         ";; does not). UNVERIFIED on a real macOS host.",
         "(deny file-read*",
         *[f"    {e}" for e in key_exprs],
+        ")",
+        ";; No agent may create or replace a file in the key or operator verify-key directory either: an",
+        ";; HMAC key file there is trusted only against a fingerprint recorded beside the verify keys (M1).",
+        "(deny file-write*",
+        *[f"    {e}" for e in (_seatbelt_path_expr(p) for p in signing_key_deny_write()) if e],
         ")",
     ]
 
