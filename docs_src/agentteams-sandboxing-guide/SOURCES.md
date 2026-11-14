@@ -101,7 +101,7 @@ Line numbers are as of `origin/main` after the `fix/convert-bridge-write-policy`
 | WASM switch opt-in; `framework` reason; composition notices `wasm-without-os-sandbox` / `wasm-only-host` / `wasm-windows-unsupported` | `agentteams/wasm_config.py` `wasm_switch`, `composition_advisories`; `agentteams/cli/wasm_sandbox_switch.py` |
 | Compute-only default grant and limits (10^10 fuel, 64 MiB, 120 s) | `agentteams/wasm_exec.py` `GRANT_SPEC`, `DEFAULT_LIMITS`, `COMPUTE_ONLY` |
 | Model-substrate projection (`.agentteams/sandbox-state.json`) | `agentteams/sandbox_projection.py`; `agentteams/schemas/sandbox-state.schema.json` |
-| Six relaxation kinds; action ids and tokens | `agentteams/cli/sandbox_effects.py` |
+| Seven relaxation kinds; action ids and tokens | `agentteams/cli/sandbox_effects.py` |
 | Governed = `enforce_decision_signing`, default true; Ed25519 required; 90-day sunset; aggregate cap | `agentteams/analyze.py` (default); `agentteams/cli/sandbox_relaxation_gate.py` (`SANDBOX_EXCEPTION_TTL_DAYS`); `agentteams/cli/exception_registry.py` (`_DEFAULT_MAX_ACTIVE_RELAXING`) |
 | Gate engagement carve-out | `agentteams/cli/os_sandbox_switch.py` `gate_engaged` |
 | `agentteams_wasm` server, `run_wasm`, launch-flag grant | `agentteams/wasm_mcp.py`; `agentteams/data/agentteams-wasm-mcp.py` |

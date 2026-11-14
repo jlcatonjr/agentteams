@@ -121,7 +121,7 @@ SIG_SCHEME_ED25519 = "ed25519"
 
 #: The pinned ``cryptography`` floor (``references/dependency-pins.json``, the ``[signing]`` extra;
 #: locked by ``tests/test_supply_chain_pins.py``). Below it, signing still works but warns once.
-CRYPTOGRAPHY_MIN_VERSION = (50, 0, 0)
+CRYPTOGRAPHY_MIN_VERSION = (50, 0, 2)
 _CRYPTO_WARNED: list[bool] = []
 
 

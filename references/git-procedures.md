@@ -524,7 +524,8 @@ bash scripts/check-durable-tmp-refs.sh
 `main` so editable installs render released code.
 
 **Release** (at a milestone): open the PR `dev` → `main` with the first-parent merge list
-(`git log --first-parent --merges --format='- %s' origin/main..origin/dev`). Fix failures on `dev`. Merge with a
+(`git log --first-parent --merges --format='- %s' origin/main..origin/dev`). Fix failures on `dev`. If the release renames a CI job that
+`main` requires, switch the required checks first (§I). Merge with a
 **merge commit**, never squash or rebase. Verify CI and the Pages deploy, then `git merge --ff-only origin/main` on `dev`.
 
 `dev` must be a **protected branch** (no deletion, no force push; no required checks or reviews, so local merges
@@ -556,3 +557,47 @@ Two failures on one day led to this section. A `cd` into a removed clone failed,
 
   Stop and read the output if a step fails. The `until` loop runs forever if the PR's workflows never start, so interrupt it if no checks appear after a few minutes.
 - **Test platform-specific output on every CI platform before pushing.** If a test reads a file that is generated on only one OS, set that platform in the test. When you can't run on the other OS, simulate it by patching `sys.platform`, and treat a pass as evidence, not proof: the CI job is the real test.
+
+---
+
+## I. Release PRs That Rename Required Checks (2026-11-13)
+
+`main` requires named status checks (classic branch protection). A release PR that renames one of those jobs cannot
+merge, because GitHub waits for a check its workflows no longer produce. Examples: a runner bump
+(`test (ubuntu-24.04, 3.11)` → `test (ubuntu-26.04, 3.11)`, #262), a Python version added to the matrix, or a renamed
+job. Switch the required set **when the release PR's new checks are green, and not earlier**: until the release
+lands, every other PR into `main` runs the old `ci.yml` and would wait forever on the new names.
+
+**Who runs it:** the operator. It needs an admin token and changes what guards `main`. An agent that opens or
+watches a release PR checks whether the PR renames a required check. If it does, the agent hands the operator the dry
+run's command (§H), and never runs `--apply`.
+
+**How:** `scripts/release_required_checks.py`. It ships with the release, so run it from a checkout of `dev` (the
+PR head), not from the shared checkout on `main`:
+
+```bash
+python3 scripts/release_required_checks.py --pr <release PR#>              # dry run
+python3 scripts/release_required_checks.py --pr <release PR#> --apply <fingerprint>
+python3 scripts/release_required_checks.py --restore <backup file it printed>    # shows the restore
+python3 scripts/release_required_checks.py --restore <backup file> --apply <fingerprint>
+```
+
+- **Proposal:** a required check the PR still produces is kept. A required check it no longer produces is replaced by
+  the PR's checks whose names match once version numbers are masked, so `ubuntu-24.04` becomes `ubuntu-26.04`. Nothing
+  else changes implicitly. Requiring a new job takes `--add NAME`, and no longer requiring one takes `--drop NAME`.
+- **Guards:** the PR is open, targets `main`, and comes from this repository's `dev` (or `hotfix/*`), never a
+  fork. Every proposed check is green on the PR head. A required check with no counterpart refuses unless it is
+  dropped. The proposal never empties the set. A renamed check keeps the old check's `app_id`, and it refuses if the
+  PR's check comes from another app or is a commit status (which any token can post). An `--add` must be a check run
+  from an app. `strict` is kept.
+- **Apply exactly what was shown:** the dry run prints a fingerprint of the PR head, the current and proposed sets and
+  `strict`. `--apply` refuses unless they are unchanged. It saves the previous protection under
+  `~/.local/state/agentteams/branch-protection/` and prints the `--restore` command. `--restore` takes only a file in
+  that folder, shows the restore, and applies it only with the fingerprint it printed. It refuses an empty set, a
+  file whose contents don't match its recorded fingerprint, a backup that would change `strict`, and a `main` that
+  has changed since the `--apply`. Every preview lists each check with its app, and flags an unpinned one.
+- **Then** merge the release PR (§H's checks-gated merge). If the release is abandoned, restore before any other PR
+  into `main` needs to merge.
+
+`--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary.
+

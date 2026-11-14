@@ -40,7 +40,8 @@ A separate switch, `wasm_sandbox.model_substrate`, projects a floor to consumers
 
 Every weakening is a **derived** constraint-relaxing effect (constraint-relaxing-authorizations rule), never a self-declared flag:
 `sandbox-os-off`, `sandbox-wasm-off`, `wasm-grant-widen`, `native-exec-keep`, `wasm-to-os-switch`,
-`mcp-approval-auto` (Codex's shared `agentteams_wasm` table set to auto-approve).
+`mcp-approval-auto` (Codex's shared `agentteams_wasm` table set to auto-approve), `gate-policy-weaken` (a recorded
+project gate policy weakened or removed).
 
 The governance property to check: **"governed" is the default.** Strict decision signing
 (`enforce_decision_signing`) defaults to true and is written at the first render, so from the second

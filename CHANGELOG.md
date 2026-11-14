@@ -15,6 +15,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
   are pinned as exceptions), and every agent the mapping names must reference that placeholder.
 
+### added (opt-in `api_impact` categories for constants and generated files; #451 c)
+
+- A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
+  text report is unchanged (`--json` gains an empty `generated_changed` list).
+- `constants`: public module-level `UPPER_CASE` assignments count as symbols (`module::NAME`), added, removed, or
+  changed when the assigned value changes.
+- `generated [glob ...]`: generated files added, modified, renamed, type-changed or deleted are listed in the new
+  `Impact.generated_changed`: files under `.claude/hooks/`, `.github/hooks/`, `.grok/hooks/` and `.codex/hooks/`,
+  `.agentteams/gate-policy.json`, `.agentteams/carveouts.json`, plus any listed globs. A body-only edit to a generated hook changes no signature and was not reported before.
+- A category counts when either side of the diff turns it on, and a change to `CATEGORIES` itself is reported
+  under `review_baseline_changed`.
+- The generated `api-impact.reference.md` fence `api_impact` is v=6.
+
+### added (the first-party toolchain group, forward-ported from 1.1.2 and 1.1.3)
+
+- **One operator-signed `.agentteams/toolchain-group.json`** (format 2) lifts Rule S-10's 14-day cooldown and a pin
+  move's per-release operator row for releases of the repositories it lists, in the workspaces it binds (git origin
+  `repo:` plus brief `team:` id): no sunset, no cap slot (operator rulings R5, T1–T3, 2026-11-13). Its signed
+  `derives_from` must name Ed25519-signed, currently authorizing decisions on a recorded, acyclic chain; an
+  unretracted HALT on any id in that chain, on `s10-toolchain-group`, or on any `s10-cooldown-exempt` action, in any
+  surface's log, empties the group with an `::error::` line, and the render goes on. Verbs: `--sign-toolchain-group`
+  (operator-only), `--verify-toolchain-group`, `--verify-toolchain-pin <lock> --allowed-signers <file>` (a
+  `vX.Y.Z` tag, one SSH signature block, the locked commit; exit 2 when there is no group file). The file is a trust
+  root. The constitution gains the fenced, template-authoritative "First-party toolchain group" section, and the
+  S-10 bullet becomes the toolchain-group bullet (`{S10_TOOLCHAIN_GROUP}`). Released as 1.1.2 (#481) and 1.1.3 (#485)
+  on `release/1.1`; this brings them to `dev`.
+- **agentteams#476:** a registered S-10 exemption that does not carry over says why, with an `::error::` line.
+- **The verify verbs find the brief themselves** (researchteam-f8): with no `--team-id` or `--description`, the team id
+  comes from the project's own brief, as fleet discovery finds it; and a workspace with no group file reports that
+  (exit 2 for `--verify-toolchain-pin`) before any team-id lookup.
+- **`--verify-toolchain-group` agrees with a render** (conflict audit): it exits 1 in an ungoverned workspace, where a
+  render never applies the group, and when a HALT drops every member, instead of reporting "verified".
+- **`cryptography` 50.0.0 → 50.0.2** in the `signing` extra (latest stable, OSV none; sdist sha256 verified locally).
+
+### fixed (the API impact checklist lists a symbol's users, not every file with the word; #451 b)
+
+- `status`'s audit checklist (`agentteams._api_impact_checklist`) used to search each changed name as a bare word over
+  the whole tree, so a re-signed `main` listed 341 files. It now lists module-qualified evidence: files that import
+  the module and mention the name, `module.name`, and `from module import name`, with relative imports resolved
+  and a leading `src/` dropped from module names. A removed module lists its importers.
+- Only when the qualified search finds no file but the changed one does it fall back to the bare word, and the
+  entry is then keyed `"<name> (bare-word fallback)"`. This is a behaviour change for `--json` consumers that read checklist keys.
+- `references/api-impact-reviews/CHECKLIST_EXCLUDES`, read as committed at the range's tip (one glob per line),
+  keeps record paths such as ledgers and run reports out of the checklist. The review ledger itself is always left out.
+- The generated `api-impact.reference.md` fence `api_impact` is v=5.
+
+### added (switching main's required checks when a release renames them)
+
+- **`scripts/release_required_checks.py`** (operator-only; `references/git-procedures.md` §I). When a release PR
+  renames a job `main` requires, such as the #262 runner bump, it proposes the new required set. A dry run shows the
+  change and a fingerprint; `--apply <fingerprint>` makes exactly that change once every proposed check is green on
+  the PR head, and saves the old protection for `--restore`. New jobs are required only with `--add`.
+
+### fixed (`api_impact` sees positional arguments, `choices` and `sys.argv` options; #451 a)
+
+- `add_argument` positionals are part of the surface (`cli-pos:<name>`). Their `choices`, and an option's `choices`,
+  are compared too, so adding or removing a subcommand-like choice is reported (new `Impact.cli_changed`).
+- A literal `"--x" in sys.argv` test is reported as `--x (sys.argv, heuristic)` unless a parser in the same module
+  declares `--x`. Only literal `choices` are compared by their members; a name or call is compared by its source text.
+- `surface` moved to `agentteams._api_surface` (re-exported from `agentteams.api_impact`). The generated
+  `api-impact.reference.md` fence `api_impact` is v=4.
+
 ### fixed (`api_impact status` no longer forgives pushed commits; #447 b)
 
 - **A push-independent range.** On the default branch, `status` used `@{upstream}`, so a commit pushed before its
@@ -77,6 +139,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control; new tests in `tests/test_redteam_verifiers_{cli,vulnscan,core,data}.py`) and four F-3 exemptions with
   evidence tests. F-5 (probe intent) stays weekly; the 2026-11-12 re-validation is in
   `references/redteam-probe-revalidation.md`.
+
+### added (project verdict policy for the constitutional gate, #456)
+
+- **New `.agentteams/gate-policy.json`.** It turns chosen `ask` classes into `deny`, for teams whose sessions run headless,
+  where an `ask` is not answered by anyone. Format: `{"version": 1, "preset": "strict", "deny": [...], "fail_closed_tools": true}`.
+  - **Tighten-only.** There is no `allow`. An unknown key, class or preset is a load error.
+  - **Class ids.** The gate gives each trigger a fixed class id, exported as `ASK_CLASSES` and `POLICY_ONLY_CLASSES`.
+  - **Policy-only classes.** `rm-recursive-force`, `git-force-push-short` (`-f` and `+refspec`) and `git-alias-config`
+    are evaluated only when a policy denies them.
+  - **`strict` preset.** Defined in the gate, it denies the force-push, remote-delete, git alias/remote config,
+    publication, `rm -rf`, pipe-to-shell and SQL-deletion classes listed in #456, plus `command-too-long`.
+    Under any non-empty deny list an over-long command is denied, so padding cannot hide a denied class.
+  - **`fail_closed_tools`.** A gate crash or a missing interpreter now denies every tool that is not read-only,
+    whatever the `privilege_profile`.
+- **Pinned at render.** The file is validated (an invalid one stops the render) and its SHA-256 is written into the
+  installed gate.
+  - A recorded policy that is missing, altered, swapped for a symlink or invalid → `deny` for every tool that is not
+    read-only (`policy-unverified`).
+  - No recorded policy → today's verdicts. A recorded policy, even an empty one, also adds the
+    write protection below. Byte-identical against the previous template on the test corpus.
+  - The gate's own template pin moves once, for this change.
+- **Write-protected once recorded.** The gate refuses `Write`/`Edit` to the policy file, to itself and to its
+  interpreter pin. The Claude sandbox block adds `denyWrite` and `Edit` rules for the same three files.
+- **Weakening is a Rule 15 relaxation.** Recording a weaker policy (fewer denied classes, `fail_closed_tools` dropped,
+  or the file removed) is the new relaxation kind `gate-policy-weaken:<framework>`. In a governed workspace it needs
+  the operator's Ed25519-signed decision.
+- **`--check-wiring` reports the policy.** It prints the active policy and its digest, and marks it ADVISORY where no
+  OS write deny covers the gate (Copilot, Grok, or the OS sandbox off).
+- **Decision log.** The log gains `policy_class` and `policy_sha256`.
+- **New pinned module:** `agentteams/gate_policy.py`. API page: `docs_src/api-reference/gate-policy.md`.
 
 ### changed (CI runs on Ubuntu 26; #262)
 
@@ -146,12 +238,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### fixed (bridged Claude teams get the model defaults too)
 
 - **The gap.** On a copilot-vscode-canonical project, `.claude/agents/` holds bridge stubs, and the bridge rewrote them
-  without a `model:`. The Claude adapter's new defaults never reached them, and a `model:` added by hand was wiped by
-  the next `--bridge-merge` (every `researchteam update` and autosync run).
-- **Now** every stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub declares
-  (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
+  without a `model:`, so the Claude adapter's new defaults never reached them, and a `model:` added by hand was
+  wiped whenever the stubs were re-emitted.
+- **Now** every re-emitted stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub
+  declares (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
   `claude-fable-5-2` for the orchestrator, `opus` for every other stub, the parametric workstream expert included.
   The bridge lists every stub that received a default in a notice. Native (non-stub) agent bodies are untouched.
+- **When stubs are re-emitted.** Only a `--bridge-merge` that passes the `bridge:copilot-vscode-to-claude:subagents`
+  host feature rewrites `.claude/agents/` stubs. `researchteam update` and its autosync do not pass it, so their
+  existing stubs keep what they have (a `model:` added by hand included) and gain no default from an update. Add the
+  line once (infrastructureManagement's `scripts/operator/65-adopt-claude-model-lines.py`); a later re-emit keeps it.
 
 ### fixed (sandbox: the exception registry and the carve-out high-water mark are protected; carve-outs count in the exception cap)
 

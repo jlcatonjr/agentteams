@@ -1,12 +1,12 @@
 {
   "probes": {
     "A0": {
-      "evidence_digest": "5732d9f2c352e143",
+      "evidence_digest": "7f90abf69bba11d3",
       "note": "",
       "outcome": "DEFENDED"
     },
     "A1": {
-      "evidence_digest": "ff148beeecb227e2",
+      "evidence_digest": "561cea766bc5ec24",
       "note": "",
       "outcome": "DEFENDED"
     },
@@ -26,12 +26,12 @@
       "outcome": "DEFENDED"
     },
     "A2": {
-      "evidence_digest": "cf5257f5406b684d",
+      "evidence_digest": "240ce293073d0fe5",
       "note": "",
       "outcome": "DEFENDED"
     },
     "A3": {
-      "evidence_digest": "cf5257f5406b684d",
+      "evidence_digest": "240ce293073d0fe5",
       "note": "",
       "outcome": "DEFENDED"
     },
@@ -46,12 +46,12 @@
       "outcome": "PARTIAL"
     },
     "A6": {
-      "evidence_digest": "5732d9f2c352e143",
+      "evidence_digest": "7f90abf69bba11d3",
       "note": "",
       "outcome": "DEFENDED"
     },
     "A7": {
-      "evidence_digest": "ff148beeecb227e2",
+      "evidence_digest": "561cea766bc5ec24",
       "note": "",
       "outcome": "DEFENDED"
     },
@@ -126,12 +126,12 @@
       "outcome": "DEFENDED"
     },
     "C0": {
-      "evidence_digest": "db9af91f130f57b6",
+      "evidence_digest": "0c98980811209286",
       "note": "",
       "outcome": "DEFENDED"
     },
     "C1": {
-      "evidence_digest": "8300a7753529b194",
+      "evidence_digest": "49e01bf8c0693ca9",
       "note": "",
       "outcome": "DEFENDED"
     },
@@ -175,6 +175,11 @@
       "note": "",
       "outcome": "DEFENDED"
     },
+    "D6": {
+      "evidence_digest": "306d06787146f694",
+      "note": "",
+      "outcome": "DEFENDED"
+    },
     "E1": {
       "evidence_digest": "24ee3b8bda398444",
       "note": "2026-08-14: evidence changed because the agent-file count grew from 30 to 35 (api-conformity-tracker.md, pr-manager.md, pr-notifier.md, pr-reminder.md, tool-doc-researcher.md added; zero removed, all five are named, roster-listed agents). Outcome unchanged (DEFENDED); the probe still measures the same thing over a larger population.",
@@ -187,12 +192,12 @@
     },
     "E3": {
       "evidence_digest": "c52124a7f449048e",
-      "note": "2026-09-04 (issue #16): repointed from the gitignored .claude/hooks/constitutional-gate.py to the TRACKED template agentteams/templates/universal/hooks/constitutional-gate.py, so the verdict is environment-independent (DOCUMENTED-LIMIT in every checkout, not EXPLOITED-in-CI / DEFENDED-on-laptop). Outcome unchanged; evidence now cites the shipped template. Teeth: EXPLOITED if the template leaves the repo.",
+      "note": "",
       "outcome": "DOCUMENTED-LIMIT"
     },
     "E4": {
-      "evidence_digest": "aba59de24c938c1a",
-      "note": "2026-09-04 (issue #16): evidence_digest updated as the enforcement-module set/manifest were corrected (20 modules, no mismatches) and integrity.verify now treats an absent INSTALLED_COPY (the two machine-local hook copies) as benign while still flagging a present-but-edited one. Outcome unchanged (DEFENDED); E4 still measures whether a manifest exists and covers the enforcement modules.",
+      "evidence_digest": "2acaba32dbc23834",
+      "note": "",
       "outcome": "DEFENDED"
     }
   },

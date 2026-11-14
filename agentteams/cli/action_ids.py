@@ -27,13 +27,13 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: The action ids agentteams' own gates are called with (``_assert_destructive_action_allowed``,
 #: ``check_clearance``, ``_assert_no_unretracted_halt``); ``branch-cleanup`` is the family of the
 #: per-plan ``branch-cleanup:<sha256>`` id. The pre-upgrade report checks old HALTs against these; a
-#: test checks both directions against the call sites. The six sandbox-relaxation families
+#: test checks both directions against the call sites. The seven sandbox-relaxation families
 #: (``cli/sandbox_effects.py``) are called as ``<kind>:<qualifier>`` instance ids and as the bare family.
 #: ``server-apply`` is the family of the per-path ``server-apply:remove-path:<host>:<path>`` id.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
                                  "branch-cleanup", "vulnscan-remediation", "vulnscan-publish", "wasm-pin-remediation",
                                  "vulnscan-known", "server-apply", *SANDBOX_RELAXATION_KINDS, "s10-cooldown-exempt",
-                                 "carveout")
+                                 "carveout", "s10-toolchain-group")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:

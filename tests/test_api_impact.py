@@ -192,7 +192,8 @@ def test_checklist_names_files_that_mention_a_removed_symbol(repo: Path):
     _write(repo, "pkg/core.py", "class Tool:\n    def go(self):\n        pass\n")
     _commit(repo, "remove run")
     _, commits = ai.status(repo)
-    assert commits[-1].checklist["run"] == ["docs_src/api.md"]
+    # No module-qualified evidence (nothing imports pkg.core), so the bare word is searched and the entry says so.
+    assert commits[-1].checklist["run (bare-word fallback)"] == ["docs_src/api.md"]
 
 
 # --- pre-commit ---------------------------------------------------------------
