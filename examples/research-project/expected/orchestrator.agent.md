@@ -234,16 +234,16 @@ new operational rule remains a manual edit in each deployed team.
 
 | Content Area | Agent | Key Indicators |
 |---|---|---|
-<!-- AGENTTEAMS:BEGIN routing_table_rows v=6 -->
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=7 -->
 | Creating or revising primary HTML chapter drafts, LaTeX manuscript and BibTeX bibliography | `@primary-producer` | New work or revision in `html/chapters/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
 | Within-section cohesion | `@cohesion-repairer` *(if in team)* | Disjointed paragraphs, broken argument flow, orphaned evidence |
 | Style and standards | `@style-guardian` *(if in team)* | Style reference: references/voice-samples/ |
-| Technical accuracy | `@technical-validator` | Code, paths, counts, claims against source files |
-| Format conversion | `@format-converter` | Source format → output format `PDF via LaTeX` |
-| References and dependencies | `@reference-manager` | Database: `references/bibliography.bib` |
-| Final compilation | `@output-compiler` | Final assembly and build |
+| Technical accuracy | `@technical-validator` *(if in team)* | Code, paths, counts, claims against source files |
+| Format conversion | `@format-converter` *(if in team)* | Source format → output format `PDF via LaTeX` |
+| References and dependencies | `@reference-manager` *(if in team)* | Database: `references/bibliography.bib` |
+| Final compilation | `@output-compiler` *(if in team)* | Final assembly and build |
 | Diagrams and figures | `@visual-designer` *(if in team)* | Files in `figures/` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
 | Daily/weekly/monthly work summary reporting | `@work-summarizer` | Synthesize `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history into `workSummaries/` |

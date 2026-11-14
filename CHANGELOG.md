@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (orchestrator routing rows for optional agents say "(if in team)", #392 item 14)
+
+- The Domain Agent Routing rows for `@technical-validator`, `@format-converter`, `@reference-manager` and
+  `@output-compiler` now carry *(if in team)*, like the other rows for agents the analyzer may not select. Before, a
+  team without one of them was told to route work to an agent it does not have.
+- The `routing_table_rows` fence is v=7, so **every team's orchestrator changes on its next `--update`**, including
+  teams that have all four agents.
+- New `tests/test_routing_rows_conditional.py`: every routing row for an optional domain agent must be conditional,
+  in the template and in the rendered example teams.
+
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
 - A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
