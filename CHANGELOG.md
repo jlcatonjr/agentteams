@@ -19,6 +19,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under `review_baseline_changed`.
 - The generated `api-impact.reference.md` fence `api_impact` is v=6.
 
+### added (the first-party toolchain group, forward-ported from 1.1.2 and 1.1.3)
+
+- **One operator-signed `.agentteams/toolchain-group.json`** (format 2) lifts Rule S-10's 14-day cooldown and a pin
+  move's per-release operator row for releases of the repositories it lists, in the workspaces it binds (git origin
+  `repo:` plus brief `team:` id): no sunset, no cap slot (operator rulings R5, T1–T3, 2026-11-13). Its signed
+  `derives_from` must name Ed25519-signed, currently authorizing decisions on a recorded, acyclic chain; an
+  unretracted HALT on any id in that chain, on `s10-toolchain-group`, or on any `s10-cooldown-exempt` action, in any
+  surface's log, empties the group with an `::error::` line, and the render goes on. Verbs: `--sign-toolchain-group`
+  (operator-only), `--verify-toolchain-group`, `--verify-toolchain-pin <lock> --allowed-signers <file>` (a
+  `vX.Y.Z` tag, one SSH signature block, the locked commit; exit 2 when there is no group file). The file is a trust
+  root. The constitution gains the fenced, template-authoritative "First-party toolchain group" section, and the
+  S-10 bullet becomes the toolchain-group bullet (`{S10_TOOLCHAIN_GROUP}`). Released as 1.1.2 (#481) and 1.1.3 (#485)
+  on `release/1.1`; this brings them to `dev`.
+- **agentteams#476:** a registered S-10 exemption that does not carry over says why, with an `::error::` line.
+- **The verify verbs find the brief themselves** (researchteam-f8): with no `--team-id` or `--description`, the team id
+  comes from the project's own brief, as fleet discovery finds it; and a workspace with no group file reports that
+  (exit 2 for `--verify-toolchain-pin`) before any team-id lookup.
+- **`--verify-toolchain-group` agrees with a render** (conflict audit): it exits 1 in an ungoverned workspace, where a
+  render never applies the group, and when a HALT drops every member, instead of reporting "verified".
+- **`cryptography` 50.0.0 → 50.0.2** in the `signing` extra (latest stable, OSV none; sdist sha256 verified locally).
+
 ### fixed (the API impact checklist lists a symbol's users, not every file with the word; #451 b)
 
 - `status`'s audit checklist (`agentteams._api_impact_checklist`) used to search each changed name as a bare word over
