@@ -246,7 +246,8 @@ constraint-relaxing rule carries:
   the signed integration branch. `--merge-pr` refuses, and the merge goes back to the ordinary prompt, unless: the
   pull request is open, not a draft and not from a fork, in this repository, and based on that branch (never the
   default branch, `main`, `master` or a `release/*` line); its merge state is clean with no changes requested; every
-  check on its head has passed (at least one, every required check included); it touches no governance, agent,
+  check on its head has passed, every check the signed file lists is among them, and every workflow run for the
+  head completed with success (the full CI, not only the jobs reported first); it touches no governance, agent,
   workflow or trust-root path; and a recorded `@security` PASS names that pull request and head commit. The PASS is
   spent on use, and the merge is a merge commit at exactly the checked head.
 - **What it never lifts.** Any HALT, any other gate prompt, C-5 clearance, the release model, signing, or an agent's

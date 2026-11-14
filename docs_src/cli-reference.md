@@ -1398,7 +1398,8 @@ With `--verify-toolchain-pin`: the ssh `allowed_signers` file naming the operato
 - the project is governed, its branch model is `integration`, and its integration branch is the signed one;
 - the pull request is open, not a draft, not from a fork, in the signed repository, and based on the signed branch, which is never the default branch, `main`, `master` or a `release/*` line;
 - its merge state is `CLEAN` with no changes requested;
-- every check on its head completed with `SUCCESS` (at least one), and every required check is present and passed;
+- every check on its head completed with `SUCCESS` (at least one), every required check is present and passed, and every check the signed file's `required_checks` lists is reported and passed (so a partial rollup, with only the fast jobs in, never qualifies);
+- every GitHub Actions workflow run for the head commit completed with `success` (at least one, at most 100 read);
 - it touches no agent, harness, workflow, `.agentteams/` or governance-target path;
 - a recorded `@security` PASS names `dev-merge:<owner/name>:pr-<N>-<head sha>`. The PASS is spent before `gh` runs, so one PASS is one merge.
 
@@ -1406,7 +1407,7 @@ Immediately before merging it re-reads the head and base, then runs exactly `gh 
 
 ### `--sign-dev-merge-authorization`
 
-Operator-only, and refused inside an agent session: `--sign-dev-merge-authorization FILE` signs the integration-branch merge authorization in place with the Ed25519 decision key. The file's fields are `version`, `scope`, `branch`, `workspaces`, `purpose`, `sequence`, `key_id` and `derives_from`. Signing takes the same preflight, review digest and confirmation as `--sign-decision`. `--output` names a governed team dir whose `references/authorized-verify-keys` holds `<key_id>.pub.pem`. **Exit code:** `0` signed, `1` otherwise.
+Operator-only, and refused inside an agent session: `--sign-dev-merge-authorization FILE` signs the integration-branch merge authorization in place with the Ed25519 decision key. The file's fields are `version`, `scope`, `branch`, `required_checks` (1–50 check names the integration branch's full CI reports, for example the default branch's required set), `workspaces`, `purpose`, `sequence`, `key_id` and `derives_from`. Signing takes the same preflight, review digest and confirmation as `--sign-decision`. `--output` names a governed team dir whose `references/authorized-verify-keys` holds `<key_id>.pub.pem`. **Exit code:** `0` signed, `1` otherwise.
 
 ### `--verify-dev-merge-authorization`
 

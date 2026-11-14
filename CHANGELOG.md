@@ -79,7 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.agentteams/dev-merge-authorization.json` (Ed25519, a trust root, HALT family `integration-merge`, lineage, rollback
   guard; no sunset and no cap slot, by operator ruling, like the toolchain group) lets `agentteams --merge-pr N` merge
   a pull request into the signed integration branch without the gate's merge prompt. That holds only while it
-  verifies and every condition holds: the PR is open, not a draft, not a fork, CLEAN, has every check passed, touches
+  verifies and every condition holds: the PR is open, not a draft, not a fork, CLEAN, has every check passed (the
+  signed file's `required_checks` all reported, and every workflow run for the head completed with success), touches
   no governance, agent or workflow path, and a `@security` PASS for its exact head exists and is spent on use. The
   merge is a merge commit at the checked head. Otherwise the verb exits 2, and the merge goes back to the ordinary
   prompt. New verbs `--sign-dev-merge-authorization` (operator-only, refused in an agent session) and

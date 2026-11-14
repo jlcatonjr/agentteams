@@ -25,7 +25,7 @@
     "agentteams/cli/decision_lineage.py": "1a287a76f21a3594eb86936acd60b9d682f17855e28a120c29188f9b70b05d57",
     "agentteams/cli/decision_log.py": "a25650c3a84a3f4533513a1e55eeac92d2acff4be1133243a5e68dbc2f8400c1",
     "agentteams/cli/decision_text.py": "174d40806dc6e5a3bd62644e49c5b9ec3c8cadbae6fb832d7cecb4cddf707ed3",
-    "agentteams/cli/dev_merge.py": "210ac579bbba85c29478e8ef5bac979e3e4b577a6366b476a030324d37467144",
+    "agentteams/cli/dev_merge.py": "5c6cdd8e71ea4b393ea8db016f3ffeb5611c67023a7555c6ecb532b38837340e",
     "agentteams/cli/dev_merge_commands.py": "d1c8eb79346cc3dce830d03093436a77bf09a1a92b23f02498757090e4055a63",
     "agentteams/cli/effect_classifier.py": "4fb469e822027adea4c06c2cae4b23bcf38dd9e58727afcb794a6fb76c8e4d2c",
     "agentteams/cli/exception_registry.py": "f1aa98336c9685736fbef541b5a64790ae27d2bcad77318adb4fb56ec53bdb2d",

@@ -38,7 +38,7 @@ import os
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -60,7 +60,12 @@ HIGH_WATER_KEY = "dev_merge_sequence"
 #: The file format version.
 FORMAT_VERSION = 1
 
-_FIELDS = ("version", "scope", "branch", "workspaces", "purpose", "sequence", "key_id", "derives_from", "signature")
+_FIELDS = ("version", "scope", "branch", "required_checks", "workspaces", "purpose", "sequence", "key_id",
+           "derives_from", "signature")
+#: At most this many signed required checks, each a check name GitHub reports (1-200 printable characters).
+MAX_REQUIRED_CHECKS = 50
+#: At most this many workflow runs for one head are read; more refuses (an unread run could be failing).
+MAX_HEAD_RUNS = 100
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 #: Branches the authorization can never name, whatever the repository's settings.
 _NEVER_BRANCHES = frozenset({"main", "master", "head"})
@@ -95,6 +100,7 @@ class AuthResult:
         present: Whether the file exists.
         repo: The signed ``owner/name`` this workspace's pair names (lowercased); "" on any problem.
         branch: The signed integration branch; "" on any problem.
+        required_checks: The signed check names every merged head must report as passed; empty on any problem.
         problem: Why the authorization does not apply although the file exists, else None.
         env: True when the problem is the environment (no Ed25519 backend), not the file.
         sequence: The verified file's sequence (0 when none verified).
@@ -103,6 +109,7 @@ class AuthResult:
     present: bool = False
     repo: str = ""
     branch: str = ""
+    required_checks: list[str] = field(default_factory=list)
     problem: str | None = None
     env: bool = False
     sequence: int = 0
@@ -115,12 +122,14 @@ def signed_values(doc: dict) -> list[str]:
         doc: A structurally valid document (:func:`validate`).
 
     Returns:
-        ``[purpose, version, scope, branch, sequence, key_id, workspaces, derives_from]``, each workspace as
+        ``[purpose, version, scope, branch, required_checks, sequence, key_id, workspaces, derives_from]``; the
+        required checks as compact JSON (check names may contain commas), each workspace as
         ``repo:<owner/name>=team:<id>`` (lowercased repository) and the lineage lowercased.
     """
     workspaces = ",".join(f"{w['repo'].lower()}={w['team']}" for w in doc["workspaces"])
-    return [str(doc["purpose"]), str(doc["version"]), str(doc["scope"]), str(doc["branch"]), str(doc["sequence"]),
-            str(doc["key_id"]), workspaces, ",".join(tg._lineage(doc))]
+    checks = json.dumps(list(doc["required_checks"]), ensure_ascii=True, separators=(",", ":"))
+    return [str(doc["purpose"]), str(doc["version"]), str(doc["scope"]), str(doc["branch"]), checks,
+            str(doc["sequence"]), str(doc["key_id"]), workspaces, ",".join(tg._lineage(doc))]
 
 
 def branch_refusal(branch: object) -> str | None:
@@ -164,6 +173,12 @@ def validate(doc: object, *, signed: bool = True) -> dict:
     refusal = branch_refusal(doc.get("branch"))
     if refusal:
         raise DevMergeError(refusal)
+    checks = doc.get("required_checks")
+    if not (isinstance(checks, list) and 0 < len(checks) <= MAX_REQUIRED_CHECKS and all(
+            isinstance(c, str) and 0 < len(c) <= 200 and c.isprintable() and c == c.strip() for c in checks)
+            and len(set(checks)) == len(checks)):
+        raise DevMergeError(f"required_checks must list 1-{MAX_REQUIRED_CHECKS} distinct check names (the full CI "
+                            "the integration branch needs, e.g. the default branch's required set)")
     parents = tg._lineage(doc) if isinstance(doc.get("derives_from"), str) else []
     if not parents or not all(tg._ACTION_ID_RE.fullmatch(p) for p in parents):
         raise DevMergeError("derives_from must name one or more recorded decision action ids (';'-separated)")
@@ -318,7 +333,8 @@ def load_authorization(project_root: Path, governance_dir: Path, *, team_id: str
             write_registry(governance_dir, registry)
     except (OSError, ValueError, RuntimeError) as exc:
         return AuthResult(present=True, problem=f"the exception registry cannot be read or written ({exc})")
-    return AuthResult(present=True, repo=mine[0], branch=doc["branch"], sequence=doc["sequence"])
+    return AuthResult(present=True, repo=mine[0], branch=doc["branch"], required_checks=list(doc["required_checks"]),
+                      sequence=doc["sequence"])
 
 
 def merge_action_id(repo: str, number: int, head_sha: str) -> str:
@@ -368,7 +384,7 @@ def _check_name(item: dict) -> str:
 
 
 def pr_problem(*, repo: str, branch: str, default_branch: str, pull: dict, view: dict, required: list[dict],
-               files: list[str]) -> str | None:
+               files: list[str], signed_checks: list[str], runs: list[dict]) -> str | None:
     """Why pull request *pull* may not be merged without the prompt, or None when every condition holds.
 
     Args:
@@ -379,6 +395,8 @@ def pr_problem(*, repo: str, branch: str, default_branch: str, pull: dict, view:
         view: ``gh pr view <N> --json reviewDecision,mergeStateStatus,statusCheckRollup``.
         required: ``gh pr checks <N> --required --json name,bucket`` (empty when the branch requires none).
         files: Every path the pull request changes (renames: both names).
+        signed_checks: The authorization's signed ``required_checks``: each must be reported for the head and passed.
+        runs: Every GitHub Actions workflow run for the head commit (``actions/runs?head_sha=``).
 
     Returns:
         A one-line reason, or None.
@@ -416,6 +434,15 @@ def pr_problem(*, repo: str, branch: str, default_branch: str, pull: dict, view:
         name = str(req.get("name") or "")
         if str(req.get("bucket") or "").lower() != "pass" or name not in reported:
             return f"required check {name or '?'} has not passed"
+    missing = [name for name in signed_checks if name not in reported]
+    if missing:   # a partial rollup: the full CI has not registered yet
+        return f"signed required check(s) not reported yet: {', '.join(missing[:5])}"
+    if not runs:
+        return "no workflow run is recorded for its head commit"
+    unfinished = sorted({str(r.get("name") or "?") for r in runs
+                         if str(r.get("status") or "") != "completed" or str(r.get("conclusion") or "") != "success"})
+    if unfinished:
+        return f"workflow run(s) not completed with success: {', '.join(unfinished[:5])}"
     touched = sorted({p for p in files if _sensitive(p)})
     if touched:
         return f"it touches governance, agent or workflow path(s): {', '.join(touched[:5])}"
@@ -496,7 +523,19 @@ def _files(gh: GhRunner, repo: str, number: int, changed_files: object) -> list[
     return sorted(names)
 
 
-def _gather(gh: GhRunner, repo: str, number: int) -> tuple[str, dict, dict, list[dict], list[str]]:
+def _head_runs(gh: GhRunner, repo: str, head_sha: str) -> list[dict]:
+    """Every workflow run for *head_sha* (refuses more than :data:`MAX_HEAD_RUNS`: an unread run could fail)."""
+    data = _gh_object(gh, ["api", f"repos/{repo}/actions/runs?head_sha={head_sha}&per_page={MAX_HEAD_RUNS}"])
+    runs = data.get("workflow_runs")
+    total = data.get("total_count")
+    if not isinstance(runs, list) or not all(isinstance(r, dict) for r in runs) or not isinstance(total, int):
+        raise _GhError("the head's workflow runs could not be read")
+    if total > len(runs) or total > MAX_HEAD_RUNS:
+        raise _GhError(f"the head has {total} workflow runs; at most {MAX_HEAD_RUNS} can be checked")
+    return runs
+
+
+def _gather(gh: GhRunner, repo: str, number: int) -> tuple[str, dict, dict, list[dict], list[str], list[dict]]:
     default_branch = str(_gh_object(gh, ["api", f"repos/{repo}"]).get("default_branch") or "")
     pull = _gh_object(gh, ["api", f"repos/{repo}/pulls/{number}"])
     view = _gh_object(gh, ["pr", "view", str(number), "-R", repo, "--json",
@@ -504,7 +543,9 @@ def _gather(gh: GhRunner, repo: str, number: int) -> tuple[str, dict, dict, list
     if not default_branch:
         raise _GhError("the repository's default branch could not be read")
     files = _files(gh, repo, number, pull.get("changed_files"))
-    return default_branch, pull, view, _required_checks(gh, repo, number), files
+    head_sha = str((pull.get("head") or {}).get("sha") or "").lower()
+    runs = _head_runs(gh, repo, head_sha) if _SHA_RE.match(head_sha) else []
+    return default_branch, pull, view, _required_checks(gh, repo, number), files, runs
 
 
 def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: int, integration_branch: str | None,
@@ -549,12 +590,12 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
         return refuse(f"the brief's integration branch ({integration_branch!r}) is not the signed one ({auth.branch!r})")
     repo, branch = auth.repo, auth.branch
     try:
-        default_branch, pull, view, required, files = _gather(gh, repo, number)
+        default_branch, pull, view, required, files, runs = _gather(gh, repo, number)
     except (_GhError, OSError, subprocess.SubprocessError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     problem = pr_problem(repo=repo, branch=branch, default_branch=default_branch, pull=pull, view=view,
-                         required=required, files=files)
+                         required=required, files=files, signed_checks=auth.required_checks, runs=runs)
     if problem:
         return refuse(f"pull request #{number} does not qualify: {problem}")
     head_sha = str(pull["head"]["sha"]).lower()
@@ -569,14 +610,15 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
         return refuse(f"the @security PASS for {merge_action} could not be spent ({exc})")
     try:
         # Re-read everything at merge time (head, base, checks, files): a change since the first read refuses.
-        _default, again, again_view, again_required, again_files = _gather(gh, repo, number)
+        _default, again, again_view, again_required, again_files, again_runs = _gather(gh, repo, number)
     except (_GhError, OSError, subprocess.SubprocessError) as exc:
         print(f"Error: {exc} (the PASS is spent; record a new one to retry).", file=sys.stderr)
         return 1
     if str((again.get("head") or {}).get("sha") or "").lower() != head_sha:
         return refuse("the pull request's head changed while it was being checked (the PASS is spent)")
     late = pr_problem(repo=repo, branch=branch, default_branch=_default, pull=again, view=again_view,
-                      required=again_required, files=again_files)
+                      required=again_required, files=again_files, signed_checks=auth.required_checks,
+                      runs=again_runs)
     if late:
         return refuse(f"at merge time pull request #{number} no longer qualifies: {late} (the PASS is spent)")
     argv = ["pr", "merge", str(number), "-R", repo, "--merge", "--match-head-commit", head_sha]
@@ -673,6 +715,7 @@ def sign_file(path: Path, team_dir: Path, *, confirm_sha256: str | None = None, 
           "authorization section: agents may merge a qualifying pull request into this branch without the merge "
           "prompt, in these workspaces, until a HALT or key revocation):")
     print(f"  branch      : {doc['branch']}")
+    print(f"  checks      : {', '.join(doc['required_checks'])}")
     for w in doc["workspaces"]:
         print(f"  workspace   : {w['repo']}  {w['team']}")
     print(f"  sequence    : {doc['sequence']}")
@@ -727,7 +770,7 @@ def verify_command(project_root: Path, governance_dir: Path, team_id: str, halt_
 
 __all__ = [
     "ACTION_FAMILY", "AUTH_FILE_REL", "AuthResult", "DevMergeError", "FAMILY", "FORBIDDEN_MERGE_FLAGS",
-    "FORMAT_VERSION", "GhRunner", "HIGH_WATER_KEY", "MAX_PR_FILES", "PURPOSE", "SCOPE", "SENSITIVE_FILES",
+    "FORMAT_VERSION", "GhRunner", "HIGH_WATER_KEY", "MAX_HEAD_RUNS", "MAX_PR_FILES", "MAX_REQUIRED_CHECKS", "PURPOSE", "SCOPE", "SENSITIVE_FILES",
     "SENSITIVE_PREFIXES", "agent_session", "branch_refusal",
     "load_authorization", "merge_action_id", "merge_pr", "pr_problem", "read_document", "run_gh", "sign_file",
     "signed_values", "validate", "verify_command", "verify_signature",
