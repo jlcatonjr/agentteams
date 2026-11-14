@@ -121,6 +121,41 @@ def substrate_protect_paths(manifest: dict[str, Any]) -> tuple[str, ...]:
     return (SUBSTRATE_FILE_REL,)
 
 
+#: == ``gate_policy.GATE_POLICY_REL`` (test-locked).
+GATE_POLICY_FILE_REL = ".agentteams/gate-policy.json"
+
+
+def gate_policy_protect_paths(manifest: dict[str, Any], hooks_rel: str = ".claude/hooks") -> tuple[str, ...]:
+    """Return the files to write-protect because a project gate policy is recorded (#456), or ``()``.
+
+    @security (#456, cond. 1): the policy's digest lives in the installed gate, so once a policy is recorded the
+    gate, its interpreter pin and the policy file are protected (Claude: denyWrite + ``Edit`` rules). The policy file
+    is left out when the whole control plane is already protected (no rule twice). Files, not the hooks directory:
+    the render writes each of them, so every deny path exists (bwrap refuses a missing one).
+
+    Args:
+        manifest: The team manifest (its CLI project root locates the policy file).
+        hooks_rel: The framework's project-relative hooks directory.
+
+    Returns:
+        The project-relative paths, or ``()`` when no policy is recorded.
+
+    Raises:
+        GatePolicyRenderError: The policy file is invalid (the render stops; see ``gate_policy.project_policy``).
+    """
+    from agentteams.gate_policy import manifest_policy
+
+    if manifest_policy(manifest) is None:
+        return ()
+    import os
+    import sys
+
+    # The pin is emitted only when this interpreter has an absolute sys.executable (claude.gate_interpreter_pin_files).
+    pin = (f"{hooks_rel}/agentteams-python",) if os.path.isabs(sys.executable or "") else ()
+    hooks = (f"{hooks_rel}/constitutional-gate.py", *pin)
+    return hooks if protect_control_plane(manifest) else (*hooks, GATE_POLICY_FILE_REL)
+
+
 def write_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None,
                  substrate: tuple[str, ...] = ()) -> tuple[str, ...]:
     """Return the Claude ``denyWrite`` entries for the two flags.
@@ -226,6 +261,7 @@ def runner_protect_block(control_plane: tuple[str, ...] | None, root_var: str,
 
 __all__ = [
     "control_plane_for",
+    "gate_policy_protect_paths",
     "permission_rules",
     "protect_control_plane",
     "runner_protect_block",

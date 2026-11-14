@@ -554,6 +554,12 @@ def finalize_privilege_wiring(
             f"mcp_grants need the agents directory to be the project's {'/'.join(canonical)}; this --output would "
             "install the agentteams_runner server outside the project")
     brief_roots = write_root_policy.begin(manifest, project_root)
+    from agentteams.gate_policy import GatePolicyRenderError, manifest_policy
+
+    try:  # #456: an invalid project gate policy stops the render before anything is written (fail closed)
+        manifest_policy(manifest)
+    except GatePolicyRenderError as exc:
+        raise PrivilegeConfinementError(str(exc)) from exc
     from agentteams.cli.wasm_sandbox_switch import (WasmSwitchError, advise_wasm, apply_wasm_switch,
                                                     report_wasm_wiring)
 

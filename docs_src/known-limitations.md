@@ -276,6 +276,18 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   (next entry).
 - **Tracking:** remediation log rows 388 and 413. Threat model v3, section 2a.
 
+### The project gate policy is advisory where nothing write-protects the gate
+
+- **What:** the policy's digest is recorded in the installed gate. On Copilot, on Grok, and in any team whose OS
+  sandbox is off, no OS write deny covers the gate or `.agentteams/gate-policy.json`. An agent that can write them
+  can clear the digest, which unpins the policy. A harness timeout, or a hook removed from settings, is still the
+  harness's own fail-open.
+- **Who:** teams that use `.agentteams/gate-policy.json` without the Claude OS sandbox.
+- **Mitigation:** run with the Claude sandbox on (the gate, its pin and the policy file get `denyWrite` and `Edit`
+  rules), and check `--check-wiring`, which marks the policy ADVISORY where this applies. See
+  [`gate_policy`](api-reference/gate-policy.md).
+- **Tracking:** issue #456.
+
 ### The project sandbox block does not confine network egress
 
 - **What:**
