@@ -18,6 +18,7 @@ from typing import Any
 # re-exported so analyze._plan_output_files resolves unchanged.
 from agentteams.write_policy import manifest_fields as _wp_manifest_fields
 from agentteams.write_policy import resolve as _wp_resolve
+from agentteams import agent_refactor_codes as _agent_refactor_codes
 from agentteams import branch_model as _branch_model
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
@@ -534,6 +535,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # WASM plan P14: wasm_policy.populate_placeholders fills these once the switch is resolved ("" while off).
     auto_resolved[SECURITY_ROWS_PLACEHOLDER] = auto_resolved[ROUTING_ROWS_PLACEHOLDER] = ""
     auto_resolved.update(_branch_model.default_placeholders())  # filled by branch_model at render time
+    # #453 opt-in: "" unless the brief sets agent_refactor.violation_codes, so the default render is byte-identical.
+    auto_resolved[_agent_refactor_codes.PLACEHOLDER] = _agent_refactor_codes.section(description)
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)
@@ -609,6 +612,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
             if isinstance(description.get("framework_conformance_check"), bool)
             else {}
         ),
+        **_agent_refactor_codes.manifest_fields(description),  # #453 opt-in; absent unless turned on
         "retrieval_trigger_contract_version": retrieval_integration.get("trigger_contract_version", "v1"),
         "retrieval_integration": retrieval_integration,
         **(

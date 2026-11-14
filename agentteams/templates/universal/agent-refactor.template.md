@@ -61,4 +61,4 @@ Check every agent file for:
 | Tool declarations | Read-only agents must NOT declare `edit` or `execute` tools |
 | Agent slugs | All agent slug references must resolve within the team |
 
-Report all violations to the orchestrator. Do not auto-fix violations that would change an agent's scope or access level.
+Report all violations to the orchestrator. Do not auto-fix violations that would change an agent's scope or access level.{AGENT_REFACTOR_VIOLATION_CODES}

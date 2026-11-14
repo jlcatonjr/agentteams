@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (opt-in typed violation codes for `@agent-refactor`; #453)
+
+- A brief that sets `agent_refactor.violation_codes: true` gives the agent-refactor file a "Violation Codes" section:
+  - the ten Chapter 13 codes, AR-01 to AR-10, each with the check that fires it;
+  - AR-05 fires above `agent_refactor.line_budget` lines (default 200), and its evidence gives the actual line count;
+  - findings are reported as code / file / evidence rows plus one `Counts:` line per code, so a closeout can report
+    "AR-05 x3, AR-09 x1" and runs can be compared;
+  - an uncited reference file has no code and is reported as an orphan finding, as in the chapter;
+  - AR-01 checks the template's five-field front-matter baseline, not the chapter's six. A file with no `handoffs:`
+    key is reported as AR-10.
+- Off by default. A brief without the key, or with `violation_codes` false, renders a byte-identical agent-refactor
+  file. `line_budget` takes effect only when the codes are on.
+- The section has no fence of its own and sits inside the file's whole-body `content` fence, so `--update --merge`
+  adds it when the switch is turned on. Turning it off again removes it, and the merge reports a shrink notice for
+  the `content` fence.
+- Both schemas define `agent_refactor`. The manifest carries it only when the codes are on.
+- Ledger row TA-009 stays `not-a-gap`, because the portable baseline is still the default. Its detail now records the
+  opt-in.
+
 ### changed (agents run GitHub management; required-check apply is approved per release)
 
 - `references/git-procedures.md` §G: the agent does branch, PR, merge, release and cleanup work with `git`/`gh`. The
