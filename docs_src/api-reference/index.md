@@ -193,6 +193,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`learned_blocks`](learned-blocks.md) | Pure-text parse/compose/verify of the learned block in markdown agent files and goose recipes |
 | [`branch_inventory`](branch-inventory.md) | `--branch-inventory`: read-only branch classification (ancestry, Merged-by-PR via the GitHub API, holds) and a leased deletion plan |
 | [`branch_model`](branch-model.md) | Brief `git_workflow`: trunk or integration-branch model; the integration rows and reference; the integration branch the branch tools keep |
+| [`agent_refactor_codes`](agent-refactor-codes.md) | Brief `agent_refactor`: the opt-in AR-01..AR-10 violation-code section for `@agent-refactor`, with the AR-05 line budget |
 | [`project_notes`](project-notes.md) | The USER-EDITABLE Project-Specific Notes section of agent personas (carved from `emit`) |
 | [`copilot_body_limit`](copilot-body-limit.md) | `--check`'s guard for operator notes past Copilot's 30,000-character agent-body limit |
 | [`bridge_refresh`](bridge-refresh.md) | What `--bridge-refresh` writes for `.goosehints`: the bridge fence, keeping project text around it |
