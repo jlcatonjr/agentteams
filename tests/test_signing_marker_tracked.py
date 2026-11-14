@@ -234,20 +234,74 @@ def test_a_staged_but_uncommitted_marker_still_governs_once_deleted(tmp_path):
 # --------------------------------------------------------------------------- --doctor names a committed deletion
 
 
-@needs_git
-def test_doctor_warns_when_a_committed_deletion_ended_governance(tmp_path, capsys):
-    """The one way out of governance (a committed deletion) is visible: --doctor names the deleting commit."""
+def _short_head(root: Path) -> str:
+    return subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def _team(root: Path) -> Path:
+    """A governed repo whose team dir holds another file too, so removing the marker leaves the dir in place."""
+    agents = _governed_repo(root)
+    (agents / "orchestrator.agent.md").write_text("team\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "team file")
+    return agents
+
+
+def _doctor(root: Path, capsys) -> str:
     from agentteams.doctor import run_doctor
 
-    _governed_repo(tmp_path)
+    assert run_doctor(str(root)) == 0  # these are WARN / INFO lines, never a FAIL
+    return capsys.readouterr().out
+
+
+@needs_git
+def test_doctor_warns_when_a_committed_deletion_ended_governance(tmp_path, capsys):
+    """The way out of governance (a deletion on every governing ref) is visible: --doctor names the commit."""
+    _team(tmp_path)
     _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
     _git(tmp_path, "commit", "-q", "-m", "drop the signing marker")
-    sha = subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "--short", "HEAD"], capture_output=True,
-                         text=True, check=True).stdout.strip()
-    assert run_doctor(str(tmp_path)) == 0  # a WARN, not a FAIL
-    out = capsys.readouterr().out
+    out = _doctor(tmp_path, capsys)
     assert "Signing governance" in out
-    assert f".claude/agents/{MARKER} is absent and was deleted in {sha} drop the signing marker" in out
+    assert (f".claude/agents/{MARKER} is absent and was deleted in {_short_head(tmp_path)} drop the signing marker; "
+            "no team dir in this project is signing-governed any more") in out
+
+
+@needs_git
+def test_a_marker_head_still_carries_is_not_reported(tmp_path, capsys):
+    """Deleted, re-added, then removed only in the working tree: HEAD has it, so no old deletion is named."""
+    agents = _team(tmp_path)
+    _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(tmp_path, "commit", "-q", "-m", "old deletion")
+    (agents / MARKER).write_text("governed\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "re-added")
+    (agents / MARKER).unlink()
+    assert signing_switch.marker_deletion_commits(tmp_path) == {}
+    assert "Signing governance" not in _doctor(tmp_path, capsys)
+
+
+@needs_git
+def test_the_wording_names_a_sibling_team_that_still_governs(tmp_path, capsys):
+    _team(tmp_path)
+    (tmp_path / ".github" / "agents").mkdir(parents=True)
+    (tmp_path / ".github" / "agents" / MARKER).write_text("governed\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "second team")
+    _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(tmp_path, "commit", "-q", "-m", "drop one")
+    out = _doctor(tmp_path, capsys)
+    assert "this team dir is no longer signing-governed (.github/agents still is)" in out
+
+
+@needs_git
+def test_a_removed_team_dir_is_one_info_line_not_a_warn(tmp_path, capsys):
+    _governed_repo(tmp_path)
+    _git(tmp_path, "rm", "-q", "-r", ".claude/agents")
+    _git(tmp_path, "commit", "-q", "-m", "remove the team")
+    out = _doctor(tmp_path, capsys)
+    assert f".claude/agents was removed; its {MARKER} was deleted in {_short_head(tmp_path)} remove the team" in out
+    assert "WARN .claude/agents" not in out
 
 
 @needs_git
@@ -270,39 +324,72 @@ def test_doctor_is_quiet_unless_a_deletion_was_committed(tmp_path, capsys, state
 
 
 @needs_git
-def test_marker_deletion_commit_is_none_outside_git_and_when_present(tmp_path):
-    agents = tmp_path / ".claude" / "agents"
-    agents.mkdir(parents=True)
-    assert signing_switch.marker_deletion_commit(agents) is None  # not a work tree
-    agents = _governed_repo(tmp_path / "repo")
-    assert signing_switch.marker_deletion_commit(agents) is None  # marker present
+def test_marker_deletion_commits_is_empty_outside_git_and_when_present(tmp_path):
+    (tmp_path / "plain" / ".claude" / "agents").mkdir(parents=True)
+    assert signing_switch.marker_deletion_commits(tmp_path / "plain") == {}  # not a work tree
+    _governed_repo(tmp_path / "repo")
+    assert signing_switch.marker_deletion_commits(tmp_path / "repo") == {}  # marker present
+
+
+def _deleted_in_history(root: Path) -> None:
+    _governed_repo(root)
+    _git(root, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(root, "commit", "-q", "-m", "drop")
 
 
 @needs_git
-def test_marker_deletion_commit_runs_git_hardened(tmp_path):
-    """The history lookup must not run a planted fsmonitor (same hardening as the governance check)."""
-    agents = _governed_repo(tmp_path)
-    _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
-    _git(tmp_path, "commit", "-q", "-m", "drop")
+def test_the_history_lookup_does_not_run_a_planted_fsmonitor(tmp_path):
+    _deleted_in_history(tmp_path)
     sentinel = tmp_path / "pwned"
     hook = tmp_path / "fsmon.sh"
     hook.write_text(f"#!/bin/sh\ntouch {sentinel}\n")
     hook.chmod(0o755)
     _git(tmp_path, "config", "core.fsmonitor", str(hook))
-    assert signing_switch.marker_deletion_commit(agents)
+    assert signing_switch.marker_deletion_commits(tmp_path)
     assert not sentinel.exists()
+
+
+@needs_git
+def test_the_history_lookup_does_not_run_a_planted_gpg_program(tmp_path):
+    """@security: log.showSignature in the repo config would run gpg.program to verify a signed commit."""
+    _governed_repo(tmp_path)
+    sentinel = tmp_path / "pwned"
+    fake_gpg = tmp_path / "fake-gpg.sh"
+    fake_gpg.write_text("#!/bin/sh\n"
+                        f'case " $* " in *" --verify "*) touch {sentinel}; exit 0;; esac\n'
+                        'printf "\\n[GNUPG:] SIG_CREATED D 1 8 00 0 0\\n" >&2\n'
+                        'printf -- "-----BEGIN PGP SIGNATURE-----\\n\\nAA==\\n-----END PGP SIGNATURE-----\\n"\n')
+    fake_gpg.chmod(0o755)
+    for key, value in (("gpg.program", str(fake_gpg)), ("user.signingkey", "fake"), ("log.showSignature", "true")):
+        _git(tmp_path, "config", key, value)
+    _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(tmp_path), "commit",
+                    "-q", "-S", "-m", "signed drop"], check=True, capture_output=True)
+    sentinel.unlink(missing_ok=True)  # signing at commit time is not the hazard; reading the history is
+    assert signing_switch.marker_deletion_commits(tmp_path)
+    assert not sentinel.exists()
+
+
+@needs_git
+def test_a_commit_subject_cannot_inject_terminal_escapes(tmp_path):
+    _governed_repo(tmp_path)
+    _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(tmp_path, "commit", "-q", "-m", "drop \x1b[2J\x1b]0;owned\x07 now")
+    (commit,) = signing_switch.marker_deletion_commits(tmp_path).values()
+    assert all(ch.isprintable() for ch in commit)
+    assert commit.endswith("drop [2J]0;owned now")
 
 
 @needs_git
 def test_doctor_says_a_branch_only_deletion_still_governs(tmp_path, capsys):
     """A deletion committed only on the agent's branch keeps governing; --doctor must not claim it ended."""
-    from agentteams.doctor import run_doctor
-
     _origin, agents = _clone_with_upstream(tmp_path)
     work = agents.parents[1]
+    (agents / "orchestrator.agent.md").write_text("team\n")  # the team dir outlives its marker
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "team file")
     _git(work, "rm", "-q", f".claude/agents/{MARKER}")
     _git(work, "commit", "-q", "-m", "ungovern on my branch")
-    run_doctor(str(work))
-    out = capsys.readouterr().out
-    assert "still governs until that deletion reaches the upstream" in out
+    out = _doctor(work, capsys)
+    assert "still governs until that deletion reaches the upstream and default branch" in out
     assert "no longer signing-governed" not in out

@@ -303,37 +303,64 @@ def is_governed(*dirs: Path) -> bool:
 
     Returns:
         True for a signing-governed team, including one whose tracked marker was deleted.
+
+    Raises:
+        Nothing.
     """
     return any(os.path.lexists(d / GOVERNED_MARKER) for d in dirs) or any(_marker_tracked(d) for d in dirs)
 
 
-def marker_deletion_commit(agents_dir: Path) -> str | None:
-    """The commit that deleted ``agents_dir``'s :data:`GOVERNED_MARKER`, when it is absent now (``--doctor``).
+def marker_deletion_commits(root: Path) -> dict[str, str]:
+    """The commit that deleted each team dir's :data:`GOVERNED_MARKER`, for markers gone from disk and HEAD.
 
-    A committed deletion is the one way to end governance (:func:`is_governed`), so ``--doctor`` names it rather than
-    letting it pass silently (IM item 17 addition). The newest deleting commit reachable from HEAD is found with a
-    hardened ``git log --diff-filter=D -1``. git stops at that commit, so the cost is a history walk only as far
-    back as the deletion.
+    Governance ends only when a deletion has reached the governing refs: HEAD, its upstream and ``origin/HEAD``
+    (:func:`is_governed`). ``--doctor`` names the deleting commit so that this never happens silently (IM item 17
+    addition).
+
+    A team dir counts only when its marker is absent on disk **and** in HEAD. A marker that HEAD still carries, for
+    example one re-added after an old deletion and now removed only in the working tree, is not a committed deletion.
+
+    One hardened ``git log --diff-filter=D --name-only`` over every candidate path finds the newest deletion of
+    each, so the history is walked once, not once per team dir. ``log.showSignature`` is forced off, so a planted
+    ``gpg.program`` cannot run. Commit subjects are repository text (C-4) and are reduced to printable characters.
 
     Args:
-        agents_dir: A team directory (for example ``<project>/.claude/agents``).
+        root: The project root.
 
     Returns:
-        ``"<short sha> <subject>"`` of the deleting commit; None when the marker exists, git never tracked a
-        deletion of it, the directory is not in a git work tree, or git is unavailable or times out.
+        ``{team_dir: "<short sha> <subject>"}`` for each :data:`TEAM_DIRS` entry whose marker was deleted in a
+        commit. Empty when nothing qualifies, when ``root`` is not in a git work tree, or when git is missing or
+        times out.
+
+    Raises:
+        Nothing.
     """
-    if os.path.lexists(agents_dir / GOVERNED_MARKER):
-        return None
-    root = _project_root(agents_dir)
-    if not root.is_dir():
-        return None
-    rel = (agents_dir / GOVERNED_MARKER).relative_to(root).as_posix()
+    absent = [t for t in TEAM_DIRS if not os.path.lexists(root / t / GOVERNED_MARKER)]
+    if not absent or not root.is_dir():
+        return {}
     try:
-        out = _git(root, "log", "--diff-filter=D", "-1", "--format=%h %s", "--", rel)
+        probe = _git(root, "cat-file", "--batch-check", stdin="".join(f"HEAD:./{t}/{GOVERNED_MARKER}\n" for t in absent))
+        if probe.returncode != 0:
+            return {}
+        candidates = [t for t, ln in zip(absent, probe.stdout.splitlines()) if ln.endswith(" missing")]
+        if not candidates:
+            return {}
+        # log.showSignature from the repository's config would run its gpg.program on a signed commit (@security).
+        out = _git(root, "-c", "log.showSignature=false", "log", "--no-show-signature", "--diff-filter=D",
+                   "--format=%x00%h %s", "--name-only", "--", *(f"{t}/{GOVERNED_MARKER}" for t in candidates))
     except (OSError, subprocess.SubprocessError, ValueError):
-        return None
-    line = out.stdout.strip() if out.returncode == 0 else ""
-    return line.splitlines()[0] if line else None
+        return {}
+    if out.returncode != 0:
+        return {}
+    wanted = {f"{t}/{GOVERNED_MARKER}": t for t in candidates}
+    found: dict[str, str] = {}
+    commit = ""
+    for ln in out.stdout.splitlines():
+        if ln.startswith("\x00"):
+            commit = "".join(ch for ch in ln[1:] if ch.isprintable())  # repository text (C-4): no escape bytes
+        elif commit and ln in wanted and wanted[ln] not in found:
+            found[wanted[ln]] = commit  # git log lists newest first: the first sighting is the newest deletion
+    return {t: found[t] for t in TEAM_DIRS if t in found}
 
 
 def _replace_no_follow(path: Path, text: str) -> None:
@@ -540,7 +567,7 @@ __all__ = [
     "TEAM_MARKER_REL",
     "apply_switch",
     "is_governed",
-    "marker_deletion_commit",
+    "marker_deletion_commits",
     "owns_switch",
     "read_switch",
     "review_lines",

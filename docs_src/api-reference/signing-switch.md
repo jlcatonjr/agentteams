@@ -90,13 +90,29 @@ A dir is governed when its `signing-governed.marker` exists, or when git still t
   calls per check; the callers are `--update`/projection writes and the decision-signing switch read when the
   switch file is missing, not a per-tool-call path.
 
-### `marker_deletion_commit(agents_dir) -> str | None`
+### `marker_deletion_commits(root) -> dict[str, str]`
 
-`"<short sha> <subject>"` of the newest commit reachable from HEAD that deleted `agents_dir`'s marker, when the
-marker is absent now; otherwise None (marker present, never deleted in a commit, not a git work tree, git missing or
-timing out). It runs a hardened `git log --diff-filter=D -1`, which stops at the deleting commit. `--doctor`'s
-**Signing governance** section uses it, together with `is_governed`, so that a committed deletion (the one way
-governance ends) is never silent.
+Returns `{team_dir: "<short sha> <subject>"}`: for each `TEAM_DIRS` entry whose marker is absent **on disk and in
+HEAD**, the newest commit that deleted it. A marker that HEAD still carries is not reported (for example one re-added
+after an old deletion and now removed only in the working tree). The result is empty outside a git work tree, without
+git, or on a timeout.
+
+- **One history walk.** A single `git log --diff-filter=D --name-only` covers every candidate path, rather than one
+  walk per team dir.
+- **Hardened.** git runs with the hardened config, and `log.showSignature` is forced off, so a planted `gpg.program`
+  cannot run.
+- **Clean subjects.** Commit subjects are reduced to printable characters, because they are repository text.
+
+`--doctor`'s **Signing governance** section uses this so that the end of governance, a deletion that has reached the
+upstream and default branch, is never silent. It combines this with `is_governed`, for this dir and its siblings,
+to say whether the team still governs (the deletion is on this branch only), is governed through a sibling team dir,
+or is not governed. A removed team dir gets one INFO line. The WARN repeats until the marker is restored.
+
+Limits:
+
+- Only the `TEAM_DIRS` paths under `--project` are checked.
+- A deletion outside the history git has locally (a shallow clone, rewritten history) is not seen. That reduces
+  visibility only; `is_governed` is unaffected.
 
 Where the marker is write-protected:
 
