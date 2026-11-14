@@ -101,7 +101,9 @@ def test_integration_render_adds_rows_naming_the_branch(template, names):
 def test_integration_reference_template_uses_only_known_placeholders():
     text = (TEMPLATES / bm.REFERENCE_TEMPLATE).read_text(encoding="utf-8")
     tokens = set(re.findall(r"\{([A-Z][A-Z0-9_]+)\}", text))
-    assert tokens <= {"PROJECT_NAME", *bm.VALUE_PLACEHOLDERS}
+    from agentteams import github_management as gm
+
+    assert tokens <= {"PROJECT_NAME", *bm.VALUE_PLACEHOLDERS, *gm.PLACEHOLDERS}
     assert "Never squash or rebase the release PR" in text
 
 

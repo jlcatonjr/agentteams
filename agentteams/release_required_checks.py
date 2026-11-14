@@ -1,21 +1,26 @@
-#!/usr/bin/env python3
-"""Switch main's required status checks when a release PR renames CI jobs (git-procedures §I).
+"""Switch the default branch's required status checks when a release PR renames CI jobs.
 
-A release PR (``dev`` → ``main``) that renames a job main requires, such as a runner bump (``test (ubuntu-24.04, 3.11)``
-→ ``test (ubuntu-26.04, 3.11)``) or a matrix change, cannot merge: GitHub waits for a check its workflows no longer
+Shipped to generated teams as ``python -m agentteams.release_required_checks`` (brief option
+``git_workflow.agent_github_management``; procedure: the team's ``references/integration-branch.reference.md`` §3 and
+``@git-operations`` rule 12). In AgentTeamsModule itself: ``references/git-procedures.md`` §I.
+
+A release PR (integration branch → default branch, e.g. ``dev`` → ``main``) that renames a job the default branch
+requires, such as a runner bump (``test (ubuntu-24.04, 3.11)`` → ``test (ubuntu-26.04, 3.11)``) or a matrix change,
+cannot merge: GitHub waits for a check its workflows no longer
 produce. The required set has to change at the moment the PR's new checks are green, and no earlier, or every other PR
-into main waits on checks its own ``ci.yml`` never produces.
+into the default branch waits on checks its own ``ci.yml`` never produces.
 
-**Operator-approved per release.** Changing branch protection changes what guards ``main``. An agent may run
-``--apply`` only after the operator approves that run's fingerprint in the live session and ``@security`` clears it
-(git-procedures §I).
+**Operator-approved per run.** Changing branch protection changes what guards the default branch. An agent may run
+``--apply`` only after the operator approves that run's fingerprint in the live session and ``@security`` clears it.
+Only classic branch protection is switched: required checks that come from a repository ruleset, or a token without
+admin rights, refuse (hand the step to the operator).
 
 Usage::
 
-    python3 scripts/release_required_checks.py --pr 512                  # dry run: shows the change and a fingerprint
-    python3 scripts/release_required_checks.py --pr 512 --apply 3fa9c1d2e4b5
-    python3 scripts/release_required_checks.py --restore ~/.local/state/agentteams/branch-protection/<file>.json
-    python3 scripts/release_required_checks.py --restore <that file> --apply <fingerprint it printed>
+    python3 -m agentteams.release_required_checks --pr 512                  # dry run: the change and a fingerprint
+    python3 -m agentteams.release_required_checks --pr 512 --apply 3fa9c1d2e4b5
+    python3 -m agentteams.release_required_checks --restore ~/.local/state/agentteams/branch-protection/<file>.json
+    python3 -m agentteams.release_required_checks --restore <that file> --apply <fingerprint it printed>
 
 The proposal keeps every required check the PR still produces. A required check it no longer produces is replaced
 by the PR's checks with the same name once version numbers are masked. Any other change needs ``--add NAME`` (a check
@@ -39,6 +44,9 @@ from pathlib import Path
 
 GREEN = {"success"}
 BACKUP_DIR = Path.home() / ".local" / "state" / "agentteams" / "branch-protection"
+#: How the dry run, ``--apply`` and ``--restore`` print the command to run next.
+COMMAND = "python3 -m agentteams.release_required_checks"
+_BACKUP_SUFFIX = "-required-checks-"
 _VERSION = re.compile(r"\d+(?:\.\d+)*")
 
 
@@ -81,7 +89,7 @@ def propose(
     add: list[str] | None = None,
     drop: list[str] | None = None,
 ) -> Proposal:
-    """Work out main's new required set from the release PR's checks.
+    """Work out the default branch's new required set from the release PR's checks.
 
     Args:
         required: Main's current required checks, ``context -> app_id``.
@@ -100,7 +108,7 @@ def propose(
     add, drop = list(add or []), list(drop or [])
     for name in drop:
         if name not in required:
-            raise Refused(f"--drop {name!r}: main does not require it")
+            raise Refused(f"--drop {name!r}: the default branch does not require it")
     for name in add:
         if name not in pr_checks:
             raise Refused(f"--add {name!r}: the PR produces no check by that name")
@@ -127,7 +135,7 @@ def propose(
     if unresolved:
         raise Refused(
             "the PR produces no check for required " + ", ".join(repr(c) for c in unresolved)
-            + " and none renamed to it; pass --drop for a check main should stop requiring, or wait for the PR's checks"
+            + " and none renamed to it; pass --drop for a check the default branch should stop requiring, or wait for the PR's checks"
         )
     for name in add:
         if pr_checks[name][1] == -1:
@@ -135,7 +143,7 @@ def propose(
                           "only a check run from a GitHub App can be pinned")
         new[name] = pr_checks[name][1]
     if not new:
-        raise Refused("the proposal requires no checks at all; main must keep at least one required check")
+        raise Refused("the proposal requires no checks at all; the default branch must keep at least one required check")
     not_green = sorted(n for n in new if pr_checks.get(n, ("", 0))[0] not in GREEN)
     return Proposal(old=dict(required), new=new, replaced=replaced, not_green=not_green)
 
@@ -145,7 +153,7 @@ def fingerprint(proposal: Proposal, *, strict: bool, pr: int, head_sha: str) -> 
 
     Args:
         proposal: The proposed change.
-        strict: Main's current ``strict`` setting (kept unchanged).
+        strict: The default branch's current ``strict`` setting (kept unchanged).
         pr: The release PR number.
         head_sha: The PR head commit the checks were read from.
 
@@ -167,26 +175,45 @@ def _gh(*args: str, stdin: str | None = None) -> str:
     return proc.stdout
 
 
-def _protection(repo: str) -> tuple[bool, dict[str, int]]:
-    doc = json.loads(_gh("api", f"repos/{repo}/branches/main/protection/required_status_checks"))
+def _default_branch(repo: str) -> str:
+    return _gh("api", f"repos/{repo}", "-q", ".default_branch").strip()
+
+
+def _refuse_rulesets(repo: str, branch: str) -> None:
+    """Refuse when a repository ruleset requires status checks on ``branch``: this command switches only classic
+    branch protection, so it would leave the ruleset's (old) names required and the release blocked."""
+    rules = json.loads(_gh("api", f"repos/{repo}/rules/branches/{branch}") or "[]")
+    if any(r.get("type") == "required_status_checks" for r in rules):
+        raise Refused(f"{branch}'s required checks come from a repository ruleset; this command switches only classic "
+                      "branch protection. Hand the ruleset change to the operator")
+
+
+def _protection(repo: str, branch: str) -> tuple[bool, dict[str, int]]:
+    try:
+        raw = _gh("api", f"repos/{repo}/branches/{branch}/protection/required_status_checks")
+    except Refused as exc:
+        raise Refused(f"cannot read {branch}'s required checks ({exc}). Reading and changing branch protection needs "
+                      "an admin token; without one, hand the step to the operator") from None
+    doc = json.loads(raw)
     checks = {c["context"]: c.get("app_id") if c.get("app_id") is not None else -1 for c in doc.get("checks", [])}
     for ctx in doc.get("contexts", []):
         checks.setdefault(ctx, -1)
     return bool(doc.get("strict")), checks
 
 
-def _pr(repo: str, pr: int) -> tuple[str, dict[str, tuple[str, int]]]:
+def _pr(repo: str, pr: int, base: str, integration: str) -> tuple[str, dict[str, tuple[str, int]]]:
     meta = json.loads(_gh("pr", "view", str(pr), "-R", repo, "--json",
                           "state,baseRefName,headRefName,headRefOid,isCrossRepository"))
     if meta["state"] != "OPEN":
         raise Refused(f"PR {pr} is {meta['state']}, not open")
-    if meta["baseRefName"] != "main":
-        raise Refused(f"PR {pr} targets {meta['baseRefName']}, not main")
+    if meta["baseRefName"] != base:
+        raise Refused(f"PR {pr} targets {meta['baseRefName']}, not the default branch {base}")
     if meta["isCrossRepository"]:
-        raise Refused(f"PR {pr} comes from a fork; only a branch of {repo} itself may switch main's checks")
+        raise Refused(f"PR {pr} comes from a fork; only a branch of {repo} itself may switch {base}'s checks")
     head = meta["headRefName"]
-    if head != "dev" and not head.startswith("hotfix/"):
-        raise Refused(f"PR {pr} comes from {head}; only a release PR (dev) or a hotfix/* PR may switch main's checks")
+    if head != integration and not head.startswith("hotfix/"):
+        raise Refused(f"PR {pr} comes from {head}; only a release PR ({integration}) or a hotfix/* PR may switch "
+                      f"{base}'s checks")
     sha = meta["headRefOid"]
     lines = _gh("api", f"repos/{repo}/commits/{sha}/check-runs?per_page=100", "--paginate",
                 "--jq", ".check_runs[] | {id, name, conclusion, app: .app.id}")
@@ -200,14 +227,26 @@ def _pr(repo: str, pr: int) -> tuple[str, dict[str, tuple[str, int]]]:
     return sha, checks
 
 
-def _patch(repo: str, strict: bool, checks: dict[str, int]) -> None:
+def _patch(repo: str, branch: str, strict: bool, checks: dict[str, int]) -> None:
     body = {"strict": strict, "checks": [{"context": c, "app_id": a} for c, a in sorted(checks.items())]}
-    _gh("api", "-X", "PATCH", f"repos/{repo}/branches/main/protection/required_status_checks", "--input", "-",
+    _gh("api", "-X", "PATCH", f"repos/{repo}/branches/{branch}/protection/required_status_checks", "--input", "-",
         stdin=json.dumps(body))
 
 
 def _repo(arg: str | None) -> str:
     return arg or _gh("repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner").strip()
+
+
+def _integration(arg: str | None) -> str:
+    """The integration branch: ``--integration-branch``, else the brief's ``git_workflow``, else ``dev``."""
+    if arg:
+        return arg
+    from agentteams.branch_model import DEFAULT_INTEGRATION_BRANCH, integration_branch_from_project
+
+    try:
+        return integration_branch_from_project(Path.cwd()) or DEFAULT_INTEGRATION_BRANCH
+    except ValueError as exc:
+        raise Refused(str(exc)) from None
 
 
 # --------------------------------------------------------------------------- commands
@@ -221,8 +260,8 @@ def _app(app: int) -> str:
     return "[any source: UNPINNED]" if app == -1 else f"[app {app}]"
 
 
-def _show(p: Proposal) -> None:
-    print("main requires now:")
+def _show(p: Proposal, branch: str = "the default branch") -> None:
+    print(f"{branch} requires now:")
     for c, app in sorted(p.old.items()):
         print(f"  {_safe(c)} {_app(app)}")
     print("proposed:")
@@ -238,9 +277,12 @@ def _show(p: Proposal) -> None:
 def _restore(repo: str, path: Path, apply_fp: str | None) -> int:
     """Put back the protection an ``--apply`` saved: shown first, then applied with its fingerprint."""
     path = path.expanduser().resolve()
-    if path.parent != BACKUP_DIR.resolve() or not path.name.startswith("main-required-checks-"):
-        raise Refused(f"--restore takes only a backup this script wrote in {BACKUP_DIR}")
+    if path.parent != BACKUP_DIR.resolve() or _BACKUP_SUFFIX not in path.name or path.suffix != ".json":
+        raise Refused(f"--restore takes only a backup this command wrote in {BACKUP_DIR}")
     saved = json.loads(path.read_text(encoding="utf-8"))
+    branch = saved.get("branch", "main")                    # backups before 2026-11-14 were main's
+    if not path.name.startswith(f"{branch}{_BACKUP_SUFFIX}"):
+        raise Refused(f"the backup's name does not match its branch {branch!r}; not restoring")
     before = Proposal(old=dict(saved["after"]["checks"]), new=dict(saved["before"]["checks"]))
     if saved.get("repo") != repo:
         raise Refused(f"the backup is for {saved.get('repo')}, not {repo}")
@@ -248,26 +290,26 @@ def _restore(repo: str, path: Path, apply_fp: str | None) -> int:
                    head_sha=saved["head"]) != saved.get("fingerprint"):
         raise Refused("the backup's contents do not match its recorded fingerprint; not restoring")
     if not before.new:
-        raise Refused("the backup's earlier set is empty; main must keep at least one required check")
-    strict, current = _protection(repo)
+        raise Refused(f"the backup's earlier set is empty; {branch} must keep at least one required check")
+    _refuse_rulesets(repo, branch)
+    strict, current = _protection(repo, branch)
     if saved["before"]["strict"] != strict:
-        raise Refused(f"the backup would set strict={saved['before']['strict']}, but main has strict={strict}; "
+        raise Refused(f"the backup would set strict={saved['before']['strict']}, but {branch} has strict={strict}; "
                       "--apply never changes strict, so a backup that does is not one it wrote")
     if current != before.old:
-        raise Refused("main's required checks are no longer the set that --apply wrote; not restoring")
-    _show(before)
+        raise Refused(f"{branch}'s required checks are no longer the set that --apply wrote; not restoring")
+    _show(before, branch)
     fp = fingerprint(before, strict=strict, pr=saved["pr"], head_sha=saved["head"])
     if apply_fp is None:
-        print(f"\nfingerprint {fp}\napply: python3 {shlex.quote(str(Path(__file__).resolve()))} "
-              f"--restore {shlex.quote(str(path))} --apply {fp}")
+        print(f"\nfingerprint {fp}\napply: {COMMAND} --restore {shlex.quote(str(path))} --apply {fp}")
         return 0
     if apply_fp != fp:
         raise Refused(f"fingerprint {apply_fp} does not match the restore shown now ({fp}); run it again")
-    _patch(repo, strict, before.new)
-    _, now = _protection(repo)
+    _patch(repo, branch, strict, before.new)
+    _, now = _protection(repo, branch)
     if now != before.new:
-        raise Refused(f"after the restore main requires {sorted(now)}")
-    print(f"restored main's required checks from {path}")
+        raise Refused(f"after the restore {branch} requires {sorted(now)}")
+    print(f"restored {branch}'s required checks from {path}")
     return 0
 
 
@@ -282,7 +324,9 @@ def run(argv: list[str] | None = None) -> int:
     """
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--repo", help="owner/name (default: this checkout's GitHub repository)")
-    ap.add_argument("--pr", type=int, help="the open release (dev) or hotfix PR into main")
+    ap.add_argument("--pr", type=int, help="the open release (integration branch) or hotfix/* PR into the default branch")
+    ap.add_argument("--integration-branch", metavar="NAME",
+                    help="the release PR's head branch (default: the brief's git_workflow.integration_branch, else dev)")
     ap.add_argument("--add", action="append", default=[], metavar="NAME", help="also require this PR check")
     ap.add_argument("--drop", action="append", default=[], metavar="NAME", help="stop requiring this check")
     ap.add_argument("--apply", metavar="FINGERPRINT", help="apply the change (or restore) the dry run printed")
@@ -294,12 +338,14 @@ def run(argv: list[str] | None = None) -> int:
             return _restore(repo, a.restore, a.apply)
         if a.pr is None:
             ap.error("--pr is required unless --restore is given")
-        strict, required = _protection(repo)
-        head, pr_checks = _pr(repo, a.pr)
+        base = _default_branch(repo)
+        _refuse_rulesets(repo, base)
+        strict, required = _protection(repo, base)
+        head, pr_checks = _pr(repo, a.pr, base, _integration(a.integration_branch))
         p = propose(required, pr_checks, a.add, a.drop)
-        _show(p)
+        _show(p, base)
         if p.new == p.old:
-            print("no change needed: main already requires exactly these checks")
+            print(f"no change needed: {base} already requires exactly these checks")
             return 0
         if p.not_green:
             raise Refused("not green on the PR head yet: " + ", ".join(p.not_green))
@@ -307,24 +353,24 @@ def run(argv: list[str] | None = None) -> int:
         if not a.apply:
             extra = "".join(f" --add {shlex.quote(n)}" for n in a.add) + "".join(f" --drop {shlex.quote(n)}" for n in a.drop)
             print(f"\nfingerprint {fp} (PR {a.pr} head {head[:12]}, strict={strict})")
-            print(f"apply: python3 {shlex.quote(str(Path(__file__).resolve()))} --pr {a.pr}{extra} --apply {fp}")
+            ib = f" --integration-branch {shlex.quote(a.integration_branch)}" if a.integration_branch else ""
+            print(f"apply: {COMMAND} --pr {a.pr}{ib}{extra} --apply {fp}")
             return 0
         if a.apply != fp:
-            raise Refused(f"fingerprint {a.apply} does not match the current proposal {fp}: the PR head, main's "
+            raise Refused(f"fingerprint {a.apply} does not match the current proposal {fp}: the PR head, {base}'s "
                           "required checks or the arguments changed since the dry run; run it again")
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        backup = BACKUP_DIR / f"main-required-checks-{datetime.now(UTC):%Y%m%dT%H%M%SZ}.json"
+        backup = BACKUP_DIR / f"{base}{_BACKUP_SUFFIX}{datetime.now(UTC):%Y%m%dT%H%M%SZ}.json"
         backup.write_text(json.dumps({
-            "repo": repo, "pr": a.pr, "head": head, "fingerprint": fp,
+            "repo": repo, "branch": base, "pr": a.pr, "head": head, "fingerprint": fp,
             "before": {"strict": strict, "checks": sorted(p.old.items())},
             "after": {"strict": strict, "checks": sorted(p.new.items())},
         }, indent=2) + "\n", encoding="utf-8")
-        _patch(repo, strict, p.new)
-        _, now = _protection(repo)
+        _patch(repo, base, strict, p.new)
+        _, now = _protection(repo, base)
         if now != p.new:
-            raise Refused(f"after the change main requires {sorted(now)}; restore with --restore {backup}")
-        print(f"main now requires the proposed set. Undo (shows it first): python3 "
-              f"{shlex.quote(str(Path(__file__).resolve()))} --restore {shlex.quote(str(backup))}")
+            raise Refused(f"after the change {base} requires {sorted(now)}; restore with --restore {backup}")
+        print(f"{base} now requires the proposed set. Undo (shows it first): {COMMAND} --restore {shlex.quote(str(backup))}")
         return 0
     except Refused as exc:
         print(f"STOPPED: {exc}", file=sys.stderr)

@@ -534,6 +534,10 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # WASM plan P14: wasm_policy.populate_placeholders fills these once the switch is resolved ("" while off).
     auto_resolved[SECURITY_ROWS_PLACEHOLDER] = auto_resolved[ROUTING_ROWS_PLACEHOLDER] = ""
     auto_resolved.update(_branch_model.default_placeholders())  # filled by branch_model at render time
+    # git_workflow.agent_github_management (on by default): rule 12 / approval rows; "" when off (byte-identical)
+    from agentteams import github_management as _github_management
+
+    auto_resolved.update(_github_management.placeholders(description))
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)

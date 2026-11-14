@@ -109,6 +109,8 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     # (1) destructive / bulk / cross-repo (stems cover -s/-ed/-ing/-ion/-al inflections)
     "delet", "remov", "rm", "overwrit", "prun", "destroy", "destruct", "drop", "purg",
     "forc", "reset", "bulk", "cross-repo", "push", "deploy", "merg", "wipe", "truncat", "revert",
+    # what guards the default branch (git_workflow.agent_github_management: per-action live approval only)
+    "protect", "required-check", "ruleset",
     # (2) governance / trust roots (incl. this feature's own ledger + roster + key config,
     # so a directive can never widen its own trust base — @security condition 2c)
     "constitution", "invariant", "governance", "reference-template", "capability-grant",

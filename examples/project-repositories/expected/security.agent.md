@@ -51,7 +51,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=23 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=24 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -60,6 +60,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any command that deletes a repository or remote resource (`gh repo delete`, `gh api -X DELETE`) | Irreversible remote/repo loss — C-5 authorization required BEFORE execution |
 | Any command that deletes a git ref or worktree (`git push --delete`/`--mirror`/`--prune`, `git push … :ref`, `git branch`/`tag -d`/`-D`, `git update-ref -d`, `git worktree remove`) | Irreversible ref/history loss |
 | Any `agentteams --branch-cleanup … --apply` (needs your PASS on `branch-cleanup:<plan sha256>`, recorded before execution) or `--branch-post-merge … --apply` (runs under an operator Ed25519 `branch-delete` grant — verify it is the second-parent branch of the merge just pushed). A HALT on `branch-delete` stops both. Procedure: `references/branch-lifecycle.reference.md` §4 | Branch/ref loss — bulk and remote deletion |
+| Any `python -m agentteams.release_required_checks … --apply` (changes the default branch's required checks; needs the operator's live approval of that fingerprint and your clearance `release-required-checks:<fingerprint>`, recorded before execution) or any other write to a branch-protection or ruleset endpoint (`gh api -X PATCH/PUT/DELETE …/protection`, `…/rulesets`) — refuse the direct call | Weakens what guards the default branch — C-5 clearance BEFORE execution; never under a standing grant or a management directive |
 | Any destructive filesystem or infrastructure delete (`rm -rf`, `rmdir`, `shred`, `truncate`, `find … -delete`, `dd of=`, `kubectl delete`, `terraform destroy`, `docker rm`/`rmi`/`system prune`, cloud `… delete`, SQL `DROP`/`TRUNCATE`) | Irreversible data/resource loss |
 | Any modification to `.github/agents/*.agent.md` | Scope creep, privilege escalation |
 | Any operation that writes to an external repository | Cross-repo contamination |
@@ -479,7 +480,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-11-14T04:34:52Z`
+Generated at: `2026-11-14T18:52:18Z`
 
 **Sources:**
 

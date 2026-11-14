@@ -176,6 +176,13 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      r"\bpulls/[^\s/]+/merge\b|"
      r"\b(?:mergePullRequest|enablePullRequestAutoMerge)\b",
      "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
+    # What guards the default branch (git_workflow.agent_github_management): a required-check switch runs only as
+    # `release_required_checks --apply <fingerprint>` after the operator approves that fingerprint, and a direct write
+    # to a branch-protection or ruleset endpoint is never the path. Both prompt, whatever client sends them.
+    ("branch-protection-write",
+     r"\b(?:gh\s+api|curl)\b(?=[^\n]*(?:-X\s*|--request[\s=]+|--method[\s=]+)(?:PATCH|PUT|DELETE|POST)\b)"
+     r"(?=[^\n]*/(?:protection|rulesets)\b)|\brelease_required_checks\b[^\n]*--appl",
+     "default-branch protection change — the operator approves that fingerprint; @security clears it first"),
     ("git-remote-delete", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*(?:--delete|--mirror|--prune|\s:\S))",
      "remote branch/tag deletion or mirror/prune push — irreversible remote loss"),
     ("git-ref-delete", r"\bgit\b[^\n]*\b(?:branch|tag)\s+(?:-[a-zA-Z]*[dD]\b|--delete\b)|"

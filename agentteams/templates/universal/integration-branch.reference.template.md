@@ -6,7 +6,7 @@ SECTION MANIFEST
 | project_notes      | USER-EDITABLE |
 -->
 
-<!-- AGENTTEAMS:BEGIN integration_branch v=1 -->
+<!-- AGENTTEAMS:BEGIN integration_branch v=2 -->
 # Integration-Branch Model — {PROJECT_NAME}
 
 {PROJECT_NAME} uses the **integration-branch model** (brief `git_workflow.branch_model: "integration"`).
@@ -55,7 +55,7 @@ report its command and result in `@git-operations`' output contract (`Local gate
    `git log --first-parent --merges --format='- %s' origin/<default>..origin/{INTEGRATION_BRANCH}`.
 2. That PR's CI is the one cloud gate. Fix failures **on `{INTEGRATION_BRANCH}`** and batch the fixes, because
    each push re-runs CI. Checks only the cloud runs (other operating systems, container-only jobs) are first
-   exercised here.
+   exercised here.{GITHUB_MGMT_RELEASE_STEP}
 3. Merge with a **merge commit**. **Never squash or rebase the release PR.** Either one
    leaves the default branch with history `{INTEGRATION_BRANCH}` lacks: every later release PR re-conflicts,
    and no integrated branch is ever recognized as merged.
