@@ -661,3 +661,24 @@ def test_the_team_id_comes_from_the_projects_own_brief(tmp_path, capsys) -> None
     (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "team_id": _TEAM}))
     assert run_toolchain_group(_verb_args(team, verify_toolchain_group=True)) == 0
     assert "acme/toolkit" in capsys.readouterr().out
+
+
+# --- conflict audit (2026-11-14): the verify verb agrees with a render ----------------------------------------
+
+def test_the_verify_verb_refuses_an_ungoverned_workspace(tmp_path, capsys) -> None:
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    root, team, private = _project(tmp_path, governed=False)
+    _write(root, _doc(private))
+    assert run_toolchain_group(_verb_args(team, verify_toolchain_group=True, team_id=_TEAM)) == 1
+    assert "not governed" in capsys.readouterr().err
+
+
+def test_the_verify_verb_exits_1_when_every_member_is_halted(tmp_path, capsys) -> None:
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _log(team, _row("s10-cooldown-exempt:acme/toolkit", verdict="HALT", stamp="2026-11-14"))
+    assert run_toolchain_group(_verb_args(team, verify_toolchain_group=True, team_id=_TEAM)) == 1
+    assert "every group member is HALTed" in capsys.readouterr().err
