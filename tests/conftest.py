@@ -372,3 +372,16 @@ def _no_real_operator_key_dir(tmp_path_factory, monkeypatch):
 
     empty = tmp_path_factory.getbasetemp() / "no-operator-keys"
     monkeypatch.setattr(ops, "_key_dir", lambda: empty)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_hmac_key_dir(tmp_path_factory, monkeypatch):
+    """No test may read the operator's real ~/.config/agentteams/keys/<kind>-hmac.key (hmac-key-autoresolve).
+
+    With an AGENTTEAMS_*_SIGNING_KEY unset, the HMAC signers and verifiers fall back to that directory. Tests
+    that want a key file patch ``hmac_key_dir`` themselves (tests/test_hmac_key_files.py).
+    """
+    import agentteams.cli.signed_ledger as sl
+
+    monkeypatch.setattr(sl, "hmac_key_dir", lambda: tmp_path_factory.getbasetemp() / "no-hmac-keys")
+    monkeypatch.setattr(sl, "_warned_both", set())

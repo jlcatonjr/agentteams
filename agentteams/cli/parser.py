@@ -1592,7 +1592,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help=(
             "Operator-only: sign .agentteams/carveouts.json with the operator Ed25519 key (the file named by "
-            "AGENTTEAMS_DECISION_ED25519_KEYFILE) and --key-id, after the same preflight, integrity check, review "
+            "AGENTTEAMS_DECISION_ED25519_KEYFILE, else ~/.config/agentteams/keys/decision-signing-<key-id>.pem) "
+            "and --key-id, after the same preflight, integrity check, review "
             "digest and confirmation (--confirm-review-sha256 without a terminal) as --sign-decision. The signature "
             "is verified against <decision_log>/references/authorized-verify-keys/<key-id>.pub.pem before the "
             "registry is rewritten. Every carve-out relaxes a rule clause, so an unsigned registry renders nothing."

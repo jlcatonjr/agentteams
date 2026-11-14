@@ -176,7 +176,7 @@ def run_sign_carveouts(project_dir: str | None, key_id: str | None, *, confirm_s
         print(f"Error: sequence must be higher than the committed one ({last}); raise it, then sign.", file=sys.stderr)
         return 1
     body = {k: v for k, v in registry.items() if k != "signature"}
-    preflight = ops._signing_preflight(ops._project_roots(team_dir), allow_checkout)
+    preflight = ops._signing_preflight(ops._project_roots(team_dir), allow_checkout, key_id)
     if preflight is None:
         return 1
     keyfile, _overridden = preflight

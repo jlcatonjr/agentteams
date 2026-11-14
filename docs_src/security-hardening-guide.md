@@ -160,9 +160,15 @@ the signature scheme; it is a statement about custody.
 
 **Do:**
 
-- Hold the key in an OS keychain or a secret manager, and inject it only into the specific
-  command that needs it (`AGENTTEAMS_WAIVER_SIGNING_KEY=$(security find-generic-password …)
-  agentteams …`), so it lives for one process rather than one shell session.
+- Keep the key in its key file, `~/.config/agentteams/keys/<kind>-hmac.key` (mode 600), where kind is
+  `waiver`, `decision`, `grant` or `management`. With the variable unset, agentteams reads the file, and
+  every emitted sandbox read-denies that directory, so a sandboxed command fails closed instead of
+  inheriting the key. The file is refused when it is a symlink, sits behind a symlinked `keys/`, is
+  readable by others, or would be read by an install an agent could edit (a checkout or an
+  agent-writable root; see "Signing from a trusted install" in `SECURITY.md`). Otherwise hold it in an
+  OS keychain and inject it only into the one command that needs it
+  (`AGENTTEAMS_WAIVER_SIGNING_KEY=$(security find-generic-password …) agentteams …`). A set variable
+  always wins, and agentteams warns when the key file exists too.
 - Keep it out of any environment an agent can read. An agent with `Bash` can read `env`.
 - Make it strong: at least 32 bytes of random, e.g.
   `python -c 'import secrets; print(secrets.token_hex(32))'`. Since rc.12 signing and verifying
@@ -248,16 +254,18 @@ print(",".join(row[c] for c in header))                  # append this row to th
 
 **Verify existing waivers (read-only; never consumes a use):**
 ```bash
-# the key the waivers were signed with: at least 32 bytes of random, never a placeholder
-# (first-time setup: export AGENTTEAMS_WAIVER_SIGNING_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')")
-export AGENTTEAMS_WAIVER_SIGNING_KEY="$(security find-generic-password -s agentteams-waiver -w)"
+# the key the waivers were signed with: at least 32 bytes of random, never a placeholder.
+# First-time setup, into the key file agentteams reads when the variable is unset:
+#   (umask 077; python3 -c 'import secrets; print(secrets.token_hex(32))' > ~/.config/agentteams/keys/waiver-hmac.key)
+# Moving a Keychain key there:
+#   (umask 077; security find-generic-password -s agentteams-waiver -w > ~/.config/agentteams/keys/waiver-hmac.key)
 agentteams --verify-waivers --output /path/to/project
 #   [OK ] waiver-freshness-001 (action=security-intel-freshness)
 #   1 waiver(s): 1 valid, 0 invalid.
 ```
 `--verify-waivers` reports the signature, expiry, use-limit, and condition status of
 every waiver **without minting or consuming one** (exit non-zero if any is invalid).
-Without `AGENTTEAMS_WAIVER_SIGNING_KEY`, rows are reported invalid (unverifiable)
+Without `AGENTTEAMS_WAIVER_SIGNING_KEY` or its key file, rows are reported invalid (unverifiable)
 rather than silently skipped.
 
 ---

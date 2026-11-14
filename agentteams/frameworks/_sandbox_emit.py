@@ -237,7 +237,8 @@ def signing_keyfile_warnings(keyfile: str) -> list[str]:
         if os.path.dirname(real) == legacy and os.path.isfile(moved):
             return [
                 f"{keyfile} does not exist, but {moved} does: the key was migrated into "
-                f"{SIGNING_KEY_DIR}. Export AGENTTEAMS_DECISION_ED25519_KEYFILE=\"{moved}\"."
+                f"{SIGNING_KEY_DIR}. Unset AGENTTEAMS_DECISION_ED25519_KEYFILE so the signer finds it by key_id, "
+                f"or set it to \"{moved}\" on the signing command only (never export it)."
             ]
         return []
     out: list[str] = []

@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from agentteams.atomicio import atomic_rewrite_csv_rows
-from agentteams.cli.signed_ledger import require_strong_hmac_key
+from agentteams.cli.signed_ledger import load_hmac_key, require_strong_hmac_key
 
 # --- migrate destructive-gate exemption -----------------------------------
 #
@@ -447,9 +447,10 @@ def _consume_security_waiver_use(output_dir: Path, waiver: dict[str, str], *, ac
     if not target_id:
         raise RuntimeError("validated waiver is missing waiver_id")
 
-    signing_key = os.getenv("AGENTTEAMS_WAIVER_SIGNING_KEY", "")
+    signing_key = load_hmac_key("AGENTTEAMS_WAIVER_SIGNING_KEY")
     if not signing_key:
-        raise RuntimeError("waiver signing key is not configured")
+        raise RuntimeError("waiver signing key is not configured (set AGENTTEAMS_WAIVER_SIGNING_KEY, or put it in "
+                           "~/.config/agentteams/keys/waiver-hmac.key, mode 600)")
     require_strong_hmac_key(signing_key, "waiver signing key")
 
     updated = False
@@ -569,9 +570,10 @@ def _validate_security_waiver(
     if max_uses <= 0 or uses >= max_uses:
         raise RuntimeError("waiver use limit has been reached")
 
-    signing_key = os.getenv("AGENTTEAMS_WAIVER_SIGNING_KEY", "")
+    signing_key = load_hmac_key("AGENTTEAMS_WAIVER_SIGNING_KEY")
     if not signing_key:
-        raise RuntimeError("waiver signing key is not configured")
+        raise RuntimeError("waiver signing key is not configured (set AGENTTEAMS_WAIVER_SIGNING_KEY, or put it in "
+                           "~/.config/agentteams/keys/waiver-hmac.key, mode 600)")
     require_strong_hmac_key(signing_key, "waiver signing key")
 
     payload = "|".join(waiver.get(f, "").strip() for f in _WAIVER_SIGNATURE_FIELDS)

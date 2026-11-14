@@ -35,6 +35,7 @@ from agentteams.cli.effect_classifier import (
 )
 from agentteams.cli.signed_ledger import (
     SIG_SCHEME_ED25519,
+    load_hmac_key,
     path_within,
     require_strong_hmac_key,
     verify_by_scheme,
@@ -355,7 +356,8 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
 
     Args:
         row: The decision row, using either supported schema.
-        key: Signing key. Defaults to ``AGENTTEAMS_DECISION_SIGNING_KEY``.
+        key: Signing key. Defaults to ``AGENTTEAMS_DECISION_SIGNING_KEY``, else its key file
+            (:func:`~agentteams.cli.signed_ledger.load_hmac_key`).
 
     Returns:
         Hex digest.
@@ -370,9 +372,10 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
 
 def _hmac_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     """The HMAC over the row exactly as it stands (no binding): the verifier side of :func:`sign_decision_row`."""
-    signing_key = key if key is not None else os.getenv("AGENTTEAMS_DECISION_SIGNING_KEY", "")
+    signing_key = key if key is not None else load_hmac_key("AGENTTEAMS_DECISION_SIGNING_KEY")
     if not signing_key:
-        raise RuntimeError("decision signing key is not configured")
+        raise RuntimeError("decision signing key is not configured (set AGENTTEAMS_DECISION_SIGNING_KEY, or put "
+                           "it in ~/.config/agentteams/keys/decision-hmac.key, mode 600)")
     require_strong_hmac_key(signing_key, "decision signing key")
     return hmac.new(
         signing_key.encode("utf-8"),

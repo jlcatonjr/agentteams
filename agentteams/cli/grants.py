@@ -65,6 +65,7 @@ from agentteams.cli.signed_ledger import (
     ed25519_sign,
     hmac_sign,
     hmac_verify,
+    load_hmac_key,
     require_strong_hmac_key,
     is_expired,
     path_within,
@@ -131,7 +132,7 @@ class GrantError(RuntimeError):
 
 
 def _signing_key() -> str:
-    """Return the grant signing key from the environment, or fail closed.
+    """Return the grant signing key from the environment or its key file, or fail closed.
 
     Returns:
         The signing secret.
@@ -139,10 +140,10 @@ def _signing_key() -> str:
     Raises:
         GrantError: The env var is unset or empty — signing/verification cannot proceed.
     """
-    key = os.environ.get(GRANT_KEY_ENV, "")
+    key = load_hmac_key(GRANT_KEY_ENV, GrantError)
     if not key:
         raise GrantError(
-            f"{GRANT_KEY_ENV} is not set; refusing to sign or verify a capability grant "
+            f"{GRANT_KEY_ENV} is not set and ~/.config/agentteams/keys/grant-hmac.key is absent; refusing to sign or verify a capability grant "
             "without a signing key (fail-closed)."
         )
     return key

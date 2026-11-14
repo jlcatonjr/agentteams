@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -76,6 +77,95 @@ def require_strong_hmac_key(
             "character); use a random secret, e.g. `python -c 'import secrets; print(secrets.token_hex(32))'`"
         )
     return key
+
+
+#: The directory every emitted sandbox read-denies (``frameworks/_sandbox_emit.SIGNING_KEY_DIR``).
+HMAC_KEY_DIR = "~/.config/agentteams/keys"
+#: Each HMAC key's environment variable and its key file in :data:`HMAC_KEY_DIR` (hmac-key-autoresolve).
+HMAC_KEY_FILES: dict[str, str] = {
+    "AGENTTEAMS_WAIVER_SIGNING_KEY": "waiver-hmac.key",
+    "AGENTTEAMS_DECISION_SIGNING_KEY": "decision-hmac.key",
+    "AGENTTEAMS_GRANT_SIGNING_KEY": "grant-hmac.key",
+    "AGENTTEAMS_MANAGEMENT_SIGNING_KEY": "management-hmac.key",
+}
+_MAX_HMAC_KEY_FILE_BYTES = 4096
+_warned_both: set[str] = set()
+_location_cache: dict[str, list[str]] = {}
+
+
+def hmac_key_dir() -> Path:
+    """:data:`HMAC_KEY_DIR` expanded (a seam: the test suite points it at a temp dir)."""
+    return Path(os.path.expanduser(HMAC_KEY_DIR))
+
+
+def _file_key_location_refusals() -> list[str]:
+    """Install-location (a) refusals for reading a key file in this process, cached per working directory."""
+    here = str(Path.cwd().resolve())
+    if here not in _location_cache:
+        from agentteams.cli.signer_location import verify_install_location
+
+        _location_cache[here] = [f.message for f in verify_install_location([Path(here)]) if f.refuse]
+    return _location_cache[here]
+
+
+def load_hmac_key(env_name: str, error: type[RuntimeError] = RuntimeError) -> str:
+    """Return an HMAC key: the environment variable when set, else its key file, else ``""``.
+
+    The variable wins, so an existing setup behaves as before. When the key file also exists, a warning
+    names the variable: a variable left set is inherited by sandboxed commands, which the file is not.
+    Otherwise ``HMAC_KEY_DIR/<kind>-hmac.key`` is read under ``proposals.use_key_file``'s custody rules.
+    Any failure refuses, including a read the sandbox denies, so a sandboxed caller fails closed
+    (@security ruling, references/plans/hmac-key-autoresolve.plan.md). The key is never printed.
+
+    Args:
+        env_name: One of :data:`HMAC_KEY_FILES`.
+        error: The exception type to raise, so a module keeps its own (``GrantError``).
+
+    Returns:
+        The key text, or ``""`` when neither the variable nor the file exists. Callers keep their own
+        "not configured" errors, and run :func:`require_strong_hmac_key` as before.
+
+    Raises:
+        RuntimeError: (or *error*) The key file exists but is a symlink, sits outside the key directory,
+            is not a regular file you own with mode 0600, is empty or too large, cannot be read, or would
+            be read by an install an agent could edit.
+    """
+    value = os.environ.get(env_name, "")
+    key_dir = hmac_key_dir()
+    path = key_dir / HMAC_KEY_FILES[env_name]
+    if value:
+        if os.path.lexists(path) and env_name not in _warned_both:
+            _warned_both.add(env_name)
+            print(f"Warning: {env_name} is set and {path} exists; using the variable. A variable left set is "
+                  "inherited by sandboxed commands; unset it and let the key file be used.", file=sys.stderr)
+        return value
+    if not os.path.lexists(path):
+        return ""
+    if os.path.islink(key_dir) or os.path.realpath(path.parent) != os.path.realpath(key_dir):
+        raise error(f"{env_name}: key file {path} must sit in {HMAC_KEY_DIR} itself (not behind a symlink), "
+                    "which session sandboxes read-deny")
+    refusals = _file_key_location_refusals()
+    if refusals:
+        raise error(f"{env_name}: refusing to read {path} from an install an agent may be able to edit "
+                    f"({refusals[0]}); set {env_name} for this command, or run from a trusted install "
+                    "(SECURITY.md, \"Signing from a trusted install\")")
+
+    def _custody(st: os.stat_result) -> None:
+        if st.st_mode & 0o077 or st.st_uid != os.getuid():
+            raise ValueError("must be a regular file you own, with mode 0600")
+
+    from agentteams.atomicio import read_regular_nofollow
+
+    try:
+        data = read_regular_nofollow(path, _MAX_HMAC_KEY_FILE_BYTES, check=_custody).decode("utf-8").strip()
+    except OSError as exc:
+        raise error(f"{env_name}: key file {path} cannot be read (a symlink, or denied here): "
+                    f"{exc.strerror or exc}") from exc
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise error(f"{env_name}: key file {path} {exc}") from exc
+    if not data:
+        raise error(f"{env_name}: key file {path} is empty")
+    return data
 
 
 def hmac_sign(key: str, fields: Sequence[str]) -> str:
@@ -330,7 +420,11 @@ __all__ = [
     "ed25519_sign",
     "ed25519_verify",
     "MIN_HMAC_KEY_BYTES",
+    "HMAC_KEY_DIR",
+    "HMAC_KEY_FILES",
+    "hmac_key_dir",
     "hmac_sign",
+    "load_hmac_key",
     "require_strong_hmac_key",
     "hmac_verify",
     "is_expired",
