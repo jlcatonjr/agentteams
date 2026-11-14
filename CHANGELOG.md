@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (agent-run GitHub management for generated teams; `git_workflow.agent_github_management`, on by default)
+
+- **Behaviour change for every team on `--update`.** A new brief option, `git_workflow.agent_github_management`
+  (boolean, **default `true`**, also when the `git_workflow` block is absent), lets a team's agents do branch, PR,
+  merge, release and cleanup work themselves with `git`/`gh`. The operator gets a handoff script only for what the
+  sandbox refuses. Set it to `false` to keep the earlier text byte for byte.
+- What it renders, inside fenced regions so `--update --merge` delivers it:
+  - `@git-operations` Invariant rule 12. A merge into the default branch needs the operator's live, in-session
+    approval naming the PR number and head SHA. It is asked again if the head moves, and it is gated on green
+    required checks with `--match-head-commit`. Standing, relayed, file, comment, peer and signed-directive approvals
+    never count, and a host without an interactive picker hands the merge off. Switching the default branch's
+    required checks runs only through `python -m agentteams.release_required_checks --apply <fingerprint>`, after the
+    operator approves that fingerprint and `@security` logs `release-required-checks:<fingerprint>`.
+  - `@pr-manager` rule 2 (`invariant_core` v=2) now defines "explicit operator clearance". It still never merges.
+  - A `@security` trigger row (`security_rules_invariant` v=24) for that `--apply` and for any branch-protection or
+    ruleset write.
+  - The integration-branch reference §3 (`integration_branch` v=2) gains a required-check step.
+- New module command `python -m agentteams.release_required_checks`, moved from `scripts/`. It reads the default
+  branch instead of assuming `main`, takes the integration branch from the brief, and refuses ruleset-managed checks
+  and tokens without admin rights.
+- Code guards: management directives refuse `protect`, `required-check` and `ruleset` scopes (`merg` already was).
+  The constitutional gate prompts on `gh api`/`curl` writes to `…/protection` or `…/rulesets` and on
+  `release_required_checks … --apply`.
+- Unchanged: vulnscan merges stay operator-run (the merge digest), and branch deletion keeps its Ed25519
+  `branch-delete` grant.
+
 ### changed (agents run GitHub management; required-check apply is approved per release)
 
 - `references/git-procedures.md` §G: the agent does branch, PR, merge, release and cleanup work with `git`/`gh`. The

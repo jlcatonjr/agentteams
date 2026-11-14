@@ -22,6 +22,7 @@ step). Rule 15 class: a procedure with per-action live approval, not a standing 
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 #: Placeholders this module owns; each is ``""`` when the option is off.
@@ -34,6 +35,8 @@ PLACEHOLDERS: tuple[str, ...] = (
 
 #: The command generated teams run to switch required checks.
 COMMAND = "python -m agentteams.release_required_checks"
+#: Text only a render with the option on carries; :func:`update_notice` looks for it on disk.
+MARKER = "brief `git_workflow.agent_github_management`, on by default"
 
 
 def enabled(description: dict[str, Any]) -> bool:
@@ -97,8 +100,7 @@ _APPROVAL = (
 
 _TEXT: dict[str, str] = {
     "GITHUB_MGMT_GITOPS_RULE": (
-        "\n12. **You run GitHub management; the operator approves what guards the default branch.** *(brief "
-        "`git_workflow.agent_github_management`, on by default.)* Branches, pushes, PRs, merges into the integration "
+        "\n12. **You run GitHub management; the operator approves what guards the default branch.** *(" + MARKER + ".)* Branches, pushes, PRs, merges into the integration "
         "branch, the release PR, the post-release fast-forward and cleanup are yours, through `git`/`gh`, not scripts "
         "handed to the operator; rule 10 still covers what the sandbox refuses, and rules 2, 7, 8 and 11 still apply. "
         "Two actions need more:"
@@ -134,4 +136,29 @@ _TEXT: dict[str, str] = {
 }
 
 
-__all__ = ["COMMAND", "PLACEHOLDERS", "default_placeholders", "enabled", "placeholders"]
+def update_notice(rendered: list[tuple[str, str]], output_dir: Path) -> str | None:
+    """Return the one-line notice an ``--update`` prints the first time it delivers the option's text.
+
+    Args:
+        rendered: The render's ``(relative path, content)`` pairs.
+        output_dir: The team's output directory the paths are relative to.
+
+    Returns:
+        The notice when a rendered file carries :data:`MARKER` and its on-disk copy exists without it, else None.
+    """
+    for rel, content in rendered:
+        if MARKER not in content:
+            continue
+        path = Path(output_dir) / rel
+        try:
+            if path.is_file() and MARKER not in path.read_text(encoding="utf-8"):
+                return ("agents now run GitHub management themselves (@git-operations rule 12): a merge into the "
+                        "default branch needs your live approval naming the PR and head SHA, and a required-check "
+                        "switch needs your approval of its fingerprint. Turn it off with "
+                        "git_workflow.agent_github_management: false in the brief.")
+        except OSError:
+            continue
+    return None
+
+
+__all__ = ["COMMAND", "MARKER", "PLACEHOLDERS", "default_placeholders", "enabled", "placeholders", "update_notice"]

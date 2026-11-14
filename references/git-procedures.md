@@ -597,15 +597,20 @@ once the operator has approved it, `--apply`. It changes what guards `main`, so 
 
 `--restore` follows the same four steps. The operator can always run either command themselves instead.
 
-**How:** `scripts/release_required_checks.py`. It ships with the release, so run it from a checkout of `dev` (the
-PR head), not from the shared checkout on `main`:
+**How:** `python3 -m agentteams.release_required_checks` (shipped with the package since 2026-11-14; generated
+teams get the same procedure through brief option `git_workflow.agent_github_management`, on by default). It ships
+with the release, so run it from a checkout of `dev` (the PR head), not from the shared checkout on `main`:
 
 ```bash
-python3 scripts/release_required_checks.py --pr <release PR#>              # dry run
-python3 scripts/release_required_checks.py --pr <release PR#> --apply <fingerprint>
-python3 scripts/release_required_checks.py --restore <backup file it printed>    # shows the restore
-python3 scripts/release_required_checks.py --restore <backup file> --apply <fingerprint>
+python3 -m agentteams.release_required_checks --pr <release PR#>              # dry run
+python3 -m agentteams.release_required_checks --pr <release PR#> --apply <fingerprint>
+python3 -m agentteams.release_required_checks --restore <backup file it printed>    # shows the restore
+python3 -m agentteams.release_required_checks --restore <backup file> --apply <fingerprint>
 ```
+
+It reads the repository's default branch (never assumes `main`) and the integration branch from the brief
+(`--integration-branch` overrides). It refuses when a repository ruleset requires the checks, or when the token
+cannot read branch protection (no admin rights): hand that step to the operator.
 
 - **Proposal:** a required check the PR still produces is kept. A required check it no longer produces is replaced by
   the PR's checks whose names match once version numbers are masked, so `ubuntu-24.04` becomes `ubuntu-26.04`. Nothing
@@ -624,5 +629,6 @@ python3 scripts/release_required_checks.py --restore <backup file> --apply <fing
 - **Then** merge the release PR (§H's checks-gated merge). If the release is abandoned, restore before any other PR
   into `main` needs to merge.
 
-`--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary.
+`--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary. Writes to a
+branch-protection or ruleset endpoint, and `--apply`, prompt through the constitutional gate where hooks run.
 

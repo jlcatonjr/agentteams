@@ -112,3 +112,13 @@ def _gate_pattern() -> str:
 ])
 def test_the_gate_prompts_on_protection_writes(cmd, gated):
     assert bool(re.search(_gate_pattern(), cmd)) is gated
+
+
+def test_update_prints_a_notice_only_the_first_time(tmp_path):
+    """@security condition 2: the update output says what changed, once, when the rule first lands."""
+    new = "x\n" + gm.placeholders({})["GITHUB_MGMT_GITOPS_RULE"]
+    (tmp_path / "git-operations.agent.md").write_text("x\n", encoding="utf-8")
+    assert "live approval naming the PR and head SHA" in gm.update_notice([("git-operations.agent.md", new)], tmp_path)
+    (tmp_path / "git-operations.agent.md").write_text(new, encoding="utf-8")
+    assert gm.update_notice([("git-operations.agent.md", new)], tmp_path) is None
+    assert gm.update_notice([("new.agent.md", new)], tmp_path) is None          # a first render is not an update
