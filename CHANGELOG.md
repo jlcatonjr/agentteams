@@ -22,10 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     hook without this check launched a run on every Stop event, several hundred a day.
 - **Guards:** the Stop payload is never passed to the run; a hook child never launches another; one run per project
   at a time; a failed run backs off for 30 minutes; the hook detaches and never blocks the session.
-- **The unattended run has a narrow tool grant** (read and search, Agent, `git log`/`show`/`cat-file`, writes under
-  `workSummaries/` only) in `dontAsk` mode with no MCP server. Deny rules block web tools, credential directories
-  and the git options that write files or read outside the repository. `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the
-  grant; the permission mode is fixed.
+- **The unattended run has no shell.** The launcher collects the git evidence and hands it over as a file. The run
+  is granted read and search, Agent, and writes under `workSummaries/` only, in a fixed `dontAsk` mode with no MCP
+  server.
+- **Inherited allow rules are contained.** `--allowedTools` adds to the operator's own allow rules, so deny rules
+  switch off `Bash`, the web tools and notebook edits outright, and the launcher refuses to launch when the
+  operator's settings allow edits outside `workSummaries/` or an unknown tool. The refusal is logged in `hook.log`.
+- **The wiring command verifies the launcher.** The `Stop` block carries the launcher's SHA-256 and runs the
+  installed script only on a match, so an edited script stops the hook until the operator merges the block again.
+- Every skip, run and failure is one line in `hook.log` in the run folder; that log is where to look, because runs
+  do not show in session lists.
 - **Operator extras are read from the run folder, never from the repository,** so a branch or pull request cannot
   instruct an unattended run.
 - The launcher template and its emitter are pinned in the integrity manifest.

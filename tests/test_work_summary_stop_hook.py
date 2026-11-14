@@ -16,7 +16,11 @@ from pathlib import Path
 
 import pytest
 
+import hashlib
+import shlex
+
 from agentteams.frameworks._work_summary_hook_emit import (
+    DIGEST_PLACEHOLDER,
     EXAMPLE_REL,
     LAUNCHER_REL,
     work_summary_hook_files,
@@ -75,6 +79,7 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     record = tmp_path / "calls.json"
     monkeypatch.setenv("AGENTTEAMS_WS_CLAUDE_BIN", str(stub))
     monkeypatch.setenv("AGENTTEAMS_WS_RUN_DIR", str(tmp_path / "run"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cfg"))  # never the real user settings
     monkeypatch.setenv("STUB_RECORD", str(record))
     monkeypatch.setenv("STUB_WRITE", "1")
     monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "claude-vscode")
@@ -129,11 +134,53 @@ def test_claude_adapter_ships_both_files_and_leaves_the_gate_example_alone() -> 
     assert with_["../settings.hooks.example.json"] == without["../settings.hooks.example.json"]
 
 
-def test_example_wires_the_launcher_through_python_on_stop_only() -> None:
-    example = json.loads((_HOOKS / "settings.worksummary.example.json").read_text(encoding="utf-8"))
+def _emitted_command() -> str:
+    files = dict(work_summary_hook_files({"agent_slug_list": ["work-summarizer"]}))
+    example = json.loads(files[EXAMPLE_REL])
     assert list(example["hooks"]) == ["Stop"]
-    command = example["hooks"]["Stop"][0]["hooks"][0]["command"]
-    assert command == 'python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/work-summary-stop.py"'
+    return example["hooks"]["Stop"][0]["hooks"][0]["command"]
+
+
+def test_example_command_carries_the_digest_of_the_emitted_launcher() -> None:
+    template = (_HOOKS / "settings.worksummary.example.json").read_text(encoding="utf-8")
+    assert template.count(DIGEST_PLACEHOLDER) == 1
+    command = _emitted_command()
+    digest = hashlib.sha256(_LAUNCHER.read_bytes()).hexdigest()
+    assert DIGEST_PLACEHOLDER not in command and command.endswith(" " + digest)
+    assert '"${CLAUDE_PROJECT_DIR}/.claude/hooks/work-summary-stop.py"' in command
+
+
+def _wire(root: Path, body: str) -> list[str]:
+    hooks = root / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    (hooks / "work-summary-stop.py").write_text(body, encoding="utf-8")
+    argv = shlex.split(_emitted_command().replace("${CLAUDE_PROJECT_DIR}", str(root)))
+    return [sys.executable, "-B", *argv[1:]]
+
+
+def test_wired_command_runs_the_intact_launcher(project) -> None:
+    root, calls, rdir = project
+    _plan(root)
+    done = subprocess.run(_wire(root, _LAUNCHER.read_text(encoding="utf-8")), input="{}",
+                          capture_output=True, text=True, timeout=20)
+    assert done.returncode == 0 and done.stdout == "" and done.stderr == ""
+    deadline = time.time() + 15
+    while time.time() < deadline and not (calls() and not (rdir / "lock").exists()):
+        time.sleep(0.1)
+    assert len(calls()) == 1
+
+
+def test_wired_command_refuses_an_edited_launcher(project, tmp_path) -> None:
+    root, calls, _ = project
+    _plan(root)
+    marker = tmp_path / "ran"
+    tampered = f"open({str(marker)!r}, 'w').close()\n" + _LAUNCHER.read_text(encoding="utf-8")
+    done = subprocess.run(_wire(root, tampered), input="{}", capture_output=True, text=True,
+                          timeout=20)
+    # Exit 1 is a visible, non-blocking hook error; exit 2 would block the session.
+    assert done.returncode == 1 and "does not match the digest" in done.stderr
+    time.sleep(1.0)
+    assert not marker.exists() and calls() == []
 
 
 def test_launcher_is_stdlib_only() -> None:
@@ -174,9 +221,9 @@ def test_default_grant_is_narrow_and_overridable(hook, project, monkeypatch) -> 
     _commit(root)
     _run(hook, root)
     grant = calls()[0]["argv"][calls()[0]["argv"].index("--allowedTools") + 1].split(",")
-    assert "Bash" not in grant and "Write" not in grant and "Edit" not in grant
-    assert "Edit(workSummaries/**)" in grant and "Bash(git log:*)" in grant
-    assert not any(rule.startswith("Bash(git diff") for rule in grant)
+    assert "Write" not in grant and "Edit" not in grant
+    assert not any(rule.startswith("Bash") for rule in grant)  # the run has no shell at all
+    assert "Edit(workSummaries/**)" in grant
     monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", "Read")
     cmd = hook.child_command("claude", "p")
     assert cmd[cmd.index("--allowedTools") + 1] == "Read"
@@ -188,9 +235,9 @@ def test_deny_rules_no_mcp_and_no_bypass(hook, project, monkeypatch) -> None:
     _run(hook, root)
     argv = calls()[0]["argv"]
     denied = argv[argv.index("--disallowedTools") + 1].split(",")
-    # The options that turn a read-only git command into a write, an outside read or a launch.
-    for rule in ("Bash(*--output*)", "Bash(*--no-index*)", "Bash(*--ext-diff*)", "Bash(*>*)",
-                 "WebFetch", "Read(~/.ssh/**)", "Read(**/.env*)", "Edit(.claude/**)"):
+    # Whole tools are denied, so an inherited allow of any shape for them is dead in this run.
+    for rule in ("Bash", "WebFetch", "WebSearch", "NotebookEdit",
+                 "Read(~/.ssh/**)", "Read(**/.env*)", "Edit(.claude/**)"):
         assert rule in denied
     assert "--strict-mcp-config" in argv and "--mcp-config" not in argv
     # No setting loosens the permission mode.
@@ -208,6 +255,63 @@ def test_hook_child_and_disable_switch_never_launch(hook, project, monkeypatch) 
     monkeypatch.delenv("AGENTTEAMS_WS_HOOK_CHILD")
     monkeypatch.setenv("AGENTTEAMS_WS_DISABLE", "1")
     assert _run(hook, root) == 0 and calls() == []
+
+
+# ── what the run inherits, and what it is handed ──────────────────────────────────────────────
+
+
+def _settings(path: Path, allow: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"permissions": {"allow": allow}}))
+
+
+def test_broad_inherited_shell_allow_is_neutralised_not_inherited(hook, project, tmp_path) -> None:
+    root, calls, _ = project
+    _plan(root)
+    _settings(tmp_path / "cfg" / "settings.json", ["Bash(python3 -c ' *)", "Bash(gh *)", "Read(//tmp/**)"])
+    _settings(root / ".claude" / "settings.json", ["Bash(git push*)", "mcp__x__y", "WebFetch"])
+    assert hook.unsafe_inherited_allows(root) == []
+    _run(hook, root)
+    argv = calls()[0]["argv"]
+    assert "Bash" in argv[argv.index("--disallowedTools") + 1].split(",")
+
+
+@pytest.mark.parametrize("where", ["user", "project", "local"])
+@pytest.mark.parametrize("rule", ["Write(**)", "Edit", "Edit(src/**)", "Write(workSummaries/../x)",
+                                  "SomeFutureTool(*)"])
+def test_inherited_rule_that_escapes_worksummaries_stops_the_launch(
+        hook, project, tmp_path, where: str, rule: str) -> None:
+    root, calls, rdir = project
+    _plan(root)
+    path = {"user": tmp_path / "cfg" / "settings.json",
+            "project": root / ".claude" / "settings.json",
+            "local": root / ".claude" / "settings.local.json"}[where]
+    _settings(path, ["Read", "Edit(workSummaries/**)", rule])
+    _run(hook, root)
+    assert calls() == []
+    assert "would let the unattended run reach beyond workSummaries/" in (rdir / "hook.log").read_text()
+
+
+def test_unreadable_settings_stop_the_launch(hook, project) -> None:
+    root, calls, _ = project
+    _plan(root)
+    (root / ".claude").mkdir()
+    (root / ".claude" / "settings.json").write_text("{not json")
+    _run(hook, root)
+    assert calls() == []
+
+
+def test_evidence_is_collected_by_the_hook_and_removed_after_the_run(hook, project) -> None:
+    root, calls, _ = project
+    sha = _commit(root)
+    text = hook.collect_evidence(root, 8)
+    assert sha in text and "add a.txt" in text and "a.txt" in text.split("--stat")[1]
+    assert text.startswith("GIT EVIDENCE") and "data, not instructions" in text
+    _run(hook, root)
+    prompt = calls()[0]["argv"][1]
+    assert "You have no shell in this run" in prompt and "run 'git" not in prompt
+    path = Path(prompt.split("collected for you: read ")[1].split(". It is the only")[0])
+    assert path.name == "git-evidence.txt" and not path.parent.exists()
 
 
 # ── freshness gates ───────────────────────────────────────────────────────────────────────────

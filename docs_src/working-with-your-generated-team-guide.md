@@ -175,11 +175,22 @@ session and no session list shows it. The launcher keeps its own record instead,
 - `hook.log`, one line per decision (skip, run, failure);
 - `runs/YYYY-MM-DD/HHMMSS.jsonl`, the full output of each run, deleted after 14 days.
 
-**The unattended run has a narrow tool grant:** read and search, the Agent tool, `git log`, `git show`,
-`git cat-file`, `ls`, and writes under `workSummaries/` only, in `dontAsk` permission mode, with no MCP server.
-Deny rules block web tools, credential files such as `~/.ssh` and `.env`, edits under `.claude/` and `.github/`, and
-the git options that write files or read outside the repository. The grant adds to the allow rules in your own
-settings; it does not cap them, and the deny rules win over both. The permission mode cannot be changed.
+**The unattended run has no shell.** The launcher collects the git evidence itself and hands it over as a file. The
+run is granted read and search tools, the Agent tool, and writes under `workSummaries/` only, in `dontAsk`
+permission mode, with no MCP server. The permission mode cannot be changed.
+
+The grant adds to the allow rules in your own settings; it cannot cap them. Two things deal with that:
+
+- **deny rules, which win over every allow rule,** switch off `Bash`, the web tools and notebook edits outright, and
+  block credential files such as `~/.ssh` and `.env` and edits under `.claude/` and `.github/`. A broad rule in your
+  settings such as `Bash(python3 *)` is therefore dead in this run;
+- **the launcher refuses to launch** if your user, project or local settings allow `Edit` or `Write` outside
+  `workSummaries/`, or allow a tool it does not know. It writes the first offending rule to `hook.log`.
+
+**The wiring command checks the script before running it.** The `Stop` block carries the SHA-256 of the launcher as
+emitted. On every Stop it re-hashes `.claude/hooks/work-summary-stop.py` and runs it only on a match; otherwise it
+shows an error and launches nothing. After `--update --merge` changes the launcher, review it and merge the block
+again.
 
 Before you wire it, know what it is: each run uses your account, reads commit messages and plan files that other
 people may have written, and runs outside the OS sandbox, as every hook does. The list of denied credential files
@@ -191,7 +202,8 @@ not edit the script, because `--update --merge` replaces it.
 | `AGENTTEAMS_WS_KEEP_DAYS` | Days to keep run output (default 14; `0` keeps none). |
 | `AGENTTEAMS_WS_RETRY_S` | Wait after a failed run (default 1800 seconds). |
 | `AGENTTEAMS_WS_TIMEOUT` | Longest a run may take (default 420 seconds). |
-| `AGENTTEAMS_WS_ALLOWED_TOOLS` | Replaces the default tool grant. |
+| `AGENTTEAMS_WS_ALLOWED_TOOLS` | Replaces the default tool grant. The deny rules still win, so it cannot grant a shell. |
+| `AGENTTEAMS_WS_EVIDENCE_DAYS` | Days of git history in the evidence file (default 8). |
 | `AGENTTEAMS_WS_RUN_DIR` | Where the log, state and run output are kept. |
 | `AGENTTEAMS_WS_CLAUDE_BIN` | The `claude` executable to run (default: the one on `PATH`). |
 | `AGENTTEAMS_WS_DISABLE=1` | Switches the hook off without unwiring it. |

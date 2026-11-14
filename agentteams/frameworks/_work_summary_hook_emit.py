@@ -18,11 +18,14 @@ not an OS-boundary file, so it stays out of the privilege-artifact and confineme
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 SUMMARIZER_SLUG = "work-summarizer"
 LAUNCHER_REL = "../hooks/work-summary-stop.py"
 EXAMPLE_REL = "../settings.worksummary.example.json"
+#: Placeholder in the example's command, replaced by the SHA-256 of the launcher as emitted.
+DIGEST_PLACEHOLDER = "__LAUNCHER_SHA256__"
 
 
 def _has_summarizer(manifest: dict[str, Any]) -> bool:
@@ -39,7 +42,9 @@ def work_summary_hook_files(manifest: dict[str, Any]) -> list[tuple[str, str]]:
     Returns:
         ``(relative_path, content)`` tuples, relative to the agents directory. Empty when the team
         has no ``work-summarizer`` or either shipped asset is missing (both or neither, so an
-        example never points at a launcher that was not emitted).
+        example never points at a launcher that was not emitted). The example's command carries
+        the launcher's SHA-256 and runs the installed script only when it still matches, so the
+        digest lives in ``settings.json`` once merged, not beside the script it guards.
     """
     if not _has_summarizer(manifest):
         return []
@@ -47,9 +52,10 @@ def work_summary_hook_files(manifest: dict[str, Any]) -> list[tuple[str, str]]:
 
     launcher = _read_template_asset("hooks/work-summary-stop.py")
     example = _read_template_asset("hooks/settings.worksummary.example.json")
-    if not launcher or not example:
+    if not launcher or not example or DIGEST_PLACEHOLDER not in example:
         return []
+    example = example.replace(DIGEST_PLACEHOLDER, hashlib.sha256(launcher.encode("utf-8")).hexdigest())
     return [(LAUNCHER_REL, launcher), (EXAMPLE_REL, example)]
 
 
-__all__ = ["EXAMPLE_REL", "LAUNCHER_REL", "SUMMARIZER_SLUG", "work_summary_hook_files"]
+__all__ = ["DIGEST_PLACEHOLDER", "EXAMPLE_REL", "LAUNCHER_REL", "SUMMARIZER_SLUG", "work_summary_hook_files"]
