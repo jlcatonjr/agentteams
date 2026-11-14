@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (agents run GitHub management; required-check apply is approved per release)
+
+- `references/git-procedures.md` §G: the agent does branch, PR, merge, release and cleanup work with `git`/`gh`. The
+  operator gets a `.sh` file only for steps the sandbox cannot do.
+- §I: an agent may now run `scripts/release_required_checks.py --apply` (and `--restore --apply`). It must first show
+  the operator the preview, the operator must approve that exact fingerprint in the live session, and `@security` must
+  clear and log the apply. Relayed, standing or read-content approval does not count. The script's guards are
+  unchanged.
+
 ### changed (conflict-resolution dispositions take the book's meanings; #452)
 
 - **Behaviour change.** `@conflict-resolution` now uses the dispositions of Chapter 10 of the book:
