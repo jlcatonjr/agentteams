@@ -71,7 +71,8 @@ def test_the_git_agent_prefers_gh_when_authenticated() -> None:
     text = (TEMPLATES / "universal" / "git-operations.template.md").read_text(encoding="utf-8")
     assert "Use the `gh` CLI when it is installed and authenticated" in text
     assert "treat `gh` only as an optional fallback" not in text
-    assert "agentteams --merge-pr <N>" in text
+    merge_ref = (TEMPLATES / "universal" / "github-workflows-merge.reference.template.md").read_text(encoding="utf-8")
+    assert "agentteams --merge-pr <N>" in merge_ref and "## Pull-Request Merges" in merge_ref
 
 
 @pytest.mark.parametrize("value", ["false", 0, None, "true"])

@@ -33,6 +33,12 @@ This reference defines safe GitHub interaction and merge procedures for ProjectR
 6. Run post-merge verification — including **CI/CD deployment verification** (see the next section) when the push/merge triggers Actions — and document noteworthy decisions for auditability.
 7. Dispose of the merged branch per `references/branch-lifecycle.reference.md` (post-merge step: `agentteams --branch-post-merge <branch>`), and record `Branch disposition`.
 
+## Pull-Request Merges
+
+A direct `gh pr merge` goes through the constitutional gate's prompt. For `agentteams --merge-pr <N>` (a pull-request
+merge into the integration branch under the operator-signed authorization), see the constitution's
+*Integration-branch merge authorization* section.
+
 ## Post-Merge / Post-Push CI/CD Deployment Verification
 
 **Distinct from pre-merge required status checks** (which *gate* the merge, above): this verifies the GitHub Actions runs that the push/merge itself **triggers** on the target branch — CI **and** deployment workflows (Pages, release, container/package publish, environment deploys). Those runs only come into existence *after* the ref updates, so a green pre-merge PR does not imply a green deployment.
