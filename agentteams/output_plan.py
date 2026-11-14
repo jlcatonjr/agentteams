@@ -231,6 +231,12 @@ def _plan_output_files(
         "type": "reference",
         "component_slug": None,
     })
+    files.append({  # #454: the closed trigger catalog and per-entry schema (book Ch 16 §4)
+        "path": "references/work-summary-trigger-catalog.reference.md",
+        "template": f"{agents_dir}work-summary-trigger-catalog.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
 
     # Parallelization reference (always — @orchestrator Workflow 0A support;
     # documents the independence heuristic + parallel_plan analyzer for all

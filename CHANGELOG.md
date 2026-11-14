@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (typed work-summary entries and the closed trigger catalog; #454)
+
+- **A new reference, `references/work-summary-trigger-catalog.reference.md`, is emitted for every team.** It renders
+  book Ch 16 §4 and §4.1:
+  - **the seven-field entry block:** trigger, timestamp, contributing agent, affected scope, disposition, unresolved
+    obligations, sources;
+  - **a closed catalog of eight trigger types.** Each has an initiator, required fields, a destination and a closure
+    condition. Seven are canonical; the eighth is `unclassified-constitutional-event`.
+  - **four rules:**
+    - an event that matches no trigger gets a provisional entry in the same session, and meanwhile work continues
+      only under reversible dispositions;
+    - open obligations carry forward until their closure condition is met;
+    - boundary-decision entries are mirror records that add no obligations;
+    - existing prose summaries stay valid.
+- The reference's whole body is one `trigger_catalog` v=1 fence, so `--update --merge` keeps its rules current.
+- **`@work-summarizer`:**
+  - **Entry Schema section:** lists the seven fields and points to the catalog for the rules;
+  - **daily workflow:** step 5 adds a typed entry for each governance-relevant event, plus a `## Open Obligations`
+    segment carried forward from the previous day;
+  - **weekly workflow:** step 5 lists the obligations still open at week end.
+- **Additive only.** The template stays unfenced (it renders inside the whole-body `content` fence), and summaries
+  written before this change need no rewrite.
+- **Ledger.** `domain/work-summarizer.template.md` is now registered as TA-063 and leaves the unregistered baseline.
+  The new reference is TA-064.
+
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
 - A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
