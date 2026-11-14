@@ -735,7 +735,12 @@ def _build_sandbox_block(
     # read-only mount point: renaming it (the ancestor-rename route to a planted tree) gives
     # EBUSY and a planted `.claude/settings.local.json` is refused. A deny only removes
     # capability, whatever the write roots; permissions.deny is unaffected (built-in tools).
-    filesystem["denyWrite"] = [*_PROTECTED_WRITE_PATHS, framework_config_dir("claude"),
+    # M1 (hmac-key-autoresolve): write-deny the operator key and verify-key dirs, on macOS only. Seatbelt
+    # tolerates a missing deny path, but Linux bwrap fails to start on one (see the verify-key store note), and
+    # these home dirs need not exist. On Linux the write roots already exclude them: bwrap binds only the
+    # allowWrite roots writable, and validate_write_roots refuses roots at, inside or above ~/.config/agentteams.
+    key_denies = signing_key_deny_write(resolve_abspath=resolve_abspath) if (platform or sys.platform) == "darwin" else []
+    filesystem["denyWrite"] = [*_PROTECTED_WRITE_PATHS, *key_denies, framework_config_dir("claude"),
                                *sibling_deny_dirs]
     if protect_prompt_roots:
         filesystem["denyWrite"] += [p for p in present_prompt_roots(project_root)
@@ -745,12 +750,6 @@ def _build_sandbox_block(
     deny_write = filesystem["denyWrite"]
     deny_write += [p for p in cp_write_denies(protect_ledger, control_plane_protect, substrate_protect)
                    if p not in deny_write]
-    # M1 (hmac-key-autoresolve): write-deny the operator key and verify-key dirs, on macOS only. Seatbelt
-    # tolerates a missing deny path, but Linux bwrap fails to start on one (see the verify-key store note), and
-    # these home dirs need not exist. On Linux the write roots already exclude them: bwrap binds only the
-    # allowWrite roots writable, and roots at, inside or above them are refused.
-    if (platform or sys.platform) == "darwin":
-        deny_write += [p for p in signing_key_deny_write(resolve_abspath=resolve_abspath) if p not in deny_write]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:

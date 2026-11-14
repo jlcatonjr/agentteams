@@ -245,17 +245,11 @@ def test_an_unreadable_cwd_is_the_callers_error(keys, monkeypatch):
 @pytest.mark.parametrize("root", ["~", "~/.config", "~/.config/agentteams", "~/.config/agentteams/keys/x",
                                   "~/.config/agentteams/verify-keys"])
 def test_write_roots_at_inside_or_above_the_key_dirs_are_refused(root):
-    """M1: a write root above either operator directory is refused too (it used to be only at or inside)."""
-    from agentteams.frameworks._sandbox_emit import assert_roots_clear_of_signing_keys
+    """M1: no write root can reach either operator directory (validate_write_roots, which every emitter runs)."""
+    from agentteams.frameworks._write_roots import validate_write_roots
 
-    with pytest.raises(ValueError, match="at, inside or above"):
-        assert_roots_clear_of_signing_keys([root])
-
-
-def test_ordinary_write_roots_still_pass():
-    from agentteams.frameworks._sandbox_emit import assert_roots_clear_of_signing_keys
-
-    assert_roots_clear_of_signing_keys([".", "~/githubrepositories/x", "/opt/work"])
+    with pytest.raises(ValueError, match="refused sandbox write root"):
+        validate_write_roots([root])
 
 
 def test_every_emitted_sandbox_write_denies_the_key_dirs():
@@ -277,9 +271,6 @@ def test_every_emitted_sandbox_write_denies_the_key_dirs():
     write_block = text[text.index("(deny file-write*\n", text.index("Operator signing-key isolation")):]
     write_block = write_block[:write_block.index(")\n", write_block.index("verify-keys"))]
     assert ".config/agentteams/keys" in write_block and ".config/agentteams/verify-keys" in write_block
-    from agentteams.frameworks import _sandbox_emit as se
-    confine = Path(se.__file__).parents[1] / "templates" / "universal" / "sandbox" / "confine-run.sh"
-    assert '(deny file-write* (subpath \\"$HOME/.config/agentteams/verify-keys\\"))' in confine.read_text(encoding="utf-8")
 
 
 def test_the_record_command_runs_end_to_end(keys, tmp_path, capsys):

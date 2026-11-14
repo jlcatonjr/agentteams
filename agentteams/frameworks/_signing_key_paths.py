@@ -1,8 +1,9 @@
 """_signing_key_paths.py: where the operator's keys live, and what every emitted sandbox must deny there.
 
 Carved out of ``_sandbox_emit`` (hmac-key-autoresolve, @code-hygiene CH-07 ceiling). The Claude block, the goose
-Seatbelt profile and ``confine-run.sh`` read-deny :data:`SIGNING_KEY_DIR` and write-deny it and
-:data:`OPERATOR_VERIFY_KEYS_DIR`; write roots at, inside or above either are refused. ``_sandbox_emit`` re-exports
+Seatbelt profile and ``confine-run.sh`` read-deny :data:`SIGNING_KEY_DIR`; the macOS Claude block and the goose
+Seatbelt profile also write-deny it and :data:`OPERATOR_VERIFY_KEYS_DIR`. ``_write_roots.validate_write_roots``
+refuses write roots at, inside or above ``~/.config/agentteams``. ``_sandbox_emit`` re-exports
 every name here, so importers are unchanged.
 """
 
@@ -84,32 +85,30 @@ def signing_key_deny_write(*, resolve_abspath: bool = False) -> list[str]:
 
 
 def assert_roots_clear_of_signing_keys(roots: list[str] | None) -> None:
-    """Raise if a write root sits at, inside or above :data:`SIGNING_KEY_DIR` or :data:`OPERATOR_VERIFY_KEYS_DIR`.
+    """Raise if a write root sits at or inside :data:`SIGNING_KEY_DIR`.
 
     Claude Code resolves overlapping read rules narrower-wins, so a write root (re-opened by
-    ``allowRead``, and writable) at or inside the key directory would undo its deny. A root ABOVE
-    either directory (``~``, ``~/.config``) would let a sandboxed shell create files in it wherever a
-    profile lacks the write-deny (@security M1). Only ``~``-relative and absolute roots are checked: a
-    relative root is relative to the project, which is never inside or above them.
+    ``allowRead``, and writable) at or inside the key directory would undo its deny. Only
+    ``~``-relative and absolute roots are checked: a relative root is relative to the project,
+    which is never inside the key directory.
 
     Args:
         roots: The workspace write roots (``None`` = the default ``["."]``).
 
     Raises:
-        ValueError: A root resolves at, inside or above either directory.
+        ValueError: A root resolves at or inside the key directory.
     """
-    for protected in (SIGNING_KEY_DIR, OPERATOR_VERIFY_KEYS_DIR):
-        keys = _home_rel_to_abs(protected)
-        for root in roots or []:
-            if not root or not (root.startswith("~") or os.path.isabs(root)):
-                continue
-            resolved = _home_rel_to_abs(root)
-            if resolved == keys or resolved.startswith(keys + os.sep) or keys.startswith(resolved.rstrip(os.sep) + os.sep):
-                raise ValueError(
-                    f"workspace write root {root!r} is at, inside or above the operator key "
-                    f"directory {protected}; that would let the sandboxed agent read or plant "
-                    "operator keys. Remove it from workspace_write_roots (or the grant)."
-                )
+    keys = _home_rel_to_abs(SIGNING_KEY_DIR)
+    for root in roots or []:
+        if not root or not (root.startswith("~") or os.path.isabs(root)):
+            continue
+        resolved = _home_rel_to_abs(root)
+        if resolved == keys or resolved.startswith(keys + os.sep):
+            raise ValueError(
+                f"workspace write root {root!r} is at or inside the operator signing-key "
+                f"directory {SIGNING_KEY_DIR}; that would re-open the private key to the "
+                "sandboxed agent. Remove it from workspace_write_roots (or the grant)."
+            )
 
 
 def signing_keyfile_warnings(keyfile: str) -> list[str]:

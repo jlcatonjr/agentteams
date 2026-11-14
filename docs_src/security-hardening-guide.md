@@ -164,8 +164,9 @@ the signature scheme; it is a statement about custody.
   `waiver`, `decision`, `grant` or `management`, then record its fingerprint with
   `agentteams --record-hmac-fingerprint <kind>`. With the variable unset, agentteams reads the file only if
   its fingerprint matches the one recorded in `~/.config/agentteams/verify-keys/`, so a planted or
-  replaced key file is refused. Every emitted sandbox read-denies `keys/` and write-denies both
-  directories, so a sandboxed command fails closed instead of inheriting the key. The file is refused when it is a symlink, sits behind a symlinked `keys/`, is
+  replaced key file is refused. Every emitted sandbox read-denies `keys/`, no sandbox write root can
+  reach either directory, and on macOS the Claude block and goose profile also write-deny both, so a
+  sandboxed command fails closed instead of inheriting the key. The file is refused when it is a symlink, sits behind a symlinked `keys/`, is
   readable by others, or would be read by an install an agent could edit (a checkout or an
   agent-writable root; see "Signing from a trusted install" in `SECURITY.md`). Otherwise hold it in an
   OS keychain and inject it only into the one command that needs it
