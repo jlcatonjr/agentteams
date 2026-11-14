@@ -6,6 +6,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (switching main's required checks when a release renames them)
+
+- **`scripts/release_required_checks.py`** (operator-only; `references/git-procedures.md` §I). When a release PR
+  renames a job `main` requires, such as the #262 runner bump, it proposes the new required set. A dry run shows the
+  change and a fingerprint; `--apply <fingerprint>` makes exactly that change once every proposed check is green on
+  the PR head, and saves the old protection for `--restore`. New jobs are required only with `--add`.
+
+### fixed (`api_impact` sees positional arguments, `choices` and `sys.argv` options; #451 a)
+
+- `add_argument` positionals are part of the surface (`cli-pos:<name>`). Their `choices`, and an option's `choices`,
+  are compared too, so adding or removing a subcommand-like choice is reported (new `Impact.cli_changed`).
+- A literal `"--x" in sys.argv` test is reported as `--x (sys.argv, heuristic)` unless a parser in the same module
+  declares `--x`. Only literal `choices` are compared by their members; a name or call is compared by its source text.
+- `surface` moved to `agentteams._api_surface` (re-exported from `agentteams.api_impact`). The generated
+  `api-impact.reference.md` fence `api_impact` is v=4.
+
+### fixed (`api_impact status` no longer forgives pushed commits; #447 b)
+
+- **A push-independent range.** On the default branch, `status` used `@{upstream}`, so a commit pushed before its
+  review left the range for good.
+  - A committed `references/api-impact-reviews/BASELINE` (the commit reviews start after) is now the default base
+    there.
+  - `status --full` checks every commit after it, or the whole history without one.
+  - Without a baseline, the default branch still uses `@{upstream}`.
+  - A commit that changes `BASELINE` is itself impactful (new `Impact.review_baseline_changed`), and `status` prints
+    the baseline it used. A `--range` token starting with `-` is refused.
+- **The ledger is read at the range tip**, not at `HEAD`.
+- **Batched git reads** (`agentteams._api_impact_range`): one call each for SHAs and subjects, patch-ids (the same
+  ids as `patch_id`) and changed paths. That is a few git processes per commit instead of about a dozen.
+- **Pre-push check (opt-in).** `git config agentteams.apiReviewPrePush warn|block` makes the new pre-push hook block
+  report, or block, impactful commits pushed without a record at the pushed tip. Re-run `agentteams --update` to
+  install it.
+- The generated `api-impact.reference.md` (fence `api_impact` v=3) documents all of the above.
+
+### fixed (the pre-commit hook no longer skips the API impact check silently; #447 a, c)
+
+- **The hook resolves its own interpreter** (`agentteams._hook_python`). It used to test `python3` on PATH and, on an
+  older interpreter (macOS `/usr/bin/python3` is 3.9), print one line and let the commit through unchecked. Now:
+  - **In a release-locked repository** (`toolchain.lock` has an `agentteams=` or `agentteams.tag=` key, or fails
+    closed the way fleet release locks do), it uses the locked installation, `<root>/.venv/bin/python -I`. That
+    interpreter must import agentteams on 3.11+ and `.venv` must be untracked. It never falls back to the
+    agentteams checkout, which would run unreleased code.
+  - **Otherwise**, it uses the interpreter recorded at install time, then `python3.14` … `python3.11`, then `python3`,
+    run with `-P`. A candidate must be 3.11+, and neither its path nor its `readlink -f` target may be in the working
+    tree. An agentteams import path strictly inside the repository is not put on `PYTHONPATH`.
+- **A skip is recorded,** and so is an API impact step that fails. Both append to `agentteams-api-impact-skipped` in
+  the git directory.
+  `python -m agentteams.api_impact status` prints them (`hook_skips` in `--json`) and exits 1 until a hook run whose
+  API impact step completes (exit 0, or 3 in strict mode) clears them. The commit still succeeds.
+- Re-run `agentteams --update` (or `--install-git-hooks`) to get the new hook block.
+
+### security (`agentteams.scan` no longer flags public lockfile hashes or commit-URL SHAs, #460)
+
+- The context-free high-entropy detector no longer reports two kinds of public value as credentials:
+  - the base64 body of a Subresource Integrity item (`sha1-`, `sha256-`, `sha384-` or `sha512-`, with the body length
+    bound to the algorithm) inside an `integrity` value in `package-lock.json`, `npm-shrinkwrap.json` or `yarn.lock`;
+  - the lowercase 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
+- Each exemption covers the exact token only, never the line or a path glob alone:
+  - every other token on a minified lockfile line is still scanned;
+  - a secret in a commit URL's owner or repo segment still fires;
+  - an integrity value with any malformed item exempts nothing;
+  - pattern credentials, such as AWS keys, and the keyword-context detector are unchanged.
+- The exemption lives in the new integrity-pinned module `agentteams/_scan_public_hashes.py`, with a verifier-ledger row.
+- **Accepted residue:**
+  - a secret shaped exactly like one of these public hashes, in exactly that position, is not reported;
+  - a secret of 23 characters or fewer in a commit URL's owner or repo segment is not re-flagged, the same length
+    floor the path guard already applies.
+
+### added (CI fails on an unregistered verifier; #50)
+
+- `tests/test_redteam_ledger_gate.py` runs the red-team self-audit's source checks F-1 and F-3 in the required test
+  matrix. A PR that adds a verifier-shaped function (or a non-Python enforcement module) without a row in
+  `references/redteam-verifiers.csv`, or a hand-rolled target/descriptor/VCS resolution without an exemption row,
+  now fails CI with the remedy printed. Until now only the weekly audit reported them, and F-1 grew from 91 to 107
+  in a week. The backlog itself is cleared: 113 F-1 rows (verifier rows name a sensitivity test and a negative
+  control; new tests in `tests/test_redteam_verifiers_{cli,vulnscan,core,data}.py`) and four F-3 exemptions with
+  evidence tests. F-5 (probe intent) stays weekly; the 2026-11-12 re-validation is in
+  `references/redteam-probe-revalidation.md`.
+
 ### added (project verdict policy for the constitutional gate, #456)
 
 - **New `.agentteams/gate-policy.json`.** It turns chosen `ask` classes into `deny`, for teams whose sessions run headless,
@@ -45,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required on main. main's branch protection is updated by the operator when the release PR that carries this
   change opens. release/1.0 keeps `ubuntu-24.04`: the 1.0 line does not receive #405 (SECURITY.md: security fixes
   are backported only to the most recent minor), so users on 1.0.x should move to 1.1.
+
 ### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
 
 - **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
@@ -103,12 +183,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### fixed (bridged Claude teams get the model defaults too)
 
 - **The gap.** On a copilot-vscode-canonical project, `.claude/agents/` holds bridge stubs, and the bridge rewrote them
-  without a `model:`. The Claude adapter's new defaults never reached them, and a `model:` added by hand was wiped by
-  the next `--bridge-merge` (every `researchteam update` and autosync run).
-- **Now** every stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub declares
-  (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
+  without a `model:`, so the Claude adapter's new defaults never reached them, and a `model:` added by hand was
+  wiped whenever the stubs were re-emitted.
+- **Now** every re-emitted stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub
+  declares (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
   `claude-fable-5-2` for the orchestrator, `opus` for every other stub, the parametric workstream expert included.
   The bridge lists every stub that received a default in a notice. Native (non-stub) agent bodies are untouched.
+- **When stubs are re-emitted.** Only a `--bridge-merge` that passes the `bridge:copilot-vscode-to-claude:subagents`
+  host feature rewrites `.claude/agents/` stubs. `researchteam update` and its autosync do not pass it, so their
+  existing stubs keep what they have (a `model:` added by hand included) and gain no default from an update. Add the
+  line once (infrastructureManagement's `scripts/operator/65-adopt-claude-model-lines.py`); a later re-emit keeps it.
 
 ### fixed (sandbox: the exception registry and the carve-out high-water mark are protected; carve-outs count in the exception cap)
 
