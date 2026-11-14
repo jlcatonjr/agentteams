@@ -588,3 +588,49 @@ def test_a_trust_root_parent_id_is_refused(tmp_path, capsys, parent) -> None:
     _write(root, _doc(private, derives_from=parent))
     assert _authorize(team) == []
     assert "trust-root id" in capsys.readouterr().err
+
+
+# --- IM @security #485 delta -----------------------------------------------------------------------------------
+
+def test_an_ssh_block_followed_by_a_pgp_block_is_refused() -> None:
+    ssh = "-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----\n"
+    pgp = "-----BEGIN PGP SIGNATURE-----\niQEz\n-----END PGP SIGNATURE-----\n"
+    head = "object 0\ntype commit\ntag v1.0.0\ntagger op <op@x> 0 +0000\n\nrelease\n"
+    assert tg._ssh_signed(head + ssh)
+    assert not tg._ssh_signed(head + ssh + pgp)
+    assert not tg._ssh_signed(head + pgp + ssh)
+    assert not tg._ssh_signed(head + ssh + ssh)
+    assert not tg._ssh_signed(head + ssh + "trailing text\n")
+
+
+def test_a_lineage_cycle_renders_no_group(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _log(team, _row("cycle-a", relaxes="", derives="cycle-b"), _row("cycle-b", relaxes="", derives="cycle-a"))
+    _write(root, _doc(private, derives_from="cycle-a"))
+    assert _authorize(team) == []
+    assert "lineage does not hold" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("verdict", "conditions"), [("CONDITIONAL PASS", "pending"), ("FAIL", "")])
+def test_a_later_pending_or_refusing_decision_blocks_the_parent(tmp_path, capsys, verdict, conditions) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    assert _authorize(team) == ["acme/toolkit", "acme/builder"]
+    later = _row(_POLICY, verdict=verdict, stamp="2026-11-14")
+    later["conditions_verified"] = conditions
+    _log(team, later)
+    assert _authorize(team) == []
+    assert "not an authorizing one" in capsys.readouterr().err
+
+
+def test_a_retracted_halt_does_not_disable_the_parent(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _log(team, _row(_POLICY, verdict="HALT", stamp="2026-11-13"))
+    assert _authorize(team) == []
+    retract = _row(_POLICY, verdict="HALT-RETRACTED", stamp="2026-11-14")
+    retract["conditions"] = "settled"
+    retract["signature"] = __import__("tests._decision_gate_helpers", fromlist=["_stub_sig"])._stub_sig(
+        __import__("agentteams.cli.decision_log", fromlist=["x"])._decision_signature_values(retract))
+    _log(team, retract)
+    assert _authorize(team) == ["acme/toolkit", "acme/builder"]

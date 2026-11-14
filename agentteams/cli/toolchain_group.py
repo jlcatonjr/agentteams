@@ -285,12 +285,20 @@ def lineage_problem(doc: dict, governance_dir: Path, halt_dirs: tuple[Path, ...]
         lineage_map = _build_lineage_map(rows)
         chain: list[str] = []
         for lineage_action in _lineage(doc):
-            authorizing = [r for r in rows if _row_action_id(r) == lineage_action and (
-                (r.get("verdict") or "").strip().upper() == "PASS" or (
-                    (r.get("verdict") or "").strip().upper() == "CONDITIONAL PASS"
-                    and (r.get("conditions_verified") or "").strip().lower() == "verified"))]
-            if not authorizing:
-                return f"derives_from names {lineage_action!r}, which no authorizing decision records"
+            # The parent's LATEST verdict decides (HALT / HALT-RETRACTED rows are the HALT scan's, below): a later
+            # pending CONDITIONAL PASS or a refusal blocks the parent, as the verdict contract says.
+            own = [r for r in rows if _row_action_id(r) == lineage_action
+                   and (r.get("verdict") or "").strip().upper() not in ("HALT", "HALT-RETRACTED")]
+            latest = own[-1] if own else None
+            verdict = (latest.get("verdict") or "").strip().upper() if latest else ""
+            ok = latest is not None and (verdict == "PASS" or (
+                verdict == "CONDITIONAL PASS" and (latest.get("conditions_verified") or "").strip().lower() == "verified"))
+            if not ok:
+                if latest is None:
+                    return f"derives_from names {lineage_action!r}, which no authorizing decision records"
+                return (f"derives_from names {lineage_action!r}, whose latest decision is {verdict or 'empty'}"
+                        f"{' with conditions pending' if verdict == 'CONDITIONAL PASS' else ''}, not an authorizing one")
+            authorizing = [latest]
             if (authorizing[-1].get("sig_scheme") or "").strip().lower() != "ed25519":
                 return f"derives_from names {lineage_action!r}, whose authorizing row is not Ed25519-signed by the operator"
             dl._assert_authorizing_row_is_authentic(authorizing[-1], output_dir=governance_dir,
