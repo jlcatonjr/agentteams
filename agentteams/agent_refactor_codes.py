@@ -27,7 +27,7 @@ Report every spec-compliance violation with one of these codes, so each finding 
 
 | Code | Violation | Check |
 |------|-----------|-------|
-| AR-01 | Missing required front-matter field | A YAML field listed in the Part 2 front-matter row is absent |
+| AR-01 | Missing required front-matter field | One of the five fields in the Part 2 front-matter row is absent (the portable baseline; a file with no `handoffs:` key is reported as AR-10) |
 | AR-02 | H1 title does not match the `name` field | The first `# ` heading differs from the front-matter `name` value |
 | AR-03 | Inline data block meets the extraction threshold | A block meets all four Part 1 extraction criteria (size, type, shared, volatile) but is still inline |
 | AR-04 | Dead `#file:` reference | A `#file:` reference names a path that does not exist on disk |

@@ -89,6 +89,22 @@ def test_opt_in_section_sits_inside_the_emitted_content_fence() -> None:
     assert "### Violation Codes" in body and "| AR-10 |" in body
 
 
+@pytest.mark.parametrize("turn_on", [True, False])
+def test_update_merge_adds_and_removes_the_section(turn_on: bool) -> None:
+    from agentteams.emit import _normalize_generated_content
+    from agentteams.fences import _merge_fenced_content
+
+    def emitted(on: bool) -> str:
+        description = {"project_goal": "x", **({"agent_refactor": {"violation_codes": True}} if on else {})}
+        return _normalize_generated_content("agent-refactor.agent.md", _render_agent_refactor(description))
+
+    old, new = emitted(not turn_on), emitted(turn_on)
+    result = _merge_fenced_content(new, old, rel_path="agent-refactor.agent.md")
+    assert result.sections_replaced == ["content"]
+    assert ("### Violation Codes" in result.merged_content) is turn_on
+    assert bool(result.shrink_notices) is (not turn_on)
+
+
 def test_line_budget_parameter_reaches_ar_05() -> None:
     description = {"project_goal": "x", "agent_refactor": {"violation_codes": True, "line_budget": 350}}
     text = _render_agent_refactor(description)
