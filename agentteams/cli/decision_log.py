@@ -753,7 +753,8 @@ def _assert_authorizing_row_is_authentic(
                 f"decision authorizing '{action}' is UNSIGNED, but strict agent-privilege "
                 f"enforcement (enforce_decision_signing) is ON for this workspace: an unsigned "
                 f"authorization is refused (fail-closed). Activate decision signing — add a "
-                f"`signature` column to the decisions log or set AGENTTEAMS_DECISION_SIGNING_KEY "
+                f"`signature` column to the decisions log or set AGENTTEAMS_DECISION_SIGNING_KEY (a key file alone "
+                f"does not activate it) "
                 f"— or set enforce_decision_signing:false in the brief and re-run --update."
             )
         return

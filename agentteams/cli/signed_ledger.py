@@ -79,9 +79,9 @@ def require_strong_hmac_key(
     return key
 
 
-#: The directory every emitted sandbox read-denies and write-denies (``frameworks/_sandbox_emit.SIGNING_KEY_DIR``).
+#: The directory every emitted sandbox read-denies; no write root can reach it, and on macOS it is write-denied too.
 HMAC_KEY_DIR = "~/.config/agentteams/keys"
-#: The operator verify-key store, write-denied in every emitted sandbox; a key file is trusted only when its
+#: The operator verify-key store, out of every sandbox write root (write-denied on macOS); a key file is trusted only when its
 #: fingerprint is recorded here (``_sandbox_emit.OPERATOR_VERIFY_KEYS_DIR``; @security M2).
 HMAC_FINGERPRINT_DIR = "~/.config/agentteams/verify-keys"
 #: Each HMAC key's environment variable and its key file in :data:`HMAC_KEY_DIR` (hmac-key-autoresolve).
@@ -271,8 +271,8 @@ def record_hmac_fingerprint(kind: str) -> Path:
     """Record the fingerprint of the ``<kind>-hmac.key`` file in :data:`HMAC_FINGERPRINT_DIR` (operator-only).
 
     Reads the key file under the same custody checks as :func:`load_hmac_key` (not the fingerprint), and
-    writes ``<kind>-hmac.fp`` (mode 0644) in a directory created mode 0700 if absent. Every emitted sandbox
-    write-denies that directory, so an agent cannot record a planted key.
+    writes ``<kind>-hmac.fp`` (mode 0644) in a directory created mode 0700 if absent. No sandbox write root can
+    reach that directory (on macOS it is write-denied too), so a sandboxed agent cannot record a planted key.
 
     Args:
         kind: One of :data:`HMAC_KINDS`.

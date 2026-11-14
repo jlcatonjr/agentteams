@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused. Every emitted sandbox read-denies `keys/`; the macOS Claude block and the goose Seatbelt profile now
   also write-deny `keys/` and `verify-keys/` (on Linux, write roots cannot reach them).
   - A set variable still wins, and agentteams warns (saying whether the two match) when the key file exists too.
-  - The file is refused when it is a symlink, sits behind a symlinked `keys/`, is readable by others, is empty,
+  - The file is refused when it is a symlink, sits behind a symlinked `keys/`, is readable by group or others, is empty,
     or would be read by an install an agent could edit.
   - A decision key file does not by itself switch on decision-signing enforcement; that stays tied to the variable
     and the log header.
