@@ -63,6 +63,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Step 1 is unfenced. Its text does not depend on that position.
 - `template-chapter-audit.csv` records the three alignments as TA-060, TA-061 and TA-062.
 
+### added (GitHub management by default, and the signed integration-branch merge authorization)
+
+- **GitHub management section.** Every generated team's constitution gains a fenced, template-authoritative
+  `github_management_rule` section: routine GitHub work through `gh` and `git` is authorized, allocated by role
+  (`@git-operations` writes, `@pr-manager` owns the PR lifecycle and never merges, the orchestrator may run read-only
+  `gh` queries). Agents ask when an action looks risky, and always for the C-5 classes, the default branch,
+  `release/*`, tags, signing and cross-repository pins. The section is never consent to a gate prompt. New brief field
+  `github_management` (default `true`; `false` renders a notice that every GitHub write goes to the operator). No
+  `tools:` line widens, and no MCP server is activated.
+- `@git-operations` and the merge reference use `gh` when it is authenticated, else `git` and the REST API (it was
+  REST first). The orchestrator's read-only `gh` exception is in its routing rule. Fence versions: orchestrator
+  `available_workflows` v=14, pr-manager `invariant_core` v=2, security `security_rules_invariant` v=24.
+- **Integration-branch merge authorization** (`agentteams/cli/dev_merge.py`). An operator-signed
+  `.agentteams/dev-merge-authorization.json` (Ed25519, a trust root, HALT family `integration-merge`, lineage, rollback
+  guard; no sunset and no cap slot, by operator ruling, like the toolchain group) lets `agentteams --merge-pr N` merge
+  a pull request into the signed integration branch without the gate's merge prompt. That holds only while it
+  verifies and every condition holds: the PR is open, not a draft, not a fork, CLEAN, has every check passed, touches
+  no governance, agent or workflow path, and a `@security` PASS for its exact head exists and is spent on use. The
+  merge is a merge commit at the checked head. Otherwise the verb exits 2, and the merge goes back to the ordinary
+  prompt. New verbs `--sign-dev-merge-authorization` (operator-only, refused in an agent session) and
+  `--verify-dev-merge-authorization`. A new fenced `dev_merge_rule` constitution section and a security trigger row.
+  The gate is unchanged: a direct `gh pr merge` still asks.
+- The integration model's merge-strategy table gains a contributor-PR row. `references/enforcement-integrity.json`
+  pins `agentteams/cli/dev_merge.py`.
+
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
 - A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the

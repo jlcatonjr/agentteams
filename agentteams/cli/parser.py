@@ -23,6 +23,7 @@ from agentteams.cli.sync_switch import add_sync_arguments
 from agentteams.mcp_servers import SERVERS as _MCP_SERVERS
 from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
+from agentteams.cli.dev_merge_switch import add_dev_merge_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
 from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS, agents_dir_for
 
@@ -1676,6 +1677,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "has no toolchain-group file (nothing is under the rule)."
         ),
     )
+    add_dev_merge_arguments(parser)
     parser.add_argument(
         "--allowed-signers",
         dest="allowed_signers",

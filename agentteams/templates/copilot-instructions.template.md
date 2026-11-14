@@ -9,6 +9,8 @@ SECTION MANIFEST — copilot-instructions.template.md
 | authority_hierarchy   | FENCED        | Source hierarchy list                    |
 | source_repositories   | FENCED        | Authority source entries                 |
 | toolchain_group_rule  | FENCED        | First-party toolchain group; template-authoritative |
+| github_management_rule| FENCED        | GitHub management by role; template-authoritative |
+| dev_merge_rule        | FENCED        | Integration-branch merge authorization; template-authoritative |
 | constitutional_core   | FENCED        | Tier 1 principles C-1..C-5; non-overridable |
 | constitutional_rules  | USER-EDITABLE | Project may extend or customise          |
 | project_specific_rules| USER-EDITABLE | Extension home for instruction files     |
@@ -213,6 +215,47 @@ rule stands on its own, whatever number the project's constraint-relaxing rule c
 agentteams ships and restores this section on every `--update --merge`; a project's own rules stay where
 they are.
 <!-- AGENTTEAMS:END toolchain_group_rule -->
+
+<!-- AGENTTEAMS:BEGIN github_management_rule v=1 -->
+## GitHub management (`gh` / `git`)
+
+{GITHUB_MANAGEMENT_RULE}
+<!-- AGENTTEAMS:END github_management_rule -->
+
+<!-- AGENTTEAMS:BEGIN dev_merge_rule v=1 -->
+## Integration-branch merge authorization (a bounded constraint-relaxing authorization)
+
+In a governed workspace whose branch model is `integration`, the operator may sign
+`.agentteams/dev-merge-authorization.json`. While it verifies, `@git-operations` may merge a pull request into the
+integration branch with `agentteams --merge-pr <N>`, without the gate's merge prompt. The file is a
+constraint-relaxing authorization, and this rule stands on its own, whatever number the project's
+constraint-relaxing rule carries:
+
+- **Operator-signed.** It verifies only with the operator's Ed25519 decision key (a key in this team's verify-key
+  store), only for the workspaces it lists by repository and team id, and only for the integration branch it names.
+  No agent and no brief edit can widen it.
+- **Traceable.** Its signed `derives_from` names the recorded decision(s) it derives from, each an authentic
+  authorizing decision with a recorded, acyclic lineage; an unretracted HALT on it or on any ancestor ends it (C-2).
+- **A trust root.** No decision row may target the file, and editing it by hand only stops it verifying.
+- **HALT ends it.** An unretracted HALT on the `integration-merge` family, or on any `dev-merge:` action, in any
+  surface's decisions log ends it at once (C-2), as does removing its key from the verify-key store or the file.
+- **No sunset and no cap slot** (operator ruling, 2026-11-14). Like the first-party toolchain group, and unlike every
+  other relaxing exception, it does not expire and does not count against the aggregate exception cap. These two are
+  the only such authorizations; every other relaxing exception keeps its cap and sunset.
+- **What it lifts, and only when every condition holds.** Only the operator prompt for one pull-request merge into
+  the signed integration branch. `--merge-pr` refuses, and the merge goes back to the ordinary prompt, unless: the
+  pull request is open, not a draft and not from a fork, in this repository, and based on that branch (never the
+  default branch, `main`, `master` or a `release/*` line); its merge state is clean with no changes requested; every
+  check on its head has passed (at least one, every required check included); it touches no governance, agent,
+  workflow or trust-root path; and a recorded `@security` PASS names that pull request and head commit. The PASS is
+  spent on use, and the merge is a merge commit at exactly the checked head.
+- **What it never lifts.** Any HALT, any other gate prompt, C-5 clearance, the release model, signing, or an agent's
+  duty to ask when a merge looks risky. A merging agent never records its own clearance. Where decision signing is
+  off, that PASS is only as strong as the log's authorship check, so the binding controls are the signed file, the
+  green checks, the exact head, the path refusal and the integration-branch-only target.
+
+agentteams ships and restores this section on every `--update --merge`; a project's own rules stay where they are.
+<!-- AGENTTEAMS:END dev_merge_rule -->
 
 ---
 

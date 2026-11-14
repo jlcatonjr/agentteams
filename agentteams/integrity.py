@@ -356,6 +356,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out
     "agentteams/cli/toolchain_group.py",         # First-party toolchain group: the signed first-party toolchain group (S-10)
+    "agentteams/cli/dev_merge.py",               # the signed integration-branch merge authorization and --merge-pr
+    "agentteams/cli/dev_merge_commands.py",      # resolves the governance dir (verify-key store) for --merge-pr
+    "agentteams/cli/toolchain_group_commands.py",  # resolves the governance dir for both signed-file verbs
     "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
     # P16 (2026-11-01, @security review-pending): host_features holds DEFAULT_PRIVILEGE_PROFILE ("confined") and the

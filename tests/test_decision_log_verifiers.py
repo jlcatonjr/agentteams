@@ -359,6 +359,14 @@ def test_every_gate_call_site_is_listed():
                 assert text.index("action = clearance_action(scope, path)") < text.index("action=scope)")
             elif arg in {"exempt_action", "exempt_family"} and path.name == "s10_exempt_gate.py":
                 s10_sites.append(arg)  # s10-cooldown-exempt:<owner/name> and the bare family, checked below
+            elif arg == "halt_family" and path.name == "dev_merge.py":
+                # The integration-branch merge authorization's two HALT families, both listed.
+                assert "for halt_family in (FAMILY, ACTION_FAMILY):" in text
+                assert {"integration-merge", "dev-merge"} <= set(GATE_ACTIONS)
+            elif arg == "merge_action" and path.name == "dev_merge.py":
+                # dev-merge:<owner/name>:pr-<N>-<sha>, built (and validated) by merge_action_id only.
+                assert text.count("merge_action = merge_action_id(repo, number, head_sha)") == 1
+                assert "dev-merge" in GATE_ACTIONS
             elif arg == "lineage_action" and path.name == "toolchain_group.py":
                 lineage_sites.append(arg)  # the group file's derives_from chain (v1.1.3): exactly one site, below
             else:
