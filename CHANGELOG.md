@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reading a sources table as source repositories, separate from the hierarchy, needs a schema key and moves to 1.3.
 - The authority parser moves to the private `agentteams/_ingest_authority.py` (CH-07 ceiling). New `tests/test_ingest_authority_hierarchy.py`.
 
+### docs (release guide names the 1.1 line)
+
+- `release-and-branching.md` was still written for 1.1's release candidates. It now names `v1.1.3` as the install and
+  verify example, describes `release/1.1` as the 1.1 patch line, and lists `release/1.0` as an older line.
+
 ### added (typed work-summary entries and the closed trigger catalog; #454)
 
 - **A new reference, `references/work-summary-trigger-catalog.reference.md`, is emitted for every team.** It renders
@@ -1037,7 +1042,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### docs (release branches are not merged back into `main`)
 
 - `release-and-branching.md` no longer says a release branch is merged forward into `main` after each tag. Every fix
-  lands on `main` first and is copied out with `git cherry-pick -x`, so `main` already has it. The status line now
+  lands on the development branch first (now `dev`) and is copied out with `git cherry-pick -x`, so `main` already
+  has it. The status line now
   names `v1.0.7` and `v1.1.0-rc.16`.
 
 ### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
