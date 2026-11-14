@@ -554,6 +554,15 @@
       "type": "boolean",
       "description": "Follow-up #8 phase 2 opt-in (default false). When true and a sandbox is emitted, the Claude block adds permissions.deny Edit(...) rules for the prompt roots other harnesses read as instructions (.github/copilot-instructions.md, .github/instructions/, .github/prompts/, .github/agents/, AGENTS.md, AGENTS.override.md, .goosehints, .codex/, .goose/recipes/, CLAUDE.md, CLAUDE.local.md, .mcp.json, and .agentteams/ when present) plus sandbox denyWrite entries for those present at generation; the Linux goose runner example passes confine-run.sh --protect-prompt-roots (read-only binds of the present roots). .github/workflows is NOT covered and the goose macOS Seatbelt profile is unchanged (deferred). Off by default because it also blocks sandboxed agents (and an in-sandbox agentteams --update) from authoring Copilot, Codex and goose agents and instructions. Turning it off prints a SANDBOX RELAXATION notice when the live .claude/settings.json still carries the rules."
     },
+    "agent_refactor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Opt-in settings for the @agent-refactor role (#453). Set violation_codes true to emit the AR-01..AR-10 typed violation-code section from Chapter 13 of the book (each code with its check, findings reported as code / file / evidence plus a per-code count line). line_budget (default 200) is the line count above which AR-05 fires; it takes effect only when violation_codes is true. Omitted or violation_codes false keeps the portable default and a byte-identical agent-refactor file.",
+      "properties": {
+        "violation_codes": {"type": "boolean", "default": false},
+        "line_budget": {"type": "integer", "minimum": 1, "default": 200}
+      }
+    },
     "framework_conformance_check": {
       "type": "boolean",
       "description": "Opt-in override for the framework-watch reference's ≤24h standard-conformance-check section (see references/provider-adapter-refresh.procedure.md §7). When omitted, defaults on for teams that maintain framework adapters (a component with slug `framework-adapters`, i.e. the `@framework-adapters-expert` role) and off otherwise. Set true to force-emit the section (e.g. the AgentTeamsModule self-brief dogfooding the trigger onto its own governing team) or false to suppress it. The check itself is read-only detection + routing (Constitutional C-4); it never edits adapter code."
