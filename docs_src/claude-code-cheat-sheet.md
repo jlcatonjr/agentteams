@@ -24,17 +24,20 @@ Quick reference for the Claude Code CLI and VS Code extension.
 
 ### Model aliases
 
-| Alias | Resolves to |
+| Alias | Resolves to (Anthropic API, November 2026) |
 |---|---|
-| `default` | Account default (Opus 4.8 for Max/Team; Sonnet 4.6 for Pro) |
-| `best` | Fable 5 where available, else latest Opus |
-| `fable` | Claude Fable 5 |
-| `opus` | Claude Opus 4.8 |
-| `sonnet` | Claude Sonnet 4.6 |
-| `haiku` | Claude Haiku 4.5 |
-| `opusplan` | Opus for planning, Sonnet for execution |
+| `default` | Clears any model override; your account's runtime default |
+| `best` | Same as `opus` |
+| `fable` | Claude Fable 5.2 (Fable 5 in Claude apps gateway sessions) |
+| `opus` | Claude Opus 5.5 |
+| `sonnet` | Claude Sonnet 5.5 |
+| `haiku` | Claude Haiku 5.5 |
+| `opusplan` | `opus` in plan mode, then `sonnet` for execution |
 
-Use full model IDs for exact pinning: `--model claude-sonnet-4-6`, `--model claude-opus-4-8`.
+Other providers resolve some aliases to older models; for example, `opus` is Opus 4.6 on Microsoft Foundry. See
+[Model configuration](https://code.claude.com/docs/en/model-config) for the per-provider table.
+
+Use full model IDs for exact pinning: `--model claude-fable-5-2`, `--model claude-opus-5-5`.
 
 ---
 
