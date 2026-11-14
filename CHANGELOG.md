@@ -24,8 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tiers.
 - **Existing log rows keep their historical meanings.** A row written before this change that says `ACCEPT` meant
   "not a conflict" (now `NO-CONFLICT`), and one that says `REVISE` meant "correct the lower-authority file" (now
-  `REJECT`). The new `dispositions` fence states this mapping, and the memory-index section tells the resolver to read
-  a prior outcome by its recorded meaning.
+  `REJECT`). An older `REJECT` meant "remove the incorrect claim or entry", usually today's `REJECT` (read its
+  resolution text), and an older `ESCALATE` row is settled by its later resolution. The new `dispositions` fence states
+  this mapping, and the memory-index section tells the resolver to read a prior outcome by its recorded meaning.
 - `--update --merge` carries the change to existing teams:
   - Step 2 and Step 3 are now fenced (`decision_rules` v=1, `dispositions` v=1);
   - `memory_index_consultation` is v=4 in this template and `rules` is v=2;

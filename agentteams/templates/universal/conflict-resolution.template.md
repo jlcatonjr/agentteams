@@ -112,7 +112,9 @@ then gives a written justification that cites the authority tiers it relied on, 
 row sets `status` to `resolved`. An escalated row keeps `status` = `open`, and its `resolution` reads
 `ESCALATE: <why the REJECT presumption does not settle it>`. Rows written before this disposition table used the older
 meanings and keep them: an older `ACCEPT` meant "not a conflict" (now `NO-CONFLICT`), and an older `REVISE` meant
-"correct the lower-authority file" (now `REJECT`).
+"correct the lower-authority file" (now `REJECT`). An older `REJECT` meant "remove the incorrect claim or entry", which
+is usually today's `REJECT`; read its resolution text to confirm. An older `ESCALATE` row is settled by its later
+resolution, and may already be closed.
 
 <!-- AGENTTEAMS:END dispositions -->
 
@@ -126,7 +128,7 @@ Update `{CONFLICT_LOG_PATH}` as the **Recording** rule in the Step 3 disposition
 ## Rules
 
 1. Never resolve a conflict without reading both source files
-2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always
+2. Authority hierarchy (from `copilot-instructions.md`) decides by default; only an ACCEPT with cited affirmative evidence overrides it (rule 3)
 3. Under ambiguous evidence, REJECT: the higher-authority side stands. ACCEPT only with cited affirmative evidence that the higher-authority file is in error
 4. Escalate to `@orchestrator` only after rule 3 has been applied and does not settle the case, and record why in the log row
 5. Update the conflict log for every decision, including NO-CONFLICT, with a justification that cites the authority tiers
