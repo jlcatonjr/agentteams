@@ -42,7 +42,7 @@ def test_the_rendered_rule_names_only_what_the_gate_authorized() -> None:
     assert "First-party toolchain group — the 14-day cooldown does not apply" in text
     assert "repositories: `jlcatonjr/agentteams`, `jlcatonjr/researchteam`. A repository is named here only" in text
     assert "{S10_TOOLCHAIN_GROUP}" not in text
-    assert "local-repository carve-outs) the cooldown" in text
+    assert "toolchain-group carve-outs) the cooldown" in text
 
 
 def test_without_the_key_the_rule_says_the_cooldown_applies_to_everything() -> None:
@@ -60,7 +60,7 @@ def test_the_trigger_and_verdict_tables_know_the_carve_out() -> None:
     assert ("| Any change to `.agentteams/toolchain-group.json`, or any addition to the brief's "
             "`s10_cooldown_exempt_repos` | Constraint relaxation — widens Rule S-10's first-party toolchain group") in template
     verdict = next(line for line in template.splitlines() if "younger than the Rule S-10 cooldown" in line)
-    assert "outside both the remediation and the local-repository carve-outs" in verdict
+    assert "outside both the remediation and the toolchain-group carve-outs" in verdict
     assert "(for the cooldown only) that the release is of a repository the first-party toolchain group names" in verdict
     assert "verifies against the operator's release key and peels to the locked commit" in template
 

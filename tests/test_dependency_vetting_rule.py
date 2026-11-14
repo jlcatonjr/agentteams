@@ -86,11 +86,11 @@ def test_scan_remediation_carve_out_lifts_both_rules_and_only_those():
     assert "may be adopted inside the cooldown window" in carve and "need not be the latest stable release" in carve
     assert "must still pass the vulnerability search" in carve and "Rule S-9" in carve
     assert "covers only the packages the scan flagged" in carve
-    assert "(outside the remediation and local-repository carve-outs) the cooldown or the latest-stable rule" in body
+    assert "(outside the remediation and toolchain-group carve-outs) the cooldown or the latest-stable rule" in body
 
 
 def test_local_repository_carve_out_lifts_the_cooldown_only():
-    """The first-party toolchain group (Rule 11(f), v1.1.2) exempts its repositories from the cooldown and from a
+    """The first-party toolchain group (v1.1.2) exempts its repositories from the cooldown and from a
     per-release pin row, never from the vulnerability search, S-9 identity or the latest-stable rule."""
     body = _s10_body()
     start = body.index("**First-party toolchain group")

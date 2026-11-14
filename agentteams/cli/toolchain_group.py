@@ -1,4 +1,4 @@
-"""toolchain_group.py — Rule 11(f): the operator-signed first-party toolchain group (Rule S-10's cooldown scope).
+"""toolchain_group.py — First-party toolchain group: the operator-signed first-party toolchain group (Rule S-10's cooldown scope).
 
 A governed workspace may carry ``.agentteams/toolchain-group.json``: one file, signed once by the operator's Ed25519
 decision key, that names the repositories whose releases the operator cuts and signs (the *first-party toolchain
@@ -432,7 +432,7 @@ def sign_group_file(path: Path, team_dir: Path, *, confirm_sha256: str | None = 
     if preflight is None:
         return 1
     keyfile, _overridden = preflight
-    print("About to sign the first-party toolchain group (Rule 11(f): no S-10 cooldown and no per-release pin "
+    print("About to sign the first-party toolchain group (the constitution's First-party toolchain group section: no S-10 cooldown and no per-release pin "
           "row for releases of these repositories, in these workspaces, until a HALT or key revocation):")
     print(f"  group      : {', '.join(doc['group'])}")
     print(f"  workspaces : {len(doc['workspaces'])}")

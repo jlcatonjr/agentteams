@@ -250,8 +250,8 @@ def _build_placeholder_map_for_file(
     # Start with all auto-resolved global placeholders
     mapping = dict(manifest["auto_resolved_placeholders"])
     # Rule S-10's local-repository carve-out: only what cli/s10_exempt_gate authorized, never the raw brief list, so
-    # a path that skips the gate (convert, interop) renders "none" (fail-closed, Rule 11). Includes the signed
-    # first-party toolchain group (Rule 11(f)).
+    # a path that skips the gate (convert, interop) renders "none" (fail-closed, the constraint-relaxing-authorizations rule). Includes the signed
+    # first-party toolchain group (the constitution's First-party toolchain group section).
     mapping.setdefault("S10_TOOLCHAIN_GROUP",
                        format_s10_exempt_repos(manifest.get("s10_cooldown_exempt_authorized")))
 

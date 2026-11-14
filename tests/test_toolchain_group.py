@@ -1,4 +1,4 @@
-"""Rule 11(f): the operator-signed first-party toolchain group (agentteams v1.1.2; operator rulings R5, T1–T3,
+"""The operator-signed first-party toolchain group (agentteams v1.1.2; operator rulings R5, T1–T3,
 no sunset, 2026-11-13).
 
 The group file lifts Rule S-10's cooldown, and a pin move's per-release operator row, for releases of the
@@ -286,7 +286,7 @@ def test_a_malformed_file_is_refused(tmp_path, bad, capsys) -> None:
     assert "::error" in capsys.readouterr().err
 
 
-# --- Templates: generic, and Rule 11(f) reaches every constitution copy --------------------------------------------
+# --- Templates: generic, and the toolchain-group section reaches every constitution copy --------------------------------------------
 
 def test_the_shipped_rule_names_no_specific_repository() -> None:
     """Rule 11: ship the machinery, never a specific exception (the group lives only in the signed file)."""

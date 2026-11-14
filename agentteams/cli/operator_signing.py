@@ -625,7 +625,7 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     from agentteams.cli.toolchain_group import PURPOSE as _GROUP_PURPOSE
 
     if "|".join(dl._decision_signature_values(row)).startswith(_GROUP_PURPOSE + "|"):
-        # Rule 11(f) domain separation: a decision payload must never double as a toolchain-group payload.
+        # Toolchain-group domain separation: a decision payload must never double as a toolchain-group payload.
         print("Error: refusing to sign — this decision's payload begins with the toolchain-group purpose tag "
               "(use --sign-toolchain-group).", file=sys.stderr)
         return 1

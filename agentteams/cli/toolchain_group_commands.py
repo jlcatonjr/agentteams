@@ -1,4 +1,4 @@
-"""toolchain_group_commands.py — the CLI verbs for Rule 11(f)'s first-party toolchain group.
+"""toolchain_group_commands.py — the CLI verbs for the first-party toolchain group.
 
 ``--sign-toolchain-group FILE`` (operator-only), ``--verify-toolchain-group`` and ``--verify-toolchain-pin LOCKFILE``
 (both read-only). The logic lives in :mod:`agentteams.cli.toolchain_group`; this module only resolves the team dir,

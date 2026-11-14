@@ -1645,7 +1645,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="FILE",
         help=(
-            "Operator-only (Rule 11(f)): sign the first-party toolchain group file (.agentteams/toolchain-group.json: "
+            "Operator-only (the constitution's First-party toolchain group section): sign the first-party toolchain group file (.agentteams/toolchain-group.json: "
             "version, scope, group, workspaces, purpose, sequence, key_id) in place with the Ed25519 decision key, "
             "after the same preflight, review digest and confirmation as --sign-decision. --output names a governed "
             "team dir whose references/authorized-verify-keys holds <key_id>.pub.pem. Commit the same signed bytes "

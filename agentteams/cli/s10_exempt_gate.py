@@ -26,7 +26,7 @@ Each listed repository is the action ``s10-cooldown-exempt:<owner/name>``, a con
   the run's project root, this gate's root on the output path: a custom ``--output`` into another checkout takes a
   different lock (a concurrent-write window, not a bypass: every write still passes every check).
 
-**First-party toolchain group (Rule 11(f), v1.1.2):** in a governed workspace the operator-signed
+**First-party toolchain group (v1.1.2):** in a governed workspace the operator-signed
 ``.agentteams/toolchain-group.json`` (:mod:`agentteams.cli.toolchain_group`) authorizes its repositories with no
 per-repository row, no sunset and no cap slot. The rendered set is that group joined with any repository a legacy
 per-repository row still covers (the migration window); once the group verifies, no NEW per-repository row is
