@@ -546,7 +546,7 @@ Two failures on one day led to this section. A `cd` into a removed clone failed,
 
 - **Stop on the first failure.** Begin every multi-command step with `set -euo pipefail` and use absolute paths. Don't join dependent commands with `;`. Before writing, confirm you are where you think you are (`git branch --show-current`, or `pwd`).
 - **Mind the negated-grep trap.** Under `pipefail`, a guard like `! cmd | grep -q x` can pass falsely, because `grep -q` exits early and `cmd` gets SIGPIPE. Capture the output first, then test it.
-- **Gate every PR merge on its checks with `&&`** (release and hotfix PRs into `main`; §G). A checks command only protects a merge that is chained to it. Checks may not have started yet, and `gh pr checks` treats "no checks reported" as a failure, so wait for them first. Pin the merge to the commit that was checked:
+- **Gate every PR merge on its checks with `&&`** (every PR: release and hotfix PRs into `main`, and the PRs §G allows into `dev`, such as fork, automation, or plan-directed PRs). A checks command only protects a merge that is chained to it. Checks may not have started yet, and `gh pr checks` treats "no checks reported" as a failure, so wait for them first. Pin the merge to the commit that was checked:
 
   ```bash
   until [ -n "$(gh pr checks "$PR" 2>/dev/null)" ]; do sleep 15; done \
@@ -555,7 +555,7 @@ Two failures on one day led to this section. A `cd` into a removed clone failed,
   && git pull --ff-only
   ```
 
-  Stop and read the output if a step fails. The `until` loop runs forever if the PR's workflows never start, so interrupt it if no checks appear after a few minutes.
+  Stop and read the output if a step fails. The `until` loop runs forever if the PR's workflows never start. If no checks appear within a few minutes of a push, re-trigger CI without changing the head: `gh pr close "$PR" && gh pr reopen "$PR"`. CI's `pull_request` trigger uses the default types, so `reopened` starts it. Never take `mergeStateStatus` CLEAN as proof that CI ran: a PR into `dev`, which has no required checks, reports CLEAN with zero check runs (PR #487, 2026-11-14).
 - **Test platform-specific output on every CI platform before pushing.** If a test reads a file that is generated on only one OS, set that platform in the test. When you can't run on the other OS, simulate it by patching `sys.platform`, and treat a pass as evidence, not proof: the CI job is the real test.
 
 ---
