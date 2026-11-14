@@ -447,7 +447,7 @@ def _consume_security_waiver_use(output_dir: Path, waiver: dict[str, str], *, ac
     if not target_id:
         raise RuntimeError("validated waiver is missing waiver_id")
 
-    signing_key = load_hmac_key("AGENTTEAMS_WAIVER_SIGNING_KEY")
+    signing_key = load_hmac_key("AGENTTEAMS_WAIVER_SIGNING_KEY", project_dirs=(output_dir,))
     if not signing_key:
         raise RuntimeError("waiver signing key is not configured (set AGENTTEAMS_WAIVER_SIGNING_KEY, or put it in "
                            "~/.config/agentteams/keys/waiver-hmac.key, mode 600)")
@@ -570,7 +570,8 @@ def _validate_security_waiver(
     if max_uses <= 0 or uses >= max_uses:
         raise RuntimeError("waiver use limit has been reached")
 
-    signing_key = load_hmac_key("AGENTTEAMS_WAIVER_SIGNING_KEY")
+    signing_key = load_hmac_key("AGENTTEAMS_WAIVER_SIGNING_KEY",
+                                project_dirs=(output_dir,) if output_dir is not None else ())
     if not signing_key:
         raise RuntimeError("waiver signing key is not configured (set AGENTTEAMS_WAIVER_SIGNING_KEY, or put it in "
                            "~/.config/agentteams/keys/waiver-hmac.key, mode 600)")

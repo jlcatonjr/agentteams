@@ -384,4 +384,6 @@ def _no_real_hmac_key_dir(tmp_path_factory, monkeypatch):
     import agentteams.cli.signed_ledger as sl
 
     monkeypatch.setattr(sl, "hmac_key_dir", lambda: tmp_path_factory.getbasetemp() / "no-hmac-keys")
+    monkeypatch.setattr(sl, "hmac_fingerprint_dir", lambda: tmp_path_factory.getbasetemp() / "no-hmac-fingerprints")
+    monkeypatch.setattr(sl, "_location_cache", {})
     monkeypatch.setattr(sl, "_warned_both", set())

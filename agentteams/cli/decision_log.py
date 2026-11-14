@@ -370,9 +370,9 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     return _hmac_decision_row(row, key=key)
 
 
-def _hmac_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
+def _hmac_decision_row(row: dict[str, str], *, key: str | None = None, project_dirs: tuple[Path, ...] = ()) -> str:
     """The HMAC over the row exactly as it stands (no binding): the verifier side of :func:`sign_decision_row`."""
-    signing_key = key if key is not None else load_hmac_key("AGENTTEAMS_DECISION_SIGNING_KEY")
+    signing_key = key if key is not None else load_hmac_key("AGENTTEAMS_DECISION_SIGNING_KEY", project_dirs=project_dirs)
     if not signing_key:
         raise RuntimeError("decision signing key is not configured (set AGENTTEAMS_DECISION_SIGNING_KEY, or put "
                            "it in ~/.config/agentteams/keys/decision-hmac.key, mode 600)")
@@ -758,7 +758,7 @@ def _assert_authorizing_row_is_authentic(
             )
         return
 
-    expected = _hmac_decision_row(row)
+    expected = _hmac_decision_row(row, project_dirs=(Path(output_dir),))
     actual = (row.get("signature") or "").strip().lower()
     if not actual:
         raise RuntimeError(

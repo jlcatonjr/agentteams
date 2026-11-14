@@ -131,7 +131,7 @@ class GrantError(RuntimeError):
     """Raised when a grant is malformed, invalid, expired, exhausted, or unsigned."""
 
 
-def _signing_key() -> str:
+def _signing_key(team_dir: Path | None = None) -> str:
     """Return the grant signing key from the environment or its key file, or fail closed.
 
     Returns:
@@ -140,7 +140,7 @@ def _signing_key() -> str:
     Raises:
         GrantError: The env var is unset or empty — signing/verification cannot proceed.
     """
-    key = load_hmac_key(GRANT_KEY_ENV, GrantError)
+    key = load_hmac_key(GRANT_KEY_ENV, GrantError, project_dirs=(team_dir,) if team_dir is not None else ())
     if not key:
         raise GrantError(
             f"{GRANT_KEY_ENV} is not set and ~/.config/agentteams/keys/grant-hmac.key is absent; refusing to sign or verify a capability grant "
@@ -276,7 +276,7 @@ def verify_grant_signature(
             ) from exc
     if scheme != SIG_SCHEME_HMAC:
         raise GrantError(f"grant {record.get('grant_id')!r} declares unknown sig_scheme {scheme!r}")
-    signing_key = require_strong_hmac_key(key or _signing_key(), "grant signing key", GrantError)
+    signing_key = require_strong_hmac_key(key or _signing_key(team_dir), "grant signing key", GrantError)
     return hmac_verify(
         signing_key,
         _signed_values(record),

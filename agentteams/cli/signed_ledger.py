@@ -79,8 +79,11 @@ def require_strong_hmac_key(
     return key
 
 
-#: The directory every emitted sandbox read-denies (``frameworks/_sandbox_emit.SIGNING_KEY_DIR``).
+#: The directory every emitted sandbox read-denies and write-denies (``frameworks/_sandbox_emit.SIGNING_KEY_DIR``).
 HMAC_KEY_DIR = "~/.config/agentteams/keys"
+#: The operator verify-key store, write-denied in every emitted sandbox; a key file is trusted only when its
+#: fingerprint is recorded here (``_sandbox_emit.OPERATOR_VERIFY_KEYS_DIR``; @security M2).
+HMAC_FINGERPRINT_DIR = "~/.config/agentteams/verify-keys"
 #: Each HMAC key's environment variable and its key file in :data:`HMAC_KEY_DIR` (hmac-key-autoresolve).
 HMAC_KEY_FILES: dict[str, str] = {
     "AGENTTEAMS_WAIVER_SIGNING_KEY": "waiver-hmac.key",
@@ -88,9 +91,12 @@ HMAC_KEY_FILES: dict[str, str] = {
     "AGENTTEAMS_GRANT_SIGNING_KEY": "grant-hmac.key",
     "AGENTTEAMS_MANAGEMENT_SIGNING_KEY": "management-hmac.key",
 }
+#: The kind names of :data:`HMAC_KEY_FILES` (``waiver``, ``decision``, ``grant``, ``management``).
+HMAC_KINDS: dict[str, str] = {name.split("-", 1)[0]: env for env, name in HMAC_KEY_FILES.items()}
+_FINGERPRINT_LABEL = b"agentteams-hmac-fp-v1"
 _MAX_HMAC_KEY_FILE_BYTES = 4096
 _warned_both: set[str] = set()
-_location_cache: dict[str, list[str]] = {}
+_location_cache: dict[tuple[str, ...], list[str]] = {}
 
 
 def hmac_key_dir() -> Path:
@@ -98,66 +104,148 @@ def hmac_key_dir() -> Path:
     return Path(os.path.expanduser(HMAC_KEY_DIR))
 
 
-def _file_key_location_refusals() -> list[str]:
-    """Install-location (a) refusals for reading a key file in this process, cached per working directory."""
-    here = str(Path.cwd().resolve())
-    if here not in _location_cache:
+def hmac_fingerprint_dir() -> Path:
+    """:data:`HMAC_FINGERPRINT_DIR` expanded (a seam, as :func:`hmac_key_dir`)."""
+    return Path(os.path.expanduser(HMAC_FINGERPRINT_DIR))
+
+
+def hmac_key_fingerprint(key: str) -> str:
+    """Return the public fingerprint of an HMAC key: ``HMAC-SHA256(key, "agentteams-hmac-fp-v1")`` in hex.
+
+    It reveals nothing about the key, and binds a key file to the operator's intent (@security M2).
+
+    Args:
+        key: The HMAC secret.
+
+    Returns:
+        64 hex characters.
+    """
+    return hmac.new(key.encode("utf-8"), _FINGERPRINT_LABEL, hashlib.sha256).hexdigest()
+
+
+def _project_roots(dirs: Sequence[Path]) -> list[Path]:
+    """The cwd, plus for each of *dirs* the nearest ancestor holding ``.claude/settings.json`` (as Ed25519 does)."""
+    roots = [Path.cwd().resolve()]
+    for d in dirs:
+        here = Path(d).resolve()
+        for cand in (here, *here.parents):
+            if (cand / ".claude" / "settings.json").is_file():
+                if cand not in roots:
+                    roots.append(cand)
+                break
+    return roots
+
+
+def _file_key_location_refusals(roots: Sequence[Path]) -> list[str]:
+    """Install-location (a) refusals for reading a key file, cached per set of project roots."""
+    key = tuple(sorted(str(r) for r in roots))
+    if key not in _location_cache:
         from agentteams.cli.signer_location import verify_install_location
 
-        _location_cache[here] = [f.message for f in verify_install_location([Path(here)]) if f.refuse]
-    return _location_cache[here]
+        _location_cache[key] = [f.message for f in verify_install_location(list(roots)) if f.refuse]
+    return _location_cache[key]
 
 
-def load_hmac_key(env_name: str, error: type[RuntimeError] = RuntimeError) -> str:
+def _read_custody_file(directory: Path, name: str, *, private: bool) -> bytes:
+    """Read ``directory/name`` without following a symlink at either level, checking both by ``fstat``.
+
+    The directory is opened ``O_DIRECTORY | O_NOFOLLOW`` and must be yours and not group/world-writable; the
+    file is opened relative to it (``dir_fd``) with ``O_NOFOLLOW``, so swapping either for a link after the
+    checks cannot redirect the read (@security M5).
+
+    Args:
+        directory: The custody directory.
+        name: A bare file name in it.
+        private: True for a secret (the file must be mode 0600); False for a public record (not writable by
+            group or others).
+
+    Returns:
+        The file's bytes (at most :data:`_MAX_HMAC_KEY_FILE_BYTES`).
+
+    Raises:
+        OSError: Missing, a symlink, or unreadable.
+        ValueError: A custody rule fails.
+    """
+    import stat as _stat
+
+    dfd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        dst = os.fstat(dfd)
+        if dst.st_uid != os.getuid() or dst.st_mode & 0o022:
+            raise ValueError(f"{directory} must be a directory you own, not writable by group or others")
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+        try:
+            st = os.fstat(fd)
+            if not _stat.S_ISREG(st.st_mode):
+                raise ValueError("is not a regular file")
+            if st.st_uid != os.getuid() or st.st_mode & (0o077 if private else 0o022):
+                raise ValueError("must be a regular file you own, with mode 0600" if private
+                                 else "must be a file you own, not writable by group or others")
+            data = os.read(fd, _MAX_HMAC_KEY_FILE_BYTES + 1)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(dfd)
+    if len(data) > _MAX_HMAC_KEY_FILE_BYTES:
+        raise ValueError(f"is larger than {_MAX_HMAC_KEY_FILE_BYTES} bytes")
+    return data
+
+
+def load_hmac_key(env_name: str, error: type[RuntimeError] = RuntimeError, *,
+                  project_dirs: Sequence[Path] = ()) -> str:
     """Return an HMAC key: the environment variable when set, else its key file, else ``""``.
 
     The variable wins, so an existing setup behaves as before. When the key file also exists, a warning
-    names the variable: a variable left set is inherited by sandboxed commands, which the file is not.
-    Otherwise ``HMAC_KEY_DIR/<kind>-hmac.key`` is read under ``proposals.use_key_file``'s custody rules.
-    Any failure refuses, including a read the sandbox denies, so a sandboxed caller fails closed
-    (@security ruling, references/plans/hmac-key-autoresolve.plan.md). The key is never printed.
+    says whether the two match. Otherwise ``HMAC_KEY_DIR/<kind>-hmac.key`` is read, and trusted only when
+    (1) it and its directory pass custody checks, (2) the running install is not one an agent could edit,
+    and (3) its fingerprint (:func:`hmac_key_fingerprint`) equals the one recorded in
+    ``HMAC_FINGERPRINT_DIR/<kind>-hmac.fp`` by :func:`record_hmac_fingerprint`. Every failure refuses, so a
+    planted key file, or a read the sandbox denies, fails closed (@security ruling and review,
+    references/plans/hmac-key-autoresolve.plan.md). The key is never printed.
 
     Args:
         env_name: One of :data:`HMAC_KEY_FILES`.
         error: The exception type to raise, so a module keeps its own (``GrantError``).
+        project_dirs: Team or project directories whose ``.claude/settings.json`` write roots count as
+            agent-writable for the install-location check (the cwd always counts).
 
     Returns:
         The key text, or ``""`` when neither the variable nor the file exists. Callers keep their own
         "not configured" errors, and run :func:`require_strong_hmac_key` as before.
 
     Raises:
-        RuntimeError: (or *error*) The key file exists but is a symlink, sits outside the key directory,
-            is not a regular file you own with mode 0600, is empty or too large, cannot be read, or would
-            be read by an install an agent could edit.
+        RuntimeError: (or *error*) The key file exists but fails any check above, or cannot be read.
     """
     value = os.environ.get(env_name, "")
     key_dir = hmac_key_dir()
-    path = key_dir / HMAC_KEY_FILES[env_name]
+    name = HMAC_KEY_FILES[env_name]
+    path = key_dir / name
     if value:
         if os.path.lexists(path) and env_name not in _warned_both:
             _warned_both.add(env_name)
-            print(f"Warning: {env_name} is set and {path} exists; using the variable. A variable left set is "
-                  "inherited by sandboxed commands; unset it and let the key file be used.", file=sys.stderr)
+            try:
+                same = hmac.compare_digest(_read_custody_file(key_dir, name, private=True).decode("utf-8").strip(),
+                                           value)
+                how = "the same key" if same else "a DIFFERENT key"
+            except (OSError, ValueError, UnicodeDecodeError):
+                how = "a key file that fails its checks"
+            print(f"Warning: {env_name} is set and {path} exists ({how}); using the variable. If you did not "
+                  "create that file, delete it. If you did, unset the variable, which sandboxed commands "
+                  "inherit.", file=sys.stderr)
         return value
     if not os.path.lexists(path):
         return ""
-    if os.path.islink(key_dir) or os.path.realpath(path.parent) != os.path.realpath(key_dir):
-        raise error(f"{env_name}: key file {path} must sit in {HMAC_KEY_DIR} itself (not behind a symlink), "
-                    "which session sandboxes read-deny")
-    refusals = _file_key_location_refusals()
+    try:
+        refusals = _file_key_location_refusals(_project_roots(project_dirs))
+    except OSError as exc:
+        raise error(f"{env_name}: cannot check where agentteams is installed ({exc}); set {env_name} for this "
+                    "command instead") from exc
     if refusals:
         raise error(f"{env_name}: refusing to read {path} from an install an agent may be able to edit "
                     f"({refusals[0]}); set {env_name} for this command, or run from a trusted install "
                     "(SECURITY.md, \"Signing from a trusted install\")")
-
-    def _custody(st: os.stat_result) -> None:
-        if st.st_mode & 0o077 or st.st_uid != os.getuid():
-            raise ValueError("must be a regular file you own, with mode 0600")
-
-    from agentteams.atomicio import read_regular_nofollow
-
     try:
-        data = read_regular_nofollow(path, _MAX_HMAC_KEY_FILE_BYTES, check=_custody).decode("utf-8").strip()
+        data = _read_custody_file(key_dir, name, private=True).decode("utf-8").strip()
     except OSError as exc:
         raise error(f"{env_name}: key file {path} cannot be read (a symlink, or denied here): "
                     f"{exc.strerror or exc}") from exc
@@ -165,7 +253,59 @@ def load_hmac_key(env_name: str, error: type[RuntimeError] = RuntimeError) -> st
         raise error(f"{env_name}: key file {path} {exc}") from exc
     if not data:
         raise error(f"{env_name}: key file {path} is empty")
+    fp_name = name.replace(".key", ".fp")
+    fp_path = hmac_fingerprint_dir() / fp_name
+    try:
+        recorded = _read_custody_file(hmac_fingerprint_dir(), fp_name, private=False).decode("ascii").strip()
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        kind = name.split("-", 1)[0]
+        raise error(f"{env_name}: key file {path} has no usable recorded fingerprint at {fp_path} ({exc}); if you "
+                    f"created the key, record it with `agentteams --record-hmac-fingerprint {kind}`") from exc
+    if not hmac.compare_digest(recorded, hmac_key_fingerprint(data)):
+        raise error(f"{env_name}: key file {path} does not match the fingerprint recorded at {fp_path}; refusing "
+                    "it (it may have been planted or replaced). If you replaced the key, re-record it")
     return data
+
+
+def record_hmac_fingerprint(kind: str) -> Path:
+    """Record the fingerprint of the ``<kind>-hmac.key`` file in :data:`HMAC_FINGERPRINT_DIR` (operator-only).
+
+    Reads the key file under the same custody checks as :func:`load_hmac_key` (not the fingerprint), and
+    writes ``<kind>-hmac.fp`` (mode 0644) in a directory created mode 0700 if absent. Every emitted sandbox
+    write-denies that directory, so an agent cannot record a planted key.
+
+    Args:
+        kind: One of :data:`HMAC_KINDS`.
+
+    Returns:
+        The fingerprint file written.
+
+    Raises:
+        ValueError: An unknown kind.
+        RuntimeError: The running install is one an agent could edit, or the key file is missing or fails
+            a check.
+    """
+    if kind not in HMAC_KINDS:
+        raise ValueError(f"unknown HMAC key kind {kind!r}; one of {', '.join(sorted(HMAC_KINDS))}")
+    refusals = _file_key_location_refusals(_project_roots(()))
+    if refusals:
+        raise RuntimeError(f"refusing to record a key fingerprint from an install an agent may be able to edit "
+                           f"({refusals[0]}); run from a trusted install (SECURITY.md, \"Signing from a trusted "
+                           "install\")")
+    name = HMAC_KEY_FILES[HMAC_KINDS[kind]]
+    try:
+        key = _read_custody_file(hmac_key_dir(), name, private=True).decode("utf-8").strip()
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        raise RuntimeError(f"cannot read {hmac_key_dir() / name}: {exc}") from exc
+    require_strong_hmac_key(key, f"{kind} HMAC key")
+    out_dir = hmac_fingerprint_dir()
+    out_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    target = out_dir / name.replace(".key", ".fp")
+    from agentteams.atomicio import _atomic_write_text
+
+    _atomic_write_text(target, hmac_key_fingerprint(key) + "\n")
+    target.chmod(0o644)
+    return target
 
 
 def hmac_sign(key: str, fields: Sequence[str]) -> str:
@@ -420,9 +560,14 @@ __all__ = [
     "ed25519_sign",
     "ed25519_verify",
     "MIN_HMAC_KEY_BYTES",
+    "HMAC_FINGERPRINT_DIR",
     "HMAC_KEY_DIR",
     "HMAC_KEY_FILES",
+    "HMAC_KINDS",
+    "hmac_fingerprint_dir",
     "hmac_key_dir",
+    "hmac_key_fingerprint",
+    "record_hmac_fingerprint",
     "hmac_sign",
     "load_hmac_key",
     "require_strong_hmac_key",

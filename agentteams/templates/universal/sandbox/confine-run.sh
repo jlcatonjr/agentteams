@@ -570,7 +570,8 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
         while [ -n "$cp" ] && [ "$cp" != "/" ]; do echo "(deny file-write* (literal \"$cp\"))"; cp="$(dirname -- "$cp")"; done
       done
     fi
-    for m in ${MASKED[@]+"${MASKED[@]}"}; do echo "(deny file-read* (subpath \"$m\"))"; done
+    for m in ${MASKED[@]+"${MASKED[@]}"}; do echo "(deny file-read* (subpath \"$m\"))"; echo "(deny file-write* (subpath \"$m\"))"; done
+    echo "(deny file-write* (subpath \"$HOME/.config/agentteams/verify-keys\"))"   # M1: operator verify keys + HMAC fingerprints
     # -- (i) SBPL setuid/setgid-exec restriction (compensating hardening, NOT a no-new-privs guarantee) --
     # SBPL cannot express the setuid BIT itself, so this is a BEST-EFFORT, NOT-EXHAUSTIVE denylist of
     # the known macOS system setuid-/setgid-root escalation binaries, denied via

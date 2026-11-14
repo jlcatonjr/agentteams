@@ -1819,6 +1819,20 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--record-hmac-fingerprint",
+        metavar="KIND",
+        dest="record_hmac_fingerprint",
+        choices=("waiver", "decision", "grant", "management"),
+        default=None,
+        help=(
+            "Operator-only: record the fingerprint of ~/.config/agentteams/keys/KIND-hmac.key (KIND: waiver, "
+            "decision, grant, management) in ~/.config/agentteams/verify-keys/KIND-hmac.fp. With its "
+            "AGENTTEAMS_<KIND>_SIGNING_KEY unset, agentteams trusts a key file only when its fingerprint is "
+            "recorded there, so a planted key file is refused. Every emitted sandbox write-denies that directory. "
+            "Refused from an install an agent could edit. Prints the fingerprint, never the key."
+        ),
+    )
+    parser.add_argument(
         "--verify-integrity",
         action="store_true",
         dest="verify_integrity",

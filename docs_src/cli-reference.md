@@ -1402,6 +1402,10 @@ Re-record `references/enforcement-integrity.json` from the enforcement modules o
 
 > The manifest's own `note` field has named this command since the manifest was written, and the flag was not implemented until 2026-08-07 — found when probe E4 correctly flagged an intended change and the documented recovery path turned out to be unavailable. `tests/test_integrity_manifest_cli.py` now asserts every command the manifest names is one the parser accepts.
 
+### `--record-hmac-fingerprint KIND`
+
+**Operator-only.** Record the fingerprint of `~/.config/agentteams/keys/KIND-hmac.key` (`KIND`: `waiver`, `decision`, `grant`, `management`) in `~/.config/agentteams/verify-keys/KIND-hmac.fp`. With its `AGENTTEAMS_<KIND>_SIGNING_KEY` unset, agentteams reads the key file only if its fingerprint, `HMAC-SHA256(key, "agentteams-hmac-fp-v1")`, matches the recorded one. A key file planted without a matching record is refused, and every emitted sandbox write-denies both directories. The key file must be yours, mode 600, not a symlink, and in `keys/` itself. The command is refused from an install an agent could edit (a checkout or an agent-writable root), as the signers are. It prints the fingerprint, never the key. Re-run it after replacing a key. Mutually exclusive with the other standalone operations.
+
 ### `--verify-integrity`
 
 Classify every generated output file against the build-log `file_hashes` baseline and exit. Each recorded file is reported as one of:

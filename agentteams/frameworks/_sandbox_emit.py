@@ -187,31 +187,50 @@ def signing_key_deny_read(*, resolve_abspath: bool = False) -> list[str]:
     return [_home_rel_to_abs(p) for p in paths] if resolve_abspath else paths
 
 
+def signing_key_deny_write(*, resolve_abspath: bool = False) -> list[str]:
+    """Return the sandbox write-deny entries for the operator's key and verify-key directories.
+
+    An HMAC key file there is trusted only against a fingerprint recorded beside the operator verify keys,
+    so neither directory may be writable by an agent, whatever its write roots (hmac-key-autoresolve,
+    @security M1). ``denyWrite`` wins over ``allowWrite``.
+
+    Args:
+        resolve_abspath: Expand ``~`` to the generating host's absolute home (the P3-3 opt-in).
+
+    Returns:
+        :data:`SIGNING_KEY_DIR` and :data:`OPERATOR_VERIFY_KEYS_DIR`.
+    """
+    paths = [SIGNING_KEY_DIR, OPERATOR_VERIFY_KEYS_DIR]
+    return [_home_rel_to_abs(p) for p in paths] if resolve_abspath else paths
+
+
 def assert_roots_clear_of_signing_keys(roots: list[str] | None) -> None:
-    """Raise if a write root sits at or inside :data:`SIGNING_KEY_DIR`.
+    """Raise if a write root sits at, inside or above :data:`SIGNING_KEY_DIR` or :data:`OPERATOR_VERIFY_KEYS_DIR`.
 
     Claude Code resolves overlapping read rules narrower-wins, so a write root (re-opened by
-    ``allowRead``, and writable) at or inside the key directory would undo its deny. Only
-    ``~``-relative and absolute roots are checked: a relative root is relative to the project,
-    which is never inside the key directory.
+    ``allowRead``, and writable) at or inside the key directory would undo its deny. A root ABOVE
+    either directory (``~``, ``~/.config``) would let a sandboxed shell create files in it wherever a
+    profile lacks the write-deny (@security M1). Only ``~``-relative and absolute roots are checked: a
+    relative root is relative to the project, which is never inside or above them.
 
     Args:
         roots: The workspace write roots (``None`` = the default ``["."]``).
 
     Raises:
-        ValueError: A root resolves at or inside the key directory.
+        ValueError: A root resolves at, inside or above either directory.
     """
-    keys = _home_rel_to_abs(SIGNING_KEY_DIR)
-    for root in roots or []:
-        if not root or not (root.startswith("~") or os.path.isabs(root)):
-            continue
-        resolved = _home_rel_to_abs(root)
-        if resolved == keys or resolved.startswith(keys + os.sep):
-            raise ValueError(
-                f"workspace write root {root!r} is at or inside the operator signing-key "
-                f"directory {SIGNING_KEY_DIR}; that would re-open the private key to the "
-                "sandboxed agent. Remove it from workspace_write_roots (or the grant)."
-            )
+    for protected in (SIGNING_KEY_DIR, OPERATOR_VERIFY_KEYS_DIR):
+        keys = _home_rel_to_abs(protected)
+        for root in roots or []:
+            if not root or not (root.startswith("~") or os.path.isabs(root)):
+                continue
+            resolved = _home_rel_to_abs(root)
+            if resolved == keys or resolved.startswith(keys + os.sep) or keys.startswith(resolved.rstrip(os.sep) + os.sep):
+                raise ValueError(
+                    f"workspace write root {root!r} is at, inside or above the operator key "
+                    f"directory {protected}; that would let the sandboxed agent read or plant "
+                    "operator keys. Remove it from workspace_write_roots (or the grant)."
+                )
 
 
 def signing_keyfile_warnings(keyfile: str) -> list[str]:
@@ -858,6 +877,7 @@ def _build_sandbox_block(
     deny_write = filesystem["denyWrite"]
     deny_write += [p for p in cp_write_denies(protect_ledger, control_plane_protect, substrate_protect)
                    if p not in deny_write]
+    deny_write += [p for p in signing_key_deny_write(resolve_abspath=resolve_abspath) if p not in deny_write]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:
