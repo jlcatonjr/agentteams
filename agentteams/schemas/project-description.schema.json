@@ -790,7 +790,7 @@
       "uniqueItems": true,
       "maxItems": 100,
       "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"},
-      "description": "Rule S-10 first-party toolchain group hint (owner/name only): repositories whose releases may be adopted inside the 14-day package-release cooldown. In a governed workspace this list alone exempts nothing: the operator-signed .agentteams/toolchain-group.json (the constitution's "First-party toolchain group") or a legacy signed per-repository decision does, and a notice names any listed repository the signed group lacks. In an ungoverned workspace the list applies as written. Lifts the cooldown only: the vulnerability search, Rule S-9's signed-tag identity check and the latest-stable rule still apply. [] or absent exempts nothing."
+      "description": "Rule S-10 first-party toolchain group hint (owner/name only): repositories whose releases may be adopted inside the 14-day package-release cooldown. In a governed workspace this list alone exempts nothing: the operator-signed .agentteams/toolchain-group.json (the constitution's First-party toolchain group section) or a legacy signed per-repository decision does, and a notice names any listed repository the signed group lacks. In an ungoverned workspace the list applies as written. Lifts the cooldown only: the vulnerability search, Rule S-9's signed-tag identity check and the latest-stable rule still apply. [] or absent exempts nothing."
     },
     "researchteam_notes": {
       "type": "object",

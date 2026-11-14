@@ -31,7 +31,7 @@ unretracted HALT on it or any ancestor ends the group (:func:`lineage_problem`).
   or on any ``s10-cooldown-exempt`` action (the gate checks both; the matcher over-matches, so either drops every
   member) or removing the key; dropping one member takes a new signed file.
 
-No repository is named here or in any template (Rule 11: ship the machinery, never a specific exception).
+No repository is named here or in any template (the constraint-relaxing-authorizations rule: ship the machinery, never a specific exception).
 
 Stdlib only (``cryptography`` is the lazily imported ``signing`` extra).
 """
