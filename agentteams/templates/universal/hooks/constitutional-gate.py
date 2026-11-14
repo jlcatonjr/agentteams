@@ -98,9 +98,9 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      "package installation — unreviewed third-party code on the host"),
     ("git-history-destructive", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*--force)|\bgit\b[^\n]*\breset\s+--hard\b",
      "history-destructive git operation"),
-    # -f / -uf / +refspec force pushes (policy-only in #456; default since row 699). The `f` is case-sensitive:
+    # -f / -uf / +refspec (also quoted: "-f", "+"x, \+x) force pushes; default since row 699. The `f` is case-sensitive:
     # git push has no -F, and `git commit -F msg && git push` must not ask.
-    ("git-force-push-short", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s(?:-(?!-)[a-zA-Z]*(?-i:f)[a-zA-Z]*\b|['\"]?\+[\w./*-]))",
+    ("git-force-push-short", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s(?:\$?['\"]|\\)*(?:-(?!-)[a-zA-Z]*(?-i:f)[a-zA-Z]*\b|\+(?=\S)))",
      "force push by short flag (-f) or +refspec"),
     # A fleet render past a release lock can roll a pinned repository's team back (the 2026-11-09 incident);
     # the lift is an operator decision, never unattended (security remediation row 692, item 3).
@@ -138,7 +138,7 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
     ("publication-channel", r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
      r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
-     r"\bgit\b[^\n]*\s-c\s+['\"]?(?:remote|url)\.|"
+     r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:remote|url)\.|"
      r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
      r"\bgh\s+api\b[^\n|;&]*(?:\$\(|`)|"
      r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s['\"]?(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:|[\w-]+(?:\.[\w-]+)+:[^\s/]*/?))|"
@@ -151,7 +151,7 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
     # alias./push. config can hide or redirect a push (`git -c alias.p='push -f' p`); row 699.
-    ("git-alias-config", r"\bgit\b[^\n]*\s-c\s+['\"]?(?:alias|push|remote|url)\.|"
+    ("git-alias-config", r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:alias|push|remote|url)\.|"
      r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)"
      r"(?=[^\n]*\s['\"]?(?:alias|push|remote|url)\.)",
      "git alias, push or remote configuration that can hide or redirect a push"),
