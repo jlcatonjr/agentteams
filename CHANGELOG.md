@@ -108,6 +108,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
   are pinned as exceptions), and every agent the mapping names must reference that placeholder.
 
+### added (the Claude settings example names the session model)
+
+- The emitted `.claude/settings.hooks.example.json` carries `"model": "claude-fable-5-2"` and
+  `"env": {"CLAUDE_CODE_SUBAGENT_MODEL": "opus"}`, with or without the sandbox block. Merged into
+  `.claude/settings.json`, the main session runs Fable 5.2 and every subagent whose file names no model runs Opus:
+  Claude Code's built-in agents, and team agents with no `model:` key. `CLAUDE_CODE_SUBAGENT_MODEL` ranks below a
+  front-matter `model:`, so the orchestrator agent file keeps `claude-fable-5-2`; `_FORCE` is not set.
+- The example is now always re-serialized with sorted keys (as with the sandbox block), so a team without the sandbox
+  sees a one-time reformat of the file on its next update. Values the example already sets are kept. Like the hooks block, it is inert until merged; agentteams never writes
+  `settings.json`.
+
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
 - A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
