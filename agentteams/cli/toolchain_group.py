@@ -9,8 +9,9 @@ latest-stable rule all still apply.
 
 The constitution's "First-party toolchain group" section makes the file a bounded constraint-relaxing authorization:
 operator-signed, a trust root, ended by a HALT, and exempt only from the aggregate cap and sunset (operator ruling,
-2026-11-13: no sunset). It carries no ``derives_from`` lineage: it is not a decision row, so the lineage scan does not
-apply, and the HALTs below are its C-2 path. So:
+2026-11-13: no sunset). Its signed ``derives_from`` (format version 2, v1.1.3, operator ruling) names the recorded decision(s) it derives
+from: each must be an authentic authorizing row in the governance team's log with a recorded, acyclic lineage, and an
+unretracted HALT on it or any ancestor ends the group (:func:`lineage_problem`). So:
 
 * **Operator-signed:** the signature is Ed25519 over :func:`signed_values`, verified against the governance
   team's ``references/authorized-verify-keys/<key_id>.pub.pem``. A missing ``cryptography`` backend is reported as an
@@ -63,7 +64,10 @@ _TEAM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _ORIGIN_RE = re.compile(r"^(?:https://(?:[^@/\s]+@)?github\.com/|ssh://git@github\.com/|git@github\.com:)"
                         r"([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*?)(?:\.git)?/?$")
-_FIELDS = ("version", "scope", "group", "workspaces", "purpose", "sequence", "key_id", "signature")
+_FIELDS = ("version", "scope", "group", "workspaces", "purpose", "sequence", "key_id", "derives_from", "signature")
+#: The file format: version 2 adds the signed ``derives_from`` lineage (v1.1.3). No version-1 file was ever signed.
+FORMAT_VERSION = 2
+_ACTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9:/._-]{0,199}$", re.ASCII)
 
 
 class ToolchainGroupError(RuntimeError):
@@ -105,8 +109,14 @@ def signed_values(doc: dict) -> list[str]:
     """
     group = ",".join(str(r).lower() for r in doc["group"])
     workspaces = ",".join(f"{w['repo'].lower()}={w['team']}" for w in doc["workspaces"])
+    lineage = ",".join(_lineage(doc))
     return [str(doc["purpose"]), str(doc["version"]), str(doc["scope"]), str(doc["sequence"]),
-            str(doc["key_id"]), group, workspaces]
+            str(doc["key_id"]), group, workspaces, lineage]
+
+
+def _lineage(doc: dict) -> list[str]:
+    """The ``derives_from`` parent ids, normalized (lowercased, ``;``-separated in the file)."""
+    return [p.strip().lower() for p in str(doc.get("derives_from") or "").split(";") if p.strip()]
 
 
 def validate(doc: object, *, signed: bool = True) -> dict:
@@ -127,8 +137,16 @@ def validate(doc: object, *, signed: bool = True) -> dict:
     unknown = sorted(set(doc) - set(_FIELDS))
     if unknown:
         raise ToolchainGroupError(f"unknown field(s): {', '.join(unknown)}")
-    if doc.get("version") != 1 or doc.get("scope") != SCOPE or doc.get("purpose") != PURPOSE:
-        raise ToolchainGroupError(f"version must be 1, scope {SCOPE!r} and purpose {PURPOSE!r}")
+    if doc.get("version") != FORMAT_VERSION or doc.get("scope") != SCOPE or doc.get("purpose") != PURPOSE:
+        raise ToolchainGroupError(f"version must be {FORMAT_VERSION}, scope {SCOPE!r} and purpose {PURPOSE!r}")
+    parents = _lineage(doc) if isinstance(doc.get("derives_from"), str) else []
+    if not parents or not all(_ACTION_ID_RE.fullmatch(p) for p in parents):
+        raise ToolchainGroupError("derives_from must name one or more recorded decision action ids (';'-separated)")
+    from agentteams.cli.governance_targets import target_is_governance_root
+
+    if any(target_is_governance_root(p) for p in parents):
+        raise ToolchainGroupError("derives_from names a trust-root id (for example one containing 'toolchain-group'); "
+                                  "a group file cannot derive from a decision about a trust root")
     seq = doc.get("sequence")
     if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
         raise ToolchainGroupError("sequence must be a positive integer")
@@ -239,6 +257,66 @@ def _halted(halt_dirs: tuple[Path, ...]) -> str | None:
     return None
 
 
+def lineage_problem(doc: dict, governance_dir: Path, halt_dirs: tuple[Path, ...]) -> str | None:
+    """Why the file's ``derives_from`` lineage does not hold, or None (C-2 along the chain).
+
+    Each parent must be recorded in *governance_dir*'s decisions log by an authorizing row (``PASS``, or ``CONDITIONAL
+    PASS`` with verified conditions) that is authentic now (approved author, signature, lineage); the whole ancestor
+    chain must be recorded and acyclic; and no unretracted HALT on a parent or any ancestor may stand in any of
+    *halt_dirs*' logs.
+
+    Args:
+        doc: A verified group document.
+        governance_dir: The governed team dir holding the authoritative decisions log.
+        halt_dirs: Every team dir whose HALTs bind.
+
+    Returns:
+        A one-line reason, or None.
+    """
+    from agentteams.cli import decision_log as dl
+    from agentteams.cli.decision_lineage import _build_lineage_map, _row_action_id, _transitive_ancestors
+
+    try:
+        read = dl._read_decision_rows(governance_dir)
+        if read is None:
+            return "derives_from cannot resolve: the governance team has no decisions log"
+        rows, fieldnames = read
+        dl._assert_decision_chain_intact(rows, fieldnames)
+        lineage_map = _build_lineage_map(rows)
+        chain: list[str] = []
+        for lineage_action in _lineage(doc):
+            # The parent's LATEST verdict decides (HALT / HALT-RETRACTED rows are the HALT scan's, below): a later
+            # pending CONDITIONAL PASS or a refusal blocks the parent, as the verdict contract says.
+            own = [r for r in rows if _row_action_id(r) == lineage_action
+                   and (r.get("verdict") or "").strip().upper() not in ("HALT", "HALT-RETRACTED")]
+            latest = own[-1] if own else None
+            verdict = (latest.get("verdict") or "").strip().upper() if latest else ""
+            ok = latest is not None and (verdict == "PASS" or (
+                verdict == "CONDITIONAL PASS" and (latest.get("conditions_verified") or "").strip().lower() == "verified"))
+            if not ok:
+                if latest is None:
+                    return f"derives_from names {lineage_action!r}, which no authorizing decision records"
+                return (f"derives_from names {lineage_action!r}, whose latest decision is {verdict or 'empty'}"
+                        f"{' with conditions pending' if verdict == 'CONDITIONAL PASS' else ''}, not an authorizing one")
+            authorizing = [latest]
+            if (authorizing[-1].get("sig_scheme") or "").strip().lower() != "ed25519":
+                return f"derives_from names {lineage_action!r}, whose authorizing row is not Ed25519-signed by the operator"
+            dl._assert_authorizing_row_is_authentic(authorizing[-1], output_dir=governance_dir,
+                                                    signing_active=dl._decision_signing_active(fieldnames),
+                                                    action=lineage_action)
+            chain += [lineage_action, *sorted(_transitive_ancestors(lineage_action, lineage_map))]
+        # C-2 along the whole chain, by exact id in every dir: a surface's own log rarely holds the parent row, so
+        # its ancestor walk would find nothing; the governance log's chain is checked id by id instead.
+        for lineage_action in dict.fromkeys(chain):
+            for d in dict.fromkeys(halt_dirs):
+                dl._assert_no_unretracted_halt(d, action=lineage_action)
+    except RuntimeError as exc:
+        return f"its derives_from lineage does not hold ({exc})"
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        return f"its derives_from lineage cannot be checked ({exc})"
+    return None
+
+
 def _high_water(governance_dir: Path) -> int:
     from agentteams.cli.exception_registry import load_registry
 
@@ -282,6 +360,9 @@ def load_group(project_root: Path, governance_dir: Path, *, team_id: str, halt_d
     halted = _halted((governance_dir, *halt_dirs))
     if halted:
         return GroupResult(present=True, problem=halted)
+    untraced = lineage_problem(doc, governance_dir, (governance_dir, *halt_dirs))
+    if untraced:
+        return GroupResult(present=True, problem=untraced)
     own = repo if repo is not None else workspace_repo(project_root)
     pair = (f"repo:{own}".lower() if own else "", f"team:{team_id}")
     if not own or pair not in {(w["repo"].lower(), w["team"]) for w in doc["workspaces"]}:
@@ -358,6 +439,7 @@ def sign_group_file(path: Path, team_dir: Path, *, confirm_sha256: str | None = 
     for w in doc["workspaces"]:
         print(f"               {w['repo']}  {w['team']}")
     print(f"  sequence   : {doc['sequence']}")
+    print(f"  derives_from: {doc['derives_from']}")
     print(f"  key_id     : {doc['key_id']}")
     print(f"  values     : {json.dumps(signed_values(doc), ensure_ascii=True)}")
     if not ops._confirm(ops.review_digest("toolchain-group", doc, team_dir, doc["key_id"]), confirm_sha256):
@@ -399,7 +481,7 @@ def verify_group_command(project_root: Path, governance_dir: Path, team_id: str,
 
 #: Lock lines: ``<name>=<owner/repo>@<40-hex>`` and ``<name>.tag=<tag>``.
 _LOCK_PIN_RE = re.compile(r"^([A-Za-z0-9._-]+)=([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)@([0-9a-f]{40})$")
-_LOCK_TAG_RE = re.compile(r"^([A-Za-z0-9._-]+)\.tag=(v?[0-9][0-9A-Za-z.+-]*)$")
+_LOCK_TAG_RE = re.compile(r"^([A-Za-z0-9._-]+)\.tag=(v[0-9][0-9A-Za-z.+-]*)$", re.ASCII)
 
 
 def _git(*args: str, cwd: Path | None = None, timeout: int = 120) -> subprocess.CompletedProcess[str]:
@@ -417,6 +499,15 @@ def _run(argv: list[str], cwd: Path | None, timeout: int) -> subprocess.Complete
                               env={"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
                                    "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
                                    "HOME": home, "GNUPGHOME": home})
+
+
+def _ssh_signed(body: str) -> bool:
+    """True iff the tag object ends in exactly one SSH signature block and carries no PGP block."""
+    lines = body.rstrip("\n").splitlines()
+    if not lines or lines[-1] != "-----END SSH SIGNATURE-----" or "-----BEGIN PGP SIGNATURE-----" in lines:
+        return False
+    begins = [i for i, line in enumerate(lines) if line == "-----BEGIN SSH SIGNATURE-----"]
+    return len(begins) == 1 and lines.count("-----END SSH SIGNATURE-----") == 1 and begins[0] < len(lines) - 1
 
 
 def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> str | None:
@@ -443,7 +534,7 @@ def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> st
         body = _git("-C", str(repo), "cat-file", "tag", f"refs/tags/{tag}").stdout
         if f"tag {tag}" not in body.splitlines()[:6]:
             return f"the signed tag object fetched as {tag} names a different tag (a re-pushed tag is refused)"
-        if "-----BEGIN SSH SIGNATURE-----" not in body:
+        if not _ssh_signed(body):
             return f"{tag} is not SSH-signed (only the release key's SSH signature is accepted)"
         check = _git("-C", str(repo), "-c", "gpg.format=ssh", "-c", f"gpg.ssh.allowedSignersFile={allowed_signers}",
                      "verify-tag", f"refs/tags/{tag}")
@@ -488,7 +579,7 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
         if not tag:
             problems.append(f"{name}: pins group member {repo} with no {name}.tag line (a signed tag is required)")
             continue
-        if not re.fullmatch(r"v?\d+\.\d+\.\d+", tag):
+        if not re.fullmatch(r"v\d+\.\d+\.\d+", tag, re.ASCII):
             problems.append(f"{name}: {tag} is not a final release tag (the latest-stable rule: a pre-release needs a "
                             "recorded @security clearance, which this check does not read)")
             continue

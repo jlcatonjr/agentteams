@@ -34,6 +34,12 @@ BRIEF = ROOT / "examples" / "research-project" / "brief.json"
 _OWN = "acme/consumer"
 _GROUP = ["acme/toolkit", "acme/builder", _OWN]
 _TEAM = "consumer"
+_POLICY = "first-party-release-policy"
+
+
+@pytest.fixture(autouse=True)
+def _decisions_verify(stub_ed25519):
+    """Decision rows (the lineage parents) verify by the stub; the group file itself is really Ed25519-signed."""
 
 
 def _keypair() -> tuple[str, str]:
@@ -55,17 +61,19 @@ def _project(tmp_path: Path, *, governed: bool = True, origin: str = f"https://g
     (team / "references" / "authorized-verify-keys" / f"{key_id}.pub.pem").write_text(public)
     (team / "references" / "agent-privilege.json").write_text(json.dumps({"enforce_decision_signing": governed}))
     (team / "references" / "build-log.json").write_text("{}")
+    _log(team, _row(_POLICY))                     # the recorded decision the group file derives from
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     subprocess.run(["git", "-C", str(root), "remote", "add", "origin", origin], check=True)
     return root, team, private
 
 
-def _doc(private: str, *, group=None, workspaces=None, sequence: int = 1, key_id: str = "op-2026") -> dict:
+def _doc(private: str, *, group=None, workspaces=None, sequence: int = 1, key_id: str = "op-2026",
+         derives_from: str = _POLICY) -> dict:
     from agentteams.cli import signed_ledger as sl
 
-    doc = {"version": 1, "scope": tg.SCOPE, "group": list(group or _GROUP),
+    doc = {"version": tg.FORMAT_VERSION, "scope": tg.SCOPE, "group": list(group or _GROUP),
            "workspaces": workspaces or [{"repo": f"repo:{_OWN}", "team": f"team:{_TEAM}"}],
-           "purpose": tg.PURPOSE, "sequence": sequence, "key_id": key_id}
+           "purpose": tg.PURPOSE, "sequence": sequence, "key_id": key_id, "derives_from": derives_from}
     doc["signature"] = sl.ed25519_sign(private, tg.signed_values(doc))
     return doc
 
@@ -164,7 +172,7 @@ def test_the_brief_hint_beyond_the_signed_group_is_named(tmp_path, capsys) -> No
 
 
 @pytest.mark.parametrize("surface", [".github/agents", ".claude/agents", ".codex/agents"])
-def test_a_halt_on_the_family_in_any_surface_ends_the_group(tmp_path, stub_ed25519, capsys, surface) -> None:
+def test_a_halt_on_the_family_in_any_surface_ends_the_group(tmp_path, capsys, surface) -> None:
     root, team, private = _project(tmp_path)
     _write(root, _doc(private))
     halt_dir = root / surface
@@ -260,14 +268,14 @@ def test_the_group_file_is_a_trust_root() -> None:
 def test_a_group_payload_never_reads_as_a_decision_or_grant_payload() -> None:
     from agentteams.cli.grants import payload_claims_grant_purpose
 
-    values = tg.signed_values({"purpose": tg.PURPOSE, "version": 1, "scope": tg.SCOPE, "sequence": 1,
-                               "key_id": "op-2026", "group": ["a/b"],
+    values = tg.signed_values({"purpose": tg.PURPOSE, "version": 2, "scope": tg.SCOPE, "sequence": 1,
+                               "key_id": "op-2026", "group": ["a/b"], "derives_from": "p",
                                "workspaces": [{"repo": "repo:a/c", "team": "team:c"}]})
     assert values[0] == tg.PURPOSE and not payload_claims_grant_purpose(values)
 
 
 @pytest.mark.parametrize("bad", [
-    {"version": 2}, {"scope": "everything"}, {"purpose": "agentteams-grant-v1"}, {"sequence": 0},
+    {"version": 1}, {"derives_from": ""}, {"derives_from": "Bad Id"}, {"scope": "everything"}, {"purpose": "agentteams-grant-v1"}, {"sequence": 0},
     {"group": ["bare"]}, {"group": []}, {"workspaces": [{"repo": "acme/x", "team": "team:x"}]},
     {"extra": "field"}, {"key_id": "../op"},
 ])
@@ -458,3 +466,171 @@ def test_a_halt_in_a_symlinked_surface_binds(tmp_path, stub_ed25519, capsys) -> 
     (root / ".claude").mkdir()
     (root / ".claude" / "agents").symlink_to(real, target_is_directory=True)
     assert _authorize(team) == []
+
+
+# --- v1.1.3: signed derives_from lineage (operator ruling, 2026-11-13) --------------------------------------------
+
+def test_the_lineage_is_signed(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    doc = _doc(private)
+    doc["derives_from"] = "approved-baseline"          # another recorded decision, but not the one signed
+    _write(root, doc)
+    assert _authorize(team) == []
+    assert "does not verify" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("derives", "why"), [
+    ("never-recorded", "which no authorizing decision records"),
+    (f"{_POLICY};never-recorded", "which no authorizing decision records"),
+])
+def test_an_unrecorded_parent_renders_no_group(tmp_path, capsys, derives, why) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private, derives_from=derives))
+    assert _authorize(team) == []
+    err = capsys.readouterr().err
+    assert why in err and "::error title=S-10 toolchain group" in err
+
+
+@pytest.mark.parametrize("halted", [_POLICY, "approved-baseline"])     # the parent, or its ancestor
+def test_a_halt_up_the_chain_ends_the_group(tmp_path, capsys, halted) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    assert _authorize(team) == ["acme/toolkit", "acme/builder"]
+    _log(team, _row(halted, verdict="HALT", stamp="2026-11-13"))
+    assert _authorize(team) == []
+    assert "lineage does not hold" in capsys.readouterr().err
+
+
+def test_a_halt_up_the_chain_in_a_native_surface_binds(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    native = root / ".claude" / "agents"
+    (native / "references").mkdir(parents=True)
+    _log(native, _row(_POLICY, verdict="HALT", stamp="2026-11-13"))
+    assert _authorize(team) == []
+
+
+def test_a_parent_whose_row_does_not_verify_renders_no_group(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _log(team, _row("forged-policy", sign=lambda _v: "stub" + "0" * 64))
+    _write(root, _doc(private, derives_from="forged-policy"))
+    assert _authorize(team) == []
+    assert "lineage does not hold" in capsys.readouterr().err
+
+
+# --- IM @security delta (SEC-IM-PR481) ------------------------------------------------------------------------
+
+def test_load_group_returns_the_signed_lowercased_ids(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private, group=["Acme/ToolKit", _OWN]))
+    assert _authorize(team) == ["acme/toolkit"]
+
+
+def test_a_gpg_signed_tag_is_refused(tmp_path, signed_remote) -> None:
+    base, signers, sha = signed_remote
+    work = base / "acme" / "toolkit"
+    fake = (f"object {sha}\ntype commit\ntag v2.0.0\ntagger op <op@example.invalid> 1794600000 +0000\n\nrelease\n"
+            "-----BEGIN PGP SIGNATURE-----\n\niQEz\n-----END PGP SIGNATURE-----\n")
+    obj = subprocess.run(["git", "mktag"], cwd=work, input=fake, capture_output=True, text=True, check=True,
+                         env={"PATH": "/usr/bin:/bin:/usr/local/bin", "GIT_CONFIG_GLOBAL": "/dev/null"}).stdout.strip()
+    _git("update-ref", "refs/tags/v2.0.0", obj, cwd=work)
+    lockfile = tmp_path / "toolchain.lock"
+    lockfile.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v2.0.0\n")
+    [problem] = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
+    assert "not SSH-signed" in problem
+
+
+@pytest.mark.parametrize("tag", ["1.0.0", "v1.0.0-rc.1", "v\u0661.0.0"])
+def test_only_a_v_prefixed_ascii_final_tag_is_accepted(tmp_path, signed_remote, tag) -> None:
+    base, signers, sha = signed_remote
+    lockfile = tmp_path / "toolchain.lock"
+    lockfile.write_text(f"tk=acme/toolkit@{sha}\ntk.tag={tag}\n", encoding="utf-8")
+    problems = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
+    assert problems and ("not a final release tag" in problems[0] or "no tk.tag line" in problems[0])
+
+
+# --- @security v1.1.3 delta conditions ------------------------------------------------------------------------
+
+def test_a_halt_on_an_ancestor_only_in_a_surface_log_binds(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    native = root / ".claude" / "agents"
+    (native / "references").mkdir(parents=True)
+    _log(native, _row("approved-baseline", verdict="HALT", stamp="2026-11-13"))   # the parent's ancestor
+    assert _authorize(team) == []
+    assert "lineage does not hold" in capsys.readouterr().err
+
+
+def test_an_hmac_parent_row_is_refused(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _log(team, _row("hmac-policy", relaxes="", derives="", scheme=""))
+    _write(root, _doc(private, derives_from="hmac-policy"))
+    assert _authorize(team) == []
+    assert "not Ed25519-signed by the operator" in capsys.readouterr().err
+
+
+def test_a_non_relaxing_ed25519_root_parent_is_accepted(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    _log(team, _row("s10-first-party-releases-2026-11", relaxes="", derives=""))
+    _write(root, _doc(private, derives_from="s10-first-party-releases-2026-11"))
+    assert _authorize(team) == ["acme/toolkit", "acme/builder"]
+
+
+def test_every_listed_parent_must_resolve(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private, derives_from=f"{_POLICY};release-policy-1.0"))
+    assert _authorize(team) == []
+
+
+@pytest.mark.parametrize("parent", ["toolchain-group-policy", "s10-toolchain_group-x", "verify-key-rotation"])
+def test_a_trust_root_parent_id_is_refused(tmp_path, capsys, parent) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private, derives_from=parent))
+    assert _authorize(team) == []
+    assert "trust-root id" in capsys.readouterr().err
+
+
+# --- IM @security #485 delta -----------------------------------------------------------------------------------
+
+def test_an_ssh_block_followed_by_a_pgp_block_is_refused() -> None:
+    ssh = "-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----\n"
+    pgp = "-----BEGIN PGP SIGNATURE-----\niQEz\n-----END PGP SIGNATURE-----\n"
+    head = "object 0\ntype commit\ntag v1.0.0\ntagger op <op@x> 0 +0000\n\nrelease\n"
+    assert tg._ssh_signed(head + ssh)
+    assert not tg._ssh_signed(head + ssh + pgp)
+    assert not tg._ssh_signed(head + pgp + ssh)
+    assert not tg._ssh_signed(head + ssh + ssh)
+    assert not tg._ssh_signed(head + ssh + "trailing text\n")
+
+
+def test_a_lineage_cycle_renders_no_group(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _log(team, _row("cycle-a", relaxes="", derives="cycle-b"), _row("cycle-b", relaxes="", derives="cycle-a"))
+    _write(root, _doc(private, derives_from="cycle-a"))
+    assert _authorize(team) == []
+    assert "lineage does not hold" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("verdict", "conditions"), [("CONDITIONAL PASS", "pending"), ("FAIL", "")])
+def test_a_later_pending_or_refusing_decision_blocks_the_parent(tmp_path, capsys, verdict, conditions) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    assert _authorize(team) == ["acme/toolkit", "acme/builder"]
+    later = _row(_POLICY, verdict=verdict, stamp="2026-11-14")
+    later["conditions_verified"] = conditions
+    _log(team, later)
+    assert _authorize(team) == []
+    assert "not an authorizing one" in capsys.readouterr().err
+
+
+def test_a_retracted_halt_does_not_disable_the_parent(tmp_path) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _log(team, _row(_POLICY, verdict="HALT", stamp="2026-11-13"))
+    assert _authorize(team) == []
+    retract = _row(_POLICY, verdict="HALT-RETRACTED", stamp="2026-11-14")
+    retract["conditions"] = "settled"
+    retract["signature"] = __import__("tests._decision_gate_helpers", fromlist=["_stub_sig"])._stub_sig(
+        __import__("agentteams.cli.decision_log", fromlist=["x"])._decision_signature_values(retract))
+    _log(team, retract)
+    assert _authorize(team) == ["acme/toolkit", "acme/builder"]

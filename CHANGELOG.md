@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-14
+
+### release notes
+
+agentteams 1.1.3 adds lineage to the first-party toolchain group file (operator rulings, 2026-11-13: "add lineage",
+shipped as a 1.1 patch before the file is signed). No group file was signed under 1.1.2.
+
+### changed (toolchain group file format 2)
+
+- **Signed `derives_from`.** `.agentteams/toolchain-group.json` is now `version` 2 and must carry `derives_from`: one
+  or more recorded decision action ids (`;`-separated), inside the signature. Each must be an authentic authorizing
+  decision (`PASS`, or `CONDITIONAL PASS` with verified conditions) in the governance team's decisions log, with a
+  recorded, acyclic lineage. An unretracted HALT on a parent or on any ancestor, in any surface's log, renders an
+  empty group with an `::error::` line (C-2). A version-1 file is refused. Each parent's latest decision (HALT rows aside, which
+  the HALT scan handles) must be authorizing — a later `CONDITIONAL PASS` with conditions pending, or a refusal,
+  blocks it — and Ed25519-signed by the operator. The HALT check covers every ancestor by exact id in every surface's log. A parent id
+  that names a trust root (for example one containing `toolchain-group`) is refused.
+- **`cryptography` 50.0.0 → 50.0.2** in the `signing` extra (latest stable, released 2026-09-30, OSV none on
+  2026-11-14; sdist sha256 verified locally, `references/dependency-pins.json`), so a consumer vetting the latest
+  stable can install the extra.
+- **`--verify-toolchain-pin` is stricter** (IM @security, SEC-IM-PR481): the tag must be `v`-prefixed and ASCII
+  (`vX.Y.Z`), and the tag object must end in exactly one SSH signature block; a PGP-signed tag is refused.
+
 ## [1.1.2] - 2026-11-13
 
 ### release notes
