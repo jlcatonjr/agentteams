@@ -62,7 +62,7 @@
     "agentteams/data/server_kit/ioc-2026-10-litellm-1.107.0.txt": "0cc3359247a698f38b4a56edcf315c92719cae1849f4201fe4d5714176478eec",
     "agentteams/data/server_kit/remote.sh": "2631b3277696f1984222fba652e6e29ab7a3585431959f6daaddf7c034a43b1d",
     "agentteams/data/server_kit/run-host.sh": "6b433b10e3af6717d3863c4ec5e16239b9dfddd86544e4a784af99be4afc387c",
-    "agentteams/data/template_lineage.json": "a945bd5ec3a79d94752e724d125a9d843611c1b15b97b7552f192d0e425f0a6f",
+    "agentteams/data/template_lineage.json": "2a7473e063f18ec0c8ab1cc8fe554a217c1afc609cc88562eafcd16286b65941",
     "agentteams/data/vulnscan_agent/Dockerfile": "5cdc427760bc2fd15250dcdd22453560e86fc32aeffb2ab6c718e81f7d4b2974",
     "agentteams/data/vulnscan_agent/copilot/package-lock.json": "0eb6b726a3093dceb9536840f0d0486347c5aaaea91fe00b9cfeb50d044c85ba",
     "agentteams/data/vulnscan_agent/copilot/package.json": "2990a5a0ec403a5692d24c18796e7a1439bc42e2f9ad418fd48449966efe7b73",
