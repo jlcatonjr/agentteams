@@ -81,24 +81,26 @@ def test_scan_remediation_carve_out_lifts_both_rules_and_only_those():
     rule, never from the vulnerability search or S-9 identity, and covers only the flagged packages."""
     body = _s10_body()
     start = body.index("**Vulnerability-scan remediation carve-out")
-    carve = body[start: body.index("- ✅ **Local interdependent-repository carve-out", start)]
+    carve = body[start: body.index("- ⚠️ **First-party toolchain group", start)]
     assert "the cooldown and the latest-stable rule never block remediation" in carve
     assert "may be adopted inside the cooldown window" in carve and "need not be the latest stable release" in carve
     assert "must still pass the vulnerability search" in carve and "Rule S-9" in carve
     assert "covers only the packages the scan flagged" in carve
-    assert "(outside the remediation and local-repository carve-outs) the cooldown or the latest-stable rule" in body
+    assert "(outside the remediation and toolchain-group carve-outs) the cooldown or the latest-stable rule" in body
 
 
 def test_local_repository_carve_out_lifts_the_cooldown_only():
-    """The operator's local-repository carve-out (2026-11-03) exempts listed repositories from the cooldown,
-    never from the vulnerability search, S-9 identity or the latest-stable rule."""
+    """The first-party toolchain group (v1.1.2) exempts its repositories from the cooldown and from a
+    per-release pin row, never from the vulnerability search, S-9 identity or the latest-stable rule."""
     body = _s10_body()
-    start = body.index("**Local interdependent-repository carve-out")
+    start = body.index("**First-party toolchain group")
     carve = body[start: body.index("- ✅ Pin exact versions", start)]
-    assert "{S10_COOLDOWN_EXEMPT_REPOS}" in carve and "`s10_cooldown_exempt_repos` alone exempts nothing" in carve
-    assert "lifts the cooldown only" in carve and "must still pass the" in carve and "Rule S-9" in carve
+    assert "{S10_TOOLCHAIN_GROUP}" in carve and "A brief edit alone exempts nothing in a governed workspace" in carve
+    assert "Nothing else is lifted" in carve and "still pass the vulnerability search" in carve
+    assert "Rule S-9" in carve and "--verify-toolchain-pin" in carve and "fails closed" in carve
+    assert "no per-release operator decision row" in carve and "own `@security`" in carve
     assert "latest-stable rule still applies" in carve and "release candidate still needs a recorded" in carve
-    assert "A repository not listed stays under the cooldown" in carve
+    assert "Every other repository and package stays under the cooldown" in carve
 
 
 def test_verdict_table_has_a_rule_s10_row():
