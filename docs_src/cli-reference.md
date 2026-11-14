@@ -1390,6 +1390,28 @@ Read-only, fail-closed: Rule S-9 for the first-party toolchain group. Every `NAM
 
 With `--verify-toolchain-pin`: the ssh `allowed_signers` file naming the operator's release key.
 
+### `--merge-pr`
+
+`--merge-pr N` merges pull request `N` into the integration branch without the constitutional gate's merge prompt, under the operator-signed integration-branch merge authorization (`.agentteams/dev-merge-authorization.json`; the constitution's *Integration-branch merge authorization* section). `@git-operations` runs it. It refuses, with exit `2` meaning "ask the operator" (a direct `gh pr merge` goes through the gate's prompt), unless every condition holds:
+
+- the file verifies for this workspace: Ed25519 signature, team id and git origin, no HALT on `integration-merge` or any `dev-merge:` action, lineage, sequence;
+- the project is governed, its branch model is `integration`, and its integration branch is the signed one;
+- the pull request is open, not a draft, not from a fork, in the signed repository, and based on the signed branch, which is never the default branch, `main`, `master` or a `release/*` line;
+- its merge state is `CLEAN` with no changes requested;
+- every check on its head completed with `SUCCESS` (at least one), and every required check is present and passed;
+- it touches no agent, harness, workflow, `.agentteams/` or governance-target path;
+- a recorded `@security` PASS names `dev-merge:<owner/name>:pr-<N>-<head sha>`. The PASS is spent before `gh` runs, so one PASS is one merge.
+
+Immediately before merging it re-reads the head and base, then runs exactly `gh pr merge N -R <owner/name> --merge --match-head-commit <sha>` (never `--admin`, `--auto`, `--squash`, `--rebase` or `--delete-branch`). Afterwards it checks that the result is a two-parent merge commit at the branch tip. `--output` names the team dir; `--team-id` as for `--verify-toolchain-group`. **Exit code:** `0` merged; `2` not authorized; `1` an error, or an `ALARM` when the result does not check out.
+
+### `--sign-dev-merge-authorization`
+
+Operator-only, and refused inside an agent session: `--sign-dev-merge-authorization FILE` signs the integration-branch merge authorization in place with the Ed25519 decision key. The file's fields are `version`, `scope`, `branch`, `workspaces`, `purpose`, `sequence`, `key_id` and `derives_from`. Signing takes the same preflight, review digest and confirmation as `--sign-decision`. `--output` names a governed team dir whose `references/authorized-verify-keys` holds `<key_id>.pub.pem`. **Exit code:** `0` signed, `1` otherwise.
+
+### `--verify-dev-merge-authorization`
+
+Read-only: verifies this workspace's `.agentteams/dev-merge-authorization.json` against `--output`'s governed team dir and the brief's integration branch. It checks the signature, the workspace binding by team id and git origin, HALTs, lineage and sequence. **Exit code:** `0` when `--merge-pr` would be authorized here, `1` otherwise.
+
 ### `--write-integrity-manifest`
 
 Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.
