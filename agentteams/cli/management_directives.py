@@ -49,7 +49,7 @@ from pathlib import Path
 
 from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
 from agentteams.cli.frozen_surfaces import UNFREEZE_TOKENS
-from agentteams.cli.governance_targets import target_is_governance_root
+from agentteams.cli.governance_targets import target_is_governance_root, warn_pending_governance_root
 from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_TOKENS
 from agentteams.cli.signed_ledger import (
     canonical_payload,
@@ -247,6 +247,7 @@ def scope_is_allowed(task_scope: str) -> bool:
     # a trust root by PATH (e.g. security-approvers, agent-privilege, the Ed25519 verify-key
     # store) passed the verb denylist below. A valid signature cannot override this. The ORIGINAL
     # (un-lowercased) scope is passed so the predicate's camelCase folding still applies.
+    warn_pending_governance_root((task_scope or "").strip(), "directive scope")  # IM item 19 warn-first
     if target_is_governance_root((task_scope or "").strip()):
         return False
     for token in _REFUSED_SCOPE_TOKENS:

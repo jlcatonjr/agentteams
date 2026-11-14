@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (AGENTS.md, AGENTS.override.md and .goosehints are pending governance trust roots; IM item 19)
+
+- **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
+  Codex, goose, Grok and agents-md read. `governance_targets` now recognizes `AGENTS.md`, `AGENTS.override.md` and
+  `.goosehints`, in any folded spelling, as a path, a path segment or a word in a scope.
+  - The file names are matched as a whole token, not as a substring, so this repository's own `agents_md.py`
+    adapter, its tests and its docs stay ordinary content. Across every tracked path, none changes classification.
+  - **Warn-first (operator ruling 2026-11-14).** In this release they are *pending* trust roots
+    (`target_is_pending_governance_root`). A decision row or management directive that names one still clears, and
+    prints one `WARN` saying it will be refused from the next release (`warn_pending_governance_root`, called by
+    `effect_classifier.non_eligibility_reason` and `management_directives.scope_is_allowed`).
+  - Enforcing them at once would make signing-active Codex, goose, Grok and agents-md renders unclearable, because
+    every render writes `AGENTS.md`. That is the `CLAUDE.md` render limitation (known-limitations).
+  - The next release moves the pending names into `GOVERNANCE_TARGET_STEMS`.
+
 ### fix (Markdown ingest reads the authority hierarchy, #392 item 11)
 
 - An `Authority` heading with a list or table now sets `authority_sources` wherever it sits. Before, any heading

@@ -82,9 +82,86 @@ def test_target_is_governance_root_true(target):
     assert ec.target_is_governance_root(target) is True
 
 
-@pytest.mark.parametrize("target", ["docs_src/x.md", "agentteams/cli/foo.py", "", "   "])
+_NOT_THE_CONSTITUTION = [
+    # item 19: the agents-md ADAPTER and its docs are ordinary project content, not the constitution
+    # (callers that refuse a trust root must still be able to touch them).
+    "agentteams/frameworks/agents_md.py", "agentteams/frameworks/_agents_md_rules.py",
+    "docs_src/api-reference/agents-md.md", "references/agents-md-agent-infrastructure-expert.md",
+    "tests/test_agents_md_framework.py",
+]
+
+
+@pytest.mark.parametrize("target", ["docs_src/x.md", "agentteams/cli/foo.py", "", "   ", *_NOT_THE_CONSTITUTION])
 def test_target_is_governance_root_false(target):
     assert ec.target_is_governance_root(target) is False
+
+
+# --- IM item 19 (G-23-2): AGENTS.md / AGENTS.override.md / .goosehints, warn-first (operator ruling 2026-11-14) ---
+
+_NON_CLAUDE_CONSTITUTION = [
+    "AGENTS.md",                     # Codex / Goose / Grok / agents-md constitution
+    "sub/project/AGENTS.md",
+    "AGENTS.override.md",            # what Codex reads over AGENTS.md
+    ".goosehints",                   # Goose's constitution pointer
+    "edit AGENTS.md section 3",      # a scope string, not only a path
+    "agents_md",                     # folded spelling, whole token
+    "AGENTS．md",                    # NFKC full-width dot
+    "C:\\repo\\AGENTS.md",
+]
+
+
+@pytest.mark.parametrize("target", _NON_CLAUDE_CONSTITUTION)
+def test_the_non_claude_constitution_is_a_pending_trust_root(target):
+    from agentteams.cli.governance_targets import target_is_pending_governance_root
+
+    assert target_is_pending_governance_root(target) is True
+    assert ec.target_is_governance_root(target) is False  # warn-first: not enforced in this release
+
+
+@pytest.mark.parametrize("target", ["docs_src/x.md", "", "CLAUDE.md", *_NOT_THE_CONSTITUTION])
+def test_pending_never_claims_ordinary_content_or_an_enforced_root(target):
+    from agentteams.cli.governance_targets import target_is_pending_governance_root
+
+    assert target_is_pending_governance_root(target) is False
+
+
+@pytest.fixture
+def _fresh_warnings(monkeypatch):
+    from agentteams.cli import governance_targets
+
+    monkeypatch.setattr(governance_targets, "_WARNED", set())
+
+
+@pytest.mark.parametrize("target", ["AGENTS.md", "AGENTS.override.md", ".goosehints"])
+def test_a_decision_naming_it_still_clears_but_warns(target, capsys, _fresh_warnings):
+    """Nothing that clears today stops clearing; the row is told it will be refused from the next release."""
+    row = {"verdict": "PASS", "action_reviewed": "draft-weekly-report", "effect_targets": target}
+    assert ec.non_eligibility_reason(row, kind="decision") is None
+    assert ec.derive_effect_class(row, kind="decision") == ec.NON_RELAXING
+    err = capsys.readouterr().err
+    assert f"WARN: decision names {target!r}" in err and "refused as a governance trust root from the next" in err
+
+
+@pytest.mark.parametrize("scope", ["AGENTS.md", "AGENTS.override.md", ".goosehints"])
+def test_a_directive_scope_naming_it_still_passes_but_warns(scope, capsys, _fresh_warnings):
+    from agentteams.cli.management_directives import scope_is_allowed
+
+    assert scope_is_allowed(scope) is True
+    assert f"WARN: directive scope names {scope!r}" in capsys.readouterr().err
+
+
+def test_the_warning_prints_once_per_target(capsys, _fresh_warnings):
+    from agentteams.cli.governance_targets import warn_pending_governance_root
+
+    assert warn_pending_governance_root("AGENTS.md", "decision") is True
+    assert warn_pending_governance_root("AGENTS.md", "decision") is True
+    assert capsys.readouterr().err.count("WARN:") == 1
+
+
+def test_an_enforced_root_gets_no_pending_warning(capsys, _fresh_warnings):
+    row = {"verdict": "PASS", "action_reviewed": "x", "effect_targets": "CLAUDE.md"}
+    assert ec.non_eligibility_reason(row, kind="decision")  # refused as before
+    assert "WARN:" not in capsys.readouterr().err
 
 
 # --- text fallback (no structured effect declared) --------------------------------------------

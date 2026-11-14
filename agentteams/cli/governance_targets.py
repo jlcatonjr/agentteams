@@ -20,6 +20,7 @@ Stdlib-only; imports nothing from ``agentteams.cli`` (so neither importer can fo
 from __future__ import annotations
 
 import re
+import sys
 import unicodedata
 
 #: Path fragments that name a governance / trust root, matched as a substring of a
@@ -48,6 +49,25 @@ GOVERNANCE_TARGET_STEMS: tuple[str, ...] = (
     "carveout-high-water",         # the carve-out rollback mark references/carveout-high-water.json
     "toolchain-group",             # First-party toolchain group: the operator-signed first-party toolchain group file
 )
+
+#: PENDING trust roots: the constitution files the non-Claude surfaces read (IM item 19, G-23-2), WARN-FIRST.
+#: ``AGENTS.md`` is the constitution Codex, Goose, Grok and agents-md teams read, ``AGENTS.override.md`` is the one
+#: Codex reads over it, and ``.goosehints`` is Goose's pointer to it. They are not yet in
+#: :data:`GOVERNANCE_TARGET_STEMS`: every render of those teams writes ``AGENTS.md``, and a trust-root target is
+#: categorically non-eligible (``effect_classifier.non_eligibility_reason``), so enforcing them now would leave
+#: signing-active Codex/Goose/Grok/agents-md renders unclearable. That is the ``CLAUDE.md`` render limitation
+#: (known-limitations). For this release, a decision or directive that names one gets a WARN
+#: (:func:`warn_pending_governance_root`). The next release moves them into the enforced sets (operator ruling
+#: 2026-11-14: warn first, refuse next).
+#:
+#: The file names are matched as a whole path segment or word, never as a substring. A substring ``agents-md`` would
+#: also claim this repository's own adapter (``agentteams/frameworks/agents_md.py``) and docs, which callers that
+#: REFUSE a trust root (``wasm_config``, ``vulnscan.known``, ``sandbox_handoff``) would then decline to touch.
+PENDING_GOVERNANCE_TARGET_STEMS: tuple[str, ...] = ("goosehints",)
+PENDING_GOVERNANCE_TARGET_FILENAMES: frozenset[str] = frozenset({"agents-md", "agents-override-md"})
+_TOKEN_SPLIT = re.compile(r"[\s/\\]+")
+_TOKEN_TRIM = "\"'`,;:()[]{}<>"
+_WARNED: set[str] = set()
 
 
 def canon_path(path: str) -> str:
@@ -101,4 +121,61 @@ def target_is_governance_root(target: str) -> bool:
     return any(stem in normalized for stem in GOVERNANCE_TARGET_STEMS)
 
 
-__all__ = ["GOVERNANCE_TARGET_STEMS", "canon_path", "target_is_governance_root"]
+def target_is_pending_governance_root(target: str) -> bool:
+    """Return True when ``target`` names a PENDING (warn-first) trust root and no enforced one (IM item 19).
+
+    Args:
+        target: A write-target path (or scope string) to test.
+
+    Returns:
+        True for ``AGENTS.md``, ``AGENTS.override.md`` or ``.goosehints`` in any folded spelling: as a path, a path
+        segment, or a word in a scope string (``sub/AGENTS.md``, ``agents_md``, "edit AGENTS.md now"). False when the
+        target already counts under :func:`target_is_governance_root`, and for a name that merely contains the
+        words (``agentteams/frameworks/agents_md.py``).
+
+    Raises:
+        Nothing.
+    """
+    normalized = canon_path(target)
+    if not normalized or target_is_governance_root(target):
+        return False
+    if any(stem in normalized for stem in PENDING_GOVERNANCE_TARGET_STEMS):
+        return True
+    tokens = _TOKEN_SPLIT.split(unicodedata.normalize("NFKC", target))
+    return any(canon_path(tok.strip(_TOKEN_TRIM)) in PENDING_GOVERNANCE_TARGET_FILENAMES for tok in tokens)
+
+
+def warn_pending_governance_root(target: str, context: str) -> bool:
+    """Print one WARN to stderr when ``target`` is a pending trust root, once per target and context.
+
+    Args:
+        target: A write target, capability or scope string a decision or directive names.
+        context: What would refuse it next release, for example ``"decision"`` or ``"directive scope"``.
+
+    Returns:
+        Whether ``target`` is a pending trust root (whether or not the WARN was already printed).
+
+    Raises:
+        Nothing.
+    """
+    if not target_is_pending_governance_root(target):
+        return False
+    key = f"{context}\0{target}"
+    if key not in _WARNED:
+        _WARNED.add(key)
+        print(f"WARN: {context} names {target!r}, the constitution non-Claude surfaces read (AGENTS.md / "
+              ".goosehints). It is accepted in this release and will be refused as a governance trust root from the "
+              "next one (IM item 19, warn-first). Have the operator apply AGENTS.md changes as for CLAUDE.md.",
+              file=sys.stderr)
+    return True
+
+
+__all__ = [
+    "GOVERNANCE_TARGET_STEMS",
+    "PENDING_GOVERNANCE_TARGET_FILENAMES",
+    "PENDING_GOVERNANCE_TARGET_STEMS",
+    "canon_path",
+    "target_is_governance_root",
+    "target_is_pending_governance_root",
+    "warn_pending_governance_root",
+]

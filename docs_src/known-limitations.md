@@ -224,17 +224,22 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Tracking:** 1.0 known limitation (found by mathAgents, 2026-10-16). A render mode that leaves CLAUDE.md to the
   operator and prints the diff is planned for 1.0.x.
 
-### `AGENTS.md` is not classed as a governance trust root
+### `AGENTS.md` is a governance trust root only in warn-first mode
 
-- **What:** the effect classifier treats `CLAUDE.md` and `copilot-instructions` as governance trust roots, but not
-  `AGENTS.md`, which is the instruction file for Codex, goose, Grok and agents-md. A clearance whose targets include
-  `AGENTS.md` is therefore classed by its other effects, and an ordinary HMAC-signed clearance can authorize a write
-  to it.
+- **What:** the effect classifier treats `CLAUDE.md` and `copilot-instructions` as governance trust roots. Since IM
+  item 19, `AGENTS.md`, `AGENTS.override.md` and `.goosehints` are recognized too: these are the constitution files
+  for Codex, goose, Grok and agents-md. For now they are only **pending** trust roots. A decision row or management
+  directive that names one still clears as before, but it prints a `WARN` saying it will be refused from the next
+  release (`governance_targets.target_is_pending_governance_root`). Until then, an ordinary HMAC-signed clearance
+  can still authorize a write to them.
+- **Why warn-first:** every render of those teams writes `AGENTS.md`, and a trust-root target is categorically
+  non-eligible. Enforcing it at once would leave signing-active Codex, goose, Grok and agents-md renders with no
+  clearable `overwrite` row, as `CLAUDE.md` already does for Claude teams (above). Operator ruling 2026-11-14:
+  warn first, refuse next.
 - **Who:** signing-governed teams on those surfaces.
-- **Workaround:** review any decision row whose `effect_targets` include `AGENTS.md` as you would a `CLAUDE.md` one,
-  and sign it with Ed25519.
-- **Tracking:** 1.0 known limitation (found by baseAgent's @security). The fix is planned for 1.0.x, together with
-  the render mode that leaves governance files to the operator, so renders stay signable.
+- **Workaround:** treat a `WARN` naming `AGENTS.md` like a `CLAUDE.md` change. Review the row, sign it with Ed25519,
+  and from the next release have the operator apply the `AGENTS.md` diff by hand.
+- **Tracking:** IM item 19 (G-23-2). The next release moves the pending names into the enforced sets.
 
 ### Installing an existing operator key into a second team needs a manual step
 

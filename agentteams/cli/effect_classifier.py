@@ -56,7 +56,7 @@ from agentteams.cli.frozen_surfaces import (
     names_unfreeze,
     touches_frozen,
 )
-from agentteams.cli.governance_targets import target_is_governance_root
+from agentteams.cli.governance_targets import target_is_governance_root, warn_pending_governance_root
 from agentteams.cli.management_directives import scope_is_allowed
 from agentteams.cli.sandbox_effects import (
     GATE_POLICY_WEAKEN,
@@ -456,6 +456,9 @@ def non_eligibility_reason(row: dict[str, str], *, kind: str) -> str | None:
         A human-readable reason string when the row is non-eligible, else None.
     """
     profile = effect_profile_from_row(row)
+    scope_text = _scope_text(row, kind=kind)
+    for named in (*profile.write_targets, *profile.grants_capabilities, *((scope_text,) if scope_text else ())):
+        warn_pending_governance_root(named, kind)  # IM item 19 warn-first: AGENTS.md / .goosehints, refused next release
     for target in profile.write_targets:
         if target_is_governance_root(target):
             return f"authorizes a write to governance/trust root {target!r}"
@@ -464,7 +467,6 @@ def non_eligibility_reason(row: dict[str, str], *, kind: str) -> str | None:
             return f"grants a governance/trust capability {capability!r}"
     if profile.cross_repo and profile.destructive and profile.bulk:
         return "combines cross-repo + destructive + bulk into one sweeping grant"
-    scope_text = _scope_text(row, kind=kind)
     if scope_text and target_is_governance_root(scope_text):
         return f"scope {scope_text!r} targets a governance/trust root"
     return None
