@@ -96,72 +96,62 @@ def test_target_is_governance_root_false(target):
     assert ec.target_is_governance_root(target) is False
 
 
-# --- IM item 19 (G-23-2): AGENTS.md / AGENTS.override.md / .goosehints, warn-first (operator ruling 2026-11-14) ---
+# --- IM item 19 (G-23-2): the constitution files the other surfaces read are ELEVATED (operator ruling 2026-11-14) ---
+# Relaxing (operator Ed25519) and never a directive scope, but not categorically non-eligible: frozen-surface rows
+# name AGENTS.md / .goosehints as owned paths, and a non-eligible unfreeze could never be signed.
 
-_NON_CLAUDE_CONSTITUTION = [
-    "AGENTS.md",                     # Codex / Goose / Grok / agents-md constitution
-    "sub/project/AGENTS.md",
-    "AGENTS.override.md",            # what Codex reads over AGENTS.md
-    ".goosehints",                   # Goose's constitution pointer
-    "edit AGENTS.md section 3",      # a scope string, not only a path
-    "agents_md",                     # folded spelling, whole token
-    "AGENTS．md",                    # NFKC full-width dot
+_OTHER_CONSTITUTION_FILES = [
+    "AGENTS.md",                              # Codex / Goose / Grok / agents-md constitution
+    "sub/project/AGENTS.md",                  # Codex reads nested AGENTS.md too
+    "AGENTS.override.md",                     # what Codex reads over AGENTS.md
+    ".goosehints",                            # Goose's constitution pointer
+    "CLAUDE.local.md",                        # folds to claude-local-md, which the claude-md stem missed
+    ".github/instructions/py.instructions.md",  # Copilot's path-scoped instructions
+    "edit AGENTS.md section 3",               # a scope string, not only a path
+    "agents_md",                              # folded spelling, whole token
+    "AGENTS．md",                             # NFKC full-width dot
     "C:\\repo\\AGENTS.md",
+    "AGENTS%2Emd", "docs%2FAGENTS.md",        # @security: percent-encoding
+    "file:AGENTS.md", "AGENTS.md#L1", "AGENTS.md?plain=1",  # @security: prefix / anchor / query
 ]
 
 
-@pytest.mark.parametrize("target", _NON_CLAUDE_CONSTITUTION)
-def test_the_non_claude_constitution_is_a_pending_trust_root(target):
-    from agentteams.cli.governance_targets import target_is_pending_governance_root
+@pytest.mark.parametrize("target", _OTHER_CONSTITUTION_FILES)
+def test_the_other_surfaces_constitution_is_elevated(target):
+    from agentteams.cli.governance_targets import target_is_elevated_constitution
 
-    assert target_is_pending_governance_root(target) is True
-    assert ec.target_is_governance_root(target) is False  # warn-first: not enforced in this release
+    assert target_is_elevated_constitution(target) is True
+    assert ec.target_is_governance_root(target) is False  # elevated, not a categorical trust root
 
 
 @pytest.mark.parametrize("target", ["docs_src/x.md", "", "CLAUDE.md", *_NOT_THE_CONSTITUTION])
-def test_pending_never_claims_ordinary_content_or_an_enforced_root(target):
-    from agentteams.cli.governance_targets import target_is_pending_governance_root
+def test_elevated_never_claims_ordinary_content(target):
+    from agentteams.cli.governance_targets import target_is_elevated_constitution
 
-    assert target_is_pending_governance_root(target) is False
-
-
-@pytest.fixture
-def _fresh_warnings(monkeypatch):
-    from agentteams.cli import governance_targets
-
-    monkeypatch.setattr(governance_targets, "_WARNED", set())
+    assert target_is_elevated_constitution(target) is False  # CLAUDE.md is a full trust root, not this class
 
 
-@pytest.mark.parametrize("target", ["AGENTS.md", "AGENTS.override.md", ".goosehints"])
-def test_a_decision_naming_it_still_clears_but_warns(target, capsys, _fresh_warnings):
-    """Nothing that clears today stops clearing; the row is told it will be refused from the next release."""
-    row = {"verdict": "PASS", "action_reviewed": "draft-weekly-report", "effect_targets": target}
+@pytest.mark.parametrize("target", ["AGENTS.md", "AGENTS.override.md", ".goosehints", "CLAUDE.local.md",
+                                    ".github/instructions/a.instructions.md"])
+def test_a_row_writing_it_needs_the_operator_but_stays_eligible(target):
+    row = {"verdict": "PASS", "action_reviewed": "draft-weekly-report", "effect_targets": target}  # target is the only signal
+    assert ec.derive_effect_class(row, kind="decision") == ec.RELAXING
+    assert ec.requires_operator_signature(row, kind="decision") is True  # HMAC no longer suffices
+    assert ec.non_eligibility_reason(row, kind="decision") is None       # but the operator can still sign it
+
+
+def test_a_codex_unfreeze_listing_agents_md_stays_signable():
+    """No lockout: the frozen-surfaces owned paths include AGENTS.md, and the operator must be able to unfreeze."""
+    row = {"verdict": "PASS", "scope": "unfreeze-surface codex", "effect_targets": ".codex/;AGENTS.md"}
+    assert ec.requires_operator_signature(row, kind="decision") is True
     assert ec.non_eligibility_reason(row, kind="decision") is None
-    assert ec.derive_effect_class(row, kind="decision") == ec.NON_RELAXING
-    err = capsys.readouterr().err
-    assert f"WARN: decision names {target!r}" in err and "refused as a governance trust root from the next" in err
 
 
-@pytest.mark.parametrize("scope", ["AGENTS.md", "AGENTS.override.md", ".goosehints"])
-def test_a_directive_scope_naming_it_still_passes_but_warns(scope, capsys, _fresh_warnings):
+@pytest.mark.parametrize("scope", ["AGENTS.md", "AGENTS.override.md", ".goosehints", "CLAUDE.local.md"])
+def test_a_management_directive_cannot_scope_it(scope):
     from agentteams.cli.management_directives import scope_is_allowed
 
-    assert scope_is_allowed(scope) is True
-    assert f"WARN: directive scope names {scope!r}" in capsys.readouterr().err
-
-
-def test_the_warning_prints_once_per_target(capsys, _fresh_warnings):
-    from agentteams.cli.governance_targets import warn_pending_governance_root
-
-    assert warn_pending_governance_root("AGENTS.md", "decision") is True
-    assert warn_pending_governance_root("AGENTS.md", "decision") is True
-    assert capsys.readouterr().err.count("WARN:") == 1
-
-
-def test_an_enforced_root_gets_no_pending_warning(capsys, _fresh_warnings):
-    row = {"verdict": "PASS", "action_reviewed": "x", "effect_targets": "CLAUDE.md"}
-    assert ec.non_eligibility_reason(row, kind="decision")  # refused as before
-    assert "WARN:" not in capsys.readouterr().err
+    assert scope_is_allowed(scope) is False
 
 
 # --- text fallback (no structured effect declared) --------------------------------------------

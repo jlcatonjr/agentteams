@@ -8,11 +8,17 @@ path. This module is the one place that vocabulary lives, imported by both, so t
 can never disagree again.
 
 A *governance / trust root* is a file whose contents decide **who may authorize what** — the
-constitution and its mirrors, the approver/manager rosters, the signing switches and markers,
+constitution and its mirrors (``CLAUDE.md``, ``copilot-instructions``), the approver/manager rosters, the signing
+switches and markers,
 the ledgers, the integrity manifest, the authority-ordering reference, and (WS-B/R1) the
 Ed25519 verify-key store. A write that targets one of these widens authority; it is never
 ordinary project content, so it belongs on the elevated (asymmetric-signed) path and is
 refused as a directive scope.
+
+The other surfaces' constitution files (``AGENTS.md``, ``AGENTS.override.md``, ``.goosehints``, ``CLAUDE.local.md``,
+``.github/instructions``) are a second, *elevated* class (:func:`target_is_elevated_constitution`; IM item 19). A
+write to one is relaxing and never a directive scope, but it is not categorically non-eligible, because frozen-surface
+rows name them.
 
 Stdlib-only; imports nothing from ``agentteams.cli`` (so neither importer can form a cycle).
 """
@@ -20,8 +26,8 @@ Stdlib-only; imports nothing from ``agentteams.cli`` (so neither importer can fo
 from __future__ import annotations
 
 import re
-import sys
 import unicodedata
+from urllib.parse import unquote
 
 #: Path fragments that name a governance / trust root, matched as a substring of a
 #: separator-canonicalized path (see :func:`canon_path`). Chosen so each stem catches its file
@@ -50,24 +56,28 @@ GOVERNANCE_TARGET_STEMS: tuple[str, ...] = (
     "toolchain-group",             # First-party toolchain group: the operator-signed first-party toolchain group file
 )
 
-#: PENDING trust roots: the constitution files the non-Claude surfaces read (IM item 19, G-23-2), WARN-FIRST.
-#: ``AGENTS.md`` is the constitution Codex, Goose, Grok and agents-md teams read, ``AGENTS.override.md`` is the one
-#: Codex reads over it, and ``.goosehints`` is Goose's pointer to it. They are not yet in
-#: :data:`GOVERNANCE_TARGET_STEMS`: every render of those teams writes ``AGENTS.md``, and a trust-root target is
-#: categorically non-eligible (``effect_classifier.non_eligibility_reason``), so enforcing them now would leave
-#: signing-active Codex/Goose/Grok/agents-md renders unclearable. That is the ``CLAUDE.md`` render limitation
-#: (known-limitations). For this release, a decision or directive that names one gets a WARN
-#: (:func:`warn_pending_governance_root`). The next release moves them into the enforced sets (operator ruling
-#: 2026-11-14: warn first, refuse next).
+#: ELEVATED constitution files (IM item 19, G-23-2): the instructions the other surfaces read. A write to one is
+#: constraint-relaxing and needs the operator's Ed25519 signature, and a management directive can never scope one,
+#: but unlike :data:`GOVERNANCE_TARGET_STEMS` they are NOT categorically non-eligible. ``frozen_surfaces`` declares
+#: ``AGENTS.md`` and ``.goosehints`` owned by the codex/goose/agents-md surfaces, so a freeze or unfreeze row lists
+#: them. A non-eligible unfreeze could never be signed, and a frozen surface could never be unfrozen (operator ruling
+#: 2026-11-14: elevated, not refused). The files:
+#:
+#: * ``AGENTS.md``: the constitution Codex, Goose, Grok and agents-md read; nested copies count;
+#: * ``AGENTS.override.md``: what Codex reads over it;
+#: * ``.goosehints``: Goose's pointer to it;
+#: * ``CLAUDE.local.md``: folds to ``claude-local-md``, which the ``claude-md`` stem misses;
+#: * ``.github/instructions/``: Copilot's path-scoped instructions.
 #:
 #: The file names are matched as a whole path segment or word, never as a substring. A substring ``agents-md`` would
-#: also claim this repository's own adapter (``agentteams/frameworks/agents_md.py``) and docs, which callers that
-#: REFUSE a trust root (``wasm_config``, ``vulnscan.known``, ``sandbox_handoff``) would then decline to touch.
-PENDING_GOVERNANCE_TARGET_STEMS: tuple[str, ...] = ("goosehints",)
-PENDING_GOVERNANCE_TARGET_FILENAMES: frozenset[str] = frozenset({"agents-md", "agents-override-md"})
-_TOKEN_SPLIT = re.compile(r"[\s/\\]+")
-_TOKEN_TRIM = "\"'`,;:()[]{}<>"
-_WARNED: set[str] = set()
+#: also claim this repository's own adapter (``agentteams/frameworks/agents_md.py``) and docs. Before folding, a
+#: target is percent-decoded and split on whitespace, slashes and the ``:``/``#``/``?`` of a ``file:`` prefix, line
+#: anchor or query. So these match: ``AGENTS.md``, ``sub/AGENTS.md``, ``agents_md``, ``AGENTS%2Emd``,
+#: ``file:AGENTS.md``, ``AGENTS.md#L1`` and "edit AGENTS.md now". ``agents_md.py`` does not.
+ELEVATED_CONSTITUTION_STEMS: tuple[str, ...] = ("goosehints", "github-instructions")
+ELEVATED_CONSTITUTION_FILENAMES: frozenset[str] = frozenset({"agents-md", "agents-override-md", "claude-local-md"})
+_TOKEN_SPLIT = re.compile(r"[\s/\\:#?]+")
+_TOKEN_TRIM = "\"'`,;()[]{}<>"
 
 
 def canon_path(path: str) -> str:
@@ -114,6 +124,9 @@ def target_is_governance_root(target: str) -> bool:
 
     Returns:
         Whether the target is a governance/trust root.
+
+    Raises:
+        Nothing.
     """
     normalized = canon_path(target)
     if not normalized:
@@ -121,61 +134,34 @@ def target_is_governance_root(target: str) -> bool:
     return any(stem in normalized for stem in GOVERNANCE_TARGET_STEMS)
 
 
-def target_is_pending_governance_root(target: str) -> bool:
-    """Return True when ``target`` names a PENDING (warn-first) trust root and no enforced one (IM item 19).
+def target_is_elevated_constitution(target: str) -> bool:
+    """Return True when ``target`` names an :data:`ELEVATED_CONSTITUTION_STEMS` / ``_FILENAMES`` file (IM item 19).
+
+    Such a write is constraint-relaxing (operator Ed25519) and never a directive scope, but stays eligible.
 
     Args:
         target: A write-target path (or scope string) to test.
 
     Returns:
-        True for ``AGENTS.md``, ``AGENTS.override.md`` or ``.goosehints`` in any folded spelling: as a path, a path
-        segment, or a word in a scope string (``sub/AGENTS.md``, ``agents_md``, "edit AGENTS.md now"). False when the
-        target already counts under :func:`target_is_governance_root`, and for a name that merely contains the
-        words (``agentteams/frameworks/agents_md.py``).
+        Whether the target names another surface's constitution file, in any folded spelling.
 
     Raises:
         Nothing.
     """
     normalized = canon_path(target)
-    if not normalized or target_is_governance_root(target):
+    if not normalized:
         return False
-    if any(stem in normalized for stem in PENDING_GOVERNANCE_TARGET_STEMS):
+    if any(stem in normalized for stem in ELEVATED_CONSTITUTION_STEMS):
         return True
-    tokens = _TOKEN_SPLIT.split(unicodedata.normalize("NFKC", target))
-    return any(canon_path(tok.strip(_TOKEN_TRIM)) in PENDING_GOVERNANCE_TARGET_FILENAMES for tok in tokens)
-
-
-def warn_pending_governance_root(target: str, context: str) -> bool:
-    """Print one WARN to stderr when ``target`` is a pending trust root, once per target and context.
-
-    Args:
-        target: A write target, capability or scope string a decision or directive names.
-        context: What would refuse it next release, for example ``"decision"`` or ``"directive scope"``.
-
-    Returns:
-        Whether ``target`` is a pending trust root (whether or not the WARN was already printed).
-
-    Raises:
-        Nothing.
-    """
-    if not target_is_pending_governance_root(target):
-        return False
-    key = f"{context}\0{target}"
-    if key not in _WARNED:
-        _WARNED.add(key)
-        print(f"WARN: {context} names {target!r}, the constitution non-Claude surfaces read (AGENTS.md / "
-              ".goosehints). It is accepted in this release and will be refused as a governance trust root from the "
-              "next one (IM item 19, warn-first). Have the operator apply AGENTS.md changes as for CLAUDE.md.",
-              file=sys.stderr)
-    return True
+    tokens = _TOKEN_SPLIT.split(unquote(unicodedata.normalize("NFKC", target)))  # decode first: %2F splits too
+    return any(canon_path(tok.strip(_TOKEN_TRIM)) in ELEVATED_CONSTITUTION_FILENAMES for tok in tokens)
 
 
 __all__ = [
+    "ELEVATED_CONSTITUTION_FILENAMES",
+    "ELEVATED_CONSTITUTION_STEMS",
     "GOVERNANCE_TARGET_STEMS",
-    "PENDING_GOVERNANCE_TARGET_FILENAMES",
-    "PENDING_GOVERNANCE_TARGET_STEMS",
     "canon_path",
+    "target_is_elevated_constitution",
     "target_is_governance_root",
-    "target_is_pending_governance_root",
-    "warn_pending_governance_root",
 ]

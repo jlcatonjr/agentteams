@@ -215,31 +215,34 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ### A full render can't be covered by a signed `overwrite` row, because it writes CLAUDE.md
 
-- **What:** every render writes the managed block of `.claude/CLAUDE.md`, and the effect classifier treats
-  CLAUDE.md as a governance trust root. In a workspace where signing is active, a signed `overwrite` row whose effect
-  includes that write is refused as non-eligible, so no honest signed row covers a full render.
+- **What:** every render writes the managed block of `.claude/CLAUDE.md`, and the effect classifier treats CLAUDE.md
+  as a governance trust root. In a workspace where signing is active, a signed `overwrite` row whose effect includes
+  that write is refused as non-eligible, so no honest signed row covers a full render.
 - **Who:** teams with decision signing active that re-render a Claude team.
 - **Workaround:** discard the render's change to `.claude/CLAUDE.md` and have the operator apply the managed-block
   diff by hand. Sign the `overwrite` row for the remaining files.
+- **Note:** the gate checks the effects a row *declares*. It does not derive a render's actual writes, so a row that
+  leaves CLAUDE.md out of `effect_targets` is not refused. Review render rows for that omission. Deriving the write
+  set is tracked as a separate remediation item.
+
+### The other surfaces' constitution files need the operator's signature, but are not refused like CLAUDE.md
+
+- **What:** since IM item 19, a row writing any of these needs the operator's Ed25519 signature, and a management
+  directive cannot scope one:
+  - `AGENTS.md` and `AGENTS.override.md`, the constitution for Codex, goose, Grok and agents-md;
+  - `.goosehints`;
+  - `CLAUDE.local.md`;
+  - `.github/instructions/`.
+
+  Unlike `CLAUDE.md`, they are not refused even when signed, because the frozen-surfaces feature lists `AGENTS.md`
+  and `.goosehints` as owned paths, and an unsignable unfreeze would lock a frozen surface for good. The rendered
+  constitution's Rule 15(c) wording ("the constitution ... even when validly signed") describes the `CLAUDE.md` case
+  only.
+- **Who:** signing-governed teams on those surfaces. A freeze, unfreeze or render row that lists one of these files
+  now needs the operator's Ed25519 signature, where an HMAC row used to clear.
+- **Tracking:** IM item 19 (G-23-2), operator ruling 2026-11-14. A template rewording of Rule 15(c) is a follow-up.
 - **Tracking:** 1.0 known limitation (found by mathAgents, 2026-10-16). A render mode that leaves CLAUDE.md to the
   operator and prints the diff is planned for 1.0.x.
-
-### `AGENTS.md` is a governance trust root only in warn-first mode
-
-- **What:** the effect classifier treats `CLAUDE.md` and `copilot-instructions` as governance trust roots. Since IM
-  item 19, `AGENTS.md`, `AGENTS.override.md` and `.goosehints` are recognized too: these are the constitution files
-  for Codex, goose, Grok and agents-md. For now they are only **pending** trust roots. A decision row or management
-  directive that names one still clears as before, but it prints a `WARN` saying it will be refused from the next
-  release (`governance_targets.target_is_pending_governance_root`). Until then, an ordinary HMAC-signed clearance
-  can still authorize a write to them.
-- **Why warn-first:** every render of those teams writes `AGENTS.md`, and a trust-root target is categorically
-  non-eligible. Enforcing it at once would leave signing-active Codex, goose, Grok and agents-md renders with no
-  clearable `overwrite` row, as `CLAUDE.md` already does for Claude teams (above). Operator ruling 2026-11-14:
-  warn first, refuse next.
-- **Who:** signing-governed teams on those surfaces.
-- **Workaround:** treat a `WARN` naming `AGENTS.md` like a `CLAUDE.md` change. Review the row, sign it with Ed25519,
-  and from the next release have the operator apply the `AGENTS.md` diff by hand.
-- **Tracking:** IM item 19 (G-23-2). The next release moves the pending names into the enforced sets.
 
 ### Installing an existing operator key into a second team needs a manual step
 
