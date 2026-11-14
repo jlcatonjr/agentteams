@@ -745,7 +745,12 @@ def _build_sandbox_block(
     deny_write = filesystem["denyWrite"]
     deny_write += [p for p in cp_write_denies(protect_ledger, control_plane_protect, substrate_protect)
                    if p not in deny_write]
-    deny_write += [p for p in signing_key_deny_write(resolve_abspath=resolve_abspath) if p not in deny_write]
+    # M1 (hmac-key-autoresolve): write-deny the operator key and verify-key dirs, on macOS only. Seatbelt
+    # tolerates a missing deny path, but Linux bwrap fails to start on one (see the verify-key store note), and
+    # these home dirs need not exist. On Linux the write roots already exclude them: bwrap binds only the
+    # allowWrite roots writable, and roots at, inside or above them are refused.
+    if (platform or sys.platform) == "darwin":
+        deny_write += [p for p in signing_key_deny_write(resolve_abspath=resolve_abspath) if p not in deny_write]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:

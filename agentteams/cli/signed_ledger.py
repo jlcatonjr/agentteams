@@ -227,8 +227,8 @@ def load_hmac_key(env_name: str, error: type[RuntimeError] = RuntimeError, *,
                 same = hmac.compare_digest(_read_custody_file(key_dir, name, private=True).decode("utf-8").strip(),
                                            value)
                 how = "the same key" if same else "a DIFFERENT key"
-            except (OSError, ValueError, UnicodeDecodeError):
-                how = "a key file that fails its checks"
+            except (OSError, ValueError, TypeError, UnicodeDecodeError):
+                how = "a key file that fails its checks, or cannot be compared"
             print(f"Warning: {env_name} is set and {path} exists ({how}); using the variable. If you did not "
                   "create that file, delete it. If you did, unset the variable, which sandboxed commands "
                   "inherit.", file=sys.stderr)

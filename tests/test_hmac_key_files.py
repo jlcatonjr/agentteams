@@ -265,10 +265,13 @@ def test_every_emitted_sandbox_write_denies_the_key_dirs():
 
     want = signing_key_deny_write()
     assert want == ["~/.config/agentteams/keys", "~/.config/agentteams/verify-keys"]
-    deny = _build_sandbox_block(None)["filesystem"]["denyWrite"]
+    deny = _build_sandbox_block(None, platform="darwin")["filesystem"]["denyWrite"]
     assert all(p in deny for p in want)
-    absolute = _build_sandbox_block(None, resolve_abspath=True)["filesystem"]["denyWrite"]
+    absolute = _build_sandbox_block(None, platform="darwin", resolve_abspath=True)["filesystem"]["denyWrite"]
     assert all(p in absolute for p in signing_key_deny_write(resolve_abspath=True))
+    # Linux bwrap fails to start on a missing deny path, and these home dirs need not exist: never on Linux.
+    linux = _build_sandbox_block(None, platform="linux")["filesystem"]["denyWrite"]
+    assert not any(p in linux for p in want)
     profile = _build_seatbelt_profile(None)
     text = profile if isinstance(profile, str) else "\n".join(profile)
     write_block = text[text.index("(deny file-write*\n", text.index("Operator signing-key isolation")):]
@@ -277,3 +280,17 @@ def test_every_emitted_sandbox_write_denies_the_key_dirs():
     from agentteams.frameworks import _sandbox_emit as se
     confine = Path(se.__file__).parents[1] / "templates" / "universal" / "sandbox" / "confine-run.sh"
     assert '(deny file-write* (subpath \\"$HOME/.config/agentteams/verify-keys\\"))' in confine.read_text(encoding="utf-8")
+
+
+def test_the_record_command_runs_end_to_end(keys, tmp_path, capsys):
+    """`--record-hmac-fingerprint waiver` through the CLI: records, prints the fingerprint and the key's mtime."""
+    from agentteams.cli.app import main
+
+    (keys / "waiver-hmac.key").write_text(KEY, encoding="utf-8")
+    (keys / "waiver-hmac.key").chmod(0o600)
+    assert main(["--record-hmac-fingerprint", "waiver"]) == 0
+    out = capsys.readouterr().out
+    assert sl.hmac_key_fingerprint(KEY) in out and "was last changed" in out and KEY not in out
+    assert sl.load_hmac_key(WAIVER) == KEY
+    assert main(["--record-hmac-fingerprint", "grant"]) == 1
+    assert "cannot read" in capsys.readouterr().err
