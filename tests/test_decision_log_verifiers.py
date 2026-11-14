@@ -11,8 +11,9 @@ the resolver:
 * ``_assert_decision_chain_intact`` — deletion/reorder detection on a chained log.
 * ``_assert_authorizing_row_is_authentic`` — a requesting agent cannot clear its own action (A4).
 
-The pure id-matcher ``_action_matches`` is registered ``not-a-verifier``; its match decision is
-exercised here through its caller ``_assert_no_unretracted_halt`` with both a matching action (which
+The id-matcher (now ``action_ids.action_matches``, re-exported as ``_action_matches``) is
+registered as a verifier with direct tests in ``tests/test_redteam_verifiers_cli.py``; its match
+decision is also exercised here through its caller ``_assert_no_unretracted_halt`` with both a matching action (which
 must refuse) and a non-matching action (which must accept), so a regression in it would break a
 security assertion rather than pass silently.
 """
@@ -323,6 +324,7 @@ def test_every_gate_call_site_is_listed():
     dynamic = []
     sandbox_sites: list[str] = []
     s10_sites: list[str] = []
+    lineage_sites: list[str] = []
     for path, text in sources.items():
         for arg in call.findall(text):
             if arg.startswith('"'):
@@ -357,6 +359,8 @@ def test_every_gate_call_site_is_listed():
                 assert text.index("action = clearance_action(scope, path)") < text.index("action=scope)")
             elif arg in {"exempt_action", "exempt_family"} and path.name == "s10_exempt_gate.py":
                 s10_sites.append(arg)  # s10-cooldown-exempt:<owner/name> and the bare family, checked below
+            elif arg == "lineage_action" and path.name == "toolchain_group.py":
+                lineage_sites.append(arg)  # the group file's derives_from chain (v1.1.3): exactly one site, below
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
     assert "branch-cleanup" in GATE_ACTIONS and dynamic
@@ -369,6 +373,7 @@ def test_every_gate_call_site_is_listed():
     from agentteams.cli.s10_exempt_gate import S10_EXEMPT_KIND
 
     assert set(s10_sites) == {"exempt_action", "exempt_family"} and S10_EXEMPT_KIND in GATE_ACTIONS
+    assert lineage_sites == ["lineage_action"]   # one call site only; a second must be reviewed and listed
     # A call shape the regex cannot parse would be skipped silently; the count makes such a miss fail.
     assert sum(len(call.findall(t)) for t in sources.values()) >= 11
 

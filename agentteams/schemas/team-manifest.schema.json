@@ -1091,7 +1091,7 @@
     },
     "sandbox_exceptions": {
       "type": "object",
-      "description": "P15: relaxation-gate inputs outside SandboxState: agents keeping native exec while WASM is on (P13), runner confined_programs entries on sandbox: wasm / sandbox: os (P12), and (WP-C2) whether the shared agentteams_wasm MCP table is emitted with auto approval (codex:wasm-auto-approve; written only when on, absent reads as off).",
+      "description": "P15: relaxation-gate inputs outside SandboxState: agents keeping native exec while WASM is on (P13), runner confined_programs entries on sandbox: wasm / sandbox: os (P12), and (WP-C2) whether the shared agentteams_wasm MCP table is emitted with auto approval (codex:wasm-auto-approve; written only when on, absent reads as off), and (#456) the recorded project gate verdict policy (written only when the project has one).",
       "additionalProperties": false,
       "required": [
         "native_exec_keep",
@@ -1129,6 +1129,37 @@
             "off"
           ],
           "description": "WP-C2: the mcp-approval-auto relaxation is in effect (a Codex render with WASM on and codex:wasm-auto-approve). Written only when on."
+        },
+        "gate_policy": {
+          "type": "object",
+          "description": "#456: the project gate verdict policy (.agentteams/gate-policy.json) this render pinned: its sha256, every class it denies (preset classes included) and fail_closed_tools. Written only when the project has a policy; re-pinning a weaker one is the gate-policy-weaken relaxation.",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "deny",
+            "fail_closed_tools"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "deny": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              }
+            },
+            "fail_closed_tools": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off"
+              ]
+            }
+          }
         }
       }
     },
@@ -1152,7 +1183,8 @@
               "wasm-grant-widen",
               "native-exec-keep",
               "wasm-to-os-switch",
-              "mcp-approval-auto"
+              "mcp-approval-auto",
+              "gate-policy-weaken"
             ]
           },
           "action": {

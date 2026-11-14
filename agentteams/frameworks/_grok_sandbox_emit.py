@@ -210,14 +210,14 @@ def grok_sandbox_output_files(manifest: dict[str, Any], platform: str | None = N
     plat = sys.platform if platform is None else platform
     if not (plat.startswith("linux") or plat.startswith("darwin")):
         return []
-    from agentteams.frameworks.claude import _apply_fail_closed_policy, gate_interpreter_pin_files
+    from agentteams.frameworks.claude import gate_interpreter_pin_files, render_gate
 
     return [
         (GROK_SANDBOX_PROFILE_REL, _PROFILE),
         (GROK_RUNNER_REL, _build_runner(manifest)),
         (GROK_GATE_JSON_REL, _GATE_JSON),
         (GROK_GATE_SHIM_REL, _read_template("hooks/grok-gate-shim.py")),
-        (GROK_GATE_REL, _apply_fail_closed_policy(_read_template("hooks/constitutional-gate.py"), manifest)),
+        (GROK_GATE_REL, render_gate(_read_template("hooks/constitutional-gate.py"), manifest)),
         # The gate re-executes under this pin when the shim's python3 cannot import agentteams (untracked).
         *gate_interpreter_pin_files(GROK_HOOKS_REL),
     ]

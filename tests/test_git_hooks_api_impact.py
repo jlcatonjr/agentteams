@@ -24,7 +24,7 @@ def test_clause_is_inside_the_refresh_block_before_its_exit():
     block = git_hooks._render_hook_block("/opt/at")
     clause = block.index("agentteams.api_impact --pre-commit")
     assert block.index(git_hooks._HOOK_BEGIN) < clause < block.index("exit $_at_rc")
-    assert "python3 -P -m agentteams.api_impact" in block
+    assert "_at_run -m agentteams.api_impact" in block and "\"$_at_py\" -P \"$@\"" in block
     assert "git diff --cached --name-only 2>/dev/null)" in block  # unfiltered: deletions count
     line = block[block.rindex("\n", 0, clause) + 1:block.index("\n", clause)]
     assert "--strict-capable" in line

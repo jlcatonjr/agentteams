@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Create the project dev venv (follow-up #20): .venv (gitignored) with .[test,research,signing], so the
-# suite and the signing CLI run on the PINNED cryptography (50.0.0) and pytest>=8 rather than a base
+# suite and the signing CLI run on the PINNED cryptography (50.0.2) and pytest>=8 rather than a base
 # conda/system environment's copies. No sudo; installs from PyPI only, honouring the exact pins in
-# pyproject.toml (the [signing] extra pins cryptography==50.0.0, vetted in references/dependency-pins.json).
+# pyproject.toml (the [signing] extra pins cryptography==50.0.2, vetted in references/dependency-pins.json).
 #
 # Rule S-10: review the extras' dependency versions (pyproject.toml) for known vulnerabilities before the
 # first install. Dry run by default; --apply creates/updates .venv.

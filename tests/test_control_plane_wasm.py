@@ -133,11 +133,12 @@ def test_control_plane_constants_match_the_emitter():
 
 
 def test_launcher_bytes_unchanged():
-    # Pinned by integrity.py; P00 must not touch it (A.6). The hash is re-derived from the base commit's bytes.
-    import subprocess
+    # P00 must not touch the launcher (A.6). It is pinned in the enforcement-integrity manifest, so a change has to
+    # re-pin it there (a reviewed trust-root change). Compared with the pin rather than a base commit, so the check
+    # holds in shallow and full clones alike and does not go stale when the launcher is re-pinned (#474).
+    from agentteams import integrity
 
-    base = subprocess.run(["git", "show", "c4930051:agentteams/templates/universal/sandbox/confine-run.sh"],
-                          cwd=REPO, capture_output=True)
-    if base.returncode != 0:
-        pytest.skip("base commit not available in this checkout")
-    assert hashlib.sha256(LAUNCHER.read_bytes()).hexdigest() == hashlib.sha256(base.stdout).hexdigest()
+    rel = LAUNCHER.relative_to(REPO).as_posix()
+    assert rel in integrity.ENFORCEMENT_MODULES
+    pinned = json.loads((REPO / integrity.MANIFEST_REL_PATH).read_text(encoding="utf-8"))["modules"][rel]
+    assert hashlib.sha256(LAUNCHER.read_bytes()).hexdigest() == pinned

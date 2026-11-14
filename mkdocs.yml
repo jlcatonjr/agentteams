@@ -242,6 +242,7 @@ nav:
               - session_scan: api-reference/session_scan.md
               - audit: api-reference/audit.md
               - integrity: api-reference/integrity.md
+              - gate_policy: api-reference/gate-policy.md
               - feature-audit: api-reference/feature-audit.md
               - living-doc: api-reference/living-doc.md
               - remediate: api-reference/remediate.md

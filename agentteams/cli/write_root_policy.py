@@ -153,6 +153,7 @@ def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxSt
         ValueError: A malformed slug or grant mount in either state.
     """
     from agentteams.cli.sandbox_effects import (  # local: keep the gate out of this module's import graph
+        GATE_POLICY_WEAKEN,
         MCP_APPROVAL_AUTO,
         NATIVE_EXEC_KEEP,
         SANDBOX_OS_OFF,
@@ -160,7 +161,7 @@ def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxSt
         WASM_GRANT_WIDEN,
         WASM_TO_OS_SWITCH,
     )
-    from agentteams.cli.sandbox_relaxation_gate import plan_relaxations
+    from agentteams.cli.sandbox_relaxation_gate import gate_policy_weakenings, plan_relaxations
 
     planned = plan_relaxations(old_state, new_state, framework_id=framework_id,
                                profile_would_emit=profile_would_emit, exceptions=exceptions)
@@ -185,6 +186,8 @@ def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxSt
         elif r.kind == MCP_APPROVAL_AUTO:
             lines.append(f"agentteams_wasm MCP table for {r.qualifier} set to default_tools_approval_mode = \"auto\" "
                          "(codex:wasm-auto-approve): run_wasm runs without the per-call approval prompt")
+        elif r.kind == GATE_POLICY_WEAKEN:
+            lines += gate_policy_weakenings(*(exceptions or (None, None)))
     lines = [f"{SANDBOX_RELAXATION_PREFIX} {line}" for line in lines]
     for line in lines:
         print(line, file=sys.stderr)

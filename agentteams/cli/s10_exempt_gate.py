@@ -26,6 +26,13 @@ Each listed repository is the action ``s10-cooldown-exempt:<owner/name>``, a con
   the run's project root, this gate's root on the output path: a custom ``--output`` into another checkout takes a
   different lock (a concurrent-write window, not a bypass: every write still passes every check).
 
+**First-party toolchain group (v1.1.2):** in a governed workspace the operator-signed
+``.agentteams/toolchain-group.json`` (:mod:`agentteams.cli.toolchain_group`) authorizes its repositories with no
+per-repository row, no sunset and no cap slot. The rendered set is that group joined with any repository a legacy
+per-repository row still covers (the migration window); once the group verifies, no NEW per-repository row is
+consumed. The brief list is then only a hint, with a notice when it names a repository the signed group lacks.
+Ungoverned workspaces keep the brief-alone path (operator ruling T3).
+
 Rule 12, named: the ungoverned case trusts the brief, as every ungoverned relaxation does; and a refusal drops the
 repository silently from the rule's text except for the notice, so the cooldown then applies to it (over-tightening).
 The canonical redirect is derived from the output path alone (never a brief field such as ``existing_project_path``),
@@ -41,7 +48,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from agentteams.cli import security_gate
+from agentteams.cli import security_gate, toolchain_group
 from agentteams.cli.decision_log import _enforce_decision_signing
 from agentteams.cli.effect_classifier import EffectClassifierError, requires_operator_signature
 from agentteams.cli.exception_registry import (
@@ -55,7 +62,7 @@ from agentteams.cli.exception_registry import (
 from agentteams.cli.sandbox_relaxation_gate import _decision_binding, _split, _unbound_reason
 from agentteams.frameworks._sandbox_emit import team_agents_dir
 from agentteams.manifest_format import _REPO_ID_RE
-from agentteams.prompt_roots import team_project_root
+from agentteams.prompt_roots import TEAM_AGENT_GLOBS, team_project_root
 
 #: The action family; an action id is ``s10-cooldown-exempt:<owner/name>`` (lowercased).
 S10_EXEMPT_KIND = "s10-cooldown-exempt"
@@ -144,11 +151,22 @@ def _check_new(team_dir: Path, action: str) -> dict[str, str]:
     return row
 
 
+class CarryOverError(RuntimeError):
+    """A registered exemption did not carry over; ``env`` is True when the cause is a missing Ed25519 backend."""
+
+    def __init__(self, message: str, *, env: bool = False) -> None:
+        super().__init__(message)
+        self.env = env
+
+
 def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime,
-                   halt_dirs: tuple[Path, ...] = ()) -> None:
+                   halt_dirs: tuple[Path, ...] = (), allow_new: bool = True) -> None:
     """Authorize *repo* or raise (RuntimeError, ExceptionRegistryError, OSError or ValueError).
 
     *halt_dirs* are further team dirs whose HALTs also bind (the surface's own dir when *team_dir* is canonical).
+    With *allow_new* False (the signed toolchain group verified) only a registered exemption carries over; no new
+    row is consumed. When a registered exemption fails to carry over, the refusal names why (agentteams#476), as a
+    :class:`CarryOverError` whose ``env`` flag marks a missing Ed25519 backend.
     """
     action = action_for(repo)
     exempt_action, exempt_family = action, S10_EXEMPT_KIND
@@ -158,10 +176,22 @@ def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime,
         security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
     entries = entries_for(team_dir, action)
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
-    if any(_unbound_reason(team_dir, e) is None for e in active):
-        return
+    reasons: list[str] = []
+    for entry in active:
+        reason = _unbound_reason(team_dir, entry)
+        if reason is None:
+            return
+        reasons.append(f"registered exemption {entry.get('id')} did not carry over: it {reason}")
     lapsed = [str(e.get("id")) for e in entries if (e.get("status") or "active").strip().lower() == "active"]
-    row = _check_new(team_dir, action)
+    try:
+        if not allow_new:
+            raise RuntimeError("the signed toolchain group replaces new per-repository rows")
+        row = _check_new(team_dir, action)
+    except RuntimeError as exc:
+        if not reasons:
+            raise
+        env = any("'signing' extra" in r for r in reasons)
+        raise CarryOverError("; ".join(reasons) + f" (and no new row: {exc})", env=env) from exc
     assert_within_aggregate_cap(team_dir, adding=1, now=now, retiring=lapsed)
     if not consume:
         return
@@ -181,7 +211,7 @@ def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime,
 
 
 def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
-                            now: datetime | None = None) -> list[str]:
+                            now: datetime | None = None, allow_new: bool = True) -> list[str]:
     """Return the listed repositories the carve-out may name, printing a notice for each one left out.
 
     Args:
@@ -191,6 +221,7 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
         consume: True to consume a new decision row and register its exception; False (dry run, ``--check``)
             checks only and writes nothing.
         now: Reference time (defaults to now, UTC).
+        allow_new: False once the signed toolchain group verified: only registered exemptions carry over.
 
     Returns:
         The authorized ``owner/name`` identifiers, in the brief's order, de-duplicated ignoring case. Invalid
@@ -223,11 +254,16 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
     kept: list[str] = []
     for repo in valid:
         try:
-            _authorize_one(team_dir, repo, consume=consume, now=when, halt_dirs=halt_dirs)
+            _authorize_one(team_dir, repo, consume=consume, now=when, halt_dirs=halt_dirs, allow_new=allow_new)
             kept.append(repo)
         except (RuntimeError, ExceptionRegistryError, OSError, ValueError) as exc:
+            if not allow_new and not isinstance(exc, CarryOverError):
+                continue  # covered (or not) by the signed group; nothing registered to report
             print(f"  ✗  S-10 carve-out: {repo} is NOT exempted from the cooldown ({exc}); {_shape(action_for(repo))}",
                   file=sys.stderr)
+            if isinstance(exc, CarryOverError):  # agentteams#476: a dropped registered relaxation is loud in CI
+                kind = "environment" if exc.env else "carry-over"
+                print(f"::error title=S-10 carve-out {kind}::{repo}: {exc}", file=sys.stderr)
     return kept
 
 
@@ -245,8 +281,81 @@ def authorize_into(manifest: dict, team_dir: Path, *, consume: bool) -> None:
     Raises:
         RuntimeError: As :func:`authorized_exempt_repos`.
     """
-    manifest["s10_cooldown_exempt_authorized"] = authorized_exempt_repos(
-        team_dir, manifest.get("s10_cooldown_exempt_repos"), consume=consume)
+    hint = manifest.get("s10_cooldown_exempt_repos")
+    group = _signed_group(manifest, team_dir, consume=consume)
+    legacy = authorized_exempt_repos(team_dir, hint, consume=consume, allow_new=group is None)
+    merged: dict[str, str] = {}
+    for repo in [*(group or []), *legacy]:
+        merged.setdefault(repo.lower(), repo)
+    if group is not None and isinstance(hint, list):
+        extra = [r for r in hint if isinstance(r, str) and r.lower() not in merged]
+        if extra:
+            print(f"  !  S-10 toolchain group: the brief also lists {', '.join(extra)}, which the signed "
+                  f"{toolchain_group.GROUP_FILE_REL} does not; the brief alone exempts nothing here.", file=sys.stderr)
+    manifest["s10_cooldown_exempt_authorized"] = list(merged.values())
+
+
+def _surface_dirs(root: Path) -> tuple[Path, ...]:
+    """Every team dir of the project at *root* that exists, symlinked ones included (each one's HALTs bind the
+    group, C-2: following a symlink can only add HALTs, never remove one)."""
+    rels = (*TEAM_AGENT_GLOBS, *_OTHER_TEAM_DIRS)
+    return tuple(root / rel for rel in rels if (root / rel).is_dir())
+
+
+def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str] | None:
+    """The verified toolchain group for this workspace, or None (no file, ungoverned, or refused with a report).
+
+    Governed workspaces only (ungoverned ones keep the brief-alone path, operator ruling T3). A refusal prints a
+    notice and an ``::error::`` line and returns None, so the render goes on with no group.
+    """
+    root = _project_root_of(team_dir)
+    if root is None:
+        return None
+    try:
+        governance = governance_team_dir(team_dir)
+        if not _enforce_decision_signing(governance):
+            return None
+    except RuntimeError:
+        return None  # authorized_exempt_repos reports an unreadable switch
+    try:
+        result = toolchain_group.load_group(root, governance, team_id=str(manifest.get("team_id") or ""),
+                                            halt_dirs=(team_dir, *_surface_dirs(root)), consume=consume)
+    except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:   # never fatal for the render
+        result = toolchain_group.GroupResult(present=True, problem=f"it could not be checked ({exc})")
+    if result.problem is not None:
+        toolchain_group.report(result)
+        return None
+    if not result.present:
+        return None
+    return drop_halted_members(result.repos, (governance, team_dir, *_surface_dirs(root)))
+
+
+def drop_halted_members(repos: list[str], halt_dirs: tuple[Path, ...]) -> list[str]:
+    """Return the group members no unretracted ``s10-cooldown-exempt`` HALT covers, reporting each one dropped.
+
+    C-2: a HALT on a member's per-repository exemption, or on its family, binds the group too. The HALT matcher
+    over-matches on purpose (``action_ids``), so in practice either HALT drops every member, not only the one named. The render gate and the
+    ``--verify-toolchain-group``/``--verify-toolchain-pin`` verbs share this filter.
+
+    Args:
+        repos: The verified group.
+        halt_dirs: Every team dir whose HALTs bind.
+
+    Returns:
+        The members kept, in order.
+    """
+    kept: list[str] = []
+    for repo in repos:
+        exempt_action, exempt_family = action_for(repo), S10_EXEMPT_KIND
+        try:
+            for halt_dir in dict.fromkeys(halt_dirs):
+                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
+                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
+            kept.append(repo)
+        except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
+            print(f"  ✗  S-10 toolchain group: {repo} is NOT exempted from the cooldown ({exc}).", file=sys.stderr)
+            print(f"::error title=S-10 toolchain group HALT::{repo}: {exc}", file=sys.stderr)
+    return kept
 
 
 __all__ = ["CANONICAL_TEAM_DIR", "S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorize_into",

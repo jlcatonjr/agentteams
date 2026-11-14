@@ -1,0 +1,8 @@
+{
+  "patch_id": "01f23a52f862d1dfb3a0130fa555e419d6be794a",
+  "commit": "cd9926521406440d6a7c42c6cffb8bece8412c07",
+  "subject": "fix(sandbox): protect the exception registry and the carve-out high-water mark; count carve-outs in the exception cap",
+  "impact": "1 symbols added",
+  "note": "#456 project gate verdict policy: new pinned module gate_policy; gate template class ids/policy loader; seventh relaxation kind gate-policy-weaken; claude.render_gate; _control_plane_protect.gate_policy_protect_paths; SandboxExceptions.gate_policy. Additive; no public signature removed. @security PASS (design + pinned diff + F1-F7 re-review).",
+  "recorded_at": "2026-11-13T01:44:47Z"
+}

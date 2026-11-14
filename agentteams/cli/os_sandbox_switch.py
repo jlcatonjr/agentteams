@@ -23,7 +23,9 @@ engaged and keeps a byte-identical build-log (the P00 carve-out now covers only 
 ``orchestrator-only`` after runner programs were recorded counts every recorded ``sandbox: wasm`` agent as switched
 (the runner no longer serves it), so ``wasm-to-os-switch`` is still gated. WP-C2: whether the shared
 ``agentteams_wasm`` table is emitted with ``auto`` approval (``codex:wasm-auto-approve``) is a gate input too, so
-turning it on is the gated ``mcp-approval-auto:codex``.
+turning it on is the gated ``mcp-approval-auto:codex``. #456: the project gate verdict policy the render pins
+(``.agentteams/gate-policy.json``) is a gate input as well, so re-pinning a weaker one is the gated
+``gate-policy-weaken:<framework_id>``.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from agentteams.gate_policy import RecordedPolicy
     from agentteams.sandbox_state import SandboxExceptions, SandboxState
 
 _CONFINING = frozenset({"confined", "exclusive"})
@@ -214,6 +217,14 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
     * ``mcp_approval_auto`` (WP-C2): whether the shared ``agentteams_wasm`` table is emitted with ``auto`` approval
       (:func:`~agentteams.sandbox_state.mcp_approval_auto`: Codex, WASM on, ``codex:wasm-auto-approve``), so turning
       it on is a gated ``mcp-approval-auto:codex`` and dropping the token retires its standing exception.
+    * ``gate_policy`` (#456): the project gate verdict policy this render pins
+      (:func:`~agentteams.gate_policy.manifest_policy`, recorded without its ``preset`` name), so re-pinning a weaker
+      one than the previous record is a gated ``gate-policy-weaken:<framework_id>``. A policy in either the previous
+      or the new record engages the gate, so removing a recorded policy is seen too. Fail closed across frameworks
+      (@security F2): the digests every installed gate under the project root pins (:func:`installed_gate_digests`,
+      every ``GATE_HOOKS_DIR_BY_FRAMEWORK`` dir) and the ``gate_policy`` records of the project's other team dirs
+      are carried on the previous record (transient ``pinned_digests`` / ``other_policies``), so neither deleting
+      the record nor re-rendering under another framework hides a weakening.
 
     Args:
         manifest: The team manifest (``write_policy``, ``wasm_sandbox``, ``agent_slug_list``).
@@ -223,13 +234,16 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
         brief_confined_programs: The brief's ``confined_programs``.
 
     Returns:
-        None when nothing is or was recorded (a team that never kept native exec, used the runner's WASM or turned
-        on ``mcp_approval_auto`` keeps a byte-identical build-log), else ``(previous_exc, new)``.
+        None when nothing is or was recorded (a team that never kept native exec, used the runner's WASM, turned
+        on ``mcp_approval_auto`` or had a gate policy keeps a byte-identical build-log), else ``(previous_exc, new)``.
 
     Raises:
         WriteRootPolicyError: The operator ``confined_programs`` file fails its custody checks.
         ValueError: A malformed ``wasm_sandbox`` block.
+        GatePolicyRenderError: The project's gate policy file exists but is invalid or not a regular file (fail
+            closed; a ``ValueError``).
     """
+    from agentteams.gate_policy import manifest_policy
     from agentteams.sandbox_state import SandboxExceptions, mcp_approval_auto
     from agentteams.wasm_enforcement import gate_keep_set
 
@@ -252,11 +266,100 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
         new_exc = SandboxExceptions(native_exec_keep=keep, os_programs=carried)
     if mcp_approval_auto(manifest):   # WP-C2: the agentteams_wasm table runs without a per-call prompt
         new_exc = dataclasses.replace(new_exc, mcp_approval_auto=True)
-    # Engaged once a keep, a runner wasm program or auto-approval is (or was recorded); once recorded, every later
-    # render re-checks the standing exceptions.
-    if new_exc.wasm_programs or new_exc.native_exec_keep or new_exc.mcp_approval_auto or previous_exc is not None:
+    policy = manifest_policy(manifest)   # #456: the gate verdict policy this render pins
+    if policy is not None:
+        new_exc = dataclasses.replace(new_exc, gate_policy=dataclasses.replace(policy, preset=None))
+    # Every policy any installed gate pins, and every other team dir's record, so a framework switch cannot hide one.
+    pinned = installed_gate_digests(Path(project_root))
+    others = other_recorded_policies(Path(project_root))
+    if pinned or others:
+        previous_exc = dataclasses.replace(previous_exc or SandboxExceptions(), pinned_digests=pinned,
+                                           other_policies=others)
+    # Engaged once a keep, a runner wasm program, auto-approval or a gate policy is (or was recorded); once recorded,
+    # every later render re-checks the standing exceptions (and sees a recorded gate policy removed).
+    if (new_exc.wasm_programs or new_exc.native_exec_keep or new_exc.mcp_approval_auto
+            or new_exc.gate_policy is not None or previous_exc is not None):
         return previous_exc, new_exc
     return None
+
+
+def installed_gate_digests(project_root: Path) -> frozenset[str]:
+    """Return the gate-policy digests every installed constitutional gate under the project root pins (#456).
+
+    Every ``GATE_HOOKS_DIR_BY_FRAMEWORK`` hooks dir is read, whatever framework this render targets (@security F2).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        The non-empty digests: 64-hex, or :data:`~agentteams.sandbox_state.MALFORMED_GATE_DIGEST` for a
+        ``_GATE_POLICY_SHA256`` line that is present but malformed or repeated. A gate that is missing, a symlink,
+        not a regular file, unreadable, from before #456 (no sentinel at all) or that pins no policy adds nothing.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.frameworks.claude import GATE_HOOKS_DIR_BY_FRAMEWORK
+
+    found = (_gate_digest(Path(project_root) / hooks / "constitutional-gate.py")
+             for hooks in sorted(set(GATE_HOOKS_DIR_BY_FRAMEWORK.values())))
+    return frozenset(d for d in found if d)
+
+
+def _gate_digest(path: Path) -> str | None:
+    """The digest one installed gate pins, the malformed marker, or None (see :func:`installed_gate_digests`)."""
+    import os
+    import stat
+
+    from agentteams.gate_policy import recorded_digest
+    from agentteams.sandbox_state import MALFORMED_GATE_DIGEST
+
+    try:
+        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(os.dup(fd), "rb") as handle:
+            text = handle.read().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    finally:
+        os.close(fd)
+    if "_GATE_POLICY_SHA256" not in text:
+        return None   # a gate that predates #456 has no sentinel and so cannot pin a policy (an upgrade, not damage)
+    digest = recorded_digest(text)
+    if digest is None:
+        return MALFORMED_GATE_DIGEST
+    return digest or None
+
+
+def other_recorded_policies(project_root: Path) -> frozenset[RecordedPolicy]:
+    """Return the ``gate_policy`` records in the build-logs of the project's team dirs (@security F2).
+
+    Every ``signing_switch.TEAM_DIRS`` entry under the project root is read (the render's own team dir included;
+    its policy is judged the same way, so a duplicate is harmless). An unusable build-log adds nothing.
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        The recorded policies.
+
+    Raises:
+        OSError: A team's build log exists but cannot be read.
+    """
+    from agentteams.sandbox_state import previous_sandbox_exceptions
+    from agentteams.signing_switch import TEAM_DIRS
+
+    out: set[RecordedPolicy] = set()
+    for rel in TEAM_DIRS:
+        # No try: a malformed log already reads as no record; an unreadable one (OSError) stops the render (fail closed).
+        exc = previous_sandbox_exceptions(Path(project_root) / rel)
+        if exc is not None and exc.gate_policy is not None:
+            out.add(exc.gate_policy)
+    return frozenset(out)
 
 
 def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, manifest: dict | None,
@@ -304,4 +407,4 @@ def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, 
 
 
 __all__ = ["OsSwitchError", "check_projected_relaxation", "engage_relaxation_gate", "gate_engaged", "gate_exceptions",
-           "resolve_os_switch"]
+           "installed_gate_digests", "other_recorded_policies", "resolve_os_switch"]
