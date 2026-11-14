@@ -115,6 +115,8 @@ def test_an_authority_heading_without_a_list_does_not_block_a_sources_table(
     ("| # | Item | Where |\n|---|---|---|\n| 1 | A | a/ |", [{"name": "A", "path": "a/", "rank": 1}]),
     ("| Doc | Link |\n|---|---|\n| A | a.md |", [{"name": "A", "path": "a.md", "rank": 1}]),
     ("| Python source | src/ |", [{"name": "Python source", "path": "src/", "rank": 1}]),
+    ("| Name | Path |\n|---|---|\n| A | a/ |\n|---|---|\n| B | b/ |",
+     [{"name": "A", "path": "a/", "rank": 1}, {"name": "B", "path": "b/", "rank": 2}]),
     ("1. **Template library:** agentteams/templates/",
      [{"name": "Template library", "path": "agentteams/templates/", "rank": 1}]),
 ])

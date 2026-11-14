@@ -85,7 +85,7 @@ def _header_columns(header: list[str], *, all_named: bool = False) -> dict[str, 
 def _authority_table(table: list[str]) -> list[dict[str, Any]]:
     """Rows of one Markdown table as sources, by column; header and separator rows are skipped."""
     sep = next((i for i, ln in enumerate(table) if _TABLE_SEPARATOR.match(ln)), None)
-    rows = [_table_cells(ln) for i, ln in enumerate(table) if i != sep]
+    rows = [_table_cells(ln) for ln in table if not _TABLE_SEPARATOR.match(ln)]  # every separator row
     if sep:  # the row above a separator is the header, whatever it says
         columns = _header_columns(rows.pop(sep - 1))
     else:  # no separator: a first row that only names columns is still a header
