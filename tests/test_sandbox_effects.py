@@ -1,4 +1,4 @@
-"""The sandbox-relaxation vocabulary (P15 D1; WP-C2 adds the sixth): six kinds, word-start matching, action ids and grant tokens."""
+"""The sandbox-relaxation vocabulary (P15 D1; WP-C2 adds the sixth, #456 the seventh): seven kinds, word-start matching, action ids and grant tokens."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import pytest
 from agentteams.cli import sandbox_effects as se
 
 
-def test_six_kinds_in_order():
+def test_seven_kinds_in_order():
     assert se.SANDBOX_RELAXATION_KINDS == (
         "sandbox-os-off", "sandbox-wasm-off", "wasm-grant-widen", "native-exec-keep", "wasm-to-os-switch",
-        "mcp-approval-auto")
+        "mcp-approval-auto", "gate-policy-weaken")
 
 
 @pytest.mark.parametrize("kind", se.SANDBOX_RELAXATION_KINDS)

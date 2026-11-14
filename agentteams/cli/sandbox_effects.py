@@ -1,7 +1,7 @@
-"""sandbox_effects.py — the six sandbox-relaxation effect kinds and their token spelling (Rule 15, D7).
+"""sandbox_effects.py — the seven sandbox-relaxation effect kinds and their token spelling (Rule 15, D7).
 
-Turning a sandbox off, widening what a WASM guest may reach, or turning off the per-call MCP approval prompt is a
-constraint-relaxing effect: in a governed
+Turning a sandbox off, widening what a WASM guest may reach, turning off the per-call MCP approval prompt, or
+re-pinning a weaker gate verdict policy is a constraint-relaxing effect: in a governed
 workspace it needs the operator's Ed25519-signed decision row, never a self-declared flag. This small module is the
 one vocabulary the effect classifier, the management-directive denylist and the render-time gate
 (:mod:`agentteams.cli.sandbox_relaxation_gate`) share, so they cannot drift (modelled on
@@ -15,10 +15,14 @@ The kinds:
 * ``native-exec-keep`` — a WASM-eligible agent keeps native execution while WASM is on;
 * ``wasm-to-os-switch`` — a runner ``confined_programs`` entry moves from ``sandbox: wasm`` back to ``os``;
 * ``mcp-approval-auto`` — the shared ``agentteams_wasm`` MCP table stops prompting per tool call (the opt-in
-  ``codex:wasm-auto-approve`` host feature sets its ``default_tools_approval_mode`` to ``auto``; WP-C2).
+  ``codex:wasm-auto-approve`` host feature sets its ``default_tools_approval_mode`` to ``auto``; WP-C2);
+* ``gate-policy-weaken`` — the render re-pins a weaker project gate verdict policy (``.agentteams/gate-policy.json``,
+  #456) than the one recorded: a class no longer denied, ``fail_closed_tools`` turned off, or the policy removed.
+  One-shot: the next render records the new policy, so nothing stands and nothing sunsets.
 
 Gate action ids are ``<kind>:<qualifier>`` (a framework id, ``model-substrate``, or an agent slug); the
-``mcp-approval-auto`` id is ``mcp-approval-auto:codex``. Grant tokens are
+``mcp-approval-auto`` id is ``mcp-approval-auto:codex`` and the ``gate-policy-weaken`` id is
+``gate-policy-weaken:<framework_id>``. Grant tokens are
 ``wasm:<agent>:read:<rel>``, ``wasm:<agent>:scratch`` and ``native-exec:<agent>``.
 
 Stdlib-only; imports only the leaf :mod:`agentteams.sandbox_tokens` (the token spelling, re-exported here), so
@@ -38,10 +42,12 @@ WASM_GRANT_WIDEN = "wasm-grant-widen"
 NATIVE_EXEC_KEEP = "native-exec-keep"
 WASM_TO_OS_SWITCH = "wasm-to-os-switch"
 MCP_APPROVAL_AUTO = "mcp-approval-auto"
+GATE_POLICY_WEAKEN = "gate-policy-weaken"
 
-#: The six relaxation kinds, in a fixed order (schema enum, gate action families).
+#: The seven relaxation kinds, in a fixed order (schema enum, gate action families).
 SANDBOX_RELAXATION_KINDS: tuple[str, ...] = (
-    SANDBOX_OS_OFF, SANDBOX_WASM_OFF, WASM_GRANT_WIDEN, NATIVE_EXEC_KEEP, WASM_TO_OS_SWITCH, MCP_APPROVAL_AUTO)
+    SANDBOX_OS_OFF, SANDBOX_WASM_OFF, WASM_GRANT_WIDEN, NATIVE_EXEC_KEEP, WASM_TO_OS_SWITCH, MCP_APPROVAL_AUTO,
+    GATE_POLICY_WEAKEN)
 
 #: The qualifier of the projected model-substrate switch (P20): ``sandbox-wasm-off:model-substrate``.
 MODEL_SUBSTRATE_QUALIFIER = "model-substrate"
@@ -54,6 +60,12 @@ _STEMS: tuple[str, ...] = (
     # inflection (auto-approve/-approval/-approving, autoapprove) matches. Not "tools-approval-mode": the
     # setting's name alone also appears in text about the "prompt" default.
     "auto-approv", "autoapprov",
+    # gate-policy-weaken synonyms (#456): word-start prefixes after "gate-policy", so weaken/weaker/weakening,
+    # loosen/looser and relax/relaxation all match, plus the verb-first order. Never "gate-policy" alone: text about
+    # tightening or reading the policy must not read as a relaxation.
+    "gate-policy-weak", "gate-policy-loos", "gate-policy-relax",
+    "weaken-gate-policy", "loosen-gate-policy", "relax-gate-policy",
+    "weaken-the-gate-policy", "loosen-the-gate-policy", "relax-the-gate-policy",
 )
 
 #: Word-start stems that name a sandbox relaxation in free text (scope, action, decision, task_scope), in the hyphen,
@@ -128,6 +140,7 @@ def is_relaxation_token(token: str) -> bool:
 
 
 __all__ = [
+    "GATE_POLICY_WEAKEN",
     "MCP_APPROVAL_AUTO",
     "MODEL_SUBSTRATE_QUALIFIER",
     "NATIVE_EXEC_KEEP",
