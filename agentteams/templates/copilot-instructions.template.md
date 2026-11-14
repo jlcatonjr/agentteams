@@ -184,7 +184,7 @@ ordering, including where operator instructions and read content sit:
 {AUTHORITY_SOURCES_LIST}
 <!-- AGENTTEAMS:END source_repositories -->
 
-<!-- AGENTTEAMS:BEGIN toolchain_group_rule v=1 -->
+<!-- AGENTTEAMS:BEGIN toolchain_group_rule v=2 -->
 ## First-party toolchain group (a bounded constraint-relaxing authorization)
 
 In a governed workspace, the repositories listed in the toolchain-group file
@@ -195,6 +195,9 @@ rule stands on its own, whatever number the project's constraint-relaxing rule c
 - **Operator-signed.** It verifies only with the operator's Ed25519 decision key (a key in this team's
   verify-key store) and only for the workspaces it lists, by repository and team id. No agent and no
   brief edit can widen it; changing the group or its workspaces needs a new operator signature.
+- **Traceable.** Its signed `derives_from` names the recorded decision(s) it derives from. Each must be an
+  authentic authorizing decision in this team's log, with a recorded, acyclic lineage; an unretracted HALT on
+  it or on any ancestor ends the group (C-2).
 - **A trust root.** No decision row may target the file, and editing it by hand only stops it verifying.
 - **HALT ends it.** An unretracted HALT on the `s10-toolchain-group` family in any surface's decisions
   log ends it at once (C-2), as does removing its key from the verify-key store. A HALT on any

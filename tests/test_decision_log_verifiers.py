@@ -332,6 +332,8 @@ def test_every_gate_call_site_is_listed():
                 dynamic.append(path.name)
             elif arg in {"exempt_action", "exempt_family"} and path.name == "s10_exempt_gate.py":
                 s10_sites.append(arg)  # s10-cooldown-exempt:<owner/name> and the bare family, checked below
+            elif arg == "lineage_action" and path.name == "toolchain_group.py":
+                pass  # a signed group file's derives_from parents: recorded decision ids, HALT-checked (v1.1.3)
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
     assert "branch-cleanup" in GATE_ACTIONS and dynamic

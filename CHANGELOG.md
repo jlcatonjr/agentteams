@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-14
+
+### release notes
+
+agentteams 1.1.3 adds lineage to the first-party toolchain group file (operator rulings, 2026-11-13: "add lineage",
+shipped as a 1.1 patch before the file is signed). No group file was signed under 1.1.2.
+
+### changed (toolchain group file format 2)
+
+- **Signed `derives_from`.** `.agentteams/toolchain-group.json` is now `version` 2 and must carry `derives_from`: one
+  or more recorded decision action ids (`;`-separated), inside the signature. Each must be an authentic authorizing
+  decision (`PASS`, or `CONDITIONAL PASS` with verified conditions) in the governance team's decisions log, with a
+  recorded, acyclic lineage. An unretracted HALT on a parent or on any ancestor, in any surface's log, renders an
+  empty group with an `::error::` line (C-2). A version-1 file is refused. The parent's action id must not contain
+  `toolchain-group`: a relaxing decision naming the trust root is categorically non-eligible.
+- **`--verify-toolchain-pin` is stricter** (IM @security, SEC-IM-PR481): the tag must be `v`-prefixed and ASCII
+  (`vX.Y.Z`), and the tag object must end in exactly one SSH signature block; a PGP-signed tag is refused.
+
 ## [1.1.2] - 2026-11-13
 
 ### release notes

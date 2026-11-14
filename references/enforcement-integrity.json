@@ -28,7 +28,7 @@
     "agentteams/cli/security_gate.py": "105e2b678d8d58343ae63b9fe73c4e128cd994868c9baca57f5cd8e9b4088fe6",
     "agentteams/cli/signed_ledger.py": "62ad100c98683313794d2d9a3daf7af4ceb864c813ed5c956f25b1277416a537",
     "agentteams/cli/signer_location.py": "a1ef5ce01bf104fe0926f1ec47dfa3e9e73b23eb934e258ac283d1fab74a6a9b",
-    "agentteams/cli/toolchain_group.py": "d743e6e5079a16a529b00238966366dc83af10f3af2974f1b9c55bfa4860edda",
+    "agentteams/cli/toolchain_group.py": "55921f75ff87884695aa79bd539f9fde20420c01e8a7945895ecb446dd14f8a8",
     "agentteams/cli/write_root_policy.py": "2cb952f2ba69e73a2fa6e9e215c55abfd5f1b5f1d4496f8cc9987f1ffe70bafe",
     "agentteams/confinement.py": "f6e47b171a916599a1ca26b5a44209fb376b0030b29144dd7c8768f4cf50093c",
     "agentteams/data/agentteams-runner-mcp.py": "4620bcf383dd819e030be287b19fd95b0d57b881301b1aaeb8f663b672c28db9",
