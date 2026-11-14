@@ -36,6 +36,13 @@ Quick reference for the Claude Code CLI and VS Code extension.
 
 Use full model IDs for exact pinning: `--model claude-sonnet-4-6`, `--model claude-opus-4-8`.
 
+**Per project.** `"model"` in `.claude/settings.json` sets a project's session model; `.claude/settings.local.json`,
+`ANTHROPIC_MODEL`, `--model` and `/model` override it. A subagent uses its file's `model:`, else
+`CLAUDE_CODE_SUBAGENT_MODEL` (set under `"env"`), else the session model. A generated team's
+`.claude/settings.hooks.example.json` carries `"model": "claude-fable-5-2"` and
+`"env": {"CLAUDE_CODE_SUBAGENT_MODEL": "opus"}` to merge: Fable 5.2 orchestrates, Opus subagents do the work.
+Check the result with `/status`.
+
 ---
 
 ## Referencing Files in a Prompt
