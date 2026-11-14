@@ -42,6 +42,7 @@ GOVERNANCE_TARGET_STEMS: tuple[str, ...] = (
     "instruction-authority",       # the authority-ordering reference
     "signing-key",                 # any signing-key material path
     "waiver",                      # a security waiver
+    "toolchain-group",             # Rule 11(f): the operator-signed first-party toolchain group file
 )
 
 

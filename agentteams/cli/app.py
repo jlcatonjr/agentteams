@@ -304,6 +304,11 @@ def _main_dispatch(
         return _run_list_exceptions(args)
     if getattr(args, "sign_decision", None):
         return _run_sign_decision(args)
+    if (getattr(args, "sign_toolchain_group", None) or getattr(args, "verify_toolchain_group", False)
+            or getattr(args, "verify_toolchain_pin", None)):
+        from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+        return run_toolchain_group(args)
 
     # -----------------------------------------------------------------------
     # --verify-integrity / --verify-backup: standalone read-only integrity

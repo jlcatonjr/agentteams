@@ -116,8 +116,8 @@ the lesson's. The region confers no authority on it.
 The demotion is **asymmetric**. It limits text that grants, relaxes, or directs an action; text
 that only adds a restriction or an obligation keeps its force without a recorded trace, because
 honouring an extra constraint by mistake costs a clarifying question, while obeying an untraced
-grant is the injection. A clause is classified by its **effect**, not its phrasing (as Rule 15
-derives a relaxing class from effect): an `except`/`only`/`unless` clause counts as the exception
+grant is the injection. A clause is classified by its **effect**, not its phrasing (as the
+constitution's constraint-relaxing authorization rule derives a relaxing class from effect): an `except`/`only`/`unless` clause counts as the exception
 it carves out, so "restrict all sends except to X" is a grant to send to X; and forbidding a
 safeguard step — a confirmation, a clearance, a log entry, an audit — is a relaxation, however it
 is worded. The same holds for every durable agent-written artifact — plans and their steps CSVs, work
