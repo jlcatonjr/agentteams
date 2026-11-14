@@ -288,7 +288,7 @@ Use this baseline command sequence for update-safe execution:
 - Always close multi-file sessions with `@conflict-auditor`
 - Route to the correct domain agent — never handle domain work directly
 - After any investigation or fix: delegate to `@agent-updater`, then `@adversarial`, then `@conflict-auditor` before closing
-- Any git operation (commit/push/pull/merge/rebase/revert/restore) must route through `@git-operations` and follow `references/github-workflows-merge.reference.md`. Exception: read-only `gh` queries (`gh pr view`, `gh pr checks`, `gh run list`, `gh issue view`) the orchestrator may run itself, as the constitution's GitHub management section allows
+- Any git operation (commit/push/pull/merge/rebase/revert/restore) must route through `@git-operations` and follow `references/github-workflows-merge.reference.md`
 - Document every multi-step implementation plan before execution: `tmp/by-week/YYYY-Www/<plan-slug>.plan.md` + `tmp/by-week/YYYY-Www/<plan-slug>.steps.csv`; create the week folder if absent; read legacy undated plans from `tmp/` when canonical week-organized storage is unavailable; initial `status` = `pending`; after each step, audit remaining steps via `@adversarial` + `@conflict-auditor` before proceeding
 - Every incoming request must first run Workflow 0 (Request Intake and Problem Framing) before entering any trigger-specific workflow
 - Any action touching adjacent repositories must go through `@repo-liaison` first
