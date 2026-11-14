@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fix (Markdown ingest reads the authority hierarchy, #392 item 11)
 
-- An `Authority` heading now sets `authority_sources` wherever it sits. Before, any heading containing "source"
-  overwrote it, so a `Source Repositories` table after an `Authority Hierarchy` list replaced the hierarchy.
-- A Markdown table in an authority or sources section is parsed by column (header words pick the name, path and
-  scope columns), and its header and separator rows are no longer read as tiers.
+- An `Authority` heading with a list or table now sets `authority_sources` wherever it sits. Before, any heading
+  containing "source" overwrote it, so a `Source Repositories` table after an `Authority Hierarchy` list replaced
+  the hierarchy. An `Authority` heading with no list (prose only, or its list under a sub-heading) no longer
+  blocks a sources list.
+- A Markdown table in an authority or sources section is parsed by column: whole header words pick the name, path
+  and scope columns, and a `Tier` or `#` column is ignored. Its header and separator rows are no longer read as
+  tiers. A section holding both a list and a table keeps both, in document order, and drops other prose lines.
 - List markers are stripped without eating a bold name's `**` or a leading digit, and `**Name** (`path`) — scope`
   items (the form agentteams itself renders) give the name, path and scope.
 - Reading a sources table as source repositories, separate from the hierarchy, needs a schema key and moves to 1.3.

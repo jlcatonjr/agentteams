@@ -151,9 +151,14 @@ def _load_markdown(path: Path) -> dict[str, Any]:
         elif "existing project" in heading_l or heading_l in {"project path", "project location"}:
             desc["existing_project_path"] = _first_line(body)
         elif "authority" in heading_l:
-            # An Authority heading wins over any "source" heading, wherever each sits (#392 item 11).
-            desc["authority_sources"] = _parse_authority_sources(body)
-            authority_from_heading = True
+            # An Authority heading that yields sources wins over any "source" heading, wherever each sits
+            # (#392 item 11). An empty one (its list under a sub-heading, say) claims nothing.
+            parsed = _parse_authority_sources(body)
+            if parsed and _has_list_or_table(body):
+                desc["authority_sources"] = parsed
+                authority_from_heading = True
+            elif parsed and "authority_sources" not in desc:  # prose only: a later sources list may replace it
+                desc["authority_sources"] = parsed
         elif "source" in heading_l and "reference" not in heading_l:
             if not authority_from_heading:
                 desc["authority_sources"] = _parse_authority_sources(body)
@@ -271,15 +276,18 @@ def _parse_list(text: str) -> list[str]:
     return items
 
 
-_LIST_MARKER = re.compile(r"^(?:(?:[-*•+]|\d+[.)])\s+)+")
+# Unlike _LIST_MARKER_RE (one marker, for the goal fallback), this strips stacked markers ("- 1. ") and "•".
+_AUTHORITY_ITEM_MARKER = re.compile(r"^(?:(?:[-*•+]|\d+[.)])\s+)+")
 _TABLE_SEPARATOR = re.compile(r"^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$")
-_BOLD_ENTRY = re.compile(r"^\*\*(?P<name>.+?)\*\*\s*(?:\(`(?P<path>[^`]*)`\))?\s*(?:(?:—|–|--?|:)\s*(?P<scope>.*))?$")
-# Header words that name a table column; anything else falls back to name, path, scope by position.
-_COLUMN_WORDS = {
-    "name": ("name", "source", "authority", "tier", "repository"),
-    "path": ("path", "location", "file", "url", "where"),
-    "scope": ("scope", "purpose", "covers", "governs", "description", "notes"),
-}
+_BOLD_ENTRY = re.compile(r"^\*\*(?P<name>.+?)\*\*\s*(?:\(`(?P<path>[^`]*)`\))?\s*(?:(?:—|–|--?)\s*(?P<scope>.*))?$")
+# Whole header words that name a column, checked path, then scope, then name, so "Source Path" is a path.
+_COLUMN_WORDS = (
+    ("path", frozenset({"path", "location", "file", "filename", "url", "directory", "dir"})),
+    ("scope", frozenset({"scope", "purpose", "covers", "governs", "description", "notes", "role"})),
+    ("name", frozenset({"name", "source", "authority", "repository", "repo", "document", "title"})),
+)
+# Columns that only number the rows; never used as a name, path or scope.
+_ORDINAL_WORDS = frozenset({"tier", "rank", "order", "no", "number", "priority"})
 
 
 def _table_cells(line: str) -> list[str]:
@@ -294,6 +302,8 @@ def _authority_entry(item: str, rank: int) -> dict[str, Any]:
         if bold["scope"]:
             entry["scope"] = bold["scope"].strip()
         return entry
+    if item.startswith("**") and "**:" in item:  # **Name**: path — scope
+        item = item[2:].replace("**:", ":", 1)
     if ":" in item:
         name, rest = item.split(":", 1)
         path_scope = rest.strip().split(" — ", 1)
@@ -307,36 +317,58 @@ def _authority_entry(item: str, rank: int) -> dict[str, Any]:
     return {"name": item, "path": item, "rank": rank}
 
 
-def _authority_table(rows: list[list[str]], header: list[str] | None) -> list[dict[str, Any]]:
-    """Map table rows to sources by column: header words pick the columns, else name, path, scope in order."""
-    columns = {"name": 0, "path": 1, "scope": 2}
-    if header:
-        found: dict[str, int] = {}
-        for i, cell in enumerate(c.lower().strip("*` ") for c in header):
-            for key, words in _COLUMN_WORDS.items():
-                if key not in found and any(w in cell for w in words):
-                    found[key] = i
-                    break
-        if "name" in found:
-            columns = {**columns, **found}
+def _header_columns(header: list[str]) -> dict[str, int] | None:
+    """Map name/path/scope to header cells by whole words; ``None`` if no cell names a column."""
+    found: dict[str, int] = {}
+    ordinal: set[int] = set()
+    for i, cell in enumerate(header):
+        words = set(re.findall(r"[a-z]+", cell.lower()))
+        if not words or words <= _ORDINAL_WORDS:
+            ordinal.add(i)
+            continue
+        for key, names in _COLUMN_WORDS:
+            if key not in found and words & names:
+                found[key] = i
+                break
+    if not found:
+        return None
+    free = [i for i in range(len(header)) if i not in ordinal and i not in found.values()]
+    for key in ("name", "path", "scope"):
+        if key not in found and free:
+            found[key] = free.pop(0)
+    return found
+
+
+def _authority_table(table: list[str]) -> list[dict[str, Any]]:
+    """Rows of one Markdown table as sources, by column; header and separator rows are skipped."""
+    rows = [_table_cells(ln) for ln in table if not _TABLE_SEPARATOR.match(ln)]
+    columns = _header_columns(rows[0]) if rows else None
+    if columns is not None:
+        rows = rows[1:]
+    else:
+        columns = {"name": 0, "path": 1, "scope": 2}
     sources = []
     for row in rows:
-        name, path, scope = (row[columns[k]].strip("*` ").strip() if columns[k] < len(row) else ""
+        name, path, scope = (row[columns[k]].strip("*` ") if k in columns and columns[k] < len(row) else ""
                              for k in ("name", "path", "scope"))
-        if not name and not path:
-            continue
-        entry: dict[str, Any] = {"name": name or path, "path": path, "rank": len(sources) + 1}
-        if scope:
-            entry["scope"] = scope
-        sources.append(entry)
+        if name or path:
+            entry: dict[str, Any] = {"name": name or path, "path": path}
+            if scope:
+                entry["scope"] = scope
+            sources.append(entry)
     return sources
 
 
-def _parse_authority_sources(text: str) -> list[dict[str, Any]]:
-    """Parse an authority section's list items or Markdown table into ranked sources.
+def _has_list_or_table(text: str) -> bool:
+    return any(ln.strip().startswith("|") or _AUTHORITY_ITEM_MARKER.match(ln.strip()) for ln in text.splitlines())
 
-    A Markdown table is parsed by column and its header and separator rows are skipped; list markers are
-    stripped without eating a bold name's ``**`` (#392 item 11).
+
+def _parse_authority_sources(text: str) -> list[dict[str, Any]]:
+    """Parse an authority section's list items and Markdown tables into ranked sources.
+
+    Tables are parsed by column, skipping header and separator rows; list markers are stripped without eating a
+    bold name's ``**``. When the section has any list item or table, other prose lines are ignored; otherwise
+    each line is an entry, as before (#392 item 11).
 
     Args:
         text: The section body.
@@ -345,17 +377,24 @@ def _parse_authority_sources(text: str) -> list[dict[str, Any]]:
         Sources in document order, each with ``name``, ``path``, ``rank`` and, when given, ``scope``.
     """
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    table = [ln for ln in lines if ln.startswith("|")]
-    if table:
-        sep = next((i for i, ln in enumerate(table) if _TABLE_SEPARATOR.match(ln)), None)
-        header = _table_cells(table[sep - 1]) if sep else None
-        body = table[sep + 1:] if sep is not None else table
-        return _authority_table([_table_cells(ln) for ln in body], header)
-    sources = []
-    for line in lines:
-        item = _LIST_MARKER.sub("", line).strip()
-        if item:
-            sources.append(_authority_entry(item, len(sources) + 1))
+    structured = _has_list_or_table(text)
+    sources: list[dict[str, Any]] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].startswith("|"):
+            j = i
+            while j < len(lines) and lines[j].startswith("|"):
+                j += 1
+            sources += _authority_table(lines[i:j])
+            i = j
+            continue
+        marked = _AUTHORITY_ITEM_MARKER.match(lines[i])
+        item = _AUTHORITY_ITEM_MARKER.sub("", lines[i]).strip()
+        if item and (marked or not structured):
+            sources.append(_authority_entry(item, 0))
+        i += 1
+    for rank, entry in enumerate(sources, start=1):
+        entry["rank"] = rank
     return sources
 
 

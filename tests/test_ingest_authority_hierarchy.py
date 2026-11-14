@@ -76,3 +76,36 @@ def test_no_tier_is_built_from_table_markup() -> None:
 ])
 def test_list_items_keep_their_names(line: str, expected: dict) -> None:
     assert ingest._parse_authority_sources(line) == [expected]
+
+
+# Review cases (2026-11-14): column choice, mixed sections, and an Authority heading that names no source.
+@pytest.mark.parametrize("table, expected", [
+    ("| Tier | Source | Path |\n|---|---|---|\n| 1 | Book | b/ |", [{"name": "Book", "path": "b/", "rank": 1}]),
+    ("| Document | Filename | Scope |\n|---|---|---|\n| Spec | s.md | all |",
+     [{"name": "Spec", "path": "s.md", "scope": "all", "rank": 1}]),
+    ("| Name | Path |\n| A | a/ |", [{"name": "A", "path": "a/", "rank": 1}]),
+    ("|---|---|\n| A | a/ |", [{"name": "A", "path": "a/", "rank": 1}]),
+    ("| Source Path | Name |\n|---|---|\n| s/ | S |", [{"name": "S", "path": "s/", "rank": 1}]),
+])
+def test_columns_follow_whole_header_words(table: str, expected: list) -> None:
+    assert ingest._parse_authority_sources(table) == expected
+
+
+def test_a_list_and_a_table_in_one_section_keep_document_order() -> None:
+    text = "Intro prose.\n\n1. A: a/\n2. **B** (`b/`) — bee\n\n| Name | Path |\n|---|---|\n| C | c/ |"
+    assert [(s["name"], s["path"], s["rank"]) for s in ingest._parse_authority_sources(text)] == [
+        ("A", "a/", 1), ("B", "b/", 2), ("C", "c/", 3)]
+
+
+def test_bold_name_with_a_colon_keeps_its_path() -> None:
+    assert ingest._parse_authority_sources("1. **Schemas**: schemas/ — contracts") == [
+        {"name": "Schemas", "path": "schemas/", "scope": "contracts", "rank": 1}]
+
+
+@pytest.mark.parametrize("authority", ["## Authority\n\n### Tier 1\n\n1. A\n", "## Authority Hierarchy\n\nSee docs/x.md.\n"])
+@pytest.mark.parametrize("order", ["authority_first", "table_first"])
+def test_an_authority_heading_without_a_list_does_not_block_a_sources_table(
+        tmp_path: Path, authority: str, order: str) -> None:
+    parts = [authority, SOURCE_TABLE] if order == "authority_first" else [SOURCE_TABLE, authority]
+    sources = _load(tmp_path, "\n\n".join(parts))["authority_sources"]
+    assert [s["name"] for s in sources] == ["Book", "Data"]
