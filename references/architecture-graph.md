@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **462**
+- Modules mapped: **463**
 - Packages: **14**
-- Internal import edges: **1756**
+- Internal import edges: **1757**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 196 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 197 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 62 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -75,8 +75,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.adopted_agents` | `agentteams.yaml_frontmatter` | `agentteams.analyze`, `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step` |
 | `agentteams.advisory` | — | — |
 | `agentteams.agent_doc_sync` | `agentteams.learned_blocks`, `agentteams.scan` | `agentteams.cli.agent_doc_sync_switch` |
+| `agentteams.agent_refactor_codes` | — | `agentteams.analyze` |
 | `agentteams.ai_bad_habits` | — | `agentteams.cli.generate` |
-| `agentteams.analyze` | `agentteams._utils`, `agentteams.adopted_agents`, `agentteams.analyze_tools`, `agentteams.branch_model`, `agentteams.frameworks.registry`, `agentteams.host_features`, `agentteams.manifest_format`, `agentteams.mcp_catalog`, `agentteams.mcp_detect`, `agentteams.mcp_emit`, `agentteams.output_plan`, `agentteams.recipe_fields`, `agentteams.sandbox_state`, `agentteams.tool_metadata_catalog`, `agentteams.wasm_agent.team`, `agentteams.wasm_policy`, `agentteams.write_policy` | `agentteams.cli.adopt_step`, `agentteams.cli.generate`, `agentteams.cli.toolchain_group_commands`, `agentteams.output_plan`, `agentteams.rank_conformance` |
+| `agentteams.analyze` | `agentteams._utils`, `agentteams.adopted_agents`, `agentteams.agent_refactor_codes`, `agentteams.analyze_tools`, `agentteams.branch_model`, `agentteams.frameworks.registry`, `agentteams.host_features`, `agentteams.manifest_format`, `agentteams.mcp_catalog`, `agentteams.mcp_detect`, `agentteams.mcp_emit`, `agentteams.output_plan`, `agentteams.recipe_fields`, `agentteams.sandbox_state`, `agentteams.tool_metadata_catalog`, `agentteams.wasm_agent.team`, `agentteams.wasm_policy`, `agentteams.write_policy` | `agentteams.cli.adopt_step`, `agentteams.cli.generate`, `agentteams.cli.toolchain_group_commands`, `agentteams.output_plan`, `agentteams.rank_conformance` |
 | `agentteams.analyze_tools` | `agentteams._utils`, `agentteams.tool_metadata_catalog` | `agentteams.analyze` |
 | `agentteams.api_impact` | `agentteams._api_impact_categories`, `agentteams._api_impact_checklist`, `agentteams._api_impact_range`, `agentteams._api_surface`, `agentteams._hook_python` | `agentteams._api_impact_categories` |
 | `agentteams.architecture` | `agentteams.backup`, `agentteams.svg_render` | `agentteams.git_hooks` |
@@ -894,6 +895,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.agent_refactor_codes": {
+      "package": "agentteams",
+      "path": "agentteams/agent_refactor_codes.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.ai_bad_habits": {
       "package": "agentteams",
       "path": "agentteams/ai_bad_habits.py",
@@ -909,6 +918,7 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams._utils",
         "agentteams.adopted_agents",
+        "agentteams.agent_refactor_codes",
         "agentteams.analyze_tools",
         "agentteams.branch_model",
         "agentteams.frameworks.registry",
@@ -6757,6 +6767,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.analyze",
       "target": "agentteams.adopted_agents"
+    },
+    {
+      "source": "agentteams.analyze",
+      "target": "agentteams.agent_refactor_codes"
     },
     {
       "source": "agentteams.analyze",
