@@ -495,3 +495,29 @@ def test_f7_a_relative_path_to_the_policy_is_self_denied(tmp_path: Path, monkeyp
     monkeypatch.chdir(tmp_path)
     assert verdict(gate, "Write", {"file_path": ".agentteams/gate-policy.json", "content": "{}"})[:2] == (
         "deny", "policy-protected")
+
+
+# ── Row 700 (@security F6): an ancestor rename around the file-level denies is not a bypass ─────
+
+def test_row700_renaming_the_policy_dir_away_locks_and_a_plant_cannot_unpin(tmp_path: Path) -> None:
+    """The digest lives in the gate, not beside the policy: moving `.agentteams/` away locks the gate, a planted
+    weaker policy locks it too, and only the recorded bytes verify. The worst outcome is fail-closed."""
+    raw = policy(preset="strict")
+    hook = tmp_path / ".claude" / "hooks" / "constitutional-gate.py"
+    install(tmp_path, raw)
+    (tmp_path / ".agentteams").rename(tmp_path / "moved")
+    _assert_locked(_load(hook))
+    (tmp_path / ".agentteams").mkdir()
+    (tmp_path / ".agentteams" / "gate-policy.json").write_bytes(policy())
+    _assert_locked(_load(hook))
+    (tmp_path / ".agentteams" / "gate-policy.json").write_bytes(raw)
+    assert verdict(_load(hook), "Bash", {"command": "rm -rf build"})[:2] == ("deny", "policy-deny")
+
+
+def test_row700_the_gate_and_its_pin_sit_under_directory_level_denies() -> None:
+    """The gate and its pin need no new rule: the Claude block write-denies all of `.claude`, and the permission
+    rules cover `.claude/hooks/**` (the mechanism test for the rename is test_sandbox_ancestor_rename.py)."""
+    from agentteams.frameworks._sandbox_emit import _build_sandbox_block, permission_deny_rules
+
+    assert ".claude" in _build_sandbox_block(None, None, platform="linux")["filesystem"]["denyWrite"]
+    assert "Edit(/.claude/hooks/**)" in permission_deny_rules("claude")
