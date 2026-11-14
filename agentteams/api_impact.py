@@ -375,7 +375,7 @@ def patch_id(repo: Path, commit: str) -> str:
     return out[0] if out else ""
 
 
-def _checklist(repo: Path, imp: Impact) -> dict[str, list[str]]:
+def _checklist(repo: Path, imp: Impact, excludes: list[str]) -> dict[str, list[str]]:
     """Files to audit per changed name (:mod:`agentteams._api_impact_checklist`): module-qualified evidence first."""
     from agentteams import _api_impact_checklist as ck
 
@@ -399,7 +399,7 @@ def _checklist(repo: Path, imp: Impact) -> dict[str, list[str]]:
     ledger_prefix = ledger.relative_to(Path(repo).resolve()).as_posix().rstrip("/") + "/"
     return ck.build(repo, entries, symbols=symbols, modules=modules,
                     skip=lambda h: _is_test(h) or h.startswith(ledger_prefix),
-                    excludes=ck.read_excludes(ledger), cap=CHECKLIST_CAP)
+                    excludes=excludes, cap=CHECKLIST_CAP)
 
 
 def status(repo: Path, rev_range: str | None = None, *, full: bool = False,
@@ -448,6 +448,7 @@ def status(repo: Path, rev_range: str | None = None, *, full: bool = False,
     ids = rng.patch_ids(repo, shas, ledger_rel)
     paths = rng.changed_paths(repo, shas)
     on_tip = rng.ledger_names(repo, tip, ledger_rel)
+    excludes: list[str] | None = None  # CHECKLIST_EXCLUDES at the tip, read once when first needed
     # A page counts as updated for a commit when that commit or a later one in the range changed it.
     later: list[set[str]] = []
     acc: set[str] = set()
@@ -463,7 +464,11 @@ def status(repo: Path, rev_range: str | None = None, *, full: bool = False,
         pid = ids.get(sha, "")
         # Reviewed only when the ledger file is committed at the range's tip (an uncommitted record does not count).
         reviewed = bool(pid) and f"{pid}.json" in on_tip
-        out.append(CommitStatus(sha, subjects[sha], pid, imp, reviewed, {} if reviewed else _checklist(repo, imp),
+        if not reviewed and excludes is None:
+            from agentteams._api_impact_checklist import read_excludes
+            excludes = read_excludes(repo, tip, ledger_rel)
+        checklist = {} if reviewed else _checklist(repo, imp, excludes or [])
+        out.append(CommitStatus(sha, subjects[sha], pid, imp, reviewed, checklist,
                                 [] if reviewed else doc_status(repo, imp, later[i], ref=tip)))
     return used, out
 

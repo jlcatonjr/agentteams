@@ -48,11 +48,15 @@ Nothing is stored between runs. `status` walks the non-merge commits from the br
 - **Checklist** (`agentteams._api_impact_checklist`): for each removed, renamed or re-signed name, the tracked
   files to audit, at most 15 plus the total. A symbol lists files with module-qualified evidence: files that import
   its module and mention it, `<module>.<name>` or `<leaf>.<name>`, and `from <module> import … <name>` (also in
-  parentheses). A removed or renamed module lists its importers. Only when that finds nothing does it fall back to
-  the whole word, and the entry is keyed `"<name> (bare-word fallback)"`. Options and non-Python paths are searched
-  as whole words. The changed file, tests, the review ledger and paths matching a glob in the committed
-  `<ledger>/CHECKLIST_EXCLUDES` (one `fnmatch` pattern per line, `#` comments) are left out, so a project can drop
-  record paths such as ledgers and run reports.
+  parentheses). A removed or renamed module lists its importers; a name that is both gets both. Relative imports are
+  resolved against the importing file's package, and a leading `src/` is not part of a module name. Only when the
+  qualified search finds no file but the changed one does it fall back to the whole word, and the entry is keyed
+  `"<name> (bare-word fallback)"`; qualified hits that are all left out (tests only) give an empty entry. Options and
+  non-Python paths are searched as whole words. The changed file, tests, the review ledger and paths matching a glob
+  in `<ledger>/CHECKLIST_EXCLUDES` as committed at the range's tip (one `fnmatch` pattern per line, `#` comments; a
+  file that is not UTF-8 is ignored with a warning) are left out, so a project can drop record paths such as ledgers
+  and run reports. The search errs toward listing too much: aliases, a shared module leaf name and `import` lines in
+  docstrings can add files.
 
 `record` writes the ledger files. It is a self-attestation that the ledger makes visible in the pull
 request, not proof that a review happened.

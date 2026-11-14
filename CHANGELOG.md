@@ -10,11 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `status`'s audit checklist (`agentteams._api_impact_checklist`) used to search each changed name as a bare word over
   the whole tree, so a re-signed `main` listed 341 files. It now lists module-qualified evidence: files that import
-  the module and mention the name, `module.name`, and `from module import name`. A removed module lists its
-  importers.
-- Only when that finds nothing does it fall back to the bare word, and the entry is then keyed
+  the module and mention the name, `module.name`, and `from module import name`, with relative imports resolved
+  and a leading `src/` dropped from module names. A removed module lists its importers.
+- Only when the qualified search finds no file but the changed one does it fall back to the bare word, and the entry is then keyed
   `"<name> (bare-word fallback)"`. This is a behaviour change for `--json` consumers that read checklist keys.
-- A committed `references/api-impact-reviews/CHECKLIST_EXCLUDES` (one glob per line) keeps record paths such as
+- `references/api-impact-reviews/CHECKLIST_EXCLUDES`, read as committed at the range's tip (one glob per line), keeps record paths such as
   ledgers and run reports out of the checklist. The review ledger itself is always left out.
 - The generated `api-impact.reference.md` fence `api_impact` is v=5.
 

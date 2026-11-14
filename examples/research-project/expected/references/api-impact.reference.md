@@ -96,10 +96,11 @@ python -m agentteams.api_impact record --note "<what the review covered and chan
 - **Audit checklist.** For each removed, renamed or re-signed name, `status` lists the tracked files to audit
   (at most 15 plus the total). For a symbol these are files with module-qualified evidence: they import its module
   and mention it, write `<module>.<name>`, or import it from the module. A removed or renamed module lists its
-  importers. Only when that finds nothing is the whole word searched, and the entry is then marked
-  `(bare-word fallback)`: read those hits with care, since a common name matches unrelated code. The changed file,
-  tests, the review ledger and any glob listed in the committed `references/api-impact-reviews/CHECKLIST_EXCLUDES`
-  (one per line, for record paths such as ledgers and run reports) are left out. That list is the scope of the
+  importers. Relative imports count. Only when that finds nothing but the changed file is the whole word searched,
+  and the entry is then marked `(bare-word fallback)`: read those hits with care, since a common name matches
+  unrelated code. The changed file, tests, the review ledger and any glob listed in
+  `references/api-impact-reviews/CHECKLIST_EXCLUDES` as committed at the tip of the range checked (one per line,
+  for record paths such as ledgers and run reports) are left out. That list is the scope of the
   infrastructure audit.
 - **API docs.** Under each unreviewed impactful commit with a module to report, `status` prints an
   `API docs:` block, one line per module: `<module>: <state> — <pages>`, plus `; undocumented: …` and
