@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Entry Schema section:** lists the seven fields and points to the catalog for the rules;
   - **daily workflow:** step 5 adds a typed entry for each governance-relevant event, plus a `## Open Obligations`
     segment carried forward from the previous day;
-  - **weekly workflow:** step 5 lists the obligations still open at week end.
+  - **weekly and monthly workflows:** step 5 lists the obligations still open at the end of the period;
+  - **sources:** the `Sources` field holds cited pointers and adds no source class to the Evidence Model.
 - **Additive only.** The template stays unfenced (it renders inside the whole-body `content` fence), and summaries
   written before this change need no rewrite.
 - **Ledger.** `domain/work-summarizer.template.md` is now registered as TA-063 and leaves the unregistered baseline.

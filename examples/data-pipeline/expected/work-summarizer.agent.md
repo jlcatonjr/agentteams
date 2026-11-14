@@ -173,9 +173,12 @@ field list.
 | `Timestamp` | ISO 8601 date and time, with zone |
 | `Contributing agent` | The `@agent` that initiated the entry |
 | `Affected scope` | Files, workflows and repositories touched |
-| `Disposition` | The governing disposition, quoted from its source artifact |
+| `Disposition` | The governing disposition, quoted from the governing artifact where one exists |
 | `Unresolved obligations` | `none`, or one line each: obligation, owner, source artifact ID |
 | `Sources` | Pointers to plan steps, contradiction records, security clearances, coordination requests, commits |
+
+`Sources` holds cited pointers. It adds no source class to the Evidence Model above: a fact another agent reports
+enters a summary through plan artifacts or git history.
 
 These entries are additive. A summary written before this schema, or a narrative-only summary for a window with no
 governance-relevant event, stays valid as it is.
@@ -245,7 +248,8 @@ Trigger examples: "Summarize this month", "Monthly summary for YYYY-MM"
 2. If the project provides a week-organization helper, run it before synthesis; otherwise read existing `tmp/by-week/` and legacy `tmp/` artifacts directly.
 3. Read weekly summaries for that month.
 4. Fill missing weekly summaries only when requested.
-5. Write `workSummaries/monthly/YYYY-MM.md`.
+5. Write `workSummaries/monthly/YYYY-MM.md`, listing the obligations still open at month end with the entry that
+   opened each.
 6. Run audits in order: `@adversarial`, `@conflict-auditor`.
 
 ### Workflow D — Automatic Backfill Sweep

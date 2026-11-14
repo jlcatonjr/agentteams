@@ -88,6 +88,8 @@ def test_daily_and_weekly_workflows_carry_open_obligations() -> None:
     weekly = text.split("### Weekly Summary", 1)[1].split("### Monthly Summary", 1)[0]
     assert "## Open Obligations" in daily and "typed" in daily
     assert "obligations still open at\n   week end" in weekly
+    monthly = text.split("### Monthly Summary", 1)[1].split("### Workflow D", 1)[0]
+    assert "obligations still open at month end" in monthly
 
 
 def test_every_reference_rule_is_fenced() -> None:

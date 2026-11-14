@@ -12,8 +12,10 @@ SECTION MANIFEST
 
 This file says when a governance-relevant event gets a typed entry in a work summary, and what that entry holds.
 `@work-summarizer` writes the entries. Any agent whose work matches a trigger below is that trigger's initiator: it
-reports the entry's fields to `@work-summarizer` or records them in the session's plan artifacts. An entry records
-state that later sessions inherit. It grants the summary writer no new authority.
+records the entry's fields in the session's plan artifacts, where `@work-summarizer` reads them. An entry records
+state that later sessions inherit. It grants the summary writer no new authority, and it adds no source class to
+`@work-summarizer`'s Evidence Model: the records named under **Sources** are cited pointers, and a fact another
+agent reports enters a summary only through plan artifacts or git history.
 
 Governance-relevant means a constitutionally significant event, or a workflow event that changes an obligation, a
 disposition, or traceability across a boundary.
@@ -28,13 +30,14 @@ Each entry is one block placed above the narrative it belongs to, with these sev
 - **Timestamp:** <ISO 8601 date and time, with zone>
 - **Contributing agent:** <@agent that initiated the entry>
 - **Affected scope:** <files, workflows and repositories touched>
-- **Disposition:** <the governing disposition, quoted from its source artifact>
+- **Disposition:** <the governing disposition, quoted from the governing artifact where one exists>
 - **Unresolved obligations:** <none, or one line each: obligation, owner, source artifact ID>
 - **Sources:** <plan step, contradiction record, security clearance, coordination request, commit>
 ```
 
-The trigger's own required fields (catalog column 3) go under **Disposition** or **Affected scope**, whichever they
-describe. A field with nothing to record says `none`. It is not left out.
+The trigger's own required fields (catalog column 3) go under whichever of the seven fields they describe: a record
+ID (contradiction ID, decision artifact ID) under **Sources**, an owner or unblock condition under **Unresolved
+obligations**, a scope under **Affected scope**, and an outcome or decision under **Disposition**. A field with nothing to record says `none`. It is not left out.
 
 ## Trigger Catalog
 
@@ -51,7 +54,7 @@ The catalog is closed: these eight types are the only values of **Trigger**.
 | `boundary-decision` | `@orchestrator`, at a principal decision point | Decision artifact ID, decision statement, alternatives considered, obligations referenced from the governing artifact | A coordination summary entry linked to the impact report or coordination request | The source artifact's obligations are referenced, ownership links are validated, and tracking status is synchronized |
 | `unclassified-constitutional-event` | Any agent that detects a governance-relevant change matching no other type | Event description, provisional impact scope, escalation owner, classification deadline | A provisional summary entry flagged `unclassified` | The event is reclassified into one of the other seven types, or formally retired as non-constitutional |
 
-`security-clearance` also covers destructive-operation clearances.
+`security-clearance` is the book's "security exceptions or destructive-operation clearances": it covers both.
 
 ## Rules
 
