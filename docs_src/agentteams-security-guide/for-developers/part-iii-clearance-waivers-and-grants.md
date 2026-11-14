@@ -23,8 +23,9 @@ instrument is consulted for it (`agentteams/cli/grants.py:47-48`).
 list, an ISO-8601 expiry check, and a symlink/`..`-safe containment test. Each
 instrument uses its own key (`AGENTTEAMS_WAIVER_SIGNING_KEY`,
 `AGENTTEAMS_GRANT_SIGNING_KEY`; decision-signing when active,
-`agentteams/cli/security_gate.py:39-69`). **Key unset ⇒ fails closed** — it
-refuses rather than proceeding unsigned.
+`agentteams/cli/security_gate.py:39-69`), or its fingerprint-pinned key file in
+`~/.config/agentteams/keys/`. **No key ⇒ fails closed** — it refuses rather than
+proceeding unsigned.
 
 **Honest ceiling — what it costs.** HMAC signing is *symmetric* (one shared key per
 instrument). It stops a **keyless forger** but not an actor who **holds the key**, and a

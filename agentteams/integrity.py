@@ -110,6 +110,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # allowWrite / denyRead / denyWrite (D-3 control-plane protection). A silent edit here (e.g.
     # dropping the denyWrite or widening allowWrite) weakens every emitted boundary.
     "agentteams/frameworks/_sandbox_emit.py",
+    "agentteams/frameworks/_signing_key_paths.py",  # carved from _sandbox_emit: key-dir read/write denies, write-root refusal
     # The goose SEATBELT emitter (2026-09-30; @security CONDITIONAL PASS). The goose analog of
     # _sandbox_emit.py: it builds .goose/sandbox.sb, including the `(deny file-write* …)`
     # control-plane block (switch, gate hook, verify-key store, the profile itself). It was the

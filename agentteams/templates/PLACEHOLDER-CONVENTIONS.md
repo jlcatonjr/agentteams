@@ -77,7 +77,6 @@ These cannot be inferred from the project description and require human completi
 
 - `{MANUAL:SPECIFIC_FILE_PATHS}` — Exact paths within the project codebase
 - `{MANUAL:API_ENDPOINT_NAMES}` — Proprietary API endpoints
-- `{MANUAL:STYLE_EXEMPLARS}` — Specific style example documents
 - `{MANUAL:EXTERNAL_REPO_PATHS}` — Exact paths to external read-only repositories
 - `{MANUAL:TOOL_DOCS_URL}` — Documentation URL when none of the resolution tiers above found one
 - `{MANUAL:TOOL_API_SURFACE}` — Key API surface when none of the resolution tiers above found one

@@ -349,6 +349,24 @@ def _main_dispatch(
         return _run_write_integrity_manifest(args)
     if getattr(args, "verify_integrity", False):
         return _run_verify_integrity(args)
+    if getattr(args, "record_hmac_fingerprint", None) is not None:
+        from agentteams.cli.signed_ledger import record_hmac_fingerprint
+
+        try:
+            fp_path = record_hmac_fingerprint(args.record_hmac_fingerprint)
+        except (ValueError, RuntimeError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        from datetime import datetime
+
+        from agentteams.cli.signed_ledger import HMAC_KEY_FILES, HMAC_KINDS, hmac_key_dir
+
+        key_path = hmac_key_dir() / HMAC_KEY_FILES[HMAC_KINDS[args.record_hmac_fingerprint]]
+        changed = datetime.fromtimestamp(key_path.stat().st_mtime).astimezone().isoformat(timespec="seconds")
+        print(f"Recorded the {args.record_hmac_fingerprint} HMAC key fingerprint in {fp_path}: "
+              f"{fp_path.read_text(encoding='utf-8').strip()}")
+        print(f"  key file {key_path} was last changed {changed}; if you did not create it then, delete both files.")
+        return 0
     if getattr(args, "verify_backup", None) is not None:
         return _run_verify_backup(args)
 

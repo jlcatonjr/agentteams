@@ -136,7 +136,7 @@ def _strong_key(key: str) -> str:
 
 
 def _signing_key() -> str:
-    """Return the management-directive signing key from the environment, or fail closed.
+    """Return the management-directive signing key from the environment or its key file, or fail closed.
 
     The key value is never logged, emitted, or returned anywhere but here (to the internal
     signing primitive).
@@ -147,10 +147,13 @@ def _signing_key() -> str:
     Raises:
         MgmtDirectiveError: The env var is unset or empty — signing/verification cannot proceed.
     """
-    key = os.environ.get(MGMT_KEY_ENV, "")
+    from agentteams.cli.signed_ledger import load_hmac_key
+
+    key = load_hmac_key(MGMT_KEY_ENV, MgmtDirectiveError)
     if not key:
         raise MgmtDirectiveError(
-            f"{MGMT_KEY_ENV} is not set; refusing to sign or verify a management directive "
+            f"{MGMT_KEY_ENV} is not set (and there is no ~/.config/agentteams/keys/management-hmac.key); "
+            "refusing to sign or verify a management directive "
             "without a signing key (fail-closed)."
         )
     return key

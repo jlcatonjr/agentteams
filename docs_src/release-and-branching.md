@@ -16,9 +16,9 @@ and baseAgent all follow the same model, so what you learn here applies to all f
   fixes reach `main` by a hotfix pull request, and `main` is merged back into `dev` straight after. agentteams
   adopted this **integration-branch model** on 2026-11-04 to cut GitHub Actions cost, which follows the number of
   CI runs, not their size. The other three repositories have not adopted it yet (see below).
-- **Releases are signed tags,** `v1.0.0`, `v1.0.1`, …, and they are what users install and pin.
-- **`release/1.0`** collects the reviewed fixes for the next patch release. It changes only when Jim copies in a fix
-  that is already on `dev` or `main` (a *backport*). Between tags its commits are unsigned, so it is not for installing or
+- **Releases are signed tags,** `v1.1.0`, `v1.1.1`, …, and they are what users install and pin.
+- **`release/1.1`** collects the reviewed fixes for the next patch release (`release/1.0` does the same for 1.0, on
+  request). It changes only when Jim copies in a fix that is already on `dev` or `main` (a *backport*). Between tags its commits are unsigned, so it is not for installing or
   pinning.
 - **Each tag is cut on its release branch** and signed by Jim. Release branches are not merged back into `main` or `dev`:
   every fix landed on `dev` (or, for a hotfix, `main`) first and was copied out with `git cherry-pick -x`, so it
@@ -33,40 +33,40 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 | `dev` | Development, the next minor version | Invited contributors, through a pull request; Jim, by local merge |
 | `main` | The last released state of development; advances at release milestones | Jim only, by the release pull request (`dev` → `main`) or a hotfix pull request |
 | `release/1.0` | Reviewed fixes queued for the next patch release; unsigned between tags; not for pinning | Jim only, by backport (from `dev` or `main`) |
-| `release/1.1` | Release candidates for `1.1.0` (`v1.1.0-rc.N`); unsigned between tags; not for pinning | Jim only, by backport (from `dev` or `main`) |
+| `release/1.1` | Reviewed fixes queued for the next 1.1 patch release; unsigned between tags; not for pinning | Jim only, by backport (from `dev` or `main`) |
 | `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved; what you install and pin | Jim only |
 | Your work branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`) | One change, deleted after merge | Its author |
 
-`main` is `1.1.0.dev0`. `release/1.0` is tagged `v1.0.7`, and `release/1.1` is tagged `v1.1.0-rc.16`. `v1.0.0` is the first 1.0 release.
+`main` is `1.1.0.dev0`. `release/1.1` is tagged `v1.1.3`, and `release/1.0` is tagged `v1.0.7`. `v1.1.0` is the first 1.1 release.
 
-**Older lines:** none. The 1.0 line is the first maintained line. RCs 1–9 were tags on `main`.
+**Older lines:** `release/1.0` (latest `v1.0.7`) takes fixes only on request. Its RCs 1–9 were tags on `main`.
 
 The name `release/<X.Y>` is reserved for maintained lines. Never create a `release/*` branch, locally or on GitHub.
 
 ## Using agentteams
 
-Install the latest signed release tag on the 1.0 line: today `v1.0.7`.
+Install the latest signed release tag on the 1.1 line: today `v1.1.3`.
 
 ```bash
-pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.7"
+pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.1.3"
 ```
 
 **Verified install,** for a governed team, an experiment or a paper. Clone the tag into a directory of its own, check its signature with repository config neutralised, then install from that checkout:
 
 ```bash
-git clone --branch v1.0.7 https://github.com/jlcatonjr/agentteams.git agentteams-v1.0.7
-cd agentteams-v1.0.7
+git clone --branch v1.1.3 https://github.com/jlcatonjr/agentteams.git agentteams-v1.1.3
+cd agentteams-v1.1.3
 git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
     -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
     -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-    tag -v v1.0.7 && pip install .
+    tag -v v1.1.3 && pip install .
 ```
 
 The `&&` stops the install if the signature check fails. The output must also show the release key's full fingerprint, which begins `SHA256:IPdnLwlF`, not just "Good signature"; if it doesn't, stop and uninstall. "Verifying a release" below explains how to set up `allowed_signers` once. For a patch release, repeat this with the new tag in a new directory.
 
 To sign decisions or grants, follow `SECURITY.md` ("Signing from a trusted install"): install with `pipx`, from that verified checkout, outside every agent write root. The [migration guide](migration-guide.md) ("Moving to a release checkout") covers rendering a governed team from a tag checkout.
 
-**`release/1.0` is not an install source.** It holds reviewed fixes queued for the next patch release. Those commits are unsigned between tags, so don't install from the branch or pin it.
+**Release branches are not install sources.** `release/1.1` and `release/1.0` hold reviewed fixes queued for the next patch release on their line. Those commits are unsigned between tags, so don't install from the branch or pin it.
 
 **For development,** work on `dev` in a clone of your fork, and install it with `pip install -e .`. "Contributing a change" below covers setting up the fork.
 
@@ -108,15 +108,16 @@ agentteams is public, and you have read access only. Pull requests are currently
 ## Getting a fix into a release
 
 1. **Land the fix on `dev` first,** as above. It reaches `main` with the next release.
-2. **Ask for a backport.** On the merged pull request, add the label `needs-backport-1.0`. If you can't add labels,
-   leave a comment instead: "please backport to 1.0". Either way, say why. Only these qualify:
+2. **Ask for a backport.** On the merged pull request, add the label `needs-backport-1.1` (or `needs-backport-1.0` for the 1.0 line). If
+   you can't add labels, leave a comment instead: "please backport to 1.1". Either way, say why. Only these qualify:
    - security fixes;
    - correctness fixes;
    - documentation fixes.
 
    New features wait for the next minor release.
-3. **Jim does the rest.** He copies the fix to `release/1.0` in his own pull request, labelled `backport-1.0`, using
-   `git cherry-pick -x` and never a squash. When he releases, he signs `v1.0.N`.
+3. **Jim does the rest.** He copies the fix to `release/1.1` (or `release/1.0`) in his own pull request, labelled
+   `backport-1.1` (or `backport-1.0`), using `git cherry-pick -x` and never a squash. When he releases, he signs
+   `v1.1.N` (or `v1.0.N`).
 4. **Urgent?** Say so in the pull request and message Jim.
 
 ## What only Jim does
@@ -157,7 +158,7 @@ You only need this for context:
 4. **Repositories release in order:** agentteams → researchteam → mathAgents → baseAgent. Each one moves its pins only
    after verifying the upstream tag's signature.
 5. **Next minor.** At `1.1`'s first release candidate, Jim cut `release/1.1` from `main`. From then on,
-   `release/1.0` takes fixes only on request, and installs move to the `v1.1.N` tags once `1.1.0` is final.
+   `release/1.0` takes fixes only on request. `1.1.0` is final, so installs use the `v1.1.N` tags.
 
 ## Verifying a release
 
@@ -173,14 +174,14 @@ copy inside the repository you are checking, or confirm the fingerprint with Jim
    git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
        -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
        -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-       tag -v v1.0.7
+       tag -v v1.1.3
    ```
 
 3. Check that the output shows the full fingerprint from `SECURITY.md`, not just "Good signature".
 
 ## Notes for agentteams
 
-- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version as of the last release milestone (`dev` may be ahead). For the 1.0 documentation, browse the `docs_src/` folder at the latest `v1.0.N` tag (today `v1.0.7`).
+- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version as of the last release milestone (`dev` may be ahead). For a release's documentation, browse the `docs_src/` folder at its tag: the latest `v1.1.N` (today `v1.1.3`), or `v1.0.7` for 1.0.
 - **Only agentteams uses `dev` so far.** researchteam, mathAgents and baseAgent still develop on `main`. Each can opt in
   through its brief (`git_workflow.branch_model: "integration"`), which ships the same model to its agent team.
 - **Downstream repositories** (researchteam, mathAgents, baseAgent) pin agentteams in their `toolchain.lock` to the commit of a verified tag, never to a branch. A downstream repository may tighten these rules, never weaken them.

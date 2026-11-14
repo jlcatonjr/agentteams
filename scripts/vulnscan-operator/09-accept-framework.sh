@@ -130,7 +130,7 @@ echo "== 3/5 sign the narrow grant: stage-fix on $ROOT, 1 day, 5 uses (review ev
 if "${VS[@]}" grant list 2>/dev/null | grep -q '"stage-fix"'; then
   echo "an active grant already exists:"; "${VS[@]}" grant list
 else
-  AGENTTEAMS_DECISION_ED25519_KEYFILE="$PRIV" "${VS[@]}" grant sign --key-id "$KEY_ID" --days 1 --max-uses 5 \
+  "${VS[@]}" grant sign --key-id "$KEY_ID" --days 1 --max-uses 5 \
     --op stage-fix --repo-root "$ROOT" --governance-dir "$GOV"
 fi
 

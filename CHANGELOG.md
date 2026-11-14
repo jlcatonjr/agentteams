@@ -43,6 +43,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Effect on existing teams: a team whose tracked marker was deleted but not committed is governed again.
     Nothing changes for a team that never had a marker.
 
+### fix (Markdown ingest reads the authority hierarchy, #392 item 11)
+
+- An `Authority` heading with a list or table now sets `authority_sources` wherever it sits. Before, any heading
+  containing "source" overwrote it, so a `Source Repositories` table after an `Authority Hierarchy` list replaced
+  the hierarchy. An `Authority` heading with no list (prose only, or its list under a sub-heading) no longer
+  blocks a sources list.
+- A Markdown table in an authority or sources section is parsed by column: whole header words pick the name, path
+  and scope columns, and a `Tier` or `#` column is ignored. Its header and separator rows are no longer read as
+  tiers. A section holding both a list and a table keeps both, in document order, and drops other prose lines.
+- List markers are stripped without eating a bold name's `**` or a leading digit, and `**Name** (`path`) — scope`
+  items (the form agentteams itself renders) give the name, path and scope.
+- Reading a sources table as source repositories, separate from the hierarchy, needs a schema key and moves to 1.3.
+- The authority parser moves to the private `agentteams/_ingest_authority.py` (CH-07 ceiling). New `tests/test_ingest_authority_hierarchy.py`.
+
+### docs (release guide names the 1.1 line)
+
+- `release-and-branching.md` was still written for 1.1's release candidates. It now names `v1.1.3` as the install and
+  verify example, describes `release/1.1` as the 1.1 patch line, and lists `release/1.0` as an older line.
+
+### added (typed work-summary entries and the closed trigger catalog; #454)
+
+- **A new reference, `references/work-summary-trigger-catalog.reference.md`, is emitted for every team.** It renders
+  book Ch 16 §4 and §4.1:
+  - **the seven-field entry block:** trigger, timestamp, contributing agent, affected scope, disposition, unresolved
+    obligations, sources;
+  - **a closed catalog of eight trigger types.** Each has an initiator, required fields, a destination and a closure
+    condition. Seven are canonical; the eighth is `unclassified-constitutional-event`.
+  - **four rules:**
+    - an event that matches no trigger gets a provisional entry in the same session, and meanwhile work continues
+      only under reversible dispositions;
+    - open obligations carry forward until their closure condition is met;
+    - boundary-decision entries are mirror records that add no obligations;
+    - existing prose summaries stay valid.
+- The reference's whole body is one `trigger_catalog` v=1 fence, so `--update --merge` keeps its rules current.
+- **`@work-summarizer`:**
+  - **Entry Schema section:** lists the seven fields and points to the catalog for the rules;
+  - **daily workflow:** step 5 adds a typed entry for each governance-relevant event, plus a `## Open Obligations`
+    segment carried forward from the previous day;
+  - **weekly and monthly workflows:** step 5 lists the obligations still open at the end of the period;
+  - **sources:** the `Sources` field holds cited pointers and adds no source class to the Evidence Model.
+- **Additive only.** The template stays unfenced (it renders inside the whole-body `content` fence), and summaries
+  written before this change need no rewrite.
+- **Ledger.** `domain/work-summarizer.template.md` is now registered as TA-063 and leaves the unregistered baseline.
+  The new reference is TA-064.
+
+### changed (HMAC signing keys can live in key files)
+
+- With `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_DECISION_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY` or
+  `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, agentteams reads `~/.config/agentteams/keys/<kind>-hmac.key`
+  (`waiver`, `decision`, `grant`, `management`), so the key no longer has to be exported into a shell an agent
+  might inherit. A key file is trusted only when its fingerprint matches one you record with the new
+  `--record-hmac-fingerprint KIND` (in `~/.config/agentteams/verify-keys/`), so a planted or replaced key file is
+  refused. Every emitted sandbox read-denies `keys/`; the macOS Claude block and the goose Seatbelt profile now
+  also write-deny `keys/` and `verify-keys/` (on Linux, write roots cannot reach them).
+  - A set variable still wins, and agentteams warns (saying whether the two match) when the key file exists too.
+  - The file is refused when it is a symlink, sits behind a symlinked `keys/`, is readable by group or others, is empty,
+    or would be read by an install an agent could edit.
+  - A decision key file does not by itself switch on decision-signing enforcement; that stays tied to the variable
+    and the log header.
+  - One helper (`signed_ledger.load_hmac_key`) serves the waiver, decision, grant and directive paths
+    (@security ruling, 5 conditions).
+- `--sign-carveouts` now finds the Ed25519 key from `--key-id` like the other operator signers; it still required
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE`. The migrated-key warning and the vulnscan operator scripts no longer tell
+  you to set or export that variable.
+
 ### added (opt-in typed violation codes for `@agent-refactor`; #453)
 
 - A brief that sets `agent_refactor.violation_codes: true` gives the agent-refactor file a "Violation Codes" section:
@@ -99,6 +164,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   In an existing file, the new `decision_rules` fence lands just after `Invariant Core`, before `Step 1`, because
   Step 1 is unfenced. Its text does not depend on that position.
 - `template-chapter-audit.csv` records the three alignments as TA-060, TA-061 and TA-062.
+
+### fix (orchestrator routing rows for optional agents say "(if in team)", #392 item 14)
+
+- The Domain Agent Routing rows for `@technical-validator`, `@format-converter`, `@reference-manager` and
+  `@output-compiler` now carry *(if in team)*, like the other rows for agents the analyzer may not select. Before, a
+  team without one of them was told to route work to an agent it does not have.
+- The `routing_table_rows` fence is v=7, so **every team's orchestrator changes on its next `--update`**, including
+  teams that have all four agents.
+- New `tests/test_routing_rows_conditional.py`: every routing row for an optional domain agent must be conditional,
+  in the template and in the rendered example teams.
+
+### fix (placeholder docs: agent-updater mapping and a dead manual placeholder, #392 item 9)
+
+- `agent-updater`'s Change-to-Agent Mapping no longer says `@primary-producer` uses `{STYLE_REFERENCE_PATH}` or
+  `@output-compiler` uses `{REFERENCE_DB_PATH}`; neither template does. The rows now list the agents whose templates
+  reference each path. Teams pick this up on their next `--update`.
+- `PLACEHOLDER-CONVENTIONS.md` no longer documents `{MANUAL:STYLE_EXEMPLARS}`, which nothing emits.
+- New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
+  are pinned as exceptions), and every agent the mapping names must reference that placeholder.
 
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
@@ -1015,7 +1099,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### docs (release branches are not merged back into `main`)
 
 - `release-and-branching.md` no longer says a release branch is merged forward into `main` after each tag. Every fix
-  lands on `main` first and is copied out with `git cherry-pick -x`, so `main` already has it. The status line now
+  lands on the development branch first (now `dev`) and is copied out with `git cherry-pick -x`, so `main` already
+  has it. The status line now
   names `v1.0.7` and `v1.1.0-rc.16`.
 
 ### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
