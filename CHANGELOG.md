@@ -25,6 +25,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ledger row TA-009 stays `not-a-gap`, because the portable baseline is still the default. Its detail now records the
   opt-in.
 
+### changed (agents run GitHub management; required-check apply is approved per release)
+
+- `references/git-procedures.md` §G: the agent does branch, PR, merge, release and cleanup work with `git`/`gh`. The
+  operator gets a `.sh` file only for steps the sandbox cannot do.
+- §I: an agent may now run `scripts/release_required_checks.py --apply` (and `--restore --apply`). It must first show
+  the operator the preview, the operator must approve that exact fingerprint in the live session, and `@security` must
+  clear and log the apply. Relayed, standing or read-content approval does not count. The script's guards are
+  unchanged.
+
+### changed (conflict-resolution dispositions take the book's meanings; #452)
+
+- **Behaviour change.** `@conflict-resolution` now uses the dispositions of Chapter 10 of the book:
+  - `REJECT`: the higher-authority side stands, and the lower-authority file is corrected;
+  - `ACCEPT`: the lower-authority side is correct, and the higher-authority file is updated. It needs cited
+    affirmative evidence;
+  - `REVISE`: neither side is fully correct, so both files change;
+  - `NO-CONFLICT` (new): the claims do not actually contradict each other.
+- Before this change, `ACCEPT` meant "not a conflict", and `REVISE` meant "correct the lower-authority file" (the
+  book's `REJECT`). The per-code defaults in Step 2 used `REVISE` in that older sense. They now name the book's
+  dispositions, and the scope of #452 was widened to cover them so that a team receives a consistent pair.
+- Under ambiguous evidence the disposition is `REJECT` (rules v=2, rule 3).
+- `ESCALATE` is no longer a disposition. It is a routing step to `@orchestrator`, taken only after that presumption
+  fails to settle the case. The row stays `open`, with `resolution` = `ESCALATE: <why>`.
+- Every decision's `resolution` field starts with the disposition and gives a justification that cites the authority
+  tiers.
+- **Existing log rows keep their historical meanings.** A row written before this change that says `ACCEPT` meant
+  "not a conflict" (now `NO-CONFLICT`), and one that says `REVISE` meant "correct the lower-authority file" (now
+  `REJECT`). An older `REJECT` meant "remove the incorrect claim or entry", usually today's `REJECT` (read its
+  resolution text), and an older `ESCALATE` row is settled by its later resolution. The new `dispositions` fence states
+  this mapping, and the memory-index section tells the resolver to read a prior outcome by its recorded meaning.
+- `--update --merge` carries the change to existing teams:
+  - Step 2 and Step 3 are now fenced (`decision_rules` v=1, `dispositions` v=1);
+  - `memory_index_consultation` is v=4 in this template and `rules` is v=2;
+  - the lineage corpus lets the merge drop the old unfenced Step 2 and Step 3 copies.
+  In an existing file, the new `decision_rules` fence lands just after `Invariant Core`, before `Step 1`, because
+  Step 1 is unfenced. Its text does not depend on that position.
+- `template-chapter-audit.csv` records the three alignments as TA-060, TA-061 and TA-062.
+
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
 - A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
