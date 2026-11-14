@@ -307,6 +307,35 @@ def is_governed(*dirs: Path) -> bool:
     return any(os.path.lexists(d / GOVERNED_MARKER) for d in dirs) or any(_marker_tracked(d) for d in dirs)
 
 
+def marker_deletion_commit(agents_dir: Path) -> str | None:
+    """The commit that deleted ``agents_dir``'s :data:`GOVERNED_MARKER`, when it is absent now (``--doctor``).
+
+    A committed deletion is the one way to end governance (:func:`is_governed`), so ``--doctor`` names it rather than
+    letting it pass silently (IM item 17 addition). The newest deleting commit reachable from HEAD is found with a
+    hardened ``git log --diff-filter=D -1``. git stops at that commit, so the cost is a history walk only as far
+    back as the deletion.
+
+    Args:
+        agents_dir: A team directory (for example ``<project>/.claude/agents``).
+
+    Returns:
+        ``"<short sha> <subject>"`` of the deleting commit; None when the marker exists, git never tracked a
+        deletion of it, the directory is not in a git work tree, or git is unavailable or times out.
+    """
+    if os.path.lexists(agents_dir / GOVERNED_MARKER):
+        return None
+    root = _project_root(agents_dir)
+    if not root.is_dir():
+        return None
+    rel = (agents_dir / GOVERNED_MARKER).relative_to(root).as_posix()
+    try:
+        out = _git(root, "log", "--diff-filter=D", "-1", "--format=%h %s", "--", rel)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    line = out.stdout.strip() if out.returncode == 0 else ""
+    return line.splitlines()[0] if line else None
+
+
 def _replace_no_follow(path: Path, text: str) -> None:
     """Atomically write ``path`` (inside a real ``references/`` dir), never through a link.
 
@@ -511,6 +540,7 @@ __all__ = [
     "TEAM_MARKER_REL",
     "apply_switch",
     "is_governed",
+    "marker_deletion_commit",
     "owns_switch",
     "read_switch",
     "review_lines",

@@ -229,3 +229,80 @@ def test_a_staged_but_uncommitted_marker_still_governs_once_deleted(tmp_path):
     _git(tmp_path, "add", f".claude/agents/{MARKER}")
     (agents / MARKER).unlink()
     assert signing_switch.is_governed(agents)
+
+
+# --------------------------------------------------------------------------- --doctor names a committed deletion
+
+
+@needs_git
+def test_doctor_warns_when_a_committed_deletion_ended_governance(tmp_path, capsys):
+    """The one way out of governance (a committed deletion) is visible: --doctor names the deleting commit."""
+    from agentteams.doctor import run_doctor
+
+    _governed_repo(tmp_path)
+    _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(tmp_path, "commit", "-q", "-m", "drop the signing marker")
+    sha = subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "--short", "HEAD"], capture_output=True,
+                         text=True, check=True).stdout.strip()
+    assert run_doctor(str(tmp_path)) == 0  # a WARN, not a FAIL
+    out = capsys.readouterr().out
+    assert "Signing governance" in out
+    assert f".claude/agents/{MARKER} is absent and was deleted in {sha} drop the signing marker" in out
+
+
+@needs_git
+@pytest.mark.parametrize("state", ["present", "never-tracked", "uncommitted-deletion"])
+def test_doctor_is_quiet_unless_a_deletion_was_committed(tmp_path, capsys, state):
+    from agentteams.doctor import run_doctor
+
+    if state == "never-tracked":
+        (tmp_path / ".claude" / "agents").mkdir(parents=True)
+        (tmp_path / ".claude" / "agents" / "README.md").write_text("team\n")
+        _git(tmp_path, "init", "-q")
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "commit", "-q", "-m", "team")
+    else:
+        agents = _governed_repo(tmp_path)
+        if state == "uncommitted-deletion":
+            (agents / MARKER).unlink()  # still governed (index/HEAD); nothing to report yet
+    run_doctor(str(tmp_path))
+    assert "Signing governance" not in capsys.readouterr().out
+
+
+@needs_git
+def test_marker_deletion_commit_is_none_outside_git_and_when_present(tmp_path):
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+    assert signing_switch.marker_deletion_commit(agents) is None  # not a work tree
+    agents = _governed_repo(tmp_path / "repo")
+    assert signing_switch.marker_deletion_commit(agents) is None  # marker present
+
+
+@needs_git
+def test_marker_deletion_commit_runs_git_hardened(tmp_path):
+    """The history lookup must not run a planted fsmonitor (same hardening as the governance check)."""
+    agents = _governed_repo(tmp_path)
+    _git(tmp_path, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(tmp_path, "commit", "-q", "-m", "drop")
+    sentinel = tmp_path / "pwned"
+    hook = tmp_path / "fsmon.sh"
+    hook.write_text(f"#!/bin/sh\ntouch {sentinel}\n")
+    hook.chmod(0o755)
+    _git(tmp_path, "config", "core.fsmonitor", str(hook))
+    assert signing_switch.marker_deletion_commit(agents)
+    assert not sentinel.exists()
+
+
+@needs_git
+def test_doctor_says_a_branch_only_deletion_still_governs(tmp_path, capsys):
+    """A deletion committed only on the agent's branch keeps governing; --doctor must not claim it ended."""
+    from agentteams.doctor import run_doctor
+
+    _origin, agents = _clone_with_upstream(tmp_path)
+    work = agents.parents[1]
+    _git(work, "rm", "-q", f".claude/agents/{MARKER}")
+    _git(work, "commit", "-q", "-m", "ungovern on my branch")
+    run_doctor(str(work))
+    out = capsys.readouterr().out
+    assert "still governs until that deletion reaches the upstream" in out
+    assert "no longer signing-governed" not in out

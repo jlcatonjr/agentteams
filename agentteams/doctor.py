@@ -16,6 +16,9 @@ the project's providers see the same rules, the same memory, and the same agents
   both lines), or a project rule using a framework-range id — :mod:`agentteams.hygiene_rules` (IM item 26).
 * **Backup stubs** (WARN, warn-first): a backed-up agent file under any runtime dir's ``.agentteams-backups/`` that
   a runtime would still load as a live agent (IM item 01) — :func:`agentteams.backup.runtime_loadable_backups`.
+* **Signing governance** (WARN): a team dir whose ``signing-governed.marker`` is absent and was deleted in a commit,
+  naming that commit, since a committed deletion ends governed signing (IM item 17) —
+  :func:`agentteams.signing_switch.marker_deletion_commit`.
 
 Exit code 1 when any FAIL is reported.
 
@@ -167,6 +170,29 @@ def _hygiene_rule_ids(root: Path) -> tuple[list[str], int]:
     return lines, 0
 
 
+def _signing_governance(root: Path) -> tuple[list[str], int]:
+    """WARN per team dir whose signing-governed.marker was deleted in a commit (IM item 17 addition).
+
+    A committed deletion is the one way a team stops being signing-governed (``signing_switch.is_governed``). It is
+    legitimate when the operator means it, so this is a WARN that names the commit, not a FAIL.
+    """
+    from agentteams.signing_switch import GOVERNED_MARKER, TEAM_DIRS, is_governed, marker_deletion_commit
+
+    lines: list[str] = []
+    for team in TEAM_DIRS:
+        commit = marker_deletion_commit(root / team)
+        if not commit:
+            continue
+        if is_governed(root / team):  # deleted on this branch only: upstream/origin/HEAD still carry the marker
+            effect = ("it still governs until that deletion reaches the upstream and default branch, then it will "
+                      "not")
+        else:
+            effect = "the team is no longer signing-governed"
+        lines.append(f"  !  WARN {team}/{GOVERNED_MARKER} is absent and was deleted in {commit}; {effect}. Restore "
+                     "it (git checkout <commit>^ -- <path>) unless that was intended")
+    return lines, 0
+
+
 def run_doctor(project: str | None) -> int:
     """``--doctor``: print the cross-surface report for the project at *project* (else the working directory).
 
@@ -186,7 +212,8 @@ def run_doctor(project: str | None) -> int:
     sections = (("Rules projection", lambda: _rules(root, brief)), ("Memory index", lambda: (_indexes(root, brief), 0)),
                 ("Copilot body limit", lambda: _body_limit(root)), ("Agents", lambda: (_agents(root), 0)),
                 ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)),
-                ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)))
+                ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)),
+                ("Signing governance", lambda: _signing_governance(root)))
     for title, section in sections:
         try:
             lines, failed = section()

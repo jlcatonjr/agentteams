@@ -90,6 +90,14 @@ A dir is governed when its `signing-governed.marker` exists, or when git still t
   calls per check; the callers are `--update`/projection writes and the decision-signing switch read when the
   switch file is missing, not a per-tool-call path.
 
+### `marker_deletion_commit(agents_dir) -> str | None`
+
+`"<short sha> <subject>"` of the newest commit reachable from HEAD that deleted `agents_dir`'s marker, when the
+marker is absent now; otherwise None (marker present, never deleted in a commit, not a git work tree, git missing or
+timing out). It runs a hardened `git log --diff-filter=D -1`, which stops at the deleting commit. `--doctor`'s
+**Signing governance** section uses it, together with `is_governed`, so that a committed deletion (the one way
+governance ends) is never silent.
+
 Where the marker is write-protected:
 
 - the Claude `Edit(...)` rules, for every team dir (they bind the built-in Write/Edit tools; Grok inherits them);

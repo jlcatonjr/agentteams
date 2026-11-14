@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Copilot and Codex emit no deny list of their own.
   - `confine-run.sh` changed, so its pins are updated (`EXPECTED_LAUNCHER_SHA256`, the WASM launcher pin, and
     `launcher_lineage.json`). The downstream re-pin of the parity test is coordinated outside this repository.
+  - A committed deletion still ends governance (the honest limit), but it is no longer silent. `--doctor`
+    has a new **Signing governance** section that WARNs for each team dir whose marker is absent and was
+    deleted in a commit, naming that commit (`signing_switch.marker_deletion_commit`, a hardened
+    `git log --diff-filter=D -1`). It is a WARN, not a FAIL, because the operator may have meant it.
   - Effect on existing teams: a team whose tracked marker was deleted but not committed is governed again.
     Nothing changes for a team that never had a marker.
 

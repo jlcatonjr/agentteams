@@ -14,6 +14,7 @@ project's providers see the same rules, the same memory and the same agents? It 
 | Shared AGENTS.md | WARN | A root `AGENTS.md` whose `constitutional_core` is older than the other entry files' (frozen with Codex while they moved on). |
 | Backup stubs | WARN | A backed-up agent file under any runtime dir's `.agentteams-backups/` that a runtime would still load as a live agent ([`backup.runtime_loadable_backups`](emit.md)); warn-first this release. |
 | Hygiene rule ids | WARN | A `### CH-…` heading repeated in a team's `references/code-hygiene-rules.reference.md` (the file and both lines), or a project rule using a framework-range id rather than `CH-P01…` ([`hygiene_rules`](hygiene-rules.md)). |
+| Signing governance | WARN | A team dir whose `signing-governed.marker` is absent and was deleted in a commit, naming that commit, and saying whether the team still governs (a deletion committed only on the current branch) or no longer does ([`signing_switch.marker_deletion_commit`](signing-switch.md); IM item 17). |
 
 `run_doctor(project) -> int` prints the report for `--project` (else the working directory), using the brief found
 there for `project_rules_source` and `frozen_surfaces`. It returns 1 when any FAIL is reported.
