@@ -4,10 +4,11 @@ CSV plan-steps ↔ Claude TodoWrite projection. The canonical plan-steps CSV rem
 
 Opt-in (for the bridge skill artifact) via [`--target-host-features bridge:copilot-vscode-to-claude:todo-projection`](host-features.md). The module is importable regardless of the host-feature flag; the flag only gates emission of the `.claude/skills/todo-from-plan/SKILL.md` skill file.
 
-> **Disambiguation.** This module's `read_steps`/`PlanStep` read the **strict 11-column** todo-projection schema (columns listed below) into dataclasses. The dict-row reader for `.steps.csv` audit artifacts is [`plan_steps`](plan_steps.md); the **tolerant 7-column** runtime wave reader is [`parallel_plan`](parallel-plan.md).
+> **Disambiguation.** This module's `read_steps`/`PlanStep` read the **Rule 9 runtime schema** (`step,agent,action,inputs,outputs,status,notes`; a row's `action` becomes the title, its `outputs` the deliverable, its `depends_on` the dependencies) or, as a fallback, the **11-column** todo-projection schema below, into dataclasses. The dict-row reader for `.steps.csv` audit artifacts is [`plan_steps`](plan_steps.md); the **tolerant 7-column** runtime wave reader is [`parallel_plan`](parallel-plan.md).
 
-## Required CSV Columns
+## Accepted CSV Columns
 
+The Rule 9 runtime schema (`step`, `status` and the other Rule 9 columns; `update_status()` keys on `step` and writes `completed` as `done`), or the 11-column form:
 `phase_id, step_id, phase_name, step_title, description, deliverable, dependencies, priority, effort, notes, status`
 
 ## Status Projection
@@ -17,7 +18,7 @@ Opt-in (for the bridge skill artifact) via [`--target-host-features bridge:copil
 | `pending` | `pending` | Yes |
 | `in_progress` | `in_progress` | Yes |
 | `completed` | `completed` | Yes |
-| `done` | `completed` (legacy synonym) | Yes |
+| `done` | `completed` (the Rule 9 word; `completed` is its legacy synonym) | Yes |
 | `blocked` | `pending` | Yes |
 | *(anything else — e.g. legacy/typo strings like `in-progress`, `wip`, or blank)* | `pending` (falls through via `.get(status, "pending")`) | **No** — `update_status()` raises `ValueError`; only the five statuses above are valid |
 

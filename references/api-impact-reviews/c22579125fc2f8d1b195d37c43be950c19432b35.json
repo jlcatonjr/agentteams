@@ -1,0 +1,8 @@
+{
+  "patch_id": "c22579125fc2f8d1b195d37c43be950c19432b35",
+  "commit": "f886e48141b899811c00d10bc2924055e7a338dd",
+  "subject": "fix(hygiene): audit fixes for item 26 (CH- rules only, verbatim blocks, placeholder-tolerant, scan flag, non-weakening clause)",
+  "impact": "1 symbols added, 1 symbols changed",
+  "note": "IM item 26 audit fixes: adds hygiene_rules.visible_text (public helper replacing tests' use of a private regex); additive; documented.",
+  "recorded_at": "2026-11-12T23:22:42Z"
+}

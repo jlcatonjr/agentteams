@@ -98,7 +98,9 @@ def test_copilot_and_codex_trust_root_table():
                                               f"{refs}/authorized-verify-keys")
         assert governed_roster_paths(key) == (f"{refs}/security-approvers.txt",
                                               f"{refs}/authorized-managers.txt",
-                                              f"{refs}/management-authority.json")
+                                              f"{refs}/management-authority.json",
+                                              f"{refs}/exception-registry.json",
+                                              f"{refs}/carveout-high-water.json")
     assert _PROTECTED_WRITE_PATHS == (".claude/agents/references/agent-privilege.json",
                                       ".claude/hooks/constitutional-gate.py",
                                       ".claude/agents/references/authorized-verify-keys")

@@ -332,6 +332,16 @@ def run_standalone_modes(
 
         gate_ok, gate_messages = verify_gate_interpreter(wiring_root, framework)
         ok, messages = ok and gate_ok, [*messages, *gate_messages]
+        from agentteams import gate_policy as _gate_policy  # #456: the active project gate verdict policy
+        from agentteams.frameworks.claude import GATE_HOOKS_DIR_BY_FRAMEWORK
+
+        if GATE_HOOKS_DIR_BY_FRAMEWORK.get(framework):
+            # The pin is enforced only where an OS write deny covers the gate and the policy file (Claude, sandbox on).
+            advisory = framework != "claude" or not effective_sandbox_state(manifest).os
+            pol_ok, pol_lines = _gate_policy.wiring_lines(
+                Path(wiring_root), Path(wiring_root) / GATE_HOOKS_DIR_BY_FRAMEWORK[framework] / "constitutional-gate.py",
+                advisory=advisory)
+            ok, messages = ok and pol_ok, [*messages, *pol_lines]
         from agentteams import runner_mcp  # R7: MCP-mediated agent writes need the server and agent files protected
 
         runner_problems = runner_mcp.wiring_problems(wiring_root, framework, manifest)

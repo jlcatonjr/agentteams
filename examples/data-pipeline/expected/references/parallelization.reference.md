@@ -24,7 +24,12 @@ derived from these **footprints**, not from the prose.
 python -m agentteams.parallel_plan tmp/by-week/<week>/<plan>.steps.csv
 python -m agentteams.parallel_plan PLAN_A.steps.csv PLAN_B.steps.csv   # cross-plan
 python -m agentteams.parallel_plan <plan>.steps.csv --json
+python -m agentteams.parallel_plan <plan>.steps.csv --all    # every row, done/blocked/in-progress included
 ```
+
+By default only the remaining steps are scheduled: `done` rows are dropped and satisfy their dependents; a
+`blocked` or `in_progress` row is held (a running step is not dispatched again) and its dependents wait, each
+reported as a warning. Check a CSV against the Rule 9 contract with `python -m agentteams.plan_steps --check <plan>.steps.csv`.
 
 From Python:
 

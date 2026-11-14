@@ -1567,8 +1567,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Read-only: report the health of the constraint-relaxing exception registry "
             "(references/exception-registry.json) under --output/--project (else CWD) — every "
-            "active-but-expired (lapsed) exception and any breach of the aggregate cap. Never "
-            "mints or activates. Exits non-zero if the registry is unhealthy."
+            "active-but-expired (lapsed) exception and any breach of the aggregate cap, which "
+            "the active carve-outs pinned to the team count against too, and a note when the cap "
+            "is not the default. Never mints or activates. Exits non-zero if the registry is unhealthy."
         ),
     )
     parser.add_argument(
@@ -1637,6 +1638,50 @@ def _build_parser() -> argparse.ArgumentParser:
             "(references/exception-registry.json) under --output/--project (else CWD), with id, "
             "status, scope, and expiry. Always exits 0."
         ),
+    )
+    parser.add_argument(
+        "--sign-toolchain-group",
+        dest="sign_toolchain_group",
+        default=None,
+        metavar="FILE",
+        help=(
+            "Operator-only (the constitution's First-party toolchain group section): sign the first-party toolchain group file (.agentteams/toolchain-group.json: "
+            "version, scope, group, workspaces, purpose, sequence, key_id) in place with the Ed25519 decision key, "
+            "after the same preflight, review digest and confirmation as --sign-decision. --output names a governed "
+            "team dir whose references/authorized-verify-keys holds <key_id>.pub.pem. Commit the same signed bytes "
+            "in every listed workspace."
+        ),
+    )
+    parser.add_argument(
+        "--verify-toolchain-group",
+        action="store_true",
+        dest="verify_toolchain_group",
+        default=False,
+        help=(
+            "Read-only: verify this workspace's .agentteams/toolchain-group.json (signature, workspace binding by git "
+            "origin and team id, HALTs, sequence) against --output's governed team dir, and print the group. "
+            "Exit 0 when it verifies, 1 otherwise. Team id from --team-id, else the brief (--description)."
+        ),
+    )
+    parser.add_argument(
+        "--verify-toolchain-pin",
+        dest="verify_toolchain_pin",
+        default=None,
+        metavar="LOCKFILE",
+        help=(
+            "Read-only, fail-closed (Rule S-9 for the toolchain group): every NAME=owner/repo@SHA pin in LOCKFILE to "
+            "a verified group member needs a NAME.tag=TAG line, and TAG must be an annotated tag that verifies "
+            "against --allowed-signers, names itself, and peels to SHA. Exit 0 when at least one such pin was checked and "
+            "every one verifies; 1 on any failure or when no pin to a group member was found; 2 when the workspace "
+            "has no toolchain-group file (nothing is under the rule)."
+        ),
+    )
+    parser.add_argument(
+        "--allowed-signers",
+        dest="allowed_signers",
+        default=None,
+        metavar="PATH",
+        help="With --verify-toolchain-pin: the ssh allowed_signers file naming the operator's release key.",
     )
     parser.add_argument(
         "--confirm-review-sha256",

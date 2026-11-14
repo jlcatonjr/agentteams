@@ -1,11 +1,12 @@
-"""sandbox_relaxation_gate.py — the render-time gate for turning a sandbox off, widening a WASM grant, or turning off
-the per-call MCP approval prompt (Rule 15, D7).
+"""sandbox_relaxation_gate.py — the render-time gate for turning a sandbox off, widening a WASM grant, turning off
+the per-call MCP approval prompt, or re-pinning a weaker gate verdict policy (Rule 15, D7).
 
-Six transitions are constraint-relaxing effects (:mod:`agentteams.cli.sandbox_effects`): ``sandbox-os-off``,
+Seven transitions are constraint-relaxing effects (:mod:`agentteams.cli.sandbox_effects`): ``sandbox-os-off``,
 ``sandbox-wasm-off`` (incl. the projected model-substrate switch), ``wasm-grant-widen``, ``native-exec-keep``,
 ``wasm-to-os-switch`` and ``mcp-approval-auto`` (the shared ``agentteams_wasm`` table of a Codex render stops
-prompting: the opt-in ``codex:wasm-auto-approve`` host feature, WP-C2). :func:`plan_relaxations` derives them from the
-previous and the new :class:`~agentteams.sandbox_state.SandboxState` and gate inputs; :func:`authorize` clears them;
+prompting: the opt-in ``codex:wasm-auto-approve`` host feature, WP-C2) and ``gate-policy-weaken`` (the render
+re-pins a weaker project gate verdict policy than the one recorded, #456; one-shot, never standing).
+:func:`plan_relaxations` derives them from the previous and the new :class:`~agentteams.sandbox_state.SandboxState` and gate inputs; :func:`authorize` clears them;
 :func:`retire_on_tighten` ends the standing exceptions a tightening makes unnecessary. Modelled on :mod:`agentteams.cli.adopt_merge_gate`.
 
 **Governed workspace** (``enforce_decision_signing``, read from disk before the render, so a render that flips it
@@ -27,8 +28,9 @@ consumes nothing.
 
 Rule 12 carve-outs (each is an audit target; see ``P15-governance.plan.md``): a ``sandbox-os-off`` that predates
 governance (no registry entry was ever recorded) continues with a notice; ``sandbox-wasm-off`` is not standing;
-ungoverned workspaces never refuse; the fixed native-exec exemption never reaches the keep set; raising limits within
-``LIMIT_BOUNDS`` mints no token; and a HALT on one instance of a family (``sandbox-os-off:goose``) also blocks its
+ungoverned workspaces never refuse; ``gate-policy-weaken`` is not standing (the next render records the weaker
+policy as the baseline, so the signed decision is spent once and nothing sunsets); the fixed native-exec exemption
+never reaches the keep set; raising limits within ``LIMIT_BOUNDS`` mints no token; and a HALT on one instance of a family (``sandbox-os-off:goose``) also blocks its
 siblings, because the family check matches every instance id (over-blocking only).
 """
 
@@ -61,6 +63,7 @@ from agentteams.cli.exception_registry import (
     retire_exception,
 )
 from agentteams.cli.sandbox_effects import (
+    GATE_POLICY_WEAKEN,
     MCP_APPROVAL_AUTO,
     MODEL_SUBSTRATE_QUALIFIER,
     NATIVE_EXEC_KEEP,
@@ -72,7 +75,14 @@ from agentteams.cli.sandbox_effects import (
     action_id,
     relaxation_kind_of,
 )
-from agentteams.sandbox_state import SandboxExceptions, SandboxState, keep_tokens, state_tokens
+from agentteams.gate_policy import RecordedPolicy, weakens
+from agentteams.sandbox_state import (
+    MALFORMED_GATE_DIGEST,
+    SandboxExceptions,
+    SandboxState,
+    keep_tokens,
+    state_tokens,
+)
 
 #: The sunset of a standing sandbox exception (Rule 15(d)); a later render re-checks it and refuses once it lapses.
 SANDBOX_EXCEPTION_TTL_DAYS = 90
@@ -134,7 +144,12 @@ def plan_relaxations(old: SandboxState | None, new: SandboxState, *, framework_i
         The relaxations in a stable order. Continuing ``wasm-to-os-switch`` entries are candidates (every agent on
         ``sandbox: os``); :func:`authorize` keeps only those the registry shows were switched. ``mcp-approval-auto``
         is new when ``new`` turns auto-approval on and the previous record did not (an absent record reads as off),
-        and continuing while both have it on.
+        and continuing while both have it on. ``gate-policy-weaken`` (never standing, never continuing) is planned
+        when the new gate policy is weaker than the recorded one (:func:`~agentteams.gate_policy.weakens`: a class
+        no longer denied, ``fail_closed_tools`` turned off, or the recorded policy removed), or when the previous
+        or another team dir's record is weakened likewise, or any installed gate (any framework) pins a digest no
+        reachable record explains and this render does not reproduce (or a malformed one): unprovable, so gated
+        (fail closed; :func:`gate_policy_weakenings`). A tightening, an equal policy or a first policy plans nothing.
 
     Raises:
         ValueError: A malformed slug, framework id or grant mount.
@@ -165,6 +180,52 @@ def plan_relaxations(old: SandboxState | None, new: SandboxState, *, framework_i
         if new_exc.mcp_approval_auto:
             was_on = old_exc is not None and old_exc.mcp_approval_auto
             out.append(Relaxation(MCP_APPROVAL_AUTO, framework_id, continuing=was_on))
+    if gate_policy_weakenings(old_exc, new_exc):
+        out.append(Relaxation(GATE_POLICY_WEAKEN, framework_id, standing=False))
+    return out
+
+
+def _weakening_detail(before: RecordedPolicy, after: RecordedPolicy | None) -> str:
+    """What re-pinning ``after`` drops relative to the recorded ``before`` (a weakening, per ``weakens``)."""
+    if after is None:
+        return (f"gate verdict policy removed: the recorded .agentteams/gate-policy.json (sha256 {before.sha256[:12]}) "
+                "is gone, so its deny classes return to the default verdicts.")
+    dropped = sorted(before.deny - after.deny)
+    parts = [f"no longer denies {dropped}"] if dropped else []
+    if before.fail_closed_tools and not after.fail_closed_tools:
+        parts.append("fail_closed_tools turned off")
+    return f"gate verdict policy weakened (sha256 {before.sha256[:12]} -> {after.sha256[:12]}): {'; '.join(parts)}."
+
+
+def gate_policy_weakenings(old_exc: SandboxExceptions | None, new_exc: SandboxExceptions | None) -> list[str]:
+    """Return why this render's gate policy is, or cannot be proved not to be, weaker than a previous one (#456).
+
+    Every reachable previous policy is judged: the own record and other team dirs' records semantically
+    (:func:`~agentteams.gate_policy.weakens`), and each digest an installed gate pins that no record explains by
+    sha256 alone (it must equal this render's; a malformed one never does). Fail closed (@security F2).
+
+    Args:
+        old_exc: The previous gate inputs (with the transient ``pinned_digests`` / ``other_policies``), or None.
+        new_exc: This render's gate inputs, or None.
+
+    Returns:
+        One notice line per weakening; empty for a tightening, an equal policy or a first policy.
+    """
+    new = new_exc.gate_policy if new_exc is not None else None
+    if old_exc is None:
+        return []
+    known = ([old_exc.gate_policy] if old_exc.gate_policy is not None else []) + sorted(
+        (p for p in old_exc.other_policies if p != old_exc.gate_policy), key=lambda p: p.sha256)
+    out = [_weakening_detail(p, new) for p in known if weakens(p, new)]
+    explained = {p.sha256 for p in known}
+    now = f"this render pins sha256 {new.sha256[:12]}" if new is not None else "this render pins no policy"
+    for digest in sorted(old_exc.pinned_digests - explained):
+        if digest == MALFORMED_GATE_DIGEST:
+            out.append("gate verdict policy changed: the previous policy is unknown (no build-log record); an "
+                       f"installed gate's _GATE_POLICY_SHA256 line is malformed; {now}.")
+        elif new is None or new.sha256 != digest:
+            out.append("gate verdict policy changed: the previous policy is unknown (no build-log record); the "
+                       f"installed gate records sha256 {digest[:12]}; {now}.")
     return out
 
 
@@ -182,8 +243,8 @@ def _shape(r: Relaxation) -> str:
     """The decision-row shape the refusal tells the operator to record."""
     effect = (f"effect_grants={';'.join(r.grants)}" if r.kind in (WASM_GRANT_WIDEN, NATIVE_EXEC_KEEP)
               else f"effect_relaxes={r.action}")
-    alternative = (" (or drop the codex:wasm-auto-approve host feature, which keeps the prompt)"
-                   if r.kind == MCP_APPROVAL_AUTO else "")
+    alternative = {MCP_APPROVAL_AUTO: " (or drop the codex:wasm-auto-approve host feature, which keeps the prompt)",
+                   GATE_POLICY_WEAKEN: f" (or {_way_back(r)})"}.get(r.kind, "")
     return (f"record a PASS row signed with the operator's Ed25519 key (--sign-decision): action_reviewed={r.action}, "
             f"scope={r.action}, {effect}, derives_from=<a recorded decision id>{alternative}")
 
@@ -310,9 +371,11 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
 
 
 def _way_back(r: Relaxation) -> str:
-    """The undo step a lapsed or unrecorded relaxation's refusal names (drop the token for auto-approval)."""
+    """The undo step a refusal names (drop the token for auto-approval, keep the policy for a weakening)."""
     if r.kind == MCP_APPROVAL_AUTO:
         return "drop the codex:wasm-auto-approve host feature"
+    if r.kind == GATE_POLICY_WEAKEN:
+        return "keep or restore the recorded .agentteams/gate-policy.json, which needs no decision"
     return "turn the sandbox back on"
 
 
@@ -582,6 +645,7 @@ __all__ = [
     "SandboxRelaxationError",
     "authorize",
     "excuse_stale_evidence",
+    "gate_policy_weakenings",
     "plan_relaxations",
     "retire_on_tighten",
     "standing_authorization",

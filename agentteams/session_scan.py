@@ -26,13 +26,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-from agentteams.plan_steps import read_steps
+from agentteams.plan_steps import DONE_STATUSES, STATUSES, read_steps
 
 _KNOWN_ISSUES_HEADING_RE = re.compile(r"^#{1,6}\s*.*Known Issues.*$", re.IGNORECASE)
 _HEADING_RE = re.compile(r"^#{1,6}\s")
 _STRUCK_BULLET_RE = re.compile(r"^-\s*~~")
 
-_PENDING_BLOCKED_STATUSES = frozenset({"pending", "blocked"})
+_OPEN_STATUSES = STATUSES - DONE_STATUSES
 
 
 @dataclass
@@ -73,7 +73,12 @@ def _scan_changelog_known_issues(repo_root: Path) -> list[RepoIssue]:
 def _scan_pending_blocked_steps(
     repo_root: Path, *, exclude_paths: set[Path] | None = None
 ) -> list[RepoIssue]:
-    """Return pending/blocked rows from the gitignored plan-steps tree (current + legacy layout)."""
+    """Return open rows from the gitignored plan-steps tree (current + legacy layout).
+
+    Open is every status but ``done`` (or the legacy ``completed``): ``pending``, ``in_progress``, ``blocked``,
+    and any value outside that vocabulary, which is flagged ``not a Rule 9 status`` rather than dropped. The
+    name is kept for callers.
+    """
     exclude = {p.resolve() for p in (exclude_paths or set())}
     # glob() returns empty on a fresh clone rather than raising, since these paths are gitignored.
     csv_paths = sorted({
@@ -93,13 +98,16 @@ def _scan_pending_blocked_steps(
         rel = str(csv_path.relative_to(repo_root))
         for row in rows:
             status = row.get("status", "").strip().lower()
-            if status not in _PENDING_BLOCKED_STATUSES:
+            # Every status but `done` is open: `in_progress` and an unknown value (`todo`, `in-progress`) used to
+            # vanish from Final Check Part B (IM item 09, G-05-1). An unknown value is flagged, not dropped.
+            if status in DONE_STATUSES:
                 continue
             agent = row.get("agent", "")
             action = row.get("action", "")
             issues.append(RepoIssue(
                 source="steps_csv", path=rel,
-                detail=f"{agent}: {action} (status={status})",
+                detail=f"{agent}: {action} (status={status}"
+                       + ("" if status in _OPEN_STATUSES else "; not a Rule 9 status") + ")",
             ))
     return issues
 

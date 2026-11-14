@@ -88,20 +88,20 @@ HOOK_EVENT = "PreToolUse"
 
 #: Bash patterns that match a Mandatory Review Trigger in security.template.md. Each is a
 #: judgment call routed to the operator, never an automatic deny — see the verdict policy above.
-_BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
-    (r"\bsudo\b|\bdoas\b", "elevated privilege — effects outside the project tree"),
-    (r"curl[^|]*\|\s*(?:ba)?sh|wget[^|]*\|\s*(?:ba)?sh|iwr[^|]*\|\s*iex",
+_BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
+    ("elevated-privilege", r"\bsudo\b|\bdoas\b", "elevated privilege — effects outside the project tree"),
+    ("remote-pipe-shell", r"curl[^|]*\|\s*(?:ba)?sh|wget[^|]*\|\s*(?:ba)?sh|iwr[^|]*\|\s*iex",
      "remote content piped straight into a shell with no inspectable step (Rule S-9 criterion 2)"),
-    (r"\b(?:crontab|launchctl)\b|/etc/sudoers|LaunchAgents",
+    ("persistence", r"\b(?:crontab|launchctl)\b|/etc/sudoers|LaunchAgents",
      "persistence mechanism — outlives the current session (Rule S-9 criterion 4)"),
-    (r"\b(?:brew|apt|apt-get|dnf|yum)\s+install\b|\bpip\s+install\b|\bnpm\s+i(?:nstall)?\b",
+    ("package-install", r"\b(?:brew|apt|apt-get|dnf|yum)\s+install\b|\bpip\s+install\b|\bnpm\s+i(?:nstall)?\b",
      "package installation — unreviewed third-party code on the host"),
-    (r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*--force)|\bgit\b[^\n]*\breset\s+--hard\b",
+    ("git-history-destructive", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*--force)|\bgit\b[^\n]*\breset\s+--hard\b",
      "history-destructive git operation"),
     # A fleet render past a release lock can roll a pinned repository's team back (the 2026-11-09 incident);
     # the lift is an operator decision, never unattended (security remediation row 692, item 3).
     # argparse takes any unique prefix, and `--fleet-i` is the shortest one; the Python API spells it fleet_ignore_locks.
-    (r"--fleet-i|\bfleet_ignore_locks\b",
+    ("fleet-lock-lift", r"--fleet-i|\bfleet_ignore_locks\b",
      "fleet release-lock lift — renders pinned repositories outside their own pin process (C-5)"),
     # ── Outbound-data gate (Rule S-9 criterion 6; C-4 derived content) ────────────────────────────
     # Exfiltration is the last hop of an injection, including one an agent decoded from read content
@@ -119,20 +119,20 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     # _command_name_trigger() below, so `grep scp` or `wget -nc` stays silent. Also an accepted extra
     # prompt: a quoted argument containing `; nc …` (the line is split on separators before quoting). Known extra prompts, accepted: a quoted
     # `requests.post(` in a grep, and `curl -H "…$(gh auth token)"` (that one sends a credential).
-    (r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*d|--data(?:-binary|-ascii)?|--json)[\s=]*['\"]?@|"
+    ("outbound-upload", r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*d|--data(?:-binary|-ascii)?|--json)[\s=]*['\"]?@|"
      r"\bcurl\b[^\n|;&]*\s--data-urlencode[\s=]*['\"]?[^\s'\"@]*@|"
      r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*F|--form(?:-string)?)[\s=]*['\"]?[^\s'\"=]+=[@<]|"
      r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*[TK]\b|--upload-file\b|--config\b)|"
      r"\bwget\b[^\n]*--(?:post|body)-file\b|"
      r"\bgh\b[^\n|;&]*(?:\s--input\b|\s(?-i:-F|--field)[\s=]*['\"]?[\w.\[\]-]+=@)",
      "outbound request uploading a file or stdin body (Rule S-9 criterion 6 — local data leaving the machine)"),
-    (r"\b(?:curl|wget)\b[^\n;&|]*(?:\$\(|`)|"
+    ("outbound-derived", r"\b(?:curl|wget)\b[^\n;&|]*(?:\$\(|`)|"
      r"\b(?:curl|wget|gh|nc|ncat|socat|scp|rsync|sftp)\b[^\n;&|]*"
      r"(?:~/\.ssh|\.aws/|\.netrc|\.gnupg|\bid_(?:rsa|ed25519|ecdsa)\b|\.env(?![\w.])|\bprintenv\b)",
      "outbound request built from command output or naming a credential path (Rule S-9 criterion 6)"),
-    (r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
+    ("raw-socket", r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
      "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
-    (r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
+    ("publication-channel", r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
      r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
      r"\bgit\b[^\n]*\s-c\s+['\"]?(?:remote|url)\.|"
      r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
@@ -146,7 +146,7 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
      r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
-    (r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
+    ("interpreter-send", r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
     # ── Delete-authorization gate (operator-directed; C-5: clearance precedes destruction) ──────────
@@ -159,7 +159,7 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     # is pinned in ENFORCEMENT_MODULES), not this hook self-checking. A green delete-gate test suite
     # means "these spellings are gated", never "deletion is prevented". Authoritative limits:
     # security.template.md.
-    (r"\bgh\b[^\n]*\s\w+\s+delete\b|\bgh\s+api\b[^\n]*(?:-X\s*DELETE|--method\s+DELETE)",
+    ("gh-delete", r"\bgh\b[^\n]*\s\w+\s+delete\b|\bgh\s+api\b[^\n]*(?:-X\s*DELETE|--method\s+DELETE)",
      "GitHub resource deletion via gh (repo/release/etc.) — irreversible"),
     # A merge is outside every PR agent's remit and outside the github-write MCP allowlist; the same token
     # through gh would otherwise get around both (MCP catalogue, @security implementation review cond. 6).
@@ -171,39 +171,211 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     # flag is `-{1,2}` + a word char. Overlapping alternatives here backtracked exponentially — 14
     # repeats of ` --repo -R` took ~50 s, and a hook the harness times out lets the command run. (No
     # atomic groups: the hook may run under a system python3 older than 3.11.)
-    (r"\bgh(?:\s+(?:-R|--repo)\s+[^\s-]\S*|\s+-{1,2}\w[\w-]*(?:=\S+)?)*\s+pr"
+    ("pr-merge", r"\bgh(?:\s+(?:-R|--repo)\s+[^\s-]\S*|\s+-{1,2}\w[\w-]*(?:=\S+)?)*\s+pr"
      r"(?:\s+(?:-R|--repo)\s+[^\s-]\S*|\s+-{1,2}\w[\w-]*(?:=\S+)?)*\s+merge\b|"
      r"\bpulls/[^\s/]+/merge\b|"
      r"\b(?:mergePullRequest|enablePullRequestAutoMerge)\b",
      "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
-    (r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*(?:--delete|--mirror|--prune|\s:\S))",
+    ("git-remote-delete", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*(?:--delete|--mirror|--prune|\s:\S))",
      "remote branch/tag deletion or mirror/prune push — irreversible remote loss"),
-    (r"\bgit\b[^\n]*\b(?:branch|tag)\s+(?:-[a-zA-Z]*[dD]\b|--delete\b)|"
+    ("git-ref-delete", r"\bgit\b[^\n]*\b(?:branch|tag)\s+(?:-[a-zA-Z]*[dD]\b|--delete\b)|"
      r"\bgit\b[^\n]*\bupdate-ref\s+-d\b|\bgit\b[^\n]*\bworktree\s+remove\b",
      "git branch/tag/ref/worktree deletion (any -C/--git-dir prefix)"),
     # argparse accepts unique prefixes (`--branch-c`, `--appl`), and the CLI is reachable as
     # `agentteams`, `python -m agentteams.cli.app` or `build_team.py`; the Python API too.
-    (r"\b(?:agentteams|build_team)\b(?=[^\n]*--branch-[cp])(?=[^\n]*--appl)|"
+    ("agentteams-branch-delete", r"\b(?:agentteams|build_team)\b(?=[^\n]*--branch-[cp])(?=[^\n]*--appl)|"
      r"\bbranch_cleanup\b[^\n]*\b(?:run_cleanup|run_post_merge|execute_items)\b",
      "branch deletion through agentteams (its git deletes run inside the tool, unseen here)"),
-    (r"\brm\s+\S|\b(?:unlink|srm|wipe|rmdir|shred|truncate)\b|\bfind\b[^\n]*\s-delete\b|"
+    ("fs-delete", r"\brm\s+\S|\b(?:unlink|srm|wipe|rmdir|shred|truncate)\b|\bfind\b[^\n]*\s-delete\b|"
      r"\bdd\b[^\n]*\bof=|>\|\s*\S|(?:^|[;&|])\s*:\s*>\s*\S|\bmv\b[^\n]*\s/dev/null\b|\bcp\s+/dev/null\b",
      "irreversible filesystem deletion or truncation/overwrite"),
-    (r"\bkubectl\b[^\n]*\bdelete\b|\bhelm\s+uninstall\b|\bterraform\s+(?:destroy|state\s+rm)\b|"
+    ("infra-delete", r"\bkubectl\b[^\n]*\bdelete\b|\bhelm\s+uninstall\b|\bterraform\s+(?:destroy|state\s+rm)\b|"
      r"\bterraform\s+apply\b[^\n]*-destroy|"
      r"\bdocker\s+(?:container\s+rm|image\s+rm|rm|rmi|volume\s+(?:rm|prune)|system\s+prune)\b|"
      r"\bdocker\s+compose\s+down\b[^\n]*(?:-v|--volumes)|"
      r"\baws\s+\S+\s+delete-|\baws\s+s3\s+r[bm]\b|\bgcloud\b[^\n]*\sdelete\b|\baz\b[^\n]*\sdelete\b|"
      r"\bdropdb\b",
      "infrastructure resource deletion"),
-    (r"\b(?:psql|mysql|mariadb|sqlite3?|mongo|redis-cli|clickhouse[-a-z]*)\b[^\n]*"
+    ("db-delete", r"\b(?:psql|mysql|mariadb|sqlite3?|mongo|redis-cli|clickhouse[-a-z]*)\b[^\n]*"
      r"(?:\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b|\bTRUNCATE\b|\bDELETE\s+FROM\b)",
      "database deletion via a client invocation"),
-    (r"\b(?:shutil\.rmtree|os\.(?:remove|unlink|rmdir)|rimraf)\b|\.unlink\(|\bfs\.rm(?:Sync|dirSync)?\(",
+    ("interpreter-delete", r"\b(?:shutil\.rmtree|os\.(?:remove|unlink|rmdir)|rimraf)\b|\.unlink\(|\bfs\.rm(?:Sync|dirSync)?\(",
      "interpreter-mediated deletion (python/node/etc.)"),
 )
 
 _WRITE_TOOLS = frozenset({"Write", "Edit", "NotebookEdit", "MultiEdit"})
+
+# ── Project verdict policy (#456) ─────────────────────────────────────────────────────────────────
+# A project may turn chosen `ask` classes into `deny` (a headless session answers no `ask`). The policy is
+# data beside this hook: `.agentteams/gate-policy.json`, whose SHA-256 agentteams writes into the installed
+# copy at render (`_GATE_POLICY_SHA256`). Tighten-only. No digest → default verdicts; digest set and the file
+# missing/altered/invalid → `deny` for every non-read-only tool. Limits: docs_src/api-reference/gate-policy.md.
+
+GATE_POLICY_REL = ".agentteams/gate-policy.json"
+GATE_POLICY_VERSION = 1
+GATE_POLICY_KEYS = frozenset({"version", "preset", "deny", "fail_closed_tools"})
+_GATE_POLICY_MAX_BYTES = 65536
+
+#: Refinements evaluated only when the policy denies their class, so an empty policy never sees them.
+POLICY_ONLY_TRIGGERS: tuple[tuple[str, str, str], ...] = (
+    ("rm-recursive-force", r"\brm\b(?=[^\n;&|]*\s(?:-[a-zA-Z]*r[a-zA-Z]*\b|--recursive\b))(?=[^\n;&|]*\s(?:-[a-zA-Z]*f[a-zA-Z]*\b|--force\b))",
+     "recursive forced removal (rm -rf)"),
+    ("git-force-push-short", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s(?:-(?!-)[a-zA-Z]*f[a-zA-Z]*\b|['\"]?\+[\w./*-]))",
+     "force push by short flag (-f) or +refspec"),
+    ("git-alias-config", r"\bgit\b[^\n]*\s-c\s+['\"]?(?:alias|push|remote|url)\.|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)"
+     r"(?=[^\n]*\s['\"]?(?:alias|push|remote|url)\.)",
+     "git alias, push or remote configuration that can hide or redirect a push"),
+)
+
+#: Every class a policy may name: the default `ask` classes, then the policy-only refinements.
+ASK_CLASSES: frozenset[str] = frozenset(
+    {c for c, _, _ in _BASH_REVIEW_TRIGGERS}
+    | {"raw-socket", "dns-exfil", "command-too-long", "git-config-write", "scanner-unverified", "no-interpreter"})
+POLICY_ONLY_CLASSES: frozenset[str] = frozenset(c for c, _, _ in POLICY_ONLY_TRIGGERS)
+POLICY_CLASSES: frozenset[str] = ASK_CLASSES | POLICY_ONLY_CLASSES
+
+#: Named presets, defined here and never in the project file. `strict` is for headless teams: the
+#: history-destructive, publication and destructive classes a downstream wrapper denied (#456).
+GATE_POLICY_PRESETS: dict[str, frozenset[str]] = {"strict": frozenset({
+    "git-history-destructive", "git-force-push-short", "git-remote-delete", "git-alias-config",
+    "publication-channel", "rm-recursive-force", "remote-pipe-shell", "db-delete", "command-too-long"})}
+
+#: F1: a Bash line naming a protected file with a write verb, redirect or interpreter is denied once a policy is recorded.
+_POLICY_FILES_RE = r"gate-policy\.json|constitutional-gate\.py|agentteams-python"
+_WRITE_VERBS_RE = (r">|\b(?:sed|perl|mv|cp|tee|ln|rm|dd|truncate|install|chmod|touch|git|python[\d.]*|ruby|node|"
+                   r"awk|ex|vi|vim|ed|rsync|tar|unzip|patch)\b")
+
+#: Tools a failed policy still allows, so the operator can look at what went wrong.
+READ_ONLY_TOOLS = frozenset({"Read", "Grep", "Glob", "LS", "NotebookRead"})
+
+
+class GatePolicyError(ValueError):
+    """The project's gate policy cannot be used (missing, altered or invalid)."""
+
+
+class GatePolicy:
+    """A parsed, validated project gate policy: the classes it denies and its crash posture."""
+
+    def __init__(self, deny: "frozenset[str]", fail_closed_tools: bool, preset: "str | None") -> None:
+        self.deny, self.fail_closed_tools, self.preset = deny, fail_closed_tools, preset
+
+
+def parse_gate_policy(raw: bytes) -> GatePolicy:
+    """Parse and validate policy bytes; ``deny`` is the preset's classes plus the listed ones.
+
+    Raises GatePolicyError for anything but a valid deny-only policy (size, JSON, keys, types, ids).
+    """
+    if len(raw) > _GATE_POLICY_MAX_BYTES:
+        raise GatePolicyError(f"larger than {_GATE_POLICY_MAX_BYTES} bytes")
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise GatePolicyError(f"not valid UTF-8 JSON ({type(exc).__name__})") from exc
+    if not isinstance(data, dict):
+        raise GatePolicyError("not a JSON object")
+    if set(data) - GATE_POLICY_KEYS:
+        raise GatePolicyError(f"unknown key(s) {sorted(set(data) - GATE_POLICY_KEYS)}; a policy can only deny")
+    if data.get("version") != GATE_POLICY_VERSION or type(data.get("version")) is not int:
+        raise GatePolicyError(f"version must be {GATE_POLICY_VERSION}")
+    preset = data.get("preset")
+    if preset is not None and (not isinstance(preset, str) or preset not in GATE_POLICY_PRESETS):
+        raise GatePolicyError(f"unknown preset {preset!r} (known: {sorted(GATE_POLICY_PRESETS)})")
+    listed = data.get("deny", [])
+    if not isinstance(listed, list) or not all(isinstance(c, str) for c in listed):
+        raise GatePolicyError("deny must be a list of class ids")
+    if set(listed) - POLICY_CLASSES:
+        raise GatePolicyError(f"unknown class id(s) {sorted(set(listed) - POLICY_CLASSES)}")
+    fail_closed = data.get("fail_closed_tools", False)
+    if not isinstance(fail_closed, bool):
+        raise GatePolicyError("fail_closed_tools must be true or false")
+    deny = frozenset(listed) | GATE_POLICY_PRESETS.get(preset or "", frozenset())
+    return GatePolicy(deny, fail_closed, preset)
+
+
+def _policy_path() -> Path:
+    """The policy file of the project this hook is installed in (never cwd or an environment variable)."""
+    parents = Path(__file__).resolve().parents
+    return (parents[2] if len(parents) > 2 else Path(__file__).resolve().parent) / GATE_POLICY_REL
+
+
+def _read_policy_bytes(path: Path) -> bytes:
+    """Read the policy file without following a final symlink; raise OSError otherwise."""
+    fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    with os.fdopen(fd, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("not a regular file")
+        return handle.read(_GATE_POLICY_MAX_BYTES + 1)
+
+
+#: Cached per process: (policy or None, why it failed or "").
+_POLICY_STATE: "tuple[GatePolicy | None, str] | None" = None
+
+
+def _active_policy() -> "tuple[GatePolicy | None, str]":
+    """Return ``(policy, "")``, ``(None, "")`` when no policy is recorded, or ``(None, why)`` when it failed.
+
+    Reads the file once and hashes and parses those same bytes. Never raises.
+    """
+    global _POLICY_STATE
+    if _POLICY_STATE is not None:
+        return _POLICY_STATE
+    if not _GATE_POLICY_SHA256:
+        _POLICY_STATE = (None, "")
+        return _POLICY_STATE
+    path: object = GATE_POLICY_REL
+    try:
+        path = _policy_path()
+        raw = _read_policy_bytes(path)
+        if not hmac.compare_digest(hashlib.sha256(raw).hexdigest(), _GATE_POLICY_SHA256):
+            raise GatePolicyError("its SHA-256 does not match the digest recorded at render")
+        _POLICY_STATE = (parse_gate_policy(raw), "")
+    except FileNotFoundError:
+        _POLICY_STATE = (None, f"{path} was recorded at render but is missing")
+    except (OSError, ValueError, RuntimeError, TypeError) as exc:  # recorded: the gate locks (not a swallow)
+        _POLICY_STATE = (None, f"{path} cannot be used: {type(exc).__name__}: {exc}")
+    return _POLICY_STATE
+
+
+def _protected_by_policy(target: str) -> bool:
+    """Whether a write targets the policy file, this hook, or its interpreter pin (only once a policy is recorded)."""
+    if not target:
+        return False
+    here = Path(__file__).resolve()
+    try:
+        resolved = Path(os.path.abspath(target)).resolve()
+    except (OSError, RuntimeError):
+        return True  # cannot tell where it lands: treat as protected
+    guarded = [_policy_path().resolve(), here, here.parent / _PIN_NAME]
+    if resolved in guarded:
+        return True
+    try:  # a case variant (case-insensitive APFS) or a hardlink of a guarded file is the same inode
+        st = os.stat(resolved)
+    except OSError:
+        return False
+    return any(os.path.exists(g) and os.path.samestat(st, os.stat(g)) for g in guarded)
+
+
+def _policy_ask(reason: str, reason_id: str, checked: str, classes: "list[str]",
+                categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
+    """Decide ``ask`` — or ``deny`` when the project policy denies any of ``classes``."""
+    policy, _ = _active_policy()
+    # F3: under any deny policy an over-long command is denied too, or padding would hide every denied class.
+    denied = [c for c in classes if policy is not None and (c in policy.deny or (c == "command-too-long" and policy.deny))]
+    if denied:
+        _decide("deny", f"{reason} The project gate policy ({GATE_POLICY_REL}) denies class "
+                        f"'{denied[0]}' instead of asking, so this call is blocked. Change the policy "
+                        "(an operator decision) if this operation is intended.",
+                "policy-deny", checked, categories, lines, policy_class=denied[0])
+    _decide("ask", reason, reason_id, checked, categories, lines, policy_class=classes[0] if classes else None)
+
+
+def _fail_closed_for(tool_name: object) -> bool:
+    """Whether a gate failure denies this tool: the profile's posture, or the policy's ``fail_closed_tools``."""
+    if _FAIL_CLOSED_ON_ERROR:
+        return True
+    policy, failure = _active_policy()  # a recorded policy that failed to load also fails closed (F4)
+    return tool_name not in READ_ONLY_TOOLS and bool(failure or (policy is not None and policy.fail_closed_tools))
 
 #: Bounds on what the regex triggers are asked to scan. Patterns with unbounded gaps are superlinear on
 #: pathological input (a line of `git push git push …` took 89 s on one pattern), and a hook the
@@ -242,24 +414,37 @@ def _mask_quoted_separators(command: str) -> str:
     return "".join(out)
 
 
-def _bash_trigger(command: str) -> "str | None":
-    """The first Mandatory Review Trigger a Bash command matches, else None — in bounded time."""
+def _bash_matches(command: str, first_only: bool = False,
+                  extra: "frozenset[str]" = frozenset()) -> "list[tuple[str, str]]":
+    """Return ``(class_id, reason)`` for the triggers a Bash command matches, in table order.
+
+    ``first_only`` stops at the first match (the default verdict needs only that one). Otherwise every
+    matching class is returned, so a project policy can deny a class that is not the first match, and
+    the :data:`POLICY_ONLY_TRIGGERS` named in ``extra`` are evaluated too (never otherwise).
+    """
     # A trailing pipe or `&&`/`||` continues the pipeline on the next line; join it so per-line
     # evaluation still sees `curl … |` and `sh` together.
     command = re.sub(r"(\||&&)[ \t]*\r?\n", r"\1 ", command)
     lines = command.splitlines() or [""]
     if len(command) > _MAX_COMMAND or any(len(line) > _MAX_LINE for line in lines):
-        return (f"command too long to check reliably (over {_MAX_COMMAND} characters, or a line over "
-                f"{_MAX_LINE}) — the gate routes it to you rather than scanning it slowly")
+        return [("command-too-long",
+                 f"command too long to check reliably (over {_MAX_COMMAND} characters, or a line over "
+                 f"{_MAX_LINE}) — the gate routes it to you rather than scanning it slowly")]
     command = _mask_quoted_separators(command)
     lines = command.splitlines() or [""]
-    why = _command_name_trigger(command)
-    if why:
-        return why
-    for pattern, reason in _BASH_REVIEW_TRIGGERS:
+    found: list[tuple[str, str]] = []
+    named = _command_name_trigger(command)
+    if named:
+        found.append(named)
+        if first_only:
+            return found
+    table = _BASH_REVIEW_TRIGGERS + tuple(t for t in POLICY_ONLY_TRIGGERS if t[0] in extra)
+    for class_id, pattern, reason in table:
         if any(re.search(pattern, line, re.IGNORECASE) for line in lines):
-            return reason
-    return None
+            found.append((class_id, reason))
+            if first_only:
+                return found
+    return found
 
 
 # ── Command-name triggers (tools whose names are also ordinary words) ─────────────────────────────
@@ -328,14 +513,16 @@ def _command_names(command: str) -> list[tuple[str, str]]:
     return found
 
 
-def _command_name_trigger(command: str) -> "str | None":
-    """The trigger reason for a word-like network tool run as a command, else None."""
+def _command_name_trigger(command: str) -> "tuple[str, str] | None":
+    """``(class_id, reason)`` for a word-like network tool run as a command, else None."""
     for name, rest in _command_names(command):
         if name in _RAW_SOCKET_TOOLS or (name == "nc" and not re.search(r"(?:^|\s)-[a-zA-Z]*z", rest)):
-            return "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"
+            return ("raw-socket",
+                    "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)")
     if re.search(r"\b(?:dig|nslookup|drill|host)\b[^\n|;&]*(?:\$\(|`)", command, re.IGNORECASE) and any(
             name in _DNS_TOOLS for name, _ in _command_names(command)):
-        return "DNS lookup built from command output — a covert exfiltration channel (Rule S-9 criterion 6)"
+        return ("dns-exfil",
+                "DNS lookup built from command output — a covert exfiltration channel (Rule S-9 criterion 6)")
     return None
 
 
@@ -343,16 +530,19 @@ class _Verdict(Exception):
     """A decision reached by :func:`main`; :func:`_entrypoint` emits and logs it once."""
 
     def __init__(self, decision: str, reason: str, reason_id: str, checked: str,
-                 categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
+                 categories: tuple[str, ...] = (), lines: tuple[int, ...] = (),
+                 policy_class: "str | None" = None) -> None:
         super().__init__(reason_id)
         self.decision, self.reason, self.reason_id = decision, reason, reason_id
         self.checked, self.categories, self.lines = checked, categories, lines
+        self.policy_class = policy_class
 
 
 def _decide(decision: str, reason: str, reason_id: str, checked: str,
-            categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
+            categories: tuple[str, ...] = (), lines: tuple[int, ...] = (),
+            policy_class: "str | None" = None) -> None:
     """Stop the gate with a decision; :func:`_entrypoint` emits it on stdout and logs it."""
-    raise _Verdict(decision, reason, reason_id, checked, categories, lines)
+    raise _Verdict(decision, reason, reason_id, checked, categories, lines, policy_class)
 
 
 def _emit(decision: str, reason: str) -> None:
@@ -491,7 +681,9 @@ def _import_integrity(raw: bytes):
         f"{Path(__file__).resolve().parent / _PIN_NAME} names that interpreter."
     )
     print(f"agentteams constitutional gate: {message}", file=sys.stderr)
-    _decide("deny" if _FAIL_CLOSED_ON_ERROR else "ask", message, "no-interpreter", "none")
+    if _fail_closed_for("Write"):  # only content-bearing writes reach here
+        _decide("deny", message, "no-interpreter", "none", policy_class="no-interpreter")
+    _policy_ask(message, "no-interpreter", "none", ["no-interpreter"])
     raise SystemExit(2)  # unreachable: _decide raises the verdict
 
 
@@ -512,25 +704,46 @@ def main(payload: object, raw: bytes = b"") -> str:
         return "none"
 
     tool_name = payload.get("tool_name", "")
+    policy, policy_failure = _active_policy()
+    if policy_failure and tool_name not in READ_ONLY_TOOLS:
+        _decide("deny", f"the project gate policy cannot be verified: {policy_failure}. Every tool that "
+                        "is not read-only is denied until the operator restores the recorded policy or "
+                        "re-renders the team (`agentteams --update`) to record the intended one.",
+                "policy-unverified", "policy")
     tool_input = payload.get("tool_input") or {}
     if not isinstance(tool_input, dict):
+        if policy is not None and tool_name in _WRITE_TOOLS | {"Bash"}:
+            _decide("deny", "malformed tool_input under a project gate policy", "policy-unverified", "policy")
         return "none"
 
     if tool_name == "Bash":
         # A backslash-newline is a line continuation to the shell; join it so no pattern is split by one.
         command = re.sub(r"\\\r?\n", " ", str(tool_input.get("command", "")))
-        why = _bash_trigger(command)
-        if why:
-            _decide(
-                "ask",
+        if policy is not None and re.search(_POLICY_FILES_RE, command, re.I) and re.search(_WRITE_VERBS_RE, command):
+            _decide("deny", "this command names the project gate policy, the gate or its interpreter pin together "
+                            "with a write; a recorded policy protects them. Changing them is an operator decision.",
+                    "policy-protected", "policy")
+        if policy is not None and policy.deny:
+            found = _bash_matches(command, extra=policy.deny & POLICY_ONLY_CLASSES)
+        else:
+            found = _bash_matches(command, first_only=True)
+        if found:
+            ask_found = [f for f in found if f[0] not in POLICY_ONLY_CLASSES]
+            why = (ask_found or found)[0][1]
+            _policy_ask(
                 f"Mandatory Review Trigger: {why}. C-5 requires a recorded clearance BEFORE "
                 f"execution, not after. Approve only if this is the operation you intended.",
-                "bash-trigger", "bash-triggers",
+                "bash-trigger", "bash-triggers", [c for c, _ in found],
             )
         return "bash-triggers"
 
     if tool_name in _WRITE_TOOLS:
         content, target = _written_content(tool_name, tool_input)
+        if policy is not None and _protected_by_policy(str(target)):
+            _decide("deny", f"this write targets the project gate policy ({GATE_POLICY_REL}), the gate "
+                            "itself or its interpreter pin, which a recorded policy protects. Changing the "
+                            "policy is an operator decision, made outside the agent session.",
+                    "policy-protected", "policy")
         # Writing a git config file can add or repoint a remote with no `git remote` command for the
         # Bash gate to see; a later plain `git push` then sends to it (Rule S-9 criterion 6). Asked
         # only AFTER the content scan, so a credential in it still gets the deterministic deny.
@@ -562,13 +775,12 @@ def main(payload: object, raw: bytes = b"") -> str:
         if _FAIL_CLOSED_ON_ERROR:
             tampered += [f for f in integrity_findings if f.reason == "manifest-missing"]
         if tampered:
-            _decide(
-                "ask",
+            _policy_ask(
                 "the content scanner does not match the integrity manifest ("
                 + "; ".join(f.describe() for f in tampered)
                 + "). Its verdict on this write cannot be trusted. Regenerate the manifest if "
                 "you changed scan.py deliberately, or investigate.",
-                "scanner-unverified", "none",
+                "scanner-unverified", "none", ["scanner-unverified"],
             )
 
         from agentteams.scan import scan_content, verdict_for_findings
@@ -592,9 +804,9 @@ def main(payload: object, raw: bytes = b"") -> str:
 
 def _ask_git_config(checked: str) -> None:
     """Route a write to a git config file to the operator (Rule S-9 criterion 6)."""
-    _decide("ask", "Mandatory Review Trigger: a write to a git config file can add or repoint a remote "
-                   "(Rule S-9 criterion 6). Approve only if this is the change you intended.",
-            "git-config", checked)
+    _policy_ask("Mandatory Review Trigger: a write to a git config file can add or repoint a remote "
+                "(Rule S-9 criterion 6). Approve only if this is the change you intended.",
+                "git-config", checked, ["git-config-write"])
 
 
 #: Bounds on what the decision log copies from the payload (ids are harness-generated, but bounded anyway).
@@ -656,7 +868,8 @@ def _append_chained(target: Path, record: dict) -> None:
 
 
 def _log_decision(payload: object, decision: str, reason_id: "str | None", checked: str,
-                  categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
+                  categories: tuple[str, ...] = (), lines: tuple[int, ...] = (),
+                  policy_class: "str | None" = None) -> None:
     """Append this invocation's record when ``AGENTTEAMS_GATE_LOG`` is set; never raises OSError/ValueError."""
     raw = os.environ.get("AGENTTEAMS_GATE_LOG", "")
     if not raw:
@@ -677,6 +890,8 @@ def _log_decision(payload: object, decision: str, reason_id: "str | None", check
             "categories": list(categories),
             "lines": list(lines),
             "fail_closed": _FAIL_CLOSED_ON_ERROR,
+            "policy_class": policy_class,
+            "policy_sha256": _GATE_POLICY_SHA256 or None,
             "reexec": os.environ.get(_REEXEC_ENV) == "1",
             "gate_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "input_hmac": _input_hmac(fields.get("tool_input")),
@@ -693,6 +908,10 @@ def _log_decision(payload: object, decision: str, reason_id: "str | None", check
 #: entry-point handler below is a process-BOUNDARY reporting handler — it acts (emits a
 #: deny) and reports; it is not a swallow (CH-24), and it is the only broad catch here.
 _FAIL_CLOSED_ON_ERROR = False
+
+#: #456: agentteams writes the SHA-256 of the project's validated `.agentteams/gate-policy.json` here at
+#: render. Empty: no policy is recorded, and a policy file beside an empty digest is ignored.
+_GATE_POLICY_SHA256 = ""
 
 
 def _entrypoint() -> int:
@@ -726,17 +945,20 @@ def _entrypoint() -> int:
     except _Verdict as verdict:
         _emit(verdict.decision, verdict.reason)
         _log_decision(payload, verdict.decision, verdict.reason_id, verdict.checked,
-                      verdict.categories, verdict.lines)
+                      verdict.categories, verdict.lines, verdict.policy_class)
         raise SystemExit(0)
     except Exception as exc:  # process-boundary handler: acts (deny) + reports, never swallows
-        if not _FAIL_CLOSED_ON_ERROR:
+        tool = payload.get("tool_name") if isinstance(payload, dict) else None
+        if not _fail_closed_for(tool):
             _log_decision(payload, "crash-open", "crash", "none")
             raise
         _emit(
             "deny",
             f"the constitutional gate crashed ({type(exc).__name__}: {exc}); failing closed "
-            "because this workspace uses a confined/exclusive privilege_profile — a gate "
-            "crash must not become a silent allow. Fix the gate, or regenerate with "
+            + ("because the project gate policy sets fail_closed_tools — a gate "
+               if not _FAIL_CLOSED_ON_ERROR else
+               "because this workspace uses a confined/exclusive privilege_profile — a gate ")
+            + "crash must not become a silent allow. Fix the gate, or regenerate with "
             "--allow-fallback-fail-open to restore the harness fail-open default.",
         )
         _log_decision(payload, "crash-deny", "crash", "none")

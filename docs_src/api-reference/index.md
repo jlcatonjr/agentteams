@@ -53,6 +53,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
 | [`integrity`](integrity.md) | Hash manifest over the modules that enforce the constitution itself |
+| [`gate_policy`](gate-policy.md) | Project verdict policy for the constitutional gate: ask→deny classes, pinned at render, fail-closed when tampered (#456) |
 | [`feature_audit`](feature-audit.md) | Verifies features documented in Feature Inventory still function, via the machine-readable feature registry |
 | [`living-doc`](living-doc.md) | Living-document conformance (Rule 7) over unfenced agent prose |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
@@ -76,6 +77,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`carveouts`](carveouts.md) | Operator-signed, workspace-scoped carve-outs: one signed, committed registry, machine-checked bounds, rendered into every entry file |
 | [`surface-matrix`](surface-matrix.md) | Which agents exist on which provider, their declared tools, notes and skills parity |
 | [`doctor`](doctor.md) | `--doctor`: one read-only report on whether the project's providers agree |
+| [`hygiene_rules`](hygiene-rules.md) | Project code-hygiene rules in the `CH-P` namespace: merge migration and the `--doctor` id checks |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
 | [`code-index`](code-index.md) | Code & API index over repository scripts and the external APIs they use (gitignored local cache) |
 | [`code-sources`](code-sources.md) | Source resolution and partitioning for the code & API index |

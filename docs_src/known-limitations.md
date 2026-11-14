@@ -150,15 +150,44 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 ### The aggregate cap (constraint-relaxing-authorizations rule, clause d) is not consulted for operator-signed relaxing decisions
 
 - **What:** `exception_registry.assert_within_aggregate_cap` runs on the adopt-merge, sandbox-relaxation and S-10
-  paths, and carve-outs (`.agentteams/carveouts.json`) count against the same cap when they render. Other
-  Ed25519-signed relaxing decisions (cross-repo actions, grants) are bounded only by their own expiry. The count is
-  one-way: minting an exception and `--audit-exceptions` don't count active carve-outs, so a team at its cap can
-  still mint an exception, after which its carve-outs stop rendering.
+  paths, and carve-outs (`.agentteams/carveouts.json`) count against the same cap both ways: when they render, and
+  (since 2026-11-12) when an exception is minted and in `--audit-exceptions`. Other Ed25519-signed relaxing
+  decisions (cross-repo actions, grants) are bounded only by their own expiry.
 - **Who:** operators of signing-governed workspaces who sign relaxing decisions.
 - **Mitigation:** give every signed relaxing decision a short expiry, and review the decision log's open relaxing
-  rows at each release or fleet round. `--audit-exceptions` covers only `references/exception-registry.json`, so it
-  does not see these rows.
+  rows at each release or fleet round. `--audit-exceptions` covers `references/exception-registry.json` and the
+  carve-outs pinned to the team, so it does not see these rows.
 - **Tracking:** remediation log row 337.
+
+### A cap planted before the exception registry was protected stays in place
+
+- **What:** since 2026-11-12 a sandboxed team's `references/exception-registry.json` is stubbed and write-protected.
+  In a team rendered before then, a confined process could have created the file with a raised
+  `cap.max_active_relaxing`. The stub writer never overwrites an existing file, so the next `--update` keeps it, and
+  the sandbox then protects it. A raised cap grants nothing by itself (each exception still needs an operator-signed
+  decision), but it loosens the aggregate cap.
+- **Who:** operators of sandboxed teams created before 2026-11-12.
+- **Mitigation:** `--audit-exceptions` prints a note whenever the cap is not the default; check the file's history
+  (`git log -p`) and restore the default if you didn't set it.
+
+### Any carve-out entry takes exception-cap room, signed or not
+
+- **What:** minting an exception and `--audit-exceptions` count every active, unexpired entry in
+  `.agentteams/carveouts.json`, whether or not the registry is signed or valid, and refuse when the file can't be
+  read. A draft registry therefore takes cap room before the operator signs it, and a sandboxed agent that can write
+  `.agentteams/` (protected only when prompt-root protection is on) can block minting with a planted or malformed
+  file. Rendering counts only valid, signed entries, so the two counts can differ.
+- **Who:** operators who use carve-outs and also mint exceptions.
+- **Mitigation:** the refusal names the carve-out registry; remove or fix the entry. Counting more is the
+  fail-closed direction for a cap.
+
+### The carve-out high-water mark can be rolled back with the team dir
+
+- **What:** every sandboxed team rendered or updated since 2026-11-12 has `references/carveout-high-water.json`. In a project that commits its team
+  dir, a `git checkout` or `git reset` of the team dir lowers the mark with it.
+- **Who:** projects that commit `.github/agents` or another team dir.
+- **Mitigation:** the registry's own history check (the last 500 commits) still refuses a re-used or lower sequence;
+  the mark only adds to it. Leave the mark uncommitted (gitignore it) if your team dir is tracked.
 
 ### Generation-time grant widening does not consume `max_uses`
 
@@ -246,6 +275,18 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Mitigation:** deny or ask WebFetch and unneeded MCP servers in your settings' permission rules. Confine egress
   (next entry).
 - **Tracking:** remediation log rows 388 and 413. Threat model v3, section 2a.
+
+### The project gate policy is advisory where nothing write-protects the gate
+
+- **What:** the policy's digest is recorded in the installed gate. On Copilot, on Grok, and in any team whose OS
+  sandbox is off, no OS write deny covers the gate or `.agentteams/gate-policy.json`. An agent that can write them
+  can clear the digest, which unpins the policy. A harness timeout, or a hook removed from settings, is still the
+  harness's own fail-open.
+- **Who:** teams that use `.agentteams/gate-policy.json` without the Claude OS sandbox.
+- **Mitigation:** run with the Claude sandbox on (the gate, its pin and the policy file get `denyWrite` and `Edit`
+  rules), and check `--check-wiring`, which marks the policy ADVISORY where this applies. See
+  [`gate_policy`](api-reference/gate-policy.md).
+- **Tracking:** issue #456.
 
 ### The project sandbox block does not confine network egress
 
@@ -476,7 +517,8 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
 ### Several standing sandbox exceptions can hit the aggregate cap
 
 - **What:** each standing relaxation (OS off, a grant widening, a native-exec keep, a runner switch) is one active
-  exception in the registry, and the registry's aggregate cap defaults to one. A governed workspace that needs two
+  exception in the registry, and the registry's aggregate cap defaults to one (active carve-outs pinned to the
+  team count against it too). A governed workspace that needs two
   at once (for example the default `native_exec_keep` and a widened grant) is refused until the cap is raised.
 - **Who:** governed workspaces with WASM on and more than one exception.
 - **Workaround:** raise `max_active_relaxing` in the exception registry deliberately (it is git-tracked).

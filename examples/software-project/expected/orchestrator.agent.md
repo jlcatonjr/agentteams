@@ -301,7 +301,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=12 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=13 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -335,7 +335,7 @@ Before executing Step 1 of any such plan:
 4. **Run Workflow 0A (Parallelization Analysis)** on the freshly written plan to compute the wave schedule before executing Step 1 (see Workflow 0A for the per-wave audit cadence).
 5. As each step completes: mark its `status` `done`, then pass the remaining `pending` steps through `@adversarial` and `@conflict-auditor` in light of any learning from the completed step; revise affected rows (including `depends_on`) before proceeding to the next step or wave
 6. Mark steps `blocked` with a note if they cannot proceed; surface blocked steps to the user
-7. A step that must run outside the agent sandbox is an **operator step**: `agent` = `operator`, `status` = `blocked`, `notes` = `handoff: <script path>` until its handoff log reports `ok` (see **Sandbox Operator Handoff**). Workflow 0A schedules it as a singleton; only the steps that depend on it wait
+7. A step that must run outside the agent sandbox is an **operator step**: `agent` = `operator`, `status` = `blocked`, `notes` = `handoff: <script path>` until its handoff log reports `ok` (see **Sandbox Operator Handoff**). Workflow 0A does not schedule it while it is `blocked` (it is listed as held), and only the steps that depend on it wait; once the operator reports `ok`, mark it `done` and its dependents are scheduled
 
 The plan slug is a lowercase-hyphenated name derived from the workflow trigger (e.g., `produce-chapter-3`, `dependency-audit-2026-04`). Legacy undated plans already present in `tmp/` remain readable and should be considered fallback inputs during review and summary workflows.
 
@@ -708,7 +708,7 @@ carry an appended handoff:
 
 **Trigger:** "Run code hygiene audit" / "Pre-merge check" / "Check file hygiene"
 
-1. Invoke `@code-hygiene` → full audit against CH-01 through CH-20 (and any CH-21+ extensions)
+1. Invoke `@code-hygiene` → full audit against the framework rules (CH-01 onward) and any project rules (CH-P01 onward)
 2. Invoke `@adversarial` → challenge the presuppositions in the hygiene findings before acting (e.g., "this file is truly orphaned", "no other agent depends on this") — especially required before any step 3 deletion plan
 3. Review findings
 4. If deletions needed (CH-01, CH-15, CH-16, CH-18, CH-19) → invoke `@security` for clearance → invoke `@cleanup`
@@ -774,7 +774,7 @@ carry an appended handoff:
 #### Part A — Within-Plan Issues
 *(Skip Part A if no plan was active for the current session.)*
 
-1. Read the current plan steps file from `tmp/by-week/YYYY-Www/<current-plan-slug>.steps.csv` when present, otherwise from legacy `tmp/<current-plan-slug>.steps.csv` → list all rows where `status` is `pending` or `blocked`
+1. Read the current plan steps file from `tmp/by-week/YYYY-Www/<current-plan-slug>.steps.csv` when present, otherwise from legacy `tmp/<current-plan-slug>.steps.csv` → list all rows whose `status` is not `done` (or the legacy `completed`): `pending`, `in_progress`, `blocked`, and any value outside that vocabulary, which is itself a finding to fix. First run `python -m agentteams.plan_steps --check <the steps CSV>` and record each WARNING (a missing Rule 9 column, an unknown status, an unknown `depends_on` id, an empty footprint) as a Part A item; an ERROR means the CSV has no `step` column and must be repaired before anything else
    - **A plan file with no steps CSV is a Rule 9 finding, not an absent plan.** Distinguish the two before skipping Part A: if no plan was written, Part A does not apply; if a `*.plan.md` exists for this session without its `*.steps.csv`, the obligation was incurred and not met — record it and create the CSV before closing. Skipping Part A because the CSV is missing suppresses the only check that would catch its absence.
 2. For each open item:
    a. Investigate: read relevant files, verify facts on disk
@@ -790,7 +790,7 @@ carry an appended handoff:
 
 1. Scan issue sources. `agentteams.session_scan.scan_repo_issues(repo_root, exclude_steps_paths={<this plan's .steps.csv>}, known_output_paths=<this plan's declared outputs>)` (or `python -m agentteams.session_scan` for a shell-only runtime) computes the first three sources below in one call — invoke it instead of re-deriving each by hand when engineering integration is available:
    - `CHANGELOG.md` → any heading matching `Known Issues` (regex)
-   - `tmp/by-week/` and legacy `tmp/` → any `.steps.csv` files with `pending` or `blocked` rows (excluding the current plan)
+   - `tmp/by-week/` and legacy `tmp/` → any `.steps.csv` files with rows not `done` (`pending`, `in_progress`, `blocked`, or a value outside that vocabulary, listed as `not a Rule 9 status`; excluding the current plan)
    - `git status --short` in the current repo → untracked files in `tmp/` or modified files outside the current plan's known output set; present as repo-relative paths only (never absolute filesystem paths)
    - `.github/agents/references/conflict-log.csv` → any row with `status=open` lacking a `resolution` — handled separately by step 2 below, not part of `scan_repo_issues`
 2. For each at-large issue found: write a one-paragraph summary — what it is, why it matters, which files or commits are involved. **Exception:** for issues found via `.github/agents/references/conflict-log.csv`, invoke `@conflict-resolution`'s ACCEPT/REJECT/REVISE decision instead — unlike the other three sources (summarized and presented only), "was it actually fixed already?" has a concrete, checkable answer available at closeout time

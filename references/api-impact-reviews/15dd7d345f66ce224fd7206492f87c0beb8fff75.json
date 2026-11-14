@@ -1,0 +1,8 @@
+{
+  "patch_id": "15dd7d345f66ce224fd7206492f87c0beb8fff75",
+  "commit": "1be23c4322959ef5130e8457e8f26e4a0a2aee62",
+  "subject": "fix(plans): check the Rule 9 steps-CSV contract; schedule only remaining steps; todo-from-plan reads Rule 9",
+  "impact": "3 symbols added, 1 symbols changed, 2 cli added",
+  "note": "IM item 09: plan_steps gains validate/runnable/main (+__all__) and the --check CLI; parallel_plan gains --all and now schedules only the remaining steps by default (behaviour change in the CHANGELOG). API pages plan_steps.md and parallel-plan.md updated; cli-reference has no module-CLI section for these. Reviewed by agentteams-d5.",
+  "recorded_at": "2026-11-12T02:06:00Z"
+}

@@ -167,6 +167,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # undetected. Pinning it lets E4/verify() flag a neutered gate and makes each edit git-visible.
     # (Generated *teams* carry their own emitted hook + manifest; this pins agentteams' own hooks.)
     "agentteams/templates/universal/hooks/constitutional-gate.py",  # the authoritative template
+    # #456: validates the project gate policy at render, pins its digest into the emitted gate and tells a weakening
+    # (a Rule 15 relaxation) from a tightening. A silent edit could record the wrong bytes or bless a weakening.
+    "agentteams/gate_policy.py",
     ".claude/hooks/constitutional-gate.py",                          # this repo's installed Claude hook
     ".github/hooks/constitutional-gate.py",                          # this repo's installed copilot hook
     # Exception-governance hardening (2026-W38). These carry constitutional weight now:
@@ -348,10 +351,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/carveout_checks.py",            # Rule 15: the carve-outs' HALT, lineage, rollback and cap checks
     "agentteams/cli/carveout_commands.py",      # Rule 15: the carve-out signer and the post-build hook
     "agentteams/cli/clearance_binding.py",      # the sha-bound clearance check operator scripts gate on
-    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the six sandbox-relaxation kinds + token vocabulary
+    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the seven sandbox-relaxation kinds + token vocabulary
     "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out
+    "agentteams/cli/toolchain_group.py",         # First-party toolchain group: the signed first-party toolchain group (S-10)
     "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
     # P16 (2026-11-01, @security review-pending): host_features holds DEFAULT_PRIVILEGE_PROFILE ("confined") and the
@@ -529,6 +533,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # Release locks (2026-11-09, security row 692). _fleet_locks decides which workspaces fleet must not render
     # because their repository pins agentteams; an unpinned edit could quietly lift every lock.
     "agentteams/_fleet_locks.py",
+    # Scanner public-hash exemptions (2026-11-12, #460). _scan_public_hashes decides which high-entropy tokens
+    # the C-4 credential detector suppresses (lockfile SRI bodies, GitHub commit-URL SHAs); an unpinned edit could
+    # widen it into a blanket credential exemption.
+    "agentteams/_scan_public_hashes.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

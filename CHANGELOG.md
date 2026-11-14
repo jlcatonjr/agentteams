@@ -6,15 +6,270 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (opt-in `api_impact` categories for constants and generated files; #451 c)
+
+- A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
+  text report is unchanged (`--json` gains an empty `generated_changed` list).
+- `constants`: public module-level `UPPER_CASE` assignments count as symbols (`module::NAME`), added, removed, or
+  changed when the assigned value changes.
+- `generated [glob ...]`: generated files added, modified, renamed, type-changed or deleted are listed in the new
+  `Impact.generated_changed`: files under `.claude/hooks/`, `.github/hooks/`, `.grok/hooks/` and `.codex/hooks/`,
+  `.agentteams/gate-policy.json`, `.agentteams/carveouts.json`, plus any listed globs. A body-only edit to a generated hook changes no signature and was not reported before.
+- A category counts when either side of the diff turns it on, and a change to `CATEGORIES` itself is reported
+  under `review_baseline_changed`.
+- The generated `api-impact.reference.md` fence `api_impact` is v=6.
+
+### added (the first-party toolchain group, forward-ported from 1.1.2 and 1.1.3)
+
+- **One operator-signed `.agentteams/toolchain-group.json`** (format 2) lifts Rule S-10's 14-day cooldown and a pin
+  move's per-release operator row for releases of the repositories it lists, in the workspaces it binds (git origin
+  `repo:` plus brief `team:` id): no sunset, no cap slot (operator rulings R5, T1–T3, 2026-11-13). Its signed
+  `derives_from` must name Ed25519-signed, currently authorizing decisions on a recorded, acyclic chain; an
+  unretracted HALT on any id in that chain, on `s10-toolchain-group`, or on any `s10-cooldown-exempt` action, in any
+  surface's log, empties the group with an `::error::` line, and the render goes on. Verbs: `--sign-toolchain-group`
+  (operator-only), `--verify-toolchain-group`, `--verify-toolchain-pin <lock> --allowed-signers <file>` (a
+  `vX.Y.Z` tag, one SSH signature block, the locked commit; exit 2 when there is no group file). The file is a trust
+  root. The constitution gains the fenced, template-authoritative "First-party toolchain group" section, and the
+  S-10 bullet becomes the toolchain-group bullet (`{S10_TOOLCHAIN_GROUP}`). Released as 1.1.2 (#481) and 1.1.3 (#485)
+  on `release/1.1`; this brings them to `dev`.
+- **agentteams#476:** a registered S-10 exemption that does not carry over says why, with an `::error::` line.
+- **The verify verbs find the brief themselves** (researchteam-f8): with no `--team-id` or `--description`, the team id
+  comes from the project's own brief, as fleet discovery finds it; and a workspace with no group file reports that
+  (exit 2 for `--verify-toolchain-pin`) before any team-id lookup.
+- **`--verify-toolchain-group` agrees with a render** (conflict audit): it exits 1 in an ungoverned workspace, where a
+  render never applies the group, and when a HALT drops every member, instead of reporting "verified".
+- **`cryptography` 50.0.0 → 50.0.2** in the `signing` extra (latest stable, OSV none; sdist sha256 verified locally).
+
+### fixed (the API impact checklist lists a symbol's users, not every file with the word; #451 b)
+
+- `status`'s audit checklist (`agentteams._api_impact_checklist`) used to search each changed name as a bare word over
+  the whole tree, so a re-signed `main` listed 341 files. It now lists module-qualified evidence: files that import
+  the module and mention the name, `module.name`, and `from module import name`, with relative imports resolved
+  and a leading `src/` dropped from module names. A removed module lists its importers.
+- Only when the qualified search finds no file but the changed one does it fall back to the bare word, and the
+  entry is then keyed `"<name> (bare-word fallback)"`. This is a behaviour change for `--json` consumers that read checklist keys.
+- `references/api-impact-reviews/CHECKLIST_EXCLUDES`, read as committed at the range's tip (one glob per line),
+  keeps record paths such as ledgers and run reports out of the checklist. The review ledger itself is always left out.
+- The generated `api-impact.reference.md` fence `api_impact` is v=5.
+
+### added (switching main's required checks when a release renames them)
+
+- **`scripts/release_required_checks.py`** (operator-only; `references/git-procedures.md` §I). When a release PR
+  renames a job `main` requires, such as the #262 runner bump, it proposes the new required set. A dry run shows the
+  change and a fingerprint; `--apply <fingerprint>` makes exactly that change once every proposed check is green on
+  the PR head, and saves the old protection for `--restore`. New jobs are required only with `--add`.
+
+### fixed (`api_impact` sees positional arguments, `choices` and `sys.argv` options; #451 a)
+
+- `add_argument` positionals are part of the surface (`cli-pos:<name>`). Their `choices`, and an option's `choices`,
+  are compared too, so adding or removing a subcommand-like choice is reported (new `Impact.cli_changed`).
+- A literal `"--x" in sys.argv` test is reported as `--x (sys.argv, heuristic)` unless a parser in the same module
+  declares `--x`. Only literal `choices` are compared by their members; a name or call is compared by its source text.
+- `surface` moved to `agentteams._api_surface` (re-exported from `agentteams.api_impact`). The generated
+  `api-impact.reference.md` fence `api_impact` is v=4.
+
+### fixed (`api_impact status` no longer forgives pushed commits; #447 b)
+
+- **A push-independent range.** On the default branch, `status` used `@{upstream}`, so a commit pushed before its
+  review left the range for good.
+  - A committed `references/api-impact-reviews/BASELINE` (the commit reviews start after) is now the default base
+    there.
+  - `status --full` checks every commit after it, or the whole history without one.
+  - Without a baseline, the default branch still uses `@{upstream}`.
+  - A commit that changes `BASELINE` is itself impactful (new `Impact.review_baseline_changed`), and `status` prints
+    the baseline it used. A `--range` token starting with `-` is refused.
+- **The ledger is read at the range tip**, not at `HEAD`.
+- **Batched git reads** (`agentteams._api_impact_range`): one call each for SHAs and subjects, patch-ids (the same
+  ids as `patch_id`) and changed paths. That is a few git processes per commit instead of about a dozen.
+- **Pre-push check (opt-in).** `git config agentteams.apiReviewPrePush warn|block` makes the new pre-push hook block
+  report, or block, impactful commits pushed without a record at the pushed tip. Re-run `agentteams --update` to
+  install it.
+- The generated `api-impact.reference.md` (fence `api_impact` v=3) documents all of the above.
+
+### fixed (the pre-commit hook no longer skips the API impact check silently; #447 a, c)
+
+- **The hook resolves its own interpreter** (`agentteams._hook_python`). It used to test `python3` on PATH and, on an
+  older interpreter (macOS `/usr/bin/python3` is 3.9), print one line and let the commit through unchecked. Now:
+  - **In a release-locked repository** (`toolchain.lock` has an `agentteams=` or `agentteams.tag=` key, or fails
+    closed the way fleet release locks do), it uses the locked installation, `<root>/.venv/bin/python -I`. That
+    interpreter must import agentteams on 3.11+ and `.venv` must be untracked. It never falls back to the
+    agentteams checkout, which would run unreleased code.
+  - **Otherwise**, it uses the interpreter recorded at install time, then `python3.14` … `python3.11`, then `python3`,
+    run with `-P`. A candidate must be 3.11+, and neither its path nor its `readlink -f` target may be in the working
+    tree. An agentteams import path strictly inside the repository is not put on `PYTHONPATH`.
+- **A skip is recorded,** and so is an API impact step that fails. Both append to `agentteams-api-impact-skipped` in
+  the git directory.
+  `python -m agentteams.api_impact status` prints them (`hook_skips` in `--json`) and exits 1 until a hook run whose
+  API impact step completes (exit 0, or 3 in strict mode) clears them. The commit still succeeds.
+- Re-run `agentteams --update` (or `--install-git-hooks`) to get the new hook block.
+
+### security (`agentteams.scan` no longer flags public lockfile hashes or commit-URL SHAs, #460)
+
+- The context-free high-entropy detector no longer reports two kinds of public value as credentials:
+  - the base64 body of a Subresource Integrity item (`sha1-`, `sha256-`, `sha384-` or `sha512-`, with the body length
+    bound to the algorithm) inside an `integrity` value in `package-lock.json`, `npm-shrinkwrap.json` or `yarn.lock`;
+  - the lowercase 40- or 64-hex SHA that ends a `https://github.com/<owner>/<repo>/commit/<sha>` URL.
+- Each exemption covers the exact token only, never the line or a path glob alone:
+  - every other token on a minified lockfile line is still scanned;
+  - a secret in a commit URL's owner or repo segment still fires;
+  - an integrity value with any malformed item exempts nothing;
+  - pattern credentials, such as AWS keys, and the keyword-context detector are unchanged.
+- The exemption lives in the new integrity-pinned module `agentteams/_scan_public_hashes.py`, with a verifier-ledger row.
+- **Accepted residue:**
+  - a secret shaped exactly like one of these public hashes, in exactly that position, is not reported;
+  - a secret of 23 characters or fewer in a commit URL's owner or repo segment is not re-flagged, the same length
+    floor the path guard already applies.
+
+### added (CI fails on an unregistered verifier; #50)
+
+- `tests/test_redteam_ledger_gate.py` runs the red-team self-audit's source checks F-1 and F-3 in the required test
+  matrix. A PR that adds a verifier-shaped function (or a non-Python enforcement module) without a row in
+  `references/redteam-verifiers.csv`, or a hand-rolled target/descriptor/VCS resolution without an exemption row,
+  now fails CI with the remedy printed. Until now only the weekly audit reported them, and F-1 grew from 91 to 107
+  in a week. The backlog itself is cleared: 113 F-1 rows (verifier rows name a sensitivity test and a negative
+  control; new tests in `tests/test_redteam_verifiers_{cli,vulnscan,core,data}.py`) and four F-3 exemptions with
+  evidence tests. F-5 (probe intent) stays weekly; the 2026-11-12 re-validation is in
+  `references/redteam-probe-revalidation.md`.
+
+### added (project verdict policy for the constitutional gate, #456)
+
+- **New `.agentteams/gate-policy.json`.** It turns chosen `ask` classes into `deny`, for teams whose sessions run headless,
+  where an `ask` is not answered by anyone. Format: `{"version": 1, "preset": "strict", "deny": [...], "fail_closed_tools": true}`.
+  - **Tighten-only.** There is no `allow`. An unknown key, class or preset is a load error.
+  - **Class ids.** The gate gives each trigger a fixed class id, exported as `ASK_CLASSES` and `POLICY_ONLY_CLASSES`.
+  - **Policy-only classes.** `rm-recursive-force`, `git-force-push-short` (`-f` and `+refspec`) and `git-alias-config`
+    are evaluated only when a policy denies them.
+  - **`strict` preset.** Defined in the gate, it denies the force-push, remote-delete, git alias/remote config,
+    publication, `rm -rf`, pipe-to-shell and SQL-deletion classes listed in #456, plus `command-too-long`.
+    Under any non-empty deny list an over-long command is denied, so padding cannot hide a denied class.
+  - **`fail_closed_tools`.** A gate crash or a missing interpreter now denies every tool that is not read-only,
+    whatever the `privilege_profile`.
+- **Pinned at render.** The file is validated (an invalid one stops the render) and its SHA-256 is written into the
+  installed gate.
+  - A recorded policy that is missing, altered, swapped for a symlink or invalid → `deny` for every tool that is not
+    read-only (`policy-unverified`).
+  - No recorded policy → today's verdicts. A recorded policy, even an empty one, also adds the
+    write protection below. Byte-identical against the previous template on the test corpus.
+  - The gate's own template pin moves once, for this change.
+- **Write-protected once recorded.** The gate refuses `Write`/`Edit` to the policy file, to itself and to its
+  interpreter pin. The Claude sandbox block adds `denyWrite` and `Edit` rules for the same three files.
+- **Weakening is a Rule 15 relaxation.** Recording a weaker policy (fewer denied classes, `fail_closed_tools` dropped,
+  or the file removed) is the new relaxation kind `gate-policy-weaken:<framework>`. In a governed workspace it needs
+  the operator's Ed25519-signed decision.
+- **`--check-wiring` reports the policy.** It prints the active policy and its digest, and marks it ADVISORY where no
+  OS write deny covers the gate (Copilot, Grok, or the OS sandbox off).
+- **Decision log.** The log gains `policy_class` and `policy_sha256`.
+- **New pinned module:** `agentteams/gate_policy.py`. API page: `docs_src/api-reference/gate-policy.md`.
+
+### changed (CI runs on Ubuntu 26; #262)
+
+- Every CI job that ran on `ubuntu-24.04` now runs on `ubuntu-26.04`: the `test` matrix rows, `docs-build`,
+  `template-lineage`, `wasm-live` and the docs-links workflow. The image is named, not `ubuntu-latest`, so it changes
+  only in a PR. The Ubuntu rows of the required checks are renamed `test (ubuntu-26.04, 3.11)` and
+  `test (ubuntu-26.04, 3.12)`, and `ubuntu-26-confinement` (which fails if the survivor test skips) becomes
+  required on main. main's branch protection is updated by the operator when the release PR that carries this
+  change opens. release/1.0 keeps `ubuntu-24.04`: the 1.0 line does not receive #405 (SECURITY.md: security fixes
+  are backported only to the most recent minor), so users on 1.0.x should move to 1.1.
+
+### changed (project code-hygiene rules move to the `CH-P` namespace, outside the managed region)
+
+- **Behaviour change.** The code-hygiene catalogue told projects to "add CH-21+" inside the managed `content` fence
+  of `references/code-hygiene-rules.reference.md`. The framework's own rules already run to CH-31, so a project rule
+  could share a framework id, and `--update --merge` overwrote it with no notice (IM evaluation item 26).
+  - Project rules now go in a new user-owned **Project Extension Rules (CH-P01+)** section after the fence, numbered
+    `CH-P01`, `CH-P02`, …. The framework does not use that namespace. A project rule may add a check; it may not
+    relax, narrow or suspend a framework rule. The `@code-hygiene` agent's Extension Point says the same, and its
+    rule table now lists CH-29, CH-30 and CH-31.
+  - Framework rule ids are unchanged: CH-01 to CH-31 keep their numbers and catalogue titles.
+- **Migration.** On `--update --merge`, each `### CH-…` rule section of the old managed region that is not a current
+  framework rule is moved, verbatim (comments and code blocks included), into Project Extension Rules. The update
+  report names each one and says the moved text is unreviewed and now kept across merges. This includes a local
+  rule that reuses a framework id with its own title (for example a local `CH-29`). A framework heading whose
+  placeholder renders differently (CH-03 names the output directory) is still recognised as framework. A second
+  merge moves nothing.
+  - What the notice can't tell apart: a framework rule that a later release renames or removes also lands there.
+    The notice says so; delete such a rule.
+  - Other old managed sections the new render lacks (not `CH-` rules) are named in a notice but not moved. Upgrading
+    from earlier releases names the old `Extension Rules (CH-21+)` heading this way.
+  - The security scan runs over moved text, and any high-severity finding is quoted in the notice.
+  - **After updating, renumber your moved project rules `CH-P01`, `CH-P02`, … and update any citations of them.**
+- **`--doctor`** has a new **Hygiene rule ids** WARN section (`agentteams.hygiene_rules`). It names the file and both
+  lines of a repeated `### CH-…` heading, and the line of any project rule that uses a framework-range id. A team
+  dir symlinked outside the project is skipped. `--check` does not report these yet; that is deferred.
+- Tests: rule ids are checked for uniqueness as a list (a repeat fails), and every catalogue rule must appear in the
+  agent's rule table (previously only CH-26 to CH-28 were checked). Stale "CH-21+ are project rules" text is fixed
+  in the orchestrator, Unix-mapping and feature-inventory pages.
+
+### changed (`parallel_plan` schedules only the remaining steps; the steps-CSV contract is checked)
+
+- **Behaviour change.** `python -m agentteams.parallel_plan` now schedules only the remaining steps, as Workflows
+  0A and 10 always said. `--all` restores the old schedule, and `compute_waves` itself is unchanged
+  (IM evaluation item 09, G-05-5).
+  - A `done` (or legacy `completed`) row is dropped and satisfies its dependents.
+  - A `blocked` or `in_progress` row is held: it is not scheduled (a running step is never dispatched twice),
+    and neither is any step that depends on one, directly or transitively. Each held and waiting step is reported
+    in `warnings`. A blocked operator handoff step is listed as held until its handoff reports `ok`.
+  - A row with an unknown status is scheduled as pending and reported.
+  - A CSV with no `step` column now gives an `Error:` line and exit 1 instead of a traceback.
+- **New `plan_steps.validate()` and `python -m agentteams.plan_steps --check`** (G-05-1).
+  - It checks the Rule 9 columns, the status vocabulary (`pending|in_progress|done|blocked`, with `completed`
+    accepted without a warning as the legacy synonym of `done`; compared case-insensitively), the `depends_on` ids
+    and empty footprints.
+  - Warn-first: only a file with no `step` (or legacy `step_id`) column is an error. All 699 steps CSVs in
+    agentteams' own local plans give warnings only.
+  - Workflow 11 Part A runs it, and its step 1 now lists every row that is not done (`in_progress` and unknown
+    values included). The `available_workflows` fence is now v=13.
+- **`session_scan` (Final Check Part B)** treats every status but `done`/`completed` as open. An `in_progress` row
+  no longer disappears, and an unknown value is listed as `not a Rule 9 status`.
+- **The `todo-from-plan` skill** (`plan_steps_todo`) reads the Rule 9 runtime schema (`step,action,…`), with the
+  11-column form as a fallback. It used to reject every Rule 9 CSV (G-05-4).
+- **Deferred.** Adding steps CSVs to `--verify-integrity`: they are local, gitignored and often legacy, so a
+  warn-first validator there would only add noise. `--check` and Part A cover it.
+
 ### fixed (bridged Claude teams get the model defaults too)
 
 - **The gap.** On a copilot-vscode-canonical project, `.claude/agents/` holds bridge stubs, and the bridge rewrote them
-  without a `model:`. The Claude adapter's new defaults never reached them, and a `model:` added by hand was wiped by
-  the next `--bridge-merge` (every `researchteam update` and autosync run).
-- **Now** every stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub declares
-  (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
+  without a `model:`, so the Claude adapter's new defaults never reached them, and a `model:` added by hand was
+  wiped whenever the stubs were re-emitted.
+- **Now** every re-emitted stub carries a `model:`. A re-emitted stub keeps the readable model its existing stub
+  declares (`inherit`, `fable`, `sonnet`, …); a stub with none, or one Claude cannot read, gets the default:
   `claude-fable-5-2` for the orchestrator, `opus` for every other stub, the parametric workstream expert included.
   The bridge lists every stub that received a default in a notice. Native (non-stub) agent bodies are untouched.
+- **When stubs are re-emitted.** Only a `--bridge-merge` that passes the `bridge:copilot-vscode-to-claude:subagents`
+  host feature rewrites `.claude/agents/` stubs. `researchteam update` and its autosync do not pass it, so their
+  existing stubs keep what they have (a `model:` added by hand included) and gain no default from an update. Add the
+  line once (infrastructureManagement's `scripts/operator/65-adopt-claude-model-lines.py`); a later re-emit keeps it.
+
+### fixed (sandbox: the exception registry and the carve-out high-water mark are protected; carve-outs count in the exception cap)
+
+- **Before**, a sandboxed agent could rewrite two Rule 15 files in its team's `references/`:
+  - `exception-registry.json`, which sets its own aggregate cap (`cap.max_active_relaxing`);
+  - `carveout-high-water.json`, which stops an older carve-out registry being restored.
+
+  The cap was also counted one way: carve-outs counted exceptions when they rendered, but minting an exception and
+  `--audit-exceptions` ignored active carve-outs.
+- **Now** both files are governed control-plane files, like the approver and manager rosters:
+  - protected by Claude `permissions.deny`, the Goose Seatbelt profile, the sibling-team rules and `confine-run.sh`;
+  - stubbed write-if-absent (the empty registry, and `{"sequence": 0}`). The cap, audit and high-water readers
+    treat a stub exactly as a missing file. One check does not: a carve-out registry whose pinned team had no
+    exception registry was refused (`no-exception-registry`); with the stub it passes the check at the default cap;
+  - in the launcher they are protect-if-present, so a team rendered before this change still launches. Its next
+    `--update` writes the stubs, which the sandbox then protects. A file already there is kept, including one a
+    confined process created before then (known limitation);
+- **The exception registry is a trust root:** governance stem `exception-registry-json` (and `carveout-high-water`
+  for the mark) and a handoff trust-root token. A decision row or handoff naming it is refused like one naming a
+  roster.
+- **`--audit-exceptions` notes a non-default cap.** In a team rendered before this change, a confined process could
+  have created the registry with a raised cap, which the stub writer keeps; the note asks you to confirm it (known
+  limitation).
+- **The cap now counts carve-outs both ways.** `assert_within_aggregate_cap` and `--audit-exceptions` count the
+  active carve-outs pinned to the same team dir (`carveout_checks.active_carveouts_for`), signed or not, valid or
+  not. An unreadable carve-out registry refuses minting and is reported by the audit. A draft (unsigned) registry
+  therefore already takes cap room, and a sandboxed agent that can write `.agentteams/` can block minting (known
+  limitation).
+- **Launcher re-pin.** `confine-run.sh` changed for the first time since 2026-10-14, so its sha256 is now
+  `e22910653d00…`. Consumers that pin it (baseAgent's parity test) re-pin when they take this version; the lineage
+  entry is `security: true`.
 
 ### fixed (backups: legacy `.md` stubs in a bridge runtime dir no longer load as live agents)
 
