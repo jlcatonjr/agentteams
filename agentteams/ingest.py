@@ -294,43 +294,53 @@ def _table_cells(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
-def _authority_entry(item: str, rank: int) -> dict[str, Any]:
+def _authority_entry(item: str) -> dict[str, Any]:
     """Parse one list item: ``**Name** (`path`) — scope``, ``Name: path — scope``, ``name | path`` or bare."""
     bold = _BOLD_ENTRY.match(item)
     if bold:
-        entry: dict[str, Any] = {"name": bold["name"].strip(), "path": (bold["path"] or "").strip(), "rank": rank}
+        entry: dict[str, Any] = {"name": bold["name"].strip(), "path": (bold["path"] or "").strip()}
         if bold["scope"]:
             entry["scope"] = bold["scope"].strip()
         return entry
-    if item.startswith("**") and "**:" in item:  # **Name**: path — scope
-        item = item[2:].replace("**:", ":", 1)
+    if item.startswith("**") and ("**:" in item or ":**" in item):  # **Name**: path or **Name:** path
+        item = item[2:].replace("**:", ":", 1).replace(":**", ":", 1)
     if ":" in item:
         name, rest = item.split(":", 1)
         path_scope = rest.strip().split(" — ", 1)
-        entry = {"name": name.strip(), "path": path_scope[0].strip(), "rank": rank}
+        entry = {"name": name.strip(), "path": path_scope[0].strip()}
         if len(path_scope) > 1:
             entry["scope"] = path_scope[1].strip()
         return entry
     if "|" in item:
         parts = item.split("|")
-        return {"name": parts[0].strip(), "path": parts[1].strip() if len(parts) > 1 else "", "rank": rank}
-    return {"name": item, "path": item, "rank": rank}
+        return {"name": parts[0].strip(), "path": parts[1].strip() if len(parts) > 1 else ""}
+    return {"name": item, "path": item}
 
 
-def _header_columns(header: list[str]) -> dict[str, int] | None:
-    """Map name/path/scope to header cells by whole words; ``None`` if no cell names a column."""
+def _header_columns(header: list[str], *, all_named: bool = False) -> dict[str, int] | None:
+    """Map name/path/scope to header cells by whole words; row-number columns (``#``, Tier) are never used.
+
+    Args:
+        header: The header row's cells.
+        all_named: Without a separator row, accept the row as a header only if every other cell names a column.
+
+    Returns:
+        Column indexes by key, or ``None`` when ``all_named`` is set and the row is not a header.
+    """
     found: dict[str, int] = {}
     ordinal: set[int] = set()
+    unnamed = 0
     for i, cell in enumerate(header):
         words = set(re.findall(r"[a-z]+", cell.lower()))
         if not words or words <= _ORDINAL_WORDS:
             ordinal.add(i)
             continue
-        for key, names in _COLUMN_WORDS:
-            if key not in found and words & names:
-                found[key] = i
-                break
-    if not found:
+        key = next((k for k, names in _COLUMN_WORDS if k not in found and words & names), None)
+        if key is None:
+            unnamed += 1
+        else:
+            found[key] = i
+    if all_named and (unnamed or not found):
         return None
     free = [i for i in range(len(header)) if i not in ordinal and i not in found.values()]
     for key in ("name", "path", "scope"):
@@ -341,11 +351,15 @@ def _header_columns(header: list[str]) -> dict[str, int] | None:
 
 def _authority_table(table: list[str]) -> list[dict[str, Any]]:
     """Rows of one Markdown table as sources, by column; header and separator rows are skipped."""
-    rows = [_table_cells(ln) for ln in table if not _TABLE_SEPARATOR.match(ln)]
-    columns = _header_columns(rows[0]) if rows else None
-    if columns is not None:
-        rows = rows[1:]
-    else:
+    sep = next((i for i, ln in enumerate(table) if _TABLE_SEPARATOR.match(ln)), None)
+    rows = [_table_cells(ln) for i, ln in enumerate(table) if i != sep]
+    if sep:  # the row above a separator is the header, whatever it says
+        columns = _header_columns(rows.pop(sep - 1))
+    else:  # no separator: a first row that only names columns is still a header
+        columns = _header_columns(rows[0], all_named=True) if rows else None
+        if columns is not None:
+            rows = rows[1:]
+    if columns is None:
         columns = {"name": 0, "path": 1, "scope": 2}
     sources = []
     for row in rows:
@@ -391,7 +405,7 @@ def _parse_authority_sources(text: str) -> list[dict[str, Any]]:
         marked = _AUTHORITY_ITEM_MARKER.match(lines[i])
         item = _AUTHORITY_ITEM_MARKER.sub("", lines[i]).strip()
         if item and (marked or not structured):
-            sources.append(_authority_entry(item, 0))
+            sources.append(_authority_entry(item))
         i += 1
     for rank, entry in enumerate(sources, start=1):
         entry["rank"] = rank

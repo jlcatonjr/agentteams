@@ -109,3 +109,15 @@ def test_an_authority_heading_without_a_list_does_not_block_a_sources_table(
     parts = [authority, SOURCE_TABLE] if order == "authority_first" else [SOURCE_TABLE, authority]
     sources = _load(tmp_path, "\n\n".join(parts))["authority_sources"]
     assert [s["name"] for s in sources] == ["Book", "Data"]
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("| # | Item | Where |\n|---|---|---|\n| 1 | A | a/ |", [{"name": "A", "path": "a/", "rank": 1}]),
+    ("| Doc | Link |\n|---|---|\n| A | a.md |", [{"name": "A", "path": "a.md", "rank": 1}]),
+    ("| Python source | src/ |", [{"name": "Python source", "path": "src/", "rank": 1}]),
+    ("1. **Template library:** agentteams/templates/",
+     [{"name": "Template library", "path": "agentteams/templates/", "rank": 1}]),
+])
+def test_header_rows_and_bold_colons(text: str, expected: list) -> None:
+    """The row above a separator is always the header; with no separator, only a row of column names is."""
+    assert ingest._parse_authority_sources(text) == expected
