@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (security: a `git config` read on the same line hid a remote or alias rewrite from the gate)
+
+- The constitutional gate exempts `git config --get`, `--get-all`, `--get-regexp`, `--get-urlmatch`, `--list`,
+  `--show-origin` and `-l` as reads. The exemption covered the whole line, so a read anywhere on it hid a write
+  after a separator: `git config -l; git config remote.origin.url https://e.x/r` asked nothing, in every shipped
+  version with the `publication-channel` config check. The exemption now covers only its own command (stops at
+  `;`, `&`, `|`), in `publication-channel` (remote/URL rewrites and `include.path`) and `git-alias-config`.
+
+### changed (the constitutional gate asks on short force pushes and git alias/push config; remediation row 699)
+
+- `git push -f` (and clusters such as `-uf`), `git push <remote> +<ref>`, `git -c alias.*|push.*|remote.*|url.*`
+  and `git config alias.*|push.*|remote.*|url.*` now ask by default. Before, only `--force` and remote/URL
+  rewrites asked; #456 matched these spellings only under a project policy that denied them.
+- The class ids (`git-force-push-short`, `git-alias-config`) are unchanged, so a recorded
+  `.agentteams/gate-policy.json` names the same classes. The patterns are unchanged except for one narrowing:
+  the `f` is now case-sensitive, so `git commit -F msg && git push` asks nothing and `strict` no longer denies it
+  (git push has no `-F`).
+- The match is not scoped to the push command, so `git checkout -f && git push`, `git push && tail -f log` and
+  `git commit -m "bump +1" && git push` ask too, and may report "force push" as the reason. Scoping it would let an
+  escaped separator (`a\;b -f`) through, so this is an accepted extra prompt.
+- Every team derived from agentteams 1.2 or later gets a gate that asks on these commands. A headless session,
+  where an `ask` is denied, can no longer force-push by `-f` or `+refspec` (`--force` already asked).
+- A recorded policy that does not name the two classes now asks on them instead of passing.
+- `rm-recursive-force` stays policy-only: `fs-delete` already asks on every `rm`.
+- Default verdicts only tighten (pass to ask). The one loosening is `strict` on uppercase `-F`, above. The
+  template's integrity pin moves.
+
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
 - A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
@@ -138,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Tighten-only.** There is no `allow`. An unknown key, class or preset is a load error.
   - **Class ids.** The gate gives each trigger a fixed class id, exported as `ASK_CLASSES` and `POLICY_ONLY_CLASSES`.
   - **Policy-only classes.** `rm-recursive-force`, `git-force-push-short` (`-f` and `+refspec`) and `git-alias-config`
-    are evaluated only when a policy denies them.
+    are evaluated only when a policy denies them (until row 699, above, made the two git classes default asks).
   - **`strict` preset.** Defined in the gate, it denies the force-push, remote-delete, git alias/remote config,
     publication, `rm -rf`, pipe-to-shell and SQL-deletion classes listed in #456, plus `command-too-long`.
     Under any non-empty deny list an over-long command is denied, so padding cannot hide a denied class.

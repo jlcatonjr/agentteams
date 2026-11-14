@@ -98,6 +98,10 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      "package installation — unreviewed third-party code on the host"),
     ("git-history-destructive", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*--force)|\bgit\b[^\n]*\breset\s+--hard\b",
      "history-destructive git operation"),
+    # -f / -uf / +refspec force pushes (policy-only in #456; default since row 699). The `f` is case-sensitive:
+    # git push has no -F, and `git commit -F msg && git push` must not ask.
+    ("git-force-push-short", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s(?:-(?!-)[a-zA-Z]*(?-i:f)[a-zA-Z]*\b|['\"]?\+[\w./*-]))",
+     "force push by short flag (-f) or +refspec"),
     # A fleet render past a release lock can roll a pinned repository's team back (the 2026-11-09 incident);
     # the lift is an operator decision, never unattended (security remediation row 692, item 3).
     # argparse takes any unique prefix, and `--fleet-i` is the shortest one; the Python API spells it fleet_ignore_locks.
@@ -133,19 +137,24 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
     ("raw-socket", r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
      "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
     ("publication-channel", r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
      r"\bgit\b[^\n]*\s-c\s+['\"]?(?:remote|url)\.|"
      r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
      r"\bgh\s+api\b[^\n|;&]*(?:\$\(|`)|"
      r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s['\"]?(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:|[\w-]+(?:\.[\w-]+)+:[^\s/]*/?))|"
      r"\bGIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+|PARAMETERS|GLOBAL|SYSTEM)\b|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\binclude(?:if\b[^\n]*)?\.path\b)|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\binclude(?:if\b[^\n]*)?\.path\b)|"
      r"^(?=[^\n]*(?:\.git[\\/](?:config|modules[\\/]\S+[\\/]config|worktrees[\\/]\S+[\\/]config)|\.gitconfig))"
      r"(?=[^\n]*(?:\b(?:cp|mv|ln|install|dd|rsync)\b|\bsed\b[^\n]*\s-i|\bperl\b[^\n]*\s-p?i))|"
      r"(?:>>?|\btee\b(?:\s+-\S+)*)\s*['\"]?[^\s;&|'\"]*"
      r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
+    # alias./push. config can hide or redirect a push (`git -c alias.p='push -f' p`); row 699.
+    ("git-alias-config", r"\bgit\b[^\n]*\s-c\s+['\"]?(?:alias|push|remote|url)\.|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)"
+     r"(?=[^\n]*\s['\"]?(?:alias|push|remote|url)\.)",
+     "git alias, push or remote configuration that can hide or redirect a push"),
     ("interpreter-send", r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
@@ -220,12 +229,6 @@ _GATE_POLICY_MAX_BYTES = 65536
 POLICY_ONLY_TRIGGERS: tuple[tuple[str, str, str], ...] = (
     ("rm-recursive-force", r"\brm\b(?=[^\n;&|]*\s(?:-[a-zA-Z]*r[a-zA-Z]*\b|--recursive\b))(?=[^\n;&|]*\s(?:-[a-zA-Z]*f[a-zA-Z]*\b|--force\b))",
      "recursive forced removal (rm -rf)"),
-    ("git-force-push-short", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s(?:-(?!-)[a-zA-Z]*f[a-zA-Z]*\b|['\"]?\+[\w./*-]))",
-     "force push by short flag (-f) or +refspec"),
-    ("git-alias-config", r"\bgit\b[^\n]*\s-c\s+['\"]?(?:alias|push|remote|url)\.|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)"
-     r"(?=[^\n]*\s['\"]?(?:alias|push|remote|url)\.)",
-     "git alias, push or remote configuration that can hide or redirect a push"),
 )
 
 #: Every class a policy may name: the default `ask` classes, then the policy-only refinements.

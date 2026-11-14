@@ -40,16 +40,22 @@ The gate exports its enums:
 ### Class ids
 
 The default `ask` classes:
-- `elevated-privilege`, `remote-pipe-shell`, `persistence`, `package-install`, `git-history-destructive`, `fleet-lock-lift`;
-- `outbound-upload`, `outbound-derived`, `raw-socket`, `dns-exfil`, `publication-channel`, `interpreter-send`;
+- `elevated-privilege`, `remote-pipe-shell`, `persistence`, `package-install`, `git-history-destructive`,
+  `git-force-push-short` (`git push -f`, `-uf`, or a `+refspec`), `fleet-lock-lift`;
+- `outbound-upload`, `outbound-derived`, `raw-socket`, `dns-exfil`, `publication-channel`,
+  `git-alias-config` (`git -c` or `git config` for `alias.`, `push.`, `remote.` or `url.`), `interpreter-send`;
 - `gh-delete`, `pr-merge`, `git-remote-delete`, `git-ref-delete`, `agentteams-branch-delete`;
 - `fs-delete`, `infra-delete`, `db-delete`, `interpreter-delete`;
 - `command-too-long`, `git-config-write`, `scanner-unverified`, `no-interpreter`.
 
-Policy-only refinements are evaluated only when a policy denies them, so a project without a policy never sees them:
-- `rm-recursive-force`;
-- `git-force-push-short` (`git push -f`, or a `+refspec`);
-- `git-alias-config` (`git -c` or `git config` for `alias.`, `push.`, `remote.` or `url.`).
+`git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation
+row 699, with the same class ids. One narrowing came with them: the `f` of `-f` is case-sensitive (git push has
+no `-F`), so `strict` no longer denies `git commit -F msg && git push`. The match is not scoped to the push
+command, so `git checkout -f && git push` still asks, and may give "force push" as the reason. Like every trigger they also
+match quoted text, so `git commit -m 'push -f later'` asks. That is an accepted extra prompt.
+
+One policy-only refinement is evaluated only when a policy denies it, so a project without a policy never sees it:
+- `rm-recursive-force` (`fs-delete` already asks on every `rm`).
 
 `strict` denies these classes. They are the downstream wrapper's list from issue #456, plus `command-too-long`:
 - `git-history-destructive`, `git-force-push-short`, `git-remote-delete`, `git-alias-config`;
