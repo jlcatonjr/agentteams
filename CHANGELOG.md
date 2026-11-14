@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (switching main's required checks when a release renames them)
+
+- **`scripts/release_required_checks.py`** (operator-only; `references/git-procedures.md` §I). When a release PR
+  renames a job `main` requires, such as the #262 runner bump, it proposes the new required set. A dry run shows the
+  change and a fingerprint; `--apply <fingerprint>` makes exactly that change once every proposed check is green on
+  the PR head, and saves the old protection for `--restore`. New jobs are required only with `--add`.
+
 ### fixed (`api_impact status` no longer forgives pushed commits; #447 b)
 
 - **A push-independent range.** On the default branch, `status` used `@{upstream}`, so a commit pushed before its
