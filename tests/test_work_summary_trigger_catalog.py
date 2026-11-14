@@ -92,6 +92,13 @@ def test_daily_and_weekly_workflows_carry_open_obligations() -> None:
     assert "obligations still open at month end" in monthly
 
 
+def test_summarizer_builds_the_entry_when_the_initiator_recorded_none() -> None:
+    # Initiator templates do not cite the catalog yet, so the fallback keeps their events covered.
+    text = " ".join(REFERENCE.read_text(encoding="utf-8").split())
+    assert "When the initiator recorded no entry fields, `@work-summarizer` builds the entry" in text
+    assert "a field the record does not answer reads `not recorded`" in text
+
+
 def test_every_reference_rule_is_fenced() -> None:
     # Only the SECTION MANIFEST comment sits outside the trigger_catalog fence.
     outside = [ln for ln in unfenced_lines(REFERENCE.read_text(encoding="utf-8")) if ln.strip()]

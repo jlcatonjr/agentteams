@@ -17,6 +17,10 @@ state that later sessions inherit. It grants the summary writer no new authority
 `@work-summarizer`'s Evidence Model: the records named under **Sources** are cited pointers, and a fact another
 agent reports enters a summary only through plan artifacts or git history.
 
+When the initiator recorded no entry fields, `@work-summarizer` builds the entry from the initiator's own committed
+record, as git history shows it: a security-decision row, a conflict-log row, a plan step. It cites that record
+under **Sources**, and a field the record does not answer reads `not recorded`.
+
 Governance-relevant means a constitutionally significant event, or a workflow event that changes an obligation, a
 disposition, or traceability across a boundary.
 
