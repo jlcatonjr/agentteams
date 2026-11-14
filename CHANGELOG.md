@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (release guide names the 1.1 line)
+
+- `release-and-branching.md` was still written for 1.1's release candidates. It now names `v1.1.3` as the install and
+  verify example, describes `release/1.1` as the 1.1 patch line, and lists `release/1.0` as an older line.
+
 ### added (opt-in typed violation codes for `@agent-refactor`; #453)
 
 - A brief that sets `agent_refactor.violation_codes: true` gives the agent-refactor file a "Violation Codes" section:
@@ -978,7 +983,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### docs (release branches are not merged back into `main`)
 
 - `release-and-branching.md` no longer says a release branch is merged forward into `main` after each tag. Every fix
-  lands on `main` first and is copied out with `git cherry-pick -x`, so `main` already has it. The status line now
+  lands on the development branch first (now `dev`) and is copied out with `git cherry-pick -x`, so `main` already
+  has it. The status line now
   names `v1.0.7` and `v1.1.0-rc.16`.
 
 ### changed (pinned sync: the pin decides; operator ruling 2026-11-04)
