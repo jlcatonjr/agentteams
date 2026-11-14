@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
+
+- **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and
+  `.claude/settings.worksummary.example.json`.** Both are inert until the operator merges the example's `Stop` block
+  into `.claude/settings.json`. The example is a separate file, so wiring the constitutional gate does not switch
+  it on.
+- **Runs do not appear in any Claude Code session list.** The launcher starts the summarizer with
+  `--no-session-persistence` and keeps the run's output in its own archive under
+  `~/.claude/logs/agentteams-work-summary/` (under `CLAUDE_CONFIG_DIR` when set), readable by the owner only and
+  pruned after 14 days.
+- **It launches only when the day's summary is out of date:**
+  - a day with commits is current when the summary is synthesized and covers the latest commit;
+  - a planning-only day is current when the day's plan files are unchanged since the last run. An operator-written
+    hook without this check launched a run on every Stop event, several hundred a day.
+- **Guards:** the Stop payload is never passed to the run; a hook child never launches another; one run per project
+  at a time; a failed run backs off for 30 minutes; the hook detaches and never blocks the session.
+- **The unattended run has a narrow tool grant** (read and search, Agent, `git log`/`show`/`cat-file`, writes under
+  `workSummaries/` only) in `dontAsk` mode with no MCP server. Deny rules block web tools, credential directories
+  and the git options that write files or read outside the repository. `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the
+  grant; the permission mode is fixed.
+- **Operator extras are read from the run folder, never from the repository,** so a branch or pull request cannot
+  instruct an unattended run.
+- The launcher template and its emitter are pinned in the integrity manifest.
+- This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
+  notification-only. Grok teams do not receive it.
+
 ### added (typed work-summary entries and the closed trigger catalog; #454)
 
 - **A new reference, `references/work-summary-trigger-catalog.reference.md`, is emitted for every team.** It renders

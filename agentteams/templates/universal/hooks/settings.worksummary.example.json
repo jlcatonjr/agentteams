@@ -1,0 +1,49 @@
+{
+  "_comment": [
+    "Work-summary Stop hook: OPTIONAL. Merge this `hooks` block into your .claude/settings.json only",
+    "if you want this project's daily work summary brought up to date automatically when a session",
+    "stops. It is a separate file from settings.hooks.example.json on purpose: wiring the",
+    "constitutional gate must never switch this on as a side effect.",
+    "",
+    "What it does: on each Stop event, .claude/hooks/work-summary-stop.py checks whether today's",
+    "commits or plan files are already reflected in workSummaries/daily/<today>.md. If not, it runs",
+    "`claude --print` as @work-summarizer in the background. Each run is an ordinary Claude Code run",
+    "against your account, so the hook skips whenever nothing has changed since its last run.",
+    "",
+    "No conversation is left behind: the run uses --no-session-persistence, so Claude Code saves no",
+    "session and no session list shows it. The run's full output is kept instead under",
+    "<claude config dir>/logs/agentteams-work-summary/<project>-<hash>/runs/ for 14 days",
+    "(AGENTTEAMS_WS_KEEP_DAYS; 0 keeps none). The decision log is hook.log in the same folder.",
+    "",
+    "The unattended run is granted read and search tools, the Agent tool, git log/show/cat-file, ls,",
+    "and writes under workSummaries/ only, in dontAsk permission mode, with no MCP server. Deny rules",
+    "block web tools, credential files, edits under .claude/ and .github/, and the git options that",
+    "write files or read outside the repository. The grant ADDS to the allow rules in your own",
+    "settings; it does not cap them. Like every hook, the run is outside the OS sandbox, and it reads",
+    "commit messages and plan files others may have written: look at the workSummaries/ diff before",
+    "you push. The installed script is protected from agent edits by the sandbox block in",
+    "settings.hooks.example.json (denyWrite .claude, Edit(.claude/hooks/**)), once you merge that.",
+    "Check the first live run: if your summarizer needs more, set AGENTTEAMS_WS_ALLOWED_TOOLS rather",
+    "than editing the script, which --update --merge replaces. Project-specific instructions go in",
+    "extra.md in the run folder named above (your config directory, not the repository).",
+    "",
+    "If a user-level Stop hook already launches a summarizer for this project, remove this project",
+    "from it BEFORE wiring this block, or both will launch. Any other harness that runs this",
+    "project's .claude/settings.json hooks will fire this hook too. A scheduler can call the script",
+    "directly: python3 .claude/hooks/work-summary-stop.py --foreground --project <project root>.",
+    "To switch it off without unwiring: AGENTTEAMS_WS_DISABLE=1. To remove it: delete the Stop entry."
+  ],
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/work-summary-stop.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

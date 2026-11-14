@@ -147,6 +147,61 @@ The summary is then passed through `@technical-validator` (verify commit hashes 
 
 Weekly summaries aggregate daily summaries. Monthly summaries aggregate weekly ones. Both pass through the same audit chain.
 
+### Automatic Daily Summaries on Claude Code (optional)
+
+A Claude team that has `@work-summarizer` also receives an optional Stop hook:
+
+- `.claude/hooks/work-summary-stop.py`, the launcher;
+- `.claude/settings.worksummary.example.json`, the `Stop` block that wires it.
+
+It does nothing until you merge that block into your `.claude/settings.json`. agentteams never writes that file. The
+block is kept apart from `settings.hooks.example.json`, so wiring the constitutional gate does not switch it on.
+
+Once wired, each time a session stops the launcher checks whether today's daily summary is out of date:
+
+- **a day with commits** is current when the summary has a `## Plans Implemented` section and already covers the
+  latest commit (it names the commit's short hash, or the hook's last successful run was for that commit);
+- **a planning-only day** is current when a summary exists and no plan file under `tmp/by-week/` has changed since
+  the last successful run.
+
+Only when the summary is out of date does it run `@work-summarizer`, in the background, as an ordinary Claude Code
+run on your account. A failed run is not retried for 30 minutes.
+
+**The run leaves no conversation behind.** It is started with `--no-session-persistence`, so Claude Code saves no
+session and no session list shows it. The launcher keeps its own record instead, outside the project, in
+`~/.claude/logs/agentteams-work-summary/<project>-<hash>/` (under `CLAUDE_CONFIG_DIR` when that is set, or wherever
+`AGENTTEAMS_WS_RUN_DIR` points). The files are readable by you only:
+
+- `hook.log`, one line per decision (skip, run, failure);
+- `runs/YYYY-MM-DD/HHMMSS.jsonl`, the full output of each run, deleted after 14 days.
+
+**The unattended run has a narrow tool grant:** read and search, the Agent tool, `git log`, `git show`,
+`git cat-file`, `ls`, and writes under `workSummaries/` only, in `dontAsk` permission mode, with no MCP server.
+Deny rules block web tools, credential files such as `~/.ssh` and `.env`, edits under `.claude/` and `.github/`, and
+the git options that write files or read outside the repository. The grant adds to the allow rules in your own
+settings; it does not cap them, and the deny rules win over both. The permission mode cannot be changed.
+
+Before you wire it, know what it is: each run uses your account, reads commit messages and plan files that other
+people may have written, and runs outside the OS sandbox, as every hook does. The list of denied credential files
+cannot be complete, so look at the `workSummaries/` diff before you push. Check the first live run. If your summarizer needs more, set `AGENTTEAMS_WS_ALLOWED_TOOLS`; do
+not edit the script, because `--update --merge` replaces it.
+
+| Setting | Effect |
+|---------|--------|
+| `AGENTTEAMS_WS_KEEP_DAYS` | Days to keep run output (default 14; `0` keeps none). |
+| `AGENTTEAMS_WS_RETRY_S` | Wait after a failed run (default 1800 seconds). |
+| `AGENTTEAMS_WS_TIMEOUT` | Longest a run may take (default 420 seconds). |
+| `AGENTTEAMS_WS_ALLOWED_TOOLS` | Replaces the default tool grant. |
+| `AGENTTEAMS_WS_RUN_DIR` | Where the log, state and run output are kept. |
+| `AGENTTEAMS_WS_CLAUDE_BIN` | The `claude` executable to run (default: the one on `PATH`). |
+| `AGENTTEAMS_WS_DISABLE=1` | Switches the hook off without unwiring it. |
+| `extra.md` in the run folder | Project-specific instructions appended to the summarizer's prompt. It is read from your configuration directory, never from the repository, so a branch or pull request cannot plant it. |
+
+A scheduler can call it directly: `python3 .claude/hooks/work-summary-stop.py --foreground --project <root>`.
+
+If you already run a user-level Stop hook that launches a summarizer for the same project, take that project out of
+it before wiring this one. Otherwise both launch.
+
 ---
 
 ## When to Invoke Governance Agents Directly

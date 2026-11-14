@@ -321,6 +321,10 @@ class ClaudeAdapter(FrameworkAdapter):
         ``settings.json`` for the OS-level boundary to take effect. See
         :func:`_inject_sandbox_block`.
 
+        A team that has ``work-summarizer`` also gets the optional work-summary Stop hook
+        (``hooks/work-summary-stop.py``) with its OWN example, ``settings.worksummary.example.json``,
+        so that wiring the gate never switches it on. See ``_work_summary_hook_emit``.
+
         Args:
             manifest: The team manifest. ``host_features`` gates the sandbox block;
                 ``workspace_write_roots`` (optional) overrides the confined roots.
@@ -331,6 +335,10 @@ class ClaudeAdapter(FrameworkAdapter):
         # Framework-neutral baseline first (the Linux confinement launcher on linux); the
         # constitutional hook below is Claude-specific and layered on top.
         files = super().extra_output_files(manifest)
+        from agentteams.frameworks._work_summary_hook_emit import work_summary_hook_files
+
+        # Optional and separate from the gate: its own example file, inert until merged.
+        files.extend(work_summary_hook_files(manifest))
         hook = _read_template_asset("hooks/constitutional-gate.py")
         example = _read_template_asset("hooks/settings.hooks.example.json")
         if not hook:

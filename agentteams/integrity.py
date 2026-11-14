@@ -170,6 +170,15 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # #456: validates the project gate policy at render, pins its digest into the emitted gate and tells a weakening
     # (a Rule 15 relaxation) from a tightening. A silent edit could record the wrong bytes or bless a weakening.
     "agentteams/gate_policy.py",
+    # The optional work-summary Stop hook (@security CONDITIONAL PASS, 2026-11-14). Once an operator
+    # wires it, the launcher runs unattended, outside the sandbox, with the operator's credentials;
+    # its tool grant and deny rules are the only limit on that run. A silent edit that widens
+    # ALLOWED_TOOLS, drops a DISALLOWED_TOOLS rule, reads operator extras from the repository, or
+    # removes --no-session-persistence would ship to every Claude team. The emitter is pinned with
+    # it: it decides which teams get the launcher and keeps its example apart from the gate's.
+    # Template only: this repository has no installed copy until an operator wires one.
+    "agentteams/templates/universal/hooks/work-summary-stop.py",
+    "agentteams/frameworks/_work_summary_hook_emit.py",
     ".claude/hooks/constitutional-gate.py",                          # this repo's installed Claude hook
     ".github/hooks/constitutional-gate.py",                          # this repo's installed copilot hook
     # Exception-governance hardening (2026-W38). These carry constitutional weight now:

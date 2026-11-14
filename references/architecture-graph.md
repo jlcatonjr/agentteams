@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **463**
+- Modules mapped: **464**
 - Packages: **14**
-- Internal import edges: **1757**
+- Internal import edges: **1759**
 - Distinct external dependencies: **11**
 
 ---
@@ -29,7 +29,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.data.wasm_probes` | 1 | — |
 | `agentteams.enrich` | 6 | `agentteams`, `agentteams.frameworks` |
 | `agentteams.eval_adapters` | 2 | — |
-| `agentteams.frameworks` | 39 | `agentteams`, `agentteams.cli`, `agentteams.wasm_agent` |
+| `agentteams.frameworks` | 40 | `agentteams`, `agentteams.cli`, `agentteams.wasm_agent` |
 | `agentteams.mcp_servers` | 3 | `agentteams`, `agentteams.cli` |
 | `agentteams.model_providers` | 8 | `agentteams`, `agentteams.vulnscan` |
 | `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
@@ -230,10 +230,11 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks._wasm_team_docs` | `agentteams._sandbox_profiles`, `agentteams.frameworks._write_roots`, `agentteams.model_providers`, `agentteams.sandbox_state`, `agentteams.wasm_agent.team` | `agentteams.frameworks.wasm` |
 | `agentteams.frameworks._wasm_tool_scoping` | — | `agentteams.frameworks.wasm`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.team` |
 | `agentteams.frameworks._wasm_wiring` | `agentteams.codex_mcp_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_mcp` | `agentteams.cli.artifacts`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp`, `agentteams.wasm_policy` |
+| `agentteams.frameworks._work_summary_hook_emit` | `agentteams.frameworks.claude` | `agentteams.frameworks.claude` |
 | `agentteams.frameworks._write_roots` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_team_docs`, `agentteams.frameworks.claude`, `agentteams.gate_policy`, `agentteams.multi_sync`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.sandbox_state`, `agentteams.vulnscan.team_dir`, `agentteams.wasm_config`, `agentteams.wasm_enforcement` |
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.frameworks.wasm` |
 | `agentteams.frameworks.base` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.frameworks.wasm`, `agentteams.interop`, `agentteams.output_plan` |
-| `agentteams.frameworks.claude` | `agentteams.frameworks._claude_model`, `agentteams.frameworks._claude_wiring_check`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.base`, `agentteams.gate_policy`, `agentteams.runner_mcp`, `agentteams.sandbox_state`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.multi_sync`, `agentteams.wasm_enforcement` |
+| `agentteams.frameworks.claude` | `agentteams.frameworks._claude_model`, `agentteams.frameworks._claude_wiring_check`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks._work_summary_hook_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.base`, `agentteams.gate_policy`, `agentteams.runner_mcp`, `agentteams.sandbox_state`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._work_summary_hook_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.multi_sync`, `agentteams.wasm_enforcement` |
 | `agentteams.frameworks.codex` | `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.emit`, `agentteams.fence_inject`, `agentteams.frameworks.registry`, `agentteams.learned_blocks` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.copilot_body_limit`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check` |
@@ -2961,6 +2962,16 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.frameworks._work_summary_hook_emit": {
+      "package": "agentteams.frameworks",
+      "path": "agentteams/frameworks/_work_summary_hook_emit.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.frameworks.claude"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.frameworks._write_roots": {
       "package": "agentteams.frameworks",
       "path": "agentteams/frameworks/_write_roots.py",
@@ -3006,6 +3017,7 @@ digraph "agentteams architecture" {
         "agentteams.frameworks._sandbox_drift",
         "agentteams.frameworks._sandbox_emit",
         "agentteams.frameworks._wasm_wiring",
+        "agentteams.frameworks._work_summary_hook_emit",
         "agentteams.frameworks._write_roots",
         "agentteams.frameworks.base",
         "agentteams.gate_policy",
@@ -9517,6 +9529,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.wasm_mcp"
     },
     {
+      "source": "agentteams.frameworks._work_summary_hook_emit",
+      "target": "agentteams.frameworks.claude"
+    },
+    {
       "source": "agentteams.frameworks.agents_md",
       "target": "agentteams.frameworks._agents_md_rules"
     },
@@ -9571,6 +9587,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.claude",
       "target": "agentteams.frameworks._wasm_wiring"
+    },
+    {
+      "source": "agentteams.frameworks.claude",
+      "target": "agentteams.frameworks._work_summary_hook_emit"
     },
     {
       "source": "agentteams.frameworks.claude",
