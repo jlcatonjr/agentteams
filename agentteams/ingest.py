@@ -127,6 +127,7 @@ def _load_markdown(path: Path) -> dict[str, Any]:
     # (rank, body) for overview-style headings; lowest rank wins. Ties keep the
     # earliest in document order (dict preserves insertion order).
     overview_candidates: list[tuple[int, str]] = []
+    authority_from_heading = False
     _OVERVIEW_PRIORITY = (("overview", 0), ("purpose", 1), ("summary", 2), ("abstract", 2), ("about", 3))
 
     for heading, content in sections.items():
@@ -149,8 +150,13 @@ def _load_markdown(path: Path) -> dict[str, Any]:
             desc["figures_dir"] = _first_line(body)
         elif "existing project" in heading_l or heading_l in {"project path", "project location"}:
             desc["existing_project_path"] = _first_line(body)
-        elif "authority" in heading_l or ("source" in heading_l and "reference" not in heading_l):
+        elif "authority" in heading_l:
+            # An Authority heading wins over any "source" heading, wherever each sits (#392 item 11).
             desc["authority_sources"] = _parse_authority_sources(body)
+            authority_from_heading = True
+        elif "source" in heading_l and "reference" not in heading_l:
+            if not authority_from_heading:
+                desc["authority_sources"] = _parse_authority_sources(body)
         elif "style reference" in heading_l or "style guide" in heading_l:
             desc["style_reference"] = _first_line(body) or None
         elif "tool" in heading_l or "technology" in heading_l or "tech stack" in heading_l:
@@ -265,22 +271,91 @@ def _parse_list(text: str) -> list[str]:
     return items
 
 
-def _parse_authority_sources(text: str) -> list[dict[str, str]]:
+_LIST_MARKER = re.compile(r"^(?:(?:[-*•+]|\d+[.)])\s+)+")
+_TABLE_SEPARATOR = re.compile(r"^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$")
+_BOLD_ENTRY = re.compile(r"^\*\*(?P<name>.+?)\*\*\s*(?:\(`(?P<path>[^`]*)`\))?\s*(?:(?:—|–|--?|:)\s*(?P<scope>.*))?$")
+# Header words that name a table column; anything else falls back to name, path, scope by position.
+_COLUMN_WORDS = {
+    "name": ("name", "source", "authority", "tier", "repository"),
+    "path": ("path", "location", "file", "url", "where"),
+    "scope": ("scope", "purpose", "covers", "governs", "description", "notes"),
+}
+
+
+def _table_cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _authority_entry(item: str, rank: int) -> dict[str, Any]:
+    """Parse one list item: ``**Name** (`path`) — scope``, ``Name: path — scope``, ``name | path`` or bare."""
+    bold = _BOLD_ENTRY.match(item)
+    if bold:
+        entry: dict[str, Any] = {"name": bold["name"].strip(), "path": (bold["path"] or "").strip(), "rank": rank}
+        if bold["scope"]:
+            entry["scope"] = bold["scope"].strip()
+        return entry
+    if ":" in item:
+        name, rest = item.split(":", 1)
+        path_scope = rest.strip().split(" — ", 1)
+        entry = {"name": name.strip(), "path": path_scope[0].strip(), "rank": rank}
+        if len(path_scope) > 1:
+            entry["scope"] = path_scope[1].strip()
+        return entry
+    if "|" in item:
+        parts = item.split("|")
+        return {"name": parts[0].strip(), "path": parts[1].strip() if len(parts) > 1 else "", "rank": rank}
+    return {"name": item, "path": item, "rank": rank}
+
+
+def _authority_table(rows: list[list[str]], header: list[str] | None) -> list[dict[str, Any]]:
+    """Map table rows to sources by column: header words pick the columns, else name, path, scope in order."""
+    columns = {"name": 0, "path": 1, "scope": 2}
+    if header:
+        found: dict[str, int] = {}
+        for i, cell in enumerate(c.lower().strip("*` ") for c in header):
+            for key, words in _COLUMN_WORDS.items():
+                if key not in found and any(w in cell for w in words):
+                    found[key] = i
+                    break
+        if "name" in found:
+            columns = {**columns, **found}
     sources = []
-    for i, item in enumerate(_parse_list(text), start=1):
-        # Try to split "Name: path — scope" or "name | path"
-        if ":" in item:
-            name, rest = item.split(":", 1)
-            path_scope = rest.strip().split(" — ", 1)
-            entry = {"name": name.strip(), "path": path_scope[0].strip(), "rank": i}
-            if len(path_scope) > 1:
-                entry["scope"] = path_scope[1].strip()
-        elif "|" in item:
-            parts = item.split("|")
-            entry = {"name": parts[0].strip(), "path": parts[1].strip() if len(parts) > 1 else "", "rank": i}
-        else:
-            entry = {"name": item, "path": item, "rank": i}
+    for row in rows:
+        name, path, scope = (row[columns[k]].strip("*` ").strip() if columns[k] < len(row) else ""
+                             for k in ("name", "path", "scope"))
+        if not name and not path:
+            continue
+        entry: dict[str, Any] = {"name": name or path, "path": path, "rank": len(sources) + 1}
+        if scope:
+            entry["scope"] = scope
         sources.append(entry)
+    return sources
+
+
+def _parse_authority_sources(text: str) -> list[dict[str, Any]]:
+    """Parse an authority section's list items or Markdown table into ranked sources.
+
+    A Markdown table is parsed by column and its header and separator rows are skipped; list markers are
+    stripped without eating a bold name's ``**`` (#392 item 11).
+
+    Args:
+        text: The section body.
+
+    Returns:
+        Sources in document order, each with ``name``, ``path``, ``rank`` and, when given, ``scope``.
+    """
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    table = [ln for ln in lines if ln.startswith("|")]
+    if table:
+        sep = next((i for i, ln in enumerate(table) if _TABLE_SEPARATOR.match(ln)), None)
+        header = _table_cells(table[sep - 1]) if sep else None
+        body = table[sep + 1:] if sep is not None else table
+        return _authority_table([_table_cells(ln) for ln in body], header)
+    sources = []
+    for line in lines:
+        item = _LIST_MARKER.sub("", line).strip()
+        if item:
+            sources.append(_authority_entry(item, len(sources) + 1))
     return sources
 
 
