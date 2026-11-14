@@ -18,6 +18,7 @@ Keys and values (a value is what a change is detected on):
 from __future__ import annotations
 
 import ast
+import re
 
 #: Key prefix → how :func:`cli_label` labels the entry in a report.
 _CLI_PREFIXES = {"cli:": "", "cli-pos:": " (positional)", "cli-argv:": " (sys.argv, heuristic)"}
@@ -150,3 +151,56 @@ def cli_term(label: str) -> str:
         Nothing.
     """
     return label.split(" (", 1)[0]
+
+
+_CONSTANT = re.compile(r"[A-Z][A-Z0-9_]*\Z")
+
+
+def _top_level(body: list[ast.stmt]) -> list[ast.stmt]:
+    """Module-level statements, including those inside top-level ``if`` / ``try`` blocks (where constants often are)."""
+    out: list[ast.stmt] = []
+    for node in body:
+        out.append(node)
+        if isinstance(node, ast.If):
+            out += _top_level(node.body) + _top_level(node.orelse)
+        elif isinstance(node, ast.Try):
+            out += _top_level(node.body) + [s for h in node.handlers for s in _top_level(h.body)]
+            out += _top_level(node.orelse) + _top_level(node.finalbody)
+    return out
+
+
+def constants(source: str) -> dict[str, str] | None:
+    """Public module-level constants: ``UPPER_CASE`` names assigned at the top level, mapped to their value's source
+    text (an annotation-only declaration maps to ``: <annotation>``), for the opt-in ``constants`` category (#451 c).
+    Assignments inside top-level ``if`` / ``try`` blocks and tuple targets count; when a name is assigned more than
+    once, the last assignment in source order is used. Augmented assignments and ``type`` aliases do not count.
+
+    Args:
+        source: The module's source text.
+
+    Returns:
+        Name → value text, or ``None`` when the source does not parse.
+
+    Raises:
+        TypeError: When ``source`` is not a string.
+    """
+    if not isinstance(source, str):
+        raise TypeError(f"source must be str, got {type(source).__name__}")
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return None
+    out: dict[str, str] = {}
+    for node in _top_level(tree.body):
+        if isinstance(node, ast.Assign):
+            names = [n.id for t in node.targets for n in ast.walk(t) if isinstance(n, ast.Name)]
+            value = ast.unparse(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names = [node.target.id]
+            value = ast.unparse(node.value) if node.value is not None else f": {ast.unparse(node.annotation)}"
+        else:
+            continue
+        for name in names:
+            if _CONSTANT.match(name):
+                out[name] = value
+    return out

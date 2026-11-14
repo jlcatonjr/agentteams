@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (opt-in `api_impact` categories for constants and generated files; #451 c)
+
+- A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
+  text report is unchanged (`--json` gains an empty `generated_changed` list).
+- `constants`: public module-level `UPPER_CASE` assignments count as symbols (`module::NAME`), added, removed, or
+  changed when the assigned value changes.
+- `generated [glob ...]`: generated files added, modified, renamed, type-changed or deleted are listed in the new
+  `Impact.generated_changed`: files under `.claude/hooks/`, `.github/hooks/`, `.grok/hooks/` and `.codex/hooks/`,
+  `.agentteams/gate-policy.json`, `.agentteams/carveouts.json`, plus any listed globs. A body-only edit to a generated hook changes no signature and was not reported before.
+- A category counts when either side of the diff turns it on, and a change to `CATEGORIES` itself is reported
+  under `review_baseline_changed`.
+- The generated `api-impact.reference.md` fence `api_impact` is v=6.
+
 ### added (the first-party toolchain group, forward-ported from 1.1.2 and 1.1.3)
 
 - **One operator-signed `.agentteams/toolchain-group.json`** (format 2) lifts Rule S-10's 14-day cooldown and a pin
