@@ -29,8 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   branch instead of assuming `main`, takes the integration branch from the brief, and refuses ruleset-managed checks
   and tokens without admin rights.
 - Code guards: management directives refuse `protect`, `required-check` and `ruleset` scopes (`merg` already was).
-  The constitutional gate prompts on `gh api`/`curl` writes to `…/protection` or `…/rulesets` and on
-  `release_required_checks … --apply`.
+  The constitutional gate prompts on:
+  - `gh api`/`curl` writes to `…/protection` or `…/rulesets`, whether the method is explicit (`-X`, `--request`,
+    `--method`) or implied by a body (`-f`, `-F`, `--field`, `--raw-field`, `--input`);
+  - the GraphQL `BranchProtectionRule` and `RepositoryRuleset` create, update and delete mutations;
+  - `release_required_checks … --apply`, including shortened forms (argparse abbreviations are off as well).
 - Security rows 811 and 816 (816 amends 811's condition 3 to allow #504's signed integration-branch authorization)
   are cross-referenced with #504's rows 809, 812 and 815.
 
