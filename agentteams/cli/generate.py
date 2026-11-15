@@ -844,6 +844,12 @@ def _run_generate_locked(
                 print(f"     ... and {len(customized) - 10} more")
             print("     These files will have their fenced sections updated; "
                   "user-authored content outside fences is preserved.")
+    if args.merge:
+        from agentteams.github_management import update_notice as _gh_mgmt_notice
+
+        _note = _gh_mgmt_notice(final_rendered, output_dir)
+        if _note:
+            print(f"\n  ℹ  GitHub management: {_note}")
 
     # Destructive-action gate must clear BEFORE backup/migration so a blocked
     # overwrite produces no spurious backup or log migration. A --migrate-driven
