@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a fleet re-render no longer drops the agents the stub records; IM item 12)
+
+- **G-17-1.** `fleet._resolve_descriptor` took the root `brief.json` whole whenever it existed. In researchteam-derived
+  repos the roster lives only in `.github/agents/_build-description.json`, so a brief-only re-render re-ran keyword
+  selection and dropped agents, and `--yes` applied the shrunken roster.
+  - **Fleet descriptor union:** the fleet now renders with the brief's content plus each roster key the brief lacks
+    (`selected_archetypes`, `governance_agents`, `write_policy`, `retrieval_integration`) from the stub. The brief
+    wins on every key it sets. The union goes to a private temp file named `brief.json` (so `--no-scan` still
+    applies), never into the workspace, and is removed at exit. The fleet prints which keys came from the stub, and
+    its report still names the real descriptor. This mirrors researchteam's `_resolve_descriptor`, except that a
+    roster the brief sets itself is kept.
+  - **Roster-shrink guard:** `--update` now compares the new manifest's `selected_archetypes` with the stub's.
+    Archetypes the run would drop are reported. Under `--yes` the run **refuses before writing** unless the new
+    `--allow-roster-shrink` is given; without `--yes` it warns and continues. A run whose description is the stub
+    itself never trips it.
+  - **Dual-descriptor advisory:** `selected_archetypes` is now one of the compared fields.
+  - **Behaviour change:** a scripted `--update --yes` whose description has a thinner roster than the stub, including
+    a fleet row, now exits 1 with the dropped archetypes listed instead of applying the shrink. Put the roster in the
+    description, or pass `--allow-roster-shrink` when the shrink is intended.
+
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
 - **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files

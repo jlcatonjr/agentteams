@@ -174,7 +174,7 @@ from agentteams.cli.security_gate import (
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
+_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables", "selected_archetypes")
 
 
 def _check_dual_descriptor(args: argparse.Namespace) -> None:

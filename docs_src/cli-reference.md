@@ -20,7 +20,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--code-query-strategy {lexical,vector}] [--code-kind {local,api,doc,all}]
            [--refresh-graph] [--refresh-architecture]
            [--install-git-hooks] [--no-git-hooks] [--code-index-hook]
-           [--allow-foreign-output] [--pin-templates]
+           [--allow-foreign-output] [--allow-roster-shrink] [--pin-templates]
            [--reconcile-front-matter] [--reconcile-apply]
            [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers]
            [--scan-security] [--check-budget] [--self] [--allow-external-self-output]
@@ -1585,7 +1585,7 @@ How it works, per discovered workspace:
 
 Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `REVIEW` (shrink Notice or USER-EDITABLE deletion — inspect the diff), `FAIL` (the merge itself errored), `SKIP` (ambiguous `.claude` with no bridge signal and no descriptor), `WOULD-UPDATE` (dry-run).
 
-**Safety:** fleet mode is non-destructive by construction. It is **merge-only** — `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, and `--shrink-policy=allow` are rejected, and `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` over the thin `_build-description.json` stub.
+**Safety:** fleet mode is non-destructive by construction. It is **merge-only** — `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, and `--shrink-policy=allow` are rejected, and `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` (then the root `brief.json`) over the thin `_build-description.json` stub, and fills in each roster key the brief lacks (`selected_archetypes`, `governance_agents`, `write_policy`, `retrieval_integration`) from the stub. The brief wins on every key it sets, and the union is written to a private temp file, never into the workspace (`agentteams/descriptor_union.py`, IM item 12).
 
 ### `--fleet DIR`
 
@@ -1641,6 +1641,15 @@ so it is never auto-committed as OK. A lock that cannot be trusted counts as a l
 directory, a dangling or looping symlink, unreadable, not UTF-8, or has a non-comment line without `=`. A `.git`
 marks a repository toplevel only as a directory or a `gitdir:` file. The constitutional gate routes any command
 using this flag (or a prefix of it, down to `--fleet-i`) to the operator ("ask").
+
+### `--allow-roster-shrink`
+
+With `--update --yes`, accept a run that drops archetypes the project's
+`.github/agents/_build-description.json` records in `selected_archetypes`. Without it such a run
+**refuses** before anything is written; without `--yes` it only warns. A description with no
+roster re-runs keyword selection, which is how a fleet re-render once dropped agents (IM item 12).
+
+---
 
 ### `--allow-foreign-output`
 

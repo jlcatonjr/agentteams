@@ -49,6 +49,7 @@ from agentteams.signing_switch import review_lines as _switch_review_lines, revi
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams import _fleet_locks
+from agentteams import descriptor_union as _union
 from agentteams.git_exec import run_git
 from agentteams._fleet_snapshot import (  # noqa: F401  (re-exported: tests and callers use fleet.*)
     SNAPSHOT_REF_PREFIX, agent_paths as _agent_paths, agent_paths_dirty as _agent_paths_dirty, git_diff as _git_diff,
@@ -785,6 +786,7 @@ def run_fleet(args, parser) -> int:
             print(f"    REVIEW: {detail}")
 
         descriptor = _resolve_descriptor(ws)
+        render_desc = _union.for_fleet(ws, descriptor)  # IM item 12: the stub supplies a roster the brief lacks
         if note := _vpolicy.unanswered_line(ws, _vpolicy.read_policy(ws)):   # prints only; never enrols
             wr.vulnscan_unanswered = True
             print(f"    {note}")
@@ -844,7 +846,7 @@ def run_fleet(args, parser) -> int:
                     print(f"    {target}: SKIP ({detail})")
                     continue
                 bridge_source = recorded or "copilot-vscode"
-            argv = _target_argv(target, ws, descriptor, dry_run=not apply, shrink_policy=shrink_policy,
+            argv = _target_argv(target, ws, render_desc, dry_run=not apply, shrink_policy=shrink_policy,
                                 bridge_source=bridge_source)
             if argv is None:
                 wr.targets.append(TargetResult(

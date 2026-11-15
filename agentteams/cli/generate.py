@@ -43,6 +43,7 @@ from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
 from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
+from agentteams import descriptor_union
 from agentteams.cli.s10_exempt_gate import authorize_into
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
@@ -107,7 +108,6 @@ def run_generate(
         _run_generate_inner, args, strict_manual_placeholders,
         migrate_exemption=migrate_exemption,
     )
-
 
 
 def _run_generate_inner(
@@ -188,7 +188,8 @@ def _run_generate_inner(
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
-    if not args.check and refuse_if_frozen(manifest, framework_id, output_dir):  # before anything is written
+    if not args.check and (refuse_if_frozen(manifest, framework_id, output_dir)  # before anything is written
+                           or descriptor_union.refuse_roster_shrink(args, manifest, project_root)):  # IM item 12
         return 1
 
     # Everything after this point writes, so it runs under the per-checkout update lock and leaves one

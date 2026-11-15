@@ -69,7 +69,7 @@ A descriptor missing fields the renderer needs will silently substitute defaults
 - **Pipeline graph drops archetypes** (e.g. `visual-designer`, `retrieval-integrator`) when `selected_archetypes` is absent and analyzer auto-selection differs from the historical brief.
 - **Memory index loses extra-dir coverage** (e.g. `docs/`, `docs/decisions/`) when `memory_index_extra_dirs` is absent. The agent files themselves are preserved, but their content surfaces less in `--query-index` results.
 
-Because `--merge` only re-renders inside fences, these regressions are valid merges from the renderer's perspective — there is no warning. The only signal is the diff.
+Because `--merge` only re-renders inside fences, most of these regressions are valid merges from the renderer's perspective, with no warning; the only signal is the diff. The roster is the exception (IM item 12): when the new manifest drops archetypes that `.github/agents/_build-description.json` records in `selected_archetypes`, `--update` warns, and under `--yes` it refuses before writing unless `--allow-roster-shrink` is given. The dual-descriptor advisory also reports a `selected_archetypes` divergence.
 
 ### Pre-update verification
 
