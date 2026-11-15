@@ -243,7 +243,7 @@ def _refuse_empty(kept: list[str], slug: str, framework: str) -> None:
         return
     raise ValueError(
         f"WASM native-exec policy: removing `execute` leaves agent {slug!r} with no {framework} tool "
-        f"({kept or 'none'}), and an empty list falls back to a default grant that includes the shell; refusing "
+        f"({kept or 'none'}), and an empty list falls back to a default grant the template never declared; refusing "
         "(fail closed). Give its template a non-execute tool, or list it in wasm_sandbox.native_exec_keep.")
 
 

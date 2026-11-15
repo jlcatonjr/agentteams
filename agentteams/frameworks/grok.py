@@ -261,7 +261,7 @@ class GrokAdapter(ClaudeAdapter):
             )
         name, description = _extract_name_description(content, agent_slug, manifest)
         _model, disallowed, _permission = _extract_claude_optional_keys(content)
-        tools, disallowed = _translate_agent_tools(manifest, agent_slug, _map_allowed_tools(content), disallowed)
+        tools, disallowed = _translate_agent_tools(manifest, agent_slug, _map_allowed_tools(content, agent_slug), disallowed)
         body = self._strip_handoffs_section(self._strip_yaml_front_matter(content))
         return (_front_matter(name, description, tools, disallowed) + body).strip() + "\n"
 
@@ -304,7 +304,7 @@ class GrokAdapter(ClaudeAdapter):
         if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
             raise ValueError("the Grok team-builder template needs a canonical `tools: [...]` front-matter line")
         head = content[: len(content) - len(body)]
-        tools, _ = _translate_agent_tools(manifest, "team-builder", _map_allowed_tools(content), None)
+        tools, _ = _translate_agent_tools(manifest, "team-builder", _map_allowed_tools(content, "team-builder"), None)
         replacement = "\n".join([f"tools: {tools}", *EXACT_TOOLSET_LINES])
         head = _YAML_TOOLS_RE.sub(lambda _m: replacement, head, count=1)
         return head + body

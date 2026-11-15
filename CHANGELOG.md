@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (an unscoped agent gets a read-only Claude grant, not write and a shell; IM item 42)
+
+- **G-04-9.** The Claude adapter's fallback grant was `Bash, Read, Write, Edit`. `_map_allowed_tools` used it when an
+  agent had no front matter (or front matter that never closes), no inline `tools: [...]` list, or a list none of
+  whose tokens maps to a Claude tool. So the one agent nobody scoped got write access and an unrestricted shell
+  (C-3). The fallback is now `Read, Grep, Glob`, and each fallback emits a `UserWarning` naming the agent and the
+  missing scope. Grok shares the mapping and the change.
+  - **Behaviour change:** a hand-written or converted agent with no usable `tools:` loses `Bash`, `Write` and `Edit`
+    on its next render, `--convert` or interop import. No shipped template reaches the fallback: every agent
+    template declares `tools:`, and a render of each example brief for Claude and Grok produced no fallback.
+  - **Migration:** if the warning names an agent that needs to write or run commands, give it an inline list, for
+    example `tools: ['read', 'search', 'edit', 'execute']`, and re-render.
+  - The WASM narrowing refusal (`wasm_enforcement._refuse_empty`) still fails closed on an empty list; its message
+    no longer says the default includes the shell.
+
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
 - **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
