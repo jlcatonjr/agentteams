@@ -144,3 +144,57 @@ def test_update_prints_a_notice_only_the_first_time(tmp_path):
     (tmp_path / "CLAUDE.md").write_text(new, encoding="utf-8")
     assert gm.update_notice([("CLAUDE.md", new)], tmp_path) is None
     assert gm.update_notice([("new.md", new)], tmp_path) is None
+
+
+def test_the_gate_pattern_stays_fast_on_repeated_anchors():
+    """@security re-verification advisory: many anchors on one line is the real worst case."""
+    import time
+
+    pat = re.compile(_gate_pattern())
+    for unit in ("gh api ", "curl -X ", "gh api -f /protection "):
+        line = (unit * (8192 // len(unit) + 1))[:8192]
+        start = time.perf_counter()
+        pat.search(line)
+        assert time.perf_counter() - start < 0.5, unit
+
+
+_FRAMEWORKS = ("copilot-vscode", "copilot-cli", "claude", "goose", "agents-md", "codex", "grok", "wasm")
+
+
+@pytest.fixture(scope="module")
+def _renders():
+    import json
+    import warnings
+
+    from agentteams import analyze
+    from agentteams.cli.render_pipeline import _build_final_rendered
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    brief = json.loads((ROOT / "examples" / "software-project" / "brief.json").read_text(encoding="utf-8"))
+    out = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for fw in _FRAMEWORKS:
+            manifest = analyze.build_manifest(json.loads(json.dumps(brief)), framework=fw)
+            out[fw] = dict(_build_final_rendered(manifest, FRAMEWORKS[fw](), "x"))
+    return out
+
+
+@pytest.mark.parametrize("framework", _FRAMEWORKS)
+def test_each_framework_ships_the_pointer_fenced_and_the_rule_beside_it(_renders, framework):
+    """@security condition 1 placement ruling (2026-11-15): git-operations' pointer is inside a fence once emitted, and
+    the same team's instruction file carries the fenced rule it points to."""
+    from agentteams.emit import _normalize_generated_content
+
+    out = _renders[framework]
+    gitops = [k for k in out if Path(k).name.startswith("git-operations")]
+    assert gitops, "no git-operations file"
+    pointer = "*integration-branch merge authorization*"
+    for rel in gitops:
+        emitted = _normalize_generated_content(rel, out[rel])
+        assert pointer in emitted
+        if rel.endswith(".md"):
+            before = emitted.split(pointer, 1)[0]
+            assert before.rfind("AGENTTEAMS:BEGIN") > before.rfind("AGENTTEAMS:END"), rel
+    rules = [v for v in out.values() if "AGENTTEAMS:BEGIN github_management_rule" in v]
+    assert len(rules) == 1 and gm.MARKER in rules[0]
