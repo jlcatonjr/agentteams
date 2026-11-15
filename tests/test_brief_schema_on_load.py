@@ -119,6 +119,18 @@ def test_the_fleet_report_carries_the_schema_warning(tmp_path, capsys):
     assert TargetResult(workspace="w", target="github", status="OK").schema_warnings == []
 
 
+def test_the_fleet_console_summary_names_schema_warnings(tmp_path, capsys):
+    # @adversarial re-check: the report JSON alone is not enough; the closing console summary says it too.
+    from agentteams._fleet_report import write_report
+    from agentteams.fleet import TargetResult, WorkspaceResult
+
+    wr = WorkspaceResult(path=str(tmp_path / "ws"), is_git=False)
+    wr.targets.append(TargetResult(workspace=wr.path, target="github", status="OK",
+                                   schema_warnings=["brief.json does not match the project-description schema"]))
+    assert write_report([wr], tmp_path / "_r", tmp_path, apply=False, frameworks="github") == 0
+    assert "project-description schema: 1 workspace(s)" in capsys.readouterr().out
+
+
 def test_a_long_issue_is_clipped_so_brief_values_are_not_echoed_whole():
     doc = {**json.loads(EXAMPLES[0].read_text(encoding="utf-8")), "project_name": "x " + "/abs/path/" * 50}
     issue = next(e for e in brief_schema.schema_errors(doc) if e.startswith("project_name"))

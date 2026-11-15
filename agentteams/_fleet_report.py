@@ -66,6 +66,10 @@ def write_report(results, report_root: Path, parent: Path, apply: bool, framewor
     if unanswered:
         print(f"  vulnerability scanning: {len(unanswered)} project(s) unanswered — answer with "
               f"`{ENROLL_HINT} --discover {parent}`")
+    # IM item 13a: a brief that doesn't match its schema is warn-only; say so on the console, not only in report.json.
+    if schema := [r for r in rows if r.get("schema_warnings")]:
+        print(f"  project-description schema: {len(schema)} workspace(s) with a brief that doesn't match it "
+              f"(warn only; see schema_warnings in report.json)")
     review = [r for r in rows if r["status"] in ("REVIEW", "FAIL")]
     if review:
         print(f"  ⚠  {len(review)} target(s) need review:")
