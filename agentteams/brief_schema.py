@@ -75,11 +75,18 @@ def _validator() -> Any:
 
 
 def _check_failures() -> tuple[type[BaseException], ...]:
-    """Return the exceptions a schema check can raise on a broken install or schema; ``warn_on_load`` reports them."""
-    from jsonschema.exceptions import SchemaError
-    from referencing.exceptions import Unresolvable
+    """Return the exceptions a schema check can raise on a broken install or schema; ``warn_on_load`` reports them.
 
-    return (OSError, ValueError, TypeError, LookupError, RecursionError, SchemaError, Unresolvable)
+    It runs in the ``except`` clause, so it must not raise itself: when jsonschema or referencing can't be imported,
+    the check failed with ``ImportError`` and that is in the base tuple (IM-5c).
+    """
+    base: tuple[type[BaseException], ...] = (OSError, ValueError, TypeError, LookupError, RecursionError, ImportError)
+    try:
+        from jsonschema.exceptions import SchemaError
+        from referencing.exceptions import Unresolvable
+    except ImportError:
+        return base
+    return (*base, SchemaError, Unresolvable)
 
 
 def schema_errors(description: dict[str, Any]) -> list[str]:

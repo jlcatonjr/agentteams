@@ -189,3 +189,24 @@ def test_an_unresolvable_reference_is_a_warning_not_a_crash(tmp_path, capsys, mo
     monkeypatch.setattr(brief_schema, "schema_errors", broken)
     ingest.load(_write(tmp_path, json.loads(EXAMPLES[0].read_text(encoding="utf-8"))), scan_project=False)
     assert "schema check was skipped (Unresolvable)" in capsys.readouterr().err
+
+
+def test_a_missing_jsonschema_or_referencing_is_a_warning_not_a_crash(tmp_path, capsys, monkeypatch):
+    # IM-5c: an ImportError escaped warn_on_load, and _check_failures re-raised it from inside the except clause.
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_validators(name, *args, **kwargs):
+        if name.split(".")[0] in ("jsonschema", "referencing"):
+            raise ImportError(f"No module named {name!r}")
+        return real_import(name, *args, **kwargs)
+
+    brief_schema._validator.cache_clear()
+    monkeypatch.setattr(builtins, "__import__", no_validators)
+    try:
+        brief_schema.warn_on_load(_write(tmp_path, json.loads(EXAMPLES[0].read_text(encoding="utf-8"))), {})
+    finally:
+        monkeypatch.undo()
+        brief_schema._validator.cache_clear()
+    assert "schema check was skipped (ImportError)" in capsys.readouterr().err
