@@ -52,10 +52,10 @@ Commit a regenerated figure only when its source changed.
   `@repo-liaison` tells the research instance:
   1. It appends one row to `.github/agents/references/adjacent-repos-coordination-log.csv`:
      `date,agentteamsBookResearch,outbound,<PR#> <merge SHA>: <templates/fences changed>`.
-  2. It files a cross-orchestrator request naming the merge SHA and the changed paths, and nothing else. The request
-     goes as a message to the instance's session, or is relayed by infrastructureManagement or the operator. It is
-     never a write to the `agentteamsBookResearch` repository (no issue, file or PR), which would be an external
-     write needing its own clearance.
+  2. It files a cross-orchestrator request naming the merge SHA, the changed paths and which side moved (below),
+     and nothing else. The request goes as a message to the instance's session, or is relayed by
+     infrastructureManagement or the operator. It is never a write to the `agentteamsBookResearch` repository (no
+     issue, file or PR), which would be an external write needing its own clearance.
 
   The instance re-runs its Book–Module Alignment check at that SHA (`.book-source` re-fetch). A finding comes back
   as an ordinary proposal (above), never as a write. A change to a concept or term the book defines follows the
