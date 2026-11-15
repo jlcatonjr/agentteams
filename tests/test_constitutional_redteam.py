@@ -165,17 +165,47 @@ def _e1_with(monkeypatch: pytest.MonkeyPatch, agents: dict[str, str]):
 
 def test_e1_reports_an_emitted_allowed_tools_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sensitivity: a subagent whose limit sits in `allowed-tools:` is EXPLOITED."""
-    row = _e1_with(monkeypatch, {"worker.md": "---\nname: w\nallowed-tools: Read\ntools: Read\n---\n"})
+    row = _e1_with(monkeypatch, {"b/worker.md": "---\nname: w\nallowed-tools: Read\ntools: Read\n---\n"})
     assert row.outcome == EXPLOITED
 
 
-def test_e1_reports_a_read_only_agent_without_a_recognised_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    row = _e1_with(monkeypatch, {"security.md": "---\nname: security\ndescription: s\n---\n"})
-    assert row.outcome == EXPLOITED and "security.md" in row.evidence
+def test_e1_reports_any_agent_without_a_recognised_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No `tools:`/`disallowedTools:` inherits every tool, read-only or not."""
+    assert _e1_with(monkeypatch, {"b/security.md": "---\nname: security\ndescription: s\n---\n"}).outcome == EXPLOITED
+    assert _e1_with(monkeypatch, {"b/primary-producer.md": "---\nname: p\n---\n"}).outcome == EXPLOITED
+
+
+@pytest.mark.parametrize("tools", ["Bash, Read, Write, Edit", "Read, Edit", "Read, Grep, Bash"])
+def test_e1_reports_a_read_only_agent_emitted_with_write_tools(monkeypatch: pytest.MonkeyPatch, tools: str) -> None:
+    """@adversarial #478 review: a present `tools:` key is not enough; a read-only agent must not get write tools."""
+    row = _e1_with(monkeypatch, {"b/security.md": f"---\nname: security\ntools: {tools}\n---\n"})
+    assert row.outcome == EXPLOITED and "b/security.md" in row.evidence
+
+
+def test_e1_allows_a_scoped_bash_for_a_read_only_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _e1_with(monkeypatch, {"b/security.md": "---\nname: security\ntools: Read, Grep, Bash(python -m x:*)\n---\n"})
+    assert row.outcome == DEFENDED
+
+
+def test_e1_catches_the_adapters_blanket_default() -> None:
+    """The path E1 now guards: a tool list the adapter cannot parse becomes `Bash, Read, Write, Edit`."""
+    from agentteams.frameworks.claude import _map_allowed_tools
+    import tests.constitutional_redteam_battery as battery
+
+    fallback = _map_allowed_tools("---\nname: security\ntools:\n  - read\n  - search\n---\n")
+    assert set(t.strip() for t in fallback.split(",")) & battery._E1_WRITE_TOOLS
+
+
+def test_e1_read_only_set_comes_from_the_templates() -> None:
+    import tests.constitutional_redteam_battery as battery
+
+    slugs = battery._e1_read_only_slugs()
+    assert {"security", "code-hygiene", "adversarial", "conflict-auditor"} <= slugs
+    assert "git-operations" not in slugs and "primary-producer" not in slugs
 
 
 def test_e1_is_defended_when_every_agent_states_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    row = _e1_with(monkeypatch, {"security.md": "---\nname: security\ntools: Read, Grep\n---\n"})
+    row = _e1_with(monkeypatch, {"b/security.md": "---\nname: security\ntools: Read, Grep\n---\n"})
     assert row.outcome == DEFENDED
 
 

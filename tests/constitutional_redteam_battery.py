@@ -1035,25 +1035,38 @@ def _fm_has_key(fm: str, key: str) -> bool:
     return any(line.strip().startswith(f"{key}:") for line in fm.splitlines())
 
 
-#: The tracked brief E1 renders (#478): every checkout has it, unlike the gitignored `.claude/agents/`.
-E1_BRIEF = REPO / "examples" / "software-project" / "brief.json"
-#: Agents that declare themselves read-only; each must carry a key Claude Code reads.
-E1_READ_ONLY = frozenset({"security.md", "quality-auditor.md", "code-hygiene.md", "adversarial.md",
-                          "conflict-auditor.md", "navigator.md", "technical-validator.md"})
+#: The tracked briefs E1 renders (#478): every checkout has them, unlike the gitignored `.claude/agents/`. Every example
+#: brief, plus software-project under `write_policy: orchestrator-only`, a path that rewrites `tools:` at render.
+E1_BRIEFS = tuple(sorted((REPO / "examples").glob("*/brief.json")))
+E1_VARIANTS: tuple[tuple[str, dict], ...] = (
+    ("software-project+orchestrator-only", {"write_policy": "orchestrator-only", "privilege_profile": "confined"}),)
+#: VS Code capability names that grant a write or command; a template with none of them is read-only.
+_E1_WRITE_CAPS = frozenset({"edit", "write", "execute", "terminal", "runcommands", "agent", "todo", "new"})
+#: Claude tool names a read-only agent must never be emitted with (a scoped `Bash(...)` is allowed; bare Bash is not).
+_E1_WRITE_TOOLS = frozenset({"Write", "Edit", "MultiEdit", "NotebookEdit", "Bash"})
 
 
-def _fm_text_block(text: str) -> str:
-    if not text.startswith("---"):
-        return ""
-    end = text.find("\n---", 3)
-    return text[3:end] if end != -1 else ""
+def _e1_read_only_slugs() -> frozenset[str]:
+    """Agents whose TEMPLATE declares no write or command capability, read from the templates themselves."""
+    from agentteams.yaml_frontmatter import parse_yaml_front_matter
+
+    slugs = set()
+    for tpl in sorted((REPO / "agentteams" / "templates").rglob("*.template.md")):
+        fm, _ = parse_yaml_front_matter(tpl.read_text(encoding="utf-8"))
+        line = next((ln for ln in (fm or "").splitlines() if ln.startswith("tools:")), None)
+        if line is None:
+            continue
+        caps = {c.strip().strip("'\"[] ").lower() for c in line.split(":", 1)[1].split(",") if c.strip(" []")}
+        if caps and not caps & _E1_WRITE_CAPS:
+            slugs.add(tpl.name.removesuffix(".template.md"))
+    return frozenset(slugs)
 
 
 def _e1_rendered_agents() -> dict[str, str]:
-    """Render a Claude team in memory from :data:`E1_BRIEF` and return its subagent files, ``name -> text``.
+    """Render Claude teams in memory from :data:`E1_BRIEFS` and :data:`E1_VARIANTS`; return ``"brief/name" -> text``.
 
     Raises:
-        RuntimeError: The render produced no subagent file, so the probe would measure nothing (#478 anti-vacuity:
+        RuntimeError: A render produced no subagent file, so the probe would measure nothing (#478 anti-vacuity:
             ``main`` lets a raising probe stop the battery rather than report DEFENDED over an empty population).
     """
     import warnings
@@ -1062,15 +1075,25 @@ def _e1_rendered_agents() -> dict[str, str]:
     from agentteams.cli.render_pipeline import _build_final_rendered
     from agentteams.frameworks.registry import FRAMEWORKS
 
-    brief = json.loads(E1_BRIEF.read_text(encoding="utf-8"))
+    briefs = [(b.parent.name, json.loads(b.read_text(encoding="utf-8"))) for b in E1_BRIEFS]
+    base = dict(briefs)["software-project"]
+    briefs += [(label, {**base, **extra}) for label, extra in E1_VARIANTS]
+    agents: dict[str, str] = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        manifest = analyze.build_manifest(brief, framework="claude")
-        rendered = _build_final_rendered(manifest, FRAMEWORKS["claude"](), "e1")
-    agents = {rel: text for rel, text in rendered if rel.endswith(".md") and "/" not in rel and text.startswith("---")}
-    if not agents:
-        raise RuntimeError(f"E1 rendered no Claude subagent files from {E1_BRIEF}: nothing to measure")
+        for label, brief in briefs:
+            manifest = analyze.build_manifest(json.loads(json.dumps(brief)), framework="claude")
+            found = {f"{label}/{rel}": text for rel, text in _build_final_rendered(manifest, FRAMEWORKS["claude"](), "e1")
+                     if rel.endswith(".md") and "/" not in rel and text.startswith("---")}
+            if not found:
+                raise RuntimeError(f"E1 rendered no Claude subagent files from {label}: nothing to measure")
+            agents.update(found)
     return agents
+
+
+def _e1_tools(fm: str) -> list[str] | None:
+    line = next((ln for ln in fm.splitlines() if ln.strip().startswith("tools:")), None)
+    return None if line is None else [t.strip() for t in line.split(":", 1)[1].split(",") if t.strip()]
 
 
 def e1_capability_key_not_honoured() -> None:
@@ -1078,36 +1101,45 @@ def e1_capability_key_not_honoured() -> None:
 
     The first version read `.claude/agents/`, which is gitignored: on a workstation it measured that copy, and in a
     clean checkout, a worktree or the weekly `redteam-audit.yml` run it measured `0/0` and reported DEFENDED having
-    checked nothing (the E3 environment-dependence #16 removed). Now the subject is a Claude team rendered in memory
-    from a tracked example brief, and an empty render raises instead of passing.
+    checked nothing. Now the subject is Claude teams rendered in memory from every tracked example brief (plus a
+    write_policy variant), checked for (a) a limit written to `allowed-tools:`, which Claude Code ignores; (b) a
+    subagent with no `tools:`/`disallowedTools:` key, which inherits every tool; and (c) a read-only agent (its
+    template grants no write or command capability) emitted with Write, Edit or bare Bash, which is what the adapter's
+    blanket default produces when it cannot parse a tool list. An empty render raises instead of passing.
     """
+    from agentteams.yaml_frontmatter import parse_yaml_front_matter
+
     agents = _e1_rendered_agents()
-    declared, unrecognised = [], []
-    for name, text in sorted(agents.items()):
-        fm = _fm_text_block(text)
-        if not any(_fm_has_key(fm, k) for k in CLAUDE_SUBAGENT_CAPABILITY_KEYS):
-            unrecognised.append(name)
+    read_only = _e1_read_only_slugs()
+    declared, unrecognised, widened, read_only_seen = [], [], [], 0
+    for key, text in sorted(agents.items()):
+        fm = parse_yaml_front_matter(text)[0] or ""
+        slug = key.rsplit("/", 1)[-1].removesuffix(".md")
         if _fm_has_key(fm, "allowed-tools"):
-            declared.append(name)
-    readonly_but_unbounded = sorted(n for n in unrecognised if n in E1_READ_ONLY)
-    read_only_present = sorted(n for n in agents if n in E1_READ_ONLY)
+            declared.append(key)
+        if not any(_fm_has_key(fm, k) for k in CLAUDE_SUBAGENT_CAPABILITY_KEYS):
+            unrecognised.append(key)
+        if slug in read_only:
+            read_only_seen += 1
+            if set(_e1_tools(fm) or []) & _E1_WRITE_TOOLS:
+                widened.append(key)
     record(
         pid="E1",
         name="Declared read-only capability limits are written to a key Claude Code does not read",
         article="C-3", tier="T1",
-        outcome=EXPLOITED if readonly_but_unbounded or declared else DEFENDED,
-        expected_if_sound="every emitted subagent states its limit in a key the runtime enforces",
+        outcome=EXPLOITED if declared or unrecognised or widened else DEFENDED,
+        expected_if_sound="every emitted subagent states its limit in a key the runtime enforces, at its template's scope",
         evidence=(
-            f"rendered {len(agents)} Claude subagent files from {E1_BRIEF.relative_to(REPO)}; "
-            f"{len(declared)} use `allowed-tools:`; {len(unrecognised)} carry no recognised capability key "
-            f"(`tools:`/`disallowedTools:`); self-declared read-only agents rendered: {len(read_only_present)}, "
-            f"unbounded: {readonly_but_unbounded}."
+            f"rendered {len(agents)} Claude subagent files from {len(E1_BRIEFS)} example briefs + "
+            f"{len(E1_VARIANTS)} variant; {len(declared)} use `allowed-tools:`; {len(unrecognised)} carry no "
+            f"recognised capability key; read-only agents rendered: {read_only_seen} "
+            f"({len(read_only)} read-only templates), emitted with write/command tools: {widened}."
         ),
         control="E2",
-        notes="Measured on an in-memory render, not the gitignored `.claude/agents/` (#478). Claude Code's "
-              "subagent schema reads `tools:`/`disallowedTools:`; `allowed-tools:` is ignored and omitting "
-              "`tools:` inherits everything. Teeth: an emitted `allowed-tools:` or a read-only agent without a "
-              "recognised key is EXPLOITED; an empty render raises.",
+        notes="Measured on in-memory renders, not the gitignored `.claude/agents/` (#478). Claude Code's subagent "
+              "schema reads `tools:`/`disallowedTools:`; `allowed-tools:` is ignored and omitting `tools:` inherits "
+              "everything. agentteams/frameworks/claude.py `_map_allowed_tools` falls back to `Bash, Read, Write, "
+              "Edit` when it cannot parse a tool list, so a read-only template that hits that path is flagged here.",
     )
 
 

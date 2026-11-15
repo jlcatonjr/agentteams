@@ -7,13 +7,14 @@ here, newest first, and committed with the baseline change it justifies.
 
 ## 2026-11-15 — #478 E1 measures a rendered team (pending the operator's accept)
 
-E1 no longer reads the gitignored `.claude/agents/`. It renders a Claude team in memory from the tracked
-`examples/software-project/brief.json` and checks the front matter the module emits. An empty render raises, and the
+E1 no longer reads the gitignored `.claude/agents/`. It renders Claude teams in memory from every tracked
+`examples/*/brief.json`, plus software-project under `write_policy: orchestrator-only`, and checks the front matter
+the module emits. An empty render raises, and the
 battery treats a raised probe as a defect, so it can no longer report DEFENDED over `0/0`.
 
 | Probe | Claim | Current evidence | Still attacks what it claims? | Why the evidence changed |
 |---|---|---|---|---|
-| E1 (C-3) | declared read-only limits are written to a key Claude Code does not read | "rendered 24 Claude subagent files …; 0 use `allowed-tools:`; 0 carry no recognised capability key; self-declared read-only agents rendered: 7, unbounded: []" | Yes: an emitted `allowed-tools:` or a read-only agent with no `tools:`/`disallowedTools:` is EXPLOITED (`tests/test_constitutional_redteam.py` sensitivity tests); an empty render raises | the subject moved from a workstation's untracked copy (35 files, 2026-08-14 note) to a render every checkout reproduces |
+| E1 (C-3) | declared read-only limits are written to a key Claude Code does not read | "rendered 161 Claude subagent files from 5 example briefs + 1 variant; 0 use `allowed-tools:`; 0 carry no recognised capability key; read-only agents rendered: 40 (11 read-only templates), emitted with write/command tools: []" | Yes. Each of these is EXPLOITED (sensitivity tests in `tests/test_constitutional_redteam.py`): an emitted `allowed-tools:`; any agent with no `tools:`/`disallowedTools:`; a read-only agent emitted with Write, Edit or bare Bash. The last is the adapter's blanket default for a tool list it cannot parse, a gap @adversarial found in the first draft. Read-only means the template grants no write or command capability. An empty render raises | the subject moved from a workstation's untracked copy (35 files, 2026-08-14 note) to a render every checkout reproduces |
 
 **To accept (operator only):** once this lands, run `--accept-probe-baseline`. It re-records E1's digest and writes
 `note: ""`, which removes the last hand-written baseline note (the F-5 residual below).
