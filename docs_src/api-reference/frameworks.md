@@ -262,6 +262,7 @@ Strips YAML front matter and inline handoff blocks to produce plain Markdown sys
 
 - `render_builder_file` maps a canonical builder `tools:` line (written by `write_policy` narrowing) to Claude names, e.g. `Read, Grep, Glob`. Claude Code can't launch a sub-agent whose tool names don't resolve.
 - Agent files get a default `model:` (`_claude_model.resolve_claude_model`): `claude-fable-5-2` for `orchestrator` and `bridge-orchestrator`, `opus` for every other agent, when the source declares a model Claude cannot read (the templates' Copilot list form). A valid Claude model is kept and an absent key stays absent. `render_builder_file` applies the same rule to the team-builder, so a converted Copilot builder gets `model: opus`.
+- An agent file with no `model:` key runs on the session's model. The settings example (`settings.hooks.example.json`) therefore also sets the session `model` (`claude-fable-5-2`) and `env.CLAUDE_CODE_SUBAGENT_MODEL` (`opus`, for Claude Code's built-in agents and agents with no `model:`), via `_claude_model.inject_session_model`. It takes effect once merged into `.claude/settings.json`; `settings.local.json`, `ANTHROPIC_MODEL`, `--model` and `/model` still override the session model.
 
 Adapter for Claude Projects.
 
