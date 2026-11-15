@@ -200,7 +200,9 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
             raise ValueError("a value holds a line that starts a dated record; check reads that as a swallowed row")
         if [len(r) for r in _parse(rendered.encode("utf-8"))] != [len(header)]:
             raise ValueError("the rendered row does not round-trip to one record of the header's width")
-        data = ((newline if raw and not raw.endswith(newline.encode()) else "") + rendered).encode("utf-8")
+        # Any trailing "\n" already ends the last record. Testing for the log's own terminator instead made a CRLF
+        # log whose last row another writer ended with a bare "\n" gain a blank line on every append.
+        data = (("" if not raw or raw.endswith(b"\n") else newline) + rendered).encode("utf-8")
         if os.write(fd, data) != len(data):
             raise OSError(f"short write appending to {path}")
     finally:
