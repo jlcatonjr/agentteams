@@ -31,17 +31,12 @@ REPO_ONLY = re.compile(
 
 def _rendered_templates() -> list[Path]:
     """Every text file under the template root (``*.template.md``, ``*.json.template``, ``*.csv.template``, the
-    sandbox ``*.sh`` scripts, hooks …) except :data:`NOT_RENDERED`. Binary files are skipped."""
-    found = []
-    for p in sorted(TEMPLATES.rglob("*")):
-        if not p.is_file() or p.relative_to(TEMPLATES).as_posix() in NOT_RENDERED or "__pycache__" in p.parts:
-            continue
-        try:
-            p.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        found.append(p)
-    return found
+    sandbox ``*.sh`` scripts, hooks …) except :data:`NOT_RENDERED`. Binary files (a NUL byte) are skipped."""
+    return [
+        p for p in sorted(TEMPLATES.rglob("*"))
+        if p.is_file() and "__pycache__" not in p.parts
+        and p.relative_to(TEMPLATES).as_posix() not in NOT_RENDERED and b"\0" not in p.read_bytes()
+    ]
 
 
 def test_the_lint_pattern_catches_each_repo_only_form() -> None:

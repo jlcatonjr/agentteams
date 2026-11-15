@@ -111,7 +111,7 @@ Any run of `--update` or `--update --merge` against a deployed agent team must f
 
 ### Pre-Update
 
-1. **Backup** — Confirm that `emit.backup_output_dir()` will be called before any write. For scripted batch runs, verify that `--update --merge --yes` is used (merge is the default; never `--update --overwrite` without approval), which calls `emit.backup_output_dir()` automatically. For non-git repos, this is the only rollback path; confirm the backup directory exists after the run.
+1. **Backup** — Confirm that `emit.backup_output_dir()` will be called before any write. For scripted batch runs, verify that `--update --merge --yes` is used (merge is the default; `--update --overwrite` needs explicit approval), which calls `emit.backup_output_dir()` automatically. For non-git repos, this is the only rollback path; confirm the backup directory exists after the run.
 2. **Dry-run** — Run `--update --merge --dry-run` first to see which files would be written. Review the list for unexpected targets. For programmatic/CI review, pipe through `--dry-run --json` and process the JSON `entries` list with `jq` or another consumer (W21 `--update` improvements Plan 1).
 2b. **Cost-routing (opt-in)** — `--cost-routing` (default OFF) instructs the run to additionally emit `references/model-routing.json` — a framework-neutral per-agent model-tier contract (`primary` / `cheap`) used by downstream runtimes that honor multi-model routing. The flag does NOT modify any rendered agent file; toggle it only when the target runtime supports tier-aware model selection.
 3. **Drift check** — Run `--check` to confirm which templates have changed since the last build. This establishes the expected scope of changes.
