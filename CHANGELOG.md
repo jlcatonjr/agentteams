@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (red-team probe E1 measures a rendered team; #478)
+
+- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
+  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders a
+  Claude team in memory from the tracked `examples/software-project/brief.json` and checks the emitted front matter:
+  - an `allowed-tools:` key, or a read-only agent with no `tools:`/`disallowedTools:`, is EXPLOITED;
+  - an empty render raises.
+- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
+- The probe baseline is re-accepted by the operator after merge; the review is in
+  `references/redteam-probe-revalidation.md`.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub

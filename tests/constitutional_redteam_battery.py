@@ -1019,19 +1019,10 @@ def d6_hand_edited_twin_survives_drop_authority() -> None:
 # verifiable configuration assertion, not a behavioural one, and is rated for
 # legitimacy accordingly in the report.
 
-CLAUDE_AGENTS = REPO / ".claude" / "agents"
 #: Claude Code subagent front matter fields, per code.claude.com/docs/en/sub-agents
 #: (verified 2026-08-06): name, description, tools, disallowedTools, model, permissionMode.
 #: `tools` omitted => "Inherits every tool available to subagents".
 CLAUDE_SUBAGENT_CAPABILITY_KEYS = ("tools", "disallowedTools")
-
-
-def _front_matter_block(path: Path) -> str:
-    text = path.read_text(encoding="utf-8")
-    if not text.startswith("---"):
-        return ""
-    end = text.find("\n---", 3)
-    return text[3:end] if end != -1 else ""
 
 
 def _fm_has_key(fm: str, key: str) -> bool:
@@ -1044,39 +1035,79 @@ def _fm_has_key(fm: str, key: str) -> bool:
     return any(line.strip().startswith(f"{key}:") for line in fm.splitlines())
 
 
+#: The tracked brief E1 renders (#478): every checkout has it, unlike the gitignored `.claude/agents/`.
+E1_BRIEF = REPO / "examples" / "software-project" / "brief.json"
+#: Agents that declare themselves read-only; each must carry a key Claude Code reads.
+E1_READ_ONLY = frozenset({"security.md", "quality-auditor.md", "code-hygiene.md", "adversarial.md",
+                          "conflict-auditor.md", "navigator.md", "technical-validator.md"})
+
+
+def _fm_text_block(text: str) -> str:
+    if not text.startswith("---"):
+        return ""
+    end = text.find("\n---", 3)
+    return text[3:end] if end != -1 else ""
+
+
+def _e1_rendered_agents() -> dict[str, str]:
+    """Render a Claude team in memory from :data:`E1_BRIEF` and return its subagent files, ``name -> text``.
+
+    Raises:
+        RuntimeError: The render produced no subagent file, so the probe would measure nothing (#478 anti-vacuity:
+            ``main`` lets a raising probe stop the battery rather than report DEFENDED over an empty population).
+    """
+    import warnings
+
+    from agentteams import analyze
+    from agentteams.cli.render_pipeline import _build_final_rendered
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    brief = json.loads(E1_BRIEF.read_text(encoding="utf-8"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        manifest = analyze.build_manifest(brief, framework="claude")
+        rendered = _build_final_rendered(manifest, FRAMEWORKS["claude"](), "e1")
+    agents = {rel: text for rel, text in rendered if rel.endswith(".md") and "/" not in rel and text.startswith("---")}
+    if not agents:
+        raise RuntimeError(f"E1 rendered no Claude subagent files from {E1_BRIEF}: nothing to measure")
+    return agents
+
+
 def e1_capability_key_not_honoured() -> None:
+    """C-3 on what the module EMITS for Claude, measured identically in every checkout (#478).
+
+    The first version read `.claude/agents/`, which is gitignored: on a workstation it measured that copy, and in a
+    clean checkout, a worktree or the weekly `redteam-audit.yml` run it measured `0/0` and reported DEFENDED having
+    checked nothing (the E3 environment-dependence #16 removed). Now the subject is a Claude team rendered in memory
+    from a tracked example brief, and an empty render raises instead of passing.
+    """
+    agents = _e1_rendered_agents()
     declared, unrecognised = [], []
-    for f in sorted(CLAUDE_AGENTS.glob("*.md")):
-        fm = _front_matter_block(f)
+    for name, text in sorted(agents.items()):
+        fm = _fm_text_block(text)
+        if not any(_fm_has_key(fm, k) for k in CLAUDE_SUBAGENT_CAPABILITY_KEYS):
+            unrecognised.append(name)
         if _fm_has_key(fm, "allowed-tools"):
-            declared.append(f.name)
-            if not any(_fm_has_key(fm, k) for k in CLAUDE_SUBAGENT_CAPABILITY_KEYS):
-                unrecognised.append(f.name)
-    readonly_but_unbounded = [
-        n for n in unrecognised
-        if n in {"security.md", "quality-auditor.md", "code-hygiene.md",
-                 "adversarial.md", "conflict-auditor.md", "navigator.md",
-                 "technical-validator.md"}
-    ]
+            declared.append(name)
+    readonly_but_unbounded = sorted(n for n in unrecognised if n in E1_READ_ONLY)
+    read_only_present = sorted(n for n in agents if n in E1_READ_ONLY)
     record(
         pid="E1",
         name="Declared read-only capability limits are written to a key Claude Code does not read",
         article="C-3", tier="T1",
-        outcome=EXPLOITED if unrecognised else DEFENDED,
-        expected_if_sound="the runtime enforces the declared grant",
+        outcome=EXPLOITED if readonly_but_unbounded or declared else DEFENDED,
+        expected_if_sound="every emitted subagent states its limit in a key the runtime enforces",
         evidence=(
-            f"{len(declared)}/{len(list(CLAUDE_AGENTS.glob('*.md')))} agent files declare "
-            f"`allowed-tools:`; {len(unrecognised)} declare NO recognised capability key "
-            f"(`tools:`/`disallowedTools:`). Self-declared read-only agents affected: "
-            f"{readonly_but_unbounded}. Corroboration: this session's runtime agent roster "
-            f"reports 'Tools: All tools' for every AgentTeamsModule agent, while built-ins that "
-            f"do restrict tools are reported with their restrictions."
+            f"rendered {len(agents)} Claude subagent files from {E1_BRIEF.relative_to(REPO)}; "
+            f"{len(declared)} use `allowed-tools:`; {len(unrecognised)} carry no recognised capability key "
+            f"(`tools:`/`disallowedTools:`); self-declared read-only agents rendered: {len(read_only_present)}, "
+            f"unbounded: {readonly_but_unbounded}."
         ),
         control="E2",
-        notes="agentteams/frameworks/claude.py:227 emits `allowed-tools:`. Claude Code's "
-              "subagent schema has no such field, and omitting `tools:` inherits everything. "
-              "C-3 ('tools: front matter is a limit, not a suggestion') is therefore a no-op "
-              "in every Claude team this module generates: @security runs with Write and Bash.",
+        notes="Measured on an in-memory render, not the gitignored `.claude/agents/` (#478). Claude Code's "
+              "subagent schema reads `tools:`/`disallowedTools:`; `allowed-tools:` is ignored and omitting "
+              "`tools:` inherits everything. Teeth: an emitted `allowed-tools:` or a read-only agent without a "
+              "recognised key is EXPLOITED; an empty render raises.",
     )
 
 

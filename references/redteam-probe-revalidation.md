@@ -5,6 +5,19 @@ was last accepted. `agentteams --redteam --redteam-probes tests.constitutional_r
 (operator only) re-records every digest and writes `note: ""` for every probe, so the review behind each accept is kept
 here, newest first, and committed with the baseline change it justifies.
 
+## 2026-11-15 — #478 E1 measures a rendered team (pending the operator's accept)
+
+E1 no longer reads the gitignored `.claude/agents/`. It renders a Claude team in memory from the tracked
+`examples/software-project/brief.json` and checks the front matter the module emits. An empty render raises, and the
+battery treats a raised probe as a defect, so it can no longer report DEFENDED over `0/0`.
+
+| Probe | Claim | Current evidence | Still attacks what it claims? | Why the evidence changed |
+|---|---|---|---|---|
+| E1 (C-3) | declared read-only limits are written to a key Claude Code does not read | "rendered 24 Claude subagent files …; 0 use `allowed-tools:`; 0 carry no recognised capability key; self-declared read-only agents rendered: 7, unbounded: []" | Yes: an emitted `allowed-tools:` or a read-only agent with no `tools:`/`disallowedTools:` is EXPLOITED (`tests/test_constitutional_redteam.py` sensitivity tests); an empty render raises | the subject moved from a workstation's untracked copy (35 files, 2026-08-14 note) to a render every checkout reproduces |
+
+**To accept (operator only):** once this lands, run `--accept-probe-baseline`. It re-records E1's digest and writes
+`note: ""`, which removes the last hand-written baseline note (the F-5 residual below).
+
 ## 2026-11-12 — #50 G3 (baseline last accepted 2026-09-04, b6c1c473)
 
 Audit run on origin/dev 875d0315; re-checked on 7db5e379 before the commit (only E4 moved, by the one module named in its row). F-5 flagged nine probes (the accept itself showed three more, below the table): eight whose evidence changed with the outcome still

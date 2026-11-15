@@ -148,3 +148,49 @@ def test_the_ledger_is_populated_and_every_reason_is_substantive() -> None:
         if len(reason) < MIN_REASON_CHARS
     }
     assert not thin, f"exemptions with a reason shorter than {MIN_REASON_CHARS} chars: {thin}"
+
+
+# --------------------------------------------------------------------------- E1 measures a render, not a laptop (#478)
+
+def _e1_with(monkeypatch: pytest.MonkeyPatch, agents: dict[str, str]):
+    import tests.constitutional_redteam_battery as battery
+
+    monkeypatch.setattr(battery, "_e1_rendered_agents", lambda: agents)
+    before = len(battery.RESULTS)
+    battery.e1_capability_key_not_honoured()
+    row = battery.RESULTS[before]
+    del battery.RESULTS[before:]
+    return row
+
+
+def test_e1_reports_an_emitted_allowed_tools_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sensitivity: a subagent whose limit sits in `allowed-tools:` is EXPLOITED."""
+    row = _e1_with(monkeypatch, {"worker.md": "---\nname: w\nallowed-tools: Read\ntools: Read\n---\n"})
+    assert row.outcome == EXPLOITED
+
+
+def test_e1_reports_a_read_only_agent_without_a_recognised_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _e1_with(monkeypatch, {"security.md": "---\nname: security\ndescription: s\n---\n"})
+    assert row.outcome == EXPLOITED and "security.md" in row.evidence
+
+
+def test_e1_is_defended_when_every_agent_states_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _e1_with(monkeypatch, {"security.md": "---\nname: security\ntools: Read, Grep\n---\n"})
+    assert row.outcome == DEFENDED
+
+
+def test_e1_raises_on_an_empty_render(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Anti-vacuity: no rendered subagent file is a probe defect, never DEFENDED (0/0 was the #478 bug)."""
+    import tests.constitutional_redteam_battery as battery
+
+    import agentteams.cli.render_pipeline as rp
+
+    monkeypatch.setattr(rp, "_build_final_rendered", lambda *a, **k: [("../CLAUDE.md", "x")])
+    with pytest.raises(RuntimeError, match="nothing to measure"):
+        battery._e1_rendered_agents()
+
+
+def test_e1_reads_no_gitignored_path() -> None:
+    src = (REPO_ROOT / "tests" / "constitutional_redteam_battery.py").read_text(encoding="utf-8")
+    body = src.split("def e1_capability_key_not_honoured", 1)[1].split("\ndef ", 1)[0]
+    assert '".claude"' not in body and "CLAUDE_AGENTS" not in src
