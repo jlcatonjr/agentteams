@@ -63,7 +63,7 @@ def test_non_str_is_a_type_error() -> None:
 
 
 def test_output_keys_are_sorted() -> None:
-    assert list(json.loads(cm.inject_session_model('{"z": 1, "_comment": []}'))) == ["_comment", "env", "model", "z"]
+    assert list(json.loads(cm.inject_session_model('{"z": 1, "_comment": []}'))) == ["_comment", "effortLevel", "env", "model", "z"]
 
 
 def test_other_keys_survive_unchanged() -> None:
@@ -72,5 +72,5 @@ def test_other_keys_survive_unchanged() -> None:
     before = json.loads(template)
     after = json.loads(cm.inject_session_model(template))
     assert after["_comment"][: len(before["_comment"])] == before["_comment"]
-    assert {k: v for k, v in after.items() if k not in ("model", "env", "_comment")} == {
+    assert {k: v for k, v in after.items() if k not in ("model", "env", "effortLevel", "_comment")} == {
         k: v for k, v in before.items() if k != "_comment"}

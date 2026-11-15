@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (model and reasoning effort per role, on every provider: agentteams #508, for 1.3.0)
+
+- **The brief's new `agent_runtime` block** sets the orchestrator's and the subagents' model and reasoning effort,
+  with per-agent overrides under `agents.<slug>` (`agentteams/agent_runtime.py`; docs: API reference *agent runtime*).
+  - Effort is named on a neutral scale (`low`, `medium`, `high`, `xhigh`, `max`). Each level maps to the provider's
+    level of the same name, and an object form (`{"default": "high", "codex": "ultra"}`) reaches a level only one
+    provider offers. A level a provider cannot take refuses the render.
+  - Model is set per provider, as a bare name: never a provider, base URL or profile.
+- **Default effort is `medium` for both roles.** Every generated Claude agent file now has an `effort:` line, and
+  every VS Code Copilot agent file has a `reasoning-effort:` line. A per-agent effort outranks the user's session
+  level, so a team that ran subagents at a higher session effort now runs them at `medium` unless the brief raises it.
+- **Claude's settings example** (`.claude/settings.hooks.example.json`) gains `effortLevel` (the orchestrator's
+  effort; omitted for `max`, which the setting does not take). Its `model` and `CLAUDE_CODE_SUBAGENT_MODEL` follow a
+  configured Claude model.
+- **Copilot CLI, Codex, Goose and Grok write no effort, and the run says so.** Copilot CLI agent files take no
+  effort key. Codex's `model_reasoning_effort` waits for a live codex-cli test (operator ruling 2026-11-15). Goose has
+  no effort setting. Grok's keys are not in xAI's docs. A configured Codex, Goose or Grok model is reported the same
+  way.
+- **`--update --merge`.** `effort:` merges like any other front-matter key: a missing line is added where the build
+  log has a baseline, and a hand-edited value is kept and reported. `model:` is still a capability key, so `--update`
+  reports the proposed line and never writes it (adopt it by hand or with `--overwrite` and an `@security`
+  clearance). This extends the model-adoption note further down to a model set through `agent_runtime`.
+- **Flags** `--orchestrator-model`, `--orchestrator-effort`, `--subagent-model` and `--subagent-effort` override the
+  brief for one run. They are not kept; the run says to put the value in the brief.
+- **`--doctor`** gains an *Agent runtime* section. It shows the effective model and effort per role and framework,
+  names every value not written, counts the Claude agent files with no `effort:`, and names the two things a render
+  cannot see: Claude Code lowering a level the model doesn't support, and `CLAUDE_CODE_EFFORT_LEVEL` in the caller's
+  environment.
+- A per-agent entry that lowers the effort of `@security`, `@adversarial`, `@conflict-auditor` or `@code-hygiene`, or
+  gives one of them its own model, is shown as a warning.
+- **Not changed:** the team-builder agent, and bridge stubs (built from a source team, not a brief).
+
 ### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
 
 - **Security fix (IM evaluation item 17, G-22-7).** The governed check tested only that

@@ -181,11 +181,13 @@ class ClaudeAdapter(FrameworkAdapter):
         # A.5: Extract optional Claude-specific keys before stripping front matter.
         model, disallowed_tools, permission_mode = _extract_claude_optional_keys(content)
         model = _resolve_claude_model(content, model, agent_slug)
+        model, effort = _claude_runtime(content, model, agent_slug, manifest)
         content = self._strip_yaml_front_matter(content)
         content = self._strip_handoffs_section(content)
         content = _inject_claude_front_matter(
             content, name, description, allowed_tools,
             model=model,
+            effort=effort,
             disallowed_tools=disallowed_tools,
             permission_mode=permission_mode,
             mcp_block=mcp_block,
@@ -365,7 +367,7 @@ class ClaudeAdapter(FrameworkAdapter):
                 # FrameworkAdapter.extra_output_files (super() above), so a deny never ships
                 # without it. The old "sentinel only with the deny" rule is superseded
                 # (2026-09-30): the sentinel reads like an empty store.
-            files.append(("../settings.hooks.example.json", inject_session_model(example)))
+            files.append(("../settings.hooks.example.json", inject_session_model(example, manifest)))
         return files
 
     def get_agents_dir(self, project_path: Path) -> Path:
@@ -857,6 +859,42 @@ def _extract_name_description(
     return name, description
 
 
+_FRONT_MATTER_EFFORT_RE = re.compile(r"^effort\s*:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def _claude_runtime(content: str, model: str | None, agent_slug: str,
+                    manifest: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Apply the brief's ``agent_runtime`` (#508) to one Claude agent: its ``model:`` and ``effort:``.
+
+    A configured model (the agent's override, else its role's) replaces the resolved one. The effort is the
+    configured or default level, except that a source ``effort:`` the brief does not set explicitly is kept.
+
+    Args:
+        content: The agent file content, front matter included.
+        model: The model resolved so far (``_claude_model.resolve_claude_model``).
+        agent_slug: The agent slug.
+        manifest: The team manifest.
+
+    Returns:
+        ``(model, effort)`` to emit; either may be None.
+
+    Raises:
+        agentteams.agent_runtime.AgentRuntimeError: The resolved level is one Claude cannot take.
+    """
+    from agentteams import agent_runtime as _ar
+
+    runtime = _ar.from_manifest(manifest)
+    configured = _ar.model_for(runtime, agent_slug, "claude")
+    if configured is not None:
+        model = configured
+    effort = _ar.effort_for(runtime, agent_slug, "claude")
+    yaml_body, _ = _parse_yaml_front_matter(content)
+    source = _FRONT_MATTER_EFFORT_RE.search(yaml_body or "")
+    if source and not _ar.explicit_effort(runtime, agent_slug):
+        effort = source.group(1).strip("\"'")
+    return model, effort
+
+
 def _runner_grant(agent_slug: str, manifest: dict[str, Any]) -> dict[str, Any] | None:
     """The agent's ``agentteams_runner`` grant under the switch (R6), else None. The orchestrator never has one."""
     from agentteams import write_policy as _wp
@@ -874,6 +912,7 @@ def _inject_claude_front_matter(
     allowed_tools: str = _CLAUDE_DEFAULT_ALLOWED_TOOLS,
     *,
     model: str | None = None,
+    effort: str | None = None,
     disallowed_tools: str | None = None,
     permission_mode: str | None = None,
     mcp_block: str | None = None,
@@ -897,6 +936,8 @@ def _inject_claude_front_matter(
     # A.5: emit optional Claude-specific front-matter keys when provided.
     if model:
         lines.append(f"model: {model}")
+    if effort:  # #508: per-agent reasoning effort (overrides the session level for this subagent)
+        lines.append(f"effort: {effort}")
     if disallowed_tools:
         lines.append(f"disallowedTools: {disallowed_tools}")
     if permission_mode:

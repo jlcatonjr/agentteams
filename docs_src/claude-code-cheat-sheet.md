@@ -46,6 +46,12 @@ Use full model IDs for exact pinning: `--model claude-fable-5-2`, `--model claud
 `"env": {"CLAUDE_CODE_SUBAGENT_MODEL": "opus"}` to merge: Fable 5.2 orchestrates, Opus subagents do the work.
 Check the result with `/status`.
 
+**Effort per project.** `"effortLevel"` in `.claude/settings.json` (`low` to `xhigh`; no `max`) sets the session's
+effort; `CLAUDE_CODE_EFFORT_LEVEL`, `/effort` and `--effort` override it. A subagent's `effort:` front-matter line
+overrides the session level (but not the environment variable). From agentteams 1.3, every generated agent file
+carries `effort: medium` and the settings example carries `"effortLevel": "medium"`. Change either with the brief's
+`agent_runtime` block.
+
 ---
 
 ## Referencing Files in a Prompt

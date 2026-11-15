@@ -153,6 +153,19 @@ def _run_generate_inner(
         else frozenset()
     )
 
+    # #508: --orchestrator-*/--subagent-* override the brief's agent_runtime for this run only.
+    from agentteams import agent_runtime as _agent_runtime
+    from agentteams.cli.agent_runtime_switch import apply_to_description as _apply_runtime_flags
+
+    try:
+        runtime_flag_notices = _apply_runtime_flags(description, args)
+        _agent_runtime.parse(description)
+    except _agent_runtime.AgentRuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    for line in runtime_flag_notices:
+        print(f"  !  {line}", file=sys.stderr)
+
     # -----------------------------------------------------------------------
     # Step 2: Validate
     # -----------------------------------------------------------------------

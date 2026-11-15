@@ -663,6 +663,9 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         manifest["git_workflow"] = git_workflow
     if "wasm_sandbox" in description:  # P01: carried only when the brief has the block (else byte-identical)
         manifest["wasm_sandbox"] = _wasm_sandbox_record(description, all_slugs)
+    if "agent_runtime" in description:  # #508: model and effort per role; carried only when present
+        from agentteams import agent_runtime as _agent_runtime
+        manifest["agent_runtime"] = _agent_runtime.to_manifest(_agent_runtime.parse(description))
     if "wasm_runtime" in description:  # P08 (--framework wasm runtime.json): carried only when present
         from agentteams.wasm_agent.team import normalize_wasm_runtime
         manifest["wasm_runtime"] = normalize_wasm_runtime(description["wasm_runtime"])

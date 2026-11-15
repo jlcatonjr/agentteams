@@ -38,9 +38,26 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
         return "copilot-vscode"
 
     def render_agent_file(self, content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
-        """Validate and normalize YAML front matter for VS Code Copilot format."""
+        """Validate and normalize YAML front matter for VS Code Copilot format, then apply ``agent_runtime``."""
+        return self.render_for(content, agent_slug, manifest, "copilot-vscode")
+
+    def render_for(self, content: str, agent_slug: str, manifest: dict[str, Any], framework: str) -> str:
+        """Render the shared ``.agent.md`` shape for *framework* (``copilot-vscode`` or ``copilot-cli``).
+
+        Args:
+            content: The agent file content.
+            agent_slug: The agent slug.
+            manifest: The team manifest.
+            framework: Which Copilot surface: VS Code writes ``reasoning-effort:``; the CLI has no such key.
+
+        Returns:
+            The rendered agent file.
+
+        Raises:
+            agentteams.agent_runtime.AgentRuntimeError: A configured level the surface cannot take.
+        """
         content = _ensure_yaml_front_matter(content, agent_slug, manifest)
-        return content
+        return _apply_agent_runtime(content, agent_slug, manifest, framework)
 
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
         return content  # instructions format is plain Markdown; no adjustments needed
@@ -276,6 +293,42 @@ def _check_body_length(body_text: str, agent_slug: str) -> None:
             UserWarning,
             stacklevel=2,
         )
+
+
+_MODEL_LINE_RE = re.compile(r"^model:[^\n]*$", re.MULTILINE)
+_REASONING_EFFORT_RE = re.compile(r"^reasoning-effort:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def _apply_agent_runtime(content: str, agent_slug: str, manifest: dict[str, Any], framework: str) -> str:
+    """Apply the brief's ``agent_runtime`` (#508): a configured ``model:`` and, on VS Code, ``reasoning-effort:``.
+
+    A configured model replaces the ``model:`` line (VS Code as a one-item list, the CLI as a quoted string). A source
+    ``reasoning-effort:`` the brief does not set explicitly is kept.
+    """
+    from agentteams import agent_runtime as _ar
+
+    yaml_text, body_text = _parse_yaml_front_matter(content)
+    if yaml_text is None:
+        return content
+    runtime = _ar.from_manifest(manifest)
+    yaml_body = yaml_text.rstrip("\n")
+    model = _ar.model_for(runtime, agent_slug, framework)
+    if model is not None:
+        value = f'["{model}"]' if framework == "copilot-vscode" else f'"{model}"'
+        if _MODEL_LINE_RE.search(yaml_body):
+            yaml_body = _MODEL_LINE_RE.sub(lambda _m: f"model: {value}", yaml_body, count=1)
+        else:
+            yaml_body += f"\nmodel: {value}"
+    effort = _ar.effort_for(runtime, agent_slug, framework)
+    if effort is not None:
+        current = _REASONING_EFFORT_RE.search(yaml_body)
+        if current is None:
+            yaml_body += f"\nreasoning-effort: {effort}"
+        elif _ar.explicit_effort(runtime, agent_slug):
+            yaml_body = _REASONING_EFFORT_RE.sub(f"reasoning-effort: {effort}", yaml_body, count=1)
+    if yaml_body == yaml_text.rstrip("\n"):
+        return content
+    return f"---\n{yaml_body}\n---\n{body_text}"
 
 
 def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str, Any]) -> str:

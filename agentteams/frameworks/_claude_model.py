@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TypeGuard
+from typing import Any, TypeGuard
 
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -26,12 +26,21 @@ CLAUDE_AGENT_MODEL_DEFAULT = "opus"
 #: so the orchestrator file keeps :data:`CLAUDE_ORCHESTRATOR_MODEL_DEFAULT`.
 CLAUDE_SUBAGENT_MODEL_ENV = "CLAUDE_CODE_SUBAGENT_MODEL"
 
-_SESSION_MODEL_COMMENT = (
-    "",
-    f"`model` and `env.{CLAUDE_SUBAGENT_MODEL_ENV}`: the main session runs {CLAUDE_ORCHESTRATOR_MODEL_DEFAULT} and every "
-    f"subagent whose file names no model runs {CLAUDE_AGENT_MODEL_DEFAULT}, matching the agent files' own `model:` lines.",
-    "settings.local.json, ANTHROPIC_MODEL, --model and /model still override the session model.",
-)
+def _session_comment(orchestrator_model: str, subagent_model: str, level: str | None) -> tuple[str, ...]:
+    """The ``_comment`` lines explaining the session keys."""
+    lines = [
+        "",
+        f"`model` and `env.{CLAUDE_SUBAGENT_MODEL_ENV}`: the main session runs {orchestrator_model} and every "
+        f"subagent whose file names no model runs {subagent_model}, matching the agent files' own `model:` lines.",
+        "settings.local.json, ANTHROPIC_MODEL, --model and /model still override the session model.",
+    ]
+    if level is not None:
+        lines.append(f"`effortLevel`: the main session's reasoning effort ({level}); each agent file's `effort:` sets "
+                     "its own. CLAUDE_CODE_EFFORT_LEVEL, /effort and --effort still override it.")
+    else:
+        lines.append("No `effortLevel`: the orchestrator effort is max, which this setting does not take; start the "
+                     "session with --effort max, or rely on the orchestrator agent file's `effort: max`.")
+    return tuple(lines)
 
 # A value Claude Code accepts as ``model:``: an alias (``opus``, ``inherit``), a model id
 # (``claude-opus-5-5``), optionally with a context suffix (``opus[1m]``). Copilot's display names
@@ -103,15 +112,18 @@ def resolve_claude_model(content: str, model: str | None, agent_slug: str) -> st
     return default_claude_model(agent_slug)
 
 
-def inject_session_model(example_text: str) -> str:
+def inject_session_model(example_text: str, manifest: dict[str, Any] | None = None) -> str:
     """Return the Claude settings example with the session-model keys added.
 
-    Adds ``"model": CLAUDE_ORCHESTRATOR_MODEL_DEFAULT`` and ``"env": {CLAUDE_SUBAGENT_MODEL_ENV:
-    CLAUDE_AGENT_MODEL_DEFAULT}``, keeping any value the example already sets, and a ``_comment`` note. The
-    example stays inert until an operator merges it into ``settings.json``.
+    Adds ``"model"`` (the brief's orchestrator Claude model, else :data:`CLAUDE_ORCHESTRATOR_MODEL_DEFAULT`),
+    ``"env": {CLAUDE_SUBAGENT_MODEL_ENV: <the subagents' Claude model, else CLAUDE_AGENT_MODEL_DEFAULT>}`` and
+    ``"effortLevel"`` (the orchestrator's effort, default ``medium``; omitted for ``max``, which the setting does not
+    take: agentteams #508), keeping any value the example already sets, and a ``_comment`` note. The example stays
+    inert until an operator merges it into ``settings.json``.
 
     Args:
         example_text: The ``settings.hooks.example.json`` text (with or without the sandbox block).
+        manifest: The team manifest (its ``agent_runtime``); None means every default.
 
     Returns:
         The example re-serialized (keys sorted, as the sandbox injector writes it) with the keys added.
@@ -129,12 +141,20 @@ def inject_session_model(example_text: str) -> str:
         raise ValueError(f"settings.hooks.example.json is not valid JSON; cannot add the session model: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("settings.hooks.example.json did not parse to a JSON object; cannot add the session model")
-    data.setdefault("model", CLAUDE_ORCHESTRATOR_MODEL_DEFAULT)
+    from agentteams import agent_runtime as _ar
+
+    runtime = _ar.from_manifest(manifest or {})
+    orchestrator_model = runtime.roles["orchestrator"].model.get("claude", CLAUDE_ORCHESTRATOR_MODEL_DEFAULT)
+    subagent_model = runtime.roles["subagents"].model.get("claude", CLAUDE_AGENT_MODEL_DEFAULT)
+    data.setdefault("model", orchestrator_model)
     env = data.setdefault("env", {})
     if not isinstance(env, dict):
         raise ValueError("settings.hooks.example.json `env` is not an object; cannot add the session model")
-    env.setdefault(CLAUDE_SUBAGENT_MODEL_ENV, CLAUDE_AGENT_MODEL_DEFAULT)
+    env.setdefault(CLAUDE_SUBAGENT_MODEL_ENV, subagent_model)
+    level = _ar.session_effort(runtime, "claude")
+    if level is not None:
+        data.setdefault("effortLevel", level)
     comment = data.setdefault("_comment", [])
     if isinstance(comment, list):
-        comment.extend(_SESSION_MODEL_COMMENT)
+        comment.extend(_session_comment(orchestrator_model, subagent_model, level))
     return json.dumps(data, indent=2, sort_keys=True) + "\n"

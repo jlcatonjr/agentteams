@@ -1420,6 +1420,16 @@ Operator-only, and refused inside an agent session: `--sign-dev-merge-authorizat
 
 Read-only: verifies this workspace's `.agentteams/dev-merge-authorization.json` against `--output`'s governed team dir and the brief's integration branch. It checks the signature, the workspace binding by team id and git origin, HALTs, lineage and sequence. **Exit code:** `0` when `--merge-pr` would be authorized here, `1` otherwise.
 
+### `--orchestrator-model`, `--orchestrator-effort`, `--subagent-model`, `--subagent-effort`
+
+Override the brief's `agent_runtime` (agentteams #508; [agent runtime](api-reference/agent-runtime.md)) **for one run**.
+`--orchestrator-model [PROVIDER=]MODEL` and `--subagent-model [PROVIDER=]MODEL` set a role's model. `PROVIDER` is
+`claude` (the default), `copilot`, `copilot-vscode`, `copilot-cli`, `codex`, `goose` or `grok`, and the value must be
+a bare model name. `--orchestrator-effort LEVEL` and `--subagent-effort LEVEL` set a role's reasoning effort: `low`,
+`medium` (the default), `high`, `xhigh` or `max`, or `PROVIDER=LEVEL` for a provider's own level. Repeat a flag once
+per provider. A value a provider cannot take refuses the run before anything is written. The values are not kept: the
+run says so, and the brief's `agent_runtime` is how a setting survives `--update`.
+
 ### `--write-integrity-manifest`
 
 Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.

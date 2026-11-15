@@ -199,6 +199,40 @@ def _signing_governance(root: Path) -> tuple[list[str], int]:
     return lines, 0
 
 
+_SURFACE_DIRS: tuple[tuple[str, str], ...] = (
+    ("claude", ".claude/agents"), ("copilot-vscode", ".github/agents"), ("codex", ".codex/agents"),
+    ("goose", ".goose/recipes"), ("grok", ".grok/agents"),
+)
+
+
+def _agent_runtime(root: Path, brief: dict) -> tuple[list[str], int]:
+    """The effective model and effort per role and provider (agentteams #508), and what is not written."""
+    from agentteams import agent_runtime as ar
+
+    try:
+        runtime = ar.parse(brief)
+    except ar.AgentRuntimeError as exc:
+        return [f"  ✗  FAIL the brief's agent_runtime is invalid: {exc}"], 1
+    frameworks = [fw for fw, rel in _SURFACE_DIRS if (root / rel).is_dir()]
+    if not frameworks:
+        return [], 0
+    lines = [f"  ℹ  {fw:<15} {role:<12} model {model:<28} effort {effort}"
+             for fw, role, model, effort in ar.effective_table(runtime, frameworks)]
+    for fw in frameworks:
+        lines += [f"  ℹ  {line}" for line in ar.report_lines(runtime, fw, None)]
+    claude_dir = root / ".claude" / "agents"
+    if claude_dir.is_dir():
+        missing = sorted(f.name for f in claude_dir.glob("*.md")
+                         if f.is_file() and f.read_text(encoding="utf-8", errors="ignore").startswith("---")
+                         and not re.search(r"^effort\s*:", f.read_text(encoding="utf-8", errors="ignore").split("\n---", 1)[0],
+                                           re.MULTILINE))
+        if missing:
+            lines.append(f"  !  WARN {len(missing)} Claude agent file(s) set no effort: and run at the session level "
+                         f"(e.g. {', '.join(missing[:3])}); --update --merge adds it where the build log has a baseline, else reports it")
+    lines += [f"  ℹ  not checkable from files: {c}" for c in ar.RUNTIME_CAVEATS]
+    return lines, 0
+
+
 def run_doctor(project: str | None) -> int:
     """``--doctor``: print the cross-surface report for the project at *project* (else the working directory).
 
@@ -219,7 +253,8 @@ def run_doctor(project: str | None) -> int:
                 ("Copilot body limit", lambda: _body_limit(root)), ("Agents", lambda: (_agents(root), 0)),
                 ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)),
                 ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)),
-                ("Signing governance", lambda: _signing_governance(root)))
+                ("Signing governance", lambda: _signing_governance(root)),
+                ("Agent runtime (model / effort)", lambda: _agent_runtime(root, brief)))
     for title, section in sections:
         try:
             lines, failed = section()

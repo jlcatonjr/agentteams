@@ -926,6 +926,13 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
 
         print_merge_notices(result.notices)
 
+    # #508: every agent_runtime value this framework does not write is named (never dropped silently at render).
+    from agentteams import agent_runtime as _agent_runtime
+
+    for line in _agent_runtime.report_lines(_agent_runtime.from_manifest(manifest), framework,
+                                            list(manifest.get("agent_slug_list") or [])):
+        print(f"  !  {line}", file=sys.stderr)
+
     manual_count = len(manifest.get("manual_required_placeholders", []))
     if manual_count > 0:
         print(f"\n  ⚠  {manual_count} placeholder(s) require manual completion.")

@@ -982,6 +982,10 @@
         }
       }
     },
+    "agent_runtime": {
+      "type": "object",
+      "description": "agentteams #508: the brief's agent_runtime block normalised by agent_runtime.to_manifest (roles and per-agent overrides; effort per framework with a default, model per framework). Carried only when the brief has the block; without it every adapter uses the defaults (agent_runtime.from_manifest)."
+    },
     "wasm_runtime": {
       "type": "object",
       "description": "P08: the brief's wasm_runtime block in normalised form (wasm_agent.team.normalize_wasm_runtime), carried only when the brief has the block."
