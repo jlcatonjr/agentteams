@@ -484,7 +484,8 @@ def test_merge_pattern_has_no_catastrophic_backtracking() -> None:
     assert code == 0 and decision is not None and decision["permissionDecision"] == "ask"
 
 
-@pytest.mark.parametrize("head", ["git push ", "git ", "curl -x ", "gh ", "rsync ", "agentteams ", "git config ", "tee "])
+@pytest.mark.parametrize("head", ["git push ", "git ", "curl -x ", "gh ", "rsync ", "agentteams ", "git config ", "tee ",
+                                  "git push -" + "a" * 60 + " ", "git push +", "git -c push.", "git config -l; "])
 def test_every_pattern_is_bounded_at_the_length_caps(head: str) -> None:
     """PR #211 review: the pre-existing `git push` patterns were cubic (`git push ` x2000 took 89 s),
     and a timed-out hook lets the command run. Per-line evaluation under the caps must stay fast

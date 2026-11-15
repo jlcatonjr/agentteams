@@ -58,6 +58,11 @@ def policy(**fields) -> bytes:
 
 
 # ── Empty policy: byte-identical verdicts against the previous template ─────────────────────────────
+# Except the two classes row 699 promoted from policy-only to default asks. The frozen copy is NOT
+# regenerated: the commands whose verdict may move are listed here, and each moves pass -> ask only.
+
+PROMOTED_699 = frozenset({"git-force-push-short", "git-alias-config"})
+NEW_ASKS_699 = {"git push -f origin main", "git push origin +main", "git config alias.p push"}
 
 CORPUS_BASH = [
     "ls -la", "git status", "git push origin main", "git push --force origin main", "git push -f origin main",
@@ -107,13 +112,61 @@ def test_no_recorded_policy_matches_the_pre_456_gate(tmp_path: Path) -> None:
     old_path.write_text(PRE_456.read_text(encoding="utf-8"), encoding="utf-8")
     old = _load(old_path)
     new = install(tmp_path / "proj", None)
-    assert _emit_all(new) == _emit_all(old)
+    changed = set()
+    for before, after, cmd in zip(_emit_all(old), _emit_all(new), CORPUS_BASH + [None] * 99):
+        if before != after:
+            assert before[0] == "pass" and after[0] == "ask", (cmd, before, after)
+            assert {c for c, _ in new._bash_matches(cmd)} <= PROMOTED_699, cmd
+            changed.add(cmd)
+    assert changed == NEW_ASKS_699   # `git -c alias.p='push --force' p` already asked (--force)
+
+
+@pytest.mark.parametrize("cmd", [
+    "git push -f origin main", "git push -uf origin main", "git push origin +main", "git -C ../wt push -f",
+    "git push origin '+refs/heads/*:refs/heads/*'", "git -c alias.p='push -f' p", "git -c push.default=x push",
+    "git config alias.p push", "git config --global push.default current", "git config remote.origin.fetch x",
+    "git push -vf origin main", "git push -fu origin main", "git push origin +main:refs/heads/main",
+])
+def test_row699_default_asks(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
+    assert {c for c, _ in gate._bash_matches(cmd)} & PROMOTED_699
+
+
+@pytest.mark.parametrize("cmd", ["git push --force-with-lease origin x", "git push --force-if-includes origin x",
+                                 "git push --force origin x"])
+def test_row699_long_force_flags_still_report_history_destructive_first(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert gate._bash_matches(cmd, first_only=True)[0][0] == "git-history-destructive"
+
+
+def test_row699_a_plus_after_the_colon_is_a_branch_name_not_a_force(tmp_path: Path) -> None:
+    # git applies `+` only as a refspec's leading character; `main:+dst` pushes to a branch named `+dst`.
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": "git push origin main:+dst"})[0] == "pass"
+
+
+@pytest.mark.parametrize("cmd", ["git config -l; git config alias.p '!git push -f'",
+                                 "git config --get user.name && git config remote.origin.url https://e.x/r"])
+def test_row699_a_read_exemption_covers_only_its_own_command(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
+
+
+@pytest.mark.parametrize("cmd", [
+    "git push origin main", "git push -u origin feat/x", "git push --follow-tags", "git fetch -f",
+    "git commit -F msg.txt && git push origin main", "git config --get alias.p", "git config -l",
+    "git config user.name x", "git stash push -m wip", "git commit -m 'force later' && git push",
+])
+def test_row699_ordinary_commands_stay_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert not {c for c, _ in gate._bash_matches(cmd)} & PROMOTED_699, cmd
 
 
 def test_unrecorded_policy_file_is_ignored(tmp_path: Path) -> None:
     gate = install(tmp_path, policy(preset="strict"), record=False)
     assert verdict(gate, "Bash", {"command": "rm -rf build"})[0] == "ask"
-    assert verdict(gate, "Bash", {"command": "git push -f origin main"})[0] == "pass"
+    assert verdict(gate, "Bash", {"command": "git push -f origin main"})[:2] == ("ask", "bash-trigger")
 
 
 # ── Tighten-only parsing ───────────────────────────────────────────────────────────────────────────
@@ -145,6 +198,7 @@ FLIPS = {
     "package-install": "pip install x", "git-history-destructive": "git reset --hard", "fs-delete": "rm a.txt",
     "db-delete": "psql -c 'DROP TABLE t'", "pr-merge": "gh pr merge 1", "git-ref-delete": "git branch -d x",
     "raw-socket": "nc host 80", "dns-exfil": "dig $(id).x.com", "command-too-long": "echo " + "a" * 9000,
+    "git-force-push-short": "git push -f origin main", "git-alias-config": "git config alias.p push",
 }
 
 
