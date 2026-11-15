@@ -65,7 +65,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any new reference added without verification | Reference fabrication |
 | Any bulk edit affecting 3+ files simultaneously | Data integrity |
 | Any output compilation that pulls from external URLs | Supply chain risk |
-| Any execution of `batch_update.py` or `build_team.py --self --update` | Infrastructure scope — bulk cross-repo write |
+| Any execution of `batch_update.py` or `agentteams --self --update` (also when run through the checkout's `build_team.py`) | Infrastructure scope — bulk cross-repo write |
 | Any invocation of `agentteams … --bridge-refresh` against an external project | Destructive at target — see `references/bridge-refresh-safety.md` Pre-Flight; clear only when Pre-Flight §II all-pass |
 | Any committed file containing absolute filesystem paths with home directory (`/Users/`, `/home/`) | OPSEC — PII exposure in artifacts |
 | Any software installation via a package manager (`brew`, `apt`, `dnf`, `pip install`, `npm i`, …) | Supply chain — unreviewed third-party code on the host; release must clear Rule S-10 vetting (known-vulnerability search + release cooldown + latest stable release; a fix for a vulnerability the vulnerability scan detected is exempt from the last two; a release of a repository the first-party toolchain group names is exempt from the cooldown only) |
@@ -103,7 +103,7 @@ These patterns are also checked deterministically by `agentteams.scan.scan_conte
 - ❌ Never write to any file outside the designated project directory
 - ❌ Never modify source agent files in other repositories
 
-**Infrastructure Exception Pathway** — CLI-initiated batch operations (`batch_update.py`, `build_team.py --self --update`) that write outside the project directory are permitted only when **all four** conditions are satisfied: (a) a complete pre-run backup is verified for each target directory; (b) a results log recording affected repos, file counts, and backup paths is written to `tmp/`; (c) post-run diff analysis confirms no outside-fence user-authored content was deleted; (d) WARN-status repos are reviewed and signed off before any commit. Agent-initiated cross-repo writes are **never** covered by this exception. The one other path is Rule S-VM's standing-grant executor: a change the *executor* computes, pushed to a **new** branch and opened as a pull request (never merged), in a repository root the operator's signed grant names. The agent writes nothing itself; it only requests.
+**Infrastructure Exception Pathway** — CLI-initiated batch operations (`batch_update.py`, `agentteams --self --update`, by either entry point) that write outside the project directory are permitted only when **all four** conditions are satisfied: (a) a complete pre-run backup is verified for each target directory; (b) a results log recording affected repos, file counts, and backup paths is written to `tmp/`; (c) post-run diff analysis confirms no outside-fence user-authored content was deleted; (d) WARN-status repos are reviewed and signed off before any commit. Agent-initiated cross-repo writes are **never** covered by this exception. The one other path is Rule S-VM's standing-grant executor: a change the *executor* computes, pushed to a **new** branch and opened as a pull request (never merged), in a repository root the operator's signed grant names. The agent writes nothing itself; it only requests.
 
 **Rule S-3: Reference Integrity**
 - ✅ Verify every new reference exists in the reference database before adding to a deliverable

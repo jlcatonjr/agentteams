@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (generated teams are no longer told to run commands that exist only in the agentteams checkout; IM item 23)
+
+- **G-06-2, G-19-4.** The navigator, agent-updater, orchestrator and security templates and all five team-builder
+  templates said to run `python build_team.py …` or `python -m src.graph …`. A generated team has no `build_team.py`
+  (it sits at the root of this repository) and there is no `src/` package anywhere. They now use the installed
+  `agentteams` entry point: `agentteams --refresh-graph` for the pipeline graph, `agentteams --description <brief>
+  --check` / `--update --merge` / `--scan-security`, `--add-fence-markers` and `--migrate`. The security triggers
+  name `agentteams --self --update` and still cover the checkout's `build_team.py`.
+- **G-12-3.** The agent-updater said bare `--update` overwrites whole files, including USER-EDITABLE content, which
+  contradicted its own later section and the CLI (merge is the default). It now says only `--update --overwrite`
+  replaces whole files, and its batch-run assertion requires "never `--update --overwrite`".
+- `tests/test_template_repo_only_commands.py` refuses `python build_team.py`, `build_team.py --…` and
+  `python -m src.` in any rendered template. A re-render (`agentteams --update --merge`) brings existing teams the
+  corrected text.
+
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
 - **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files

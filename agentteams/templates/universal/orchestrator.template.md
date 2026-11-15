@@ -243,7 +243,7 @@ Before orchestrating any on-the-fly agent file update, review these canonical fi
 
 Use this baseline command sequence for update-safe execution:
 
-1. `agentteams --description <brief> --check` (or `python build_team.py --description <brief> --check`)
+1. `agentteams --description <brief> --check`
 2. `agentteams --description <brief> --update --merge --dry-run` for scope preview
 3. `agentteams --description <brief> --update --merge` for apply
 4. `agentteams --description <brief> --scan-security` and `--post-audit` closeout when required by policy

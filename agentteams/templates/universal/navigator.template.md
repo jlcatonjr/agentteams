@@ -72,7 +72,7 @@ The current agent team topology is maintained as a directed graph:
 The graph is **regenerated automatically** on every pipeline run. To refresh it manually:
 
 ```bash
-python build_team.py --description <brief.json> --update --yes
+agentteams --description <brief.json> --update --merge --yes
 ```
 
 The graph shows every agent node (governance, domain, workstream-expert, tool-specialist), all directed handoff edges, and `agents:` list references between agents. Use it to answer topology questions such as:
@@ -83,7 +83,7 @@ The graph shows every agent node (governance, domain, workstream-expert, tool-sp
 To regenerate the graph without a full team update:
 
 ```bash
-python -m src.graph .github/agents/ --output .github/agents/references/pipeline-graph.md
+agentteams --refresh-graph
 ```
 
 ---
