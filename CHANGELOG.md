@@ -34,6 +34,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security rows 811 and 816 (816 amends 811's condition 3 to allow #504's signed integration-branch authorization)
   are cross-referenced with #504's rows 809, 812 and 815.
 
+### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
+
+- **Security fix (IM evaluation item 17, G-22-7).** The governed check tested only that
+  `<team>/signing-governed.marker` existed, and the sandbox left the marker writable. So an agent that deleted it
+  turned fail-closed signing off: `enforce_decision_signing: false` applied again, and a missing
+  `agent-privilege.json` reverted to legacy unsigned behaviour instead of raising.
+  - `signing_switch.is_governed` now also counts a marker that git still tracks: in the index, or in HEAD, its
+    upstream or `origin/HEAD`. So a deleted marker, a staged deletion, and a deletion committed only on the
+    agent's own branch all still govern.
+    - git runs hardened, and inherited `GIT_DIR`, `GIT_INDEX_FILE` and similar variables are removed.
+    - A repository nested inside the project (a planted `.git`) and a git timeout count as governed.
+    - It still falls back to existence only outside a git work tree, without git, when git refuses the
+      repository (`safe.directory`), and for an untracked or ignored marker.
+  - `cli/decision_log` and `projection_marker` use this same check instead of their own.
+  - The marker is now write-protected by:
+    - the Claude `Edit` rules for every team dir (Grok inherits them);
+    - the goose Seatbelt profile for every team dir;
+    - the launcher's protect-if-present set;
+    - Claude's Bash `denyWrite`, through the whole `.claude` dir.
+
+    Copilot and Codex emit no deny list of their own.
+  - `confine-run.sh` changed, so its pins are updated (`EXPECTED_LAUNCHER_SHA256`, the WASM launcher pin, and
+    `launcher_lineage.json`). The downstream re-pin of the parity test is coordinated outside this repository.
+  - A deletion that has reached the upstream and default branch still ends governance (the honest limit), but it
+    is no longer silent. `--doctor` has a new **Signing governance** section that WARNs for each team dir whose
+    marker is absent on disk and in HEAD. The WARN:
+    - names the deleting commit;
+    - says whether the team still governs (the deletion is on this branch only), is governed through a sibling
+      team dir, or is not governed;
+    - repeats until the marker is restored.
+
+    A removed team dir gets one INFO line instead. The lookup is `signing_switch.marker_deletion_commits`, one
+    hardened `git log --diff-filter=D` with `log.showSignature` forced off and commit subjects reduced to
+    printable characters. It is a WARN, not a FAIL, because the operator may have meant it.
+  - Effect on existing teams: a team whose tracked marker was deleted but not committed is governed again.
+    Nothing changes for a team that never had a marker.
+
 ### fixed (security: a `git config` read on the same line hid a remote or alias rewrite from the gate)
 
 - The constitutional gate exempts `git config --get`, `--get-all`, `--get-regexp`, `--get-urlmatch`, `--list`,

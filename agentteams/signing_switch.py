@@ -38,18 +38,20 @@ import json
 import os
 import re
 import stat
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.atomicio import replace_no_follow
 from agentteams.drift import is_interop_marker
-from agentteams.frameworks._sandbox_emit import TEAM_MARKER_REL
+from agentteams.frameworks._sandbox_emit import GOVERNED_MARKER_REL, TEAM_MARKER_REL
+from agentteams.git_exec import HARDENED_ENV, git_argv
 
 #: The switch, relative to a team's agents dir.
 SWITCH_REL = "references/agent-privilege.json"
 
 #: A signing-governed team's assertion marker (``cli/decision_log``): its switch is always ``true``.
-GOVERNED_MARKER = "signing-governed.marker"
+GOVERNED_MARKER = GOVERNED_MARKER_REL  # one definition (_sandbox_emit), so the deny lists and the check agree
 
 #: Notice prefix for a ``true -> false`` change; a fleet REVIEW reason.
 RELAXED_PREFIX = "SIGNING SWITCH RELAXED"
@@ -234,16 +236,131 @@ def owns_switch(agents_dir: Path) -> bool:
     return _has_team_marker(agents_dir) and data.get("note") in PIPELINE_NOTES
 
 
+#: Inherited variables that would point git at another repository or index (@security/@adversarial, item 17).
+_GIT_REDIRECT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CEILING_DIRECTORIES", "GIT_COMMON_DIR",
+                     "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
+                     "GIT_DISCOVERY_ACROSS_FILESYSTEM", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT")
+#: Refs whose tree keeps a team governed: the checkout, its upstream, and the remote default branch. A deletion
+#: committed on the agent's own branch alone does not end governance (@security item 17 condition 4).
+_GOVERNING_REFS = ("HEAD", "refs/remotes/origin/HEAD")  # + the upstream, resolved first (absent: skipped)
+
+
+def _git(base: Path, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
+    """Hardened git in ``base``, with no inherited repository redirection (raises like ``subprocess.run``)."""
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_REDIRECT_ENV and not k.startswith("GIT_CONFIG_KEY_")
+           and not k.startswith("GIT_CONFIG_VALUE_")}
+    return subprocess.run(git_argv(base, *args, hardened=True), input=stdin, capture_output=True, text=True,
+                          env={**env, **HARDENED_ENV}, timeout=10, check=False, stdin=None if stdin else subprocess.DEVNULL)
+
+
+def _project_root(agents_dir: Path) -> Path:
+    """The project root a team dir belongs to (two levels up for a default team dir, else its parent)."""
+    posix = agents_dir.as_posix()
+    return agents_dir.parents[1] if any(posix.endswith("/" + t) for t in TEAM_DIRS) else agents_dir.parent
+
+
+def _marker_tracked(agents_dir: Path) -> bool:
+    """True when git still governs ``agents_dir`` through a tracked marker (IM item 17, G-22-7).
+
+    Governed when the marker is in the index, or in the tree of HEAD, its upstream, or ``origin/HEAD``. So a
+    deleted or deletion-staged marker still governs, and so does one whose deletion was committed only on the
+    current branch. Fail-closed cases (True): a git repository nested inside the project between its root and the
+    team dir (a planted ``.git``), and a git timeout. Not a work tree, no git, or git refusing the repository
+    (``safe.directory``): False, the existence test alone, as before. git runs hardened in a repository the agent
+    can write: no fsmonitor or hooks from its config, and no inherited ``GIT_DIR``/``GIT_INDEX_FILE``/… .
+    """
+    base, rel = agents_dir, Path(GOVERNED_MARKER)
+    while not base.is_dir():  # a removed team dir (git rm of its last file) still counts: ask from an ancestor
+        if base.parent == base:
+            return False
+        base, rel = base.parent, Path(base.name) / rel
+    try:
+        top = _git(base, "rev-parse", "--show-toplevel")
+        if top.returncode != 0:
+            return False
+        root, top_dir = _project_root(agents_dir).resolve(), Path(top.stdout.strip()).resolve()
+        if top_dir != root and top_dir.is_relative_to(root):
+            return True  # a repository nested inside the project answers for itself: fail closed
+        if _git(base, "ls-files", "--error-unmatch", "--", str(rel)).returncode == 0:
+            return True
+        upstream = _git(base, "rev-parse", "--verify", "-q", "@{upstream}").stdout.strip()
+        refs = (*_GOVERNING_REFS, *((upstream,) if upstream else ()))
+        found = _git(base, "cat-file", "--batch-check", stdin="".join(f"{r}:./{rel.as_posix()}\n" for r in refs))
+    except subprocess.TimeoutExpired:
+        return True  # fail closed: a hung git must not read as "not governed"
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+    return found.returncode == 0 and any(" blob " in ln for ln in found.stdout.splitlines())
+
+
 def is_governed(*dirs: Path) -> bool:
-    """Return True when any of ``dirs`` holds :data:`GOVERNED_MARKER`.
+    """Return True when any of ``dirs`` holds :data:`GOVERNED_MARKER`, or git tracks it there.
+
+    The single governance predicate (``cli/decision_log`` and ``projection_marker`` call it too).
 
     Args:
         dirs: Team agents dirs.
 
     Returns:
-        True for a signing-governed team.
+        True for a signing-governed team, including one whose tracked marker was deleted.
+
+    Raises:
+        Nothing.
     """
-    return any(os.path.lexists(d / GOVERNED_MARKER) for d in dirs)
+    return any(os.path.lexists(d / GOVERNED_MARKER) for d in dirs) or any(_marker_tracked(d) for d in dirs)
+
+
+def marker_deletion_commits(root: Path) -> dict[str, str]:
+    """The commit that deleted each team dir's :data:`GOVERNED_MARKER`, for markers gone from disk and HEAD.
+
+    Governance ends only when a deletion has reached the governing refs: HEAD, its upstream and ``origin/HEAD``
+    (:func:`is_governed`). ``--doctor`` names the deleting commit so that this never happens silently (IM item 17
+    addition).
+
+    A team dir counts only when its marker is absent on disk **and** in HEAD. A marker that HEAD still carries, for
+    example one re-added after an old deletion and now removed only in the working tree, is not a committed deletion.
+
+    One hardened ``git log --diff-filter=D --name-only`` over every candidate path finds the newest deletion of
+    each, so the history is walked once, not once per team dir. ``log.showSignature`` is forced off, so a planted
+    ``gpg.program`` cannot run. Commit subjects are repository text (C-4) and are reduced to printable characters.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        ``{team_dir: "<short sha> <subject>"}`` for each :data:`TEAM_DIRS` entry whose marker was deleted in a
+        commit. Empty when nothing qualifies, when ``root`` is not in a git work tree, or when git is missing or
+        times out.
+
+    Raises:
+        Nothing.
+    """
+    absent = [t for t in TEAM_DIRS if not os.path.lexists(root / t / GOVERNED_MARKER)]
+    if not absent or not root.is_dir():
+        return {}
+    try:
+        probe = _git(root, "cat-file", "--batch-check", stdin="".join(f"HEAD:./{t}/{GOVERNED_MARKER}\n" for t in absent))
+        if probe.returncode != 0:
+            return {}
+        candidates = [t for t, ln in zip(absent, probe.stdout.splitlines()) if ln.endswith(" missing")]
+        if not candidates:
+            return {}
+        # log.showSignature from the repository's config would run its gpg.program on a signed commit (@security).
+        out = _git(root, "-c", "log.showSignature=false", "log", "--no-show-signature", "--diff-filter=D",
+                   "--format=%x00%h %s", "--name-only", "--", *(f"{t}/{GOVERNED_MARKER}" for t in candidates))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {}
+    if out.returncode != 0:
+        return {}
+    wanted = {f"{t}/{GOVERNED_MARKER}": t for t in candidates}
+    found: dict[str, str] = {}
+    commit = ""
+    for ln in out.stdout.splitlines():
+        if ln.startswith("\x00"):
+            commit = "".join(ch for ch in ln[1:] if ch.isprintable())  # repository text (C-4): no escape bytes
+        elif commit and ln in wanted and wanted[ln] not in found:
+            found[wanted[ln]] = commit  # git log lists newest first: the first sighting is the newest deletion
+    return {t: found[t] for t in TEAM_DIRS if t in found}
 
 
 def _replace_no_follow(path: Path, text: str) -> None:
@@ -450,6 +567,7 @@ __all__ = [
     "TEAM_MARKER_REL",
     "apply_switch",
     "is_governed",
+    "marker_deletion_commits",
     "owns_switch",
     "read_switch",
     "review_lines",
