@@ -22,12 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     hook without this check launched a run on every Stop event, several hundred a day.
 - **Guards:** the Stop payload is never passed to the run; a hook child never launches another; one run per project
   at a time; a failed run backs off for 30 minutes; the hook detaches and never blocks the session.
-- **The unattended run has no shell.** The launcher collects the git evidence and hands it over as a file. The run
-  is granted read and search, Agent, and writes under `workSummaries/` only, in a fixed `dontAsk` mode with no MCP
-  server.
+- **The unattended run has six tools and no others** (`--tools Read,Grep,Glob,Agent,Edit,Write`), in the run and in
+  the agents it calls: no shell, no web tools, no cross-session messaging, no scheduled or remote triggers, no
+  worktree creation. A live probe found that the session tools needing no permission ran unprompted without the
+  cap. The launcher collects the git evidence and hands it over as a file. The mode is a fixed `dontAsk`, with no
+  MCP server, and the child's environment carries no messaging socket or token.
 - **Inherited allow rules are contained.** `--allowedTools` adds to the operator's own allow rules, so deny rules
-  switch off `Bash`, the web tools and notebook edits outright, and the launcher refuses to launch when the
-  operator's settings allow edits outside `workSummaries/` or an unknown tool. The refusal is logged in `hook.log`.
+  block credential files and the control plane, and the launcher refuses to launch when the operator's settings
+  allow edits outside `workSummaries/` or an unknown tool. The refusal is logged in `hook.log`.
 - **The wiring command verifies the launcher.** The `Stop` block carries the launcher's SHA-256 and runs the
   installed script only on a match, so an edited script stops the hook until the operator merges the block again.
 - Every skip, run and failure is one line in `hook.log` in the run folder; that log is where to look, because runs

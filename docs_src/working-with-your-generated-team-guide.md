@@ -175,15 +175,22 @@ session and no session list shows it. The launcher keeps its own record instead,
 - `hook.log`, one line per decision (skip, run, failure);
 - `runs/YYYY-MM-DD/HHMMSS.jsonl`, the full output of each run, deleted after 14 days.
 
-**The unattended run has no shell.** The launcher collects the git evidence itself and hands it over as a file. The
-run is granted read and search tools, the Agent tool, and writes under `workSummaries/` only, in `dontAsk`
-permission mode, with no MCP server. The permission mode cannot be changed.
+Claude Code saves no transcript for the run. When the run calls an agent, Claude Code still leaves a small folder
+of agent metadata stubs under `~/.claude/projects/`. No session list shows them.
 
-The grant adds to the allow rules in your own settings; it cannot cap them. Two things deal with that:
+**The unattended run has six tools and no others:** Read, Grep, Glob, Agent, Edit and Write. The launcher caps the
+tool set with `--tools`, so nothing else exists in the run or in the agents it calls: no shell, no web tools, no
+cross-session messaging, no scheduled or remote triggers, no worktree creation. Those last ones need no permission
+in Claude Code, so only the cap removes them. The launcher collects the git evidence itself and hands it over as a
+file. No MCP server is loaded.
 
-- **deny rules, which win over every allow rule,** switch off `Bash`, the web tools and notebook edits outright, and
-  block credential files such as `~/.ssh` and `.env` and edits under `.claude/` and `.github/`. A broad rule in your
-  settings such as `Bash(python3 *)` is therefore dead in this run;
+Within those six tools the run is in `dontAsk` permission mode, which cannot be changed, and is granted reads,
+searches, the Agent tool and writes under `workSummaries/` only. That grant adds to the allow rules in your own
+settings; it cannot cap them. Two things deal with that:
+
+- **deny rules, which win over every allow rule,** block credential files such as `~/.ssh` and `.env` and edits
+  under `.claude/` and `.github/`. A broad rule in your settings such as `Bash(python3 *)` does nothing here,
+  because the run has no shell;
 - **the launcher refuses to launch** if your user, project or local settings allow `Edit` or `Write` outside
   `workSummaries/`, or allow a tool it does not know. It writes the first offending rule to `hook.log`.
 

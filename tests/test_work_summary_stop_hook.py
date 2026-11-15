@@ -84,7 +84,8 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("STUB_WRITE", "1")
     monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "claude-vscode")
     for name in ("AGENTTEAMS_WS_HOOK_CHILD", "AGENTTEAMS_WS_DISABLE", "AGENTTEAMS_WS_KEEP_DAYS",
-                 "AGENTTEAMS_WS_ALLOWED_TOOLS", "AGENTTEAMS_WS_PERMISSION_MODE", "STUB_EXIT"):
+                 "AGENTTEAMS_WS_ALLOWED_TOOLS", "AGENTTEAMS_WS_PERMISSION_MODE", "STUB_EXIT",
+                 "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN"):
         monkeypatch.delenv(name, raising=False)
 
     def calls() -> list[dict]:
@@ -227,6 +228,25 @@ def test_default_grant_is_narrow_and_overridable(hook, project, monkeypatch) -> 
     monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", "Read")
     cmd = hook.child_command("claude", "p")
     assert cmd[cmd.index("--allowedTools") + 1] == "Read"
+
+
+def test_tool_set_is_capped_and_messaging_credentials_are_stripped(hook, project, monkeypatch) -> None:
+    """F-LC1: allow/deny rules do not remove tools that need no permission; only the cap does."""
+    root, calls, _ = project
+    _commit(root)
+    monkeypatch.setenv("CLAUDE_CODE_MESSAGING_SOCKET", "/tmp/some.sock")
+    monkeypatch.setenv("CLAUDE_CODE_MESSAGING_TOKEN", "secret")
+    monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", "Read,SendMessage,Bash")  # cannot widen the cap
+    cmd = hook.child_command("claude", "p")
+    assert cmd[cmd.index("--tools") + 1] == "Read,Grep,Glob,Agent,Edit,Write"
+    env = hook.child_env()
+    assert "CLAUDE_CODE_MESSAGING_SOCKET" not in env and "CLAUDE_CODE_MESSAGING_TOKEN" not in env
+    _run(hook, root)
+    argv = calls()[0]["argv"]
+    cap = argv[argv.index("--tools") + 1].split(",")
+    for tool in ("Bash", "WebFetch", "SendMessage", "ListAgents", "CronCreate", "RemoteTrigger",
+                 "EnterWorktree", "Skill", "Workflow", "ToolSearch"):
+        assert tool not in cap
 
 
 def test_deny_rules_no_mcp_and_no_bypass(hook, project, monkeypatch) -> None:

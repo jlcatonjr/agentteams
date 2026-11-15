@@ -28,16 +28,21 @@ Guards (each one closes an incident the operator-authored predecessor of this ho
 * The audit chain is requested once per day; later runs the same day are append-only.
 * A run that fails is not retried before ``AGENTTEAMS_WS_RETRY_S`` seconds have passed, so a
   broken setup cannot launch a run on every Stop.
-* The unattended run has NO shell. This hook collects the git evidence itself and hands it over
-  as a file, so the run needs only read and search tools, the Agent tool, and writes under
-  ``workSummaries/``. It runs in ``dontAsk`` mode, where anything not granted is refused rather
-  than asked about, and no MCP server is loaded. The permission mode is fixed.
-* The grant ADDS to the allow rules in the operator's own settings; it cannot cap them. Two things
-  deal with that. Deny rules, which win over every allow rule, switch off ``Bash``, the web tools
-  and notebook edits outright, and block credential files and the control plane; so an inherited
-  ``Bash(python3 *)`` is dead in this run. And before launching, the hook reads the allow rules
-  the run would inherit and refuses to launch (with a log line) if any of them would let it edit
-  files outside ``workSummaries/`` or use a tool this hook does not know.
+* The run's tool set is capped with ``--tools`` to six tools: Read, Grep, Glob, Agent, Edit and
+  Write. Nothing else exists in the run or in the agents it calls: no shell, no web tools, and
+  none of the session tools that act outside the project and need no permission (cross-session
+  messaging, scheduled and remote triggers, worktree creation). A live probe found those ran
+  unprompted before the cap. This hook collects the git evidence itself and hands it over as a
+  file. No MCP server is loaded.
+* Within those six tools, the run is in ``dontAsk`` mode, where anything not granted is refused
+  rather than asked about, and the permission mode is fixed. ``--allowedTools`` grants read and
+  search, Agent, and writes under ``workSummaries/``. That grant ADDS to the allow rules in the
+  operator's own settings and cannot cap them, so two more things apply. Deny rules, which win
+  over every allow rule, block credential files and the control plane (and still name the shell
+  and web tools, in case the cap is ever lost). And before launching, the hook reads the allow
+  rules the run would inherit and refuses to launch (with a log line) if any of them would let
+  it edit files outside ``workSummaries/`` or use a tool this hook does not know.
+* The child's environment carries no cross-session messaging socket or token.
 
 Environment:
 
@@ -86,8 +91,13 @@ ALLOWED_TOOLS = ",".join((
     "Read", "Grep", "Glob", "Agent",
     "Edit(workSummaries/**)", "Write(workSummaries/**)",
 ))
-#: Deny rules. They win over every allow rule, including ones the operator's settings carry, so
-#: whole tools are named here: an inherited ``Bash(...)`` allow of any shape is dead in this run.
+#: The cap: the only tools that exist in the run and in the agents it calls. Allow and deny rules
+#: decide what a tool may do; they do not remove tools that need no permission at all, and a live
+#: probe (2026-11-15, Claude Code 2.1.325) found SendMessage, CronCreate, RemoteTrigger and
+#: EnterWorktree, among others, running unprompted under dontAsk. ``--tools`` removes them.
+TOOL_CAP = "Read,Grep,Glob,Agent,Edit,Write"
+#: Deny rules. They win over every allow rule, including ones the operator's settings carry. The
+#: whole tools named here are already outside TOOL_CAP; they stay as a second line.
 DISALLOWED_TOOLS = ",".join((
     "Bash", "WebFetch", "WebSearch", "NotebookEdit",
     "Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.gnupg/**)", "Read(~/.config/**)",
@@ -471,11 +481,12 @@ def child_command(claude_bin: str, prompt: str) -> list[str]:
     Returns:
         The argv list. ``--no-session-persistence`` is what keeps the run out of every session
         list; ``stream-json`` makes the run's own output a complete record for the archive;
-        ``--strict-mcp-config`` with no MCP configuration loads no MCP server; the deny list
-        switches the shell off whatever the operator's settings allow.
+        ``--strict-mcp-config`` with no MCP configuration loads no MCP server; ``--tools`` caps
+        the tool set, so no shell and no session tool exists whatever the operator's settings allow.
     """
     return [
         claude_bin, "--print", prompt,
+        "--tools", TOOL_CAP,
         "--allowedTools", os.environ.get("AGENTTEAMS_WS_ALLOWED_TOOLS") or ALLOWED_TOOLS,
         "--disallowedTools", DISALLOWED_TOOLS,
         "--strict-mcp-config",
@@ -489,12 +500,15 @@ def child_env() -> dict[str, str]:
     """Environment for the child: marked as a hook child, and not posing as an editor session.
 
     Returns:
-        A copy of the environment with the recursion marker set and ``CLAUDE_CODE_ENTRYPOINT``
-        removed (an inherited editor entrypoint makes a headless run look like an editor session).
+        A copy of the environment with the recursion marker set, ``CLAUDE_CODE_ENTRYPOINT``
+        removed (an inherited editor entrypoint makes a headless run look like an editor session)
+        and the cross-session messaging socket and token removed (the run must not be able to
+        reach other sessions, even if the tool cap were lost).
     """
     env = dict(os.environ)
     env[CHILD_MARKER] = "1"
-    env.pop("CLAUDE_CODE_ENTRYPOINT", None)
+    for name in ("CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN"):
+        env.pop(name, None)
     extra = [str(Path(p).expanduser()) for p in _EXTRA_PATH]
     env["PATH"] = os.pathsep.join([env.get("PATH", "")] + extra).strip(os.pathsep)
     return env
