@@ -134,7 +134,7 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
 
 #: Directive-gate-only stems (IM item 05). Releasing, publishing, signing and tagging are never a task a
 #: directive may waive a re-ask for. They stay out of :data:`_REFUSED_SCOPE_TOKENS` because the effect classifier shares
-#: that list, and on decision rows they are mostly false positives ("sign-off", "release/* ruleset": about 130 rows).
+#: that list, and on decision rows they are mostly false positives ("sign-off", "tag-release.sh": about 130 rows).
 _DIRECTIVE_ONLY_TOKENS: tuple[str, ...] = ("publish", "releas", "sign", "tag")
 
 #: The positive half of the directive gate (IM item 05, operator ruling 2026-11-15): a directive scope must START with
