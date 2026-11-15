@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (what counts as approval for actions that guard the default branch; `github_management`)
+
+- **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub
+  management section (#504) now says what counts as the operator's approval:
+  - **Merges into the default branch, `main`, `master`, `release/*` or a tag** need the operator's live, in-session
+    answer naming the PR number and head SHA, asked again if the head moves. Standing, relayed, file, comment, peer
+    and signed-directive approvals never count, and #504's integration-branch authorization never reaches these
+    branches. Merge only after at least one check run has registered on that SHA and every check is green, with
+    `--match-head-commit`.
+  - **Switching the default branch's required checks** runs only as
+    `python -m agentteams.release_required_checks --apply <fingerprint>`. The operator approves that fingerprint
+    first, with the full preview shown, and `@security` records `release-required-checks:<fingerprint>`.
+- The same rule now appears in three more places:
+  - `@pr-manager` rule 2 (`invariant_core` v=3) defines "explicit operator clearance";
+  - a `@security` trigger row (`security_rules_invariant` v=25) covers that `--apply` and any branch-protection or
+    ruleset write;
+  - the integration-branch reference §3 (`integration_branch` v=2) adds a required-check step.
+
+  Each is empty with `github_management: false`. `--update` prints a one-time notice when the rules first land.
+- New module command `python -m agentteams.release_required_checks`, moved from `scripts/`. It reads the default
+  branch instead of assuming `main`, takes the integration branch from the brief, and refuses ruleset-managed checks
+  and tokens without admin rights.
+- Code guards: management directives refuse `protect`, `required-check` and `ruleset` scopes (`merg` already was).
+  The constitutional gate prompts on `gh api`/`curl` writes to `…/protection` or `…/rulesets` and on
+  `release_required_checks … --apply`.
+- Security rows 811 and 816 (816 amends 811's condition 3 to allow #504's signed integration-branch authorization)
+  are cross-referenced with #504's rows 809, 812 and 815.
+
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
 - **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
