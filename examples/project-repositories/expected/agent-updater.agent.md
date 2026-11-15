@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Agent documentation has been synchronized with project changes."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

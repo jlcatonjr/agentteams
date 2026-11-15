@@ -14,6 +14,7 @@ handoffs:
     agent: orchestrator
     prompt: "Reference database operation complete."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

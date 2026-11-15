@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Crisis and Credit Allocation has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

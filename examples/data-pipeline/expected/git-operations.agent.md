@@ -21,6 +21,7 @@ handoffs:
     agent: agent-updater
     prompt: "Tracked repository content changed. Run repository change census and docs/API impact evaluation before closeout."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

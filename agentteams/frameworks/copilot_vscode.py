@@ -329,7 +329,8 @@ def _apply_agent_runtime(content: str, agent_slug: str, manifest: dict[str, Any]
             yaml_body = _REASONING_EFFORT_RE.sub(f"reasoning-effort: {effort}", yaml_body, count=1)
     if yaml_body == yaml_text.rstrip("\n"):
         return content
-    return f"---\n{yaml_body}\n---\n{body_text}"
+    trailing = yaml_text[len(yaml_text.rstrip("\n")):] or "\n"  # keep the block's own trailing blank line(s)
+    return f"---\n{yaml_body}{trailing}---\n{body_text}"
 
 
 def _ensure_yaml_front_matter(content: str, agent_slug: str, manifest: dict[str, Any]) -> str:

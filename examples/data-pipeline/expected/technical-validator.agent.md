@@ -18,6 +18,7 @@ handoffs:
     agent: orchestrator
     prompt: "Technical validation complete. See findings."
     send: false
+reasoning-effort: medium
 
 ---
 

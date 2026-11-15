@@ -14,6 +14,7 @@ handoffs:
     agent: orchestrator
     prompt: "Content enrichment complete. All auto-fillable placeholders have been resolved."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

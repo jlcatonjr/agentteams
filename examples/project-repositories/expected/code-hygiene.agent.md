@@ -25,6 +25,7 @@ handoffs:
     agent: orchestrator
     prompt: "Code hygiene review is complete. Returning findings to the orchestrator."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

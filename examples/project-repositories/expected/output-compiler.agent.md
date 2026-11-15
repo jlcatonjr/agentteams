@@ -18,6 +18,7 @@ handoffs:
     agent: orchestrator
     prompt: "Final output assembly complete."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

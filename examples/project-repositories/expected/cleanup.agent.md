@@ -9,6 +9,7 @@ handoffs:
     agent: orchestrator
     prompt: "Cleanup is complete. Review the removal report."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

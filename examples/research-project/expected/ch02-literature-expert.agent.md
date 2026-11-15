@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Chapter 2: Literature Review has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Chapter 1: Introduction has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

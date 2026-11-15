@@ -9,6 +9,7 @@ handoffs:
     agent: orchestrator
     prompt: "Navigation query is complete. Here are the structural findings."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

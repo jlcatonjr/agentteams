@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Work summary reporting complete. See workSummaries/."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

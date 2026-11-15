@@ -22,6 +22,7 @@ handoffs:
     agent: technical-validator
     prompt: "SOURCE_DRIFT conflict detected. Verify deliverable description against current source file on disk."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

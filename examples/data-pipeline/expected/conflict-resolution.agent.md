@@ -13,6 +13,7 @@ handoffs:
     agent: agent-updater
     prompt: "Conflict resolutions may require agent documentation updates."
     send: false
+reasoning-effort: medium
 ---
 <!--
 SECTION MANIFEST

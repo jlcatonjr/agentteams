@@ -17,6 +17,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`manifest_format`](manifest-format.md) | Manifest field derivation/formatting helpers (_format_*/_default_*/_collect_*) — carved from analyze |
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
+| [`emit_report`](emit-report.md) | The run's printed reports: the dry-run report and the generation summary (carved from emit) |
 | [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
 | [`fence_baseline`](fence-baseline.md) | Per-fence digests of what agentteams authored, so a fence unedited since generation takes a shrinking template update instead of being preserved |
 | [`fence_twins`](fence-twins.md) | Drops an unfenced pre-fencing copy of a fenced section only on proof (git-derived lineage corpus or the fenced copy); keeps and flags the rest |

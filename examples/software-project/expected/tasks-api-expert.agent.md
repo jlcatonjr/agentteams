@@ -18,6 +18,7 @@ handoffs:
     agent: orchestrator
     prompt: "Tasks API has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 
 ---
 

@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "More Prairie Prosperity — Fiscal and Economic Policy in North Dakota has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

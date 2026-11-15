@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Deliverable production is complete."
     send: false
+reasoning-effort: medium
 
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->

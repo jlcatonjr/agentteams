@@ -110,6 +110,7 @@ handoffs:
     agent: git-operations
     prompt: "Run a git operation: commit and push, pull/merge/rebase, resolve conflicts, or recover a file. Describe the operation needed."
     send: false
+reasoning-effort: medium
 
 ---
 

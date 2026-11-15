@@ -17,6 +17,7 @@ handoffs:
     agent: conflict-auditor
     prompt: "Adjacent repository documentation has been updated. Verify internal consistency with current project docs."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

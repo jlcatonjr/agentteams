@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Federal Reserve Response Function DAG Analysis has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

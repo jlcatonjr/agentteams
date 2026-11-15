@@ -26,6 +26,7 @@ handoffs:
     agent: security
     prompt: "A follow-up remediation requires destructive mutation. Review and clear before execution."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

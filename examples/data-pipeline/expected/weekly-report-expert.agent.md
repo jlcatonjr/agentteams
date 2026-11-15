@@ -18,6 +18,7 @@ handoffs:
     agent: orchestrator
     prompt: "Weekly Summary Report has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 
 ---
 

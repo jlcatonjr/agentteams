@@ -13,6 +13,7 @@ handoffs:
     agent: conflict-auditor
     prompt: "Adversarial review surfaced assumptions that may conflict with documented facts. Run a targeted conflict audit on the identified areas."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 

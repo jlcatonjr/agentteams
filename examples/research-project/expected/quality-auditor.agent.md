@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Quality audit complete. See findings."
     send: false
+reasoning-effort: medium
 ---
 <!--
 SECTION MANIFEST

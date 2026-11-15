@@ -18,6 +18,7 @@ handoffs:
     agent: orchestrator
     prompt: "Authentication Module has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 
 ---
 

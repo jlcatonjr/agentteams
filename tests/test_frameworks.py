@@ -582,7 +582,10 @@ def test_cli_preserves_yaml_and_matches_vscode_shape():
     assert "# Navigator" in result
     assert "name:" in result
     assert "model:" in result
-    assert result == vscode_result, "no handoffs in this fixture — CLI output must match VS Code exactly"
+    # #508: VS Code alone writes `reasoning-effort:` (Copilot CLI agent files take no effort key); otherwise identical.
+    assert "reasoning-effort:" not in result and "\nreasoning-effort: medium\n" in vscode_result
+    assert result == vscode_result.replace("reasoning-effort: medium\n", ""), \
+        "no handoffs in this fixture — CLI output must match VS Code apart from reasoning-effort"
 
 
 def test_cli_diverges_from_vscode_when_handoffs_present():

@@ -9,6 +9,7 @@ handoffs:
     agent: orchestrator
     prompt: "Security review is complete. Return to the orchestrator with findings."
     send: false
+reasoning-effort: medium
 ---
 
 <!--
@@ -480,7 +481,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-11-14T18:50:26Z`
+Generated at: `2026-11-15T20:50:43Z`
 
 **Sources:**
 

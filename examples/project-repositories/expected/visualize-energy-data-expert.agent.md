@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Visualize Energy Data has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

@@ -14,6 +14,7 @@ handoffs:
     agent: orchestrator
     prompt: "Tool documentation research complete."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

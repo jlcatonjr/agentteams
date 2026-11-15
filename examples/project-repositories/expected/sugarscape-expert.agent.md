@@ -22,6 +22,7 @@ handoffs:
     agent: orchestrator
     prompt: "Sugarscape Agent-Based Model has been reviewed and accepted."
     send: false
+reasoning-effort: medium
 ---
 
 <!--

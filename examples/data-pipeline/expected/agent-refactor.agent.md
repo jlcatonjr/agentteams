@@ -14,6 +14,7 @@ handoffs:
     agent: orchestrator
     prompt: "Agent refactoring is complete. Review the changes."
     send: false
+reasoning-effort: medium
 ---
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 
