@@ -1,0 +1,8 @@
+{
+  "patch_id": "a2baf2d8137268df0cedae056423189a1d3efa2d",
+  "commit": "f3cafab8f3c0cd7fd9191f0e26b18af4d3af726c",
+  "subject": "fix(governance): AGENTS.md, AGENTS.override.md and .goosehints are pending trust roots, warn-first (IM item 19)",
+  "impact": "2 symbols added, 1 symbols changed",
+  "note": "IM item 19 (G-23-2): governance_targets gains target_is_elevated_constitution and the ELEVATED_CONSTITUTION_* sets; the warn-first names added in f3cafab8 are removed again in 6c10af04 (no caller outside the branch). __all__ consumers checked: effect_classifier and management_directives updated; toolchain_group and wasm_config import only target_is_governance_root (unchanged). Reviewed by @security (CONDITIONAL PASS, conditions applied), @code-hygiene, @adversarial, @conflict-auditor.",
+  "recorded_at": "2026-11-15T00:03:56Z"
+}

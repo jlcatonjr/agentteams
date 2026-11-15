@@ -8,11 +8,17 @@ path. This module is the one place that vocabulary lives, imported by both, so t
 can never disagree again.
 
 A *governance / trust root* is a file whose contents decide **who may authorize what** — the
-constitution and its mirrors, the approver/manager rosters, the signing switches and markers,
+constitution and its mirrors (``CLAUDE.md``, ``copilot-instructions``), the approver/manager rosters, the signing
+switches and markers,
 the ledgers, the integrity manifest, the authority-ordering reference, and (WS-B/R1) the
 Ed25519 verify-key store. A write that targets one of these widens authority; it is never
 ordinary project content, so it belongs on the elevated (asymmetric-signed) path and is
 refused as a directive scope.
+
+The other surfaces' constitution files (``AGENTS.md``, ``AGENTS.override.md``, ``.goosehints``, ``CLAUDE.local.md``,
+``.github/instructions``) are a second, *elevated* class (:func:`target_is_elevated_constitution`; IM item 19). A
+write to one is relaxing and never a directive scope, but it is not categorically non-eligible, because frozen-surface
+rows name them.
 
 Stdlib-only; imports nothing from ``agentteams.cli`` (so neither importer can form a cycle).
 """
@@ -21,6 +27,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from urllib.parse import unquote
 
 #: Path fragments that name a governance / trust root, matched as a substring of a
 #: separator-canonicalized path (see :func:`canon_path`). Chosen so each stem catches its file
@@ -49,6 +56,31 @@ GOVERNANCE_TARGET_STEMS: tuple[str, ...] = (
     "toolchain-group",             # First-party toolchain group: the operator-signed first-party toolchain group file
     "dev-merge-authorization",     # the operator-signed integration-branch merge authorization (cli/dev_merge)
 )
+
+#: ELEVATED constitution files (IM item 19, G-23-2): the instructions the other surfaces read. A write to one is
+#: constraint-relaxing and needs the operator's Ed25519 signature, and a management directive can never scope one,
+#: but unlike :data:`GOVERNANCE_TARGET_STEMS` they are NOT categorically non-eligible. ``frozen_surfaces`` declares
+#: ``AGENTS.md`` and ``.goosehints`` owned by the codex/goose/agents-md surfaces, so a freeze or unfreeze row lists
+#: them. A non-eligible unfreeze could never be signed, and a frozen surface could never be unfrozen (operator ruling
+#: 2026-11-14: elevated, not refused). The files:
+#:
+#: * ``AGENTS.md``: the constitution Codex, Goose, Grok and agents-md read; nested copies count;
+#: * ``AGENTS.override.md``: what Codex reads over it;
+#: * ``.goosehints``: Goose's pointer to it;
+#: * ``CLAUDE.local.md``: folds to ``claude-local-md``, which the ``claude-md`` stem misses;
+#: * ``.github/instructions/``: Copilot's path-scoped instructions.
+#:
+#: The file names are matched as a whole path segment or word, never as a substring. A substring ``agents-md`` would
+#: also claim this repository's own adapter (``agentteams/frameworks/agents_md.py``) and docs. Before folding, a
+#: target is percent-decoded and split on every character that cannot be part of a file name (slashes, whitespace,
+#: ``:``/``#``/``?``, ``@``, ``,``, ``;`` …). So these match: ``AGENTS.md``, ``sub/AGENTS.md``, ``agents_md``,
+#: ``AGENTS%2Emd``, ``file:AGENTS.md``, ``AGENTS.md#L1``, ``@AGENTS.md``, ``AGENTS.md,README.md`` and
+#: "edit AGENTS.md now". ``agents_md.py`` does not.
+ELEVATED_CONSTITUTION_STEMS: tuple[str, ...] = ("goosehints", "github-instructions")
+ELEVATED_CONSTITUTION_FILENAMES: frozenset[str] = frozenset({"agents-md", "agents-override-md", "claude-local-md"})
+#: Anything that cannot be part of a file name splits a token (@security re-review: ``@AGENTS.md``,
+#: ``AGENTS.md,README.md`` and ``AGENTS.md;x`` must match): an allow-list of word characters, ``.`` and ``-``.
+_TOKEN_SPLIT = re.compile(r"[^\w.-]+")
 
 
 def canon_path(path: str) -> str:
@@ -95,6 +127,9 @@ def target_is_governance_root(target: str) -> bool:
 
     Returns:
         Whether the target is a governance/trust root.
+
+    Raises:
+        Nothing.
     """
     normalized = canon_path(target)
     if not normalized:
@@ -102,4 +137,34 @@ def target_is_governance_root(target: str) -> bool:
     return any(stem in normalized for stem in GOVERNANCE_TARGET_STEMS)
 
 
-__all__ = ["GOVERNANCE_TARGET_STEMS", "canon_path", "target_is_governance_root"]
+def target_is_elevated_constitution(target: str) -> bool:
+    """Return True when ``target`` names an :data:`ELEVATED_CONSTITUTION_STEMS` / ``_FILENAMES`` file (IM item 19).
+
+    Such a write is constraint-relaxing (operator Ed25519) and never a directive scope, but stays eligible.
+
+    Args:
+        target: A write-target path (or scope string) to test.
+
+    Returns:
+        Whether the target names another surface's constitution file, in any folded spelling.
+
+    Raises:
+        Nothing.
+    """
+    normalized = canon_path(target)
+    if not normalized:
+        return False
+    if any(stem in normalized for stem in ELEVATED_CONSTITUTION_STEMS):
+        return True
+    tokens = _TOKEN_SPLIT.split(unquote(unicodedata.normalize("NFKC", target)))  # decode first: %2F splits too
+    return any(canon_path(tok) in ELEVATED_CONSTITUTION_FILENAMES for tok in tokens)
+
+
+__all__ = [
+    "ELEVATED_CONSTITUTION_FILENAMES",
+    "ELEVATED_CONSTITUTION_STEMS",
+    "GOVERNANCE_TARGET_STEMS",
+    "canon_path",
+    "target_is_elevated_constitution",
+    "target_is_governance_root",
+]

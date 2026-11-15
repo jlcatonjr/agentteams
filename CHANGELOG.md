@@ -34,6 +34,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security rows 811 and 816 (816 amends 811's condition 3 to allow #504's signed integration-branch authorization)
   are cross-referenced with #504's rows 809, 812 and 815.
 
+### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
+
+- **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
+  the other surfaces read, so a row writing one was classed on the ordinary path and an HMAC clearance sufficed. These
+  are now an *elevated* class (`governance_targets.target_is_elevated_constitution`):
+  - `AGENTS.md`, read by Codex, goose, Grok and agents-md, including nested copies;
+  - `AGENTS.override.md`, which Codex reads over it;
+  - `.goosehints`;
+  - `CLAUDE.local.md`, which folds to `claude-local-md`, so the `claude-md` stem missed it;
+  - `.github/instructions/`, Copilot's path-scoped instructions.
+
+  A row whose declared target is one of these is constraint-relaxing and needs the operator's Ed25519 signature
+  (`requires_operator_signature`), and a management directive can never scope one.
+  - **Elevated, not refused (operator ruling 2026-11-14).** Unlike `CLAUDE.md`, these files are not categorically
+    non-eligible. `frozen_surfaces` declares `AGENTS.md` and `.goosehints` owned by the codex, goose and agents-md
+    surfaces, so freeze and unfreeze rows list them, and a non-eligible unfreeze could never be signed.
+  - **Behaviour change:** a freeze, unfreeze or render row for those surfaces that lists `AGENTS.md` or `.goosehints`
+    now needs the operator's Ed25519 signature; HMAC no longer clears it.
+  - **Migration:** in a signing-governed workspace, an HMAC-signed row that names one of these files no longer
+    authorizes. Find such rows: `effect_targets`, `effect_grants` or the scope text naming `AGENTS.md`,
+    `AGENTS.override.md`, `.goosehints`, `CLAUDE.local.md` or `.github/instructions`. They include the freeze and
+    unfreeze rows for the codex, goose and agents-md surfaces. Re-mint each with `--sign-decision` (operator,
+    Ed25519) before the next gated render. A management directive whose scope names one is refused, so re-issue the
+    task without it.
+  - The file names are matched as whole tokens, not substrings, so this repository's own `agents_md.py` adapter, its
+    tests and docs stay ordinary content. Across every tracked path, none changes classification.
+  - Tokens split on every character that cannot be part of a file name, after percent-decoding, so `AGENTS%2Emd`,
+    `file:AGENTS.md`, `AGENTS.md#L1`, `@AGENTS.md` and `AGENTS.md,README.md` match too (@security).
+
 ### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
 
 - **Security fix (IM evaluation item 17, G-22-7).** The governed check tested only that
