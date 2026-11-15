@@ -175,6 +175,9 @@ def rows(branch: str) -> dict[str, str]:
             f"(no cloud CI runs) | The local gate in {ref} passed |"
             f"\n| Release PR ({b} → default branch) | Integration model: shipping a batch | Medium (large batch) "
             "| CI green on the release PR; **merge commit only**, never squash or rebase |"
+            f"\n| Contributor PR into {b} | Integration model: a pull request based on {b} | Low "
+            "| `agentteams --merge-pr <N>` when the signed integration-branch merge authorization verifies and its "
+            "conditions hold (checks green, `@security` PASS for the head, merge commit); otherwise the gate's prompt |"
         ),
         "BRANCH_MODEL_GITOPS_REFS": (
             f"\n- {ref} *(this project's **integration-branch model**: feature branches merge locally into {b}; "

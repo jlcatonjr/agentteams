@@ -70,6 +70,7 @@ from ._write_roots import project_root_of
 from ._claude_model import (  # noqa: F401  (constants re-exported for importers of claude)
     CLAUDE_AGENT_MODEL_DEFAULT,
     CLAUDE_ORCHESTRATOR_MODEL_DEFAULT,
+    inject_session_model,
     resolve_claude_model as _resolve_claude_model,
 )
 from agentteams.yaml_frontmatter import FRONT_MATTER_MODEL_LINE_RE, parse_yaml_front_matter as _parse_yaml_front_matter
@@ -308,7 +309,8 @@ class ClaudeAdapter(FrameworkAdapter):
 
         * ``hooks/constitutional-gate.py`` — the hook itself, executable content;
         * ``settings.hooks.example.json`` — the block an operator merges into their own
-          ``settings.json``.
+          ``settings.json``, with the session ``model`` and ``env.CLAUDE_CODE_SUBAGENT_MODEL``
+          (:func:`~agentteams.frameworks._claude_model.inject_session_model`).
 
         **The settings file is deliberately NOT written.** That is the standing convention in
         ``hooks_emit.py`` and it is right: clobbering an operator's config is a worse failure
@@ -363,7 +365,7 @@ class ClaudeAdapter(FrameworkAdapter):
                 # FrameworkAdapter.extra_output_files (super() above), so a deny never ships
                 # without it. The old "sentinel only with the deny" rule is superseded
                 # (2026-09-30): the sentinel reads like an empty store.
-            files.append(("../settings.hooks.example.json", example))
+            files.append(("../settings.hooks.example.json", inject_session_model(example)))
         return files
 
     def get_agents_dir(self, project_path: Path) -> Path:
