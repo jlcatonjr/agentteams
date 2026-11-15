@@ -72,7 +72,8 @@ def _stub_core_pipeline(monkeypatch: pytest.MonkeyPatch, framework: str, capture
     monkeypatch.setattr(build_team.analyze, "build_manifest", lambda _desc, framework=framework: _build_min_manifest(framework))
     monkeypatch.setattr(build_team.render, "render_all", lambda _manifest, templates_dir: [
         ("orchestrator.agent.md", "# Orchestrator\n"),
-        ("team-builder.agent.md", "# Team Builder\n"),
+        # A scoped builder: the Claude builder fails closed without a tools key (IM item 42).
+        ("team-builder.agent.md", "---\nname: Team Builder\ntools: ['read']\n---\n# Team Builder\n"),
         ("../copilot-instructions.md", "# Instructions\n"),
         ("SETUP-REQUIRED.md", "# Setup\n"),
     ])

@@ -40,6 +40,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
   notification-only. Grok teams do not receive it.
 
+### added (what counts as approval for actions that guard the default branch; `github_management`)
+
+- **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub
+  management section (#504) now says what counts as the operator's approval:
+  - **Merges into the default branch, `main`, `master`, `release/*` or a tag** need the operator's live, in-session
+    answer naming the PR number and head SHA, asked again if the head moves. Standing, relayed, file, comment, peer
+    and signed-directive approvals never count, and #504's integration-branch authorization never reaches these
+    branches. Merge only after at least one check run has registered on that SHA and every check is green, with
+    `--match-head-commit`.
+  - **Switching the default branch's required checks** runs only as
+    `python -m agentteams.release_required_checks --apply <fingerprint>`. The operator approves that fingerprint
+    first, with the full preview shown, and `@security` records `release-required-checks:<fingerprint>`.
+- The same rule now appears in three more places:
+  - `@pr-manager` rule 2 (`invariant_core` v=3) defines "explicit operator clearance";
+  - a `@security` trigger row (`security_rules_invariant` v=25) covers that `--apply` and any branch-protection or
+    ruleset write;
+  - the integration-branch reference §3 (`integration_branch` v=2) adds a required-check step.
+
+  Each is empty with `github_management: false`. `--update` prints a one-time notice when the rules first land.
+- New module command `python -m agentteams.release_required_checks`, moved from `scripts/`. It reads the default
+  branch instead of assuming `main`, takes the integration branch from the brief, and refuses ruleset-managed checks
+  and tokens without admin rights.
+- Code guards: management directives refuse `protect`, `required-check` and `ruleset` scopes (`merg` already was).
+  The constitutional gate prompts on:
+  - `gh api`/`curl` writes to `…/protection` or `…/rulesets`, whether the method is explicit (`-X`, `--request`,
+    `--method`) or implied by a body (`-f`, `-F`, `--field`, `--raw-field`, `--input`);
+  - the GraphQL `BranchProtectionRule` and `RepositoryRuleset` create, update and delete mutations;
+  - `release_required_checks … --apply`, including shortened forms (argparse abbreviations are off as well).
+- Security rows 811 and 816 (816 amends 811's condition 3 to allow #504's signed integration-branch authorization)
+  are cross-referenced with #504's rows 809, 812 and 815.
+
+### fixed (generated teams are no longer told to run commands that exist only in the agentteams checkout; IM item 23)
+
+- **G-06-2, G-19-4.** The navigator, agent-updater, orchestrator and security templates and all five team-builder
+  templates said to run `python build_team.py …` or `python -m src.graph …`. A generated team has no `build_team.py`
+  (it sits at the root of this repository) and there is no `src/` package anywhere. They now use the installed
+  `agentteams` entry point: `agentteams --refresh-graph` for the pipeline graph, `agentteams --description <brief>
+  --check` / `--update --merge` / `--scan-security`, `--add-fence-markers` and `--migrate`. The security triggers
+  name `agentteams --self --update` and still cover the checkout's `build_team.py`.
+- **G-12-3.** The agent-updater said bare `--update` overwrites whole files, including USER-EDITABLE content, which
+  contradicted its own later section and the CLI (merge is the default). It now says only `--update --overwrite`
+  replaces whole files, and its batch-run assertion requires "never `--update --overwrite`".
+- The agent-updater now says which `agentteams` to run: the pinned installation where `toolchain.lock` pins it, an
+  editable install in the agentteams checkout itself. The navigator notes that `--refresh-graph` maps `.github/agents/`
+  before `.claude/agents/`. The security trigger keys on `--self` with `--update` in either order, through any entry
+  point (`agentteams`, `python -m agentteams.cli.app`, `build_team.py`).
+- `tests/test_template_repo_only_commands.py` refuses `python [path/]build_team.py`, `build_team.py --…`,
+  `python -m src.` and `python -m build_team` in every text file under `agentteams/templates/`.
+- **Existing teams:** `agentteams --update --merge --yes` brings most of this. The security
+  (`security_rules_invariant` v=26, after #507 also revised it), orchestrator (`update_compatibility_source_pack` v=2) and Grok builder (`rules`
+  v=2) changes are inside fences. The agent-updater and the Claude, Copilot and goose builders have no fences of their
+  own, so their whole body is one generated `content` fence (the goose recipe is rewritten whole), and merge replaces
+  it. Merge keeps text outside fences in a file that has fences, so two places keep the old lines: the navigator's two
+  refresh commands and the Grok builder's step 3 and invocation block. Edit those by hand.
+
+### security (an unscoped agent gets a read-only Claude grant, not write and a shell; IM item 42)
+
+- **G-04-9.** The Claude adapter's fallback grant was `Bash, Read, Write, Edit`. `_map_allowed_tools` used it when an
+  agent had no front matter (or front matter that never closes), no inline `tools: [...]` list, or a list none of
+  whose tokens maps to a Claude tool. So the one agent nobody scoped got write access and an unrestricted shell
+  (C-3). The fallback is now `Read, Grep, Glob`, and each fallback emits a `UserWarning` naming the agent and the
+  missing scope. Grok shares the mapping and the change.
+  - **Behaviour change:** a hand-written or converted agent with no usable `tools:` loses `Bash`, `Write` and `Edit`
+    on its next render, `--convert` or interop import. No shipped template reaches the fallback: every agent
+    template declares `tools:`, and a render of each example brief for Claude and Grok produced no fallback.
+  - **Who is affected:** agents the templates don't produce, which are hand-written, operator-added, converted or
+    imported agents. `--convert` reports each narrowed agent in its notices. A source whose `tools:` is a YAML block
+    list is still refused as a widening, not narrowed. Files already on disk keep their grant: `--update --merge`
+    never widens or silently narrows an edited capability line, so an existing agent keeps `Bash, Read, Write, Edit`
+    until it is re-converted or edited.
+  - **The team-builder fails closed (@security):** a Claude builder with no front matter, or no `tools:` /
+    `allowed-tools:` key, now raises instead of passing through, because Claude gives it every tool. Grok's builder
+    already did. The shipped builder declares `tools:`.
+  - **Migration:** if the warning names an agent that needs to write or run commands, give it an inline list, for
+    example `tools: ['read', 'search', 'edit', 'execute']`, and re-render.
+  - The WASM narrowing refusal (`wasm_enforcement._refuse_empty`) still fails closed on an empty list; its message
+    no longer says the default includes the shell.
+
+### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
+
+- **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
+  the other surfaces read, so a row writing one was classed on the ordinary path and an HMAC clearance sufficed. These
+  are now an *elevated* class (`governance_targets.target_is_elevated_constitution`):
+  - `AGENTS.md`, read by Codex, goose, Grok and agents-md, including nested copies;
+  - `AGENTS.override.md`, which Codex reads over it;
+  - `.goosehints`;
+  - `CLAUDE.local.md`, which folds to `claude-local-md`, so the `claude-md` stem missed it;
+  - `.github/instructions/`, Copilot's path-scoped instructions.
+
+  A row whose declared target is one of these is constraint-relaxing and needs the operator's Ed25519 signature
+  (`requires_operator_signature`), and a management directive can never scope one.
+  - **Elevated, not refused (operator ruling 2026-11-14).** Unlike `CLAUDE.md`, these files are not categorically
+    non-eligible. `frozen_surfaces` declares `AGENTS.md` and `.goosehints` owned by the codex, goose and agents-md
+    surfaces, so freeze and unfreeze rows list them, and a non-eligible unfreeze could never be signed.
+  - **Behaviour change:** a freeze, unfreeze or render row for those surfaces that lists `AGENTS.md` or `.goosehints`
+    now needs the operator's Ed25519 signature; HMAC no longer clears it.
+  - **Migration:** in a signing-governed workspace, an HMAC-signed row that names one of these files no longer
+    authorizes. Find such rows: `effect_targets`, `effect_grants` or the scope text naming `AGENTS.md`,
+    `AGENTS.override.md`, `.goosehints`, `CLAUDE.local.md` or `.github/instructions`. They include the freeze and
+    unfreeze rows for the codex, goose and agents-md surfaces. Re-mint each with `--sign-decision` (operator,
+    Ed25519) before the next gated render. A management directive whose scope names one is refused, so re-issue the
+    task without it.
+  - The file names are matched as whole tokens, not substrings, so this repository's own `agents_md.py` adapter, its
+    tests and docs stay ordinary content. Across every tracked path, none changes classification.
+  - Tokens split on every character that cannot be part of a file name, after percent-decoding, so `AGENTS%2Emd`,
+    `file:AGENTS.md`, `AGENTS.md#L1`, `@AGENTS.md` and `AGENTS.md,README.md` match too (@security).
+
 ### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
 
 - **Security fix (IM evaluation item 17, G-22-7).** The governed check tested only that

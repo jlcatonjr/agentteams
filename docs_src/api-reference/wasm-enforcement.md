@@ -60,7 +60,7 @@ source or target team recorded WASM or carries its evidence) they report a `[WAS
 ONLY` notice (`projection_notice`) instead of any claim.
 
 **Fail closed.** Narrowing that would leave an agent no tool on the framework (an execute-only custom template, or
-on Claude a list none of whose tokens maps to a Claude tool, which falls back to `Bash, Read, Write, Edit`) refuses
+on Claude a list none of whose tokens maps to a Claude tool, which falls back to the default grant `Read, Grep, Glob` that the template never declared) refuses
 the render.
 
 `top_level` is always `advisory`. Codex's `default_tools_approval_mode = "prompt"` is a configured default and never

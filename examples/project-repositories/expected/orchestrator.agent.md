@@ -262,7 +262,7 @@ new operational rule remains a manual edit in each deployed team.
 | Spawn a scoped child orchestrator for a coordinating sub-body-of-work (in-repo) | `@orchestrator` → Workflow 13 | "Spin up an orchestrator for X"; a delegated body of work that itself needs coordination, not a single domain subagent |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
-<!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=1 -->
+<!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=2 -->
 ### Update Compatibility Source Pack
 
 Before orchestrating any on-the-fly agent file update, review these canonical files in order:
@@ -274,7 +274,7 @@ Before orchestrating any on-the-fly agent file update, review these canonical fi
 
 Use this baseline command sequence for update-safe execution:
 
-1. `agentteams --description <brief> --check` (or `python build_team.py --description <brief> --check`)
+1. `agentteams --description <brief> --check`
 2. `agentteams --description <brief> --update --merge --dry-run` for scope preview
 3. `agentteams --description <brief> --update --merge` for apply
 4. `agentteams --description <brief> --scan-security` and `--post-audit` closeout when required by policy

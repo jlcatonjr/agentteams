@@ -43,6 +43,7 @@ import json
 import os
 import re
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -101,7 +102,11 @@ CLAUDE_LEGACY_CAPABILITY_KEY = "allowed-tools"
 #: least likely to be reviewed, and this project's own C-3 ("capability
 #: declarations are binding, widening one is privileged") favors the
 #: conservative reading when the source data gives no explicit signal.
-_CLAUDE_DEFAULT_ALLOWED_TOOLS = "Bash, Read, Write, Edit"
+#:
+#: Read-only since IM item 42 (G-04-9). It was ``Bash, Read, Write, Edit``, which gave write access and an
+#: unrestricted shell to exactly the agent nobody scoped. ``_map_allowed_tools`` warns, naming the agent, whenever
+#: it falls back, so a hand-written agent that needs more declares it.
+_CLAUDE_DEFAULT_ALLOWED_TOOLS = "Read, Grep, Glob"
 
 # The command the `retrieval` token grants, and nothing else. Scoped `Bash(<prefix>:*)` rather
 # than bare `Bash`: an agent that needs to look something up on the web should not thereby gain
@@ -157,7 +162,7 @@ class ClaudeAdapter(FrameworkAdapter):
         """
         name, description = _extract_name_description(content, agent_slug, manifest)
         # Map the per-agent tool scope BEFORE the VS Code front matter is stripped.
-        allowed_tools = _map_allowed_tools(content)
+        allowed_tools = _map_allowed_tools(content, agent_slug)
         mcp_block = None
         grant = _runner_grant(agent_slug, manifest)
         if grant is not None:
@@ -216,18 +221,22 @@ class ClaudeAdapter(FrameworkAdapter):
             unreadable ``model:`` replaced by the Claude default.
 
         Raises:
-            Nothing.
+            ValueError: The builder has no front matter, or front matter with no ``tools:`` or ``allowed-tools:``
+                key. Claude would give such a sub-agent every tool, so it fails closed, as Grok's builder does
+                (IM item 42, @security).
         """
         yaml_text, body = _parse_yaml_front_matter(content)
-        if yaml_text is None:
-            return content
+        if yaml_text is None or not _BUILDER_SCOPE_KEY_RE.search(yaml_text):
+            raise ValueError(
+                "the Claude team-builder needs front matter with a `tools:` line; without one Claude gives it every "
+                "tool (fail closed)")
         head = content[: len(content) - len(body)]  # the parser's own front-matter span: never touch the body
         source_model = _extract_claude_optional_keys(content)[0]
         model = _resolve_claude_model(content, source_model, "team-builder")
         if model is not None and model != source_model:
             head = FRONT_MATTER_MODEL_LINE_RE.sub(f"model: {model}\n", head, count=1)
         if _YAML_TOOLS_RE.search(yaml_text):
-            head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
+            head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content, 'team-builder')}", head, count=1)
         return head + body
 
     def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
@@ -760,6 +769,9 @@ _YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$
 
 # Captures an inline-list `tools: ['read', 'search']` line in the VS Code front matter.
 _YAML_TOOLS_RE = re.compile(r"^tools:\s*\[([^\]]*)\]\s*$", re.MULTILINE)
+#: Any declared scope key on a builder, in any form (canonical list, Claude scalar, or the legacy key that
+#: ``--update --merge`` renames). Its absence is what ``render_builder_file`` refuses.
+_BUILDER_SCOPE_KEY_RE = re.compile(r"^(?:tools|allowed-tools):", re.MULTILINE)
 
 
 def claude_tool_names(tokens: list[str] | tuple[str, ...]) -> list[str]:
@@ -784,18 +796,50 @@ def claude_tool_names(tokens: list[str] | tuple[str, ...]) -> list[str]:
     return mapped
 
 
-def _map_allowed_tools(content: str) -> str:
+def _fallback_grant(agent: str | None, reason: str) -> str:
+    """Return the read-only default grant, warning that ``agent`` had no usable tool scope (IM item 42).
+
+    Args:
+        agent: The agent's slug, or None when the caller has none.
+        reason: Which scope was missing, for the warning.
+
+    Returns:
+        :data:`_CLAUDE_DEFAULT_ALLOWED_TOOLS`.
+
+    Raises:
+        Nothing. It emits a ``UserWarning``; ``convert_team`` records it in ``ConvertResult.notices``.
+    """
+    warnings.warn(
+        f"{agent or 'an agent'}: no usable tool scope ({reason}); granting the read-only default "
+        f"`{_CLAUDE_DEFAULT_ALLOWED_TOOLS}`. Declare `tools:` in its front matter if it needs more.",
+        UserWarning,
+        stacklevel=3,
+    )
+    return _CLAUDE_DEFAULT_ALLOWED_TOOLS
+
+
+def _map_allowed_tools(content: str, agent: str | None = None) -> str:
     """Map an agent's VS Code ``tools:`` list to a Claude ``tools:`` value.
 
-    Falls back to the blanket default only when no recognizable ``tools:`` block
-    is present, so an agent authored without a tool scope keeps working.
+    Falls back to the read-only default, with a warning naming ``agent``, when there is no front matter (or it never
+    closes), no inline ``tools: [...]`` list, or a list none of whose tokens maps to a Claude tool.
+
+    Args:
+        content: The agent file, front matter included.
+        agent: The agent's slug, for the fallback warning.
+
+    Returns:
+        The comma-separated Claude tool names.
+
+    Raises:
+        Nothing. The fallback emits a ``UserWarning``.
     """
     yaml_text, _ = _parse_yaml_front_matter(content)
     if yaml_text is None:
-        return _CLAUDE_DEFAULT_ALLOWED_TOOLS
+        return _fallback_grant(agent, "no front matter")
     tools_match = _YAML_TOOLS_RE.search(yaml_text)
     if not tools_match:
-        return _CLAUDE_DEFAULT_ALLOWED_TOOLS
+        return _fallback_grant(agent, "no inline `tools: [...]` list")
     vscode_tools = [item.strip().strip("'\"") for item in tools_match.group(1).split(",") if item.strip()]
     mapped = claude_tool_names(vscode_tools)
     # `execute` already grants unrestricted Bash, which subsumes the scoped retrieval command.
@@ -803,7 +847,9 @@ def _map_allowed_tools(content: str) -> str:
     # nothing — a misleading least-privilege signal in the generated file.
     if "Bash" in mapped and _RETRIEVAL_CLI_SCOPE in mapped:
         mapped.remove(_RETRIEVAL_CLI_SCOPE)
-    return ", ".join(mapped) if mapped else _CLAUDE_DEFAULT_ALLOWED_TOOLS
+    if not mapped:
+        return _fallback_grant(agent, f"`tools: [{tools_match.group(1).strip()}]` maps to no Claude tool")
+    return ", ".join(mapped)
 
 
 def _extract_claude_optional_keys(content: str) -> tuple[str | None, str | None, str | None]:

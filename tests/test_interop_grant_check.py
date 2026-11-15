@@ -402,12 +402,57 @@ def test_convert_maps_claude_tool_names_instead_of_falling_back_to_defaults(tmp_
     assert "tools: Read, Grep, Glob" in (target / f"{READER}.md").read_text(encoding="utf-8")
 
 
+def test_convert_maps_a_writer_s_claude_names_not_the_read_only_fallback(tmp_path):
+    # IM item 42: the fallback is now `Read, Grep, Glob`, the same string the reader case above expects, so that
+    # case alone no longer proves mapping. A writer only keeps Edit/Write/Bash if canonical_tools_header worked.
+    from agentteams.convert import convert_team
+
+    src = tmp_path / "src" / ".claude" / "agents"
+    src.mkdir(parents=True)
+    (src / "writer.md").write_text(_claude_agent("writer", "Read, Edit, Bash"), encoding="utf-8")
+    target = tmp_path / "dst" / ".claude" / "agents"
+    result = convert_team(src, target, "claude")
+    assert result.errors == []
+    assert "tools: Read, Edit, Write, Bash" in (target / "writer.md").read_text(encoding="utf-8")
+    assert not any("no usable tool scope" in n for n in result.notices)
+
+
+def test_convert_refuses_a_block_list_source_rather_than_narrowing_it(tmp_path):
+    # IM item 42: a YAML block list is not the inline form. The grant check reads it as granting nothing, so the
+    # read-only fallback is a widening and convert refuses before writing (fail closed, never a silent narrowing).
+    from agentteams.convert import convert_team
+
+    src = tmp_path / "src" / ".github" / "agents"
+    src.mkdir(parents=True)
+    (src / "blocky.agent.md").write_text(
+        "---\nname: Blocky\ndescription: \"b\"\ntools:\n  - read\n  - edit\n---\n\n# Blocky\n", encoding="utf-8")
+    target = tmp_path / "dst" / ".claude" / "agents"
+    with pytest.raises(ValueError, match="blocky: projecting onto claude would widen"):
+        convert_team(src, target, "claude")
+    assert not target.exists()
+
+
+def test_convert_reports_an_unscoped_source_narrowed_to_read_only(tmp_path):
+    # IM item 42: an agent with no front matter declares no grant, so convert renders it, and the read-only fallback
+    # must reach result.notices (CLI and --json), not only stderr.
+    from agentteams.convert import convert_team
+
+    src = tmp_path / "src" / ".github" / "agents"
+    src.mkdir(parents=True)
+    (src / "loose.agent.md").write_text("# Loose\n\nNo front matter.\n", encoding="utf-8")
+    target = tmp_path / "dst" / ".claude" / "agents"
+    result = convert_team(src, target, "claude")
+    assert result.errors == []
+    assert "tools: Read, Grep, Glob" in (target / "loose.md").read_text(encoding="utf-8")
+    assert any("loose" in n and "no usable tool scope" in n for n in result.notices), result.notices
+
+
 def test_convert_refuses_a_widening_before_writing(tmp_path):
     from agentteams.convert import convert_team
 
     src = tmp_path / "src" / ".github" / "agents"
     src.mkdir(parents=True)
-    # an empty declared grant: Claude's adapter would fall back to Bash, Read, Write, Edit
+    # an empty declared grant: Claude's adapter falls back to Read, Grep, Glob, which is still wider than nothing
     (src / "mute.agent.md").write_text("---\nname: Mute\ndescription: \"m\"\ntools: []\n---\n\n# Mute\n",
                                        encoding="utf-8")
     target = tmp_path / "dst" / ".claude" / "agents"
