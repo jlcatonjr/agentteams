@@ -126,6 +126,10 @@ def test_no_recorded_policy_matches_the_pre_456_gate(tmp_path: Path) -> None:
     "git push origin '+refs/heads/*:refs/heads/*'", "git -c alias.p='push -f' p", "git -c push.default=x push",
     "git config alias.p push", "git config --global push.default current", "git config remote.origin.fetch x",
     "git push -vf origin main", "git push -fu origin main", "git push origin +main:refs/heads/main",
+    'git push origin "+"main', "git push origin +'main'", "git push origin ''+main", "git push origin $'+main'",
+    "git push origin \\+main", "git --config-env=alias.p=EV p", "git --config-env alias.p=EV p",
+    'git push "-f" origin main', "git push \\-f origin main", "git push $'-f' origin main",
+    """git "-c" alias.p='push -f' p""", "git '--config-env=alias.p=EV' p",
 ])
 def test_row699_default_asks(tmp_path: Path, cmd: str) -> None:
     gate = install(tmp_path, None)
@@ -138,6 +142,11 @@ def test_row699_default_asks(tmp_path: Path, cmd: str) -> None:
 def test_row699_long_force_flags_still_report_history_destructive_first(tmp_path: Path, cmd: str) -> None:
     gate = install(tmp_path, None)
     assert gate._bash_matches(cmd, first_only=True)[0][0] == "git-history-destructive"
+
+
+def test_row699_config_env_remote_rewrite_is_a_publication_channel(tmp_path: Path) -> None:
+    gate = install(tmp_path, None)
+    assert gate._bash_matches("git --config-env=remote.origin.url=EV push", first_only=True)[0][0] == "publication-channel"
 
 
 def test_row699_a_plus_after_the_colon_is_a_branch_name_not_a_force(tmp_path: Path) -> None:
@@ -157,6 +166,7 @@ def test_row699_a_read_exemption_covers_only_its_own_command(tmp_path: Path, cmd
     "git push origin main", "git push -u origin feat/x", "git push --follow-tags", "git fetch -f",
     "git commit -F msg.txt && git push origin main", "git config --get alias.p", "git config -l",
     "git config user.name x", "git stash push -m wip", "git commit -m 'force later' && git push",
+    "git push -o x=+1 origin main", "git --config-env=user.name=EV commit",
 ])
 def test_row699_ordinary_commands_stay_silent(tmp_path: Path, cmd: str) -> None:
     gate = install(tmp_path, None)

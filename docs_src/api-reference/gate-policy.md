@@ -41,9 +41,10 @@ The gate exports its enums:
 
 The default `ask` classes:
 - `elevated-privilege`, `remote-pipe-shell`, `persistence`, `package-install`, `git-history-destructive`,
-  `git-force-push-short` (`git push -f`, `-uf`, or a `+refspec`), `fleet-lock-lift`;
+  `git-force-push-short` (`git push -f`, `-uf`, or a `+refspec`, quoted or not), `fleet-lock-lift`;
 - `outbound-upload`, `outbound-derived`, `raw-socket`, `dns-exfil`, `publication-channel`,
-  `git-alias-config` (`git -c` or `git config` for `alias.`, `push.`, `remote.` or `url.`), `interpreter-send`;
+  `git-alias-config` (`git -c`, `git --config-env` or `git config` for `alias.`, `push.`, `remote.` or `url.`),
+  `interpreter-send`;
 - `gh-delete`, `pr-merge`, `git-remote-delete`, `git-ref-delete`, `agentteams-branch-delete`;
 - `fs-delete`, `infra-delete`, `db-delete`, `interpreter-delete`;
 - `command-too-long`, `git-config-write`, `scanner-unverified`, `no-interpreter`.

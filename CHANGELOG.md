@@ -13,11 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after a separator: `git config -l; git config remote.origin.url https://e.x/r` asked nothing, in every shipped
   version with the `publication-channel` config check. The exemption now covers only its own command (stops at
   `;`, `&`, `|`), in `publication-channel` (remote/URL rewrites and `include.path`) and `git-alias-config`.
+- `git --config-env=remote.origin.url=VAR push` (git 2.31+ reads the value from an environment variable) is now a
+  `publication-channel` ask, like `git -c remote.origin.url=…`. Nothing matched `--config-env` before.
 
 ### changed (the constitutional gate asks on short force pushes and git alias/push config; remediation row 699)
 
-- `git push -f` (and clusters such as `-uf`), `git push <remote> +<ref>`, `git -c alias.*|push.*|remote.*|url.*`
-  and `git config alias.*|push.*|remote.*|url.*` now ask by default. Before, only `--force` and remote/URL
+- `git push -f` (and clusters such as `-uf`), `git push <remote> +<ref>` (also behind quoting: `"+"main`, `+'main'`,
+  `$'+main'`, `\+main`; a quoted flag too: `"-f"`, `"-c"`), `git -c` or `git --config-env` with
+  `alias.*|push.*|remote.*|url.*`, and
+  `git config alias.*|push.*|remote.*|url.*` now ask by default. Before, only `--force` and remote/URL
   rewrites asked; #456 matched these spellings only under a project policy that denied them.
 - The class ids (`git-force-push-short`, `git-alias-config`) are unchanged, so a recorded
   `.agentteams/gate-policy.json` names the same classes. The patterns are unchanged except for one narrowing:
