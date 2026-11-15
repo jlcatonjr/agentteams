@@ -17,9 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **G-12-3.** The agent-updater said bare `--update` overwrites whole files, including USER-EDITABLE content, which
   contradicted its own later section and the CLI (merge is the default). It now says only `--update --overwrite`
   replaces whole files, and its batch-run assertion requires "never `--update --overwrite`".
-- `tests/test_template_repo_only_commands.py` refuses `python build_team.py`, `build_team.py --…` and
-  `python -m src.` in any rendered template. A re-render (`agentteams --update --merge`) brings existing teams the
-  corrected text.
+- The agent-updater now says which `agentteams` to run: the pinned installation where `toolchain.lock` pins it, an
+  editable install in the agentteams checkout itself. The navigator notes that `--refresh-graph` maps `.github/agents/`
+  before `.claude/agents/`. The security trigger keys on `--self` with `--update` in either order, through any entry
+  point (`agentteams`, `python -m agentteams.cli.app`, `build_team.py`).
+- `tests/test_template_repo_only_commands.py` refuses `python [path/]build_team.py`, `build_team.py --…`,
+  `python -m src.` and `python -m build_team` in every text file under `agentteams/templates/`.
+- **Existing teams:** the security (`security_rules_invariant` v=25), orchestrator
+  (`update_compatibility_source_pack` v=2) and Grok builder (`rules` v=2) changes are inside fences and arrive with
+  `agentteams --update --merge`. The navigator, agent-updater and other builder lines are outside fences, and merge
+  keeps unfenced text as it is, so edit those lines by hand or re-render the files with `--update --overwrite` under
+  the usual clearance.
 
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 

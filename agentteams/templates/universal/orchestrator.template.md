@@ -231,7 +231,7 @@ new operational rule remains a manual edit in each deployed team.
 | Spawn a scoped child orchestrator for a coordinating sub-body-of-work (in-repo) | `@orchestrator` → Workflow 13 | "Spin up an orchestrator for X"; a delegated body of work that itself needs coordination, not a single domain subagent |{ADOPTED_AGENT_ROUTING_ROWS}{WASM_ROUTING_ROWS}
 <!-- AGENTTEAMS:END routing_table_rows -->
 
-<!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=1 -->
+<!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=2 -->
 ### Update Compatibility Source Pack
 
 Before orchestrating any on-the-fly agent file update, review these canonical files in order:

@@ -173,7 +173,7 @@ This builder is installed as the Grok Build custom agent `.grok/agents/team-buil
 
 ---
 
-<!-- AGENTTEAMS:BEGIN rules v=1 -->
+<!-- AGENTTEAMS:BEGIN rules v=2 -->
 ## Rules
 
 - Never fabricate project descriptions — only use what the user has provided during the intake

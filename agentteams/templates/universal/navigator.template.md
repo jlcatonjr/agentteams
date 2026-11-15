@@ -86,6 +86,8 @@ To regenerate the graph without a full team update:
 agentteams --refresh-graph
 ```
 
+Run it from the repository root, or pass `--project <repo>`. It maps the first agents tree it finds, `.github/agents/` before `.claude/agents/`, so in a repository with both, check which team the graph shows.
+
 ---
 
 <!-- agentteams-lint: no-memory-index OK — the consultation protocol is

@@ -71,6 +71,8 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 
 ## Workflow
 
+Run the `agentteams` this repository expects, not just the first one on `PATH`. In a repository whose `toolchain.lock` pins `agentteams`, use the pinned installation (compare `agentteams --version` with the lock). In the agentteams checkout itself, use an editable install of that checkout (`pip install -e .`), so the command renders the checkout's own templates.
+
 1. **Detect drift:** Run `agentteams --description <brief> --check` to identify templates that have changed since the last build
 2. **Re-render drifted files:** Run `agentteams --description <brief> --update --merge` to re-render only changed agent files while preserving manual fields and user-authored content outside fenced regions
 3. **Security scan:** Run `agentteams --description <brief> --scan-security` to check all agent files for PII, credentials, and unresolved placeholders
