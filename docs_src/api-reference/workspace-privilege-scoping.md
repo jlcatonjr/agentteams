@@ -246,8 +246,8 @@ Two properties matter for the privilege model:
   mount-protected, i.e. Seatbelt).
 - **Sibling team dirs: `.github/agents` (copilot) and `.codex/agents` (codex), 2026-09-30.**
   These dirs hold the same trust roots as `.claude/agents`: the switch, the verify-key store, the
-  three rosters, the exception registry and carve-out high-water mark (2026-11-12), and the
-  `build-log.json` team marker. They emit no sandbox of their own, so the
+  three rosters, the exception registry and carve-out high-water mark (2026-11-12), the
+  `build-log.json` team marker, and, in a governed team, `signing-governed.marker` (IM item 17). They emit no sandbox of their own, so the
   other arms protect them:
 
   | Arm | What it protects | Status |
@@ -811,14 +811,15 @@ installs the `socat` that Claude Code's own sandbox needs) and refuses to launch
 `security-approvers.txt` / `authorized-managers.txt` / `management-authority.json` rosters for
 claude and goose, each team's `exception-registry.json` and `carveout-high-water.json` (2026-11-12;
 protect-if-present), `.goose/sandbox.sb`, the project-root `references/security-approvers.txt`, and
-each team's `references/build-log.json`), and gives each ancestor directory below the root a
+each team's `references/build-log.json` and `signing-governed.marker` (2026-11-12, IM item 17;
+protect-if-present)), and gives each ancestor directory below the root a
 read-write self-bind so it becomes a mount point: `mv .claude .claude.old` fails `EBUSY`, while
 writes inside `.claude/` still work. The order is rw roots, ancestor self-binds, read-only binds,
 then the credential masks. Each path is `realpath`'d and a symlink anywhere on it is refused;
 nothing is ever created. A framework's entries are **required** only when that framework holds
 an agentteams team, marked by `<agents dir>/references/build-log.json` (a hand-written
-`.claude/agents` without one is skipped); the marker itself is read-only bound so it cannot be
-deleted to disable the check, and the rosters are required only when the team's switch is
+`.claude/agents` without one is skipped); each present marker (`build-log.json`, and
+`signing-governed.marker`) is itself read-only bound so it cannot be deleted to disable a check, and the rosters are required only when the team's switch is
 present. A required entry that is missing is an exit-2 refusal ("run agentteams --update");
 a team generated before PR-D lacks the roster stubs and is refused until its next `--update`.
 The project-root roster is protect-if-present only. `--protect PATH` (repeatable) read-only binds an extra
