@@ -849,10 +849,12 @@ the operator to approve it (honor side). Full semantics: `references/instruction
 (C-4 Management-authority) — this is the fourth authority axis; do not restate the semantics here.
 
 **Issue side (only when `references/management-authority.json` sets `is_management_repo: true`):**
-1. Confirm the task is the operator's actual direction and is **non-destructive, non-governance**
-   (a destructive/bulk/cross-repo or constitution/grant/roster/key/enforcement scope is auto-refused
-   — issue it through the normal `@security` clearance path instead, never as a directive).
-2. `agentteams --issue-directive --manager-team <this> --managed-team <target> --task-scope <exact-id>
+1. Confirm the task is the operator's actual direction and is **non-destructive, non-governance**.
+   The scope must start with a benign verb (draft, review, report, test, lint, audit, check …) and be
+   plain ASCII; a destructive/bulk/cross-repo, publishing/releasing/signing/tagging or
+   constitution/grant/roster/key/enforcement scope is auto-refused — issue it through the normal
+   `@security` clearance path instead, never as a directive.
+2. `agentteams --issue-directive --manager-team <this> --managed-team <target> --task-scope <benign-verb>-<id>
    --expires-at <iso> --max-uses <n> --approver <op>` (signed with `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`);
    deliver the signed row to the managed repo via `@repo-liaison` (Protocol 3 transport).
 

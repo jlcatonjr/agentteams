@@ -25,7 +25,8 @@ def test_every_im_probe_is_refused(scope):
 
 @pytest.mark.parametrize("scope", [
     "review-vulnscan-handoff-20261101010101",   # the production directive scope (vulnscan/handoff.py)
-    "draft-weekly-report", "draft-monthly-report", "refresh-readme", "format the sandbox docs",
+    "draft-weekly-report", "draft-monthly-report", "review the sandbox docs", "summarized findings",
+    "validating the parser", "analyzed logs",
     "summarize findings", "Reviewing the audit", "tests for parser", "lint docs_src", "audit_parser_flow",
 ])
 def test_a_benign_leading_verb_is_allowed(scope):
@@ -43,6 +44,27 @@ def test_an_unknown_or_missing_leading_verb_is_refused(scope):
                                    "draft the constitution", "review security-approvers.txt", "review AGENTS.md"])
 def test_a_benign_verb_does_not_launder_a_destructive_or_governance_tail(scope):
     assert md.scope_is_allowed(scope) is False
+
+
+@pytest.mark.parametrize("scope", ["refresh-bridge-claude", "comment-summary-on-other/repo", "label-issues",
+                                   "triage-open-issues", "format-disk-volume", "format the sandbox docs"])
+def test_verbs_that_write_outward_or_rewrite_files_are_not_benign(scope):
+    # @security: refresh (--bridge-refresh is destructive), comment/label/triage (they write to GitHub) and format
+    # (format-disk-volume) are not on the allowlist.
+    assert md.scope_is_allowed(scope) is False
+
+
+@pytest.mark.parametrize("scope", ["review-dеlete-branches",       # Cyrillic е hides "delet" from the denylist
+                                   "review-de​lete-branches",      # a zero-width space does too
+                                   "review\ndelete", "review\tthe docs", "reviеw-docs"])
+def test_a_scope_that_is_not_plain_ascii_is_refused(scope):
+    assert md.scope_is_allowed(scope) is False
+
+
+def test_rotating_a_key_is_relaxing_on_the_classifier_too():
+    # @security: rotating a key changes a trust root; "rotat" is a shared stem (no existing decision row names it).
+    assert md.scope_names_refused_effect("rotate-key") is True
+    assert ec._text_signal({"action_reviewed": "rotate-key", "verdict": "PASS"}, kind="decision") == ec.RELAXING
 
 
 def test_the_docstring_no_longer_claims_a_denylist_is_the_whole_gate():

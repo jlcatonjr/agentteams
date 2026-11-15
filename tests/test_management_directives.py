@@ -302,7 +302,7 @@ def test_scope_denylist_uses_word_boundaries_not_substrings():
     from agentteams.cli import management_directives as md
     for benign in ("ingest-transform-data", "confirm-order", "format-report", "transform-load"):
         assert md.scope_names_refused_effect(benign) is False, benign
-    assert md.scope_is_allowed("format-report") is True  # an allowlisted verb with "rm" mid-word
+    assert md.scope_is_allowed("review-format-report") is True  # an allowlisted verb, "rm" mid-word in the tail
     for bad in ("rm-tmp", "delete-logs", "cross-repo-sync", "force-push"):
         assert md.scope_is_allowed(bad) is False, bad
 
@@ -323,7 +323,7 @@ def test_denylist_refuses_inflected_destructive_and_governance_scopes():
                    "migrate-schema", "generate-invoice", "render-chart", "validate-input",
                    "normalize-records", "draft-weekly-report"):
         assert md.scope_names_refused_effect(benign) is False, benign  # the denylist half (IM item 05)
-    for benign in ("format-report", "validate-input", "draft-weekly-report"):  # allowlisted leading verbs
+    for benign in ("review-format-report", "validate-input", "draft-weekly-report"):  # allowlisted leading verbs
         assert md.scope_is_allowed(benign) is True, benign
 
 
@@ -336,7 +336,7 @@ def test_every_sandbox_relaxation_spelling_is_refused():
     for token in SANDBOX_RELAXATION_TOKENS:
         assert not md.scope_is_allowed(token), token
         assert not md.scope_is_allowed(f"run tests with {token.upper()}:claude"), token
-    assert md.scope_is_allowed("format the sandbox docs")
+    assert md.scope_is_allowed("review the sandbox docs")  # "format" left the allowlist (IM item 05, @security)
 
 
 # --------------------------------------------------------------------------

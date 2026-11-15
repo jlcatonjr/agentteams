@@ -11,25 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **G-24-1.** `management_directives.scope_is_allowed` was a stem denylist: any non-empty scope that named no
   governance root and no listed stem was authorizable. So `rewrite-history`, `git-clean-fdx`, `publish-release`,
   `sign-row` and `rotate-key` passed, although C-4 says destructive scopes are mechanically auto-refused.
-  - **The directive gate is positive (operator ruling 2026-11-15).** A scope is allowed only when it starts with a
-    verb from `BENIGN_SCOPE_VERBS` (`draft`, `review`, `report`, `test`, `lint`, `audit`, `check`, `format`,
-    `refresh` …; `s`/`es`/`ed`/`ing` inflections). It must also name no governance root and no destructive effect
-    anywhere, so a benign verb can't launder a tail (`review-then-delete-stale-branches`). Publishing, releasing,
-    signing, rotating and tagging are refused too (`_DIRECTIVE_ONLY_TOKENS`). The vulnscan handoff's
-    `review-vulnscan-handoff-<id>` still passes.
-  - **The denylist gains the precise destructive stems** `eras`, `unlink`, `clobber`, `clean`, `rewrit`, `shred`,
-    `chmod` and `chown`.
-  - **The effect classifier keeps its vocabulary plus those eight stems (operator ruling).** It now calls
+  - **The directive gate is positive (operator ruling 2026-11-15).** A scope is allowed only when it is plain ASCII
+    (`[a-z0-9 ._/:-]` after lowercasing, so no homoglyph or zero-width character hides a stem) and starts with a
+    verb from `BENIGN_SCOPE_VERBS` (`draft`, `review`, `report`, `test`, `lint`, `audit`, `check`, `verify` …;
+    `s`/`es`/`ed`/`ing` inflections, dropping a final `e`).
+    - `refresh`, `format`, `comment`, `label` and `triage` are deliberately not on the list (@security): a bridge
+      refresh is destructive at its target, `format-disk-volume` would pass, and the other three write to GitHub.
+    - The scope must also name no governance root and no destructive effect anywhere, so a benign verb can't launder
+      a tail (`review-then-delete-stale-branches`). Publishing, releasing, signing and tagging are refused too
+      (`_DIRECTIVE_ONLY_TOKENS`).
+    - The vulnscan handoff's `review-vulnscan-handoff-<id>` still passes.
+  - **The shared denylist gains nine precise stems:** `eras`, `unlink`, `clobber`, `clean`, `rewrit`, `shred`, `chmod`,
+    `chown` and `rotat` (rotating a key changes a trust root).
+  - **The effect classifier keeps its vocabulary plus those nine stems (operator ruling).** It now calls
     `scope_names_refused_effect`, the denylist half of the gate, never the verb allowlist, because decision rows are
-    free text. The full stem list would have reclassified about 130 of 1,231 existing decision rows, mostly false
-    positives ("sign-off", "release/* ruleset").
+    free text. The plan's full stem list would have reclassified about 130 of the agentteams and infrastructureManagement
+    rows, mostly false positives ("sign-off", "release/* ruleset").
   - **Behaviour change and migration:**
     - A directive whose scope doesn't start with a benign verb is refused when issued and is inert when verified. No
-      `management-directives.log.csv` existed in the workspace at the time, so no directive was affected.
-    - In a signing-governed workspace, a decision row whose scope names one of the eight stems (about 10 rows in the
-      census, e.g. "cleanup executed by operator") is now relaxing: HMAC no longer clears it. Re-mint it with
-      `--sign-decision` (operator, Ed25519).
-  - The orchestrator template's directive honor-side steps now describe the gate as a benign-verb check
+      `management-directives.log.csv` existed in the workspace at the time, so no directive was affected. Issue a
+      directive as `<benign-verb>-<id>` (the orchestrator's issue-side step now says so).
+    - **Decision rows:** across every `security-decisions.log.csv` in the workspace (2,387 rows with scope text), 26
+      now read as relaxing because of the new stems (baseAgent 8, baseAgent-alignment 8, infrastructureManagement 7,
+      agentteams 3; e.g. "branch-cleanup-…", "…66-clean-snapshot"). Relaxing is the broad class (`is_relaxing`): it
+      brings the row under the HALT and lineage machinery. It does **not** by itself require the operator's Ed25519
+      signature (`requires_operator_signature` also needs a granted capability, a relaxed constraint, cross-repo or
+      bulk reach, or a trust-root target), so no re-minting is needed.
+    - The one failure mode: a row that declares `effect_class: non-relaxing` but now derives as relaxing makes
+      `classify_row` raise (fail closed). None of the 26 declares it.
+  - **Known gap (documented, latent):** `effect_classifier` classifies a directive row's text with the denylist half
+    only, so for `kind="directive"` its text axis can call a scope non-relaxing that the gate refuses (an unknown verb).
+    No production caller classifies directive rows, and the gate refuses such a row before anything honours it.
+  - The orchestrator template's directive steps describe the gate as a benign-verb check, issue side and honor side
     (`available_workflows` v=15).
 
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
