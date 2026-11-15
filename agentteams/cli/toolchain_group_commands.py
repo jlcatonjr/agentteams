@@ -43,8 +43,9 @@ def _team_id(args: argparse.Namespace, root: Path) -> str | None:
     return description.get("team_id") or _slugify(str(description.get("project_name") or "")).lstrip("-") or None
 
 
-def _resolve(args: argparse.Namespace) -> tuple[Path, Path, Path, tuple[Path, ...]] | None:
-    """Return ``(team_dir, project_root, governance_dir, halt_dirs)``, or None with a message."""
+def _resolve(args: argparse.Namespace, ungoverned: str | None = None) -> tuple[Path, Path, Path, tuple[Path, ...]] | None:
+    """Return ``(team_dir, project_root, governance_dir, halt_dirs)``, or None with a message (*ungoverned* replaces
+    the toolchain-group wording of the not-governed one)."""
     from agentteams.cli.decision_log import _enforce_decision_signing
     from agentteams.cli.s10_exempt_gate import _project_root_of, _surface_dirs, governance_team_dir
 
@@ -61,8 +62,9 @@ def _resolve(args: argparse.Namespace) -> tuple[Path, Path, Path, tuple[Path, ..
         print(f"Error: the signing switch cannot be read: {exc}", file=sys.stderr)
         return None
     if not governed:
-        print(f"Error: {governance} is not governed (decision signing off), so a render never applies a toolchain "
-              "group here; the brief's s10_cooldown_exempt_repos applies instead.", file=sys.stderr)
+        print(f"Error: {governance} is not governed (decision signing off), so "
+              + (ungoverned or "a render never applies a toolchain group here; the brief's s10_cooldown_exempt_repos "
+                 "applies instead."), file=sys.stderr)
         return None
     return team_dir, root, governance, (team_dir, *_surface_dirs(root))
 
