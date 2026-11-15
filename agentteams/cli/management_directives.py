@@ -251,6 +251,7 @@ def scope_is_allowed(task_scope: str) -> bool:
     # (un-lowercased) scope is passed so the predicate's camelCase folding still applies.
     if target_is_governance_root((task_scope or "").strip()):
         return False
+    folded = re.sub(r"[_\s]+", "-", scope)
     for token in _REFUSED_SCOPE_TOKENS:
         # Left-boundary (word-START) match: the token must not be PRECEDED by an ASCII letter, but
         # trailing letters are allowed — so a token matches the whole word AND its inflections.
@@ -260,7 +261,9 @@ def scope_is_allowed(task_scope: str) -> bool:
         # there is preceded by a letter). Fail-closed by design: a security denylist must over-
         # refuse (a false refusal only makes the agent ask the operator, as today) rather than
         # under-refuse an inflected destructive/governance verb (which would be fail-OPEN).
-        if re.search(r"(?<![a-z])" + re.escape(token), scope):
+        # Each token is also tried against the scope with `_` and whitespace folded to `-`, so a hyphenated token
+        # ("required-check") refuses "release_required_checks" and "required checks" too (only ever more refusal).
+        if any(re.search(r"(?<![a-z])" + re.escape(token), form) for form in (scope, folded)):
             return False
     return True
 

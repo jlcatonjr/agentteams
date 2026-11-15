@@ -190,7 +190,11 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
     # to a branch-protection or ruleset endpoint is never the path. Both prompt, whatever client sends them.
     ("branch-protection-write",
      r"\b(?:gh\s+api|curl)\b(?=[^\n]*(?:-X\s*|--request[\s=]+|--method[\s=]+)(?:PATCH|PUT|DELETE|POST)\b)"
-     r"(?=[^\n]*/(?:protection|rulesets)\b)|\brelease_required_checks\b[^\n]*--appl",
+     r"(?=[^\n]*/(?:protection|rulesets)\b)|"
+     # `gh api` sends POST without -X once it has a body (-f/-F/--field/--raw-field/--input)
+     r"\bgh\s+api\b(?=[^\n]*\s(?:-[fF]|--field|--raw-field|--input)\b)(?=[^\n]*/(?:protection|rulesets)\b)|"
+     r"\b(?:create|update|delete)BranchProtectionRule\b|\b(?:create|update|delete)RepositoryRuleset\b|"
+     r"\brelease_required_checks\b[^\n]*\s--ap",
      "default-branch protection change — the operator approves that fingerprint; @security clears it first"),
     ("git-remote-delete", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*(?:--delete|--mirror|--prune|\s:\S))",
      "remote branch/tag deletion or mirror/prune push — irreversible remote loss"),

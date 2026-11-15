@@ -106,6 +106,7 @@ def _backup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, current: dict[str, 
     patched: list = []
     monkeypatch.setattr(rrc, "_protection", lambda repo, branch: (False, dict(current)))
     monkeypatch.setattr(rrc, "_refuse_rulesets", lambda repo, branch: None)
+    monkeypatch.setattr(rrc, "_default_branch", lambda repo: "main")
     monkeypatch.setattr(rrc, "_patch", lambda repo, branch, strict, checks: (patched.append(checks), current.clear(),
                                                                      current.update(checks)))
     p = rrc.propose(MAIN, RELEASE)
@@ -233,3 +234,13 @@ def test_a_stuck_gh_call_is_refused(monkeypatch) -> None:
     monkeypatch.setattr(rrc.subprocess, "run", hang)
     with pytest.raises(rrc.Refused, match="did not answer"):
         rrc._gh("api", "repos/o/r")
+
+
+def test_restore_refuses_a_backup_for_another_branch(tmp_path, monkeypatch) -> None:
+    """@security code review condition 4: a backup naming a branch that is not the default branch is refused."""
+    current = dict(rrc.propose(MAIN, RELEASE).new)
+    f, patched = _backup(tmp_path, monkeypatch, current)
+    monkeypatch.setattr(rrc, "_default_branch", lambda repo: "trunk")
+    with pytest.raises(rrc.Refused, match="default branch"):
+        rrc._restore("o/r", f, None)
+    assert patched == []

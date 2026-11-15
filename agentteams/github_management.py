@@ -72,8 +72,9 @@ question.
 - **Merging.** A pull-request merge goes through the gate's prompt. The only merge without that prompt is
   `agentteams --merge-pr` under the integration-branch merge authorization below, run by `@git-operations`.
 - **What counts as approval for the default branch.** A merge into the default branch, `main`, `master`, a
-  `release/*` line or a tag needs """ + _APPROVAL + """. Merge only after at least one check run has registered on
-  that SHA and every check is green (a branch with no required checks makes `gh pr checks --required` pass before
+  `release/*` line or a tag (a pull-request merge, or a local merge pushed there) needs """ + _APPROVAL + """
+  (for a local merge, name the commit to be pushed). Merge a pull request only after at least one check run has
+  registered on that SHA and every check is green (a branch with no required checks makes `gh pr checks --required` pass before
   anything ran), pinned to it: `gh pr merge <n> --match-head-commit <sha>` (`--merge` for a release PR). Never
   `--admin`, `--auto`, a GitHub MCP merge or the REST/GraphQL merge endpoint.
 - **Switching the default branch's required checks** (a release that renames a required CI job) runs only as
@@ -141,8 +142,12 @@ def placeholders(description: dict[str, Any]) -> dict[str, str]:
 
 _ROWS: dict[str, str] = {
     PR_CLEARANCE: (
-        "\n   *Explicit operator clearance* means " + _APPROVAL + " (the instruction file's GitHub management section). "
-        "You still never merge."
+        "\n   *Explicit operator clearance* for a merge into the default branch, `main`, `master`, a `release/*` line "
+        "or a tag is the operator's live, in-session answer naming the PR number and head SHA, asked again if the head "
+        "moves; never a standing, relayed, file, comment or signed-directive approval. A pull request into the "
+        "integration branch may instead be merged by `@git-operations` with `agentteams --merge-pr` under the "
+        "operator-signed integration-branch merge authorization. Both are in the instruction file's GitHub management "
+        "and merge-authorization sections. You still never merge."
     ),
     SECURITY_ROWS: (
         "\n| Any `" + COMMAND + " … --apply` (changes the default branch's required checks; needs the operator's live "

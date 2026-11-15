@@ -289,6 +289,8 @@ def _restore(repo: str, path: Path, apply_fp: str | None) -> int:
         raise Refused(f"--restore takes only a backup this command wrote in {BACKUP_DIR}")
     saved = json.loads(path.read_text(encoding="utf-8"))
     branch = saved.get("branch", "main")                    # backups before 2026-11-14 were main's
+    if branch != _default_branch(repo):
+        raise Refused(f"the backup is for branch {branch!r}, but {repo}'s default branch is not; not restoring")
     if not path.name.startswith(f"{branch}{_BACKUP_SUFFIX}"):
         raise Refused(f"the backup's name does not match its branch {branch!r}; not restoring")
     before = Proposal(old=dict(saved["after"]["checks"]), new=dict(saved["before"]["checks"]))
@@ -330,7 +332,8 @@ def run(argv: list[str] | None = None) -> int:
     Returns:
         Process exit status: 0 done or nothing to do, 1 refused.
     """
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    # allow_abbrev=False: the constitutional gate matches `--apply`; an abbreviation must not slip past it
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], allow_abbrev=False)
     ap.add_argument("--repo", help="owner/name (default: this checkout's GitHub repository)")
     ap.add_argument("--pr", type=int, help="the open release (integration branch) or hotfix/* PR into the default branch")
     ap.add_argument("--integration-branch", metavar="NAME",
