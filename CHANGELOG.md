@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-11-14
+
+### release notes
+
+agentteams 1.1.4 is a 1.1 patch with one supply-chain fix: an isolated build installs exactly `setuptools==84.2.1`
+(backported from `main`, #494). The installed code is 1.1.3's: only the version number and the build environment change.
+
 ### security (Rule S-10: build-system requirements pinned)
 
 - **`[build-system] requires` is pinned exactly: `setuptools==84.2.1`, and nothing else.** It was published on
