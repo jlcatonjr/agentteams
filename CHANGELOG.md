@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`SETUP-REQUIRED.md` lists every `{MANUAL:}` token the team emits; IM item 13b, G-17-3)
+
+- **For every team, on generate, `--update` and `--check`.** The checklist was built only from the brief-derived
+  `manual_required_placeholders`, so tokens written literally in templates were never listed. On dev, every example
+  emitted `{MANUAL:PROJECT_REDTEAM_NOTES}`, `{MANUAL:ADJACENT_REPO_PATH}` and `{MANUAL:ADJACENT_REPO_AGENTS_PATH}`
+  without listing them. The new `placeholder_scan` builds the list from the emitted text, and the emit summary counts
+  them.
+- **One rule for every scanner.** The `--post-audit` check and `--enrich`'s `scan_defaults` skipped tokens in inline
+  code, and the adjacent-repos placeholders are written in inline code. Now the only names skipped are the
+  instructional `TOKEN`, `UPPER_SNAKE_CASE` and `PLACEHOLDER_NAME`. A test pins where those may appear, and every
+  other name a template writes must be listed in `PLACEHOLDER-CONVENTIONS.md`.
+- **Official docs URLs for well-known tools.** Reference docs for git, gh, PostgreSQL, Python, Docker, Terraform and
+  GNU make no longer ship `{MANUAL:TOOL_DOCS_URL}`. These are vendor or project pages, applied only to tools a brief
+  names, never matched by Python import name.
+- **Unchanged:** how `SETUP-REQUIRED.md` is written. `--check` stays read-only; on `--update` an appended operator
+  note survives, and an edit inside the generated list is replaced, as before. Nothing is refused for open
+  placeholders.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub

@@ -49,7 +49,7 @@ You locate, verify, and structure **official documentation URLs, API surfaces, a
 
 The following tools are missing one or more of `docs_url`, `api_surface`, or `common_patterns`:
 
-- **PostgreSQL** (reference doc `references/ref-postgresql-reference.md`) — missing: docs URL, API surface, usage patterns
+- **PostgreSQL** (reference doc `references/ref-postgresql-reference.md`) — missing: API surface, usage patterns
 - **FastAPI** (reference file `references/ref-fastapi-reference.md`) — missing: API surface, usage patterns
 - **SQLAlchemy** (reference file `references/ref-sqlalchemy-reference.md`) — missing: API surface, usage patterns
 

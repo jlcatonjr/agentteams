@@ -77,9 +77,6 @@ _CONDITIONAL_ARCHETYPES: frozenset[str] = frozenset({
 #: Regex: unresolved auto-placeholder token {UPPER_SNAKE_CASE}
 _UNRESOLVED_AUTO_RE = re.compile(r"\{([A-Z][A-Z0-9_]{2,})\}")
 
-#: Regex: unresolved manual placeholder token {MANUAL:NAME}
-_UNRESOLVED_MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
-
 #: Tokens that look like placeholders but are intentionally literal in generated docs
 _SAFE_TOKENS: frozenset[str] = frozenset({
     "TRUE", "FALSE", "NULL", "NONE", "TODO", "FIXME", "NOTE",
@@ -336,32 +333,22 @@ def _check_unresolved_manual_placeholders(
 ) -> list[AuditFinding]:
     """Flag unresolved {MANUAL:*} tokens remaining in generated files.
 
-    Tokens inside backtick spans (inline code) and fenced code blocks are
-    treated as instructional text rather than unresolved placeholders, and
-    are skipped.
+    Uses ``placeholder_scan.scan_manual_tokens``, the rule the checklist is built with (IM item 13b): instructional
+    names are skipped by name. Backticked tokens are no longer skipped, since real placeholders are written in inline
+    code (``adjacent-repos.md``).
     """
-    findings: list[AuditFinding] = []
-    for rel_path, content in file_map.items():
-        if "SETUP-REQUIRED" in rel_path:
-            continue
-        # Strip inline code spans and fenced code blocks before scanning so
-        # instructional examples like `{MANUAL:FOO}` are not flagged.
-        content_no_code = re.sub(r"```.*?```", "", content, flags=re.DOTALL)
-        content_no_code = re.sub(r"`[^`\n]+`", "", content_no_code)
-        seen_in_file: set[str] = set()
-        for match in _UNRESOLVED_MANUAL_RE.finditer(content_no_code):
-            token = match.group(1)
-            if token in seen_in_file:
-                continue
-            seen_in_file.add(token)
-            findings.append(AuditFinding(
-                category="CONFLICT",
-                code="UNRESOLVED_MANUAL_PLACEHOLDER",
-                severity="warning",
-                file=rel_path,
-                description=f"Unresolved manual placeholder: {{MANUAL:{token}}}",
-            ))
-    return findings
+    from agentteams.placeholder_scan import scan_manual_tokens
+
+    return [
+        AuditFinding(
+            category="CONFLICT",
+            code="UNRESOLVED_MANUAL_PLACEHOLDER",
+            severity="warning",
+            file=item["agent_file"],
+            description=f"Unresolved manual placeholder: {{MANUAL:{item['placeholder']}}}",
+        )
+        for item in scan_manual_tokens(file_map.items())
+    ]
 
 
 def _check_yaml_front_matter(

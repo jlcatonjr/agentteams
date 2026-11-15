@@ -284,7 +284,10 @@ def _build_final_rendered(
         "references/pipeline-handoffs.svg",
         _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
     ))
-    return final
+    # IM item 13b (G-17-3): the checklist lists every {MANUAL:} token in the emitted text, not only the brief's.
+    from agentteams.placeholder_scan import complete_setup_required
+
+    return complete_setup_required(manifest, final)
 
 
 def twin_sources(manifest: dict[str, Any], adapter: Any, output_dir: Path | None = None) -> dict[str, Any]:

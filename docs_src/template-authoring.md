@@ -37,7 +37,11 @@ Filled automatically by the rendering engine from the project description and ma
 
 ### Manual-Required: `{MANUAL:UPPER_SNAKE_CASE}`
 
-Cannot be auto-resolved. Collected into `SETUP-REQUIRED.md` for the user to fill in.
+Cannot be auto-resolved. Collected into `SETUP-REQUIRED.md` for the user to fill in. The checklist is built from the
+emitted text ([`placeholder_scan`](api-reference/placeholder-scan.md)), so a token you write literally in a template is
+listed too, inline code included. A new `{MANUAL:X}` name must be listed in `templates/PLACEHOLDER-CONVENTIONS.md`, or,
+if it only explains placeholders, added to `placeholder_scan.INSTRUCTIONAL_TOKENS`. A test fails until you do one or
+the other.
 
 ```
 {MANUAL:REFERENCE_DB_PATH}     → path to bibliography database

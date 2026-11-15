@@ -97,6 +97,9 @@ def _merge_known_tool_metadata(tool: dict[str, Any]) -> dict[str, Any]:
     for field in ("docs_url", "api_surface", "common_patterns"):
         if not merged.get(field) and defaults.get(field):
             merged[field] = defaults[field]
+    # IM item 13b: official docs for git, gh, PostgreSQL, … (tools a brief names, never import names)
+    if not merged.get("docs_url") and (url := tool_metadata_catalog.well_known_docs_url(tool.get("name", ""))):
+        merged["docs_url"] = url
     return merged
 
 
