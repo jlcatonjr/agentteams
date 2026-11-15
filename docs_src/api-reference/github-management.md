@@ -32,3 +32,4 @@ authorization (`agentteams/cli/dev_merge.py`; see the CLI reference).
 | `section_body(description)` | The section text for this brief (the rules, or the off notice). |
 | `placeholders(description)` | `{"GITHUB_MANAGEMENT_RULE": section_body(description)}` plus the three approval rows (`""` when off). |
 | `update_notice(rendered, output_dir)` | The one-line notice `--update` prints the first time a render delivers the approval rules, else `None`. |
+| `print_update_notice(rendered, output_dir)` | Print `update_notice`'s line when there is one (called by `--update --merge`). |

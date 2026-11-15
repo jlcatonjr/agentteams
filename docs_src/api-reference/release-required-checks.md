@@ -20,7 +20,8 @@ python -m agentteams.release_required_checks --restore <backup file> --apply <fi
   token cannot read branch protection (no admin rights).
 - **Apply exactly what was shown.** `--apply` takes the dry run's fingerprint (PR head, current and proposed sets,
   `strict`) and refuses if any moved. It saves a backup under `~/.local/state/agentteams/branch-protection/` and
-  verifies the result. `--restore` takes only such a backup, shows it, and applies it only with its own fingerprint.
+  verifies the result. `--restore` takes only such a backup, refuses one whose branch is not the repository's
+  default branch, shows it, and applies it only with its own fingerprint.
 - **Approval.** An agent runs `--apply` only after the operator approves that fingerprint live and `@security` records
   `release-required-checks:<fingerprint>` (the instruction file's GitHub management section; brief
   `github_management`).
