@@ -19,8 +19,8 @@ provider's settings. Where a provider has no setting for a value, the run says s
 
 The neutral levels are `low`, `medium`, `high`, `xhigh` and `max`. Each one maps to the provider's level of the same
 name, so "medium" is each provider's own medium, not the same amount of reasoning everywhere. To use a level only one
-provider offers, give an object: `{"default": "high", "codex": "ultra"}`. A level a provider cannot take is refused
-when the team is generated.
+provider offers, give an object: `{"default": "high", "codex": "ultra"}`. In an object, `copilot` names both Copilot
+surfaces, and a surface's own key beats it. A level a provider cannot take is refused when the team is generated.
 
 | Framework | Where effort is written | Levels |
 |---|---|---|
@@ -44,7 +44,9 @@ base URL or a profile. Endpoint routing stays in session configuration, so a bri
 elsewhere. With no model set, each adapter keeps its default: for Claude, `claude-fable-5-2` for the orchestrator and
 `opus` for every other agent.
 
-Claude and both Copilot surfaces write a configured model per agent. Codex, Goose and Grok report a configured model
+Claude and both Copilot surfaces write a configured model per agent. Both Copilot surfaces write it as a one-item list
+(`model: ["…"]`), the form the template default already uses. They share `.github/agents`, so the surface rendered
+last decides the files; only the VS Code render adds `reasoning-effort:`. Codex, Goose and Grok report a configured model
 instead of writing it: Codex and Grok for the reasons in the effort table, and Goose because a recipe model would
 need a provider from the brief. Goose's model stays in its session configuration (`--goose-model`).
 
@@ -53,7 +55,9 @@ with no `effort:` line.
 
 ## Precedence
 
-On a fresh render: the agent's `agents.<slug>` entry, then its role, then the default.
+On a render: the agent's `agents.<slug>` entry, then its role, then the default. An `agents.<slug>` effort covers
+only the providers it names (`{"codex": "ultra"}` leaves Claude at the role's level). A source file's own `effort:`
+line is kept unless the brief sets that agent's effort.
 
 On `--update --merge`:
 
@@ -64,14 +68,16 @@ On `--update --merge`:
   adopt it, add it by hand or run `--update --overwrite` with an `@security` clearance (operator ruling,
   2026-11-15).
 
-A per-agent entry that lowers the effort of `@security`, `@adversarial`, `@conflict-auditor` or `@code-hygiene`, or
-gives one of them its own model, is shown as a warning.
+`@security`, `@adversarial`, `@conflict-auditor` and `@code-hygiene` are review-critical. A warning is shown when one
+of them runs below the default effort, whether through its own entry or a lower subagent role, or has its own model.
+The run summary and `doctor` both show it.
 
 ## Flags
 
 `--orchestrator-model [PROVIDER=]MODEL`, `--orchestrator-effort LEVEL`, `--subagent-model [PROVIDER=]MODEL` and
 `--subagent-effort LEVEL` override the brief **for one run**. Each may be repeated, once per provider, and
-`PROVIDER=LEVEL` sets one provider's own level. Values are not kept. The build log is generated data and is never read
+`PROVIDER=LEVEL` sets one provider's own level. A flag wins over every brief value it covers: a bare effort replaces
+the role's whole effort setting, and `copilot=` replaces both Copilot surfaces' entries. Values are not kept. The build log is generated data and is never read
 back as a setting. The run names each flag value and says to put it in the brief to keep it.
 
 ## Checking it
@@ -84,18 +90,22 @@ value not written, and counts the Claude agent files that set no `effort:`. Two 
 - `CLAUDE_CODE_EFFORT_LEVEL` in the caller's environment outranks every file agentteams writes. `confine-run.sh`
   drops it unless `--env-allow` names it.
 
-Per-agent `effort:` and `model:` lines live in the repository, so they hold under any HOME directory. The project
-`effortLevel` is read from the session's primary working directory.
+**A separate HOME (#508 requirement 6) is covered for agent files only.** Per-agent `effort:` and `model:` lines (Claude,
+VS Code Copilot) live in the repository, so they hold under any HOME. The main Claude session's level comes from
+`effortLevel`, which agentteams writes only into the inert `settings.hooks.example.json`. A main session that is not
+started as the orchestrator agent runs at its own level until an operator merges that key into `.claude/settings.json`
+(IM's live-settings script owns that step). Project settings are read from the session's primary working directory.
+Copilot CLI, Codex and Goose get no effort under any HOME.
 
 ## API
 
 | Function | Purpose |
 |---|---|
 | `parse(description)` | Normalise the brief block (an absent block means every default); raises `AgentRuntimeError` |
-| `to_manifest(rt)` / `from_manifest(manifest)` | The manifest record (`manifest["agent_runtime"]`, carried only when the brief has the block) |
+| `to_manifest(rt)` / `from_manifest(manifest)` | The manifest record (`manifest["agent_runtime"]`, carried only when the brief has the block); `from_manifest` re-validates every value and refuses a malformed record |
 | `effort_for(rt, slug, framework)` | The level to write, or None where the framework writes none |
 | `model_for(rt, slug, framework)` | The configured model, or None (the adapter default) |
-| `explicit_effort(rt, slug)` | Whether the brief set this agent's effort itself |
+| `explicit_effort(rt, slug, framework)` | Whether the brief set this agent's effort on this framework itself (used at render, not by `--update`) |
 | `session_effort(rt, framework)` | Claude's `effortLevel` (None for `max`) |
 | `report_lines(rt, framework, slugs)` | One line per value not written, and per governance warning |
-| `effective_table(rt, frameworks)` | `doctor`'s rows |
+| `print_report(manifest, framework)` | Print `report_lines` to stderr (called by the run summary) |

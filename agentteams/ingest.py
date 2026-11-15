@@ -833,6 +833,13 @@ def validate(description: dict[str, Any]) -> list[str]:
         if isinstance(tool, dict):
             errors.extend(version_source_errors(tool))
 
+    from agentteams.agent_runtime import AgentRuntimeError, parse as _parse_agent_runtime  # #508
+
+    try:
+        _parse_agent_runtime(description)
+    except AgentRuntimeError as exc:
+        errors.append(str(exc))
+
     return errors
 
 

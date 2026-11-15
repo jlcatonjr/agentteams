@@ -24,7 +24,7 @@ from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
-from agentteams.cli import security_gate
+from agentteams.cli import agent_runtime_switch, security_gate
 from agentteams.wasm_config import WASM_SUBSTRATE_CLI_KEY  # P20 --wasm-substrate (transient; validated in finalize)
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
@@ -153,23 +153,10 @@ def _run_generate_inner(
         else frozenset()
     )
 
-    # #508: --orchestrator-*/--subagent-* override the brief's agent_runtime for this run only.
-    from agentteams import agent_runtime as _agent_runtime
-    from agentteams.cli.agent_runtime_switch import apply_to_description as _apply_runtime_flags
-
-    try:
-        runtime_flag_notices = _apply_runtime_flags(description, args)
-        _agent_runtime.parse(description)
-    except _agent_runtime.AgentRuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    for line in runtime_flag_notices:
-        print(f"  !  {line}", file=sys.stderr)
-
     # -----------------------------------------------------------------------
     # Step 2: Validate
     # -----------------------------------------------------------------------
-    errors = ingest.validate(description)
+    errors = agent_runtime_switch.apply_flags(description, args) + ingest.validate(description)  # #508 flags
     if errors:
         print("Validation errors:", file=sys.stderr)
         for err in errors:

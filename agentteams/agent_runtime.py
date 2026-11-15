@@ -20,9 +20,10 @@ agent's (the "subagents") model and effort. Per-agent overrides go under ``agent
   1.2 defaults.
 * **The orchestrator** is ``write_policy.ORCHESTRATOR_SLUGS``.
 
-Precedence on a fresh render: ``agents.<slug>`` → the role → the default. On ``--update`` the front-matter merge keeps
-an existing hand value unless the brief sets that role or slug explicitly (:func:`explicit_effort`), and reports every
-change. ``model`` stays a capability key there (report-only; operator ruling 2026-11-15).
+Precedence on a render: ``agents.<slug>`` (for the providers it names; any other provider falls through) → the role →
+the default. A source file's own ``effort:`` is kept unless the brief sets that agent's effort (:func:`explicit_effort`).
+On ``--update``/``--merge`` the ordinary three-way front-matter merge decides: a hand-edited value is kept and
+reported. ``model`` stays a capability key there (report-only; operator ruling 2026-11-15).
 
 Where a provider has no per-agent surface for a value, :func:`report_lines` says so: nothing is dropped silently at
 render. Two things a render cannot see are named in :data:`RUNTIME_CAVEATS`.
@@ -64,6 +65,14 @@ _KNOWN_PROVIDER_LEVELS: dict[str, tuple[str, ...]] = {
     "codex": ("low", "medium", "high", "xhigh", "max", "ultra"),
 }
 
+#: A Claude Code ``model:`` value: an alias or model id, optionally with ``[1m]``. The one copy
+#: (``_claude_model.is_claude_model_value`` imports it).
+CLAUDE_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[1m\])?$")
+#: A front-matter ``effort:`` line (Claude); ``doctor`` and the Claude adapter share it.
+EFFORT_LINE_RE = re.compile(r"^effort\s*:\s*(\S+)\s*$", re.MULTILINE)
+#: The brief's family key for both Copilot surfaces, in a model or an effort object.
+_COPILOT_FAMILY = ("copilot-vscode", "copilot-cli")
+
 #: Model keys the brief may use, and the frameworks each one covers.
 MODEL_PROVIDERS: dict[str, tuple[str, ...]] = {
     "claude": ("claude",),
@@ -76,7 +85,7 @@ MODEL_PROVIDERS: dict[str, tuple[str, ...]] = {
 }
 _MODEL_GRAMMAR: dict[str, re.Pattern[str]] = {
     # Claude: an alias or model id, optionally `[1m]` (the same rule as _claude_model.is_claude_model_value).
-    "claude": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[1m\])?$"),
+    "claude": CLAUDE_MODEL_RE,
     # Copilot: a picker display name such as `Claude Opus 4.8 (copilot)`: printable, no quotes, brackets or commas.
     "copilot": re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,99}$"),
     # Codex / Goose / Grok: one token. No `/` (a provider path) and no whitespace.
@@ -85,8 +94,9 @@ _MODEL_GRAMMAR: dict[str, re.Pattern[str]] = {
 #: Frameworks that write a configured model per agent today. Others report it.
 MODEL_WRITTEN: frozenset[str] = frozenset({"claude", "copilot-vscode", "copilot-cli"})
 
-#: Governance agents whose effort a per-agent override should not quietly lower (the #508 plan, A7).
-GOVERNANCE_SLUGS: frozenset[str] = frozenset({"security", "adversarial", "conflict-auditor", "code-hygiene"})
+#: Review-critical governance agents: lowering their effort below the default, or giving them their own model, is
+#: warned (the #508 plan, A7; @security condition 2026-11-15). Not ``analyze.GOVERNANCE_AGENTS`` (the whole tier).
+REVIEW_CRITICAL_SLUGS: frozenset[str] = frozenset({"security", "adversarial", "conflict-auditor", "code-hygiene"})
 
 #: What a render cannot see, stated by ``doctor``.
 RUNTIME_CAVEATS: tuple[str, ...] = (
@@ -129,10 +139,14 @@ class AgentRuntime:
     agents: dict[str, RoleSetting]
 
 
-def _effort_map(value: object, where: str) -> tuple[dict[str, str], bool]:
-    """Return ``{"default"|framework: level}`` from a string or object effort value, and whether it was set."""
+def _effort_map(value: object, where: str, *, role: bool = True) -> tuple[dict[str, str], bool]:
+    """Return ``{"default"|framework: level}`` from a string or object effort value, and whether it was set.
+
+    A role gets ``default`` (``medium``) when the object omits it; a per-agent override (``role=False``) does not, so a
+    provider it does not name falls through to the role. ``copilot`` names both Copilot surfaces.
+    """
     if value is None:
-        return {"default": DEFAULT_EFFORT}, False
+        return ({"default": DEFAULT_EFFORT} if role else {}), False
     if isinstance(value, str):
         if value not in NEUTRAL_EFFORTS:
             raise AgentRuntimeError(f"{where}.effort {value!r} is not one of {', '.join(NEUTRAL_EFFORTS)} "
@@ -141,15 +155,17 @@ def _effort_map(value: object, where: str) -> tuple[dict[str, str], bool]:
     if not isinstance(value, dict) or not value:
         raise AgentRuntimeError(f"{where}.effort must be a level or a non-empty object of provider levels")
     out: dict[str, str] = {}
-    for key, level in value.items():
-        if key != "default" and key not in PROVIDER_EFFORTS:
+    for key, level in sorted(value.items(), key=lambda kv: kv[0] != "copilot"):  # the family key first, then specifics
+        if key != "default" and key != "copilot" and key not in PROVIDER_EFFORTS:
             raise AgentRuntimeError(f"{where}.effort names unknown provider {key!r}")
         if not isinstance(level, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", level):
             raise AgentRuntimeError(f"{where}.effort.{key} must be a lowercase level name")
         if key == "default" and level not in NEUTRAL_EFFORTS:
             raise AgentRuntimeError(f"{where}.effort.default {level!r} is not one of {', '.join(NEUTRAL_EFFORTS)}")
-        out[key] = level
-    out.setdefault("default", DEFAULT_EFFORT)
+        for fw in (_COPILOT_FAMILY if key == "copilot" else (key,)):
+            out[fw] = level
+    if role:
+        out.setdefault("default", DEFAULT_EFFORT)
     for key, level in out.items():
         if key != "default":
             check_effort(key, level, where=f"{where}.effort.{key}")
@@ -239,7 +255,7 @@ def parse(description: dict[str, Any]) -> AgentRuntime:
         where = f"agent_runtime.agents.{slug}"
         if not isinstance(value, dict) or set(value) - {"effort", "model"}:
             raise AgentRuntimeError(f"{where} must be an object with only 'effort' and 'model'")
-        effort, explicit = _effort_map(value.get("effort"), where) if "effort" in value else ({}, False)
+        effort, explicit = _effort_map(value.get("effort"), where, role=False)
         agents[slug] = RoleSetting(effort=effort, model=_model_map(value.get("model"), where), effort_explicit=explicit)
     return AgentRuntime(roles=roles, agents=agents)
 
@@ -266,6 +282,9 @@ def to_manifest(runtime: AgentRuntime) -> dict[str, Any]:
 def from_manifest(manifest: dict[str, Any]) -> AgentRuntime:
     """Rebuild the :class:`AgentRuntime` a manifest carries (every default when it carries none).
 
+    Every value is validated again (the grammar and level checks :func:`parse` applies), so a manifest that did not come
+    from :func:`to_manifest` cannot pass an unchecked value into a generated file.
+
     Args:
         manifest: The team manifest.
 
@@ -273,23 +292,34 @@ def from_manifest(manifest: dict[str, Any]) -> AgentRuntime:
         The runtime.
 
     Raises:
-        Nothing: a missing or malformed record falls back to the defaults (the manifest was validated upstream).
+        AgentRuntimeError: The record is present but malformed, or a value fails its check.
     """
     rec = manifest.get("agent_runtime")
-    if not isinstance(rec, dict):
+    if rec is None:
         return parse({})
+    if not isinstance(rec, dict) or set(rec) - {"roles", "agents"}:
+        raise AgentRuntimeError("manifest agent_runtime is malformed")
 
-    def one(d: object, default_effort: bool) -> RoleSetting:
-        d = d if isinstance(d, dict) else {}
-        effort = d.get("effort") if isinstance(d.get("effort"), dict) else ({"default": DEFAULT_EFFORT}
-                                                                           if default_effort else {})
-        model = d.get("model") if isinstance(d.get("model"), dict) else {}
-        return RoleSetting(effort=dict(effort), model=dict(model), effort_explicit=bool(d.get("effort_explicit")))
+    def one(d: object, where: str, role: bool) -> RoleSetting:
+        if not isinstance(d, dict) or set(d) - {"effort", "model", "effort_explicit"}:
+            raise AgentRuntimeError(f"manifest {where} is malformed")
+        effort, model = d.get("effort") or {}, d.get("model") or {}
+        if not isinstance(effort, dict) or not isinstance(model, dict):
+            raise AgentRuntimeError(f"manifest {where} is malformed")
+        if effort:
+            _effort_map(effort, where, role=role)          # raises on a bad level
+        elif role:
+            effort = {"default": DEFAULT_EFFORT}
+        for fw, value in model.items():
+            key = "claude" if fw == "claude" else "copilot" if fw.startswith("copilot") else fw
+            _model_map({key: value}, where)                # raises on a bad provider or model
+        return RoleSetting(effort=dict(effort), model=dict(model), effort_explicit=d.get("effort_explicit") is True)
 
-    roles = rec.get("roles") if isinstance(rec.get("roles"), dict) else {}
-    agents = rec.get("agents") if isinstance(rec.get("agents"), dict) else {}
-    return AgentRuntime(roles={r: one(roles.get(r), True) for r in ROLES},
-                        agents={str(k): one(v, False) for k, v in agents.items()})
+    roles, agents = rec.get("roles", {}), rec.get("agents", {})
+    if not isinstance(roles, dict) or not isinstance(agents, dict):
+        raise AgentRuntimeError("manifest agent_runtime is malformed")
+    return AgentRuntime(roles={r: one(roles.get(r, {}), f"agent_runtime.{r}", True) for r in ROLES},
+                        agents={str(k): one(v, f"agent_runtime.agents.{k}", False) for k, v in agents.items()})
 
 
 def role_of(slug: str) -> str:
@@ -330,28 +360,32 @@ def effort_for(runtime: AgentRuntime, slug: str, framework: str) -> str | None:
     if PROVIDER_EFFORTS.get(framework) is None:
         return None
     override = runtime.agents.get(slug)
-    level = (_pick(override.effort, framework) if override and override.effort else None) \
+    level = (_pick(override.effort, framework) if override is not None else None) \
         or _pick(runtime.roles[role_of(slug)].effort, framework)
     if level is not None:
         check_effort(framework, level, where=f"effort for {slug}")
     return level
 
 
-def explicit_effort(runtime: AgentRuntime, slug: str) -> bool:
-    """Whether the brief set *slug*'s effort itself (its override or its role), not the default.
+def explicit_effort(runtime: AgentRuntime, slug: str, framework: str = "claude") -> bool:
+    """Whether the brief set *slug*'s effort on *framework* itself (its override or its role), not the default.
+
+    Used at render: a source file's own ``effort:`` line gives way only to an explicit setting. (``--update`` does not
+    use this; the three-way front-matter merge decides there.)
 
     Args:
         runtime: The parsed block.
         slug: The agent slug.
+        framework: The framework id.
 
     Returns:
-        True when an existing hand value should give way on ``--update``.
+        True when the brief sets this agent's effort for this framework.
 
     Raises:
         Nothing.
     """
     override = runtime.agents.get(slug)
-    if override is not None and override.effort_explicit:
+    if override is not None and _pick(override.effort, framework) is not None:
         return True
     return runtime.roles[role_of(slug)].effort_explicit
 
@@ -434,57 +468,44 @@ def report_lines(runtime: AgentRuntime, framework: str, slugs: list[str] | None 
                "codex": "Codex's model key waits for a live codex-cli rehearsal (operator ruling 2026-11-15)",
                "grok": "Grok's model key is not in xAI's docs (operator ruling 2026-11-15)"}.get(framework, "")
         lines.append(f"agent runtime: the configured {framework} model is not written: {why}.")
-    if slugs and PROVIDER_EFFORTS.get(framework) is not None:
-        for slug in sorted(GOVERNANCE_SLUGS & set(slugs)):
+    if slugs:
+        floor = NEUTRAL_EFFORTS.index(DEFAULT_EFFORT)
+        for slug in sorted(REVIEW_CRITICAL_SLUGS & set(slugs)):
+            if PROVIDER_EFFORTS.get(framework) is not None:
+                level = effort_for(runtime, slug, framework)
+                if level in NEUTRAL_EFFORTS and NEUTRAL_EFFORTS.index(level) < floor:
+                    lines.append(f"agent runtime: WARNING: @{slug} (review-critical governance) runs at effort {level}, "
+                                 f"below the default {DEFAULT_EFFORT}.")
             override = runtime.agents.get(slug)
-            if override is None:
-                continue
-            role_level = _pick(runtime.roles["subagents"].effort, framework)
-            level = _pick(override.effort, framework) if override.effort else role_level
-            if (level in NEUTRAL_EFFORTS and role_level in NEUTRAL_EFFORTS
-                    and NEUTRAL_EFFORTS.index(level) < NEUTRAL_EFFORTS.index(role_level)):
-                lines.append(f"agent runtime: WARNING: @{slug} (governance) is lowered to effort {level} below the "
-                             f"subagent level {role_level}.")
-            if framework in override.model:
-                lines.append(f"agent runtime: WARNING: @{slug} (governance) has its own model "
+            if framework in MODEL_WRITTEN and override is not None and framework in override.model:
+                lines.append(f"agent runtime: WARNING: @{slug} (review-critical governance) has its own model "
                              f"{override.model[framework]!r}.")
     return lines
 
 
-def effective_table(runtime: AgentRuntime, frameworks: list[str]) -> list[tuple[str, str, str, str]]:
-    """Return ``(framework, role, model, effort)`` rows for ``doctor`` (``-`` where nothing is written).
+def print_report(manifest: dict[str, Any], framework: str) -> None:
+    """Print :func:`report_lines` for a render to stderr (``emit.print_summary`` calls it).
 
     Args:
-        runtime: The parsed block.
-        frameworks: Framework ids.
+        manifest: The team manifest.
+        framework: The framework id.
 
     Returns:
-        One row per framework and role.
+        None.
 
     Raises:
-        Nothing.
+        AgentRuntimeError: The manifest record is malformed.
     """
-    from agentteams.frameworks._claude_model import CLAUDE_AGENT_MODEL_DEFAULT, CLAUDE_ORCHESTRATOR_MODEL_DEFAULT
+    import sys
 
-    rows: list[tuple[str, str, str, str]] = []
-    for fw in frameworks:
-        for role, probe in (("orchestrator", "orchestrator"), ("subagents", "__subagent__")):
-            model = model_for(runtime, probe, fw) if fw in MODEL_WRITTEN else None
-            if model is None and fw == "claude":
-                model = CLAUDE_ORCHESTRATOR_MODEL_DEFAULT if role == "orchestrator" else CLAUDE_AGENT_MODEL_DEFAULT
-            elif model is None and fw in MODEL_WRITTEN:
-                model = "(the agent file's own)"
-            try:
-                effort = effort_for(runtime, probe, fw)
-            except AgentRuntimeError as exc:
-                effort = f"refused ({exc})"
-            rows.append((fw, role, model or "-", effort or "-"))
-    return rows
+    for line in report_lines(from_manifest(manifest), framework, list(manifest.get("agent_slug_list") or [])):
+        print(f"  !  {line}", file=sys.stderr)
 
 
 __all__ = [
-    "AgentRuntime", "AgentRuntimeError", "CLAUDE_SESSION_EFFORTS", "DEFAULT_EFFORT", "GOVERNANCE_SLUGS",
-    "MODEL_PROVIDERS", "MODEL_WRITTEN", "NEUTRAL_EFFORTS", "PROVIDER_EFFORTS", "ROLES", "RUNTIME_CAVEATS",
-    "RoleSetting", "check_effort", "effective_table", "effort_for", "explicit_effort", "from_manifest",
-    "model_for", "parse", "report_lines", "role_of", "session_effort", "to_manifest",
+    "AgentRuntime", "AgentRuntimeError", "CLAUDE_MODEL_RE", "CLAUDE_SESSION_EFFORTS", "DEFAULT_EFFORT",
+    "EFFORT_LINE_RE", "MODEL_PROVIDERS", "MODEL_WRITTEN", "NEUTRAL_EFFORTS", "PROVIDER_EFFORTS",
+    "REVIEW_CRITICAL_SLUGS", "ROLES", "RUNTIME_CAVEATS", "RoleSetting", "check_effort", "effort_for",
+    "explicit_effort", "from_manifest", "model_for", "parse", "print_report", "report_lines", "role_of",
+    "session_effort", "to_manifest",
 ]

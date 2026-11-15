@@ -30,6 +30,9 @@ def add_agent_runtime_arguments(parser: argparse.ArgumentParser) -> None:
 
     Returns:
         None.
+
+    Raises:
+        Nothing.
     """
     model_help = ("[PROVIDER=]MODEL: the {role} model for this run, overriding the brief's agent_runtime.{key}.model "
                   "(PROVIDER is claude (the default), copilot, copilot-vscode, copilot-cli, codex, goose or grok; a "
@@ -65,44 +68,63 @@ def apply_to_description(description: dict[str, Any], args: argparse.Namespace) 
         Notice lines naming each flag-set value (empty when no flag was given).
 
     Raises:
-        agentteams.agent_runtime.AgentRuntimeError: A flag value the block validation refuses.
+        Nothing: the merged block is validated afterwards by ``ingest.validate`` (which reports a bad flag value as a
+        validation error, before anything renders).
     """
-    from agentteams import agent_runtime as _ar
-
     given = [(dest, role, field, v) for dest, role, field in _FLAGS for v in (getattr(args, dest, None) or [])]
     if not given:
         return []
     block = copy.deepcopy(description.get("agent_runtime") or {})
     if not isinstance(block, dict):
-        raise _ar.AgentRuntimeError("agent_runtime must be an object")
+        return []  # ingest.validate reports the malformed block
     notices: list[str] = []
     for dest, role, field, raw in given:
         provider, value = _split(raw)
         entry = block.setdefault(role, {})
+        if not isinstance(entry, dict):
+            return []  # ingest.validate reports the malformed role
+        current = entry.get(field)
         if field == "model":
-            current = entry.get("model")
+            # The flag wins for every surface it names: `copilot=` replaces both Copilot surfaces' entries.
             models = dict(current) if isinstance(current, dict) else ({"claude": current} if current else {})
-            models[provider or "claude"] = value
+            key = provider or "claude"
+            for covered in (("copilot", "copilot-vscode", "copilot-cli") if key == "copilot" else (key,)):
+                models.pop(covered, None)
+            models[key] = value
             entry["model"] = models
+        elif provider is None:
+            entry["effort"] = value          # a bare level replaces every provider level the brief set
         else:
-            current = entry.get("effort")
-            if provider is None:
-                if isinstance(current, dict):
-                    current = dict(current)
-                    current["default"] = value
-                    entry["effort"] = current
-                else:
-                    entry["effort"] = value
-            else:
-                efforts = dict(current) if isinstance(current, dict) else (
-                    {"default": current} if isinstance(current, str) else {})
-                efforts[provider] = value
-                entry["effort"] = efforts
+            efforts = dict(current) if isinstance(current, dict) else (
+                {"default": current} if isinstance(current, str) else {})
+            for covered in (("copilot", "copilot-vscode", "copilot-cli") if provider == "copilot" else (provider,)):
+                efforts.pop(covered, None)
+            efforts[provider] = value
+            entry["effort"] = efforts
         notices.append(f"--{dest.replace('_', '-')} {raw}")
     description["agent_runtime"] = block
-    _ar.parse(description)  # fail closed on a bad flag value before anything renders
     return [f"agent runtime: set for this run only by {', '.join(notices)}; not kept. Add it to the brief's "
             "agent_runtime to keep it across --update."]
 
 
-__all__ = ["add_agent_runtime_arguments", "apply_to_description"]
+def apply_flags(description: dict[str, Any], args: argparse.Namespace) -> list[str]:
+    """Apply the flags and print their one-run notice (``generate``'s one call, before ``ingest.validate``).
+
+    Args:
+        description: The loaded project brief (its ``agent_runtime`` may be replaced by a merged copy).
+        args: Parsed arguments.
+
+    Returns:
+        Validation errors to add (always empty: ``ingest.validate`` checks the merged block).
+
+    Raises:
+        Nothing.
+    """
+    import sys
+
+    for line in apply_to_description(description, args):
+        print(f"  !  {line}", file=sys.stderr)
+    return []
+
+
+__all__ = ["add_agent_runtime_arguments", "apply_flags", "apply_to_description"]

@@ -859,9 +859,6 @@ def _extract_name_description(
     return name, description
 
 
-_FRONT_MATTER_EFFORT_RE = re.compile(r"^effort\s*:\s*(\S+)\s*$", re.MULTILINE)
-
-
 def _claude_runtime(content: str, model: str | None, agent_slug: str,
                     manifest: dict[str, Any]) -> tuple[str | None, str | None]:
     """Apply the brief's ``agent_runtime`` (#508) to one Claude agent: its ``model:`` and ``effort:``.
@@ -889,8 +886,8 @@ def _claude_runtime(content: str, model: str | None, agent_slug: str,
         model = configured
     effort = _ar.effort_for(runtime, agent_slug, "claude")
     yaml_body, _ = _parse_yaml_front_matter(content)
-    source = _FRONT_MATTER_EFFORT_RE.search(yaml_body or "")
-    if source and not _ar.explicit_effort(runtime, agent_slug):
+    source = _ar.EFFORT_LINE_RE.search(yaml_body or "")
+    if source and not _ar.explicit_effort(runtime, agent_slug, "claude"):
         effort = source.group(1).strip("\"'")
     return model, effort
 

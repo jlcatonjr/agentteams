@@ -39,9 +39,9 @@ class CopilotVSCodeAdapter(FrameworkAdapter):
 
     def render_agent_file(self, content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
         """Validate and normalize YAML front matter for VS Code Copilot format, then apply ``agent_runtime``."""
-        return self.render_for(content, agent_slug, manifest, "copilot-vscode")
+        return self.render_for_surface(content, agent_slug, manifest, "copilot-vscode")
 
-    def render_for(self, content: str, agent_slug: str, manifest: dict[str, Any], framework: str) -> str:
+    def render_for_surface(self, content: str, agent_slug: str, manifest: dict[str, Any], framework: str) -> str:
         """Render the shared ``.agent.md`` shape for *framework* (``copilot-vscode`` or ``copilot-cli``).
 
         Args:
@@ -302,8 +302,9 @@ _REASONING_EFFORT_RE = re.compile(r"^reasoning-effort:\s*(\S+)\s*$", re.MULTILIN
 def _apply_agent_runtime(content: str, agent_slug: str, manifest: dict[str, Any], framework: str) -> str:
     """Apply the brief's ``agent_runtime`` (#508): a configured ``model:`` and, on VS Code, ``reasoning-effort:``.
 
-    A configured model replaces the ``model:`` line (VS Code as a one-item list, the CLI as a quoted string). A source
-    ``reasoning-effort:`` the brief does not set explicitly is kept.
+    A configured model replaces the ``model:`` line, as a one-item list on both surfaces (the form the template default
+    already uses, so a ``.github/agents`` file has one shape whichever Copilot surface rendered it last). A source
+    ``reasoning-effort:`` the brief does not set explicitly is kept. Only VS Code writes ``reasoning-effort:``.
     """
     from agentteams import agent_runtime as _ar
 
@@ -314,7 +315,7 @@ def _apply_agent_runtime(content: str, agent_slug: str, manifest: dict[str, Any]
     yaml_body = yaml_text.rstrip("\n")
     model = _ar.model_for(runtime, agent_slug, framework)
     if model is not None:
-        value = f'["{model}"]' if framework == "copilot-vscode" else f'"{model}"'
+        value = f'["{model}"]'
         if _MODEL_LINE_RE.search(yaml_body):
             yaml_body = _MODEL_LINE_RE.sub(lambda _m: f"model: {value}", yaml_body, count=1)
         else:
@@ -324,7 +325,7 @@ def _apply_agent_runtime(content: str, agent_slug: str, manifest: dict[str, Any]
         current = _REASONING_EFFORT_RE.search(yaml_body)
         if current is None:
             yaml_body += f"\nreasoning-effort: {effort}"
-        elif _ar.explicit_effort(runtime, agent_slug):
+        elif _ar.explicit_effort(runtime, agent_slug, framework):
             yaml_body = _REASONING_EFFORT_RE.sub(f"reasoning-effort: {effort}", yaml_body, count=1)
     if yaml_body == yaml_text.rstrip("\n"):
         return content

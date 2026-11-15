@@ -10,6 +10,7 @@ import json
 import re
 from typing import Any, TypeGuard
 
+from agentteams.agent_runtime import CLAUDE_MODEL_RE as _CLAUDE_MODEL_VALUE_RE
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 #: Default Claude Code ``model:`` for the orchestrator slugs (``write_policy.ORCHESTRATOR_SLUGS``).
@@ -42,10 +43,8 @@ def _session_comment(orchestrator_model: str, subagent_model: str, level: str | 
                      "session with --effort max, or rely on the orchestrator agent file's `effort: max`.")
     return tuple(lines)
 
-# A value Claude Code accepts as ``model:``: an alias (``opus``, ``inherit``), a model id
-# (``claude-opus-5-5``), optionally with a context suffix (``opus[1m]``). Copilot's display names
-# (``Claude Opus 4.8 (copilot)``) and list form (``["…"]``) do not match.
-_CLAUDE_MODEL_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[1m\])?$")
+# A value Claude Code accepts as ``model:`` (an alias, a model id, optionally ``[1m]``) is
+# ``agent_runtime.CLAUDE_MODEL_RE``, imported above. Copilot's display names and list form do not match.
 
 
 def is_claude_model_value(value: object) -> TypeGuard[str]:
@@ -141,7 +140,7 @@ def inject_session_model(example_text: str, manifest: dict[str, Any] | None = No
         raise ValueError(f"settings.hooks.example.json is not valid JSON; cannot add the session model: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("settings.hooks.example.json did not parse to a JSON object; cannot add the session model")
-    from agentteams import agent_runtime as _ar
+    from agentteams import agent_runtime as _ar  # stdlib-only module; one-way import
 
     runtime = _ar.from_manifest(manifest or {})
     orchestrator_model = runtime.roles["orchestrator"].model.get("claude", CLAUDE_ORCHESTRATOR_MODEL_DEFAULT)

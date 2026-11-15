@@ -73,7 +73,7 @@ class CopilotCLIAdapter(FrameworkAdapter):
         scoping — an unscoped full-content regex risks matching a body line that happens to start
         with the literal text "handoffs:".
         """
-        content = _vscode.render_for(content, agent_slug, manifest, "copilot-cli")
+        content = _vscode.render_for_surface(content, agent_slug, manifest, "copilot-cli")
         yaml_text, body_text = _parse_yaml_front_matter(content)
         if yaml_text is not None:
             stripped_yaml = _HANDOFF_SECTION_RE.sub("", yaml_text).rstrip("\n")

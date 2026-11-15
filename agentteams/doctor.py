@@ -20,6 +20,9 @@ the project's providers see the same rules, the same memory, and the same agents
   deleted in a commit, naming that commit and whether the team still governs. Governance ends once the deletion has
   reached the upstream and default branch (IM item 17) —
   :func:`agentteams.signing_switch.marker_deletion_commits`.
+* **Agent runtime** (INFO/WARN; an invalid brief block is a FAIL): the configured model and effort per framework
+  and role, every value a framework does not write, a review-critical agent run below the default effort, and the
+  Claude agent files on disk with no ``effort:`` (agentteams #508) — :mod:`agentteams.agent_runtime`.
 
 Exit code 1 when any FAIL is reported.
 
@@ -199,36 +202,76 @@ def _signing_governance(root: Path) -> tuple[list[str], int]:
     return lines, 0
 
 
-_SURFACE_DIRS: tuple[tuple[str, str], ...] = (
-    ("claude", ".claude/agents"), ("copilot-vscode", ".github/agents"), ("codex", ".codex/agents"),
-    ("goose", ".goose/recipes"), ("grok", ".grok/agents"),
-)
+def _runtime_frameworks(root: Path) -> list[tuple[str, Path]]:
+    """The frameworks generated here, each with its agents dir: the build log names it where a dir is shared."""
+    from agentteams.frameworks.registry import FRAMEWORK_IDS, agents_dir_for
+
+    found: dict[Path, list[str]] = {}
+    for fw in FRAMEWORK_IDS:
+        d = agents_dir_for(fw, root)
+        if d.is_dir() and d.resolve().is_relative_to(root):
+            found.setdefault(d, []).append(fw)
+    out: list[tuple[str, Path]] = []
+    for d, fws in found.items():
+        if len(fws) > 1:  # copilot-vscode and copilot-cli share .github/agents: the build log says which
+            try:
+                logged = json.loads((d / "references" / "build-log.json").read_text(encoding="utf-8")).get("framework")
+            except (OSError, ValueError):
+                logged = None
+            fws = [logged] if logged in fws else fws
+        out += [(fw, d) for fw in fws]
+    return out
+
+
+def _runtime_table(runtime: object, frameworks: list[str]) -> list[str]:
+    """The configured model and effort per framework and role (``agent_runtime``; presentation only)."""
+    from agentteams import agent_runtime as ar
+    from agentteams.frameworks._claude_model import default_claude_model
+
+    lines = []
+    for fw in frameworks:
+        for role, probe in (("orchestrator", "orchestrator"), ("subagents", "navigator")):
+            model = ar.model_for(runtime, probe, fw) if fw in ar.MODEL_WRITTEN else None
+            if model is None:
+                model = default_claude_model(probe) if fw == "claude" else (
+                    "(the agent file's own)" if fw in ar.MODEL_WRITTEN else "-")
+            try:
+                effort = ar.effort_for(runtime, probe, fw) or "-"
+            except ar.AgentRuntimeError as exc:
+                effort = f"refused ({exc})"
+            lines.append(f"  ℹ  configured {fw:<15} {role:<12} model {model:<26} effort {effort}")
+    return lines
 
 
 def _agent_runtime(root: Path, brief: dict) -> tuple[list[str], int]:
-    """The effective model and effort per role and provider (agentteams #508), and what is not written."""
+    """Model and effort per role and provider (agentteams #508): configured values, what is not written, what is on disk."""
     from agentteams import agent_runtime as ar
+    from agentteams.yaml_frontmatter import parse_yaml_front_matter
 
     try:
         runtime = ar.parse(brief)
     except ar.AgentRuntimeError as exc:
         return [f"  ✗  FAIL the brief's agent_runtime is invalid: {exc}"], 1
-    frameworks = [fw for fw, rel in _SURFACE_DIRS if (root / rel).is_dir()]
-    if not frameworks:
+    surfaces = _runtime_frameworks(root)
+    if not surfaces:
         return [], 0
-    lines = [f"  ℹ  {fw:<15} {role:<12} model {model:<28} effort {effort}"
-             for fw, role, model, effort in ar.effective_table(runtime, frameworks)]
-    for fw in frameworks:
-        lines += [f"  ℹ  {line}" for line in ar.report_lines(runtime, fw, None)]
-    claude_dir = root / ".claude" / "agents"
-    if claude_dir.is_dir():
-        missing = sorted(f.name for f in claude_dir.glob("*.md")
-                         if f.is_file() and f.read_text(encoding="utf-8", errors="ignore").startswith("---")
-                         and not re.search(r"^effort\s*:", f.read_text(encoding="utf-8", errors="ignore").split("\n---", 1)[0],
-                                           re.MULTILINE))
+    lines = _runtime_table(runtime, [fw for fw, _ in surfaces])
+    for fw, d in surfaces:
+        slugs = sorted(f.name.split(".")[0] for f in d.iterdir() if f.is_file() and not f.name.startswith("_"))
+        lines += [f"  {'!' if 'WARNING' in line else 'ℹ'}  {line}" for line in ar.report_lines(runtime, fw, slugs)]
+        if fw != "claude":
+            continue
+        missing = []
+        for f in sorted(d.glob("*.md")):
+            if f.is_symlink() or not f.resolve().is_relative_to(root):
+                continue  # never follow a link out of the project
+            yaml_body, _ = parse_yaml_front_matter(f.read_text(encoding="utf-8", errors="ignore"))
+            if yaml_body is not None and not ar.EFFORT_LINE_RE.search(yaml_body):
+                missing.append(f.name)
         if missing:
-            lines.append(f"  !  WARN {len(missing)} Claude agent file(s) set no effort: and run at the session level "
-                         f"(e.g. {', '.join(missing[:3])}); --update --merge adds it where the build log has a baseline, else reports it")
+            lines.append(f"  !  WARN {len(missing)} Claude agent file(s) on disk set no effort: and run at the session "
+                         f"level (e.g. {', '.join(missing[:3])}); --update --merge adds it where the build log has a "
+                         "baseline, else reports it")
     lines += [f"  ℹ  not checkable from files: {c}" for c in ar.RUNTIME_CAVEATS]
     return lines, 0
 

@@ -94,12 +94,35 @@ def test_a_configured_model_a_framework_does_not_write_is_reported():
         assert any("model is not written" in line for line in ar.report_lines(rt, fw))
 
 
-def test_lowering_a_governance_agent_is_warned():
-    rt = ar.parse({"agent_runtime": {"subagents": {"effort": "high"},
-                                     "agents": {"security": {"effort": "low", "model": "haiku"}}}})
+def test_a_review_critical_agent_below_the_default_is_warned_by_override_or_by_role():
+    rt = ar.parse({"agent_runtime": {"agents": {"security": {"effort": "low", "model": "haiku"}}}})
     lines = ar.report_lines(rt, "claude", ["security", "navigator"])
-    assert any("@security (governance) is lowered to effort low" in line for line in lines)
-    assert any("@security (governance) has its own model" in line for line in lines)
+    assert any("@security (review-critical governance) runs at effort low" in line for line in lines)
+    assert any("@security (review-critical governance) has its own model" in line for line in lines)
+    role_low = ar.parse({"agent_runtime": {"subagents": {"effort": "low"}}})  # @security condition 2026-11-15
+    lines = ar.report_lines(role_low, "claude", ["security", "adversarial", "navigator"])
+    assert sum("runs at effort low" in line for line in lines) == 2
+    assert not any("navigator" in line for line in lines)
+    assert not ar.report_lines(ar.parse({}), "claude", ["security"])
+
+
+def test_a_governance_model_is_warned_on_copilot_cli_too():
+    rt = ar.parse({"agent_runtime": {"agents": {"security": {"model": {"copilot": "GPT-5"}}}}})
+    assert any("has its own model" in line for line in ar.report_lines(rt, "copilot-cli", ["security"]))
+
+
+def test_a_per_agent_override_covers_only_the_providers_it_names():
+    rt = ar.parse({"agent_runtime": {"subagents": {"effort": "high"}, "agents": {"navigator": {"effort": {"codex": "ultra"}}}}})
+    assert ar.effort_for(rt, "navigator", "claude") == "high"
+    assert ar.effort_for(rt, "navigator", "copilot-vscode") == "high"
+    assert ar.explicit_effort(rt, "navigator", "claude")  # the role is explicit
+    rt = ar.parse({"agent_runtime": {"agents": {"navigator": {"effort": {"codex": "ultra"}}}}})
+    assert not ar.explicit_effort(rt, "navigator", "claude") and ar.effort_for(rt, "navigator", "claude") == "medium"
+
+
+def test_the_copilot_family_key_works_in_an_effort_object_and_a_specific_key_wins():
+    rt = ar.parse({"agent_runtime": {"subagents": {"effort": {"copilot-vscode": "low", "copilot": "high"}}}})
+    assert rt.roles["subagents"].effort["copilot-vscode"] == "low" and rt.roles["subagents"].effort["copilot-cli"] == "high"
 
 
 def test_orchestrator_max_is_not_a_session_setting_and_is_reported():
@@ -107,6 +130,15 @@ def test_orchestrator_max_is_not_a_session_setting_and_is_reported():
     assert ar.session_effort(rt, "claude") is None
     assert ar.effort_for(rt, "orchestrator", "claude") == "max"
     assert any("takes no max" in line for line in ar.report_lines(rt, "claude"))
+
+
+@pytest.mark.parametrize("record", [
+    "x", {"roles": [], "agents": {}}, {"roles": {"orchestrator": {"effort": {"claude": "ultra"}}}},
+    {"roles": {"subagents": {"model": {"codex": "openai/gpt-5"}}}}, {"extra": 1},
+])
+def test_a_malformed_or_unchecked_manifest_record_is_refused(record):
+    with pytest.raises(ar.AgentRuntimeError):
+        ar.from_manifest({"agent_runtime": record})
 
 
 def test_the_manifest_record_round_trips_and_a_missing_one_means_defaults():
@@ -138,7 +170,7 @@ def test_copilot_vscode_writes_reasoning_effort_and_the_cli_does_not():
     vs = CopilotVSCodeAdapter().render_agent_file(_COPILOT_SRC, "security", m)
     assert 'model: ["GPT-5 (copilot)"]' in vs and "reasoning-effort: high" in vs
     cli = CopilotCLIAdapter().render_agent_file(_COPILOT_SRC, "security", m)
-    assert 'model: "GPT-5 (copilot)"' in cli and "reasoning-effort" not in cli
+    assert 'model: ["GPT-5 (copilot)"]' in cli and "reasoning-effort" not in cli  # one model shape on both surfaces
 
 
 def test_copilot_without_a_configured_model_keeps_the_template_model():
@@ -182,14 +214,26 @@ def test_flags_override_the_brief_for_the_run_and_say_they_are_not_kept():
     assert len(notices) == 1 and "not kept" in notices[0]
 
 
+def test_a_flag_wins_over_every_brief_value_it_covers():
+    desc = {"agent_runtime": {"subagents": {"effort": {"default": "low", "claude": "low"},
+                                            "model": {"copilot-cli": "old", "copilot-vscode": "old"}}}}
+    apply_to_description(desc, _args("--subagent-effort", "high", "--subagent-model", "copilot=NEW"))
+    rt = ar.parse(desc)
+    assert ar.effort_for(rt, "navigator", "claude") == "high"
+    assert ar.model_for(rt, "navigator", "copilot-cli") == "NEW" and ar.model_for(rt, "navigator", "copilot-vscode") == "NEW"
+
+
 def test_no_flags_leave_the_brief_untouched():
     desc = {"project_name": "x"}
     assert apply_to_description(desc, _args()) == [] and "agent_runtime" not in desc
 
 
-def test_a_bad_flag_value_fails_closed():
-    with pytest.raises(ar.AgentRuntimeError):
-        apply_to_description({}, _args("--orchestrator-model", "codex=openai/gpt-5"))
+def test_a_bad_flag_value_fails_validation_before_render():
+    from agentteams import ingest
+
+    desc = {"project_goal": "goal"}
+    apply_to_description(desc, _args("--orchestrator-model", "codex=openai/gpt-5"))
+    assert any("not a codex model name" in e for e in ingest.validate(desc))
 
 
 # --- schema -----------------------------------------------------------------------------------------------------------
@@ -199,13 +243,14 @@ def test_the_brief_schema_accepts_the_documented_block():
     from importlib import resources
 
     schema = json.loads(resources.files("agentteams").joinpath("schemas/project-description.schema.json").read_text())
+    goal = "A project goal long enough for the schema's minimum length check."
     block = {"orchestrator": {"effort": "medium", "model": {"claude": "claude-fable-5-2"}},
-             "subagents": {"effort": {"default": "medium", "codex": "ultra"}, "model": "opus"},
+             "subagents": {"effort": {"default": "medium", "copilot": "high", "codex": "ultra"}, "model": "opus"},
              "agents": {"security": {"effort": "high"}}}
-    sub = schema["properties"]["agent_runtime"]
-    jsonschema.validate(block, sub)
+    jsonschema.validate({"project_goal": goal, "agent_runtime": block}, schema)
+    ar.parse({"agent_runtime": block})  # the code accepts what the schema accepts
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({"orchestrator": {"temperature": 1}}, sub)
+        jsonschema.validate({"project_goal": goal, "agent_runtime": {"orchestrator": {"temperature": 1}}}, schema)
 
 
 # --- --update / --merge (front-matter merge; operator ruling Q2 Option A) ---------------------------------------------

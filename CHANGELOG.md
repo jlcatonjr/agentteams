@@ -34,8 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names every value not written, counts the Claude agent files with no `effort:`, and names the two things a render
   cannot see: Claude Code lowering a level the model doesn't support, and `CLAUDE_CODE_EFFORT_LEVEL` in the caller's
   environment.
-- A per-agent entry that lowers the effort of `@security`, `@adversarial`, `@conflict-auditor` or `@code-hygiene`, or
-  gives one of them its own model, is shown as a warning.
+- `@security`, `@adversarial`, `@conflict-auditor` and `@code-hygiene` are review-critical: a warning is shown in the
+  run summary and in `doctor` when one runs below the default effort (through its own entry or a lower subagent
+  role) or has its own model.
+- **A separate HOME is covered for agent files only.** The main Claude session's `effortLevel` reaches only the inert
+  settings example until an operator merges it.
+- `emit.print_summary` and `print_dry_run_report` moved to `agentteams/emit_report.py` (CH-07 carve). `emit`
+  re-exports both.
 - **Not changed:** the team-builder agent, and bridge stubs (built from a source team, not a brief).
 
 ### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
