@@ -52,6 +52,15 @@ def test_append_row_adds_a_missing_final_newline(tmp_path):
     assert list(csv.reader(path.open(newline=""))) == [["a", "b"], ["1", "2"], ["3", "4"]]
 
 
+def test_append_row_adds_no_blank_line_after_a_bare_lf_row_in_a_crlf_log(tmp_path):
+    """2026-11-15: a CRLF log whose last row another writer ended with a bare LF gained one blank line per append."""
+    path = _log(tmp_path, "a,b\r\n1,2\r\n3,4\n")
+    gl.append_row(path, ["5", "6"])
+    gl.append_row(path, ["7", "8"])
+    assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\n5,6\r\n7,8\r\n"
+    assert list(csv.reader(path.open(newline=""))) == [["a", "b"], ["1", "2"], ["3", "4"], ["5", "6"], ["7", "8"]]
+
+
 @pytest.mark.parametrize("row", [["only-one"], {"a": "1", "zzz": "2"}, ["1", 2, "3"]])
 def test_append_row_refuses_bad_rows_and_leaves_the_file_untouched(tmp_path, row):
     path = _log(tmp_path, "a,b,c\n1,2,3\n")
