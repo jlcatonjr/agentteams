@@ -136,7 +136,7 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
 _DIRECTIVE_ONLY_TOKENS: tuple[str, ...] = ("publish", "releas", "sign", "tag")
 
 #: The positive half of the directive gate (IM item 05, operator ruling 2026-11-15): a directive scope must START with
-#: one of these verbs (inflections ``s``/``es``/``ed``/``ing`` allowed). Read-only or draft-only work: a directive waives
+#: one of these verbs (inflections ``s``/``es``/``ed``/``ing`` allowed, dropping a final ``e``). Read-only or draft-only work: a directive waives
 #: a re-ask on a benign task, and anything else is refused however it is spelled. Extend it only with verbs that cannot
 #: destroy, publish or change governance. Left out on purpose (@security, 2026-11-15): ``refresh`` (``--bridge-refresh``
 #: is destructive at its target), ``comment``/``label``/``triage`` (they write to GitHub, S-9) and ``format`` (it
