@@ -231,6 +231,7 @@ nav:
               - gitdirs: api-reference/gitdirs.md
               - update-lock: api-reference/update-lock.md
               - fleet: api-reference/fleet.md
+              - descriptor-union: api-reference/descriptor-union.md
               - drift: api-reference/drift.md
               - behavioral-drift: api-reference/behavioral-drift.md
           - Audit & security support:
