@@ -15,33 +15,44 @@ import pytest
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "agentteams" / "templates"
 
-#: agentteams' own authoring docs. Never rendered into a team, so they may name the checkout's script.
-NOT_RENDERED = {"AUTHORING-GUIDE.md"}
+#: agentteams' own authoring docs and audit sheet (paths relative to ``agentteams/templates/``). Never rendered into a
+#: team, so they may name the checkout's script.
+NOT_RENDERED = {"AUTHORING-GUIDE.md", "template-chapter-audit.csv"}
 
-#: An instruction to run a repo-only command: ``python build_team.py``, ``build_team.py --flag`` or a ``\``
-#: continuation, and ``python -m src.<module>``. A bare mention of the file (a staged path, a gate comment) is fine.
+#: An instruction to run a repo-only command: ``python [path/]build_team.py``, ``build_team.py --flag`` or a ``\``
+#: continuation, and ``python -m src.<module>`` / ``python -m build_team``. A bare mention of the file (a staged
+#: path, a gate comment) is fine.
 REPO_ONLY = re.compile(
-    r"\bpython3?(?:\s+-\w+)*\s+build_team\.py"
+    r"\bpython3?(?:\s+-\w+)*\s+(?:\S*/)?build_team\.py"
     r"|\bbuild_team\.py\s+(?:--|\\)"
-    r"|\bpython3?\s+-m\s+src\."
+    r"|\bpython3?(?:\s+-\w+)*\s+-m\s+(?:src\.|build_team\b)"
 )
 
 
 def _rendered_templates() -> list[Path]:
-    return sorted(
-        p for p in TEMPLATES.rglob("*")
-        if p.is_file() and p.name not in NOT_RENDERED and p.suffix in {".md", ".py", ".json", ".toml", ".yaml", ".yml"}
-    )
+    """Every text file under the template root (``*.template.md``, ``*.json.template``, ``*.csv.template``, the
+    sandbox ``*.sh`` scripts, hooks …) except :data:`NOT_RENDERED`. Binary files are skipped."""
+    found = []
+    for p in sorted(TEMPLATES.rglob("*")):
+        if not p.is_file() or p.relative_to(TEMPLATES).as_posix() in NOT_RENDERED or "__pycache__" in p.parts:
+            continue
+        try:
+            p.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        found.append(p)
+    return found
 
 
 def test_the_lint_pattern_catches_each_repo_only_form() -> None:
     for line in ("python build_team.py --description b.json --check", "python3 -B build_team.py --self",
                  "`build_team.py --add-fence-markers x`", "python build_team.py \\", "build_team.py \\",
-                 "python -m src.graph .github/agents/"):
+                 "python -m src.graph .github/agents/", "python ./build_team.py --check",
+                 "python3 ~/agentteams/build_team.py --update", "python -m build_team --check"):
         assert REPO_ONLY.search(line), line
     for line in ("when `build_team.py`, `agentteams/cli/` or `agentteams/man.py` is staged",
                  "# `agentteams`, `python -m agentteams.cli.app` or `build_team.py`; the Python API too.",
-                 "agentteams --description <brief> --check"):
+                 "agentteams --description <brief> --check", "python -m agentteams.governance_logs check ."):
         assert not REPO_ONLY.search(line), line
 
 
