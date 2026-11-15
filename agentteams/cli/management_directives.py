@@ -109,6 +109,9 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     # (1) destructive / bulk / cross-repo (stems cover -s/-ed/-ing/-ion/-al inflections)
     "delet", "remov", "rm", "overwrit", "prun", "destroy", "destruct", "drop", "purg",
     "forc", "reset", "bulk", "cross-repo", "push", "deploy", "merg", "wipe", "truncat", "revert",
+    # IM item 05 (operator ruling 2026-11-15): the high-precision destructive stems. Shared with the effect
+    # classifier, where they reclassified 10 of 1,231 existing decision rows.
+    "eras", "unlink", "clobber", "clean", "rewrit", "shred", "chmod", "chown",
     # (2) governance / trust roots (incl. this feature's own ledger + roster + key config,
     # so a directive can never widen its own trust base — @security condition 2c)
     "constitution", "invariant", "governance", "reference-template", "capability-grant",
@@ -121,6 +124,23 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     # constraint-relaxing effect (Rule 15, D7) that needs the operator's Ed25519 decision; a directive never relaxes one
     *SANDBOX_RELAXATION_TOKENS,
 )
+
+#: Directive-gate-only stems (IM item 05). Releasing, publishing, signing, rotating a key and tagging are never a task a
+#: directive may waive a re-ask for. They stay out of :data:`_REFUSED_SCOPE_TOKENS` because the effect classifier shares
+#: that list, and on decision rows they are mostly false positives ("sign-off", "release/* ruleset": about 130 rows).
+_DIRECTIVE_ONLY_TOKENS: tuple[str, ...] = ("publish", "releas", "sign", "rotat", "tag")
+
+#: The positive half of the directive gate (IM item 05, operator ruling 2026-11-15): a directive scope must START with
+#: one of these verbs (inflections ``s``/``es``/``ed``/``ing`` allowed). Read-only or draft-only work: a directive waives
+#: a re-ask on a benign task, and anything else is refused however it is spelled. Extend it only with verbs that cannot
+#: destroy, publish or change governance.
+BENIGN_SCOPE_VERBS: frozenset[str] = frozenset({
+    "draft", "review", "summarize", "summarise", "report", "test", "lint", "document", "audit", "analyze", "analyse",
+    "check", "list", "format", "refresh", "triage", "label", "comment", "research", "plan", "proofread", "read",
+    "inspect", "verify", "validate", "survey",
+})
+_LEADING_TOKEN_RE = re.compile(r"[a-z]+")
+_INFLECTIONS = ("", "s", "es", "ed", "ing")
 
 
 class MgmtDirectiveError(RuntimeError):
@@ -212,56 +232,88 @@ def verify_directive_signature(record: dict[str, str], *, key: str | None = None
     return hmac_verify(signing_key, _signed_values(record), record.get("signature", ""))
 
 
+def _names_token(scope: str, tokens: tuple[str, ...]) -> bool:
+    """Whether lowercased ``scope`` contains a token at a word START (left-boundary match; see :func:`scope_is_allowed`)."""
+    return any(re.search(r"(?<![a-z])" + re.escape(token), scope) for token in tokens)
+
+
+def scope_names_refused_effect(text: str) -> bool:
+    """Return True when ``text`` names a governance/trust root or a destructive, bulk or cross-repo effect.
+
+    The denylist half of the directive gate, and the whole of the effect classifier's text axis
+    (``effect_classifier``): a hit there makes a decision row relaxing. It is deliberately NOT the allowlist, because
+    existing decision rows are free text ("Operator sign-off: …") that no verb list describes (operator ruling
+    2026-11-15, IM item 05).
+
+    Matching is left-boundary (word-START), case-insensitive: a token may not be preceded by an ASCII letter, but
+    trailing letters are allowed, so ``delet`` refuses ``deletes``/``deleting``/``deletion`` and ``rm`` is never caught
+    inside ``transform``/``format``/``confirm``. Over-refusing is the safe side: a false refusal only makes the agent ask
+    the operator.
+
+    Args:
+        text: A scope or decision text.
+
+    Returns:
+        Whether it names a refused effect. An empty text names none.
+
+    Raises:
+        Nothing.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    # The ORIGINAL (un-lowercased) text goes to the trust-root predicates so their camelCase folding still applies.
+    # IM item 19: the other surfaces' constitution files (AGENTS.md, .goosehints, ...) count too.
+    if target_is_governance_root(raw) or target_is_elevated_constitution(raw):
+        return True
+    return _names_token(raw.lower(), _REFUSED_SCOPE_TOKENS)
+
+
+def _leading_verb_is_benign(scope: str) -> bool:
+    """Whether lowercased ``scope`` STARTS with a :data:`BENIGN_SCOPE_VERBS` verb or one of its inflections."""
+    match = _LEADING_TOKEN_RE.match(scope)
+    if match is None:
+        return False
+    word = match.group(0)
+    return any(word == verb + ending for verb in BENIGN_SCOPE_VERBS for ending in _INFLECTIONS)
+
+
 def scope_is_allowed(task_scope: str) -> bool:
     """Return True iff ``task_scope`` is a benign scope a directive may authorize.
 
-    THE security boundary (@security condition [2]). Mechanical and signature-non-overridable:
-    a scope naming any :data:`_REFUSED_SCOPE_TOKENS` token — matched at a WORD START
-    (case-insensitive; the token may not be preceded by an ASCII letter, but trailing letters are
-    allowed) — is ALWAYS refused, even under a valid signature, because a directive can never clear
-    destruction (C-5) or touch a governance/trust root. Word-START (not raw-substring, not
-    both-sided word-boundary) matching is deliberate and **fail-closed**: raw ``"rm" in scope``
-    would refuse benign ``transform``/``confirm``/``format``; a both-sided boundary would let the
-    inflected ``deletes``/``deleted``/``reference-templates`` slip through (fail-OPEN). Left-boundary
-    catches the whole word AND its inflections (``delete`` refuses ``deletes``/``deleting``/
-    ``deletion``; ``reference-template`` refuses ``reference-templates``) while still NOT matching a
-    token embedded mid-word (``rm`` is not matched inside ``transform``). A false refusal only makes
-    the agent ask the operator (as today); under-refusing a destructive verb would not. An empty or
-    whitespace-only scope is refused too (unrecognized scope => refuse).
+    THE security boundary (@security condition [2]). Mechanical and signature-non-overridable. Since IM item 05 it is a
+    **positive** gate (C-4: destructive scopes are mechanically auto-refused). A scope is allowed only when all of the
+    following hold:
 
-    This is a denylist gate, not the scope *match*: whether a given directive authorizes a
-    specific requested task is decided separately, by EXACT equality, in
-    :func:`directive_authorizes`.
+    1. it is non-empty;
+    2. it STARTS with a :data:`BENIGN_SCOPE_VERBS` verb (``draft-weekly-report``, ``review-vulnscan-handoff-<id>``);
+       any other verb is refused however it is spelled, because a stem denylist alone let ``rewrite-history``,
+       ``git-clean-fdx`` and ``publish-release`` through;
+    3. it names no governance/trust root and no destructive effect anywhere (:func:`scope_names_refused_effect`), so a
+       benign verb cannot launder a tail (``review-then-delete-stale-branches``);
+    4. it names no :data:`_DIRECTIVE_ONLY_TOKENS` stem (publishing, releasing, signing, rotating, tagging).
+
+    A valid signature overrides none of these: a directive can never clear destruction (C-5) or touch a governance or
+    trust root.
+
+    This is the recognized-scope gate, not the scope *match*: whether a given directive authorizes a specific
+    requested task is decided separately, by EXACT equality, in :func:`directive_authorizes`.
 
     Args:
         task_scope: The task-scope string carried by (or requested of) a directive.
 
     Returns:
-        Whether the scope is permitted (benign, recognized, non-denylisted).
+        Whether the scope is permitted.
+
+    Raises:
+        Nothing.
     """
     scope = (task_scope or "").strip().lower()
-    if not scope:
+    if not scope or not _leading_verb_is_benign(scope):
         return False
-    # Governance/trust-ROOT paths (the single shared vocabulary, so this path and the effect
-    # classifier can never drift — audit Q1). Closes the directive-path gap where a scope naming
-    # a trust root by PATH (e.g. security-approvers, agent-privilege, the Ed25519 verify-key
-    # store) passed the verb denylist below. A valid signature cannot override this. The ORIGINAL
-    # (un-lowercased) scope is passed so the predicate's camelCase folding still applies.
-    # IM item 19: the other surfaces' constitution files (AGENTS.md, .goosehints, ...) are never a directive scope either.
-    if target_is_governance_root((task_scope or "").strip()) or target_is_elevated_constitution((task_scope or "").strip()):
+    if scope_names_refused_effect(task_scope):
         return False
-    for token in _REFUSED_SCOPE_TOKENS:
-        # Left-boundary (word-START) match: the token must not be PRECEDED by an ASCII letter, but
-        # trailing letters are allowed — so a token matches the whole word AND its inflections.
-        # "delete" therefore refuses "delete", "deletes", "deleted", "deleting", "deletion";
-        # "reference-template" refuses "reference-templates". Crucially it still does NOT match a
-        # token embedded mid-word: "rm" is not matched in "transform"/"format"/"confirm" (the "rm"
-        # there is preceded by a letter). Fail-closed by design: a security denylist must over-
-        # refuse (a false refusal only makes the agent ask the operator, as today) rather than
-        # under-refuse an inflected destructive/governance verb (which would be fail-OPEN).
-        if re.search(r"(?<![a-z])" + re.escape(token), scope):
-            return False
-    return True
+    return not _names_token(scope, _DIRECTIVE_ONLY_TOKENS)
 
 
 def directive_authorizes(record: dict[str, str], task_scope: str) -> bool:
@@ -876,6 +928,8 @@ __all__ = [
     "directive_row_failures",
     "issue_directive",
     "scope_is_allowed",
+    "scope_names_refused_effect",
+    "BENIGN_SCOPE_VERBS",
     "sign_directive",
     "validate_directive",
     "verify_directive_signature",

@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (a directive scope must name a benign task; IM item 05)
+
+- **G-24-1.** `management_directives.scope_is_allowed` was a stem denylist: any non-empty scope that named no
+  governance root and no listed stem was authorizable. So `rewrite-history`, `git-clean-fdx`, `publish-release`,
+  `sign-row` and `rotate-key` passed, although C-4 says destructive scopes are mechanically auto-refused.
+  - **The directive gate is positive (operator ruling 2026-11-15).** A scope is allowed only when it starts with a
+    verb from `BENIGN_SCOPE_VERBS` (`draft`, `review`, `report`, `test`, `lint`, `audit`, `check`, `format`,
+    `refresh` …; `s`/`es`/`ed`/`ing` inflections). It must also name no governance root and no destructive effect
+    anywhere, so a benign verb can't launder a tail (`review-then-delete-stale-branches`). Publishing, releasing,
+    signing, rotating and tagging are refused too (`_DIRECTIVE_ONLY_TOKENS`). The vulnscan handoff's
+    `review-vulnscan-handoff-<id>` still passes.
+  - **The denylist gains the precise destructive stems** `eras`, `unlink`, `clobber`, `clean`, `rewrit`, `shred`,
+    `chmod` and `chown`.
+  - **The effect classifier keeps its vocabulary plus those eight stems (operator ruling).** It now calls
+    `scope_names_refused_effect`, the denylist half of the gate, never the verb allowlist, because decision rows are
+    free text. The full stem list would have reclassified about 130 of 1,231 existing decision rows, mostly false
+    positives ("sign-off", "release/* ruleset").
+  - **Behaviour change and migration:**
+    - A directive whose scope doesn't start with a benign verb is refused when issued and is inert when verified. No
+      `management-directives.log.csv` existed in the workspace at the time, so no directive was affected.
+    - In a signing-governed workspace, a decision row whose scope names one of the eight stems (about 10 rows in the
+      census, e.g. "cleanup executed by operator") is now relaxing: HMAC no longer clears it. Re-mint it with
+      `--sign-decision` (operator, Ed25519).
+  - The orchestrator template's directive honor-side steps now describe the gate as a benign-verb check
+    (`available_workflows` v=15).
+
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
 - **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
