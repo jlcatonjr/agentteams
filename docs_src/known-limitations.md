@@ -215,26 +215,34 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ### A full render can't be covered by a signed `overwrite` row, because it writes CLAUDE.md
 
-- **What:** every render writes the managed block of `.claude/CLAUDE.md`, and the effect classifier treats
-  CLAUDE.md as a governance trust root. In a workspace where signing is active, a signed `overwrite` row whose effect
-  includes that write is refused as non-eligible, so no honest signed row covers a full render.
+- **What:** every render writes the managed block of `.claude/CLAUDE.md`, and the effect classifier treats CLAUDE.md
+  as a governance trust root. In a workspace where signing is active, a signed `overwrite` row whose effect includes
+  that write is refused as non-eligible, so no honest signed row covers a full render.
 - **Who:** teams with decision signing active that re-render a Claude team.
 - **Workaround:** discard the render's change to `.claude/CLAUDE.md` and have the operator apply the managed-block
   diff by hand. Sign the `overwrite` row for the remaining files.
+- **Note:** the gate checks the effects a row *declares*. It does not derive a render's actual writes, so a row that
+  leaves CLAUDE.md out of `effect_targets` is not refused. Review render rows for that omission. Deriving the write
+  set is IM item 43 (G-23-3).
 - **Tracking:** 1.0 known limitation (found by mathAgents, 2026-10-16). A render mode that leaves CLAUDE.md to the
   operator and prints the diff is planned for 1.0.x.
 
-### `AGENTS.md` is not classed as a governance trust root
+### The other surfaces' constitution files need the operator's signature, but are not refused like CLAUDE.md
 
-- **What:** the effect classifier treats `CLAUDE.md` and `copilot-instructions` as governance trust roots, but not
-  `AGENTS.md`, which is the instruction file for Codex, goose, Grok and agents-md. A clearance whose targets include
-  `AGENTS.md` is therefore classed by its other effects, and an ordinary HMAC-signed clearance can authorize a write
-  to it.
-- **Who:** signing-governed teams on those surfaces.
-- **Workaround:** review any decision row whose `effect_targets` include `AGENTS.md` as you would a `CLAUDE.md` one,
-  and sign it with Ed25519.
-- **Tracking:** 1.0 known limitation (found by baseAgent's @security). The fix is planned for 1.0.x, together with
-  the render mode that leaves governance files to the operator, so renders stay signable.
+- **What:** since IM item 19, a row writing any of these needs the operator's Ed25519 signature, and a management
+  directive cannot scope one:
+  - `AGENTS.md` and `AGENTS.override.md`, the constitution for Codex, goose, Grok and agents-md;
+  - `.goosehints`;
+  - `CLAUDE.local.md`;
+  - `.github/instructions/`.
+
+  Unlike `CLAUDE.md`, they are not refused even when signed, because the frozen-surfaces feature lists `AGENTS.md`
+  and `.goosehints` as owned paths, and an unsignable unfreeze would lock a frozen surface for good. The rendered
+  constitution's Rule 15(c) wording ("the constitution ... even when validly signed") describes the `CLAUDE.md` case
+  only.
+- **Who:** signing-governed teams on those surfaces. A freeze, unfreeze or render row that lists one of these files
+  now needs the operator's Ed25519 signature, where an HMAC row used to clear.
+- **Tracking:** IM item 19 (G-23-2), operator ruling 2026-11-14. Rewording Rule 15(c) is IM item 44.
 
 ### Installing an existing operator key into a second team needs a manual step
 

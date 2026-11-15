@@ -56,7 +56,7 @@ from agentteams.cli.frozen_surfaces import (
     names_unfreeze,
     touches_frozen,
 )
-from agentteams.cli.governance_targets import target_is_governance_root
+from agentteams.cli.governance_targets import target_is_elevated_constitution, target_is_governance_root
 from agentteams.cli.management_directives import scope_is_allowed
 from agentteams.cli.sandbox_effects import (
     GATE_POLICY_WEAKEN,
@@ -510,10 +510,14 @@ def requires_operator_signature(row: dict[str, str], *, kind: str, frozen_paths:
     profile = effect_profile_from_row(row)
     if profile.grants_capabilities or profile.relaxes or profile.cross_repo or profile.bulk:
         return True
-    if any(target_is_governance_root(target) for target in profile.write_targets):
+    # A trust root, or another surface's constitution file (IM item 19: elevated, still eligible), needs the operator.
+    def _operator_only(t: str) -> bool:
+        return target_is_governance_root(t) or target_is_elevated_constitution(t)
+
+    if any(_operator_only(target) for target in profile.write_targets):
         return True
     scope_text = _scope_text(row, kind=kind)
-    return bool(scope_text and target_is_governance_root(scope_text))
+    return bool(scope_text and _operator_only(scope_text))
 
 
 def is_relaxing(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...] = ()) -> bool:
