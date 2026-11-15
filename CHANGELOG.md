@@ -21,7 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `--check` included.
   - **Archetypes agentteams doesn't render.** A `selected_archetypes` slug with no domain template gets one `[INFO]`
     line instead of being dropped silently; another layer (researchteam's `interpretation-advisor`) may provide it.
-  - **Census for the later refusal:** 98 failing descriptors before the schema fix, 23 after.
+  - **The team-manifest schema matches too** (@conflict-auditor): its `selected_archetypes` enum is now the same slug
+    pattern, and its two `tool_category` enums accept `build` and `infrastructure`, which `analyze_tools` copies in.
+  - **The capability the code reads** (`instance_maintenance`) is in the schema's `capabilities` enum (@adversarial).
+  - **The fleet shows the warning** (@adversarial): it captures each render's output, so a printed WARN never reached
+    the operator. The fleet report's `schema_warnings` carries it, on the first target of each workspace.
+  - **The check never fails a load:** an error while checking is a `[WARN]` too, and each listed issue is clipped to
+    160 characters, so a `oneOf` message can't echo a whole brief value.
+  - **Census for the later refusal:** 98 failing descriptors before the schema fix, 23 after (unchanged by the
+    `instance_maintenance` addition, which no failing brief used). The 23 include project names with spaces, which
+    the schema documents as slug-safe and the code tolerates.
 
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 

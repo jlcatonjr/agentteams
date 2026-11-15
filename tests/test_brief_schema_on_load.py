@@ -104,3 +104,49 @@ def test_check_returns_zero_for_a_brief_with_only_schema_warnings(tmp_path, caps
     assert build_team.main(["--description", str(brief), "--project", str(tmp_path), "--output", str(out),
                             "--no-scan", "--yes", "--security-offline", "--dry-run"]) == 0
     assert "interpretation-advisor" in capsys.readouterr().err
+
+
+# --- audit follow-ups ------------------------------------------------------------------------------------------
+
+def test_the_fleet_report_carries_the_schema_warning(tmp_path, capsys):
+    # @adversarial: the fleet captures each render's output, so a printed WARN never reached the operator.
+    path = _write(tmp_path, {**json.loads(EXAMPLES[0].read_text(encoding="utf-8")), "project_name": "Has Spaces"})
+    ingest.load(path, scan_project=False)
+    lines = brief_schema.schema_warning_lines(capsys.readouterr().err)
+    assert len(lines) == 1 and "project_name" in lines[0] and not lines[0].startswith("[WARN]")
+    from agentteams.fleet import TargetResult
+
+    assert TargetResult(workspace="w", target="github", status="OK").schema_warnings == []
+
+
+def test_a_long_issue_is_clipped_so_brief_values_are_not_echoed_whole():
+    doc = {**json.loads(EXAMPLES[0].read_text(encoding="utf-8")), "project_name": "x " + "/abs/path/" * 50}
+    issue = next(e for e in brief_schema.schema_errors(doc) if e.startswith("project_name"))
+    assert len(issue) <= brief_schema._MAX_ISSUE and issue.endswith("…")
+
+
+def test_a_check_error_is_a_warning_not_a_crash(tmp_path, capsys, monkeypatch):
+    # @adversarial: warn_on_load must never raise, or a warn-only check could fail a load.
+    def broken(_description):
+        raise TypeError("unexpected value")
+
+    monkeypatch.setattr(brief_schema, "schema_errors", broken)
+    ingest.load(_write(tmp_path, json.loads(EXAMPLES[0].read_text(encoding="utf-8"))), scan_project=False)
+    assert "schema check was skipped (TypeError)" in capsys.readouterr().err
+
+
+def test_the_capability_the_code_reads_validates():
+    doc = {**json.loads(EXAMPLES[0].read_text(encoding="utf-8")), "capabilities": ["instance_maintenance"]}
+    assert brief_schema.schema_errors(doc) == []
+
+
+def test_the_manifest_schema_accepts_what_the_analyzer_builds():
+    # @conflict-auditor: team-manifest.schema.json kept the stale archetype enum and tool categories.
+    import jsonschema
+
+    schema = json.loads((brief_schema.SCHEMA_PATH.parent / "team-manifest.schema.json").read_text(encoding="utf-8"))
+    archetypes = schema["properties"]["selected_archetypes"]
+    assert "enum" not in archetypes["items"]
+    jsonschema.validate(["agentteams-updater", "tool-doc-researcher", "interpretation-advisor"], archetypes)
+    text = json.dumps(schema)
+    assert text.count('"infrastructure"') >= 2 and text.count('"build",') >= 2

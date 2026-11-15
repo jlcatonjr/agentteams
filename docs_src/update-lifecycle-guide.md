@@ -54,7 +54,7 @@ A project may have more than one descriptor on disk:
 
 | File | Role | Use with `--update`? |
 |---|---|---|
-| `.agentteams/brief.json` | **Canonical brief** — schema-valid against `agentteams/schemas/project-description.schema.json`; carries the full `components`, `tools`, `selected_archetypes`, `memory_index_extra_dirs`, output-directory fields, etc. | **Yes** when present |
+| `.agentteams/brief.json` | **Canonical brief** — meant to be schema-valid against `agentteams/schemas/project-description.schema.json` (checked on load, warn only); carries the full `components`, `tools`, `selected_archetypes`, `memory_index_extra_dirs`, output-directory fields, etc. | **Yes** when present |
 | `brief.json` (project root) | Same role as `.agentteams/brief.json` for older layouts | Yes when present |
 | `.github/agents/_build-description.json` | Operator-side scaffold created by setup; may be a thin stub (project_name + project_goal + governance_agents) or may be a full mirror of the brief | Only if it is a full mirror; otherwise treat as stale |
 

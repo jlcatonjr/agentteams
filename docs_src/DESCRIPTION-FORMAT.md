@@ -320,6 +320,13 @@ keeps several bibliographies, list them in the instruction files' **Project Layo
 
 ---
 
+### `selected_archetypes`
+
+**Type:** array of lowercase slugs (optional)  
+**Purpose:** Overrides the analyzer's archetype selection. Any lowercase slug is accepted. One with no `agentteams/templates/domain/<slug>.template.md` is not rendered by agentteams (another layer, such as researchteam, may provide it), and loading the description prints one `[INFO]` line naming it. The schema's `x-agentteams-known-archetypes` lists the archetypes agentteams renders; it is a documentation key (JSON Schema ignores `x-` keys), kept equal to the templates by a test.
+
+---
+
 ### `tools`
 
 **Type:** array of tool objects  

@@ -41,6 +41,7 @@ from pathlib import Path
 from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
 from agentteams._fleet_report import write_report as _write_report
 from agentteams._fleet_shrink_grants import shrink_grant_lines
+from agentteams.brief_schema import schema_warning_lines
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX
 from agentteams.whole_body_migration import DUPLICATE_PREFIX
@@ -135,6 +136,7 @@ class TargetResult:
     # a tracked one can ride un-audited into a commit — surface it for review.
     volatile_tracked: list[str] = field(default_factory=list)
     shrink_grant_warnings: list[str] = field(default_factory=list)  # see agentteams._fleet_shrink_grants
+    schema_warnings: list[str] = field(default_factory=list)  # brief_schema; first target per workspace (IM 13a)
     shrink_grants_active: list[str] = field(default_factory=list)
     # Pre-fencing twins (agentteams.fence_twins): kept ones are a REVIEW reason; dropped ones are listed only.
     twins_kept: list[str] = field(default_factory=list)
@@ -857,6 +859,7 @@ def run_fleet(args, parser) -> int:
             tr = TargetResult(workspace=str(ws), target=target, rc=rc, status="OK",
                               descriptor=str(descriptor) if descriptor else "")
             tr.shrink_grant_warnings, tr.shrink_grants_active = shrink_grant_lines(out)  # every path, dry runs too
+            tr.schema_warnings = schema_warning_lines(out)
 
             if not apply:
                 # Dry-run: report intent; no diff (nothing written).

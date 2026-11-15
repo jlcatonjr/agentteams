@@ -25,6 +25,12 @@ SCHEMA_PATH = _PACKAGE / "schemas" / "project-description.schema.json"
 DOMAIN_TEMPLATES = _PACKAGE / "templates" / "domain"
 #: The most schema errors one warning lists before it says "and N more".
 _SHOWN = 5
+#: Longest single issue a warning prints: a oneOf/anyOf message echoes the whole value, which can hold an absolute
+#: path from the brief (@adversarial).
+_MAX_ISSUE = 160
+#: The fleet reads these lines out of each render's captured output (``fleet.TargetResult.schema_warnings``).
+WARN_PREFIX = "[WARN] "
+WARN_MARKER = "does not match the project-description schema"
 
 _warned: set[str] = set()
 
@@ -33,7 +39,8 @@ def known_archetypes() -> frozenset[str]:
     """Return the archetype slugs agentteams renders: every domain template that is an agent, not a doc or reference.
 
     Returns:
-        The slugs (``templates/domain/<slug>.template.md``, minus ``tool-*.doc`` and ``*-reference`` templates).
+        The slugs (``templates/domain/<slug>.template.md``, minus ``tool-*.doc`` and ``*-reference`` templates). An
+        agent template must not be named ``*-reference``: it would drop out of this list and of its sync test.
 
     Raises:
         Nothing.
@@ -49,6 +56,7 @@ def known_archetypes() -> frozenset[str]:
 
 @lru_cache(maxsize=1)
 def _validator() -> Any:
+    """Return the cached Draft 7 validator for the project-description schema (it raises only on a broken install)."""
     import jsonschema
 
     return jsonschema.Draft7Validator(json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
@@ -67,7 +75,11 @@ def schema_errors(description: dict[str, Any]) -> list[str]:
         Nothing.
     """
     errors = sorted(_validator().iter_errors(description), key=lambda e: list(map(str, e.absolute_path)))
-    return [f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message}" for e in errors]
+    return [_clip(f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message}") for e in errors]
+
+
+def _clip(text: str) -> str:
+    return text if len(text) <= _MAX_ISSUE else text[: _MAX_ISSUE - 1] + "…"
 
 
 def unrendered_archetypes(description: dict[str, Any]) -> list[str]:
@@ -89,7 +101,7 @@ def unrendered_archetypes(description: dict[str, Any]) -> list[str]:
 
 
 def warn_on_load(path: Path, description: dict[str, Any]) -> None:
-    """Print the schema and unrendered-archetype warnings for *path*, once per process. Never raises.
+    """Print the schema and unrendered-archetype warnings for *path*, once per process; a check error is a WARN too.
 
     Args:
         path: The description file.
@@ -99,17 +111,40 @@ def warn_on_load(path: Path, description: dict[str, Any]) -> None:
         None.
 
     Raises:
-        Nothing.
+        Nothing: an error while checking (a broken install, an unexpected value) is reported, never raised, so a
+        load can't fail on a warn-only check (@adversarial).
     """
     key = str(path.resolve())
     if key in _warned:
         return
     _warned.add(key)
-    errors = schema_errors(description)
+    try:
+        errors = schema_errors(description)
+    except (OSError, ValueError, TypeError, LookupError, RecursionError) as exc:
+        print(f"{WARN_PREFIX}{path.name}: the project-description schema check was skipped ({type(exc).__name__})", file=sys.stderr)
+        return
     if errors:
         shown = "; ".join(errors[:_SHOWN]) + (f"; and {len(errors) - _SHOWN} more" if len(errors) > _SHOWN else "")
-        print(f"[WARN] {path.name} does not match the project-description schema ({len(errors)} issue(s); "
+        print(f"{WARN_PREFIX}{path.name} {WARN_MARKER} ({len(errors)} issue(s); "
               f"not enforced yet): {shown}", file=sys.stderr)
     if unknown := unrendered_archetypes(description):
         print(f"[INFO] {path.name}: selected_archetypes {', '.join(unknown)} have no agentteams template, so "
               "agentteams does not render them (another layer may provide them).", file=sys.stderr)
+
+
+def schema_warning_lines(output: str) -> list[str]:
+    """Return the schema warnings in a render's captured *output*, for the fleet report (@adversarial).
+
+    The fleet runs each render in-process and captures its output, so a WARN printed there never reached the operator.
+
+    Args:
+        output: The captured stdout and stderr of one render.
+
+    Returns:
+        The warning lines, without the ``[WARN]`` prefix.
+
+    Raises:
+        Nothing.
+    """
+    return [line[len(WARN_PREFIX):].strip() for line in output.splitlines()
+            if line.startswith(WARN_PREFIX) and ("project-description schema" in line)]

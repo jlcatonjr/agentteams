@@ -313,7 +313,9 @@ To add a new domain archetype (e.g., `data-validator`):
 
 4. **Update PLACEHOLDER-CONVENTIONS.md** if new placeholders are introduced.
 
-5. **Write at least one test** in `tests/test_analyze.py` asserting the archetype is selected for the relevant project type.
+5. **Register the slug in the schema**: add the slug to `x-agentteams-known-archetypes` in `agentteams/schemas/project-description.schema.json` (`tests/test_brief_schema_on_load.py` fails until the list equals the domain agent templates). Neither schema has an archetype enum any more: both accept any lowercase slug (IM item 13a). Don't name an agent template `*-reference`: those are read as reference docs, not archetypes.
+
+6. **Write at least one test** in `tests/test_analyze.py` asserting the archetype is selected for the relevant project type.
 
 ---
 
