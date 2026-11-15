@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (slug checks refuse a trailing newline; #473)
+
+- Every slug check used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
+  `"agent\n"` passed. The checks now use `re.fullmatch`:
+  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
+  - `cli/adopt_only.py`;
+  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
+  - `sandbox_state.py` (agent and profile names);
+  - `sandbox_tokens.py`;
+  - `wasm_config.py`;
+  - `wasm_agent/team.py`;
+  - `interop_helpers.py`.
+- `tests/test_slug_trailing_newline.py` adds a guard that no `_SLUG_RE.match(` call remains in the package.
+  Integrity pins are re-recorded.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub
