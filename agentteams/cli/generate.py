@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
-from agentteams import update_lock
+from agentteams import github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
@@ -844,12 +844,7 @@ def _run_generate_locked(
                 print(f"     ... and {len(customized) - 10} more")
             print("     These files will have their fenced sections updated; "
                   "user-authored content outside fences is preserved.")
-    if args.merge:
-        from agentteams.github_management import update_notice as _gh_mgmt_notice
-
-        _note = _gh_mgmt_notice(final_rendered, output_dir)
-        if _note:
-            print(f"\n  ℹ  GitHub management: {_note}")
+    github_management.print_update_notice(final_rendered, output_dir) if args.merge else None
 
     # Destructive-action gate must clear BEFORE backup/migration so a blocked
     # overwrite produces no spurious backup or log migration. A --migrate-driven

@@ -183,16 +183,25 @@ def update_notice(rendered: list[tuple[str, str]], output_dir: Path) -> str | No
         if MARKER not in content:
             continue
         path = Path(output_dir) / rel
-        try:
-            if path.is_file() and MARKER not in path.read_text(encoding="utf-8"):
-                return ("agents now run GitHub management themselves (the instruction file's GitHub management "
-                        "section): a merge into the default branch needs your live approval naming the PR and head "
-                        "SHA, and a required-check switch needs your approval of its fingerprint. Turn it off with "
-                        "github_management: false in the brief.")
-        except OSError:  # an unreadable on-disk copy: the notice is advisory, and the render itself reports I/O errors
-            continue
+        if path.is_file() and MARKER not in path.read_text(encoding="utf-8", errors="replace"):
+            return ("agents now run GitHub management themselves (the instruction file's GitHub management "
+                    "section): a merge into the default branch needs your live approval naming the PR and head "
+                    "SHA, and a required-check switch needs your approval of its fingerprint. Turn it off with "
+                    "github_management: false in the brief.")
     return None
 
 
+def print_update_notice(rendered: list[tuple[str, str]], output_dir: Path) -> None:
+    """Print :func:`update_notice`'s line, when there is one (``--update --merge``).
+
+    Args:
+        rendered: The render's ``(relative path, content)`` pairs.
+        output_dir: The team's output directory.
+    """
+    note = update_notice(rendered, output_dir)
+    if note:
+        print(f"\n  ℹ  GitHub management: {note}")
+
+
 __all__ = ["COMMAND", "MARKER", "PLACEHOLDER", "PR_CLEARANCE", "RELEASE_STEP", "SECURITY_ROWS", "enabled",
-           "placeholders", "section_body", "update_notice"]
+           "placeholders", "print_update_notice", "section_body", "update_notice"]

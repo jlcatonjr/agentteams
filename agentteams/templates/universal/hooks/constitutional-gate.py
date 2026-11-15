@@ -185,16 +185,8 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      r"\bpulls/[^\s/]+/merge\b|"
      r"\b(?:mergePullRequest|enablePullRequestAutoMerge)\b",
      "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
-    # What guards the default branch (github_management): a required-check switch runs only as
-    # `release_required_checks --apply <fingerprint>` after the operator approves that fingerprint, and a direct write
-    # to a branch-protection or ruleset endpoint is never the path. Both prompt, whatever client sends them.
-    ("branch-protection-write",
-     r"\b(?:gh\s+api|curl)\b(?=[^\n]*(?:-X\s*|--request[\s=]+|--method[\s=]+)(?:PATCH|PUT|DELETE|POST)\b)"
-     r"(?=[^\n]*/(?:protection|rulesets)\b)|"
-     # `gh api` sends POST without -X once it has a body (-f/-F/--field/--raw-field/--input)
-     r"\bgh\s+api\b(?=[^\n]*\s(?:-[fF]|--field|--raw-field|--input)\b)(?=[^\n]*/(?:protection|rulesets)\b)|"
-     r"\b(?:create|update|delete)BranchProtectionRule\b|\b(?:create|update|delete)RepositoryRuleset\b|"
-     r"\brelease_required_checks\b[^\n]*\s--ap",
+    # Default-branch protection (github_management). Line-anchored lookaheads: one scan per line, never per anchor.
+    ("branch-protection-write", r"^(?=[^\n]*\b(?:gh\s+api|curl)\b)(?=[^\n]*(?:-X\s*|--request[\s=]+|--method[\s=]+)(?:PATCH|PUT|DELETE|POST)\b)(?=[^\n]*/(?:protection|rulesets)\b)|^(?=[^\n]*\bgh\s+api\b)(?=[^\n]*\s(?:-[fF]|--field|--raw-field|--input)\b)(?=[^\n]*/(?:protection|rulesets)\b)|\b(?:create|update|delete)(?:BranchProtectionRule|RepositoryRuleset)\b|^(?=[^\n]*\brelease_required_checks\b)(?=[^\n]*\s--ap)",
      "default-branch protection change — the operator approves that fingerprint; @security clears it first"),
     ("git-remote-delete", r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*(?:--delete|--mirror|--prune|\s:\S))",
      "remote branch/tag deletion or mirror/prune push — irreversible remote loss"),
@@ -561,16 +553,8 @@ def _decide(decision: str, reason: str, reason_id: str, checked: str,
 
 def _emit(decision: str, reason: str) -> None:
     """Write a hook decision to stdout. Exit 0 + JSON is the structured-decision contract."""
-    json.dump(
-        {
-            "hookSpecificOutput": {
-                "hookEventName": HOOK_EVENT,
-                "permissionDecision": decision,
-                "permissionDecisionReason": reason,
-            }
-        },
-        sys.stdout,
-    )
+    json.dump({"hookSpecificOutput": {"hookEventName": HOOK_EVENT, "permissionDecision": decision,
+                                      "permissionDecisionReason": reason}}, sys.stdout)
     sys.stdout.write("\n")
     sys.stdout.flush()
 
@@ -777,7 +761,7 @@ def main(payload: object, raw: bytes = b"") -> str:
         # this file. It raises the cost from one edit to three and makes each visible in git.
         # Without agentteams these imports crash, and a crash is a silent allow (any exit other
         # than 0/2 is a non-blocking error), so _import_integrity re-runs under the pinned
-        # interpreter, falls back to this checkout's root, or fails visibly.
+        # interpreter or fails visibly (the checkout-root fallback was removed; see _import_integrity).
         integrity = _import_integrity(raw)
 
         integrity_findings = integrity.verify(Path.cwd())
