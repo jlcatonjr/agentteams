@@ -260,7 +260,7 @@
     "agentteams/wasm_agent/tools.py": "fac3a04eb95a0e22276863e7f35d48cfa6c4a3209b94d6120570955cabd95fbf",
     "agentteams/wasm_agent/transcript.py": "dd3cf427f3be3b2d508e74d50edebd245172e972e54537d22e61eee037d1c72c",
     "agentteams/wasm_config.py": "5e5b14f8ec2e43284843e7ee377bfb989dc8dc50acd03f69e7ccad3d8d81382d",
-    "agentteams/wasm_enforcement.py": "9353cb458e7837778334e3aa40ef346097a2c88f791a69de5902d5f1c42182b8",
+    "agentteams/wasm_enforcement.py": "fab8284321ac5bdc671e5e897a62aa5d3a4766f0650319843bdf925339506ea8",
     "agentteams/wasm_exec.py": "e5e676d7f9ae7f78aa41bc08fc1f523be7e7610f2732614a6d9fb97e5b77421a",
     "agentteams/wasm_guests.py": "af3a2cd745190320ff47a1637ea2eb8287bd1cf17a32dcf8c30bbfc7512f0b90",
     "agentteams/wasm_mcp.py": "645c0033cf2496e52901f34b9e857a7cf7995a4007506a5b526eb62095895d07",
@@ -268,7 +268,7 @@
     "agentteams/wasm_policy.py": "9c38b8c804824f11acc873d817712aa02b707a3faab70499d84b494eaa5a4d73",
     "agentteams/wasm_runtime.py": "40a40f12ec89a93aa8bf5ef3161be548adac3f15eb3f48a930fde5c22c436cce",
     "agentteams/whole_body_migration.py": "b5cfa8668f3b80d23db42849e8c13132822f50057470f80f6ecf2dc6918a3cc9",
-    "agentteams/write_policy.py": "8fa129e0bca9d1d10fcfec433c3da831512d0b08ec5772998a1a8aa4a5ea64e8"
+    "agentteams/write_policy.py": "18f8807cb5cf714c175149f5a7dddfd9ca63ebc5986bb818537096f1c37a58c6"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
   "version": 1

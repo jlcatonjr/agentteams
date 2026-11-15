@@ -360,7 +360,7 @@ def narrow_tools(content: str) -> str:
         start = fm.start(1)
         return content[:start] + "tools: ['read', 'search']\n" + content[start:]
     declared = {t.strip().strip("'\"").split("(", 1)[0].strip().lower() for t in m.group(1).split(",")}
-    # Always keep `read`: Claude falls back to "Bash, Read, Write, Edit" when nothing maps.
+    # Always keep `read`: when nothing maps, Claude falls back to a default grant the list never declared.
     kept = [t for t in NARROWED_TOKENS if t == "read" or t in declared]
     line = "tools: [" + ", ".join(f"'{t}'" for t in kept) + "]"
     start = fm.start(1)

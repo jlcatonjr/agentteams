@@ -61,6 +61,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it. Merge keeps text outside fences in a file that has fences, so two places keep the old lines: the navigator's two
   refresh commands and the Grok builder's step 3 and invocation block. Edit those by hand.
 
+### security (an unscoped agent gets a read-only Claude grant, not write and a shell; IM item 42)
+
+- **G-04-9.** The Claude adapter's fallback grant was `Bash, Read, Write, Edit`. `_map_allowed_tools` used it when an
+  agent had no front matter (or front matter that never closes), no inline `tools: [...]` list, or a list none of
+  whose tokens maps to a Claude tool. So the one agent nobody scoped got write access and an unrestricted shell
+  (C-3). The fallback is now `Read, Grep, Glob`, and each fallback emits a `UserWarning` naming the agent and the
+  missing scope. Grok shares the mapping and the change.
+  - **Behaviour change:** a hand-written or converted agent with no usable `tools:` loses `Bash`, `Write` and `Edit`
+    on its next render, `--convert` or interop import. No shipped template reaches the fallback: every agent
+    template declares `tools:`, and a render of each example brief for Claude and Grok produced no fallback.
+  - **Who is affected:** agents the templates don't produce, which are hand-written, operator-added, converted or
+    imported agents. `--convert` reports each narrowed agent in its notices. A source whose `tools:` is a YAML block
+    list is still refused as a widening, not narrowed. Files already on disk keep their grant: `--update --merge`
+    never widens or silently narrows an edited capability line, so an existing agent keeps `Bash, Read, Write, Edit`
+    until it is re-converted or edited.
+  - **The team-builder fails closed (@security):** a Claude builder with no front matter, or no `tools:` /
+    `allowed-tools:` key, now raises instead of passing through, because Claude gives it every tool. Grok's builder
+    already did. The shipped builder declares `tools:`.
+  - **Migration:** if the warning names an agent that needs to write or run commands, give it an inline list, for
+    example `tools: ['read', 'search', 'edit', 'execute']`, and re-render.
+  - The WASM narrowing refusal (`wasm_enforcement._refuse_empty`) still fails closed on an empty list; its message
+    no longer says the default includes the shell.
+
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
 - **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
