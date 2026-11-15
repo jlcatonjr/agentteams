@@ -221,11 +221,15 @@ class ClaudeAdapter(FrameworkAdapter):
             unreadable ``model:`` replaced by the Claude default.
 
         Raises:
-            Nothing.
+            ValueError: The builder has no front matter, or front matter with no ``tools:`` or ``allowed-tools:``
+                key. Claude would give such a sub-agent every tool, so it fails closed, as Grok's builder does
+                (IM item 42, @security).
         """
         yaml_text, body = _parse_yaml_front_matter(content)
-        if yaml_text is None:
-            return content
+        if yaml_text is None or not _BUILDER_SCOPE_KEY_RE.search(yaml_text):
+            raise ValueError(
+                "the Claude team-builder needs front matter with a `tools:` line; without one Claude gives it every "
+                "tool (fail closed)")
         head = content[: len(content) - len(body)]  # the parser's own front-matter span: never touch the body
         source_model = _extract_claude_optional_keys(content)[0]
         model = _resolve_claude_model(content, source_model, "team-builder")
@@ -757,6 +761,9 @@ _YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$
 
 # Captures an inline-list `tools: ['read', 'search']` line in the VS Code front matter.
 _YAML_TOOLS_RE = re.compile(r"^tools:\s*\[([^\]]*)\]\s*$", re.MULTILINE)
+#: Any declared scope key on a builder, in any form (canonical list, Claude scalar, or the legacy key that
+#: ``--update --merge`` renames). Its absence is what ``render_builder_file`` refuses.
+_BUILDER_SCOPE_KEY_RE = re.compile(r"^(?:tools|allowed-tools):", re.MULTILINE)
 
 
 def claude_tool_names(tokens: list[str] | tuple[str, ...]) -> list[str]:
@@ -782,7 +789,18 @@ def claude_tool_names(tokens: list[str] | tuple[str, ...]) -> list[str]:
 
 
 def _fallback_grant(agent: str | None, reason: str) -> str:
-    """Return the read-only default grant, warning that ``agent`` had no usable tool scope (IM item 42)."""
+    """Return the read-only default grant, warning that ``agent`` had no usable tool scope (IM item 42).
+
+    Args:
+        agent: The agent's slug, or None when the caller has none.
+        reason: Which scope was missing, for the warning.
+
+    Returns:
+        :data:`_CLAUDE_DEFAULT_ALLOWED_TOOLS`.
+
+    Raises:
+        Nothing. It emits a ``UserWarning``; ``convert_team`` records it in ``ConvertResult.notices``.
+    """
     warnings.warn(
         f"{agent or 'an agent'}: no usable tool scope ({reason}); granting the read-only default "
         f"`{_CLAUDE_DEFAULT_ALLOWED_TOOLS}`. Declare `tools:` in its front matter if it needs more.",

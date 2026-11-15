@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Behaviour change:** a hand-written or converted agent with no usable `tools:` loses `Bash`, `Write` and `Edit`
     on its next render, `--convert` or interop import. No shipped template reaches the fallback: every agent
     template declares `tools:`, and a render of each example brief for Claude and Grok produced no fallback.
+  - **Who is affected:** agents the templates don't produce, which are hand-written, operator-added, converted or
+    imported agents. `--convert` reports each narrowed agent in its notices. A source whose `tools:` is a YAML block
+    list is still refused as a widening, not narrowed. Files already on disk keep their grant: `--update --merge`
+    never widens or silently narrows an edited capability line, so an existing agent keeps `Bash, Read, Write, Edit`
+    until it is re-converted or edited.
+  - **The team-builder fails closed (@security):** a Claude builder with no front matter, or no `tools:` /
+    `allowed-tools:` key, now raises instead of passing through, because Claude gives it every tool. Grok's builder
+    already did. The shipped builder declares `tools:`.
   - **Migration:** if the warning names an agent that needs to write or run commands, give it an inline list, for
     example `tools: ['read', 'search', 'edit', 'execute']`, and re-render.
   - The WASM narrowing refusal (`wasm_enforcement._refuse_empty`) still fails closed on an empty list; its message

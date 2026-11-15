@@ -72,6 +72,26 @@ def test_the_front_matter_injector_defaults_to_read_only() -> None:
     assert f"tools: {READ_ONLY}" in out
 
 
+@pytest.mark.parametrize("builder", [
+    "# Team Builder\n\nNo front matter.\n",
+    "---\nname: Team Builder\ndescription: \"b\"\n---\n\n# Team Builder\n",
+])
+def test_an_unscoped_claude_builder_is_refused(builder: str) -> None:
+    # @security: render_builder_file returned these unchanged, and Claude gives a sub-agent with no tools: key the
+    # whole tool pool. It now fails closed, as Grok's builder does.
+    with pytest.raises(ValueError, match="needs front matter with a `tools:` line"):
+        ClaudeAdapter().render_builder_file(builder, {})
+
+
+def test_the_shipped_claude_builder_still_renders() -> None:
+    from pathlib import Path
+
+    template = (Path(claude_mod.__file__).resolve().parents[1] / "templates" / "builder"
+                / "team-builder-claude.template.md").read_text(encoding="utf-8")
+    out = ClaudeAdapter().render_builder_file(template, {})
+    assert "tools: Read, Edit, Write, Grep, Glob, Bash" in out
+
+
 def test_grok_shares_the_read_only_fallback() -> None:
     from agentteams.frameworks.grok import GrokAdapter
 

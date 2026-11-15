@@ -261,7 +261,8 @@ class GrokAdapter(ClaudeAdapter):
             )
         name, description = _extract_name_description(content, agent_slug, manifest)
         _model, disallowed, _permission = _extract_claude_optional_keys(content)
-        tools, disallowed = _translate_agent_tools(manifest, agent_slug, _map_allowed_tools(content, agent_slug), disallowed)
+        tools, disallowed = _translate_agent_tools(
+            manifest, agent_slug, _map_allowed_tools(content, agent_slug), disallowed)
         body = self._strip_handoffs_section(self._strip_yaml_front_matter(content))
         return (_front_matter(name, description, tools, disallowed) + body).strip() + "\n"
 
