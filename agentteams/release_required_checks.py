@@ -44,8 +44,12 @@ from pathlib import Path
 
 GREEN = {"success"}
 BACKUP_DIR = Path.home() / ".local" / "state" / "agentteams" / "branch-protection"
-#: How the dry run, ``--apply`` and ``--restore`` print the command to run next.
-COMMAND = "python3 -m agentteams.release_required_checks"
+#: The command as documentation and generated teams name it (:mod:`agentteams.github_management` imports it).
+COMMAND = "python -m agentteams.release_required_checks"
+#: How the dry run, ``--apply`` and ``--restore`` print the next command: this interpreter, so it runs as shown.
+_RUN = f"{shlex.quote(sys.executable)} -m agentteams.release_required_checks"
+#: Seconds one ``gh`` call may take before it is refused (a stuck call must not hang the release).
+GH_TIMEOUT = 120
 _BACKUP_SUFFIX = "-required-checks-"
 _VERSION = re.compile(r"\d+(?:\.\d+)*")
 
@@ -169,7 +173,11 @@ def fingerprint(proposal: Proposal, *, strict: bool, pr: int, head_sha: str) -> 
 
 def _gh(*args: str, stdin: str | None = None) -> str:
     gh = os.environ.get("GH", "gh")
-    proc = subprocess.run([gh, *args], input=stdin, capture_output=True, text=True, check=False)
+    try:
+        proc = subprocess.run([gh, *args], input=stdin, capture_output=True, text=True, check=False,
+                              timeout=GH_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"gh {' '.join(args[:3])} did not answer within {GH_TIMEOUT}s") from None
     if proc.returncode != 0:
         raise Refused(f"gh {' '.join(args[:3])} failed: {proc.stderr.strip()}")
     return proc.stdout
@@ -301,7 +309,7 @@ def _restore(repo: str, path: Path, apply_fp: str | None) -> int:
     _show(before, branch)
     fp = fingerprint(before, strict=strict, pr=saved["pr"], head_sha=saved["head"])
     if apply_fp is None:
-        print(f"\nfingerprint {fp}\napply: {COMMAND} --restore {shlex.quote(str(path))} --apply {fp}")
+        print(f"\nfingerprint {fp}\napply: {_RUN} --restore {shlex.quote(str(path))} --apply {fp}")
         return 0
     if apply_fp != fp:
         raise Refused(f"fingerprint {apply_fp} does not match the restore shown now ({fp}); run it again")
@@ -354,7 +362,7 @@ def run(argv: list[str] | None = None) -> int:
             extra = "".join(f" --add {shlex.quote(n)}" for n in a.add) + "".join(f" --drop {shlex.quote(n)}" for n in a.drop)
             print(f"\nfingerprint {fp} (PR {a.pr} head {head[:12]}, strict={strict})")
             ib = f" --integration-branch {shlex.quote(a.integration_branch)}" if a.integration_branch else ""
-            print(f"apply: {COMMAND} --pr {a.pr}{ib}{extra} --apply {fp}")
+            print(f"apply: {_RUN} --pr {a.pr}{ib}{extra} --apply {fp}")
             return 0
         if a.apply != fp:
             raise Refused(f"fingerprint {a.apply} does not match the current proposal {fp}: the PR head, {base}'s "
@@ -370,7 +378,7 @@ def run(argv: list[str] | None = None) -> int:
         _, now = _protection(repo, base)
         if now != p.new:
             raise Refused(f"after the change {base} requires {sorted(now)}; restore with --restore {backup}")
-        print(f"{base} now requires the proposed set. Undo (shows it first): {COMMAND} --restore {shlex.quote(str(backup))}")
+        print(f"{base} now requires the proposed set. Undo (shows it first): {_RUN} --restore {shlex.quote(str(backup))}")
         return 0
     except Refused as exc:
         print(f"STOPPED: {exc}", file=sys.stderr)

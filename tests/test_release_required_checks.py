@@ -220,4 +220,16 @@ def test_the_integration_branch_comes_from_the_flag(monkeypatch, capsys) -> None
 
 
 def test_printed_commands_use_the_module(capsys) -> None:
-    assert rrc.COMMAND == "python3 -m agentteams.release_required_checks"
+    assert rrc.COMMAND == "python -m agentteams.release_required_checks"
+    assert rrc._RUN.endswith(" -m agentteams.release_required_checks")
+
+
+def test_a_stuck_gh_call_is_refused(monkeypatch) -> None:
+    import subprocess
+
+    def hang(*a, **k):
+        raise subprocess.TimeoutExpired(cmd="gh", timeout=k["timeout"])
+
+    monkeypatch.setattr(rrc.subprocess, "run", hang)
+    with pytest.raises(rrc.Refused, match="did not answer"):
+        rrc._gh("api", "repos/o/r")

@@ -29,6 +29,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from agentteams.release_required_checks import COMMAND  # the one definition of the command
+
 #: The placeholder that carries the section body.
 PLACEHOLDER = "GITHUB_MANAGEMENT_RULE"
 #: ``@pr-manager`` rule 2: what "explicit operator clearance" means (``""`` when off).
@@ -37,8 +39,6 @@ PR_CLEARANCE = "GITHUB_MGMT_PR_CLEARANCE"
 SECURITY_ROWS = "GITHUB_MGMT_SECURITY_ROWS"
 #: Integration-branch reference §3: the required-check step of a release (``""`` when off).
 RELEASE_STEP = "GITHUB_MGMT_RELEASE_STEP"
-#: The command teams run to switch the default branch's required checks.
-COMMAND = "python -m agentteams.release_required_checks"
 
 _APPROVAL = (
     "the operator's **live, in-session** answer (the host's interactive picker, or their own typed reply) that names "
@@ -184,7 +184,7 @@ def update_notice(rendered: list[tuple[str, str]], output_dir: Path) -> str | No
                         "section): a merge into the default branch needs your live approval naming the PR and head "
                         "SHA, and a required-check switch needs your approval of its fingerprint. Turn it off with "
                         "github_management: false in the brief.")
-        except OSError:
+        except OSError:  # an unreadable on-disk copy: the notice is advisory, and the render itself reports I/O errors
             continue
     return None
 
