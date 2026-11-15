@@ -17,7 +17,7 @@ and printed by `agentteams --version`.
 - **Recording only.** Refusing an off-main or dirty source is the consumer's policy, as mathAgents' refresh
   guard does.
 - **`--version` output:** `agentteams 1.0.0rc8 (checkout 729a0add38f1 main, dirty)`, with `, not on a remote` appended when `on_remote` is `False`.
-- **Not on a remote (IM item 29).** A render from a local-only branch records a pin no CI can fetch (Tracers and MarketForge got `09dcf0d5` / `820514ac` this way). `--update` warns on every build-log write, and `--doctor` reports it. `on_remote` reads the local remote-tracking refs and never fetches: a commit pushed since the last fetch reads as not on a remote until the next `git fetch`.
+- **Not on a remote (IM item 29).** A render from a local-only branch records a pin no CI can fetch (Tracers and MarketForge got `09dcf0d5` / `820514ac` this way). Every run that writes a build log (a generate or an `--update`, never `--dry-run`) warns, and `--doctor` reports it, re-checking live whenever the running checkout knows the commit. `on_remote` reads the local remote-tracking refs and never fetches: a commit pushed since the last fetch reads as not on a remote until the next `git fetch`.
 
 | Name | Purpose |
 |---|---|

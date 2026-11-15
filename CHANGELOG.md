@@ -14,10 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `agentteams_source` in `references/build-log.json` gains `on_remote`: for a `checkout`, whether a
     remote-tracking branch contains the commit (`git branch -r --contains`, local refs only, no fetch); `None` for
     the other kinds or when git can't tell. `--version` adds `, not on a remote`.
-  - `--update` prints a WARN when it writes a build log for an unpushed checkout, naming the commit and branch.
-  - `--doctor` has a new **Agentteams source** section (WARN): a surface whose build log records an unpushed
-    checkout commit. A log written before this release is checked against the running checkout when it knows the
-    commit.
+  - Every run that writes a build log (a generate or an `--update`; not `--dry-run`) prints a WARN for an unpushed
+    checkout, naming the commit and branch.
+  - `--doctor` has a new **Agentteams source** section (WARN, never FAIL): a surface whose build log records a
+    checkout commit that no local remote-tracking ref contains. Whenever the running checkout knows the commit it
+    re-checks live, so a commit pushed since the render stops warning; otherwise it uses the recorded value and
+    says so. An unreadable log gets its own WARN line.
   - Warn only. A commit pushed since the last `git fetch` reads as not on a remote until the next fetch.
 
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)

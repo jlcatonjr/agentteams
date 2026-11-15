@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -47,7 +48,7 @@ def _from_checkout(package_dir: Path) -> dict[str, Any] | None:
     if not (repo / ".git").exists():
         return None
     commit = _git(repo, "rev-parse", "HEAD")
-    if not commit or not _COMMIT_RE.match(commit):
+    if not commit or not _COMMIT_RE.fullmatch(commit):
         return None
     branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
     status = _git(repo, "status", "--porcelain")
@@ -75,7 +76,7 @@ def _from_distribution() -> dict[str, Any]:
     if not isinstance(info, dict):
         info = {}
     vcs = info.get("vcs_info") if isinstance(info.get("vcs_info"), dict) else {}
-    if isinstance(vcs.get("commit_id"), str) and _COMMIT_RE.match(vcs["commit_id"]):
+    if isinstance(vcs.get("commit_id"), str) and _COMMIT_RE.fullmatch(vcs["commit_id"]):
         return {"kind": "vcs-pin", "commit": vcs["commit_id"], "branch": None, "dirty": False, "on_remote": None}
     dir_info = info.get("dir_info")
     if isinstance(dir_info, dict) and not dir_info.get("editable"):
@@ -149,10 +150,14 @@ def unpushed_line(prov: dict[str, Any]) -> str | None:
     """
     if prov.get("kind") != "checkout" or prov.get("on_remote") is not False:
         return None
-    commit, branch = str(prov.get("commit") or "")[:12], prov.get("branch")
+    raw = prov.get("commit")
+    # A recorded commit comes from a consumer file: only a hex id is printed (@security: no raw bytes to a terminal).
+    commit = raw[:12] if isinstance(raw, str) and _COMMIT_RE.fullmatch(raw) else "<invalid commit>"
+    branch = prov.get("branch")
     on = f" on local branch {branch!r}" if branch else ""
-    return (f"agentteams commit {commit}{on} is on no remote-tracking branch, so a CI that pins it cannot fetch it. "
-            f"Push it, or render from a pushed commit (git fetch first if it was pushed since)")
+    return (f"agentteams commit {commit}{on} is in no local remote-tracking ref, so a CI that pins it may not be able "
+            f"to fetch it. Push it or render from a pushed commit; if it was pushed since, fetch first. A squash-merged "
+            f"branch that was deleted leaves its commits unfetchable too")
 
 
 def warn_if_unpushed(prov: dict[str, Any]) -> dict[str, Any]:
@@ -167,8 +172,6 @@ def warn_if_unpushed(prov: dict[str, Any]) -> dict[str, Any]:
     Raises:
         Nothing.
     """
-    import sys
-
     if line := unpushed_line(prov):
         print(f"[WARN] {line}.", file=sys.stderr)
     return prov
@@ -187,11 +190,18 @@ def commit_on_remote(commit: str) -> bool | None:
     Raises:
         Nothing.
     """
-    import agentteams
-
-    if not _COMMIT_RE.match(commit or "") or not agentteams.__file__:
-        return None
-    repo = Path(agentteams.__file__).resolve().parent.parent
-    if not (repo / ".git").exists() or _git(repo, "cat-file", "-e", f"{commit}^{{commit}}") is None:
+    repo = _checkout_repo() if _COMMIT_RE.fullmatch(commit or "") else None
+    if repo is None or _git(repo, "cat-file", "-e", f"{commit}^{{commit}}") is None:
         return None
     return _on_remote(repo, commit)
+
+
+def _checkout_repo() -> Path | None:
+    """The git work tree the running agentteams package lives in, or None (an installed package, or an OS error)."""
+    import agentteams
+
+    try:
+        repo = Path(agentteams.__file__).resolve().parent.parent if agentteams.__file__ else None
+        return repo if repo is not None and (repo / ".git").exists() else None
+    except OSError:
+        return None

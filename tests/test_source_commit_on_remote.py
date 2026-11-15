@@ -71,7 +71,7 @@ LOCAL = {"kind": "checkout", "commit": "09dcf0d5" + "0" * 32, "branch": "feat/fe
 
 def test_the_warning_names_the_commit_and_branch_and_only_fires_for_an_unpushed_checkout():
     line = sp.unpushed_line(LOCAL)
-    assert line and "09dcf0d50000" in line and "feat/feature-audit-effectiveness" in line and "no remote" in line
+    assert line and "09dcf0d50000" in line and "feat/feature-audit-effectiveness" in line and "no local remote-tracking ref" in line
     for prov in ({**LOCAL, "on_remote": True}, {**LOCAL, "on_remote": None},
                  {"kind": "vcs-pin", "commit": "abc1234", "on_remote": None}, {"kind": "package"}):
         assert sp.unpushed_line(prov) is None, prov
@@ -96,7 +96,7 @@ def test_update_warns_and_records_on_remote(tmp_path, monkeypatch, capsys):
     rc = build_team.main(["--description", str(brief), "--project", str(tmp_path), "--framework", "claude",
                           "--output", str(out), "--no-scan", "--yes", *seed_offline_intel(out, "claude")])
     assert rc == 0
-    assert "is on no remote-tracking branch" in capsys.readouterr().err
+    assert "is in no local remote-tracking ref" in capsys.readouterr().err
     source = json.loads((out / "references" / "build-log.json").read_text(encoding="utf-8"))["agentteams_source"]
     assert source["on_remote"] is False
 
@@ -123,6 +123,24 @@ def test_doctor_checks_an_older_log_against_the_running_checkout(tmp_path, monke
     assert doctor._agentteams_source(_project_with_log(tmp_path / "b", older))[0] == []
 
 
+def test_doctor_re_checks_a_recorded_false_live_and_says_when_it_cannot(tmp_path, monkeypatch):
+    # @adversarial: a recorded on_remote: false must clear once the commit is pushed, when this checkout can tell.
+    monkeypatch.setattr(sp, "commit_on_remote", lambda commit: True)
+    assert doctor._agentteams_source(_project_with_log(tmp_path, LOCAL)) == ([], 0)
+    monkeypatch.setattr(sp, "commit_on_remote", lambda commit: None)
+    lines, _ = doctor._agentteams_source(_project_with_log(tmp_path / "b", LOCAL))
+    assert len(lines) == 1 and "as recorded at render" in lines[0]
+
+
+@pytest.mark.parametrize("body", ["{ not json", "\xff\xfe"])
+def test_an_unreadable_build_log_is_a_warn_line_not_a_fail(tmp_path, body):
+    refs = tmp_path / "proj" / ".github" / "agents" / "references"
+    refs.mkdir(parents=True)
+    (refs / "build-log.json").write_bytes(body.encode("latin-1"))
+    lines, failed = doctor._agentteams_source(tmp_path / "proj")
+    assert failed == 0 and len(lines) == 1 and "could not be read" in lines[0]
+
+
 def test_doctor_is_quiet_for_a_pushed_or_non_checkout_source(tmp_path):
     for i, source in enumerate(({**LOCAL, "on_remote": True}, {"kind": "vcs-pin", "commit": "abc1234"})):
         assert doctor._agentteams_source(_project_with_log(tmp_path / str(i), source)) == ([], 0)
@@ -131,3 +149,20 @@ def test_doctor_is_quiet_for_a_pushed_or_non_checkout_source(tmp_path):
 def test_commit_on_remote_is_none_for_an_unknown_or_malformed_commit():
     assert sp.commit_on_remote("not-a-sha") is None
     assert sp.commit_on_remote("f" * 40) is None
+    assert sp.commit_on_remote("abc1234\n") is None          # fullmatch: a trailing newline is not a commit id
+
+
+@pytest.mark.parametrize("commit", ["\x1b[31mred\x1b[0m", "abc1234\n", 1234567, None])
+def test_a_recorded_commit_that_is_not_a_hex_id_is_never_printed(commit):
+    # @security: the commit comes from a consumer's build log; raw bytes (an ANSI sequence) must not reach a terminal.
+    line = sp.unpushed_line({**LOCAL, "commit": commit})
+    assert line and "<invalid commit>" in line and "\x1b" not in line and "\n" not in line
+
+
+@pytest.mark.parametrize("body", ["[]", "\"x\"", "3"])
+def test_doctor_skips_a_build_log_that_is_not_an_object(tmp_path, body):
+    # @security: a list-shaped log made .get raise AttributeError, which run_doctor does not catch.
+    refs = tmp_path / "proj" / ".github" / "agents" / "references"
+    refs.mkdir(parents=True)
+    (refs / "build-log.json").write_text(body, encoding="utf-8")
+    assert doctor._agentteams_source(tmp_path / "proj") == ([], 0)
