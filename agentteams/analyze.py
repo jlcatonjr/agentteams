@@ -20,6 +20,7 @@ from agentteams.write_policy import manifest_fields as _wp_manifest_fields
 from agentteams.write_policy import resolve as _wp_resolve
 from agentteams import agent_refactor_codes as _agent_refactor_codes
 from agentteams import branch_model as _branch_model
+from agentteams import github_management as _github_management
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
@@ -537,6 +538,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     auto_resolved.update(_branch_model.default_placeholders())  # filled by branch_model at render time
     # #453 opt-in: "" unless the brief sets agent_refactor.violation_codes, so the default render is byte-identical.
     auto_resolved[_agent_refactor_codes.PLACEHOLDER] = _agent_refactor_codes.section(description)
+    auto_resolved.update(_github_management.placeholders(description))  # the GitHub management section
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)

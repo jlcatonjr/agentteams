@@ -54,6 +54,7 @@ GOVERNANCE_TARGET_STEMS: tuple[str, ...] = (
     "exception-registry-json",     # the Rule 15 exception registry references/exception-registry.json (sets its own cap)
     "carveout-high-water",         # the carve-out rollback mark references/carveout-high-water.json
     "toolchain-group",             # First-party toolchain group: the operator-signed first-party toolchain group file
+    "dev-merge-authorization",     # the operator-signed integration-branch merge authorization (cli/dev_merge)
 )
 
 #: ELEVATED constitution files (IM item 19, G-23-2): the instructions the other surfaces read. A write to one is
