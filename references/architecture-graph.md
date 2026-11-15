@@ -1200,7 +1200,8 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [],
       "external": [
-        "jsonschema"
+        "jsonschema",
+        "referencing"
       ],
       "repo_local": []
     },

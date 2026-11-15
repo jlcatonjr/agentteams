@@ -1,7 +1,7 @@
 """brief_schema.py — check a project description against its schema when it is loaded (IM item 13a, G-17-2).
 
 ``ingest.validate`` checks three fields; ``schemas/project-description.schema.json`` was never run on a brief, and it
-had drifted from the code (98 of 159 descriptors in the workspace failed it, mostly over archetypes and tool categories
+had drifted from the code (96 of 155 descriptors in the workspace failed it, mostly over archetypes and tool categories
 the code supports). This module runs the schema on every JSON description ``ingest.load`` reads and **warns** — it
 never refuses this release. Refusal comes later, once the census is clean.
 
@@ -56,10 +56,30 @@ def known_archetypes() -> frozenset[str]:
 
 @lru_cache(maxsize=1)
 def _validator() -> Any:
-    """Return the cached Draft 7 validator for the project-description schema (it raises only on a broken install)."""
-    import jsonschema
+    """Return the cached Draft 7 validator for the project-description schema (it raises only on a broken install).
 
-    return jsonschema.Draft7Validator(json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
+    The schema ``$ref``s sibling schemas (``mcp_servers`` items are ``mcp-server.schema.json``), so every schema in
+    ``schemas/`` is registered under its ``$id``; without that, a brief with ``mcp_servers`` failed to validate.
+    """
+    import jsonschema
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT7
+
+    resources = []
+    for sibling in SCHEMA_PATH.parent.glob("*.schema.json"):
+        contents = json.loads(sibling.read_text(encoding="utf-8"))
+        resource = Resource.from_contents(contents, default_specification=DRAFT7)
+        resources.append((contents.get("$id", sibling.name), resource))
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    return jsonschema.Draft7Validator(schema, registry=Registry().with_resources(resources))
+
+
+def _check_failures() -> tuple[type[BaseException], ...]:
+    """Return the exceptions a schema check can raise on a broken install or schema; ``warn_on_load`` reports them."""
+    from jsonschema.exceptions import SchemaError
+    from referencing.exceptions import Unresolvable
+
+    return (OSError, ValueError, TypeError, LookupError, RecursionError, SchemaError, Unresolvable)
 
 
 def schema_errors(description: dict[str, Any]) -> list[str]:
@@ -120,7 +140,7 @@ def warn_on_load(path: Path, description: dict[str, Any]) -> None:
     _warned.add(key)
     try:
         errors = schema_errors(description)
-    except (OSError, ValueError, TypeError, LookupError, RecursionError) as exc:
+    except _check_failures() as exc:
         print(f"{WARN_PREFIX}{path.name}: the project-description schema check was skipped ({type(exc).__name__})", file=sys.stderr)
         return
     if errors:

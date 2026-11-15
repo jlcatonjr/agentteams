@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### fixed (the project-description schema matches the code and is checked on load, warn only; IM item 13a)
 
 - **G-17-2.** `ingest.validate` checked three fields and `schemas/project-description.schema.json` was never run on
-  a brief. It had also drifted: 98 of 159 descriptors in the workspace failed it.
+  a brief. It had also drifted: 96 of 155 descriptors in the workspace failed it.
   - **The schema matches the code.** `selected_archetypes` takes any lowercase slug, so archetypes another layer
     provides are no longer schema errors. `x-agentteams-known-archetypes` lists the 21 agentteams renders, and a
     test keeps it equal to the domain templates, so it can't drift again. The old enum lacked `agentteams-updater`,
@@ -27,8 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **The fleet shows the warning** (@adversarial): it captures each render's output, so a printed WARN never reached
     the operator. The fleet report's `schema_warnings` carries it, on the first target of each workspace.
   - **The check never fails a load:** an error while checking is a `[WARN]` too, and each listed issue is clipped to
-    160 characters, so a `oneOf` message can't echo a whole brief value.
-  - **Census for the later refusal:** 98 failing descriptors before the schema fix, 23 after (unchanged by the
+    160 characters, so a `oneOf` message can't echo a whole brief value. The validator registers the sibling
+    schemas by `$id`, so `mcp_servers` items resolve against `mcp-server.schema.json`.
+  - **Census for the later refusal:** 96 of 155 descriptors failing before the schema fix, 23 after (unchanged by the
     `instance_maintenance` addition, which no failing brief used). The 23 include project names with spaces, which
     the schema documents as slug-safe and the code tolerates.
 

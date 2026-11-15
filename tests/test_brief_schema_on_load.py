@@ -2,7 +2,7 @@
 
 ``ingest.validate`` checked three fields and the schema was never run on a brief. It had also drifted: its archetype
 enum lacked seven archetypes agentteams renders (tool-doc-researcher among them, which keyword selection picks), and its
-tool categories rejected "infrastructure" and "build". 98 of 159 descriptors in the workspace failed it. Warn mode only
+tool categories rejected "infrastructure" and "build". 96 of 155 descriptors in the workspace failed it. Warn mode only
 this release; refusal comes once the census is clean.
 """
 
@@ -162,3 +162,30 @@ def test_the_manifest_schema_accepts_what_the_analyzer_builds():
     jsonschema.validate(["agentteams-updater", "tool-doc-researcher", "interpretation-advisor"], archetypes)
     text = json.dumps(schema)
     assert text.count('"infrastructure"') >= 2 and text.count('"build",') >= 2
+
+
+_MCP_SERVER = {"artifact_type": "mcp-server", "mcp_server_schema_version": "1.0", "server_id": "example-pg",
+               "domain": "data-access", "trust_tier": "first-party", "transport": "stdio",
+               "tools": [{"name": "run_query", "side_effects": "read"}], "scope": ["data-analyst-expert"],
+               "progressive_disclosure": "lazy", "security_review": {"required": False}}
+
+
+def test_a_brief_with_mcp_servers_resolves_the_sibling_schema(tmp_path, capsys):
+    # Full suite: the schema $refs mcp-server.schema.json; unregistered, the check raised Unresolvable on load.
+    doc = {**json.loads(EXAMPLES[0].read_text(encoding="utf-8")), "mcp_servers": [_MCP_SERVER]}
+    assert brief_schema.schema_errors(doc) == []
+    bad = {**doc, "mcp_servers": [{**_MCP_SERVER, "transport": "carrier-pigeon"}]}
+    assert any(e.startswith("mcp_servers/0/transport") for e in brief_schema.schema_errors(bad))
+    ingest.load(_write(tmp_path, doc), scan_project=False)
+    assert capsys.readouterr().err == ""
+
+
+def test_an_unresolvable_reference_is_a_warning_not_a_crash(tmp_path, capsys, monkeypatch):
+    from referencing.exceptions import Unresolvable
+
+    def broken(_description):
+        raise Unresolvable(ref="missing.schema.json")
+
+    monkeypatch.setattr(brief_schema, "schema_errors", broken)
+    ingest.load(_write(tmp_path, json.loads(EXAMPLES[0].read_text(encoding="utf-8"))), scan_project=False)
+    assert "schema check was skipped (Unresolvable)" in capsys.readouterr().err

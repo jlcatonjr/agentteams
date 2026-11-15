@@ -4,7 +4,7 @@
 
 `ingest.load` runs `schemas/project-description.schema.json` on every JSON description it reads (IM item 13a,
 G-17-2). Before that, `ingest.validate` checked only `project_goal`, component slugs and tool `version_source`, and the
-schema had drifted from the code: 98 of 159 descriptors in the workspace failed it. With the schema brought in line,
+schema had drifted from the code: 96 of 155 descriptors in the workspace failed it. With the schema brought in line,
 23 still fail, and those are real brief problems.
 
 **Warn only, this release.** A mismatch prints one `[WARN]` per description file per process, with the count and the
