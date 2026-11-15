@@ -28,7 +28,7 @@
     "agentteams/cli/effect_classifier.py": "8466dcf2f3288a9517ad2037030cabb688afeb58efc780c69a8511bd53773548",
     "agentteams/cli/exception_registry.py": "f1aa98336c9685736fbef541b5a64790ae27d2bcad77318adb4fb56ec53bdb2d",
     "agentteams/cli/frozen_surfaces.py": "21be6d82bf7b0215bc26581abd52bb10cc4064c9ef04278c0cd9c7242aa96852",
-    "agentteams/cli/governance_targets.py": "9f898fd683f25199334e5ee7caa737283daf9a34a62a01f29a7138cf4fba679b",
+    "agentteams/cli/governance_targets.py": "828739399b4014fc37af43f30621895413a8b4843008a578242a60a897ca1905",
     "agentteams/cli/grants.py": "71f900ef274fe604134a78994f318fb8eac4ee6dbfeb5415397555a7ab4c7887",
     "agentteams/cli/management_directives.py": "e8ad736f74d065cabfadbb0e161393ea198e8a21c427d6bae08a178b7be613ac",
     "agentteams/cli/mcp_grant_commands.py": "5b5787ba1bb9d016860f0d81b51212b165b962ce288c60ab9b9e7c07dec72cbe",

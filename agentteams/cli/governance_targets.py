@@ -71,13 +71,15 @@ GOVERNANCE_TARGET_STEMS: tuple[str, ...] = (
 #:
 #: The file names are matched as a whole path segment or word, never as a substring. A substring ``agents-md`` would
 #: also claim this repository's own adapter (``agentteams/frameworks/agents_md.py``) and docs. Before folding, a
-#: target is percent-decoded and split on whitespace, slashes and the ``:``/``#``/``?`` of a ``file:`` prefix, line
-#: anchor or query. So these match: ``AGENTS.md``, ``sub/AGENTS.md``, ``agents_md``, ``AGENTS%2Emd``,
-#: ``file:AGENTS.md``, ``AGENTS.md#L1`` and "edit AGENTS.md now". ``agents_md.py`` does not.
+#: target is percent-decoded and split on every character that cannot be part of a file name (slashes, whitespace,
+#: ``:``/``#``/``?``, ``@``, ``,``, ``;`` …). So these match: ``AGENTS.md``, ``sub/AGENTS.md``, ``agents_md``,
+#: ``AGENTS%2Emd``, ``file:AGENTS.md``, ``AGENTS.md#L1``, ``@AGENTS.md``, ``AGENTS.md,README.md`` and
+#: "edit AGENTS.md now". ``agents_md.py`` does not.
 ELEVATED_CONSTITUTION_STEMS: tuple[str, ...] = ("goosehints", "github-instructions")
 ELEVATED_CONSTITUTION_FILENAMES: frozenset[str] = frozenset({"agents-md", "agents-override-md", "claude-local-md"})
-_TOKEN_SPLIT = re.compile(r"[\s/\\:#?]+")
-_TOKEN_TRIM = "\"'`,;()[]{}<>"
+#: Anything that cannot be part of a file name splits a token (@security re-review: ``@AGENTS.md``,
+#: ``AGENTS.md,README.md`` and ``AGENTS.md;x`` must match): an allow-list of word characters, ``.`` and ``-``.
+_TOKEN_SPLIT = re.compile(r"[^\w.-]+")
 
 
 def canon_path(path: str) -> str:
@@ -154,7 +156,7 @@ def target_is_elevated_constitution(target: str) -> bool:
     if any(stem in normalized for stem in ELEVATED_CONSTITUTION_STEMS):
         return True
     tokens = _TOKEN_SPLIT.split(unquote(unicodedata.normalize("NFKC", target)))  # decode first: %2F splits too
-    return any(canon_path(tok.strip(_TOKEN_TRIM)) in ELEVATED_CONSTITUTION_FILENAMES for tok in tokens)
+    return any(canon_path(tok) in ELEVATED_CONSTITUTION_FILENAMES for tok in tokens)
 
 
 __all__ = [

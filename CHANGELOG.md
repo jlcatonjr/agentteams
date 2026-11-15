@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     surfaces, so freeze and unfreeze rows list them, and a non-eligible unfreeze could never be signed.
   - **Behaviour change:** a freeze, unfreeze or render row for those surfaces that lists `AGENTS.md` or `.goosehints`
     now needs the operator's Ed25519 signature; HMAC no longer clears it.
+  - **Migration:** in a signing-governed workspace, an HMAC-signed row that names one of these files no longer
+    authorizes. Find such rows: `effect_targets`, `effect_grants` or the scope text naming `AGENTS.md`,
+    `AGENTS.override.md`, `.goosehints`, `CLAUDE.local.md` or `.github/instructions`. They include the freeze and
+    unfreeze rows for the codex, goose and agents-md surfaces. Re-mint each with `--sign-decision` (operator,
+    Ed25519) before the next gated render. A management directive whose scope names one is refused, so re-issue the
+    task without it.
   - The file names are matched as whole tokens, not substrings, so this repository's own `agents_md.py` adapter, its
     tests and docs stay ordinary content. Across every tracked path, none changes classification.
   - Tokens split on whitespace, slashes and `:`/`#`/`?`, after percent-decoding, so `AGENTS%2Emd`,

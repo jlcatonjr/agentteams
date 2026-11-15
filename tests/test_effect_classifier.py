@@ -113,6 +113,7 @@ _OTHER_CONSTITUTION_FILES = [
     "C:\\repo\\AGENTS.md",
     "AGENTS%2Emd", "docs%2FAGENTS.md",        # @security: percent-encoding
     "file:AGENTS.md", "AGENTS.md#L1", "AGENTS.md?plain=1",  # @security: prefix / anchor / query
+    "@AGENTS.md", "AGENTS.md,README.md", "AGENTS.md;x",     # @security re-review: list and mention separators
 ]
 
 

@@ -223,7 +223,9 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   diff by hand. Sign the `overwrite` row for the remaining files.
 - **Note:** the gate checks the effects a row *declares*. It does not derive a render's actual writes, so a row that
   leaves CLAUDE.md out of `effect_targets` is not refused. Review render rows for that omission. Deriving the write
-  set is tracked as a separate remediation item.
+  set is IM item 43 (G-23-3).
+- **Tracking:** 1.0 known limitation (found by mathAgents, 2026-10-16). A render mode that leaves CLAUDE.md to the
+  operator and prints the diff is planned for 1.0.x.
 
 ### The other surfaces' constitution files need the operator's signature, but are not refused like CLAUDE.md
 
@@ -240,9 +242,7 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   only.
 - **Who:** signing-governed teams on those surfaces. A freeze, unfreeze or render row that lists one of these files
   now needs the operator's Ed25519 signature, where an HMAC row used to clear.
-- **Tracking:** IM item 19 (G-23-2), operator ruling 2026-11-14. A template rewording of Rule 15(c) is a follow-up.
-- **Tracking:** 1.0 known limitation (found by mathAgents, 2026-10-16). A render mode that leaves CLAUDE.md to the
-  operator and prints the diff is planned for 1.0.x.
+- **Tracking:** IM item 19 (G-23-2), operator ruling 2026-11-14. Rewording Rule 15(c) is IM item 44.
 
 ### Installing an existing operator key into a second team needs a manual step
 
