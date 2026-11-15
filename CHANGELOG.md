@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fixed (slug checks refuse a trailing newline; #473)
 
-- Every slug check used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
-  `"agent\n"` passed. The checks now use `re.fullmatch`:
+- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
+  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
   - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
   - `cli/adopt_only.py`;
   - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
@@ -17,8 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `sandbox_tokens.py`;
   - `wasm_config.py`;
   - `wasm_agent/team.py`;
-  - `interop_helpers.py`.
-- `tests/test_slug_trailing_newline.py` adds a guard that no `_SLUG_RE.match(` call remains in the package.
+  - `interop_helpers.py`;
+  - `update_lock.py` (slug-valued arguments).
+- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
+  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
+  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
   Integrity pins are re-recorded.
 
 ### added (what counts as approval for actions that guard the default branch; `github_management`)

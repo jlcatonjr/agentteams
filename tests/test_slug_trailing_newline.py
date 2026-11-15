@@ -31,6 +31,15 @@ def test_patterns_reject_a_newline_under_fullmatch(pattern):
 def test_no_slug_check_uses_match_any_more():
     from pathlib import Path
 
+    import re
+
     root = Path(__file__).resolve().parent.parent / "agentteams"
-    offenders = [str(p.relative_to(root)) for p in root.rglob("*.py") if "_SLUG_RE.match(" in p.read_text("utf-8")]
+    call = re.compile(r"\b_\w*SLUG\w*_RE\.match\(")          # _SLUG_RE, _SAFE_SLUG_RE, _SLUG_VALUE_RE, ...
+    offenders = [str(p.relative_to(root)) for p in root.rglob("*.py") if call.search(p.read_text("utf-8"))]
     assert not offenders, offenders
+
+
+def test_update_lock_slug_values_refuse_a_newline():
+    from agentteams import update_lock
+
+    assert update_lock._SLUG_VALUE_RE.fullmatch("claude,goose") and not update_lock._SLUG_VALUE_RE.fullmatch("x\n")
