@@ -1647,8 +1647,8 @@ using this flag (or a prefix of it, down to `--fleet-i`) to the operator ("ask")
 With `--update --yes`, accept a run whose roster cannot be known: the description has no
 `selected_archetypes` and the project's `.github/agents/_build-description.json` exists but cannot be
 read. Without it such a run **refuses** before anything is written; without `--yes` it only warns.
-When the stub is readable its roster is used, and a description that sets its own roster is never
-refused (IM item 12: a description with no roster re-runs keyword selection and can drop agents).
+When the stub is readable and lists known archetypes, its roster fills a description that has none;
+a description that sets its own roster is never refused (IM item 12: a description with no roster re-runs keyword selection and can drop agents).
 
 ---
 

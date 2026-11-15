@@ -38,7 +38,7 @@ def _project(tmp_path: Path, *, stub: dict | str | None = None, brief: dict | No
 
 def _ns(ws: Path, **kw) -> argparse.Namespace:
     base = {"project": None, "output": str(ws / ".github" / "agents"), "description": str(ws / "brief.json"),
-            "update": True, "yes": False, "allow_roster_shrink": False}
+            "update": True, "check": False, "yes": False, "allow_roster_shrink": False}
     return argparse.Namespace(**{**base, **kw})
 
 
@@ -52,6 +52,36 @@ def test_stub_for_finds_the_stub_from_project_output_or_the_description(tmp_path
     assert du.stub_for(None, str(ws)) == stub                                 # --output is the project root
     assert du.stub_for(None, None, str(ws / "brief.json")) == stub            # beside the description's project
     assert du.stub_for(None, None, str(stub)) is None                         # the description is never its own stub
+
+
+def test_with_project_only_that_project_s_stub_counts(tmp_path):
+    # @adversarial: an example brief rendered into another project must not bring the example's stub roster along.
+    example = _project(tmp_path / "example", stub={"selected_archetypes": STUB_ROSTER})
+    other = tmp_path / "other"
+    (other / ".github" / "agents").mkdir(parents=True)
+    assert du.stub_for(str(other), str(other / ".github" / "agents"), str(example / "brief.json")) is None
+    assert du.stub_for(str(example), None, str(example / du.STUB_REL)) is None  # never the description itself
+
+
+def test_a_fresh_render_keeps_keyword_selection(tmp_path):
+    ws = _project(tmp_path, stub={"selected_archetypes": STUB_ROSTER})
+    desc = json.loads(BRIEF.read_text(encoding="utf-8"))
+    du.apply_stub_roster(desc, ns := _ns(ws, update=False, check=False))
+    assert "selected_archetypes" not in desc and getattr(ns, du._STATE_ATTR)[0] == "none"
+    du.apply_stub_roster(desc, _ns(ws, update=False, check=True))         # --check compares like an update
+    assert desc["selected_archetypes"] == STUB_ROSTER
+
+
+@pytest.mark.parametrize("roster", [["primary-producer", "no-such-archetype"], ["primary-producer", 7],
+                                    ["../../etc"]])
+def test_a_stub_roster_with_an_unknown_archetype_is_not_applied(tmp_path, roster, capsys):
+    ws = _project(tmp_path, stub={"selected_archetypes": roster})
+    desc = json.loads(BRIEF.read_text(encoding="utf-8"))
+    du.apply_stub_roster(desc, ns := _ns(ws, yes=True))
+    assert "selected_archetypes" not in desc
+    assert getattr(ns, du._STATE_ATTR)[0] == "unreadable"
+    assert du.refuse_roster_shrink(ns, {"selected_archetypes": SELECTED}, ws) is True
+    assert "not known archetypes" in capsys.readouterr().err
 
 
 def test_a_symlinked_stub_is_never_read(tmp_path):

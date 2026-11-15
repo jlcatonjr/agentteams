@@ -11,10 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **G-17-1.** `fleet._resolve_descriptor` took the root `brief.json` whole whenever it existed. In researchteam-derived
   repos the roster lives only in `.github/agents/_build-description.json`, so a brief-only re-render re-ran keyword
   selection and dropped agents, and `--yes` applied the shrunken roster.
-  - **The stub's roster fills a description that has none.** When a description is loaded (every generate and update
-    run, so the fleet and a hand-run `--update --description brief.json` alike), a description with no
-    `selected_archetypes` takes the stub's, and the run prints where they came from. The stub is found from
-    `--project`, from `--output` (the places the dual-descriptor advisory probes), or beside the description's project.
+  - **The stub's roster fills a description that has none.** When an `--update` or `--check` run loads a description (the fleet
+    and a hand-run `--update --description brief.json` alike; a fresh render keeps keyword selection), a description
+    with no `selected_archetypes` takes the stub's, if every item is a known archetype, and the run prints where they came from. The stub is found from
+    `--project` alone when it is given, else from `--output` (the places the dual-descriptor advisory probes) or beside
+    the description's project.
     A symlinked or non-regular stub is never read. No temp file is written, and every record keeps the real
     descriptor path.
   - **Other roster keys are reported, not applied.** When the stub sets `write_policy`, `governance_agents` or
@@ -24,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **The description's own roster wins.** Archetypes it leaves out of the stub's are reported, not refused, so a
     stale stub never fails a run. The force-appended capability archetypes (`retrieval-integrator`,
     `research-analyst`, `agentteams-updater`, `vuln-remediation`) are not counted as losses.
-  - **Guard:** when the description has no roster and the stub exists but cannot be read, `--update --yes` refuses
+  - **Guard:** when the description has no roster and the stub exists but cannot be used (unparseable, or a roster
+    with an unknown archetype), `--update --yes` refuses
     before writing (the roster cannot be known) unless the new `--allow-roster-shrink` is given; without `--yes` it
     warns.
   - **Dual-descriptor advisory:** `selected_archetypes` is now one of the compared fields.
