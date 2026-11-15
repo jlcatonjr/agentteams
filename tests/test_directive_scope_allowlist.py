@@ -82,7 +82,7 @@ def test_a_precise_destructive_stem_makes_a_decision_row_relaxing(scope):
 
 
 @pytest.mark.parametrize("scope", ["Operator sign-off: residual risk", "tag-release.sh fresh-clone hardening",
-                                   "release/* branch ruleset + v* tag ruleset", "approve the docs build"])
+                                   "release/* branch naming + v* tag naming", "approve the docs build"])  # "ruleset" is a #507 stem
 def test_decision_rows_outside_the_precise_stems_keep_their_class(scope):
     # Operator ruling: the classifier does not take the allowlist or the false-positive-heavy stems.
     assert md.scope_names_refused_effect(scope) is False

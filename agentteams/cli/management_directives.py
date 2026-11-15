@@ -112,11 +112,13 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     "delet", "remov", "rm", "overwrit", "prun", "destroy", "destruct", "drop", "purg",
     "forc", "reset", "bulk", "cross-repo", "push", "deploy", "merg", "wipe", "truncat", "revert",
     # IM item 05 (operator ruling 2026-11-15): the high-precision destructive stems. Shared with the effect
-    # classifier, where they reclassified 10 of 1,231 existing decision rows.
+    # classifier; with "rotat" below they reclassify 26 of 2,387 decision rows across the workspace.
     "eras", "unlink", "clobber", "clean", "rewrit", "shred", "chmod", "chown",
     # @security re-review: rotating a key changes a trust root, so it is relaxing on the classifier too (no existing
     # decision row names it).
     "rotat",
+    # what guards the default branch (github_management: per-action live approval only; rows 811/816)
+    "protect", "required-check", "ruleset",
     # (2) governance / trust roots (incl. this feature's own ledger + roster + key config,
     # so a directive can never widen its own trust base — @security condition 2c)
     "constitution", "invariant", "governance", "reference-template", "capability-grant",
@@ -242,8 +244,13 @@ def verify_directive_signature(record: dict[str, str], *, key: str | None = None
 
 
 def _names_token(scope: str, tokens: tuple[str, ...]) -> bool:
-    """Whether lowercased ``scope`` contains a token at a word START (rules in :func:`scope_names_refused_effect`)."""
-    return any(re.search(r"(?<![a-z])" + re.escape(token), scope) for token in tokens)
+    """Whether lowercased ``scope`` contains a token at a word START (rules in :func:`scope_names_refused_effect`).
+
+    Each token is also tried against the scope with ``_`` and whitespace folded to ``-`` (#507), so a hyphenated token
+    (``required-check``) refuses ``release_required_checks`` and ``required checks`` too: only ever more refusal.
+    """
+    folded = re.sub(r"[_\s]+", "-", scope)
+    return any(re.search(r"(?<![a-z])" + re.escape(token), form) for token in tokens for form in (scope, folded))
 
 
 def scope_names_refused_effect(text: str) -> bool:
