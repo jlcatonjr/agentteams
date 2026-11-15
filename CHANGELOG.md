@@ -35,8 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot see: Claude Code lowering a level the model doesn't support, and `CLAUDE_CODE_EFFORT_LEVEL` in the caller's
   environment.
 - `@security`, `@adversarial`, `@conflict-auditor` and `@code-hygiene` are review-critical: a warning is shown in the
-  run summary and in `doctor` when one runs below the default effort (through its own entry or a lower subagent
-  role) or has its own model.
+  run summary and in `doctor` when one runs below the default effort or at a provider-only level (through its own
+  entry or the subagent role), or runs on a configured model.
 - **A separate HOME is covered for agent files only.** The main Claude session's `effortLevel` reaches only the inert
   settings example until an operator merges it.
 - `emit.print_summary` and `print_dry_run_report` moved to `agentteams/emit_report.py` (CH-07 carve). `emit`

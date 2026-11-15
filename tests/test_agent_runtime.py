@@ -98,7 +98,7 @@ def test_a_review_critical_agent_below_the_default_is_warned_by_override_or_by_r
     rt = ar.parse({"agent_runtime": {"agents": {"security": {"effort": "low", "model": "haiku"}}}})
     lines = ar.report_lines(rt, "claude", ["security", "navigator"])
     assert any("@security (review-critical governance) runs at effort low" in line for line in lines)
-    assert any("@security (review-critical governance) has its own model" in line for line in lines)
+    assert any("@security (review-critical governance) runs on a configured model" in line for line in lines)
     role_low = ar.parse({"agent_runtime": {"subagents": {"effort": "low"}}})  # @security condition 2026-11-15
     lines = ar.report_lines(role_low, "claude", ["security", "adversarial", "navigator"])
     assert sum("runs at effort low" in line for line in lines) == 2
@@ -108,7 +108,15 @@ def test_a_review_critical_agent_below_the_default_is_warned_by_override_or_by_r
 
 def test_a_governance_model_is_warned_on_copilot_cli_too():
     rt = ar.parse({"agent_runtime": {"agents": {"security": {"model": {"copilot": "GPT-5"}}}}})
-    assert any("has its own model" in line for line in ar.report_lines(rt, "copilot-cli", ["security"]))
+    assert any("runs on a configured model" in line for line in ar.report_lines(rt, "copilot-cli", ["security"]))
+
+
+def test_a_provider_only_level_or_a_role_model_for_a_review_critical_agent_is_warned():
+    rt = ar.parse({"agent_runtime": {"subagents": {"effort": {"copilot-vscode": "minimal"}}}})
+    assert any("runs at effort minimal" in line for line in ar.report_lines(rt, "copilot-vscode", ["security"]))
+    rt = ar.parse({"agent_runtime": {"subagents": {"model": "haiku"}}})
+    assert any("runs on a configured model 'haiku'" in line for line in ar.report_lines(rt, "claude", ["security"]))
+    assert not ar.report_lines(ar.parse({"agent_runtime": {"subagents": {"effort": "high"}}}), "claude", ["security"])
 
 
 def test_a_per_agent_override_covers_only_the_providers_it_names():

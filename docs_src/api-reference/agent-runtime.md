@@ -69,7 +69,9 @@ On `--update --merge`:
   2026-11-15).
 
 `@security`, `@adversarial`, `@conflict-auditor` and `@code-hygiene` are review-critical. A warning is shown when one
-of them runs below the default effort, whether through its own entry or a lower subagent role, or has its own model.
+of them runs below the default effort, or at a provider-only level that cannot be ranked (for example VS Code
+`minimal`), whether through its own entry or the subagent role. A warning is also shown when one of them runs on a
+configured model rather than the adapter default.
 The run summary and `doctor` both show it.
 
 ## Flags

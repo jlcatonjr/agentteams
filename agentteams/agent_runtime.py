@@ -473,13 +473,15 @@ def report_lines(runtime: AgentRuntime, framework: str, slugs: list[str] | None 
         for slug in sorted(REVIEW_CRITICAL_SLUGS & set(slugs)):
             if PROVIDER_EFFORTS.get(framework) is not None:
                 level = effort_for(runtime, slug, framework)
-                if level in NEUTRAL_EFFORTS and NEUTRAL_EFFORTS.index(level) < floor:
+                if level is not None and (level not in NEUTRAL_EFFORTS or NEUTRAL_EFFORTS.index(level) < floor):
+                    # A provider-only level (e.g. VS Code `minimal`) cannot be ranked, so it is warned too.
                     lines.append(f"agent runtime: WARNING: @{slug} (review-critical governance) runs at effort {level}, "
-                                 f"below the default {DEFAULT_EFFORT}.")
-            override = runtime.agents.get(slug)
-            if framework in MODEL_WRITTEN and override is not None and framework in override.model:
-                lines.append(f"agent runtime: WARNING: @{slug} (review-critical governance) has its own model "
-                             f"{override.model[framework]!r}.")
+                                 f"not a neutral level at or above the default {DEFAULT_EFFORT}.")
+            if framework in MODEL_WRITTEN:
+                model = model_for(runtime, slug, framework)
+                if model is not None:
+                    lines.append(f"agent runtime: WARNING: @{slug} (review-critical governance) runs on a configured "
+                                 f"model {model!r}, not the adapter default.")
     return lines
 
 
