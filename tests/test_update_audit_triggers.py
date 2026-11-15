@@ -56,7 +56,7 @@ def test_agent_updater_template_hands_off_to_adversarial_then_conflict() -> None
     text = Path("agentteams/templates/universal/agent-updater.template.md").read_text(encoding="utf-8")
 
     assert "agents: ['adversarial', 'conflict-auditor', 'agent-refactor']" in text
-    assert "Team initialized (first successful `build_team.py` generation)" in text
+    assert "Team initialized (first successful `agentteams` generation)" in text
     assert "Team updated (canonical: `--update --merge`)" in text
     assert "Expected output file missing on disk during update" in text
     assert "--update --merge" in text
@@ -77,7 +77,7 @@ def test_agent_updater_template_hands_off_to_adversarial_then_conflict() -> None
 def test_active_agent_updater_hands_off_to_adversarial_then_conflict() -> None:
     text = Path(".github/agents/agent-updater.agent.md").read_text(encoding="utf-8")
 
-    assert "Team initialized (first successful `build_team.py` generation)" in text
+    assert "Team initialized (first successful `agentteams` generation)" in text
     assert "Team updated (canonical: `--update --merge`)" in text
     assert "Expected output file missing on disk during update" in text
     assert "--update --merge" in text

@@ -46,6 +46,20 @@ Commit a regenerated figure only when its source changed.
   A proposal cannot widen that scope. One that touches any other path (templates, agent files, scripts)
   is a finding and needs separate scoping by the operator or the session, with that path's usual triggers.
   The session records a per-PR `@security` row (C-5) and opens a PR into `dev`, never `main`.
+- **The reverse trigger (book→module alignment):** the book describes the module, so a change to the module
+  can make the book wrong. When a PR that merges into `dev` changes a template (`agentteams/templates/**`) or
+  the constitution (the `constitutional_core` / Constitutional Rules fences, `instruction-authority`), this team's
+  `@repo-liaison` tells the research instance:
+  1. It appends one row to `.github/agents/references/adjacent-repos-coordination-log.csv`:
+     `date,agentteamsBookResearch,outbound,<PR#> <merge SHA>: <templates/fences changed>`.
+  2. It files a cross-orchestrator request naming the merge SHA, the changed paths and which side moved (below),
+     and nothing else. The request goes as a message to the instance's session, or is relayed by
+     infrastructureManagement or the operator. It is never a write to the `agentteamsBookResearch` repository (no
+     issue, file or PR), which would be an external write needing its own clearance.
+
+  The instance re-runs its Book–Module Alignment check at that SHA (`.book-source` re-fetch). A finding comes back
+  as an ordinary proposal (above), never as a write. A change to a concept or term the book defines follows the
+  book (D2), so the request says which side the PR moved.
 
 ## Which side is authoritative (D2)
 

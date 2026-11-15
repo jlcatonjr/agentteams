@@ -31,6 +31,8 @@ You execute and govern Git and GitHub workflows for ProjectRepositories. Use the
 - `references/github-workflows-merge.reference.md`
 - `references/branch-lifecycle.reference.md` *(branch states, holds, deletion guards, authorization)*
 - `references/sandbox-handoff.reference.md` *(operations the agent sandbox refuses)*
+- the team instruction file's *GitHub management* and *integration-branch merge authorization* sections *(who does
+  GitHub work, and what counts as the operator's approval for a merge or a required-check switch)*
 
 ## Invariant Core
 
