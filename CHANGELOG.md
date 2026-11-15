@@ -23,11 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   point (`agentteams`, `python -m agentteams.cli.app`, `build_team.py`).
 - `tests/test_template_repo_only_commands.py` refuses `python [path/]build_team.py`, `build_team.py --…`,
   `python -m src.` and `python -m build_team` in every text file under `agentteams/templates/`.
-- **Existing teams:** the security (`security_rules_invariant` v=25), orchestrator
-  (`update_compatibility_source_pack` v=2) and Grok builder (`rules` v=2) changes are inside fences and arrive with
-  `agentteams --update --merge`. The navigator, agent-updater and other builder lines are outside fences, and merge
-  keeps unfenced text as it is, so edit those lines by hand or re-render the files with `--update --overwrite` under
-  the usual clearance.
+- **Existing teams:** `agentteams --update --merge --yes` brings most of this. The security
+  (`security_rules_invariant` v=25), orchestrator (`update_compatibility_source_pack` v=2) and Grok builder (`rules`
+  v=2) changes are inside fences. The agent-updater and the Claude, Copilot and goose builders have no fences of their
+  own, so their whole body is one generated `content` fence (the goose recipe is rewritten whole), and merge replaces
+  it. Merge keeps text outside fences in a file that has fences, so two places keep the old lines: the navigator's two
+  refresh commands and the Grok builder's step 3 and invocation block. Edit those by hand.
 
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
