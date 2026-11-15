@@ -11,6 +11,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`ingest`](ingest.md) | Load and normalize project description files |
+| [`brief_schema`](brief-schema.md) | The project-description schema, checked on load (warn only); the archetypes agentteams renders |
 | [`analyze`](analyze.md) | Classify project type, select archetypes (including contextual post-production selection), build team manifest |
 | [`analyze_tools`](analyze-tools.md) | Tool importance classification + tool/reference-doc detection (carved from analyze) |
 | [`tool_version_source`](tool-version-source.md) | Tool versions read from the target project's pin file (`tools[].version_source`) |
