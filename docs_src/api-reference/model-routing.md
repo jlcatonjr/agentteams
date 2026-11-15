@@ -141,12 +141,12 @@ for assignment in routing['assignments']:
 
 ---
 
-## Integration with build_team.py
+## Integration with the CLI
 
 The CLI emits this contract only when `--cost-routing` is passed:
 
 ```bash
-python build_team.py --description brief.json --cost-routing
+agentteams --description brief.json --cost-routing
 # Writes: references/model-routing.json
 ```
 
