@@ -246,15 +246,21 @@ def _repo(arg: str | None) -> str:
 
 
 def _integration(arg: str | None) -> str:
-    """The integration branch: ``--integration-branch``, else the brief's ``git_workflow``, else ``dev``."""
-    if arg:
-        return arg
+    """The integration branch: the brief's ``git_workflow.integration_branch``, else ``dev``.
+
+    ``--integration-branch`` can only confirm that value, never change it: the release-PR head check is a code guard,
+    and the fingerprint the operator approves does not cover the head branch (IM review F1, 2026-11-15).
+    """
     from agentteams.branch_model import DEFAULT_INTEGRATION_BRANCH, integration_branch_from_project
 
     try:
-        return integration_branch_from_project(Path.cwd()) or DEFAULT_INTEGRATION_BRANCH
+        expected = integration_branch_from_project(Path.cwd()) or DEFAULT_INTEGRATION_BRANCH
     except ValueError as exc:
         raise Refused(str(exc)) from None
+    if arg and arg != expected:
+        raise Refused(f"--integration-branch {arg!r} differs from this checkout's integration branch {expected!r} "
+                      "(the brief's git_workflow.integration_branch, else dev); the release-PR check is not overridable")
+    return expected
 
 
 # --------------------------------------------------------------------------- commands
@@ -337,7 +343,8 @@ def run(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", help="owner/name (default: this checkout's GitHub repository)")
     ap.add_argument("--pr", type=int, help="the open release (integration branch) or hotfix/* PR into the default branch")
     ap.add_argument("--integration-branch", metavar="NAME",
-                    help="the release PR's head branch (default: the brief's git_workflow.integration_branch, else dev)")
+                    help="confirm the release PR's head branch; must equal the brief's git_workflow.integration_branch "
+                         "(else dev), and refuses otherwise")
     ap.add_argument("--add", action="append", default=[], metavar="NAME", help="also require this PR check")
     ap.add_argument("--drop", action="append", default=[], metavar="NAME", help="stop requiring this check")
     ap.add_argument("--apply", metavar="FINGERPRINT", help="apply the change (or restore) the dry run printed")

@@ -210,8 +210,8 @@ def test_no_admin_token_refuses_with_a_handoff(monkeypatch, capsys) -> None:
     assert "admin token" in capsys.readouterr().err
 
 
-def test_the_integration_branch_comes_from_the_flag(monkeypatch, capsys) -> None:
-    """A release PR from 'develop' is refused unless the integration branch is 'develop'."""
+def test_the_integration_branch_comes_from_the_brief(monkeypatch, capsys) -> None:
+    """A release PR from 'develop' is refused where the integration branch is 'dev'."""
     meta = json.dumps({"state": "OPEN", "baseRefName": "main", "headRefName": "develop", "headRefOid": "a" * 40,
                        "isCrossRepository": False})
     _fake_gh(monkeypatch, {"repos/o/r -q": "main\n", "rules/branches/main": "[]", "pr view": meta,
@@ -244,3 +244,19 @@ def test_restore_refuses_a_backup_for_another_branch(tmp_path, monkeypatch) -> N
     with pytest.raises(rrc.Refused, match="default branch"):
         rrc._restore("o/r", f, None)
     assert patched == []
+
+
+def test_a_mismatched_integration_branch_flag_refuses(monkeypatch, capsys) -> None:
+    """IM review F1: --integration-branch can confirm the brief's (or default) branch, never widen the head check."""
+    monkeypatch.setattr("agentteams.branch_model.integration_branch_from_project", lambda root: None)
+    with pytest.raises(rrc.Refused, match="not overridable"):
+        rrc._integration("feat/whatever")
+    assert rrc._integration("dev") == "dev" and rrc._integration(None) == "dev"
+    monkeypatch.setattr("agentteams.branch_model.integration_branch_from_project", lambda root: "develop")
+    assert rrc._integration(None) == "develop"
+    with pytest.raises(rrc.Refused, match="not overridable"):
+        rrc._integration("dev")
+    _fake_gh(monkeypatch, {"repos/o/r -q": "main\n", "rules/branches/main": "[]",
+                           "protection": json.dumps({"strict": False, "contexts": []})})
+    assert rrc.run(["--repo", "o/r", "--pr", "7", "--integration-branch", "feat/whatever"]) == 1
+    assert "not overridable" in capsys.readouterr().err
