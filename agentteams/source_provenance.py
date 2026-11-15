@@ -7,13 +7,16 @@ the source itself:
 
 * ``checkout``: the package runs from a git work tree (directly, or through an editable install). Records the
   commit, the branch, and ``dirty`` when ``git status --porcelain`` shows anything, untracked files included
-  (they follow branch switches and are rendered by an editable install).
+  (they follow branch switches and are rendered by an editable install). Also ``on_remote``: whether any
+  remote-tracking branch contains the commit (``git branch -r --contains``), so a render from a local-only branch,
+  whose pin no CI can fetch, is visible (IM item 29). The check reads the local remote-tracking refs and never
+  fetches, so a commit pushed since the last fetch reads as not on a remote until the next fetch.
 * ``vcs-pin``: installed from a VCS URL. The commit comes from ``direct_url.json``.
 * ``local-snapshot``: installed from a local directory without ``editable``, a frozen copy with no commit.
 * ``package``: anything else (e.g. an index install).
 
 No absolute path is recorded: consumers commit their build logs. Recording only; refusing is the consumer's
-policy (operator decision, 2026-10-07). Stdlib only; never raises.
+policy (operator decision, 2026-10-07). :func:`warn_if_unpushed` only warns. Stdlib only; never raises.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from typing import Any
 from agentteams.git_exec import run_git
 
 _COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}$")
-_UNKNOWN = {"kind": "unknown", "commit": None, "branch": None, "dirty": None}
+_UNKNOWN = {"kind": "unknown", "commit": None, "branch": None, "dirty": None, "on_remote": None}
 
 
 def _git(repo: Path, *args: str) -> str | None:
@@ -49,7 +52,13 @@ def _from_checkout(package_dir: Path) -> dict[str, Any] | None:
     branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
     status = _git(repo, "status", "--porcelain")
     return {"kind": "checkout", "commit": commit, "branch": branch if branch and branch != "HEAD" else None,
-            "dirty": None if status is None else bool(status)}
+            "dirty": None if status is None else bool(status), "on_remote": _on_remote(repo, commit)}
+
+
+def _on_remote(repo: Path, commit: str) -> bool | None:
+    """Whether a remote-tracking branch of *repo* contains *commit*; None when git can't tell."""
+    refs = _git(repo, "branch", "-r", "--contains", commit)
+    return None if refs is None else bool(refs)
 
 
 def _from_distribution() -> dict[str, Any]:
@@ -67,11 +76,11 @@ def _from_distribution() -> dict[str, Any]:
         info = {}
     vcs = info.get("vcs_info") if isinstance(info.get("vcs_info"), dict) else {}
     if isinstance(vcs.get("commit_id"), str) and _COMMIT_RE.match(vcs["commit_id"]):
-        return {"kind": "vcs-pin", "commit": vcs["commit_id"], "branch": None, "dirty": False}
+        return {"kind": "vcs-pin", "commit": vcs["commit_id"], "branch": None, "dirty": False, "on_remote": None}
     dir_info = info.get("dir_info")
     if isinstance(dir_info, dict) and not dir_info.get("editable"):
-        return {"kind": "local-snapshot", "commit": None, "branch": None, "dirty": None}
-    return {"kind": "package", "commit": None, "branch": None, "dirty": None}
+        return {"kind": "local-snapshot", "commit": None, "branch": None, "dirty": None, "on_remote": None}
+    return {"kind": "package", "commit": None, "branch": None, "dirty": None, "on_remote": None}
 
 
 @lru_cache(maxsize=1)
@@ -89,9 +98,10 @@ def source_provenance() -> dict[str, Any]:
     """Report which agentteams code is running.
 
     Returns:
-        ``{"kind", "commit", "branch", "dirty"}``. ``kind`` is ``checkout``, ``vcs-pin``, ``local-snapshot`` or
-        ``package``. ``commit`` and ``branch`` are ``None`` when unknown, and ``dirty`` is ``None`` when it can't
-        be determined.
+        ``{"kind", "commit", "branch", "dirty", "on_remote"}``. ``kind`` is ``checkout``, ``vcs-pin``,
+        ``local-snapshot`` or ``package``. ``commit`` and ``branch`` are ``None`` when unknown, and ``dirty`` is
+        ``None`` when it can't be determined. ``on_remote`` is set for a ``checkout`` only (``None`` otherwise, or
+        when git can't tell).
 
     Raises:
         Nothing.
@@ -120,4 +130,68 @@ def describe(prov: dict[str, Any] | None = None) -> str:
     text = " ".join(parts)
     if p.get("dirty"):
         text += ", dirty"
+    if p.get("on_remote") is False:
+        text += ", not on a remote"
     return f"({text})"
+
+
+def unpushed_line(prov: dict[str, Any]) -> str | None:
+    """The warning for a ``checkout`` render whose commit no remote-tracking branch contains, else None (IM item 29).
+
+    Args:
+        prov: A :func:`source_provenance` result, or a build log's recorded ``agentteams_source``.
+
+    Returns:
+        One line naming the commit and branch, or None when the source is fetchable or unknown.
+
+    Raises:
+        Nothing.
+    """
+    if prov.get("kind") != "checkout" or prov.get("on_remote") is not False:
+        return None
+    commit, branch = str(prov.get("commit") or "")[:12], prov.get("branch")
+    on = f" on local branch {branch!r}" if branch else ""
+    return (f"agentteams commit {commit}{on} is on no remote-tracking branch, so a CI that pins it cannot fetch it. "
+            f"Push it, or render from a pushed commit (git fetch first if it was pushed since)")
+
+
+def warn_if_unpushed(prov: dict[str, Any]) -> dict[str, Any]:
+    """Print :func:`unpushed_line` to stderr when it applies, and return *prov* unchanged (for the build log).
+
+    Args:
+        prov: A :func:`source_provenance` result.
+
+    Returns:
+        *prov*.
+
+    Raises:
+        Nothing.
+    """
+    import sys
+
+    if line := unpushed_line(prov):
+        print(f"[WARN] {line}.", file=sys.stderr)
+    return prov
+
+
+def commit_on_remote(commit: str) -> bool | None:
+    """Whether the running checkout's remote-tracking branches contain *commit* (for logs recorded before IM item 29).
+
+    Args:
+        commit: A recorded commit id.
+
+    Returns:
+        True or False when the running agentteams is a checkout that knows the commit; None otherwise (not a
+        checkout, the commit is unknown here, or git can't tell).
+
+    Raises:
+        Nothing.
+    """
+    import agentteams
+
+    if not _COMMIT_RE.match(commit or "") or not agentteams.__file__:
+        return None
+    repo = Path(agentteams.__file__).resolve().parent.parent
+    if not (repo / ".git").exists() or _git(repo, "cat-file", "-e", f"{commit}^{{commit}}") is None:
+        return None
+    return _on_remote(repo, commit)

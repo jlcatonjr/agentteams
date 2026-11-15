@@ -20,6 +20,9 @@ the project's providers see the same rules, the same memory, and the same agents
   deleted in a commit, naming that commit and whether the team still governs. Governance ends once the deletion has
   reached the upstream and default branch (IM item 17) —
   :func:`agentteams.signing_switch.marker_deletion_commits`.
+* **Agentteams source** (WARN): a surface's build log records a ``checkout`` render whose commit no
+  remote-tracking branch contains, so a CI pinning it cannot fetch it (IM item 29) —
+  :func:`agentteams.source_provenance.unpushed_line`.
 
 Exit code 1 when any FAIL is reported.
 
@@ -199,6 +202,31 @@ def _signing_governance(root: Path) -> tuple[list[str], int]:
     return lines, 0
 
 
+def _agentteams_source(root: Path) -> tuple[list[str], int]:
+    """WARN per surface whose build log records an agentteams commit no remote has (IM item 29, G-19-3).
+
+    A render from the shared editable checkout on a local branch records a commit no CI can fetch, so a drift CI or
+    lock that pins it never passes. A log written since item 29 records ``on_remote``; for an older log the running
+    checkout is asked, when it is a checkout that knows the commit. A WARN: the operator may push the branch later.
+    """
+    from agentteams.memory_index_surfaces import surface_dirs
+    from agentteams.source_provenance import commit_on_remote, unpushed_line
+
+    lines: list[str] = []
+    for agents_dir in surface_dirs(root):
+        log_path = agents_dir / "references" / "build-log.json"
+        if log_path.is_symlink() or not log_path.is_file():
+            continue
+        source = json.loads(log_path.read_text(encoding="utf-8")).get("agentteams_source")
+        if not isinstance(source, dict) or source.get("kind") != "checkout":
+            continue
+        if "on_remote" not in source:
+            source = {**source, "on_remote": commit_on_remote(str(source.get("commit") or ""))}
+        if line := unpushed_line(source):
+            lines.append(f"  !  WARN {log_path.relative_to(root).as_posix()}: {line}")
+    return lines, 0
+
+
 def run_doctor(project: str | None) -> int:
     """``--doctor``: print the cross-surface report for the project at *project* (else the working directory).
 
@@ -219,7 +247,8 @@ def run_doctor(project: str | None) -> int:
                 ("Copilot body limit", lambda: _body_limit(root)), ("Agents", lambda: (_agents(root), 0)),
                 ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)),
                 ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)),
-                ("Signing governance", lambda: _signing_governance(root)))
+                ("Signing governance", lambda: _signing_governance(root)),
+                ("Agentteams source", lambda: _agentteams_source(root)))
     for title, section in sections:
         try:
             lines, failed = section()

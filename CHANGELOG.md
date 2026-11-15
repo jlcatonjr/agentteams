@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (a render from an agentteams commit no remote has is reported; IM item 29)
+
+- **G-19-3.** A render from the shared editable checkout on a local branch recorded a commit no CI could fetch
+  (Tracers and MarketForge got pins that exist only on a local branch). `source_provenance` recorded it and
+  nothing more.
+  - `agentteams_source` in `references/build-log.json` gains `on_remote`: for a `checkout`, whether a
+    remote-tracking branch contains the commit (`git branch -r --contains`, local refs only, no fetch); `None` for
+    the other kinds or when git can't tell. `--version` adds `, not on a remote`.
+  - `--update` prints a WARN when it writes a build log for an unpushed checkout, naming the commit and branch.
+  - `--doctor` has a new **Agentteams source** section (WARN): a surface whose build log records an unpushed
+    checkout commit. A log written before this release is checked against the running checkout when it knows the
+    commit.
+  - Warn only. A commit pushed since the last `git fetch` reads as not on a remote until the next fetch.
+
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 
 - **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files

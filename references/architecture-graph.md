@@ -5,7 +5,7 @@
 
 - Modules mapped: **469**
 - Packages: **14**
-- Internal import edges: **1783**
+- Internal import edges: **1784**
 - Distinct external dependencies: **11**
 
 ---
@@ -189,7 +189,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.data.vulnscan_tools.selftest` | — | — |
 | `agentteams.data.wasm_agent_guest` | — | — |
 | `agentteams.data.wasm_probes.probe` | — | — |
-| `agentteams.doctor` | `agentteams.backup`, `agentteams.copilot_body_limit`, `agentteams.hygiene_rules`, `agentteams.memory_index_surfaces`, `agentteams.prompt_roots`, `agentteams.rules_projection`, `agentteams.signing_switch`, `agentteams.surface_matrix` | `agentteams.cli.app` |
+| `agentteams.doctor` | `agentteams.backup`, `agentteams.copilot_body_limit`, `agentteams.hygiene_rules`, `agentteams.memory_index_surfaces`, `agentteams.prompt_roots`, `agentteams.rules_projection`, `agentteams.signing_switch`, `agentteams.source_provenance`, `agentteams.surface_matrix` | `agentteams.cli.app` |
 | `agentteams.drift` | `agentteams.emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.fence_baseline`, `agentteams.framework_freshness`, `agentteams.front_matter_baseline`, `agentteams.signing_switch`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_baseline`, `agentteams.fence_inject`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.structural_merge`, `agentteams.front_matter_baseline`, `agentteams.front_matter_merge`, `agentteams.hygiene_rules`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
 | `agentteams.enrich` | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.cli.generate` |
@@ -378,7 +378,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.session_scan` | `agentteams.plan_steps` | — |
 | `agentteams.shrink_allow` | `agentteams.fences` | `agentteams.cli.generate`, `agentteams.emit`, `agentteams.fences` |
 | `agentteams.signing_switch` | `agentteams.atomicio`, `agentteams.drift`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec` | `agentteams.cli.app`, `agentteams.cli.artifacts`, `agentteams.cli.decision_log`, `agentteams.cli.generate_helpers`, `agentteams.cli.os_sandbox_switch`, `agentteams.doctor`, `agentteams.fleet`, `agentteams.projection_marker`, `agentteams.sandbox_state` |
-| `agentteams.source_provenance` | `agentteams`, `agentteams.git_exec` | `agentteams.cli.parser` |
+| `agentteams.source_provenance` | `agentteams`, `agentteams.git_exec` | `agentteams.cli.parser`, `agentteams.doctor` |
 | `agentteams.stale_detector` | `agentteams.backup`, `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet`, `agentteams.frameworks.registry`, `agentteams.multi_sync`, `agentteams.sync_pin` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.backup`, `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
 | `agentteams.surface_matrix` | `agentteams.confinement`, `agentteams.user_regions` | `agentteams.cli.post_build`, `agentteams.doctor` |
@@ -2501,6 +2501,7 @@ digraph "agentteams architecture" {
         "agentteams.prompt_roots",
         "agentteams.rules_projection",
         "agentteams.signing_switch",
+        "agentteams.source_provenance",
         "agentteams.surface_matrix"
       ],
       "external": [],
@@ -9153,6 +9154,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.doctor",
       "target": "agentteams.signing_switch"
+    },
+    {
+      "source": "agentteams.doctor",
+      "target": "agentteams.source_provenance"
     },
     {
       "source": "agentteams.doctor",

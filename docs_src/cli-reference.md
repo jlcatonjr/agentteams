@@ -469,6 +469,9 @@ else the working directory, and the brief found there. The report covers:
 - **Backup stubs (WARN):** a backed-up agent file under any runtime dir's `.agentteams-backups/` (`.claude/agents`,
   `.goose/recipes`, `.codex/agents`, `.grok/agents`) that the runtime would still load as a live agent: a copy made
   before 2026-10-12. The next `--update --merge` or `--bridge-merge` that takes a backup renames it inert.
+- **Agentteams source (WARN):** a surface's build log records a `checkout` render whose agentteams commit is on
+  no remote-tracking branch, so a CI that pins it cannot fetch it (IM item 29). `--update` prints the same warning
+  when it writes the build log.
 - **Signing governance (WARN):** a team dir whose `signing-governed.marker` is absent on disk and in HEAD and was
   deleted in a commit. The WARN names the commit and says whether the team:
   - still governs, because the deletion is only on the current branch;
