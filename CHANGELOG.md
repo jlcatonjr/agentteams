@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the project-description schema matches the code and is checked on load, warn only; IM item 13a)
+
+- **G-17-2.** `ingest.validate` checked three fields and `schemas/project-description.schema.json` was never run on
+  a brief. It had also drifted: 98 of 159 descriptors in the workspace failed it.
+  - **The schema matches the code.** `selected_archetypes` takes any lowercase slug, so archetypes another layer
+    provides are no longer schema errors. `x-agentteams-known-archetypes` lists the 21 agentteams renders, and a
+    test keeps it equal to the domain templates, so it can't drift again. The old enum lacked `agentteams-updater`,
+    `tool-doc-researcher`, `vuln-remediation`, `work-summarizer`, `pr-manager`, `pr-notifier` and `content-enricher`,
+    and listed `tool-specific`, which has no template. `tools[].category` accepts `build` and `infrastructure`
+    (both passive, as the code already treated them).
+  - **Checked on load, warn only.** `ingest.load` runs the schema on every JSON description and prints one `[WARN]`
+    per file per run (the count and the first five issues). It never refuses and never changes the exit code,
+    `--check` included.
+  - **Archetypes agentteams doesn't render.** A `selected_archetypes` slug with no domain template gets one `[INFO]`
+    line instead of being dropped silently; another layer (researchteam's `interpretation-advisor`) may provide it.
+  - **Census for the later refusal:** 98 failing descriptors before the schema fix, 23 after.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub

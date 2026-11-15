@@ -54,6 +54,10 @@ def load(source: str | Path, *, scan_project: bool = True) -> dict[str, Any]:
 
     if path.suffix == ".json":
         description = _load_json(path)
+        # IM item 13a: the schema is checked on load and only WARNS this release (never refuses, never changes rc).
+        from agentteams.brief_schema import warn_on_load
+
+        warn_on_load(path, description)
     elif path.suffix in {".md", ".txt", ""}:
         description = _load_markdown(path)
     else:

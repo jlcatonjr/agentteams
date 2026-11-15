@@ -9,6 +9,16 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ---
 
+## Project-description schema: warn only (IM item 13a)
+
+A JSON description is checked against `schemas/project-description.schema.json` when it is loaded, and a mismatch is a `[WARN]`, not a refusal. Census on 2026-11-15: with the schema brought in line with the code, 23 of 159 descriptors in the workspace still fail it (project names with spaces, a `pip_package_name` that isn't one, extra root keys, unknown `capabilities`, a few type errors). Refusing comes in a later release, once that census is clean.
+
+An archetype in `selected_archetypes` with no agentteams template is reported as `[INFO]` and is not rendered; another layer (researchteam) may provide it.
+
+**Tracked:** IM self-evaluation item 13 follow-up (the refusal step), logged on IM's side.
+
+---
+
 ## Orchestrator-only writes (`write_policy`) and the runner
 
 ### Turning `write_policy` off is not a clean rollback

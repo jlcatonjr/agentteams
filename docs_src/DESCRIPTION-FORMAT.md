@@ -1,6 +1,6 @@
 # Project Description Format
 
-This guide documents every field in the project description format used by the Agent Teams Module. For the full JSON Schema, see [schemas/project-description.schema.json](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/schemas/project-description.schema.json).
+This guide documents every field in the project description format used by the Agent Teams Module. A JSON description is checked against the schema when it is loaded: a mismatch is reported as one `[WARN]` per file and nothing is refused yet (IM item 13a). For the full JSON Schema, see [schemas/project-description.schema.json](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/schemas/project-description.schema.json).
 
 ---
 
@@ -349,6 +349,8 @@ Tools are documents, never agents. Operational tools become a reference doc
 | `cli` | Operational | `references/ref-<tool>-reference.md` / `.claude/skills/tool-<tool>.md` | Set `false` to downgrade |
 | `database` | Operational | `references/ref-<tool>-reference.md` / `.claude/skills/tool-<tool>.md` | Set `false` to downgrade |
 | `build-system` | Operational | `references/ref-<tool>-reference.md` / `.claude/skills/tool-<tool>.md` | Set `false` to downgrade |
+| `build` | Passive, unless the tool is a known specialist (by name) | — | Set `true` for an operational doc |
+| `infrastructure` | Passive, unless the tool is a known specialist (by name) | — | Set `true` for an operational doc |
 | `other` | Passive | — | Set `true` for an operational doc |
 
 **Auto-detection:** If `--project` points to an existing directory, the engine also scans `requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, and `go.mod` to supplement the tools list.
