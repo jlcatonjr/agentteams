@@ -104,6 +104,7 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(/.claude/agents/references/exception-registry.json)",
         "Edit(/.claude/agents/references/carveout-high-water.json)",
         "Edit(/references/security-approvers.txt)",
+        "Edit(/.claude/agents/signing-governed.marker)",  # IM item 17: deleting it turned governed signing off
         "Edit(/.claude/settings.json)",
         "Edit(/.claude/settings.local.json)",
         # follow-up #2: the operator-merged / operator-run examples
@@ -130,7 +131,8 @@ def _sibling_rules(agents: str) -> list[str]:
     return [f"Edit(/{refs}/agent-privilege.json)", f"Edit(/{refs}/authorized-verify-keys/**)",
             f"Edit(/{refs}/security-approvers.txt)", f"Edit(/{refs}/authorized-managers.txt)",
             f"Edit(/{refs}/management-authority.json)", f"Edit(/{refs}/exception-registry.json)",
-            f"Edit(/{refs}/carveout-high-water.json)", f"Edit(/{refs}/build-log.json)"]
+            f"Edit(/{refs}/carveout-high-water.json)", f"Edit(/{refs}/build-log.json)",
+            f"Edit(/{agents}/signing-governed.marker)"]  # IM item 17
 
 
 def test_control_plane_ancestors_are_top_down_and_deduplicated():

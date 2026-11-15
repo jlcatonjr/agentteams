@@ -46,10 +46,10 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.signing_switch import (  # the single home of the switch constants
-    GOVERNED_MARKER as _GOVERNED_MARKER,
     SWITCH_REL as _SWITCH_REL,
     TEAM_DIRS as _TEAM_DIRS,
     TEAM_MARKER_REL as _MARKER_REL,
+    is_governed,
     read_switch as _read_switch,
 )
 
@@ -184,8 +184,7 @@ def _switch_tracked(source_dir: Path, agents_dir: Path) -> bool:
     switch because a file is missing, not because the description said so. A governed team always
     tracks (its value is ``true``).
     """
-    return os.path.lexists(source_dir / _SWITCH_REL) or any(
-        os.path.lexists(d / _GOVERNED_MARKER) for d in (source_dir, agents_dir))
+    return os.path.lexists(source_dir / _SWITCH_REL) or is_governed(source_dir, agents_dir)
 
 
 def _switch_value(source_dir: Path, agents_dir: Path) -> bool:
@@ -196,7 +195,7 @@ def _switch_value(source_dir: Path, agents_dir: Path) -> bool:
             switch is not ``true`` (C1).
     """
     source = _read_switch(source_dir / _SWITCH_REL)
-    governed = any(os.path.lexists(d / _GOVERNED_MARKER) for d in (source_dir, agents_dir))
+    governed = is_governed(source_dir, agents_dir)
     if not governed:
         return bool(source)
     if _read_switch(agents_dir / _SWITCH_REL) is False:  # never leave a governed team OFF

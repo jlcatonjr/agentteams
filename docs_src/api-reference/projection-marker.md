@@ -42,7 +42,8 @@ format, so `--verify-integrity` reads them), `template_hashes: {}`, `origin`, `s
      unclear ownership, and prints a fleet REVIEW notice for a `true -> false` change. A missing source
      switch gives `false`, which reads like no switch. A source switch that is a symlink, not a
      regular file, unreadable, malformed or non-boolean refuses the marker, and no switch is
-     written. When the source or target team has `signing-governed.marker`, the switch is always
+     written. When the source or target team is signing-governed (`signing_switch.is_governed`: the marker exists, or
+     git still tracks it), the switch is always
      `true`, and an existing `false` target switch refuses the marker;
   2. the verify-key store sentinel;
   3. the roster stubs (`control_plane_io.write_control_plane_stubs`).
