@@ -67,6 +67,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     # combining them would silently run only the first in app.py dispatch order.
     _standalone_ops = [
         ("--verify-integrity", bool(getattr(args, "verify_integrity", False))),
+        ("--record-hmac-fingerprint", getattr(args, "record_hmac_fingerprint", None) is not None),
         ("--verify-backup", getattr(args, "verify_backup", None) is not None),
         ("--prune-backups", getattr(args, "prune_backups", None) is not None),
         ("--stale-check", bool(getattr(args, "stale_check", False))),

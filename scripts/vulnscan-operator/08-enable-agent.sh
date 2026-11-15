@@ -56,7 +56,7 @@ if [ -n "$OLDEST" ]; then
     *) echo "not signing: revoke a grant first (grant revoke --grant-id <grant_id>)" >&2; exit 1 ;;
   esac
 fi
-AGENTTEAMS_DECISION_ED25519_KEYFILE="$PRIV" "${VS[@]}" grant sign --key-id "$KEY_ID" --days "$DAYS" --max-uses "$USES" \
+"${VS[@]}" grant sign --key-id "$KEY_ID" --days "$DAYS" --max-uses "$USES" \
   --op stage-fix --op open-pr --repo-root "$REPO_ROOT" --governance-dir "$GOV"
 "${VS[@]}" grant list
 

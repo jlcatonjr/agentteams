@@ -21,6 +21,7 @@ The repo root holds only a small, fixed set of canonical project files.
 | **User-facing documentation** | `docs_src/` (built to the MkDocs site) | tracked | New pages go in a section folder (e.g. `docs_src/why/`, `docs_src/contribute/`), never moved once published, and are added to `mkdocs.yml` nav under the right tab with a unique title. API pages stay flat in `docs_src/api-reference/`. Full rules: the site's *Working on the docs site* page (`docs_src/contribute/docs-site.md`). |
 | **Daily / weekly / monthly work summaries** | `workSummaries/` | ignored | Per-date session records. |
 | **Scratch / one-off** | `tmp/` | ignored | Sanitize before promoting anything out of `tmp/`. |
+| **Quarantined team files** (files moved or deleted out of an agent team, kept so they can be restored) | `tmp/quarantine/<date>-<slug>/` | ignored | Often the **only copy**: team folders and `tmp/` are both gitignored, so git cannot restore them. Never delete `tmp/quarantine/` as part of a `tmp/` cleanup. Remove a quarantine folder only with a recorded `@security` clearance that names it. |
 
 ### Naming convention inside `references/plans/`
 

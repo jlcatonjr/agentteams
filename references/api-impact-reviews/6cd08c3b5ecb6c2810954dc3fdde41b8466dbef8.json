@@ -1,0 +1,8 @@
+{
+  "patch_id": "6cd08c3b5ecb6c2810954dc3fdde41b8466dbef8",
+  "commit": "c69bb9aa41a44c3ee6e30955bb0b7bfabccdc601",
+  "subject": "fix(signing): a deleted git-tracked signing-governed.marker still governs; every deny list protects it (IM item 17)",
+  "impact": "1 symbols changed",
+  "note": "IM item 17: team_marker_path gains an optional rel (default unchanged: build-log.json), used for each team's signing-governed.marker; callers checked (goose emitter). Backward compatible.",
+  "recorded_at": "2026-11-13T01:27:05Z"
+}

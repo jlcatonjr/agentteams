@@ -38,6 +38,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
   notification-only. Grok teams do not receive it.
 
+### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
+
+- **Security fix (IM evaluation item 17, G-22-7).** The governed check tested only that
+  `<team>/signing-governed.marker` existed, and the sandbox left the marker writable. So an agent that deleted it
+  turned fail-closed signing off: `enforce_decision_signing: false` applied again, and a missing
+  `agent-privilege.json` reverted to legacy unsigned behaviour instead of raising.
+  - `signing_switch.is_governed` now also counts a marker that git still tracks: in the index, or in HEAD, its
+    upstream or `origin/HEAD`. So a deleted marker, a staged deletion, and a deletion committed only on the
+    agent's own branch all still govern.
+    - git runs hardened, and inherited `GIT_DIR`, `GIT_INDEX_FILE` and similar variables are removed.
+    - A repository nested inside the project (a planted `.git`) and a git timeout count as governed.
+    - It still falls back to existence only outside a git work tree, without git, when git refuses the
+      repository (`safe.directory`), and for an untracked or ignored marker.
+  - `cli/decision_log` and `projection_marker` use this same check instead of their own.
+  - The marker is now write-protected by:
+    - the Claude `Edit` rules for every team dir (Grok inherits them);
+    - the goose Seatbelt profile for every team dir;
+    - the launcher's protect-if-present set;
+    - Claude's Bash `denyWrite`, through the whole `.claude` dir.
+
+    Copilot and Codex emit no deny list of their own.
+  - `confine-run.sh` changed, so its pins are updated (`EXPECTED_LAUNCHER_SHA256`, the WASM launcher pin, and
+    `launcher_lineage.json`). The downstream re-pin of the parity test is coordinated outside this repository.
+  - A deletion that has reached the upstream and default branch still ends governance (the honest limit), but it
+    is no longer silent. `--doctor` has a new **Signing governance** section that WARNs for each team dir whose
+    marker is absent on disk and in HEAD. The WARN:
+    - names the deleting commit;
+    - says whether the team still governs (the deletion is on this branch only), is governed through a sibling
+      team dir, or is not governed;
+    - repeats until the marker is restored.
+
+    A removed team dir gets one INFO line instead. The lookup is `signing_switch.marker_deletion_commits`, one
+    hardened `git log --diff-filter=D` with `log.showSignature` forced off and commit subjects reduced to
+    printable characters. It is a WARN, not a FAIL, because the operator may have meant it.
+  - Effect on existing teams: a team whose tracked marker was deleted but not committed is governed again.
+    Nothing changes for a team that never had a marker.
+
+### fixed (security: a `git config` read on the same line hid a remote or alias rewrite from the gate)
+
+- The constitutional gate exempts `git config --get`, `--get-all`, `--get-regexp`, `--get-urlmatch`, `--list`,
+  `--show-origin` and `-l` as reads. The exemption covered the whole line, so a read anywhere on it hid a write
+  after a separator: `git config -l; git config remote.origin.url https://e.x/r` asked nothing, in every shipped
+  version with the `publication-channel` config check. The exemption now covers only its own command (stops at
+  `;`, `&`, `|`), in `publication-channel` (remote/URL rewrites and `include.path`) and `git-alias-config`.
+- `git --config-env=remote.origin.url=VAR push` (git 2.31+ reads the value from an environment variable) is now a
+  `publication-channel` ask, like `git -c remote.origin.url=…`. Nothing matched `--config-env` before.
+
+### changed (the constitutional gate asks on short force pushes and git alias/push config; remediation row 699)
+
+- `git push -f` (and clusters such as `-uf`), `git push <remote> +<ref>` (also behind quoting: `"+"main`, `+'main'`,
+  `$'+main'`, `\+main`; a quoted flag too: `"-f"`, `"-c"`), `git -c` or `git --config-env` with
+  `alias.*|push.*|remote.*|url.*`, and
+  `git config alias.*|push.*|remote.*|url.*` now ask by default. Before, only `--force` and remote/URL
+  rewrites asked; #456 matched these spellings only under a project policy that denied them.
+- The class ids (`git-force-push-short`, `git-alias-config`) are unchanged, so a recorded
+  `.agentteams/gate-policy.json` names the same classes. The patterns are unchanged except for one narrowing:
+  the `f` is now case-sensitive, so `git commit -F msg && git push` asks nothing and `strict` no longer denies it
+  (git push has no `-F`).
+- The match is not scoped to the push command, so `git checkout -f && git push`, `git push && tail -f log` and
+  `git commit -m "bump +1" && git push` ask too, and may report "force push" as the reason. Scoping it would let an
+  escaped separator (`a\;b -f`) through, so this is an accepted extra prompt.
+- Every team derived from agentteams 1.2 or later gets a gate that asks on these commands. A headless session,
+  where an `ask` is denied, can no longer force-push by `-f` or `+refspec` (`--force` already asked).
+- A recorded policy that does not name the two classes now asks on them instead of passing.
+- `rm-recursive-force` stays policy-only: `fs-delete` already asks on every `rm`.
+- Default verdicts only tighten (pass to ask). The one loosening is `strict` on uppercase `-F`, above. The
+  template's integrity pin moves.
+
+### fix (Markdown ingest reads the authority hierarchy, #392 item 11)
+
+- An `Authority` heading with a list or table now sets `authority_sources` wherever it sits. Before, any heading
+  containing "source" overwrote it, so a `Source Repositories` table after an `Authority Hierarchy` list replaced
+  the hierarchy. An `Authority` heading with no list (prose only, or its list under a sub-heading) no longer
+  blocks a sources list.
+- A Markdown table in an authority or sources section is parsed by column: whole header words pick the name, path
+  and scope columns, and a `Tier` or `#` column is ignored. Its header and separator rows are no longer read as
+  tiers. A section holding both a list and a table keeps both, in document order, and drops other prose lines.
+- List markers are stripped without eating a bold name's `**` or a leading digit, and `**Name** (`path`) — scope`
+  items (the form agentteams itself renders) give the name, path and scope.
+- Reading a sources table as source repositories, separate from the hierarchy, needs a schema key and moves to 1.3.
+- The authority parser moves to the private `agentteams/_ingest_authority.py` (CH-07 ceiling). New `tests/test_ingest_authority_hierarchy.py`.
+
 ### docs (release guide names the 1.1 line)
 
 - `release-and-branching.md` was still written for 1.1's release candidates. It now names `v1.1.3` as the install and
@@ -68,6 +150,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   written before this change need no rewrite.
 - **Ledger.** `domain/work-summarizer.template.md` is now registered as TA-063 and leaves the unregistered baseline.
   The new reference is TA-064.
+
+### changed (HMAC signing keys can live in key files)
+
+- With `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_DECISION_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY` or
+  `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, agentteams reads `~/.config/agentteams/keys/<kind>-hmac.key`
+  (`waiver`, `decision`, `grant`, `management`), so the key no longer has to be exported into a shell an agent
+  might inherit. A key file is trusted only when its fingerprint matches one you record with the new
+  `--record-hmac-fingerprint KIND` (in `~/.config/agentteams/verify-keys/`), so a planted or replaced key file is
+  refused. Every emitted sandbox read-denies `keys/`; the macOS Claude block and the goose Seatbelt profile now
+  also write-deny `keys/` and `verify-keys/` (on Linux, write roots cannot reach them).
+  - A set variable still wins, and agentteams warns (saying whether the two match) when the key file exists too.
+  - The file is refused when it is a symlink, sits behind a symlinked `keys/`, is readable by group or others, is empty,
+    or would be read by an install an agent could edit.
+  - A decision key file does not by itself switch on decision-signing enforcement; that stays tied to the variable
+    and the log header.
+  - One helper (`signed_ledger.load_hmac_key`) serves the waiver, decision, grant and directive paths
+    (@security ruling, 5 conditions).
+- `--sign-carveouts` now finds the Ed25519 key from `--key-id` like the other operator signers; it still required
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE`. The migrated-key warning and the vulnscan operator scripts no longer tell
+  you to set or export that variable.
 
 ### added (opt-in typed violation codes for `@agent-refactor`; #453)
 
@@ -144,6 +246,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PLACEHOLDER-CONVENTIONS.md` no longer documents `{MANUAL:STYLE_EXEMPLARS}`, which nothing emits.
 - New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
   are pinned as exceptions), and every agent the mapping names must reference that placeholder.
+
+### added (the Claude settings example names the session model)
+
+- The emitted `.claude/settings.hooks.example.json` carries `"model": "claude-fable-5-2"` and
+  `"env": {"CLAUDE_CODE_SUBAGENT_MODEL": "opus"}`, with or without the sandbox block. Merged into
+  `.claude/settings.json`, the main session runs Fable 5.2 and every subagent whose file names no model runs Opus:
+  Claude Code's built-in agents, and team agents with no `model:` key. `CLAUDE_CODE_SUBAGENT_MODEL` ranks below a
+  front-matter `model:`, so the orchestrator agent file keeps `claude-fable-5-2`; `_FORCE` is not set.
+- The example is now always re-serialized with sorted keys (as with the sandbox block), so a team without the sandbox
+  sees a one-time reformat of the file on its next update. Values the example already sets are kept. Like the hooks block, it is inert until merged; agentteams never writes
+  `settings.json`.
+
+### added (GitHub management by default, and the signed integration-branch merge authorization)
+
+- **GitHub management section.** Every generated team's constitution gains a fenced, template-authoritative
+  `github_management_rule` section: routine GitHub work through `gh` and `git` is authorized, allocated by role
+  (`@git-operations` writes, `@pr-manager` owns the PR lifecycle and never merges, the orchestrator may run read-only
+  `gh` queries). Agents ask when an action looks risky, and always for the C-5 classes, the default branch,
+  `release/*`, tags, signing and cross-repository pins. The section is never consent to a gate prompt. New brief field
+  `github_management` (default `true`; `false` renders a notice that every GitHub write goes to the operator). No
+  `tools:` line widens, and no MCP server is activated.
+- `@git-operations` and the merge reference use `gh` when it is authenticated, else `git` and the REST API (it was
+  REST first). The orchestrator's read-only `gh` exception is in its routing rule. Fence versions: orchestrator
+  `available_workflows` v=14, pr-manager `invariant_core` v=2, security `security_rules_invariant` v=24.
+- **Integration-branch merge authorization** (`agentteams/cli/dev_merge.py`). An operator-signed
+  `.agentteams/dev-merge-authorization.json` (Ed25519, a trust root, HALT family `integration-merge`, lineage, rollback
+  guard; no sunset and no cap slot, by operator ruling, like the toolchain group) lets `agentteams --merge-pr N` merge
+  a pull request into the signed integration branch without the gate's merge prompt. That holds only while it
+  verifies and every condition holds: the PR is open, not a draft, not a fork, CLEAN, has every check passed (the
+  signed file's `required_checks` all reported, and every workflow run for the head completed with success), touches
+  no governance, agent or workflow path, and a `@security` PASS for its exact head exists and is spent on use. The
+  merge is a merge commit at the checked head. Otherwise the verb exits 2, and the merge goes back to the ordinary
+  prompt. New verbs `--sign-dev-merge-authorization` (operator-only, refused in an agent session) and
+  `--verify-dev-merge-authorization`. A new fenced `dev_merge_rule` constitution section and a security trigger row.
+  The gate is unchanged: a direct `gh pr merge` still asks.
+- The integration model's merge-strategy table gains a contributor-PR row. `references/enforcement-integrity.json`
+  pins `agentteams/cli/dev_merge.py`.
 
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
@@ -277,7 +416,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Tighten-only.** There is no `allow`. An unknown key, class or preset is a load error.
   - **Class ids.** The gate gives each trigger a fixed class id, exported as `ASK_CLASSES` and `POLICY_ONLY_CLASSES`.
   - **Policy-only classes.** `rm-recursive-force`, `git-force-push-short` (`-f` and `+refspec`) and `git-alias-config`
-    are evaluated only when a policy denies them.
+    are evaluated only when a policy denies them (until row 699, above, made the two git classes default asks).
   - **`strict` preset.** Defined in the gate, it denies the force-push, remote-delete, git alias/remote config,
     publication, `rm -rf`, pipe-to-shell and SQL-deletion classes listed in #456, plus `command-too-long`.
     Under any non-empty deny list an over-long command is denied, so padding cannot hide a denied class.
