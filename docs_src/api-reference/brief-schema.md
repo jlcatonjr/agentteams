@@ -16,7 +16,8 @@ release, once the census is clean ([known limitations](../known-limitations.md))
 | `known_archetypes()` | The archetype slugs agentteams renders: every `templates/domain/<slug>.template.md` that is an agent, not a `tool-*.doc` or `*-reference` template. The schema's `x-agentteams-known-archetypes` list equals it, and `tests/test_brief_schema_on_load.py` keeps them equal, so the list can't drift again. |
 | `schema_errors(description)` | Each violation as `path: message`, in document order; empty when the description conforms. |
 | `unrendered_archetypes(description)` | The `selected_archetypes` slugs with no domain template. agentteams does not render them; another layer (researchteam's `interpretation-advisor`, for example) may provide them. |
-| `warn_on_load(path, description)` | Prints the `[WARN]` for schema issues and an `[INFO]` line for unrendered archetypes, once per path per process. Never raises. |
+| `warn_on_load(path, description)` | Prints the `[WARN]` for schema issues (each clipped to 160 characters) and an `[INFO]` line for unrendered archetypes, once per path per process. An error while checking is a `[WARN]` too; it never raises. |
+| `schema_warning_lines(output)` | The schema warnings in one render's captured output, without the prefix. The fleet stores them in each target's `schema_warnings` (on the first target of a workspace, since the warning prints once per process). |
 
 Schema changes in the same release:
 - `selected_archetypes` takes any lowercase slug, so an archetype another layer provides is not a schema error.
