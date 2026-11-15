@@ -69,7 +69,7 @@ A descriptor missing fields the renderer needs will silently substitute defaults
 - **Pipeline graph drops archetypes** (e.g. `visual-designer`, `retrieval-integrator`) when `selected_archetypes` is absent and analyzer auto-selection differs from the historical brief.
 - **Memory index loses extra-dir coverage** (e.g. `docs/`, `docs/decisions/`) when `memory_index_extra_dirs` is absent. The agent files themselves are preserved, but their content surfaces less in `--query-index` results.
 
-Because `--merge` only re-renders inside fences, most of these regressions are valid merges from the renderer's perspective, with no warning; the only signal is the diff. The roster is the exception (IM item 12): when the new manifest drops archetypes that `.github/agents/_build-description.json` records in `selected_archetypes`, `--update` warns, and under `--yes` it refuses before writing unless `--allow-roster-shrink` is given. The dual-descriptor advisory also reports a `selected_archetypes` divergence.
+Because `--merge` only re-renders inside fences, most of these regressions are valid merges from the renderer's perspective, with no warning; the only signal is the diff. The roster is the exception (IM item 12). A description with no `selected_archetypes` takes the stub's, and the run prints where they came from. Other roster keys the stub sets (`write_policy`, `governance_agents`, `retrieval_integration`) are reported, not applied. When the stub cannot be read, `--update --yes` refuses before writing unless `--allow-roster-shrink` is given. A description that sets its own roster wins, and the archetypes it leaves out are reported. The dual-descriptor advisory also reports a `selected_archetypes` divergence.
 
 ### Pre-update verification
 

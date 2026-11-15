@@ -5,18 +5,20 @@
 One team can have two descriptors. The brief (`.agentteams/brief.json` or the root `brief.json`) carries the content:
 authority sources, style rules, components and output paths. The stub (`.github/agents/_build-description.json`) often
 carries the roster. When the description has no `selected_archetypes`, `analyze` re-runs keyword selection, and that
-can drop agents. The fleet used to take the brief whole whenever one existed, so a researchteam-derived repository lost
-agents on every fleet re-render (IM item 12, G-17-1).
+can drop agents. The fleet takes the brief whole whenever one exists, so a researchteam-derived repository lost agents
+on every fleet re-render (IM item 12, G-17-1).
+
+The fix runs where `--update` (and every generate run) loads the description. That covers the fleet and a hand-run
+`--update --description brief.json`, writes no temp file, and keeps the real descriptor path in every record.
 
 | Name | Purpose |
 |---|---|
-| `ROSTER_FIELDS` | The keys a stub can supply: `selected_archetypes`, `governance_agents`, `write_policy`, `retrieval_integration`. |
-| `union(brief, stub)` | Returns `(merged, injected)`: the brief with each roster key it lacks copied from the stub. The brief wins on every key it sets, and an empty stub value adds nothing. Neither input is modified. |
-| `for_fleet(ws, descriptor)` | The descriptor the fleet renders `ws` with. When `descriptor` is a brief and the stub adds a roster key, it writes the union as `brief.json` in a private temp directory and returns that path; otherwise it returns `descriptor` unchanged. Nothing is written into the workspace, dry run included, and the temp directories are removed at exit. The name keeps the fleet's `--no-scan` rule for briefs, and `ingest` resolves no path relative to the descriptor's folder. The fleet report still records the real descriptor. |
-| `stub_for(project_root, project)` | The project's stub: `--project`'s first, then under `project_root`, then `project_root` as the agents directory (`--output` is often the agents directory itself). The same candidates as the dual-descriptor advisory. |
-| `dropped_archetypes(manifest, project_root, project)` | The stub's `selected_archetypes` that the manifest no longer selects, sorted. Empty when there is no stub or it has no roster. |
-| `refuse_roster_shrink(args, manifest, project_root)` | Called by `--update` before anything is written. When archetypes would be dropped, it warns without `--yes`, and refuses (returns True) under `--yes` unless `--allow-roster-shrink` is given. |
+| `ROSTER_FIELDS` | The roster keys a stub can carry: `selected_archetypes`, `governance_agents`, `write_policy`, `retrieval_integration`. Only `selected_archetypes` is applied. |
+| `FORCE_APPENDED` | Archetypes `analyze` adds from a capability (`retrieval-integrator`, `research-analyst`, `agentteams-updater`, `vuln-remediation`). Turning the capability off removes them, which is not a roster loss. |
+| `stub_for(project, output, description)` | The project's stub. It checks, in order: `--project`'s; the places `build_team._check_dual_descriptor` probes from `--output` (which is often the agents directory itself); and the one beside the description's project. A symlink or non-regular file never counts, and neither does the description itself. |
+| `apply_stub_roster(description, args)` | Copies the stub's `selected_archetypes` into a description that has none, and prints where they came from. It reports the other roster keys the stub sets and the description lacks, but never applies them: they change capability and governance, and an operator may have deleted one from the brief on purpose. It records what it found on `args` for the guard. |
+| `dropped_archetypes(manifest, stub_path)` | The stub's `selected_archetypes` that the manifest no longer selects, excluding `FORCE_APPENDED`. |
+| `refuse_roster_shrink(args, manifest, project_root)` | Called by `--update` before anything is written. It refuses under `--yes` only when the roster cannot be known: the description has none and the stub exists but cannot be read. Without `--yes` it only warns, and `--allow-roster-shrink` accepts the run. A description that sets its own roster is authoritative, so archetypes it leaves out are reported, not refused, and a stale stub never fails a run. |
 
-researchteam's `_update_cmd._resolve_descriptor` makes the same union, except that its stub roster overrides a brief
-roster that differs. Here the brief's own roster is kept, and `refuse_roster_shrink` catches a brief whose roster is
-thinner than the stub's.
+researchteam's `_update_cmd._resolve_descriptor` makes a similar union, but lets the stub's roster override a brief
+roster that differs. Here the description wins on every key it sets.

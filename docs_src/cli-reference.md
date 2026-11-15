@@ -1585,7 +1585,7 @@ How it works, per discovered workspace:
 
 Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `REVIEW` (shrink Notice or USER-EDITABLE deletion — inspect the diff), `FAIL` (the merge itself errored), `SKIP` (ambiguous `.claude` with no bridge signal and no descriptor), `WOULD-UPDATE` (dry-run).
 
-**Safety:** fleet mode is non-destructive by construction. It is **merge-only** — `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, and `--shrink-policy=allow` are rejected, and `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` (then the root `brief.json`) over the thin `_build-description.json` stub, and fills in each roster key the brief lacks (`selected_archetypes`, `governance_agents`, `write_policy`, `retrieval_integration`) from the stub. The brief wins on every key it sets, and the union is written to a private temp file, never into the workspace (`agentteams/descriptor_union.py`, IM item 12).
+**Safety:** fleet mode is non-destructive by construction. It is **merge-only** — `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, and `--shrink-policy=allow` are rejected, and `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` (then the root `brief.json`) over the thin `_build-description.json` stub. A brief with no `selected_archetypes` takes the stub's roster when it is loaded, so a fleet re-render keeps the agents the stub records (`agentteams/descriptor_union.py`, IM item 12).
 
 ### `--fleet DIR`
 
@@ -1644,10 +1644,11 @@ using this flag (or a prefix of it, down to `--fleet-i`) to the operator ("ask")
 
 ### `--allow-roster-shrink`
 
-With `--update --yes`, accept a run that drops archetypes the project's
-`.github/agents/_build-description.json` records in `selected_archetypes`. Without it such a run
-**refuses** before anything is written; without `--yes` it only warns. A description with no
-roster re-runs keyword selection, which is how a fleet re-render once dropped agents (IM item 12).
+With `--update --yes`, accept a run whose roster cannot be known: the description has no
+`selected_archetypes` and the project's `.github/agents/_build-description.json` exists but cannot be
+read. Without it such a run **refuses** before anything is written; without `--yes` it only warns.
+When the stub is readable its roster is used, and a description that sets its own roster is never
+refused (IM item 12: a description with no roster re-runs keyword selection and can drop agents).
 
 ---
 

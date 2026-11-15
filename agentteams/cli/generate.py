@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
-from agentteams import update_lock
+from agentteams import descriptor_union, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
@@ -43,7 +43,6 @@ from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
 from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
-from agentteams import descriptor_union
 from agentteams.cli.s10_exempt_gate import authorize_into
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
@@ -144,6 +143,7 @@ def _run_generate_inner(
             description = ingest._supplement_from_directory(
                 description, Path(description["existing_project_path"])
             )
+    descriptor_union.apply_stub_roster(description, args)  # IM item 12: a description with no roster
 
     # Retrieval references are brief-authoritative only for a DECLARED contract (not an inferred one).
     retrieval_inferred = bool(description.pop("_retrieval_integration_inferred", False))

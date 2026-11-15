@@ -1,50 +1,88 @@
 """descriptor_union.py — a re-render never silently loses the roster (IM item 12, G-17-1).
 
-Two descriptors can describe one team. The brief (``brief.json`` or ``.agentteams/brief.json``) carries the content:
+One team can have two descriptors. The brief (``brief.json`` or ``.agentteams/brief.json``) carries the content:
 authority sources, style rules, components, output paths. The stub (``.github/agents/_build-description.json``) often
-carries the roster: ``selected_archetypes`` and the keys below. A brief without a roster makes ``analyze`` re-run
-keyword selection, which can drop agents, and the fleet used to pick the brief whole whenever it existed.
+carries the roster (``selected_archetypes``). A description with no roster makes ``analyze`` re-run keyword selection,
+which can drop agents, and the fleet takes the brief whole whenever one exists.
 
-Two guards, each kept here so the crowded modules that call them grow by one line at most (CH-07):
+The fix runs where the description is loaded, so the fleet and a hand-run ``--update --description brief.json`` both
+get it, with no temp file and the real descriptor path in every record:
 
-* :func:`for_fleet` gives the fleet a union: the brief's content, plus each roster key the brief lacks, from the stub.
-  The brief wins where both set a key. researchteam's ``_update_cmd._resolve_descriptor`` does the same union, except
-  that its stub roster overrides a differing brief roster; here a thinner brief roster is caught by the second guard.
-* :func:`refuse_roster_shrink` stops an ``--update --yes`` that would drop archetypes the stub records, unless
-  ``--allow-roster-shrink`` is given. Without ``--yes`` it warns.
+* :func:`apply_stub_roster` copies the stub's ``selected_archetypes`` into a description that has none, and reports
+  (never applies) the other roster keys the stub sets and the description lacks. Those keys change capability and
+  governance (``write_policy``, ``governance_agents``, ``retrieval_integration``), and an operator may have deleted
+  one from the brief on purpose; nothing rewrites the stub's roster, so restoring it would undo that silently.
+* :func:`refuse_roster_shrink` runs before anything is written. Under ``--yes`` it refuses only when the roster cannot
+  be known: the description has none and the stub exists but cannot be read. A description that sets its own roster
+  is a deliberate choice, so archetypes it drops from the stub's are reported, not refused (no nightly FAIL from a
+  stale stub). ``--allow-roster-shrink`` accepts the unknown-roster case.
+
+researchteam's ``_update_cmd._resolve_descriptor`` makes a similar union, but lets the stub's roster override a brief
+roster that differs; here the description wins on every key it sets.
 """
 
 from __future__ import annotations
 
 import argparse
-import atexit
 import json
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
-#: The roster keys a stub can supply. ``selected_archetypes`` decides which agents exist; ``governance_agents``,
-#: ``write_policy`` and ``retrieval_integration`` change which governance agents and capabilities render.
+#: The roster keys a stub can carry. Only ``selected_archetypes`` is applied; the rest are reported.
 ROSTER_FIELDS: tuple[str, ...] = ("selected_archetypes", "governance_agents", "write_policy", "retrieval_integration")
 
-STUB_REL = Path(".github") / "agents" / "_build-description.json"
+#: Archetypes ``analyze.build_manifest`` force-appends from a capability (retrieval, research verification, the
+#: updater, vulnscan). Turning the capability off removes them, which is not a roster loss.
+FORCE_APPENDED: frozenset[str] = frozenset({"retrieval-integrator", "research-analyst", "agentteams-updater",
+                                            "vuln-remediation"})
 
-_TEMP_DIRS: list[Path] = []
+STUB_NAME = "_build-description.json"
+STUB_REL = Path(".github") / "agents" / STUB_NAME
+
+#: ``args`` attribute recording what :func:`apply_stub_roster` found, for :func:`refuse_roster_shrink`.
+_STATE_ATTR = "_stub_roster_state"
 
 
-def _cleanup() -> None:
-    for d in _TEMP_DIRS:
-        shutil.rmtree(d, ignore_errors=True)
-    _TEMP_DIRS.clear()
+def stub_for(project: str | None, output: str | None, description: str | None = None) -> Path | None:
+    """Return the project's stub, or None. A symlink or a non-regular file never counts (@security).
 
+    Candidates, in order: ``--project``'s stub; then, from ``--output`` (often the agents dir itself), the same
+    places ``build_team._check_dual_descriptor`` probes; then the stub beside the description's project.
 
-atexit.register(_cleanup)
+    Args:
+        project: The ``--project`` argument.
+        output: The ``--output`` argument.
+        description: The ``--description`` path, which is never itself returned.
+
+    Returns:
+        The first candidate that is a regular, non-symlinked file other than the description, or None.
+
+    Raises:
+        Nothing.
+    """
+    candidates: list[Path] = []
+    if project:
+        candidates.append(Path(project).resolve() / STUB_REL)
+    if output:
+        root = Path(output).resolve()
+        candidates += [root / STUB_NAME, root / STUB_REL]
+        if root.name == "agents":
+            candidates.append(root.parent / STUB_NAME)
+    desc = Path(description).resolve() if description else None
+    if desc is not None:
+        candidates.append(desc.parent / STUB_REL)
+    for cand in candidates:
+        if desc is not None and cand.resolve() == desc:
+            continue
+        if cand.is_symlink() or not cand.is_file():
+            continue
+        return cand
+    return None
 
 
 def _read(path: Path) -> dict[str, Any] | None:
-    """Return the JSON object at ``path``, or None when it is missing, unreadable or not an object."""
+    """Return the JSON object at ``path``, or None when it cannot be read or is not an object."""
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -52,112 +90,66 @@ def _read(path: Path) -> dict[str, Any] | None:
     return doc if isinstance(doc, dict) else None
 
 
-def union(brief: dict[str, Any], stub: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-    """Return ``brief`` with each :data:`ROSTER_FIELDS` key it lacks copied from ``stub``, and the keys copied.
+def apply_stub_roster(description: dict[str, Any], args: argparse.Namespace) -> None:
+    """Copy the stub's ``selected_archetypes`` into a description that has none; report other missing roster keys.
+
+    Records what it found on ``args`` for :func:`refuse_roster_shrink`: ``"own"`` (the description sets a roster),
+    ``"injected"``, ``"none"`` (no stub, or a stub without a roster) or ``"unreadable"``.
 
     Args:
-        brief: The brief's descriptor (content of record; it wins on every key it sets).
-        stub: The stub's descriptor (roster of record).
+        description: The loaded description; modified in place when the roster is copied.
+        args: The parsed CLI arguments (``project``, ``output``, ``description``).
 
     Returns:
-        ``(merged, injected)``. ``merged`` is a new dict; ``brief`` is not modified.
+        None.
 
     Raises:
         Nothing.
     """
-    merged = dict(brief)
-    injected = [k for k in ROSTER_FIELDS if k not in brief and stub.get(k) not in (None, [], {})]
-    for key in injected:
-        merged[key] = stub[key]
-    return merged, injected
+    path = stub_for(getattr(args, "project", None), getattr(args, "output", None), getattr(args, "description", None))
+    stub = _read(path) if path else None
+    has_own = "selected_archetypes" in description
+    state = "own" if has_own else ("none" if path is None else ("unreadable" if stub is None else "none"))
+    if stub is not None:
+        roster = stub.get("selected_archetypes")
+        if not has_own and isinstance(roster, list) and roster:
+            description["selected_archetypes"] = list(roster)
+            state = "injected"
+            print(f"  Roster: {len(roster)} selected_archetypes from {path} (the description has none)")
+        unapplied = [k for k in ROSTER_FIELDS[1:] if k not in description and stub.get(k) not in (None, [], {})]
+        if unapplied:
+            print(f"[WARN] {path} sets {', '.join(unapplied)}, which the description lacks; not applied. Add them to "
+                  f"the description if they are still wanted.", file=sys.stderr)
+    setattr(args, _STATE_ATTR, (state, path))
 
 
-def for_fleet(ws: Path, descriptor: Path | None) -> Path | None:
-    """Return the descriptor the fleet should render ``ws`` with: a brief/stub union where the stub adds a roster.
-
-    The union is written as ``brief.json`` in a private temp directory, removed at exit, so nothing is written into the
-    workspace (dry run included) and the fleet's ``descriptor.name == "brief.json"`` check still applies. ``ingest``
-    resolves no path relative to the descriptor's own folder, so its location does not change the render.
-
-    Args:
-        ws: The workspace root.
-        descriptor: What ``fleet._resolve_descriptor`` chose, or None.
-
-    Returns:
-        The union file, or ``descriptor`` unchanged when it is not a brief, there is no readable stub, or the stub
-        adds nothing.
-
-    Raises:
-        Nothing.
-    """
-    if descriptor is None or descriptor.name != "brief.json":
-        return descriptor
-    brief, stub = _read(descriptor), _read(ws / STUB_REL)
-    if brief is None or stub is None:
-        return descriptor
-    merged, injected = union(brief, stub)
-    if not injected:
-        return descriptor
-    tmp = Path(tempfile.mkdtemp(prefix="agentteams-fleet-descriptor-"))
-    _TEMP_DIRS.append(tmp)
-    out = tmp / "brief.json"
-    out.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
-    print(f"    descriptor: {descriptor.relative_to(ws)} + {', '.join(injected)} from {STUB_REL.as_posix()}")
-    return out
-
-
-def stub_for(project_root: Path, project: str | None = None) -> Path | None:
-    """Return the project's stub, or None. ``project_root`` is the ``--output`` folder, often the agents dir itself.
-
-    The candidates match ``build_team._check_dual_descriptor``: ``--project``'s stub first, then the stub under
-    ``project_root``, then ``project_root`` as the agents dir.
-
-    Args:
-        project_root: The resolved write root (``resolve_output_dir``'s first value).
-        project: The ``--project`` argument, when given.
-
-    Returns:
-        The first existing stub path, or None.
-
-    Raises:
-        Nothing.
-    """
-    candidates = [Path(project).resolve() / STUB_REL] if project else []
-    candidates += [project_root / STUB_REL, project_root / STUB_REL.name]
-    return next((c for c in candidates if c.is_file()), None)
-
-
-def dropped_archetypes(manifest: dict[str, Any], project_root: Path, project: str | None = None) -> list[str]:
-    """Return the stub's ``selected_archetypes`` that ``manifest`` no longer selects (sorted; empty if no stub).
+def dropped_archetypes(manifest: dict[str, Any], stub_path: Path | None) -> list[str]:
+    """Return the stub's ``selected_archetypes`` that ``manifest`` no longer selects, less :data:`FORCE_APPENDED`.
 
     Args:
         manifest: The manifest this run is about to render.
-        project_root: The run's write root (see :func:`stub_for`).
-        project: The ``--project`` argument, when given.
+        stub_path: The stub (from :func:`stub_for`), or None.
 
     Returns:
-        The dropped archetype slugs.
+        The dropped archetype slugs, sorted; empty when there is no readable stub roster.
 
     Raises:
         Nothing.
     """
-    path = stub_for(project_root, project)
-    stub = _read(path) if path else None
+    stub = _read(stub_path) if stub_path else None
     recorded = stub.get("selected_archetypes") if stub else None
     if not isinstance(recorded, list):
         return []
-    return sorted(set(map(str, recorded)) - set(manifest.get("selected_archetypes") or []))
+    return sorted(set(map(str, recorded)) - set(manifest.get("selected_archetypes") or []) - FORCE_APPENDED)
 
 
 def refuse_roster_shrink(args: argparse.Namespace, manifest: dict[str, Any], project_root: Path) -> bool:
-    """Return True (and print why) when an ``--update --yes`` would drop archetypes the stub records.
-
-    Without ``--yes`` the shrink is reported and the run continues; ``--allow-roster-shrink`` accepts it.
+    """Return True (and print why) when an ``--update --yes`` cannot know the roster it would apply.
 
     Args:
-        args: The parsed CLI arguments (``update``, ``yes``, ``allow_roster_shrink``).
+        args: The parsed CLI arguments, after :func:`apply_stub_roster` ran.
         manifest: The manifest this run is about to render.
-        project_root: The project the run writes to.
+        project_root: The run's write root (unused; kept so the call site reads like ``refuse_if_frozen``).
 
     Returns:
         Whether the run must stop before writing.
@@ -165,17 +157,21 @@ def refuse_roster_shrink(args: argparse.Namespace, manifest: dict[str, Any], pro
     Raises:
         Nothing.
     """
-    if not getattr(args, "update", False) or getattr(args, "allow_roster_shrink", False):
+    if not getattr(args, "update", False):
         return False
-    dropped = dropped_archetypes(manifest, project_root, getattr(args, "project", None))
-    if not dropped:
+    state, path = getattr(args, _STATE_ATTR, ("none", None))
+    if state == "own":
+        if dropped := dropped_archetypes(manifest, path):
+            print(f"[WARN] the description's selected_archetypes leaves out {', '.join(dropped)}, which {path} "
+                  f"records. Applied as written (the description is authoritative).", file=sys.stderr)
         return False
-    what = (f"this update would drop {len(dropped)} archetype(s) that {STUB_REL.as_posix()} records: "
-            f"{', '.join(dropped)}")
+    if state != "unreadable" or getattr(args, "allow_roster_shrink", False):
+        return False
+    what = (f"the description has no selected_archetypes and {path} cannot be read, so this update would re-run "
+            f"keyword selection and may drop agents")
     if not getattr(args, "yes", False):
-        print(f"[WARN] {what}. Check that the description carries the roster (selected_archetypes).",
-              file=sys.stderr)
+        print(f"[WARN] {what}.", file=sys.stderr)
         return False
-    print(f"Refused: {what}. Nothing was written. Put the roster in the description, or pass "
-          f"--allow-roster-shrink if the shrink is intended.", file=sys.stderr)
+    print(f"Refused: {what}. Nothing was written. Fix the stub, put the roster in the description, or pass "
+          f"--allow-roster-shrink.", file=sys.stderr)
     return True
