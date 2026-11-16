@@ -429,9 +429,22 @@ def test_a_known_format_credential_blocks_the_snapshot_and_reaches_the_notes(tmp
     assert len(notes) == 1 and "known credential format at .github/agents/x.agent.md:2" in notes[0]
 
 
-@pytest.mark.parametrize("name, key", [("Anthropic", "sk-ant-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3"),
-                                       ("Google", "AIza" + "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q"),
-                                       ("AWS temporary", "ASIA" + "ABCDEFGHIJKLMNOP")])
+@pytest.mark.parametrize("name, key", [
+    ("Anthropic", "sk-ant-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3"),
+    ("OpenAI", "sk-proj-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"),
+    ("Google", "AIza" + "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q"),
+    ("Google", "AIza" + "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6-"),       # ends in '-': no trailing \b (@security)
+    ("AWS temporary", "ASIA" + "ABCDEFGHIJKLMNOP"),
+    ("private key", "-----BEGIN OPENSSH" + " PRIVATE KEY-----"),
+    ("private key", "-----BEGIN EC" + " PRIVATE KEY-----"),
+    ("private key", "-----BEGIN ENCRYPTED" + " PRIVATE KEY-----"),
+    ("private key", "-----BEGIN PGP" + " PRIVATE KEY BLOCK-----"),
+    ("GitLab", "glpat-" + "a1B2c3D4e5F6g7H8i9J0"),
+    ("Hugging Face", "hf_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6"),
+    ("npm", "npm_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"),
+    ("PyPI", "pypi-" + "AgEIcHlwaS5vcmcCJ" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0"),
+    ("Stripe restricted", "rk_live_" + "a1B2c3D4e5F6g7H8i9J0"),
+])
 def test_the_extra_known_formats_block_the_snapshot(tmp_path, name, key):
     repo = tmp_path / "r"
     _mk_agent(repo / ".github" / "agents", "x.agent.md")
@@ -439,7 +452,19 @@ def test_the_extra_known_formats_block_the_snapshot(tmp_path, name, key):
     (repo / ".github" / "agents" / "x.agent.md").write_text(f"see {key} here\n", encoding="utf-8")
     notes: list[str] = []
     assert fleet._git_snapshot(repo, notes=notes)[1] is False, name
-    assert name in notes[0]
+    assert name.lower() in notes[0].lower(), notes
+
+
+def test_the_untyped_messages_match_the_scanner() -> None:
+    """The two untyped messages must be what agentteams.scan emits (@security: pin them, so a reworded scanner message
+    is caught here rather than silently blocking or warning)."""
+    from agentteams._fleet_snapshot import _UNTYPED_CREDENTIAL_MESSAGES
+    from agentteams.scan import scan_content
+
+    seen = {f.message for line in ("value IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM here",
+                                   "token verify-toolchain-group-dispatcher-lane")
+            for f in scan_content(line, "x.md") if f.category == "credential"}
+    assert seen == set(_UNTYPED_CREDENTIAL_MESSAGES)
 
 
 #: v1.2.0-rc.1 soak false positives (data): each is an untyped HIGH finding, so it warns and the snapshot is recorded.
