@@ -105,24 +105,35 @@ def resolve_adopt_only_brief(args: argparse.Namespace) -> str | None:
     """
     if not getattr(args, "adopt_only", None) or args.description or getattr(args, "self_update", False):
         return None
-    from agentteams.cli.output_target import resolve_output_dir
     from agentteams.memory_index_surfaces import resolve_brief
+
+    from agentteams.fleet import _resolve_descriptor
 
     root = Path(getattr(args, "project", None) or ".").resolve()
     found = resolve_brief(root)
     if found is None:
         return None  # the caller's "--description is required" error stands
+    if found.name == "_build-description.json":  # the --self brief: never used without --self's own checks
+        return f"--adopt-only: the only brief under {root} is the --self brief {found}; pass --self or --description"
     try:
         description = json.loads(found.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return f"--adopt-only: the brief {found} cannot be read; pass --description"
+        description = None
+    if not isinstance(description, dict):
+        return f"--adopt-only: the brief {found} is not a readable JSON object; pass --description"
     adapter_cls = FRAMEWORKS.get(args.framework)
     if adapter_cls is None:
         return None  # not an agent framework; the caller's own error stands
     _project, output_dir = resolve_output_dir(args, adapter_cls(), description)
-    if not output_dir.resolve().is_relative_to(root):
+    target = output_dir.resolve()
+    if not target.is_relative_to(root):
         return (f"--adopt-only: found this project's brief at {found}, but the agents directory {output_dir} is "
                 f"outside {root}; pass --description for that team's own brief, or --project for its project")
+    nested = next((d for d in [target, *target.parents] if d != root and d.is_relative_to(root)
+                   and _resolve_descriptor(d) is not None), None)
+    if nested is not None:  # a nested project's team takes its own brief, never the parent's
+        return (f"--adopt-only: {nested} has its own brief, so {found} is not this team's; pass --description "
+                f"or --project {nested}")
     print(f"  ℹ  --adopt-only: using this project's brief {found}", file=sys.stderr)
     args.description = str(found)
     return None

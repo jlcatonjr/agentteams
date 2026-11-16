@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With no `--description` and no `--self`, `--adopt-only` now uses the project's own brief under `--project`
   (else the working directory), found as the retrieval modes find it: a symlinked brief, one outside the project,
   or one naming another project in `existing_project_path` is not used. It does so only when the agents
-  directory the run writes to is inside that project; otherwise the run refuses and asks for `--description`.
+  directory the run writes to is inside that project and no nested project between them has its own brief;
+  otherwise the run refuses and asks for `--description`. The `--self` brief is never used without `--self`, and a
+  brief that is not a JSON object refuses.
 - A `--description` that is named is never replaced, even when the file is missing. Adoption still goes through
   the `adopt-orphans-merge` gate, so finding the brief widens nothing by itself.
 - New `tests/test_adopt_only_brief_discovery.py`.

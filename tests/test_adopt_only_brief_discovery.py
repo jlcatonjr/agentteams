@@ -117,3 +117,34 @@ def test_end_to_end_dry_run_adopts_without_a_description(tmp_path: Path, monkeyp
     assert "using this project's brief" in captured.err
     payload = json.loads(captured.out[captured.out.find("{"):])
     assert "my-agent" in json.dumps(payload)
+
+
+def test_a_brief_that_is_not_a_json_object_refuses(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / ".agentteams" / "brief.json").write_text("[]", encoding="utf-8")
+    refusal = resolve_adopt_only_brief(_args(project=str(root), output=str(root / ".claude" / "agents")))
+    assert refusal and "not a readable JSON object" in refusal
+
+
+def test_malformed_json_is_not_found(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / ".agentteams" / "brief.json").write_text("{not json", encoding="utf-8")
+    args = _args(project=str(root), output=str(root / ".claude" / "agents"))
+    assert resolve_adopt_only_brief(args) is None and args.description is None
+
+
+def test_a_nested_project_with_its_own_brief_refuses(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    sub = root / "sub"
+    (sub / ".agentteams").mkdir(parents=True)
+    (sub / ".agentteams" / "brief.json").write_text(json.dumps(EXAMPLE), encoding="utf-8")
+    refusal = resolve_adopt_only_brief(_args(project=str(root), output=str(sub / ".claude" / "agents")))
+    assert refusal and "has its own brief" in refusal and str(sub.resolve()) in refusal
+
+
+def test_the_self_brief_is_not_used_without_self(tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    (root / ".github" / "agents").mkdir(parents=True)
+    (root / ".github" / "agents" / "_build-description.json").write_text(json.dumps(EXAMPLE), encoding="utf-8")
+    refusal = resolve_adopt_only_brief(_args(project=str(root), output=str(root / ".claude" / "agents")))
+    assert refusal and "--self brief" in refusal
