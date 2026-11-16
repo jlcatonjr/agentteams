@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agentteams import emit, render, vscode_tasks
+from agentteams._archetype_placeholders import ARCHETYPE_PLACEHOLDERS, explicitly_selected_unfilled
 from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
@@ -29,13 +30,28 @@ def _apply_placeholder_policy(
     manifest: dict,
     *,
     strict_manual_placeholders: bool,
+    description: dict | None = None,
 ) -> None:
     """Apply dual-mode policy for optional governance placeholders.
 
     In strict mode, unresolved {MANUAL:*} tokens are preserved as-is.
     In usability mode, selected optional placeholders are replaced with
-    explicit defaults and removed from SETUP-REQUIRED tracking.
+    explicit defaults and removed from SETUP-REQUIRED tracking, except when the brief names the archetype
+    that needs the value in ``selected_archetypes``: then the token stays, stays in SETUP-REQUIRED, and a
+    warning names it in every mode (#392 item 1). A keyword-selected archetype keeps the default and gets a
+    one-line warning.
     """
+    desc = description if description is not None else (manifest.get("description", {}) or {})
+    kept = explicitly_selected_unfilled(desc)
+    selected = set(manifest.get("selected_archetypes", []) or [])
+    for key in sorted(ARCHETYPE_PLACEHOLDERS):
+        slug, fields = ARCHETYPE_PLACEHOLDERS[key]
+        if key in kept:
+            print(f"warning: {slug} is named in selected_archetypes but the brief sets no "
+                  f"{fields[0]}; {{MANUAL:{key}}} stays in its files and SETUP-REQUIRED.md", file=sys.stderr)
+        elif slug in selected and not any(desc.get(f) for f in fields):
+            print(f"warning: {slug} selected without a {fields[0]} (set {fields[0]}, or name {slug} "
+                  "in selected_archetypes to keep the placeholder)", file=sys.stderr)
     if strict_manual_placeholders:
         return
 
@@ -45,11 +61,10 @@ def _apply_placeholder_policy(
     ref_manual = "{MANUAL:REFERENCE_DB_PATH}"
     style_manual = "{MANUAL:STYLE_REFERENCE_PATH}"
 
-    if str(auto.get(ref_key, "")).strip() == ref_manual:
+    if ref_key not in kept and str(auto.get(ref_key, "")).strip() == ref_manual:
         auto[ref_key] = "N/A - no citation database configured for this project"
 
-    if str(auto.get(style_key, "")).strip() == style_manual:
-        desc = manifest.get("description", {}) or {}
+    if style_key not in kept and str(auto.get(style_key, "")).strip() == style_manual:
         style_value = desc.get("style_reference") or desc.get("style_reference_path")
         auto[style_key] = (
             str(style_value)
@@ -61,9 +76,11 @@ def _apply_placeholder_policy(
     if manual_items:
         filtered = [
             item for item in manual_items
-            if item.get("placeholder") not in {ref_key, style_key}
+            if item.get("placeholder") not in ({ref_key, style_key} - kept)
         ]
         manifest["manual_required_placeholders"] = filtered
+
+
 def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -> bool:
     """Resolve strict/manual policy from CLI args.
 
