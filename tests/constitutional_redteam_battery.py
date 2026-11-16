@@ -1042,8 +1042,24 @@ E1_VARIANTS: tuple[tuple[str, dict], ...] = (
     ("software-project+orchestrator-only", {"write_policy": "orchestrator-only", "privilege_profile": "confined"}),)
 #: VS Code capability names that grant a write or command; a template with none of them is read-only.
 _E1_WRITE_CAPS = frozenset({"edit", "write", "execute", "terminal", "runcommands", "agent", "todo", "new"})
-#: Claude tool names a read-only agent must never be emitted with (a scoped `Bash(...)` is allowed; bare Bash is not).
-_E1_WRITE_TOOLS = frozenset({"Write", "Edit", "MultiEdit", "NotebookEdit", "Bash"})
+#: Claude tool names a read-only agent must never be emitted with. `Task` and `Agent` spawn a subagent that can write.
+_E1_WRITE_TOOLS = frozenset({"Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "Task", "Agent"})
+#: Read-only agents E1 measured when this floor was set (2026-11-16: 40 across 5 example briefs + 1 variant, from 11
+#: read-only templates). Fewer means the population shrank, so E1 raises rather than report DEFENDED on less
+#: (@security, IM #516 review). Raise the floor when the measured count grows; lower it only with a reviewed reason.
+E1_READ_ONLY_FLOOR = 40
+
+
+def _e1_widening(tools: list[str]) -> list[str]:
+    """The tools in *tools* that give a read-only agent more than read access.
+
+    A write or spawn tool (:data:`_E1_WRITE_TOOLS`), any MCP tool (``mcp__*``, which can do anything its server does),
+    and any scoped ``Bash(...)`` other than the one research scope the adapter grants.
+    """
+    from agentteams.frameworks.claude import _RETRIEVAL_CLI_SCOPE
+
+    return [t for t in tools if t in _E1_WRITE_TOOLS or t.startswith("mcp__")
+            or (t.startswith("Bash(") and t != _RETRIEVAL_CLI_SCOPE)]
 
 
 def _e1_read_only_slugs() -> frozenset[str]:
@@ -1104,7 +1120,9 @@ def e1_capability_key_not_honoured() -> None:
     checked nothing. Now the subject is Claude teams rendered in memory from every tracked example brief (plus a
     write_policy variant), checked for (a) a limit written to `allowed-tools:`, which Claude Code ignores; (b) a
     subagent with no `tools:`/`disallowedTools:` key, which inherits every tool; and (c) a read-only agent (its
-    template grants no write or command capability) emitted with Write, Edit or bare Bash. The adapter's fallback for a
+    template grants no write or command capability) emitted with a write or spawn tool, an MCP tool or any scoped Bash
+    other than the research scope. A `tools:` that is empty or `*` counts as (b). Fewer read-only agents than
+    :data:`E1_READ_ONLY_FLOOR` raises. The adapter's fallback for a
     tool list it cannot parse was `Bash, Read, Write, Edit` until #511 made it read-only; (c) keeps any regression of
     that, or any other widening, visible. An empty render raises instead of passing.
     """
@@ -1118,12 +1136,18 @@ def e1_capability_key_not_honoured() -> None:
         slug = key.rsplit("/", 1)[-1].removesuffix(".md")
         if _fm_has_key(fm, "allowed-tools"):
             declared.append(key)
-        if not any(_fm_has_key(fm, k) for k in CLAUDE_SUBAGENT_CAPABILITY_KEYS):
+        tools = _e1_tools(fm)
+        # No key, or a `tools:` that is empty or `*`: the subagent inherits every tool.
+        if (not any(_fm_has_key(fm, k) for k in CLAUDE_SUBAGENT_CAPABILITY_KEYS)
+                or (tools is not None and (not tools or "*" in tools) and not _fm_has_key(fm, "disallowedTools"))):
             unrecognised.append(key)
         if slug in read_only:
             read_only_seen += 1
-            if set(_e1_tools(fm) or []) & _E1_WRITE_TOOLS:
+            if _e1_widening(tools or []):
                 widened.append(key)
+    if read_only_seen < max(E1_READ_ONLY_FLOOR, 1):
+        raise RuntimeError(f"E1 saw {read_only_seen} read-only agents, below the floor of {E1_READ_ONLY_FLOOR}: the "
+                           "measured population shrank, so a DEFENDED would mean less than it says")
     record(
         pid="E1",
         name="Declared read-only capability limits are written to a key Claude Code does not read",
