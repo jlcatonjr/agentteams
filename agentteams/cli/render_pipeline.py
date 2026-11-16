@@ -52,8 +52,9 @@ def _apply_placeholder_policy(
             print(f"warning: {slug} is named in selected_archetypes but the brief sets no {field}; "
                   f"{{MANUAL:{key}}} stays in its files and SETUP-REQUIRED.md", file=sys.stderr)
         elif slug in selected:
-            print(f"warning: {slug} selected without a {field} (set {field}, or name {slug} "
-                  "in selected_archetypes to keep the placeholder)", file=sys.stderr)
+            advice = ("" if strict_manual_placeholders
+                      else f", or name {slug} in selected_archetypes to keep the placeholder")
+            print(f"warning: {slug} selected without a {field} (set {field}{advice})", file=sys.stderr)
     if strict_manual_placeholders:
         return
 
