@@ -311,8 +311,11 @@ Update only template-fenced regions in existing agent files, preserving all user
 A team with no generation baseline (its `references/build-log.json` records no fence digests; every team generated
 by 1.1.x or earlier) gets one notice before any file is written: a merge cannot tell an older template's text from
 an edit, so each changed fence keeps its on-disk body and prints a shrink notice. To take the current templates,
-preview `--update --overwrite --dry-run --json`, review its plan and `at_risk_routed_agents`, then run it. A run
-records the baseline for each fence it writes as the template renders it, so the notice does not repeat.
+preview `--update --overwrite --dry-run --json`, review its plan and `at_risk_routed_agents`, then run it;
+`--overwrite` replaces hand enrichment inside fences (the backup keeps it) and carries the Project-Specific Notes
+and Rules. A merge records the baseline for each fence it writes as the template renders it, so the notice stops
+after one merge, but the fences it preserved stay unrecorded and keep their shrink notices. A missing or malformed
+build log gets its own notice; an interop projection and a run with nothing to write get none.
 `--capture-baseline` records an emission snapshot, not this baseline.
 ### `--yes` / `-y`
 

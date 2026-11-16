@@ -15,7 +15,7 @@ import pytest
 
 import build_team
 from agentteams import fence_baseline
-from agentteams.cli.update_notices import NO_BASELINE, no_baseline_notice
+from agentteams.cli.update_notices import NO_BASELINE, NO_BUILD_LOG, no_baseline_notice
 from tests.test_update_dry_run import _seed_gates, _seed_pass
 
 REPO = Path(__file__).resolve().parents[1]
@@ -76,11 +76,44 @@ def test_a_real_merge_records_the_baseline_so_the_notice_does_not_repeat(team: t
 
 
 class _Args:
-    def __init__(self, overwrite: bool) -> None:
+    def __init__(self, overwrite: bool = False) -> None:
         self.overwrite = overwrite
 
 
-def test_overwrite_prints_nothing_and_a_missing_log_counts_as_no_baseline(tmp_path: Path, capsys) -> None:
-    assert no_baseline_notice(tmp_path, _Args(overwrite=True)) is False
-    assert no_baseline_notice(tmp_path, _Args(overwrite=False)) is True
-    assert capsys.readouterr().err.count(FIRST_LINE) == 1
+def _log(tmp_path: Path, log: object) -> Path:
+    (tmp_path / "references").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "references" / "build-log.json").write_text(
+        log if isinstance(log, str) else json.dumps(log), encoding="utf-8")
+    return tmp_path
+
+
+WRITES = [("orchestrator.agent.md", "x")]
+
+
+def test_overwrite_and_a_run_with_nothing_to_write_print_nothing(tmp_path: Path, capsys) -> None:
+    _log(tmp_path, {"schema_version": "1.2"})
+    assert no_baseline_notice(tmp_path, _Args(overwrite=True), WRITES) is False
+    assert no_baseline_notice(tmp_path, _Args(), []) is False
+    assert capsys.readouterr().err == ""
+
+
+def test_an_interop_projection_is_not_told_it_lacks_a_baseline(tmp_path: Path, capsys) -> None:
+    _log(tmp_path, {"origin": "interop", "schema_version": "1.2"})
+    assert no_baseline_notice(tmp_path, _Args(), WRITES) is False
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("log", [None, "{not json"])
+def test_a_missing_or_malformed_log_says_so(tmp_path: Path, capsys, log: object) -> None:
+    if log is not None:
+        _log(tmp_path, log)
+    assert no_baseline_notice(tmp_path, _Args(), WRITES) is True
+    err = capsys.readouterr().err
+    assert NO_BUILD_LOG.splitlines()[0].strip() in err and "1.1.x" not in err
+
+
+def test_the_advice_names_what_overwrite_replaces(tmp_path: Path, capsys) -> None:
+    _log(tmp_path, {"schema_version": "1.2"})
+    assert no_baseline_notice(tmp_path, _Args(), WRITES) is True
+    err = capsys.readouterr().err
+    assert "replaces hand enrichment inside fences" in err and "the preserved ones stay unrecorded" in err
