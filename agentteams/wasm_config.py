@@ -273,7 +273,7 @@ def limits_of(raw: object, path: str) -> Limits:
 
 
 def _slug_in_team(value: object, path: str, agent_slugs: frozenset[str]) -> str:
-    if not isinstance(value, str) or not _SLUG_RE.match(value):
+    if not isinstance(value, str) or not _SLUG_RE.fullmatch(value):
         raise ValueError(f"{path} = {value!r} is not an agent slug (^[a-z0-9][a-z0-9-]*$)")
     if value not in agent_slugs:
         raise ValueError(f"{path} names {value!r}, which is not an agent in this team")

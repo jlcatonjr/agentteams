@@ -96,7 +96,7 @@ def parse_slugs(raw: str) -> list[str]:
     slugs = sorted({s.strip() for s in (raw or "").split(",") if s.strip()})
     if not slugs:
         raise AdoptOnlyError("--adopt-only needs at least one agent slug")
-    bad = [s for s in slugs if not _SLUG_RE.match(s)]
+    bad = [s for s in slugs if not _SLUG_RE.fullmatch(s)]
     if bad:
         raise AdoptOnlyError(f"malformed agent slug(s): {', '.join(bad)}")
     return slugs
