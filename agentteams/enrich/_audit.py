@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import tool_metadata_catalog
-from agentteams.placeholder_scan import INSTRUCTIONAL_TOKENS
+from agentteams.placeholder_scan import INSTRUCTIONAL_TOKENS, MANUAL_TOKEN_RE, SETUP_REQUIRED_NAME
 from ._fills import _RULE_BASED_FILLS
-from ._models import DefaultFinding, _MANUAL_RE, _SECTION_RE
+from ._models import DefaultFinding, _SECTION_RE
 from ._tools import _IMPORT_TO_PACKAGE, _get_docs_url, scan_project_imports
 
 
@@ -68,7 +68,7 @@ def scan_defaults(
     comp_by_slug = {c["slug"]: c for c in manifest.get("components", [])}
 
     for rel_path, content in file_map.items():
-        if rel_path.endswith("SETUP-REQUIRED.md"):
+        if Path(rel_path).name == SETUP_REQUIRED_NAME:
             continue
 
         lines = content.splitlines()
@@ -85,7 +85,7 @@ def scan_defaults(
         for i, line in enumerate(lines):
             # IM item 13b: the shared rule (placeholder_scan) skips instructional names, not code spans or fences;
             # the backtick rule hid real placeholders such as `{MANUAL:ADJACENT_REPO_PATH}`.
-            for m in _MANUAL_RE.finditer(line):
+            for m in MANUAL_TOKEN_RE.finditer(line):
                 token = m.group(1)
                 key = (rel_path, token)
                 if token in INSTRUCTIONAL_TOKENS or key in seen_in_file:

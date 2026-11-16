@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agentteams import emit, render, vscode_tasks
+from agentteams.placeholder_scan import complete_setup_required
 from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
@@ -284,10 +285,34 @@ def _build_final_rendered(
         "references/pipeline-handoffs.svg",
         _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
     ))
-    # IM item 13b (G-17-3): the checklist lists every {MANUAL:} token in the emitted text, not only the brief's.
-    from agentteams.placeholder_scan import complete_setup_required
+    # IM item 13b (G-17-3): the checklist lists every {MANUAL:} token the run leaves open, not only the brief's.
+    return complete_setup_required(manifest, final, effective=_with_filled_values(output_dir))
 
-    return complete_setup_required(manifest, final)
+
+def _with_filled_values(output_dir: Path | None) -> Callable[[str, str], str] | None:
+    """Return the ``effective`` hook for :func:`complete_setup_required`: the operator's filled values carried forward.
+
+    ``--update`` writes :func:`_preserve_manual_values` of the on-disk file and the render, so a token the operator
+    filled is not open and stays off the checklist.
+
+    Args:
+        output_dir: The run's output dir; None (``--check``'s promotion pass) uses the render as is.
+
+    Returns:
+        A ``(path, rendered) -> content`` function, or None.
+
+    Raises:
+        Nothing.
+    """
+    if output_dir is None:
+        return None
+
+    def _effective(path: str, rendered: str) -> str:
+        disk_path = emit._resolve_path(output_dir, path)
+        if not disk_path.is_file():
+            return rendered
+        return _preserve_manual_values(disk_path.read_text(encoding="utf-8", errors="replace"), rendered)
+    return _effective
 
 
 def twin_sources(manifest: dict[str, Any], adapter: Any, output_dir: Path | None = None) -> dict[str, Any]:

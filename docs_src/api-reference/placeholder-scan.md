@@ -15,8 +15,9 @@ Nothing is refused.
 | Name | Purpose |
 |---|---|
 | `INSTRUCTIONAL_TOKENS` | `TOKEN`, `UPPER_SNAKE_CASE`, `PLACEHOLDER_NAME`: the names templates use to explain placeholders. They are the only names never listed. `tests/test_placeholder_completeness.py` pins the files each may appear in, so a new instructional example, or a real placeholder named like one, fails a test. |
-| `scan_manual_tokens(files)` | Each `{MANUAL:X}` in `(path, content)` pairs: first occurrence per token per file, with line and context, sorted by name and then file. It skips `SETUP-REQUIRED.md` and the instructional names, and has no backtick or code-fence rule. |
-| `complete_setup_required(manifest, files)` | Appends each scanned token whose name the manifest doesn't list to `manual_required_placeholders` (in sorted order), then re-renders the `SETUP-REQUIRED.md` entry. Idempotent: run on its own output, it changes nothing. |
+| `scan_manual_tokens(files)` | Each `{MANUAL:X}` in `(path, content)` pairs: first occurrence per token per file, with line and context, sorted by name and then file. It skips `SETUP-REQUIRED.md` and the instructional names, and has no backtick or code-fence rule. Raises `TypeError` for non-`str` content. |
+| `complete_setup_required(manifest, files, *, effective=None)` | Stores each scanned token whose name `manual_required_placeholders` doesn't list under `manifest["_scanned_manual_placeholders"]` (sorted), then re-renders the `SETUP-REQUIRED.md` entry from both lists. `manual_required_placeholders` is not changed, and the drift fingerprint skips `_` keys, so `--check` (which fingerprints before render) and generate (after) agree. `effective(path, rendered)` gives the content the run writes; the render pipeline passes the operator's filled values carried forward from disk, so a filled token leaves the list on `--update`. Idempotent. |
+| `open_count(manifest)` | The checklist's item count (both lists), used by the emit summary. |
 
 **Write policy unchanged.** Only the content of `SETUP-REQUIRED.md` changes, not how it is written:
 - `--check` stays read-only.

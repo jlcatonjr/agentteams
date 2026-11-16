@@ -31,6 +31,17 @@ INSTRUCTIONAL_HOMES = {
     "UPPER_SNAKE_CASE": {"AUTHORING-GUIDE.md"},
     "PLACEHOLDER_NAME": {"PLACEHOLDER-CONVENTIONS.md"},
 }
+#: Python files that write an instructional name as ``{MANUAL:X}`` (all in docstrings or comments, explaining the syntax).
+CODE_HOMES = {
+    "TOKEN": {"enrich/_audit.py", "enrich/_enrich.py", "enrich/_models.py"},
+    "PLACEHOLDER_NAME": {"render.py"},
+}
+#: Templates that write an instructional name as a plain ``{X}`` (explaining auto placeholders, never a slot).
+PLAIN_HOMES = {
+    "UPPER_SNAKE_CASE": {"AUTHORING-GUIDE.md", "domain/module-doc-author.template.md",
+                         "domain/module-doc-validator.template.md"},
+    "PLACEHOLDER_NAME": {"PLACEHOLDER-CONVENTIONS.md"},
+}
 HIDDEN_BEFORE = {"ADJACENT_REPO_PATH", "ADJACENT_REPO_AGENTS_PATH", "PROJECT_REDTEAM_NOTES"}
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")  # Copilot body-length warnings
@@ -65,6 +76,24 @@ def test_an_instructional_name_is_written_only_where_it_is_instructional_today()
         assert names.get(name, set()) == homes, f"{{MANUAL:{name}}} moved: decide whether it is a real placeholder"
 
 
+def test_code_writes_an_instructional_name_only_where_it_explains_the_syntax():
+    pattern = re.compile(r"\{MANUAL:(" + "|".join(sorted(INSTRUCTIONAL_HOMES)) + r")\}")
+    found: dict[str, set[str]] = {}
+    for path in (REPO / "agentteams").rglob("*.py"):
+        for name in pattern.findall(path.read_text(encoding="utf-8")):
+            found.setdefault(name, set()).add(path.relative_to(REPO / "agentteams").as_posix())
+    assert found == CODE_HOMES
+
+
+def test_a_template_writes_an_instructional_name_as_a_plain_placeholder_only_in_its_homes():
+    pattern = re.compile(r"(?<!MANUAL:)\{(" + "|".join(sorted(INSTRUCTIONAL_HOMES)) + r")\}")
+    found: dict[str, set[str]] = {}
+    for path in TEMPLATES.rglob("*.md"):
+        for name in pattern.findall(path.read_text(encoding="utf-8")):
+            found.setdefault(name, set()).add(path.relative_to(TEMPLATES).as_posix())
+    assert found == PLAIN_HOMES
+
+
 def test_no_code_emits_an_instructional_name_as_a_value():
     literal = re.compile(r"[\"']\{MANUAL:(" + "|".join(sorted(INSTRUCTIONAL_HOMES)) + r")\}[\"']")
     hits = [str(p.relative_to(REPO)) for p in (REPO / "agentteams").rglob("*.py")
@@ -97,9 +126,71 @@ def test_the_checklist_is_deterministic_and_idempotent():
     manifest, first = _render(EXAMPLES[0], "copilot-vscode")
     _, second = _render(EXAMPLES[0], "copilot-vscode")
     assert _setup(first) == _setup(second)
-    before = list(manifest["manual_required_placeholders"])
+    scanned = list(manifest[placeholder_scan.SCANNED_KEY])
     assert placeholder_scan.complete_setup_required(manifest, list(first.items())) == list(first.items())
-    assert manifest["manual_required_placeholders"] == before
+    assert manifest[placeholder_scan.SCANNED_KEY] == scanned
+
+
+@pytest.mark.parametrize("brief", EXAMPLES, ids=lambda p: p.parent.name)
+def test_render_leaves_the_drift_fingerprint_unchanged(brief):
+    # Adversarial 1: --check fingerprints the manifest before render, generate and --update after it.
+    from agentteams import drift
+
+    manifest = analyze.build_manifest(json.loads(brief.read_text(encoding="utf-8")), framework="copilot-vscode")
+    listed = json.dumps(manifest.get("manual_required_placeholders", []), sort_keys=True)
+    before = drift.compute_manifest_fingerprint(manifest)
+    _build_final_rendered(manifest, FRAMEWORKS["copilot-vscode"](), "x")
+    assert drift.compute_manifest_fingerprint(manifest) == before
+    assert json.dumps(manifest.get("manual_required_placeholders", []), sort_keys=True) == listed
+    assert manifest[placeholder_scan.SCANNED_KEY]
+
+
+def test_the_emit_summary_counts_the_scanned_placeholders(capsys):
+    from agentteams import emit
+
+    manifest, files = _render(EXAMPLES[0], "copilot-vscode")
+    expected = len(manifest.get("manual_required_placeholders", [])) + len(manifest[placeholder_scan.SCANNED_KEY])
+    assert placeholder_scan.open_count(manifest) == expected
+    emit.print_summary(emit.EmitResult(), manifest)
+    assert f"{expected} placeholder(s) require manual completion" in capsys.readouterr().out
+
+
+def _write_on_disk(out: Path, path: str, body: str) -> None:
+    from agentteams import emit
+
+    target = emit._resolve_path(out, path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
+
+
+def test_a_token_the_operator_filled_leaves_the_checklist(tmp_path):
+    # Adversarial 2: --update carries the filled value forward, so the token is no longer open.
+    from agentteams.cli.render_pipeline import _with_filled_values
+
+    manifest, files = _render(EXAMPLES[0], "copilot-vscode")
+    path = next(p for p, body in files.items() if "{MANUAL:ADJACENT_REPO_PATH}" in body)
+    _write_on_disk(tmp_path, path, files[path].replace("{MANUAL:ADJACENT_REPO_PATH}", "/repos/neighbour"))
+    out = dict(placeholder_scan.complete_setup_required(manifest, list(files.items()),
+                                                        effective=_with_filled_values(tmp_path)))
+    names = {item["placeholder"] for item in manifest[placeholder_scan.SCANNED_KEY]}
+    assert "ADJACENT_REPO_PATH" not in names and "{MANUAL:ADJACENT_REPO_PATH}" not in _setup(out)
+    assert "ADJACENT_REPO_AGENTS_PATH" in names                  # the one left open stays listed
+
+
+def test_a_token_new_in_the_template_stays_listed_on_update(tmp_path):
+    # A file on disk without the token is not "filled" when the render adds the token for the first time.
+    from agentteams.cli.render_pipeline import _with_filled_values
+
+    manifest, files = _render(EXAMPLES[0], "copilot-vscode")
+    path = next(p for p, body in files.items() if "{MANUAL:ADJACENT_REPO_PATH}" in body)
+    _write_on_disk(tmp_path, path, "# an older version of this file\n")
+    placeholder_scan.complete_setup_required(manifest, list(files.items()), effective=_with_filled_values(tmp_path))
+    assert "ADJACENT_REPO_PATH" in {item["placeholder"] for item in manifest[placeholder_scan.SCANNED_KEY]}
+
+
+def test_a_non_string_content_is_a_type_error():
+    with pytest.raises(TypeError, match="a.md"):
+        placeholder_scan.scan_manual_tokens([("a.md", b"{MANUAL:X}")])
 
 
 def test_scan_results_are_sorted_and_carry_line_and_context():

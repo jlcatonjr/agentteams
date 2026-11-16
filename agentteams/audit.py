@@ -41,6 +41,7 @@ from agentteams.audit_types import (  # re-exported for callers/tests
     _is_agent_file,
 )
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+from agentteams.placeholder_scan import scan_manual_tokens
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -336,9 +337,16 @@ def _check_unresolved_manual_placeholders(
     Uses ``placeholder_scan.scan_manual_tokens``, the rule the checklist is built with (IM item 13b): instructional
     names are skipped by name. Backticked tokens are no longer skipped, since real placeholders are written in inline
     code (``adjacent-repos.md``).
-    """
-    from agentteams.placeholder_scan import scan_manual_tokens
 
+    Args:
+        file_map: Generated ``relative_path -> content``.
+
+    Returns:
+        One ``UNRESOLVED_MANUAL_PLACEHOLDER`` warning per open token per file.
+
+    Raises:
+        TypeError: A content value is not a ``str``.
+    """
     return [
         AuditFinding(
             category="CONFLICT",

@@ -12,7 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `manual_required_placeholders`, so tokens written literally in templates were never listed. On dev, every example
   emitted `{MANUAL:PROJECT_REDTEAM_NOTES}`, `{MANUAL:ADJACENT_REPO_PATH}` and `{MANUAL:ADJACENT_REPO_AGENTS_PATH}`
   without listing them. The new `placeholder_scan` builds the list from the emitted text, and the emit summary counts
-  them.
+  them. A token the operator has filled in leaves the list on the next `--update`. The scanned entries are kept under
+  the manifest's `_scanned_manual_placeholders`, which the drift fingerprint skips, so `--check` does not report
+  manifest drift.
 - **One rule for every scanner.** The `--post-audit` check and `--enrich`'s `scan_defaults` skipped tokens in inline
   code, and the adjacent-repos placeholders are written in inline code. Now the only names skipped are the
   instructional `TOKEN`, `UPPER_SNAKE_CASE` and `PLACEHOLDER_NAME`. A test pins where those may appear, and every

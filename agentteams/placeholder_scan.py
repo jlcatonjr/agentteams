@@ -14,9 +14,11 @@ step (warn, then fail, as with the brief schema).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
+
+from agentteams import render
 
 #: ``{MANUAL:NAME}`` — the same token syntax ``render`` leaves for a human to fill.
 MANUAL_TOKEN_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
@@ -27,6 +29,8 @@ MANUAL_TOKEN_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
 INSTRUCTIONAL_TOKENS: frozenset[str] = frozenset({"TOKEN", "UPPER_SNAKE_CASE", "PLACEHOLDER_NAME"})
 
 SETUP_REQUIRED_NAME = "SETUP-REQUIRED.md"
+#: Manifest key for the scanned entries. The leading ``_`` keeps it out of the drift fingerprint.
+SCANNED_KEY = "_scanned_manual_placeholders"
 #: Longest context line copied into the checklist.
 _MAX_CONTEXT = 120
 
@@ -42,11 +46,13 @@ def scan_manual_tokens(files: Iterable[tuple[str, str]]) -> list[dict[str, Any]]
         and the :data:`INSTRUCTIONAL_TOKENS` are skipped; nothing else is (no backtick or code-fence rule).
 
     Raises:
-        Nothing.
+        TypeError: A content item is not a ``str``.
     """
     found: list[dict[str, Any]] = []
     for rel_path, content in files:
-        if Path(rel_path).name == SETUP_REQUIRED_NAME or not isinstance(content, str):
+        if not isinstance(content, str):
+            raise TypeError(f"{rel_path}: content is {type(content).__name__}, not str")
+        if Path(rel_path).name == SETUP_REQUIRED_NAME:
             continue
         seen: set[str] = set()
         for line_no, line in enumerate(content.splitlines(), start=1):
@@ -62,39 +68,63 @@ def scan_manual_tokens(files: Iterable[tuple[str, str]]) -> list[dict[str, Any]]
     return sorted(found, key=lambda item: (item["placeholder"], item["agent_file"], item["line"]))
 
 
-def complete_setup_required(manifest: dict[str, Any], files: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """Add every emitted token the checklist lacks to the manifest, and re-render ``SETUP-REQUIRED.md`` in *files*.
-
-    A token is new when no ``manual_required_placeholders`` entry has its name (the checklist tells the operator to
-    search every generated file for it, so one entry per name is enough). New entries are appended in sorted order,
-    so the output is deterministic.
+def open_count(manifest: dict[str, Any]) -> int:
+    """Return how many placeholders the checklist lists: the brief's plus the scanned ones.
 
     Args:
-        manifest: The team manifest; ``manual_required_placeholders`` is extended in place.
-        files: The rendered ``(relative_path, content)`` pairs.
+        manifest: The team manifest, after :func:`complete_setup_required` ran.
 
     Returns:
-        *files*, with the ``SETUP-REQUIRED.md`` entry re-rendered when anything was added (else unchanged).
+        ``len(manual_required_placeholders) + len(_scanned_manual_placeholders)``; the scanned entries never repeat a
+        listed name.
 
     Raises:
         Nothing.
     """
-    listed = manifest.setdefault("manual_required_placeholders", [])
+    return len(manifest.get("manual_required_placeholders", [])) + len(manifest.get(SCANNED_KEY, []))
+
+
+def complete_setup_required(
+    manifest: dict[str, Any],
+    files: list[tuple[str, str]],
+    *,
+    effective: Callable[[str, str], str] | None = None,
+) -> list[tuple[str, str]]:
+    """Record every emitted token the checklist lacks, and re-render ``SETUP-REQUIRED.md`` in *files*.
+
+    A token is new when no ``manual_required_placeholders`` entry has its name (the checklist tells the operator to
+    search every generated file for it, so one entry per name is enough). New entries go under
+    :data:`SCANNED_KEY`, in sorted order, replacing what an earlier call stored. The key starts with ``_``, so the
+    drift fingerprint skips it: ``--check`` fingerprints the manifest before render and generate after it, and the two
+    must agree. ``manual_required_placeholders`` itself is not changed.
+
+    Args:
+        manifest: The team manifest; :data:`SCANNED_KEY` is set in place.
+        files: The rendered ``(relative_path, content)`` pairs.
+        effective: Maps ``(path, rendered)`` to the content the run will actually write. On ``--update`` this carries
+            forward the values an operator filled in, so a filled token leaves the checklist. None scans *files* as is.
+
+    Returns:
+        *files*, with the ``SETUP-REQUIRED.md`` entry re-rendered when the checklist gained an item (else unchanged).
+
+    Raises:
+        TypeError: A content item is not a ``str`` (raised by :func:`scan_manual_tokens`).
+    """
+    listed = manifest.get("manual_required_placeholders", [])
     names = {item.get("placeholder") for item in listed}
-    added = 0
-    for item in scan_manual_tokens(files):
+    scanned_files = files if effective is None else [(path, effective(path, body)) for path, body in files]
+    scanned: list[dict[str, Any]] = []
+    for item in scan_manual_tokens(scanned_files):
         if item["placeholder"] in names:
             continue
         names.add(item["placeholder"])
-        listed.append({
+        scanned.append({
             "placeholder": item["placeholder"],
             "agent_file": item["agent_file"],
             "context": f"Written in the template (line {item['line']}): {item['context']}",
         })
-        added += 1
-    if not added:
+    manifest[SCANNED_KEY] = scanned
+    if not scanned:
         return files
-    from agentteams import render
-
-    content = render._render_setup_required(manifest)
+    content = render.render_setup_required({**manifest, "manual_required_placeholders": [*listed, *scanned]})
     return [(path, content if Path(path).name == SETUP_REQUIRED_NAME else body) for path, body in files]
