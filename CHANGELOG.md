@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`--update --overwrite` reports the routed agents it would orphan, #392 item 12)
+
+- `--update --overwrite` replaces the orchestrator. It now lists, on stderr and before any file is written, every
+  agent the current orchestrator routes to by `` `@slug` `` that the build neither emits nor still routes to,
+  whether or not the agent has a file. Before, only the "adopted by merge" advisory named such agents, and only
+  those with a file. `--dry-run --json` reports them under `at_risk_routed_agents` (`{"slug", "has_file"}`).
+- The run still proceeds. Refusing without an acknowledgement is a separate change, after `@security` reviews it.
+- New `agentteams/cli/routing_at_risk.py` and `tests/test_overwrite_at_risk_routing.py`.
+
 ### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
 
 - **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and

@@ -22,6 +22,7 @@ from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, r
 from agentteams import github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
+from agentteams.cli.routing_at_risk import report_at_risk_routing
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
@@ -627,10 +628,9 @@ def _run_generate_locked(
 
         # Orphan advisories (in build_team.py, CH-07): files on disk the team no longer emits, which
         # `--prune` (build-log removals only) misses. Then the unanswered scan-level notice (prints only).
-        build_team._report_orphan_agent_files(
-            final_rendered, output_dir, manifest,
-            agent_ext=adapter.get_file_extension("agent"),
-        )
+        build_team._report_orphan_agent_files(final_rendered, output_dir, manifest,
+                                              agent_ext=adapter.get_file_extension("agent"))
+        _at_risk = report_at_risk_routing(output_dir, manifest, adapter, final_rendered, overwrite=args.overwrite)
         build_team._report_orphan_reference_docs(final_rendered, output_dir)
         from agentteams.vulnscan.project_policy import report_unanswered
         report_unanswered(description)
@@ -681,7 +681,7 @@ def _run_generate_locked(
             goose_grant_merge_notice(output_dir)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
         _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
-        attach_dry_run_plan(_adopt_plan, result)
+        attach_dry_run_plan(_adopt_plan, result, at_risk_routed=_at_risk)
         if args.dry_run and result.dry_run_report is not None:
             emit.print_dry_run_report(
                 result, manifest,

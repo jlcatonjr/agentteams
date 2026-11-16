@@ -296,6 +296,12 @@ With `--dry-run`: emit the per-file action plan as a single JSON document on std
 
 Overwrite existing agent files without prompting. Default behavior: prompt for each existing file.
 
+With `--update`, the orchestrator is replaced too. Before any file is written, the run lists on stderr every agent
+the current orchestrator routes to (a backticked `` `@slug` `` in its body) that this build neither emits nor
+still routes to, with or without a file on disk. `--dry-run --json` puts the same list under
+`at_risk_routed_agents`. The run still proceeds. To keep such an agent, use `--adopt-orphans` (agents with a
+file), add it to the brief, or update with `--merge`, which keeps the orchestrator's body.
+
 ### `--merge`
 
 Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. The one exception is generated: the `PROJECTED-RULES` and `PROJECT-RULES-POINTER` blocks inside the user regions, which every generate and `--update` regenerates in every provider's files (see `--sync-project-rules`). Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
