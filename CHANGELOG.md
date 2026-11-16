@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (constitution: constraint-relaxing authorizations include bulk actions; operator ruling 2026-11-16)
+
+- **The generated teams' Rule 11 now says what the signing code already enforces.** `effect_classifier.
+  requires_operator_signature` has required the operator's Ed25519 signature and a traceable `derives_from` for a
+  bulk effect (`effect_bulk=yes`) since 1.0.0, but the rule text listed only capability grants, trust-root writes,
+  explicit relaxations and cross-repository reach, and said routine destructive actions keep C-5 clearance.
+  `copilot-instructions.template.md` now adds "or acts in bulk" and says a destructive action on a single target
+  keeps C-5 clearance while a bulk one needs the operator's signature. Nothing about enforcement changes. The rule
+  sits outside every fence, so `--update --merge` does not rewrite it in existing teams; new teams and an
+  `--overwrite` get the new wording.
+
 ### fixed (red-team probe E1 measures a rendered team; #478)
 
 - Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
