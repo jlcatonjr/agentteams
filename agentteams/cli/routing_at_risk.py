@@ -119,7 +119,9 @@ def report_at_risk_routing(output_dir: Path, manifest: dict, adapter: Any, updat
     if old is None:
         return []
     if not getattr(args, "discard_user_regions", False):
-        rendered = carry_regions(old, rendered, toml=ext.endswith(".toml"))[0]
+        rendered, _carried, problems = carry_regions(old, rendered, toml=ext.endswith(".toml"))
+        if problems:  # emit refuses to write this orchestrator and says why, so nothing is lost this run
+            return []
     emitted = set(manifest.get("agent_slug_list", []) or [])
     emitted |= {a for a in manifest.get("adopted_agents", []) or [] if isinstance(a, str)}
     at_risk = at_risk_routed_slugs(output_dir, ext, emitted, rendered)
