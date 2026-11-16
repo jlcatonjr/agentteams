@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (`--adopt-only` needs a brief, and `--output` is the agents directory, #392 item 13)
+
+- The CLI reference and `--adopt-only`'s help (and so the man page) now say that `--adopt-only` needs
+  `--description` or `--self`, and that `--output`, when given, is the agents directory that holds the
+  orchestrator: a project-root `--output` refuses with "no regular orchestrator file". Finding
+  `.agentteams/brief.json` automatically is a separate change.
+- New check in `tests/test_adopt_only_docs.py`.
+
 ### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
 
 - **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and
