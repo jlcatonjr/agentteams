@@ -147,7 +147,7 @@ unresolved path raises, and a raise means deny
 **Waivers lift *gates*, never HALTs.** A waiver that clears a gate block is
 **HMAC-SHA256-signed**, time-bounded (`expires_at`), and use-counted
 (`max_uses`/`uses`), and the machinery **refuses when
-`AGENTTEAMS_WAIVER_SIGNING_KEY` is unset**. The signing is **symmetric** — one
+`AGENTTEAMS_WAIVER_SIGNING_KEY` (or its fingerprint-pinned key file) is absent**. The signing is **symmetric** — one
 shared key — so its honest ceiling (F3) is exact: it defends against a
 **keyless forger, not against someone who holds the key.**
 `agentteams/cli/signed_ledger.py:9-92` is the documented **asymmetric swap

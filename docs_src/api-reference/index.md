@@ -193,6 +193,9 @@ This reference defines the **supported public API surface** (documented modules 
 | [`learned_blocks`](learned-blocks.md) | Pure-text parse/compose/verify of the learned block in markdown agent files and goose recipes |
 | [`branch_inventory`](branch-inventory.md) | `--branch-inventory`: read-only branch classification (ancestry, Merged-by-PR via the GitHub API, holds) and a leased deletion plan |
 | [`branch_model`](branch-model.md) | Brief `git_workflow`: trunk or integration-branch model; the integration rows and reference; the integration branch the branch tools keep |
+| [`github_management`](github-management.md) | Brief `github_management`: the constitution's GitHub management section (gh/git by role; never consent to a gate prompt) |
+| [`release_required_checks`](release-required-checks.md) | `python -m agentteams.release_required_checks`: switch the default branch's required checks when a release renames a CI job (fingerprint-approved `--apply`, backup and `--restore`) |
+| [`agent_refactor_codes`](agent-refactor-codes.md) | Brief `agent_refactor`: the opt-in AR-01..AR-10 violation-code section for `@agent-refactor`, with the AR-05 line budget |
 | [`project_notes`](project-notes.md) | The USER-EDITABLE Project-Specific Notes section of agent personas (carved from `emit`) |
 | [`copilot_body_limit`](copilot-body-limit.md) | `--check`'s guard for operator notes past Copilot's 30,000-character agent-body limit |
 | [`bridge_refresh`](bridge-refresh.md) | What `--bridge-refresh` writes for `.goosehints`: the bridge fence, keeping project text around it |

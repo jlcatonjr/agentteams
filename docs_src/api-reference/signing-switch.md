@@ -74,6 +74,58 @@ non-regular file, malformed JSON or a non-boolean value. It never defaults to `f
 
 The ownership test above, the governed-marker test, and the switch file text.
 
+`is_governed` is the one governance test; `cli/decision_log` and `projection_marker` call it too (IM item 17).
+A dir is governed when its `signing-governed.marker` exists, or when git still tracks the marker there:
+
+- in the index, or in the tree of HEAD, its upstream or `origin/HEAD`. So a deleted marker, one whose deletion
+  is staged, and one whose deletion is committed only on the current branch all still govern. Governance ends
+  only when the deletion has reached the upstream and default branches.
+- **Fail closed:** a git repository nested inside the project, between its root and the team dir (a planted
+  `.git`), counts as governed, and so does a git timeout.
+- **Fail open (existence only, as before):** outside a git work tree, without git, when git refuses the
+  repository (`safe.directory` ownership), and for a marker git never tracked (untracked or ignored).
+- git runs hardened (no fsmonitor or hooks from the repository's config), and inherited `GIT_DIR`,
+  `GIT_INDEX_FILE`, `GIT_WORK_TREE`, `GIT_CEILING_DIRECTORIES` and similar variables are removed. If the team dir
+  itself is gone, git is asked from the nearest existing ancestor. A non-governed team costs up to four git
+  calls per check; the callers are `--update`/projection writes and the decision-signing switch read when the
+  switch file is missing, not a per-tool-call path.
+
+### `marker_deletion_commits(root) -> dict[str, str]`
+
+Returns `{team_dir: "<short sha> <subject>"}`: for each `TEAM_DIRS` entry whose marker is absent **on disk and in
+HEAD**, the newest commit that deleted it. A marker that HEAD still carries is not reported (for example one re-added
+after an old deletion and now removed only in the working tree). The result is empty outside a git work tree, without
+git, or on a timeout.
+
+- **One history walk.** A single `git log --diff-filter=D --name-only` covers every candidate path, rather than one
+  walk per team dir.
+- **Hardened.** git runs with the hardened config, and `log.showSignature` is forced off, so a planted `gpg.program`
+  cannot run.
+- **Clean subjects.** Commit subjects are reduced to printable characters, because they are repository text.
+
+`--doctor`'s **Signing governance** section uses this so that the end of governance, a deletion that has reached the
+upstream and default branch, is never silent. It combines this with `is_governed`, for this dir and its siblings,
+to say whether the team still governs (the deletion is on this branch only), is governed through a sibling team dir,
+or is not governed. A removed team dir gets one INFO line. The WARN repeats until the marker is restored.
+
+Limits:
+
+- Only the `TEAM_DIRS` paths under `--project` are checked.
+- A deletion outside the history git has locally (a shallow clone, rewritten history) is not seen. That reduces
+  visibility only; `is_governed` is unaffected.
+
+Where the marker is write-protected:
+
+- the Claude `Edit(...)` rules, for every team dir (they bind the built-in Write/Edit tools; Grok inherits them);
+- Claude's Bash `denyWrite` covers it through the whole `.claude` dir, and a sibling team's marker only when that
+  team dir existed at generation;
+- the goose Seatbelt control-plane deny, for every team dir (a deny on a missing path also stops an agent
+  creating it);
+- the launcher's protect-if-present set, on Linux and macOS.
+
+Copilot and Codex emit no deny list of their own; their markers are protected by the arms above and the
+launcher.
+
 ### `review_lines(update_output) -> list[str]`, `review_reason(lines) -> str`
 
 Used by `fleet`. `review_lines` picks the `RELAXED_PREFIX` / `KEPT_PREFIX` lines out of a target's

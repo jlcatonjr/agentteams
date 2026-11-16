@@ -22,10 +22,19 @@ def _decision(**cells: str) -> dict[str, str]:
 
 
 def test_a_freeze_row_stays_ordinary():
-    row = _decision(scope="freeze-surface codex", effect_targets=".codex/;AGENTS.md")
+    row = _decision(scope="freeze-surface codex", effect_targets=".codex/;.agents/skills/")
     # The frozen set in force before a freeze doesn't contain the surface being frozen.
     assert ec.derive_effect_class(row, kind="decision", frozen_paths=()) == ec.NON_RELAXING
     assert not ec.requires_operator_signature(row, kind="decision")
+
+
+def test_a_freeze_row_naming_agents_md_needs_the_operator_but_stays_signable():
+    """IM item 19: AGENTS.md is another surface's constitution (elevated), so a freeze row that lists it needs the
+    operator's Ed25519 signature. It stays eligible (not a categorical trust root), so freezing is never locked out."""
+    row = _decision(scope="freeze-surface codex", effect_targets=".codex/;AGENTS.md")
+    assert ec.derive_effect_class(row, kind="decision", frozen_paths=()) == ec.RELAXING
+    assert ec.requires_operator_signature(row, kind="decision")
+    assert ec.non_eligibility_reason(row, kind="decision") is None
 
 
 @pytest.mark.parametrize("row", [
@@ -50,7 +59,9 @@ def test_an_honest_effect_relaxes_still_derives_relaxing():
                                     ".codex", ".agents/skills/a/SKILL.md"])
 def test_an_out_of_vocabulary_render_into_a_frozen_path_is_caught_by_the_target_axis(target):
     row = _decision(scope="refresh-team-surfaces", effect_targets=target)
-    assert ec.derive_effect_class(row, kind="decision") == ec.NON_RELAXING  # without the brief: not caught
+    # Without the brief only an elevated constitution file (IM item 19: AGENTS.md) is caught; the rest are not.
+    elevated = target.lower() == "agents.md"
+    assert ec.derive_effect_class(row, kind="decision") == (ec.RELAXING if elevated else ec.NON_RELAXING)
     assert ec.derive_effect_class(row, kind="decision", frozen_paths=FROZEN) == ec.RELAXING
     assert ec.is_unfreeze(row, kind="decision", frozen_paths=FROZEN)
     assert ec.requires_operator_signature(row, kind="decision", frozen_paths=FROZEN)
@@ -59,8 +70,10 @@ def test_an_out_of_vocabulary_render_into_a_frozen_path_is_caught_by_the_target_
 @pytest.mark.parametrize("target", [".codexx/a", "docs/AGENTS.md", ".goose/recipes/a.yaml", "scripts/x.py"])
 def test_a_target_outside_the_frozen_paths_is_unaffected(target):
     row = _decision(scope="refresh-team-surfaces", effect_targets=target)
-    assert ec.derive_effect_class(row, kind="decision", frozen_paths=FROZEN) == ec.NON_RELAXING
-    assert not ec.is_unfreeze(row, kind="decision", frozen_paths=FROZEN)
+    # docs/AGENTS.md is outside the frozen paths, but a nested AGENTS.md is still a constitution file (IM item 19).
+    expected = ec.RELAXING if target == "docs/AGENTS.md" else ec.NON_RELAXING
+    assert ec.derive_effect_class(row, kind="decision", frozen_paths=FROZEN) == expected
+    assert not ec.is_unfreeze(row, kind="decision", frozen_paths=FROZEN)  # the frozen-path axis is unaffected
 
 
 def test_a_self_declared_non_relaxing_unfreeze_is_refused():

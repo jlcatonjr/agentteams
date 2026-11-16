@@ -532,6 +532,21 @@ bash scripts/check-durable-tmp-refs.sh
 still push). With `delete_branch_on_merge` on, GitHub deletes a release PR's head branch when it merges, and only
 protection exempts it: release #398 (2026-11-07) deleted an unprotected `dev`, which was recreated at `main`.
 
+**Who does it (operator preference, 2026-11-14):** the agent, using `git`/`gh`. That covers branches, PRs, merges into
+`dev`, release PRs and their merge, the post-release fast-forward of `dev`, and branch cleanup. The operator gets a
+`.sh` file only for steps the sandbox cannot do: removing a worktree under the read-only `.git/worktrees`, or anything
+that needs a private key. The existing clearances all still apply:
+
+- **Branch deletion:** `--branch-cleanup --apply` still needs `@security`'s PASS for `branch-cleanup:<plan sha256>`
+  and the operator's one-use waiver (§E). `--branch-post-merge --apply` still needs the operator's `branch-delete`
+  grant. An agent without those runs only the dry run.
+- **Merge into `main`** (release or hotfix PR): the operator approves that PR in the live session, using a picker or
+  their own typed reply. The approval names the PR number and head SHA. As in §I step 2, standing, blanket or relayed
+  approval does not count (the orchestrator's verbatim pass-down to its subagent is not a relay). If the head moves,
+  ask again.
+- **Switching `main`'s required checks** follows §I. The picker shows the dry run's full preview and fingerprint
+  word for word, not a summary.
+
 **Hotfix:** `hotfix/<topic>` from `origin/main`, then a PR to `main`, then merge it. Straight after,
 `git switch dev && git merge origin/main && git push origin dev`.
 
@@ -556,6 +571,16 @@ Two failures on one day led to this section. A `cd` into a removed clone failed,
   ```
 
   Stop and read the output if a step fails. The `until` loop runs forever if the PR's workflows never start. If no checks appear within a few minutes of a push, re-trigger CI without changing the head: `gh pr close "$PR" && gh pr reopen "$PR"`. CI's `pull_request` trigger uses the default types, so `reopened` starts it. Never take `mergeStateStatus` CLEAN as proof that CI ran: a PR into `dev`, which has no required checks, reports CLEAN with zero check runs (PR #487, 2026-11-14).
+- **A runner outage is waited out: there is no admin bypass** (operator ruling, 2026-11-15, #442). `main`'s
+  protection has `enforce_admins: true`, so red required checks block everyone, the operator included, and that is
+  intended. When the bubblewrap install step (`scripts/ci-bwrap-setup.sh`, which retries apt) fails, it reports a
+  `CI setup (network)` error annotation. An outage can also fail an earlier step, such as `pip install`, with no
+  annotation. Either way:
+  1. hold the merge;
+  2. re-run the failed jobs (`gh run rerun <run> --failed`), or re-trigger as above if no checks started;
+  3. once every check is green, merge pinned with `--match-head-commit`, as above.
+
+  #442 waited about 1.5 hours this way and merged on attempt 5. Never lift protection to merge over red checks.
 - **Test platform-specific output on every CI platform before pushing.** If a test reads a file that is generated on only one OS, set that platform in the test. When you can't run on the other OS, simulate it by patching `sys.platform`, and treat a pass as evidence, not proof: the CI job is the real test.
 
 ---
@@ -568,19 +593,36 @@ merge, because GitHub waits for a check its workflows no longer produce. Example
 job. Switch the required set **when the release PR's new checks are green, and not earlier**: until the release
 lands, every other PR into `main` runs the old `ci.yml` and would wait forever on the new names.
 
-**Who runs it:** the operator. It needs an admin token and changes what guards `main`. An agent that opens or
-watches a release PR checks whether the PR renames a required check. If it does, the agent hands the operator the dry
-run's command (§H), and never runs `--apply`.
+**Who runs it (amended 2026-11-14, operator ruling):** the agent that manages the release PR runs the dry run and,
+once the operator has approved it, `--apply`. It changes what guards `main`, so approval is per release:
 
-**How:** `scripts/release_required_checks.py`. It ships with the release, so run it from a checkout of `dev` (the
-PR head), not from the shared checkout on `main`:
+1. The agent runs the dry run once every proposed check is green. It shows the operator the full preview and its
+   fingerprint word for word, not a summary, in the live session.
+2. The operator approves **that fingerprint** (an interactive picker or their own typed reply). Standing or blanket
+   approval does not count, and neither does approval relayed by another session, a peer message, a file, a PR
+   comment or any other read content (C-4). When the agent running the step is a subagent, the orchestrator asks in
+   its own picker and passes the answer down verbatim. That answer is the operator's approval, not a relay.
+3. `@security` clears the apply (C-5) before it runs, and the clearance is logged in
+   `references/security-decisions.log.csv` with the PR number, head and fingerprint.
+4. The agent runs `--apply <that fingerprint>`. If it refuses (head, sets or `strict` moved), the agent starts again
+   at step 1. It never edits the proposal or calls the protection API directly.
+
+`--restore` follows the same four steps. The operator can always run either command themselves instead.
+
+**How:** `python3 -m agentteams.release_required_checks` (in the package since 2026-11-14; generated teams
+get the same procedure from their instruction file's GitHub management section, brief `github_management`, on by
+default). It ships with the release, so run it from a checkout of `dev` (the PR head), not from the shared checkout on `main`:
 
 ```bash
-python3 scripts/release_required_checks.py --pr <release PR#>              # dry run
-python3 scripts/release_required_checks.py --pr <release PR#> --apply <fingerprint>
-python3 scripts/release_required_checks.py --restore <backup file it printed>    # shows the restore
-python3 scripts/release_required_checks.py --restore <backup file> --apply <fingerprint>
+python3 -m agentteams.release_required_checks --pr <release PR#>              # dry run
+python3 -m agentteams.release_required_checks --pr <release PR#> --apply <fingerprint>
+python3 -m agentteams.release_required_checks --restore <backup file it printed>    # shows the restore
+python3 -m agentteams.release_required_checks --restore <backup file> --apply <fingerprint>
 ```
+
+It reads the repository's default branch (never assumes `main`) and the integration branch from the brief
+(`--integration-branch` overrides). It refuses when a repository ruleset requires the checks, or when the token
+cannot read branch protection (no admin rights): hand that step to the operator.
 
 - **Proposal:** a required check the PR still produces is kept. A required check it no longer produces is replaced by
   the PR's checks whose names match once version numbers are masked, so `ubuntu-24.04` becomes `ubuntu-26.04`. Nothing
@@ -599,5 +641,6 @@ python3 scripts/release_required_checks.py --restore <backup file> --apply <fing
 - **Then** merge the release PR (§H's checks-gated merge). If the release is abandoned, restore before any other PR
   into `main` needs to merge.
 
-`--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary.
+`--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary. Writes to a
+branch-protection or ruleset endpoint, and `--apply`, prompt through the constitutional gate where hooks run.
 

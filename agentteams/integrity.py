@@ -110,6 +110,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # allowWrite / denyRead / denyWrite (D-3 control-plane protection). A silent edit here (e.g.
     # dropping the denyWrite or widening allowWrite) weakens every emitted boundary.
     "agentteams/frameworks/_sandbox_emit.py",
+    "agentteams/frameworks/_signing_key_paths.py",  # carved from _sandbox_emit: key-dir read/write denies, write-root refusal
     # The goose SEATBELT emitter (2026-09-30; @security CONDITIONAL PASS). The goose analog of
     # _sandbox_emit.py: it builds .goose/sandbox.sb, including the `(deny file-write* …)`
     # control-plane block (switch, gate hook, verify-key store, the profile itself). It was the
@@ -170,6 +171,15 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # #456: validates the project gate policy at render, pins its digest into the emitted gate and tells a weakening
     # (a Rule 15 relaxation) from a tightening. A silent edit could record the wrong bytes or bless a weakening.
     "agentteams/gate_policy.py",
+    # The optional work-summary Stop hook (@security CONDITIONAL PASS, 2026-11-14). Once an operator
+    # wires it, the launcher runs unattended, outside the sandbox, with the operator's credentials;
+    # its tool grant and deny rules are the only limit on that run. A silent edit that widens
+    # ALLOWED_TOOLS, drops a DISALLOWED_TOOLS rule, reads operator extras from the repository, or
+    # removes --no-session-persistence would ship to every Claude team. The emitter is pinned with
+    # it: it decides which teams get the launcher and keeps its example apart from the gate's.
+    # Template only: this repository has no installed copy until an operator wires one.
+    "agentteams/templates/universal/hooks/work-summary-stop.py",
+    "agentteams/frameworks/_work_summary_hook_emit.py",
     ".claude/hooks/constitutional-gate.py",                          # this repo's installed Claude hook
     ".github/hooks/constitutional-gate.py",                          # this repo's installed copilot hook
     # Exception-governance hardening (2026-W38). These carry constitutional weight now:
@@ -356,6 +366,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out
     "agentteams/cli/toolchain_group.py",         # First-party toolchain group: the signed first-party toolchain group (S-10)
+    "agentteams/cli/dev_merge.py",               # the signed integration-branch merge authorization and --merge-pr
+    "agentteams/cli/dev_merge_commands.py",      # resolves the governance dir (verify-key store) for --merge-pr
+    "agentteams/cli/toolchain_group_commands.py",  # resolves the governance dir for both signed-file verbs
     "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
     # P16 (2026-11-01, @security review-pending): host_features holds DEFAULT_PRIVILEGE_PROFILE ("confined") and the

@@ -232,16 +232,16 @@ new operational rule remains a manual edit in each deployed team.
 
 | Content Area | Agent | Key Indicators |
 |---|---|---|
-<!-- AGENTTEAMS:BEGIN routing_table_rows v=6 -->
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=7 -->
 | Creating or revising primary Python ETL modules, SQL transformation scripts and weekly PDF reports | `@primary-producer` | New work or revision in `src/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
 | Within-section cohesion | `@cohesion-repairer` *(if in team)* | Disjointed paragraphs, broken argument flow, orphaned evidence |
 | Style and standards | `@style-guardian` *(if in team)* | Style reference: {MANUAL:STYLE_REFERENCE_PATH} |
-| Technical accuracy | `@technical-validator` | Code, paths, counts, claims against source files |
-| Format conversion | `@format-converter` | Source format → output format `Python 3.11 modules and PDF reports` |
-| References and dependencies | `@reference-manager` | Database: `{MANUAL:REFERENCE_DB_PATH}` |
-| Final compilation | `@output-compiler` | Final assembly and build |
+| Technical accuracy | `@technical-validator` *(if in team)* | Code, paths, counts, claims against source files |
+| Format conversion | `@format-converter` *(if in team)* | Source format → output format `Python 3.11 modules and PDF reports` |
+| References and dependencies | `@reference-manager` *(if in team)* | Database: `{MANUAL:REFERENCE_DB_PATH}` |
+| Final compilation | `@output-compiler` *(if in team)* | Final assembly and build |
 | Diagrams and figures | `@visual-designer` *(if in team)* | Files in `reports/figures/` |
 | Cross-repository impact and liaison | `@repo-liaison` | Adjacent repo docs, cross-orchestrator coordination, registry maintenance |
 | Daily/weekly/monthly work summary reporting | `@work-summarizer` | Synthesize `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history into `workSummaries/` |
@@ -255,7 +255,7 @@ new operational rule remains a manual edit in each deployed team.
 | Spawn a scoped child orchestrator for a coordinating sub-body-of-work (in-repo) | `@orchestrator` → Workflow 13 | "Spin up an orchestrator for X"; a delegated body of work that itself needs coordination, not a single domain subagent |
 <!-- AGENTTEAMS:END routing_table_rows -->
 
-<!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=1 -->
+<!-- AGENTTEAMS:BEGIN update_compatibility_source_pack v=2 -->
 ### Update Compatibility Source Pack
 
 Before orchestrating any on-the-fly agent file update, review these canonical files in order:
@@ -267,7 +267,7 @@ Before orchestrating any on-the-fly agent file update, review these canonical fi
 
 Use this baseline command sequence for update-safe execution:
 
-1. `agentteams --description <brief> --check` (or `python build_team.py --description <brief> --check`)
+1. `agentteams --description <brief> --check`
 2. `agentteams --description <brief> --update --merge --dry-run` for scope preview
 3. `agentteams --description <brief> --update --merge` for apply
 4. `agentteams --description <brief> --scan-security` and `--post-audit` closeout when required by policy
@@ -309,7 +309,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=13 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=14 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -807,7 +807,7 @@ carry an appended handoff:
 5. Present audited summaries as a numbered list to the user
 6. If no at-large issues are found: note "No at-large issues detected"
 6b. **API impact (closeout gate; runs before step 7 pushes).** *Only when this session committed.* Run `python -m agentteams.api_impact status`. Any unreviewed impactful commit runs the **API Impact Review** before closeout; exit 2 (no branch base) means re-run with `--range BASE..HEAD`, never a pass. The session closes as **API review pending**, never as complete, while one remains.
-7. **CI/CD deployment verification (closeout gate).** *Only when this session pushed or merged to a repository that has GitHub Actions (`.github/workflows/`) and run status is reachable (GitHub REST API, or `gh` if installed — directly, or through a **Sandbox Operator Handoff** when the agent sandbox cannot reach it) — otherwise skip.* Confirm via `@git-operations` (which prefers the `git` CLI and the GitHub REST API over `gh`) that the run(s) the push/merge **triggered** on the updated branch completed with `conclusion == success` (CI **and** any deployment/Pages/release workflow) before declaring the session complete. A failing triggered deployment **blocks closeout** and routes back to `@git-operations` to diagnose and fix until green (or escalate); a cross-repo re-push during the fix re-enters Rule 11 (`@repo-liaison` + `@security`). This is distinct from the pre-merge required status checks that gated the merge. Procedure: `references/github-workflows-merge.reference.md` → *Post-Merge / Post-Push CI/CD Deployment Verification*.
+7. **CI/CD deployment verification (closeout gate).** *Only when this session pushed or merged to a repository that has GitHub Actions (`.github/workflows/`) and run status is reachable (GitHub REST API, or `gh` if installed — directly, or through a **Sandbox Operator Handoff** when the agent sandbox cannot reach it) — otherwise skip.* Confirm via `@git-operations` (which uses `gh` when it is authenticated, else the `git` CLI and the GitHub REST API) that the run(s) the push/merge **triggered** on the updated branch completed with `conclusion == success` (CI **and** any deployment/Pages/release workflow) before declaring the session complete. A failing triggered deployment **blocks closeout** and routes back to `@git-operations` to diagnose and fix until green (or escalate); a cross-repo re-push during the fix re-enters Rule 11 (`@repo-liaison` + `@security`). This is distinct from the pre-merge required status checks that gated the merge. Procedure: `references/github-workflows-merge.reference.md` → *Post-Merge / Post-Push CI/CD Deployment Verification*.
 7b. **Branch inventory (closeout gate).** *Only when this session merged or pushed.* `@git-operations` reports `Branch disposition` for every branch merged this session and `Branch inventory` (`agentteams --branch-inventory` summary line). Anything other than `clean` is surfaced to the user with the proposed disposition; deletions follow `references/branch-lifecycle.reference.md` (grant or clearance), never an ad-hoc delete.
    *Sandbox augmentation (steps 7 and 7b):* when the push, the run status, or the inventory is out of the sandbox's reach, these gates run through a **Sandbox Operator Handoff** (a REST `actions/runs` query, `gh run watch` as fallback, and `agentteams --branch-inventory` in the script) — "unreachable from the sandbox" never counts as the gate's "otherwise skip"; the gate passes on the handoff log's `ok` plus its reported conclusion.
 7c. **Pending handoffs (closeout gate).** *Only when this session wrote a handoff script.* Run `python -m agentteams.sandbox_handoff status` on each. Every handoff not `ok` is re-surfaced to the user with its complete command; the session closes as **awaiting operator handoff**, never as complete, while work depends on one. Step 8's summary records unrun handoffs as pending operator actions.

@@ -469,6 +469,13 @@ else the working directory, and the brief found there. The report covers:
 - **Backup stubs (WARN):** a backed-up agent file under any runtime dir's `.agentteams-backups/` (`.claude/agents`,
   `.goose/recipes`, `.codex/agents`, `.grok/agents`) that the runtime would still load as a live agent: a copy made
   before 2026-10-12. The next `--update --merge` or `--bridge-merge` that takes a backup renames it inert.
+- **Signing governance (WARN):** a team dir whose `signing-governed.marker` is absent on disk and in HEAD and was
+  deleted in a commit. The WARN names the commit and says whether the team:
+  - still governs, because the deletion is only on the current branch;
+  - is governed through a sibling team dir;
+  - or is no longer governed, because no governing ref still holds the marker.
+
+  A removed team dir gets one INFO line instead. The WARN repeats until the marker is restored.
 
 Exits `1` when any FAIL is reported.
 
@@ -1047,7 +1054,7 @@ corpus. Always `--dry-run` first.
 
 ### `--verify-waivers`
 
-Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` to verify signatures; without it, rows report as unverifiable.
+Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/waiver-hmac.key`, when its fingerprint is recorded) to verify signatures; without it, rows report as unverifiable. With `AGENTTEAMS_WAIVER_SIGNING_KEY` unset, the key is read from `~/.config/agentteams/keys/waiver-hmac.key` (mode 600; trusted only when its fingerprint is recorded with `--record-hmac-fingerprint`; refused from an install an agent could edit; see the [security hardening guide](security-hardening-guide.md)).
 
 ### `--issue-dispatch`
 
@@ -1274,11 +1281,11 @@ It warns, without refusing, when a write root equals, contains or lies inside a 
 
 ### `--verify-grants`
 
-Read-only: report the validity (signature scheme, signature, expiry, use-limit, approver roster) of every cross-workspace capability grant (P2) in `references/capability-grants.log.csv` under `--output`/`--project` (else CWD). The approver roster and the Ed25519 verify keys are read from the holder **team dir** — the directory `--update` with the same `--framework`/`--output` writes the team to — never from a project-root `references/security-approvers.txt` (a project-root roster is ignored for grants, with a warning). An HMAC-signed grant that permits `write` is reported as **refused**, with the migration step (re-sign it with `--sign-grant`). Never consumes a grant. Exits non-zero if any grant is invalid. HMAC rows need `AGENTTEAMS_GRANT_SIGNING_KEY`. See [Workspace Privilege Scoping](api-reference/workspace-privilege-scoping.md).
+Read-only: report the validity (signature scheme, signature, expiry, use-limit, approver roster) of every cross-workspace capability grant (P2) in `references/capability-grants.log.csv` under `--output`/`--project` (else CWD). The approver roster and the Ed25519 verify keys are read from the holder **team dir** — the directory `--update` with the same `--framework`/`--output` writes the team to — never from a project-root `references/security-approvers.txt` (a project-root roster is ignored for grants, with a warning). An HMAC-signed grant that permits `write` is reported as **refused**, with the migration step (re-sign it with `--sign-grant`). Never consumes a grant. Exits non-zero if any grant is invalid. HMAC rows need `AGENTTEAMS_GRANT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/grant-hmac.key`, when its fingerprint is recorded). See [Workspace Privilege Scoping](api-reference/workspace-privilege-scoping.md).
 
 ### `--issue-grant SPEC.json`
 
-Mint an **HMAC-signed, non-widening** cross-workspace capability grant (P2) from a JSON spec (`issuer_team`, `holder_team`, `target_path`, `permitted_ops`, `expires_at`, `max_uses`, `approver`, `ticket_id`, `reason_code`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD). Requires `AGENTTEAMS_GRANT_SIGNING_KEY` and an approver on the holder team dir's roster. A spec whose `permitted_ops` include `write` is **refused**: the shared HMAC key is inherited by Claude-sandboxed agents, so a grant that widens the sandbox `allowWrite` must be Ed25519-signed with `--sign-grant`.
+Mint an **HMAC-signed, non-widening** cross-workspace capability grant (P2) from a JSON spec (`issuer_team`, `holder_team`, `target_path`, `permitted_ops`, `expires_at`, `max_uses`, `approver`, `ticket_id`, `reason_code`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD). Requires `AGENTTEAMS_GRANT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/grant-hmac.key`, when its fingerprint is recorded) and an approver on the holder team dir's roster. A spec whose `permitted_ops` include `write` is **refused**: the shared HMAC key is inherited by Claude-sandboxed agents, so a grant that widens the sandbox `allowWrite` must be Ed25519-signed with `--sign-grant`. With `AGENTTEAMS_GRANT_SIGNING_KEY` unset, the key is read from `~/.config/agentteams/keys/grant-hmac.key` (mode 600; trusted only when its fingerprint is recorded with `--record-hmac-fingerprint`; refused from an install an agent could edit; see the [security hardening guide](security-hardening-guide.md)).
 
 ### `--confirm-review-sha256 HEX`
 
@@ -1313,16 +1320,16 @@ from a trusted install (see `SECURITY.md`, "Signing from a trusted install").
 
 ### `--verify-directives`
 
-Read-only: report the validity (signature, expiry, use-limit, manager roster, and allowed non-destructive scope) of every **management directive** in `references/management-directives.log.csv` under `--output`/`--project` (else CWD). Never consumes a directive. Exits non-zero if any directive is invalid. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`. A managed agent runs this before acting on a manager-relayed task; only a verifying, exact-scope, non-destructive directive lets it proceed without re-asking the operator. See [Instruction Authority](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/universal/instruction-authority.reference.template.md) (C-4 Management-authority) and the fourth authority axis.
+Read-only: report the validity (signature, expiry, use-limit, manager roster, and allowed non-destructive scope) of every **management directive** in `references/management-directives.log.csv` under `--output`/`--project` (else CWD). Never consumes a directive. Exits non-zero if any directive is invalid. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/management-hmac.key`, when its fingerprint is recorded). A managed agent runs this before acting on a manager-relayed task; only a verifying, exact-scope, non-destructive directive lets it proceed without re-asking the operator. See [Instruction Authority](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/universal/instruction-authority.reference.template.md) (C-4 Management-authority) and the fourth authority axis.
 
 ### `--issue-directive`
 
-Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change.
+Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/management-hmac.key`, when its fingerprint is recorded) and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change. With `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, the key is read from `~/.config/agentteams/keys/management-hmac.key` (mode 600; trusted only when its fingerprint is recorded with `--record-hmac-fingerprint`; refused from an install an agent could edit; see the [security hardening guide](security-hardening-guide.md)).
 
 ### `--sign-carveouts`
 
 **Operator-only.** Sign `.agentteams/carveouts.json` with the operator Ed25519 key (the file named by
-`AGENTTEAMS_DECISION_ED25519_KEYFILE`) and `--key-id`. It runs the same preflight, integrity check, review digest and
+`AGENTTEAMS_DECISION_ED25519_KEYFILE`, else `~/.config/agentteams/keys/decision-signing-<key-id>.pem`) and `--key-id`. It runs the same preflight, integrity check, review digest and
 confirmation as `--sign-decision` (`--confirm-review-sha256` without a terminal; `--allow-checkout-signing` as there).
 The registry is validated first. The signature covers the domain tag `agentteams-carveouts-v1`, the key id and the
 canonical registry, and is verified against `<decision_log>/references/authorized-verify-keys/<key-id>.pub.pem` before
@@ -1390,6 +1397,29 @@ Read-only, fail-closed: Rule S-9 for the first-party toolchain group. Every `NAM
 
 With `--verify-toolchain-pin`: the ssh `allowed_signers` file naming the operator's release key.
 
+### `--merge-pr`
+
+`--merge-pr N` merges pull request `N` into the integration branch without the constitutional gate's merge prompt, under the operator-signed integration-branch merge authorization (`.agentteams/dev-merge-authorization.json`; the constitution's *Integration-branch merge authorization* section). `@git-operations` runs it. It refuses, with exit `2` meaning "ask the operator" (a direct `gh pr merge` goes through the gate's prompt), unless every condition holds:
+
+- the file verifies for this workspace: Ed25519 signature, team id and git origin, no HALT on `integration-merge` or any `dev-merge:` action, lineage, sequence;
+- the project is governed, its branch model is `integration`, and its integration branch is the signed one;
+- the pull request is open, not a draft, not from a fork, in the signed repository, and based on the signed branch, which is never the default branch, `main`, `master` or a `release/*` line;
+- its merge state is `CLEAN` with no changes requested;
+- every check on its head completed with `SUCCESS` (at least one), every required check is present and passed, and every check the signed file's `required_checks` lists is reported and passed (so a partial rollup, with only the fast jobs in, never qualifies);
+- every GitHub Actions workflow run for the head commit completed with `success` (at least one, at most 100 read);
+- it touches no agent, harness, workflow, `.agentteams/` or governance-target path;
+- a recorded `@security` PASS names `dev-merge:<owner/name>:pr-<N>-<head sha>`. The PASS is spent before `gh` runs, so one PASS is one merge.
+
+Immediately before merging it re-reads the head and base, then runs exactly `gh pr merge N -R <owner/name> --merge --match-head-commit <sha>` (never `--admin`, `--auto`, `--squash`, `--rebase` or `--delete-branch`). Afterwards it checks that the result is a two-parent merge commit at the branch tip. `--output` names the team dir; `--team-id` as for `--verify-toolchain-group`. **Exit code:** `0` merged; `2` not authorized; `1` an error, or an `ALARM` when the result does not check out.
+
+### `--sign-dev-merge-authorization`
+
+Operator-only, and refused inside an agent session: `--sign-dev-merge-authorization FILE` signs the integration-branch merge authorization in place with the Ed25519 decision key. The file's fields are `version`, `scope`, `branch`, `required_checks` (1–50 check names the integration branch's full CI reports, for example the default branch's required set), `workspaces`, `purpose`, `sequence`, `key_id` and `derives_from`. Signing takes the same preflight, review digest and confirmation as `--sign-decision`. `--output` names a governed team dir whose `references/authorized-verify-keys` holds `<key_id>.pub.pem`. **Exit code:** `0` signed, `1` otherwise.
+
+### `--verify-dev-merge-authorization`
+
+Read-only: verifies this workspace's `.agentteams/dev-merge-authorization.json` against `--output`'s governed team dir and the brief's integration branch. It checks the signature, the workspace binding by team id and git origin, HALTs, lineage and sequence. **Exit code:** `0` when `--merge-pr` would be authorized here, `1` otherwise.
+
 ### `--write-integrity-manifest`
 
 Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.
@@ -1401,6 +1431,10 @@ Re-record `references/enforcement-integrity.json` from the enforcement modules o
 **Exit code:** `0` after a successful write whose verification comes back clean; `1` if verification still reports mismatches, which would mean the write did not take.
 
 > The manifest's own `note` field has named this command since the manifest was written, and the flag was not implemented until 2026-08-07 — found when probe E4 correctly flagged an intended change and the documented recovery path turned out to be unavailable. `tests/test_integrity_manifest_cli.py` now asserts every command the manifest names is one the parser accepts.
+
+### `--record-hmac-fingerprint KIND`
+
+**Operator-only.** Record the fingerprint of `~/.config/agentteams/keys/KIND-hmac.key` (`KIND`: `waiver`, `decision`, `grant`, `management`) in `~/.config/agentteams/verify-keys/KIND-hmac.fp`. With its `AGENTTEAMS_<KIND>_SIGNING_KEY` unset, agentteams reads the key file only if its fingerprint, `HMAC-SHA256(key, "agentteams-hmac-fp-v1")`, matches the recorded one. A key file planted without a matching record is refused, and no sandbox write root can reach either directory (on macOS the Claude block and goose profile also write-deny both). The key file must be yours, mode 600, not a symlink, and in `keys/` itself. The command is refused from an install an agent could edit (a checkout or an agent-writable root), as the signers are. It prints the fingerprint, never the key. Re-run it after replacing a key. Mutually exclusive with the other standalone operations.
 
 ### `--verify-integrity`
 

@@ -23,6 +23,7 @@ from agentteams.cli.sync_switch import add_sync_arguments
 from agentteams.mcp_servers import SERVERS as _MCP_SERVERS
 from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
+from agentteams.cli.dev_merge_switch import add_dev_merge_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
 from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS, agents_dir_for
 
@@ -1592,7 +1593,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help=(
             "Operator-only: sign .agentteams/carveouts.json with the operator Ed25519 key (the file named by "
-            "AGENTTEAMS_DECISION_ED25519_KEYFILE) and --key-id, after the same preflight, integrity check, review "
+            "AGENTTEAMS_DECISION_ED25519_KEYFILE, else ~/.config/agentteams/keys/decision-signing-<key-id>.pem) "
+            "and --key-id, after the same preflight, integrity check, review "
             "digest and confirmation (--confirm-review-sha256 without a terminal) as --sign-decision. The signature "
             "is verified against <decision_log>/references/authorized-verify-keys/<key-id>.pub.pem before the "
             "registry is rewritten. Every carve-out relaxes a rule clause, so an unsigned registry renders nothing."
@@ -1676,6 +1678,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "has no toolchain-group file (nothing is under the rule)."
         ),
     )
+    add_dev_merge_arguments(parser)
     parser.add_argument(
         "--allowed-signers",
         dest="allowed_signers",
@@ -1815,6 +1818,21 @@ def _build_parser() -> argparse.ArgumentParser:
             "since it was written; the flag did not exist until a red-team probe "
             "flagged a legitimate change and the documented recovery path turned out "
             "to be unavailable."
+        ),
+    )
+    parser.add_argument(
+        "--record-hmac-fingerprint",
+        metavar="KIND",
+        dest="record_hmac_fingerprint",
+        choices=("waiver", "decision", "grant", "management"),
+        default=None,
+        help=(
+            "Operator-only: record the fingerprint of ~/.config/agentteams/keys/KIND-hmac.key (KIND: waiver, "
+            "decision, grant, management) in ~/.config/agentteams/verify-keys/KIND-hmac.fp. With its "
+            "AGENTTEAMS_<KIND>_SIGNING_KEY unset, agentteams trusts a key file only when its fingerprint is "
+            "recorded there, so a planted key file is refused. No sandbox write root can reach that directory (on macOS it is "
+            "also write-denied). "
+            "Refused from an install an agent could edit. Prints the fingerprint, never the key."
         ),
     )
     parser.add_argument(

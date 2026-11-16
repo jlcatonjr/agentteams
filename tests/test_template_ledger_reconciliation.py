@@ -41,7 +41,6 @@ _UNREGISTERED_BASELINE: frozenset[str] = frozenset({
     "domain/research-analyst.template.md",
     "domain/retrieval-integrator.template.md",
     "domain/unix-philosophy-mapping-reference.template.md",
-    "domain/work-summarizer.template.md",
     "universal/adjacent-repos.reference.template.md",
     "universal/ai-bad-habits-watch.reference.template.md",
     "universal/cli-tool-discovery.reference.template.md",

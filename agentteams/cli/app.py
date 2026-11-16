@@ -321,6 +321,11 @@ def _main_dispatch(
         return _run_list_exceptions(args)
     if getattr(args, "sign_decision", None):
         return _run_sign_decision(args)
+    if (getattr(args, "merge_pr", None) is not None or getattr(args, "sign_dev_merge_authorization", None)
+            or getattr(args, "verify_dev_merge_authorization", False)):
+        from agentteams.cli.dev_merge_commands import run_dev_merge
+
+        return run_dev_merge(args)
     if (getattr(args, "sign_toolchain_group", None) or getattr(args, "verify_toolchain_group", False)
             or getattr(args, "verify_toolchain_pin", None)):
         from agentteams.cli.toolchain_group_commands import run_toolchain_group
@@ -349,6 +354,24 @@ def _main_dispatch(
         return _run_write_integrity_manifest(args)
     if getattr(args, "verify_integrity", False):
         return _run_verify_integrity(args)
+    if getattr(args, "record_hmac_fingerprint", None) is not None:
+        from agentteams.cli.signed_ledger import record_hmac_fingerprint
+
+        try:
+            fp_path = record_hmac_fingerprint(args.record_hmac_fingerprint)
+        except (ValueError, RuntimeError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        from datetime import datetime
+
+        from agentteams.cli.signed_ledger import HMAC_KEY_FILES, HMAC_KINDS, hmac_key_dir
+
+        key_path = hmac_key_dir() / HMAC_KEY_FILES[HMAC_KINDS[args.record_hmac_fingerprint]]
+        changed = datetime.fromtimestamp(key_path.stat().st_mtime).astimezone().isoformat(timespec="seconds")
+        print(f"Recorded the {args.record_hmac_fingerprint} HMAC key fingerprint in {fp_path}: "
+              f"{fp_path.read_text(encoding='utf-8').strip()}")
+        print(f"  key file {key_path} was last changed {changed}; if you did not create it then, delete both files.")
+        return 0
     if getattr(args, "verify_backup", None) is not None:
         return _run_verify_backup(args)
 

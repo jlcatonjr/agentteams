@@ -478,6 +478,30 @@
      "path": "templates/universal/conflict-resolution.template.md",
      "text": "## Rules\n\n1. Never resolve a conflict without reading both source files\n2. Authority hierarchy (from `copilot-instructions.md`) is the tiebreaker — always\n3. ESCALATE only when genuinely unresolvable by the hierarchy\n4. Update the conflict log for every decision, including ACCEPT\n"
     }
+   ],
+   "### Step 2: Apply Decision Rules": [
+    {
+     "commit": "8b6c065d769228b34e763c8e6cc42473a0e2a605",
+     "path": "templates/universal/conflict-resolution.template.md",
+     "text": "### Step 2: Apply Decision Rules\n\n| Conflict Code | Primary Decision Rule |\n|--------------|----------------------|\n| `TM` (Term Mismatch) | Use the term that appears in the highest-authority source |\n| `CC` (Claim Conflict) | Accept the claim from the higher-authority source; REVISE the lower |\n| `AE` (Attribution Error) | Verify against external source; REVISE the incorrect attribution |\n| `SD` (Source Drift) | Update deliverable to match source on disk |\n| `CN` (Count Mismatch) | Verify actual count on disk; REVISE the incorrect stated count |\n| `HC` (Hierarchy Conflict) | Use `copilot-instructions.md` as ground truth; REVISE diverging files |\n| `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |\n| `PE` (Phantom Entry) | REJECT the entry; flag for `@reference-manager` investigation |\n\n"
+    },
+    {
+     "commit": "a7160f0622299aa31caec718284c88f27620757e",
+     "path": "agentteams/templates/universal/conflict-resolution.template.md",
+     "text": "### Step 2: Apply Decision Rules\n\n| Conflict Code | Primary Decision Rule |\n|--------------|----------------------|\n| `TM` (Term Mismatch) | Use the term that appears in the highest-authority source |\n| `CC` (Claim Conflict) | Accept the claim from the higher-authority source; REVISE the lower |\n| `AE` (Attribution Error) | Verify against external source; REVISE the incorrect attribution |\n| `SD` (Source Drift) | Update deliverable to match source on disk |\n| `CN` (Count Mismatch) | Verify actual count on disk; REVISE the incorrect stated count |\n| `HC` (Hierarchy Conflict) | Use `copilot-instructions.md` as ground truth; REVISE diverging files |\n| `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |\n| `PE` (Phantom Entry) | REJECT the entry; *(If `@reference-manager` in team)* flag for `@reference-manager` investigation |\n\n"
+    },
+    {
+     "commit": "2d7d1ba29ac269b6890cff499a7907959cfdeff1",
+     "path": "agentteams/templates/universal/conflict-resolution.template.md",
+     "text": "### Step 2: Apply Decision Rules\n\n| Conflict Code | Primary Decision Rule |\n|--------------|----------------------|\n| `TM` (Term Mismatch) | Use the term that appears in the highest-authority source |\n| `CC` (Claim Conflict) | Accept the claim from the higher-authority source; REVISE the lower |\n| `AE` (Attribution Error) | Verify against external source; REVISE the incorrect attribution |\n| `SD` (Source Drift) | Update deliverable to match source on disk; if the cited path was never written, REJECT the citation and REVISE the deliverable to remove it |\n| `CN` (Count Mismatch) | Verify actual count on disk; REVISE the incorrect stated count |\n| `HC` (Hierarchy Conflict) | Use `copilot-instructions.md` as ground truth; REVISE diverging files |\n| `SR` (Stale Reference) | REJECT the stale reference; REVISE the deliverable to remove or update it |\n| `PE` (Phantom Entry) | REJECT the entry; *(If `@reference-manager` in team)* flag for `@reference-manager` investigation |\n\n"
+    }
+   ],
+   "### Step 3: Apply Decision": [
+    {
+     "commit": "8b6c065d769228b34e763c8e6cc42473a0e2a605",
+     "path": "templates/universal/conflict-resolution.template.md",
+     "text": "### Step 3: Apply Decision\n\n| Decision | Action |\n|----------|--------|\n| ACCEPT | The conflict is not actually a conflict after investigation; mark resolved in log |\n| REJECT | Remove the incorrect claim or entry; update log |\n| REVISE | Apply the correction to the lower-authority file; update log |\n| ESCALATE | Neither side can be determined correct; escalate to orchestrator with full context |\n\n"
+    }
    ]
   },
   "universal/framework-watch.reference.template.md": {

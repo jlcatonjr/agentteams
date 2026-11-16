@@ -23,6 +23,13 @@ Every other entry (a feature, a message-only or portability change, a widening s
 ``security: false``. A new template commit whose subject does not match is ``false`` until it is reviewed and,
 if it tightens a deny rule, added to :data:`SECURITY_REVIEWED`.
 
+**Side lines are left out.** ``--follow`` walks every commit that touched the template, including ones on a line
+whose change never reached ``HEAD`` (a fix made on ``main`` and reverted there, then merged into ``dev`` with
+``dev``'s template kept). Such a commit is not a version ``HEAD``'s template descends from, and listing it, by date,
+after the real newest version would call the shipped template ``older``. So an entry is kept only when git's
+default history simplification (``git log HEAD -- <path>``, no ``--full-history``) also lists its commit for its
+path: that walk keeps exactly the commits that led to ``HEAD``'s content.
+
 **History availability.** A shallow repository lacks the older versions, and a lineage built from it would call
 every older copy ``modified``; the script refuses (exit 2) rather than write it. ``HEAD`` is walked rather than
 ``origin/main`` so that a branch that changes the template can regenerate the lineage in the same change (its
@@ -93,6 +100,22 @@ def _security(sha: str, subject: str) -> bool:
     return bool(SECURITY_SUBJECT.match(subject)) or sha in SECURITY_REVIEWED
 
 
+def _simplified_commits(paths: set[str]) -> set[str]:
+    """Return the commits git's default history simplification lists for *paths* from ``HEAD``.
+
+    Args:
+        paths: The template's paths over its history (more than one only after a rename).
+
+    Returns:
+        Full commit hashes: the commits that led to ``HEAD``'s content at each path.
+
+    Raises:
+        RuntimeError: When a git command fails.
+    """
+    out = _git("log", "--format=%H", "HEAD", "--", *sorted(paths))
+    return {line.strip() for line in str(out).splitlines() if line.strip()}
+
+
 def build() -> dict:
     """Derive the lineage payload from git history.
 
@@ -117,6 +140,8 @@ def build() -> dict:
         blob = _git("cat-file", "blob", f"{sha}:{path}", text=False)
         versions.append({"commit": sha, "date": date, "path": path, "subject": subject,
                          "sha256": hashlib.sha256(bytes(blob)).hexdigest(), "security": _security(sha, subject)})
+    kept = _simplified_commits({v["path"] for v in versions})
+    versions = [v for v in versions if v["commit"] in kept]
     if not versions:
         raise RuntimeError(f"no history for {TEMPLATE_REL}")
     versions.reverse()   # git log is newest first

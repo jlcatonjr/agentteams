@@ -363,6 +363,9 @@ nav:
               - learned-blocks: api-reference/learned-blocks.md
               - branch-inventory: api-reference/branch-inventory.md
               - branch-model: api-reference/branch-model.md
+              - agent-refactor-codes: api-reference/agent-refactor-codes.md
+              - github-management: api-reference/github-management.md
+              - release-required-checks: api-reference/release-required-checks.md
               - project-notes: api-reference/project-notes.md
               - copilot-body-limit: api-reference/copilot-body-limit.md
               - bridge-refresh: api-reference/bridge-refresh.md

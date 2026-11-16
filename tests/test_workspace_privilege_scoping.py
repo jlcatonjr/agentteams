@@ -1044,7 +1044,8 @@ def test_verify_key_store_deny_is_locked_to_the_reader_in_both_frames():
         agents_rel = adapter.get_agents_dir(root).relative_to(root).as_posix()
         assert f"{agents_rel}/{decision_log._VERIFY_KEY_STORE_REL}" in protected_write_paths(fw)
     assert VERIFY_KEY_STORE_SENTINEL_REL == f"{decision_log._VERIFY_KEY_STORE_REL}/README.md"
-    block = _build_sandbox_block(None)
+    # platform pinned: on darwin the block also write-denies the operator key dirs (hmac-key-autoresolve M1)
+    block = _build_sandbox_block(None, platform="linux")
     assert ".claude/agents/references/authorized-verify-keys" in block["filesystem"]["denyWrite"]
     assert [*_PROTECTED_WRITE_PATHS, ".claude"] == block["filesystem"]["denyWrite"]
 

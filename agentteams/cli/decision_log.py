@@ -35,6 +35,7 @@ from agentteams.cli.effect_classifier import (
 )
 from agentteams.cli.signed_ledger import (
     SIG_SCHEME_ED25519,
+    load_hmac_key,
     path_within,
     require_strong_hmac_key,
     verify_by_scheme,
@@ -355,7 +356,8 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
 
     Args:
         row: The decision row, using either supported schema.
-        key: Signing key. Defaults to ``AGENTTEAMS_DECISION_SIGNING_KEY``.
+        key: Signing key. Defaults to ``AGENTTEAMS_DECISION_SIGNING_KEY``, else its key file
+            (:func:`~agentteams.cli.signed_ledger.load_hmac_key`).
 
     Returns:
         Hex digest.
@@ -368,11 +370,12 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     return _hmac_decision_row(row, key=key)
 
 
-def _hmac_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
+def _hmac_decision_row(row: dict[str, str], *, key: str | None = None, project_dirs: tuple[Path, ...] = ()) -> str:
     """The HMAC over the row exactly as it stands (no binding): the verifier side of :func:`sign_decision_row`."""
-    signing_key = key if key is not None else os.getenv("AGENTTEAMS_DECISION_SIGNING_KEY", "")
+    signing_key = key if key is not None else load_hmac_key("AGENTTEAMS_DECISION_SIGNING_KEY", project_dirs=project_dirs)
     if not signing_key:
-        raise RuntimeError("decision signing key is not configured")
+        raise RuntimeError("decision signing key is not configured (set AGENTTEAMS_DECISION_SIGNING_KEY, or put "
+                           "it in ~/.config/agentteams/keys/decision-hmac.key, mode 600)")
     require_strong_hmac_key(signing_key, "decision signing key")
     return hmac.new(
         signing_key.encode("utf-8"),
@@ -470,10 +473,10 @@ def _enforce_decision_signing(output_dir: Path) -> bool:
     """
     config_path = output_dir / "references" / _AGENT_PRIVILEGE_CONFIG
     if not config_path.exists():
-        # GV1 fail-closed: a governed workspace asserts (via a git-tracked signing-governed.marker) that
-        # signing MUST be enforced. If the config is absent there, RAISE rather than silently reverting
-        # to legacy OFF — renaming references/ must not disable strict enforcement.
-        if (output_dir / "signing-governed.marker").exists():
+        # GV1 fail-closed: a governed workspace (signing-governed.marker, or a git-tracked one since deleted: item 17)
+        # must enforce signing; with the config absent, RAISE rather than revert to legacy OFF.
+        from agentteams.signing_switch import is_governed  # the one governance predicate
+        if is_governed(output_dir):
             raise RuntimeError(
                 f"governed workspace ({output_dir}) but {config_path} is absent — refusing to fall "
                 "back to legacy unsigned behaviour (fail-closed)."
@@ -750,12 +753,13 @@ def _assert_authorizing_row_is_authentic(
                 f"decision authorizing '{action}' is UNSIGNED, but strict agent-privilege "
                 f"enforcement (enforce_decision_signing) is ON for this workspace: an unsigned "
                 f"authorization is refused (fail-closed). Activate decision signing — add a "
-                f"`signature` column to the decisions log or set AGENTTEAMS_DECISION_SIGNING_KEY "
+                f"`signature` column to the decisions log or set AGENTTEAMS_DECISION_SIGNING_KEY (a key file alone "
+                f"does not activate it) "
                 f"— or set enforce_decision_signing:false in the brief and re-run --update."
             )
         return
 
-    expected = _hmac_decision_row(row)
+    expected = _hmac_decision_row(row, project_dirs=(Path(output_dir),))
     actual = (row.get("signature") or "").strip().lower()
     if not actual:
         raise RuntimeError(

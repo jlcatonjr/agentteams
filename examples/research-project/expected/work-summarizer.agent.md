@@ -159,6 +159,30 @@ inherited from a stale prompt, and no block could prove otherwise).
   - `Coverage Status`
   - `Missing Weekly Files`
 
+## Entry Schema
+
+Each governance-relevant event in a summary's window gets one typed entry block, placed above the narrative it
+belongs to. The trigger catalog decides which events those are. The catalog, the block format, the
+provisional-entry rule for an event that matches no trigger, and the carry-forward rule for open obligations are
+defined once in `references/work-summary-trigger-catalog.reference.md`. Read them there; this table is only the
+field list.
+
+| Field | Content |
+|-------|---------|
+| `Trigger` | One of the eight catalog trigger types (`unclassified-constitutional-event` when nothing else fits) |
+| `Timestamp` | ISO 8601 date and time, with zone |
+| `Contributing agent` | The `@agent` that initiated the entry |
+| `Affected scope` | Files, workflows and repositories touched |
+| `Disposition` | The governing disposition, quoted from the governing artifact where one exists |
+| `Unresolved obligations` | `none`, or one line each: obligation, owner, source artifact ID |
+| `Sources` | Pointers to plan steps, contradiction records, security clearances, coordination requests, commits |
+
+`Sources` holds cited pointers. It adds no source class to the Evidence Model above: a fact another agent reports
+enters a summary through plan artifacts or git history.
+
+These entries are additive. A summary written before this schema, or a narrative-only summary for a window with no
+governance-relevant event, stays valid as it is.
+
 ## Workflows
 
 ### Daily Summary
@@ -169,7 +193,9 @@ Trigger examples: "Summarize today's work", "Daily summary for YYYY-MM-DD"
 2. Collect touched plan artifacts from `tmp/by-week/YYYY-Www/` and legacy `tmp/`.
 3. Collect commits and diffs in the date window.
 4. Correlate plan steps with commits when evidence exists.
-5. Draft and write `workSummaries/daily/YYYY-MM-DD.md` using `create`, `append`, or `replace` mode.
+5. Draft and write `workSummaries/daily/YYYY-MM-DD.md` using `create`, `append`, or `replace` mode. Add a typed
+   entry (see Entry Schema) for each governance-relevant event in the window, and carry forward into an
+   `## Open Obligations` segment every obligation still open in the previous daily summary.
 6. Run audits in order: `@technical-validator`, `@adversarial`, `@conflict-auditor`.
 
 #### Synthesized daily body — the `## Plans Implemented` marker
@@ -209,7 +235,8 @@ Trigger examples: "Summarize this week", "Weekly summary for YYYY-Www"
 2. If the project provides a week-organization helper, run it before synthesis; otherwise read existing `tmp/by-week/` and legacy `tmp/` artifacts directly.
 3. Read daily summaries for that week.
 4. Fill missing daily summaries only when requested. *(In-synthesis daily gap-fill stays user-gated here; recent past daily gaps are also filled **automatically** at session close via Workflow D — see `references/work-summary-backfill.reference.md`.)*
-5. Synthesize completed, in-progress, blocked work and discrepancies.
+5. Synthesize completed, in-progress, blocked work and discrepancies, and list the obligations still open at
+   week end with the entry that opened each.
 6. Write `workSummaries/weekly/YYYY-Www.md`.
 7. Run audits in order: `@adversarial`, `@conflict-auditor`.
 
@@ -221,7 +248,8 @@ Trigger examples: "Summarize this month", "Monthly summary for YYYY-MM"
 2. If the project provides a week-organization helper, run it before synthesis; otherwise read existing `tmp/by-week/` and legacy `tmp/` artifacts directly.
 3. Read weekly summaries for that month.
 4. Fill missing weekly summaries only when requested.
-5. Write `workSummaries/monthly/YYYY-MM.md`.
+5. Write `workSummaries/monthly/YYYY-MM.md`, listing the obligations still open at month end with the entry that
+   opened each.
 6. Run audits in order: `@adversarial`, `@conflict-auditor`.
 
 ### Workflow D — Automatic Backfill Sweep

@@ -6,6 +6,410 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (CI: a runner network outage reads as infrastructure, not a test failure; #442 follow-up)
+
+- `scripts/ci-bwrap-setup.sh` retries apt downloads (`Acquire::Retries=5`, 30-second timeouts) and, when bubblewrap
+  still cannot be installed, posts a `CI setup (network)` error annotation, so the checks API tells "infrastructure
+  red" from "code red" without the job log. Job names are unchanged, so `main`'s required checks are not affected.
+- `references/git-procedures.md` §H: waiting out a runner outage; `enforce_admins` on `main` is intended, with no
+  admin bypass (operator ruling, 2026-11-15).
+
+### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
+
+- **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and
+  `.claude/settings.worksummary.example.json`.** Both are inert until the operator merges the example's `Stop` block
+  into `.claude/settings.json`. The example is a separate file, so wiring the constitutional gate does not switch
+  it on.
+- **Runs do not appear in any Claude Code session list.** The launcher starts the summarizer with
+  `--no-session-persistence` and keeps the run's output in its own archive under
+  `~/.claude/logs/agentteams-work-summary/` (under `CLAUDE_CONFIG_DIR` when set), readable by the owner only and
+  pruned after 14 days.
+- **It launches only when the day's summary is out of date:**
+  - a day with commits is current when the summary is synthesized and covers the latest commit;
+  - a planning-only day is current when the day's plan files are unchanged since the last run. An operator-written
+    hook without this check launched a run on every Stop event, several hundred a day.
+- **Guards:** the Stop payload is never passed to the run; a hook child never launches another; one run per project
+  at a time; a failed run backs off for 30 minutes; the hook detaches and never blocks the session.
+- **The unattended run has six tools and no others** (`--tools Read,Grep,Glob,Agent,Edit,Write`), in the run and in
+  the agents it calls: no shell, no web tools, no cross-session messaging, no scheduled or remote triggers, no
+  worktree creation. A live probe found that the session tools needing no permission ran unprompted without the
+  cap. The launcher collects the git evidence and hands it over as a file. The mode is a fixed `dontAsk`, with no
+  MCP server, and the child's environment carries no messaging socket or token.
+- **Inherited allow rules are contained.** `--allowedTools` adds to the operator's own allow rules, so deny rules
+  block credential files and the control plane, and the launcher refuses to launch when the operator's settings
+  allow edits outside `workSummaries/` or an unknown tool. The refusal is logged in `hook.log`.
+- **The wiring command verifies the launcher.** The `Stop` block carries the launcher's SHA-256 and runs the
+  installed script only on a match, so an edited script stops the hook until the operator merges the block again.
+- Every skip, run and failure is one line in `hook.log` in the run folder; that log is where to look, because runs
+  do not show in session lists.
+- **Operator extras are read from the run folder, never from the repository,** so a branch or pull request cannot
+  instruct an unattended run.
+- The launcher template and its emitter are pinned in the integrity manifest.
+- This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
+  notification-only. Grok teams do not receive it.
+
+### fixed (the launcher lineage left out a reverted side line, so dev's own template was no longer `current`)
+
+- `scripts/build_launcher_lineage.py` walked the template with `git log --follow`, which also lists commits on a line
+  whose change never reached `HEAD`. A fix made on `main` and reverted there (c5ae8582, ee45c106), then merged into
+  `dev` with `dev`'s template kept, sorted after `dev`'s real newest version, so a regenerated lineage would have
+  called the shipped template `older` and pointed at a version without the item-17 protections. The builder now keeps
+  only the commits git's default history simplification lists for the template's path. The shipped lineage is
+  unchanged; `tests/test_launcher_lineage.py::test_lineage_regenerates_byte_for_byte` passes again on `dev`.
+
+### added (what counts as approval for actions that guard the default branch; `github_management`)
+
+- **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub
+  management section (#504) now says what counts as the operator's approval:
+  - **Merges into the default branch, `main`, `master`, `release/*` or a tag** need the operator's live, in-session
+    answer naming the PR number and head SHA, asked again if the head moves. Standing, relayed, file, comment, peer
+    and signed-directive approvals never count, and #504's integration-branch authorization never reaches these
+    branches. Merge only after at least one check run has registered on that SHA and every check is green, with
+    `--match-head-commit`.
+  - **Switching the default branch's required checks** runs only as
+    `python -m agentteams.release_required_checks --apply <fingerprint>`. The operator approves that fingerprint
+    first, with the full preview shown, and `@security` records `release-required-checks:<fingerprint>`.
+- The same rule now appears in three more places:
+  - `@pr-manager` rule 2 (`invariant_core` v=3) defines "explicit operator clearance";
+  - a `@security` trigger row (`security_rules_invariant` v=25) covers that `--apply` and any branch-protection or
+    ruleset write;
+  - the integration-branch reference §3 (`integration_branch` v=2) adds a required-check step.
+
+  Each is empty with `github_management: false`. `--update` prints a one-time notice when the rules first land.
+- New module command `python -m agentteams.release_required_checks`, moved from `scripts/`. It reads the default
+  branch instead of assuming `main`, takes the integration branch from the brief, and refuses ruleset-managed checks
+  and tokens without admin rights.
+- Code guards: management directives refuse `protect`, `required-check` and `ruleset` scopes (`merg` already was).
+  The constitutional gate prompts on:
+  - `gh api`/`curl` writes to `…/protection` or `…/rulesets`, whether the method is explicit (`-X`, `--request`,
+    `--method`) or implied by a body (`-f`, `-F`, `--field`, `--raw-field`, `--input`);
+  - the GraphQL `BranchProtectionRule` and `RepositoryRuleset` create, update and delete mutations;
+  - `release_required_checks … --apply`, including shortened forms (argparse abbreviations are off as well).
+- Security rows 811 and 816 (816 amends 811's condition 3 to allow #504's signed integration-branch authorization)
+  are cross-referenced with #504's rows 809, 812 and 815.
+
+### fixed (generated teams are no longer told to run commands that exist only in the agentteams checkout; IM item 23)
+
+- **G-06-2, G-19-4.** The navigator, agent-updater, orchestrator and security templates and all five team-builder
+  templates said to run `python build_team.py …` or `python -m src.graph …`. A generated team has no `build_team.py`
+  (it sits at the root of this repository) and there is no `src/` package anywhere. They now use the installed
+  `agentteams` entry point: `agentteams --refresh-graph` for the pipeline graph, `agentteams --description <brief>
+  --check` / `--update --merge` / `--scan-security`, `--add-fence-markers` and `--migrate`. The security triggers
+  name `agentteams --self --update` and still cover the checkout's `build_team.py`.
+- **G-12-3.** The agent-updater said bare `--update` overwrites whole files, including USER-EDITABLE content, which
+  contradicted its own later section and the CLI (merge is the default). It now says only `--update --overwrite`
+  replaces whole files, and its batch-run assertion requires "never `--update --overwrite`".
+- The agent-updater now says which `agentteams` to run: the pinned installation where `toolchain.lock` pins it, an
+  editable install in the agentteams checkout itself. The navigator notes that `--refresh-graph` maps `.github/agents/`
+  before `.claude/agents/`. The security trigger keys on `--self` with `--update` in either order, through any entry
+  point (`agentteams`, `python -m agentteams.cli.app`, `build_team.py`).
+- `tests/test_template_repo_only_commands.py` refuses `python [path/]build_team.py`, `build_team.py --…`,
+  `python -m src.` and `python -m build_team` in every text file under `agentteams/templates/`.
+- **Existing teams:** `agentteams --update --merge --yes` brings most of this. The security
+  (`security_rules_invariant` v=26, after #507 also revised it), orchestrator (`update_compatibility_source_pack` v=2) and Grok builder (`rules`
+  v=2) changes are inside fences. The agent-updater and the Claude, Copilot and goose builders have no fences of their
+  own, so their whole body is one generated `content` fence (the goose recipe is rewritten whole), and merge replaces
+  it. Merge keeps text outside fences in a file that has fences, so two places keep the old lines: the navigator's two
+  refresh commands and the Grok builder's step 3 and invocation block. Edit those by hand.
+
+### security (an unscoped agent gets a read-only Claude grant, not write and a shell; IM item 42)
+
+- **G-04-9.** The Claude adapter's fallback grant was `Bash, Read, Write, Edit`. `_map_allowed_tools` used it when an
+  agent had no front matter (or front matter that never closes), no inline `tools: [...]` list, or a list none of
+  whose tokens maps to a Claude tool. So the one agent nobody scoped got write access and an unrestricted shell
+  (C-3). The fallback is now `Read, Grep, Glob`, and each fallback emits a `UserWarning` naming the agent and the
+  missing scope. Grok shares the mapping and the change.
+  - **Behaviour change:** a hand-written or converted agent with no usable `tools:` loses `Bash`, `Write` and `Edit`
+    on its next render, `--convert` or interop import. No shipped template reaches the fallback: every agent
+    template declares `tools:`, and a render of each example brief for Claude and Grok produced no fallback.
+  - **Who is affected:** agents the templates don't produce, which are hand-written, operator-added, converted or
+    imported agents. `--convert` reports each narrowed agent in its notices. A source whose `tools:` is a YAML block
+    list is still refused as a widening, not narrowed. Files already on disk keep their grant: `--update --merge`
+    never widens or silently narrows an edited capability line, so an existing agent keeps `Bash, Read, Write, Edit`
+    until it is re-converted or edited.
+  - **The team-builder fails closed (@security):** a Claude builder with no front matter, or no `tools:` /
+    `allowed-tools:` key, now raises instead of passing through, because Claude gives it every tool. Grok's builder
+    already did. The shipped builder declares `tools:`.
+  - **Migration:** if the warning names an agent that needs to write or run commands, give it an inline list, for
+    example `tools: ['read', 'search', 'edit', 'execute']`, and re-render.
+  - The WASM narrowing refusal (`wasm_enforcement._refuse_empty`) still fails closed on an empty list; its message
+    no longer says the default includes the shell.
+
+### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
+
+- **G-23-2.** The trust-root vocabulary covered `CLAUDE.md` and `copilot-instructions` but not the constitution files
+  the other surfaces read, so a row writing one was classed on the ordinary path and an HMAC clearance sufficed. These
+  are now an *elevated* class (`governance_targets.target_is_elevated_constitution`):
+  - `AGENTS.md`, read by Codex, goose, Grok and agents-md, including nested copies;
+  - `AGENTS.override.md`, which Codex reads over it;
+  - `.goosehints`;
+  - `CLAUDE.local.md`, which folds to `claude-local-md`, so the `claude-md` stem missed it;
+  - `.github/instructions/`, Copilot's path-scoped instructions.
+
+  A row whose declared target is one of these is constraint-relaxing and needs the operator's Ed25519 signature
+  (`requires_operator_signature`), and a management directive can never scope one.
+  - **Elevated, not refused (operator ruling 2026-11-14).** Unlike `CLAUDE.md`, these files are not categorically
+    non-eligible. `frozen_surfaces` declares `AGENTS.md` and `.goosehints` owned by the codex, goose and agents-md
+    surfaces, so freeze and unfreeze rows list them, and a non-eligible unfreeze could never be signed.
+  - **Behaviour change:** a freeze, unfreeze or render row for those surfaces that lists `AGENTS.md` or `.goosehints`
+    now needs the operator's Ed25519 signature; HMAC no longer clears it.
+  - **Migration:** in a signing-governed workspace, an HMAC-signed row that names one of these files no longer
+    authorizes. Find such rows: `effect_targets`, `effect_grants` or the scope text naming `AGENTS.md`,
+    `AGENTS.override.md`, `.goosehints`, `CLAUDE.local.md` or `.github/instructions`. They include the freeze and
+    unfreeze rows for the codex, goose and agents-md surfaces. Re-mint each with `--sign-decision` (operator,
+    Ed25519) before the next gated render. A management directive whose scope names one is refused, so re-issue the
+    task without it.
+  - The file names are matched as whole tokens, not substrings, so this repository's own `agents_md.py` adapter, its
+    tests and docs stay ordinary content. Across every tracked path, none changes classification.
+  - Tokens split on every character that cannot be part of a file name, after percent-decoding, so `AGENTS%2Emd`,
+    `file:AGENTS.md`, `AGENTS.md#L1`, `@AGENTS.md` and `AGENTS.md,README.md` match too (@security).
+
+### fixed (a deleted `signing-governed.marker` no longer turns governed signing off)
+
+- **Security fix (IM evaluation item 17, G-22-7).** The governed check tested only that
+  `<team>/signing-governed.marker` existed, and the sandbox left the marker writable. So an agent that deleted it
+  turned fail-closed signing off: `enforce_decision_signing: false` applied again, and a missing
+  `agent-privilege.json` reverted to legacy unsigned behaviour instead of raising.
+  - `signing_switch.is_governed` now also counts a marker that git still tracks: in the index, or in HEAD, its
+    upstream or `origin/HEAD`. So a deleted marker, a staged deletion, and a deletion committed only on the
+    agent's own branch all still govern.
+    - git runs hardened, and inherited `GIT_DIR`, `GIT_INDEX_FILE` and similar variables are removed.
+    - A repository nested inside the project (a planted `.git`) and a git timeout count as governed.
+    - It still falls back to existence only outside a git work tree, without git, when git refuses the
+      repository (`safe.directory`), and for an untracked or ignored marker.
+  - `cli/decision_log` and `projection_marker` use this same check instead of their own.
+  - The marker is now write-protected by:
+    - the Claude `Edit` rules for every team dir (Grok inherits them);
+    - the goose Seatbelt profile for every team dir;
+    - the launcher's protect-if-present set;
+    - Claude's Bash `denyWrite`, through the whole `.claude` dir.
+
+    Copilot and Codex emit no deny list of their own.
+  - `confine-run.sh` changed, so its pins are updated (`EXPECTED_LAUNCHER_SHA256`, the WASM launcher pin, and
+    `launcher_lineage.json`). The downstream re-pin of the parity test is coordinated outside this repository.
+  - A deletion that has reached the upstream and default branch still ends governance (the honest limit), but it
+    is no longer silent. `--doctor` has a new **Signing governance** section that WARNs for each team dir whose
+    marker is absent on disk and in HEAD. The WARN:
+    - names the deleting commit;
+    - says whether the team still governs (the deletion is on this branch only), is governed through a sibling
+      team dir, or is not governed;
+    - repeats until the marker is restored.
+
+    A removed team dir gets one INFO line instead. The lookup is `signing_switch.marker_deletion_commits`, one
+    hardened `git log --diff-filter=D` with `log.showSignature` forced off and commit subjects reduced to
+    printable characters. It is a WARN, not a FAIL, because the operator may have meant it.
+  - Effect on existing teams: a team whose tracked marker was deleted but not committed is governed again.
+    Nothing changes for a team that never had a marker.
+
+### fixed (security: a `git config` read on the same line hid a remote or alias rewrite from the gate)
+
+- The constitutional gate exempts `git config --get`, `--get-all`, `--get-regexp`, `--get-urlmatch`, `--list`,
+  `--show-origin` and `-l` as reads. The exemption covered the whole line, so a read anywhere on it hid a write
+  after a separator: `git config -l; git config remote.origin.url https://e.x/r` asked nothing, in every shipped
+  version with the `publication-channel` config check. The exemption now covers only its own command (stops at
+  `;`, `&`, `|`), in `publication-channel` (remote/URL rewrites and `include.path`) and `git-alias-config`.
+- `git --config-env=remote.origin.url=VAR push` (git 2.31+ reads the value from an environment variable) is now a
+  `publication-channel` ask, like `git -c remote.origin.url=…`. Nothing matched `--config-env` before.
+
+### changed (the constitutional gate asks on short force pushes and git alias/push config; remediation row 699)
+
+- `git push -f` (and clusters such as `-uf`), `git push <remote> +<ref>` (also behind quoting: `"+"main`, `+'main'`,
+  `$'+main'`, `\+main`; a quoted flag too: `"-f"`, `"-c"`), `git -c` or `git --config-env` with
+  `alias.*|push.*|remote.*|url.*`, and
+  `git config alias.*|push.*|remote.*|url.*` now ask by default. Before, only `--force` and remote/URL
+  rewrites asked; #456 matched these spellings only under a project policy that denied them.
+- The class ids (`git-force-push-short`, `git-alias-config`) are unchanged, so a recorded
+  `.agentteams/gate-policy.json` names the same classes. The patterns are unchanged except for one narrowing:
+  the `f` is now case-sensitive, so `git commit -F msg && git push` asks nothing and `strict` no longer denies it
+  (git push has no `-F`).
+- The match is not scoped to the push command, so `git checkout -f && git push`, `git push && tail -f log` and
+  `git commit -m "bump +1" && git push` ask too, and may report "force push" as the reason. Scoping it would let an
+  escaped separator (`a\;b -f`) through, so this is an accepted extra prompt.
+- Every team derived from agentteams 1.2 or later gets a gate that asks on these commands. A headless session,
+  where an `ask` is denied, can no longer force-push by `-f` or `+refspec` (`--force` already asked).
+- A recorded policy that does not name the two classes now asks on them instead of passing.
+- `rm-recursive-force` stays policy-only: `fs-delete` already asks on every `rm`.
+- Default verdicts only tighten (pass to ask). The one loosening is `strict` on uppercase `-F`, above. The
+  template's integrity pin moves.
+
+### fix (Markdown ingest reads the authority hierarchy, #392 item 11)
+
+- An `Authority` heading with a list or table now sets `authority_sources` wherever it sits. Before, any heading
+  containing "source" overwrote it, so a `Source Repositories` table after an `Authority Hierarchy` list replaced
+  the hierarchy. An `Authority` heading with no list (prose only, or its list under a sub-heading) no longer
+  blocks a sources list.
+- A Markdown table in an authority or sources section is parsed by column: whole header words pick the name, path
+  and scope columns, and a `Tier` or `#` column is ignored. Its header and separator rows are no longer read as
+  tiers. A section holding both a list and a table keeps both, in document order, and drops other prose lines.
+- List markers are stripped without eating a bold name's `**` or a leading digit, and `**Name** (`path`) — scope`
+  items (the form agentteams itself renders) give the name, path and scope.
+- Reading a sources table as source repositories, separate from the hierarchy, needs a schema key and moves to 1.3.
+- The authority parser moves to the private `agentteams/_ingest_authority.py` (CH-07 ceiling). New `tests/test_ingest_authority_hierarchy.py`.
+
+### docs (release guide names the 1.1 line)
+
+- `release-and-branching.md` was still written for 1.1's release candidates. It now names `v1.1.3` as the install and
+  verify example, describes `release/1.1` as the 1.1 patch line, and lists `release/1.0` as an older line.
+
+### added (typed work-summary entries and the closed trigger catalog; #454)
+
+- **A new reference, `references/work-summary-trigger-catalog.reference.md`, is emitted for every team.** It renders
+  book Ch 16 §4 and §4.1:
+  - **the seven-field entry block:** trigger, timestamp, contributing agent, affected scope, disposition, unresolved
+    obligations, sources;
+  - **a closed catalog of eight trigger types.** Each has an initiator, required fields, a destination and a closure
+    condition. Seven are canonical; the eighth is `unclassified-constitutional-event`.
+  - **four rules:**
+    - an event that matches no trigger gets a provisional entry in the same session, and meanwhile work continues
+      only under reversible dispositions;
+    - open obligations carry forward until their closure condition is met;
+    - boundary-decision entries are mirror records that add no obligations;
+    - existing prose summaries stay valid.
+- The reference's whole body is one `trigger_catalog` v=1 fence, so `--update --merge` keeps its rules current.
+- **`@work-summarizer`:**
+  - **Entry Schema section:** lists the seven fields and points to the catalog for the rules;
+  - **daily workflow:** step 5 adds a typed entry for each governance-relevant event, plus a `## Open Obligations`
+    segment carried forward from the previous day;
+  - **weekly and monthly workflows:** step 5 lists the obligations still open at the end of the period;
+  - **sources:** the `Sources` field holds cited pointers and adds no source class to the Evidence Model.
+- **Additive only.** The template stays unfenced (it renders inside the whole-body `content` fence), and summaries
+  written before this change need no rewrite.
+- **Ledger.** `domain/work-summarizer.template.md` is now registered as TA-063 and leaves the unregistered baseline.
+  The new reference is TA-064.
+
+### changed (HMAC signing keys can live in key files)
+
+- With `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_DECISION_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY` or
+  `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, agentteams reads `~/.config/agentteams/keys/<kind>-hmac.key`
+  (`waiver`, `decision`, `grant`, `management`), so the key no longer has to be exported into a shell an agent
+  might inherit. A key file is trusted only when its fingerprint matches one you record with the new
+  `--record-hmac-fingerprint KIND` (in `~/.config/agentteams/verify-keys/`), so a planted or replaced key file is
+  refused. Every emitted sandbox read-denies `keys/`; the macOS Claude block and the goose Seatbelt profile now
+  also write-deny `keys/` and `verify-keys/` (on Linux, write roots cannot reach them).
+  - A set variable still wins, and agentteams warns (saying whether the two match) when the key file exists too.
+  - The file is refused when it is a symlink, sits behind a symlinked `keys/`, is readable by group or others, is empty,
+    or would be read by an install an agent could edit.
+  - A decision key file does not by itself switch on decision-signing enforcement; that stays tied to the variable
+    and the log header.
+  - One helper (`signed_ledger.load_hmac_key`) serves the waiver, decision, grant and directive paths
+    (@security ruling, 5 conditions).
+- `--sign-carveouts` now finds the Ed25519 key from `--key-id` like the other operator signers; it still required
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE`. The migrated-key warning and the vulnscan operator scripts no longer tell
+  you to set or export that variable.
+
+### added (opt-in typed violation codes for `@agent-refactor`; #453)
+
+- A brief that sets `agent_refactor.violation_codes: true` gives the agent-refactor file a "Violation Codes" section:
+  - the ten Chapter 13 codes, AR-01 to AR-10, each with the check that fires it;
+  - AR-05 fires above `agent_refactor.line_budget` lines (default 200), and its evidence gives the actual line count;
+  - findings are reported as code / file / evidence rows plus one `Counts:` line per code, so a closeout can report
+    "AR-05 x3, AR-09 x1" and runs can be compared;
+  - an uncited reference file has no code and is reported as an orphan finding, as in the chapter;
+  - AR-01 checks the template's five-field front-matter baseline, not the chapter's six. A file with no `handoffs:`
+    key is reported as AR-10.
+- Off by default. A brief without the key, or with `violation_codes` false, renders a byte-identical agent-refactor
+  file. `line_budget` takes effect only when the codes are on.
+- The section has no fence of its own and sits inside the file's whole-body `content` fence, so `--update --merge`
+  adds it when the switch is turned on. Turning it off again removes it, and the merge reports a shrink notice for
+  the `content` fence.
+- Both schemas define `agent_refactor`. The manifest carries it only when the codes are on.
+- Ledger row TA-009 stays `not-a-gap`, because the portable baseline is still the default. Its detail now records the
+  opt-in.
+
+### changed (agents run GitHub management; required-check apply is approved per release)
+
+- `references/git-procedures.md` §G: the agent does branch, PR, merge, release and cleanup work with `git`/`gh`. The
+  operator gets a `.sh` file only for steps the sandbox cannot do.
+- §I: an agent may now run `scripts/release_required_checks.py --apply` (and `--restore --apply`). It must first show
+  the operator the preview, the operator must approve that exact fingerprint in the live session, and `@security` must
+  clear and log the apply. Relayed, standing or read-content approval does not count. The script's guards are
+  unchanged.
+
+### changed (conflict-resolution dispositions take the book's meanings; #452)
+
+- **Behaviour change.** `@conflict-resolution` now uses the dispositions of Chapter 10 of the book:
+  - `REJECT`: the higher-authority side stands, and the lower-authority file is corrected;
+  - `ACCEPT`: the lower-authority side is correct, and the higher-authority file is updated. It needs cited
+    affirmative evidence;
+  - `REVISE`: neither side is fully correct, so both files change;
+  - `NO-CONFLICT` (new): the claims do not actually contradict each other.
+- Before this change, `ACCEPT` meant "not a conflict", and `REVISE` meant "correct the lower-authority file" (the
+  book's `REJECT`). The per-code defaults in Step 2 used `REVISE` in that older sense. They now name the book's
+  dispositions, and the scope of #452 was widened to cover them so that a team receives a consistent pair.
+- Under ambiguous evidence the disposition is `REJECT` (rules v=2, rule 3).
+- `ESCALATE` is no longer a disposition. It is a routing step to `@orchestrator`, taken only after that presumption
+  fails to settle the case. The row stays `open`, with `resolution` = `ESCALATE: <why>`.
+- Every decision's `resolution` field starts with the disposition and gives a justification that cites the authority
+  tiers.
+- **Existing log rows keep their historical meanings.** A row written before this change that says `ACCEPT` meant
+  "not a conflict" (now `NO-CONFLICT`), and one that says `REVISE` meant "correct the lower-authority file" (now
+  `REJECT`). An older `REJECT` meant "remove the incorrect claim or entry", usually today's `REJECT` (read its
+  resolution text), and an older `ESCALATE` row is settled by its later resolution. The new `dispositions` fence states
+  this mapping, and the memory-index section tells the resolver to read a prior outcome by its recorded meaning.
+- `--update --merge` carries the change to existing teams:
+  - Step 2 and Step 3 are now fenced (`decision_rules` v=1, `dispositions` v=1);
+  - `memory_index_consultation` is v=4 in this template and `rules` is v=2;
+  - the lineage corpus lets the merge drop the old unfenced Step 2 and Step 3 copies.
+  In an existing file, the new `decision_rules` fence lands just after `Invariant Core`, before `Step 1`, because
+  Step 1 is unfenced. Its text does not depend on that position.
+- `template-chapter-audit.csv` records the three alignments as TA-060, TA-061 and TA-062.
+
+### fix (orchestrator routing rows for optional agents say "(if in team)", #392 item 14)
+
+- The Domain Agent Routing rows for `@technical-validator`, `@format-converter`, `@reference-manager` and
+  `@output-compiler` now carry *(if in team)*, like the other rows for agents the analyzer may not select. Before, a
+  team without one of them was told to route work to an agent it does not have.
+- The `routing_table_rows` fence is v=7, so **every team's orchestrator changes on its next `--update`**, including
+  teams that have all four agents.
+- New `tests/test_routing_rows_conditional.py`: every routing row for an optional domain agent must be conditional,
+  in the template and in the rendered example teams.
+
+### fix (placeholder docs: agent-updater mapping and a dead manual placeholder, #392 item 9)
+
+- `agent-updater`'s Change-to-Agent Mapping no longer says `@primary-producer` uses `{STYLE_REFERENCE_PATH}` or
+  `@output-compiler` uses `{REFERENCE_DB_PATH}`; neither template does. The rows now list the agents whose templates
+  reference each path. Teams pick this up on their next `--update`.
+- `PLACEHOLDER-CONVENTIONS.md` no longer documents `{MANUAL:STYLE_EXEMPLARS}`, which nothing emits.
+- New `tests/test_placeholder_doc_drift.py`: every documented `{MANUAL:*}` must be used (four illustrative examples
+  are pinned as exceptions), and every agent the mapping names must reference that placeholder.
+
+### added (the Claude settings example names the session model)
+
+- The emitted `.claude/settings.hooks.example.json` carries `"model": "claude-fable-5-2"` and
+  `"env": {"CLAUDE_CODE_SUBAGENT_MODEL": "opus"}`, with or without the sandbox block. Merged into
+  `.claude/settings.json`, the main session runs Fable 5.2 and every subagent whose file names no model runs Opus:
+  Claude Code's built-in agents, and team agents with no `model:` key. `CLAUDE_CODE_SUBAGENT_MODEL` ranks below a
+  front-matter `model:`, so the orchestrator agent file keeps `claude-fable-5-2`; `_FORCE` is not set.
+- The example is now always re-serialized with sorted keys (as with the sandbox block), so a team without the sandbox
+  sees a one-time reformat of the file on its next update. Values the example already sets are kept. Like the hooks block, it is inert until merged; agentteams never writes
+  `settings.json`.
+
+### added (GitHub management by default, and the signed integration-branch merge authorization)
+
+- **GitHub management section.** Every generated team's constitution gains a fenced, template-authoritative
+  `github_management_rule` section: routine GitHub work through `gh` and `git` is authorized, allocated by role
+  (`@git-operations` writes, `@pr-manager` owns the PR lifecycle and never merges, the orchestrator may run read-only
+  `gh` queries). Agents ask when an action looks risky, and always for the C-5 classes, the default branch,
+  `release/*`, tags, signing and cross-repository pins. The section is never consent to a gate prompt. New brief field
+  `github_management` (default `true`; `false` renders a notice that every GitHub write goes to the operator). No
+  `tools:` line widens, and no MCP server is activated.
+- `@git-operations` and the merge reference use `gh` when it is authenticated, else `git` and the REST API (it was
+  REST first). The orchestrator's read-only `gh` exception is in its routing rule. Fence versions: orchestrator
+  `available_workflows` v=14, pr-manager `invariant_core` v=2, security `security_rules_invariant` v=24.
+- **Integration-branch merge authorization** (`agentteams/cli/dev_merge.py`). An operator-signed
+  `.agentteams/dev-merge-authorization.json` (Ed25519, a trust root, HALT family `integration-merge`, lineage, rollback
+  guard; no sunset and no cap slot, by operator ruling, like the toolchain group) lets `agentteams --merge-pr N` merge
+  a pull request into the signed integration branch without the gate's merge prompt. That holds only while it
+  verifies and every condition holds: the PR is open, not a draft, not a fork, CLEAN, has every check passed (the
+  signed file's `required_checks` all reported, and every workflow run for the head completed with success), touches
+  no governance, agent or workflow path, and a `@security` PASS for its exact head exists and is spent on use. The
+  merge is a merge commit at the checked head. Otherwise the verb exits 2, and the merge goes back to the ordinary
+  prompt. New verbs `--sign-dev-merge-authorization` (operator-only, refused in an agent session) and
+  `--verify-dev-merge-authorization`. A new fenced `dev_merge_rule` constitution section and a security trigger row.
+  The gate is unchanged: a direct `gh pr merge` still asks.
+- The integration model's merge-strategy table gains a contributor-PR row. `references/enforcement-integrity.json`
+  pins `agentteams/cli/dev_merge.py`.
+
 ### added (opt-in `api_impact` categories for constants and generated files; #451 c)
 
 - A committed `references/api-impact-reviews/CATEGORIES` file opts a project into extra categories. Without it, the
@@ -138,7 +542,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Tighten-only.** There is no `allow`. An unknown key, class or preset is a load error.
   - **Class ids.** The gate gives each trigger a fixed class id, exported as `ASK_CLASSES` and `POLICY_ONLY_CLASSES`.
   - **Policy-only classes.** `rm-recursive-force`, `git-force-push-short` (`-f` and `+refspec`) and `git-alias-config`
-    are evaluated only when a policy denies them.
+    are evaluated only when a policy denies them (until row 699, above, made the two git classes default asks).
   - **`strict` preset.** Defined in the gate, it denies the force-push, remote-delete, git alias/remote config,
     publication, `rm -rf`, pipe-to-shell and SQL-deletion classes listed in #456, plus `command-too-long`.
     Under any non-empty deny list an over-long command is denied, so padding cannot hide a denied class.
@@ -921,7 +1325,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### docs (release branches are not merged back into `main`)
 
 - `release-and-branching.md` no longer says a release branch is merged forward into `main` after each tag. Every fix
-  lands on `main` first and is copied out with `git cherry-pick -x`, so `main` already has it. The status line now
+  lands on the development branch first (now `dev`) and is copied out with `git cherry-pick -x`, so `main` already
+  has it. The status line now
   names `v1.0.7` and `v1.1.0-rc.16`.
 
 ### changed (pinned sync: the pin decides; operator ruling 2026-11-04)

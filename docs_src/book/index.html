@@ -1,8 +1,7 @@
-<!-- IMPORTANT: This file intentionally diverges from the working-project copy at html/index.html.
-     Divergence: loadChapter() includes a regex rewrite of src="../figures/" → src="figures/"
-     required because this SPA is served from book/ (base = agentteams/book/), while the
-     working-project copy serves from html/ where ../figures/ correctly resolves to the
-     project-root figures/ directory. DO NOT blindly overwrite this file with the working copy. -->
+<!-- Canonical book SPA. agentteams docs_src/book/ is the book's only home (since 2026-11-14;
+     references/book-source-of-truth.md); the former jameslcaton working copy is a frozen snapshot.
+     loadChapter() rewrites src="../figures/" to src="figures/" because chapters are authored with
+     ../figures/ paths while this page is served from book/ next to figures/. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>

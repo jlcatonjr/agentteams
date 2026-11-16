@@ -16,6 +16,10 @@ the project's providers see the same rules, the same memory, and the same agents
   both lines), or a project rule using a framework-range id — :mod:`agentteams.hygiene_rules` (IM item 26).
 * **Backup stubs** (WARN, warn-first): a backed-up agent file under any runtime dir's ``.agentteams-backups/`` that
   a runtime would still load as a live agent (IM item 01) — :func:`agentteams.backup.runtime_loadable_backups`.
+* **Signing governance** (WARN): a team dir whose ``signing-governed.marker`` is absent on disk and in HEAD and was
+  deleted in a commit, naming that commit and whether the team still governs. Governance ends once the deletion has
+  reached the upstream and default branch (IM item 17) —
+  :func:`agentteams.signing_switch.marker_deletion_commits`.
 
 Exit code 1 when any FAIL is reported.
 
@@ -167,6 +171,34 @@ def _hygiene_rule_ids(root: Path) -> tuple[list[str], int]:
     return lines, 0
 
 
+def _signing_governance(root: Path) -> tuple[list[str], int]:
+    """WARN per team dir whose signing-governed.marker was deleted in a commit (IM item 17 addition).
+
+    Governance ends once a deletion has reached the governing refs (``signing_switch.is_governed``). The operator may
+    mean that, so this is a WARN that names the commit, not a FAIL, and it repeats until the marker is restored. Its
+    wording follows the real state: still governed (the deletion is only on this branch), governed through a sibling
+    team dir, or not governed. A team dir that no longer exists gets one INFO line instead.
+    """
+    from agentteams.signing_switch import GOVERNED_MARKER, TEAM_DIRS, is_governed, marker_deletion_commits
+
+    lines: list[str] = []
+    for team, commit in marker_deletion_commits(root).items():
+        here = root / team
+        if not here.is_dir():
+            lines.append(f"  ℹ  {team} was removed; its {GOVERNED_MARKER} was deleted in {commit}")
+            continue
+        others = [t for t in TEAM_DIRS if t != team and (root / t).is_dir() and is_governed(root / t)]
+        if is_governed(here):  # deleted on this branch only: the upstream or origin/HEAD still carries it
+            effect = "it still governs until that deletion reaches the upstream and default branch"
+        elif others:
+            effect = f"this team dir is no longer signing-governed ({', '.join(others)} still is)"
+        else:
+            effect = "no team dir in this project is signing-governed any more"
+        lines.append(f"  !  WARN {team}/{GOVERNED_MARKER} is absent and was deleted in {commit}; {effect}. Restore "
+                     "it (git checkout <commit>^ -- <path>) unless that was intended")
+    return lines, 0
+
+
 def run_doctor(project: str | None) -> int:
     """``--doctor``: print the cross-surface report for the project at *project* (else the working directory).
 
@@ -186,7 +218,8 @@ def run_doctor(project: str | None) -> int:
     sections = (("Rules projection", lambda: _rules(root, brief)), ("Memory index", lambda: (_indexes(root, brief), 0)),
                 ("Copilot body limit", lambda: _body_limit(root)), ("Agents", lambda: (_agents(root), 0)),
                 ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)),
-                ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)))
+                ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)),
+                ("Signing governance", lambda: _signing_governance(root)))
     for title, section in sections:
         try:
             lines, failed = section()

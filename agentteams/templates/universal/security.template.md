@@ -47,7 +47,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=23 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=26 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -55,7 +55,8 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any file deletion in the project | Irreversible file loss |
 | Any command that deletes a repository or remote resource (`gh repo delete`, `gh api -X DELETE`) | Irreversible remote/repo loss — C-5 authorization required BEFORE execution |
 | Any command that deletes a git ref or worktree (`git push --delete`/`--mirror`/`--prune`, `git push … :ref`, `git branch`/`tag -d`/`-D`, `git update-ref -d`, `git worktree remove`) | Irreversible ref/history loss |
-| Any `agentteams --branch-cleanup … --apply` (needs your PASS on `branch-cleanup:<plan sha256>`, recorded before execution) or `--branch-post-merge … --apply` (runs under an operator Ed25519 `branch-delete` grant — verify it is the second-parent branch of the merge just pushed). A HALT on `branch-delete` stops both. Procedure: `references/branch-lifecycle.reference.md` §4 | Branch/ref loss — bulk and remote deletion |
+| Any `agentteams --branch-cleanup … --apply` (needs your PASS on `branch-cleanup:<plan sha256>`, recorded before execution) or `--branch-post-merge … --apply` (runs under an operator Ed25519 `branch-delete` grant — verify it is the second-parent branch of the merge just pushed). A HALT on `branch-delete` stops both. Procedure: `references/branch-lifecycle.reference.md` §4 | Branch/ref loss — bulk and remote deletion |{GITHUB_MGMT_SECURITY_ROWS}
+| Any `agentteams --merge-pr <N>` (merges a pull request into the integration branch without the merge prompt, under the operator-signed integration-branch merge authorization): it needs your PASS on `dev-merge:<owner/name>:pr-<N>-<head sha>`, recorded before it runs and spent on use. Review that exact head: green checks, no governance, agent or workflow path, nothing risky. The merging agent never records its own PASS; a HALT on `integration-merge` or any `dev-merge:` action ends the authorization (constitution: Integration-branch merge authorization) | Unreviewed code reaching the integration branch |
 | Any destructive filesystem or infrastructure delete (`rm -rf`, `rmdir`, `shred`, `truncate`, `find … -delete`, `dd of=`, `kubectl delete`, `terraform destroy`, `docker rm`/`rmi`/`system prune`, cloud `… delete`, SQL `DROP`/`TRUNCATE`) | Irreversible data/resource loss |
 | Any modification to `.github/agents/*.agent.md` | Scope creep, privilege escalation |
 | Any operation that writes to an external repository | Cross-repo contamination |
@@ -64,7 +65,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any new reference added without verification | Reference fabrication |
 | Any bulk edit affecting 3+ files simultaneously | Data integrity |
 | Any output compilation that pulls from external URLs | Supply chain risk |
-| Any execution of `batch_update.py` or `build_team.py --self --update` | Infrastructure scope — bulk cross-repo write |
+| Any execution of `batch_update.py`, or any agentteams run that combines `--self` with `--update` (either order, any entry point: `agentteams`, `python -m agentteams.cli.app`, the checkout's `build_team.py`) | Infrastructure scope — bulk cross-repo write |
 | Any invocation of `agentteams … --bridge-refresh` against an external project | Destructive at target — see `references/bridge-refresh-safety.md` Pre-Flight; clear only when Pre-Flight §II all-pass |
 | Any committed file containing absolute filesystem paths with home directory (`/Users/`, `/home/`) | OPSEC — PII exposure in artifacts |
 | Any software installation via a package manager (`brew`, `apt`, `dnf`, `pip install`, `npm i`, …) | Supply chain — unreviewed third-party code on the host; release must clear Rule S-10 vetting (known-vulnerability search + release cooldown + latest stable release; a fix for a vulnerability the vulnerability scan detected is exempt from the last two; a release of a repository the first-party toolchain group names is exempt from the cooldown only) |
@@ -102,7 +103,7 @@ These patterns are also checked deterministically by `agentteams.scan.scan_conte
 - ❌ Never write to any file outside the designated project directory
 - ❌ Never modify source agent files in other repositories
 
-**Infrastructure Exception Pathway** — CLI-initiated batch operations (`batch_update.py`, `build_team.py --self --update`) that write outside the project directory are permitted only when **all four** conditions are satisfied: (a) a complete pre-run backup is verified for each target directory; (b) a results log recording affected repos, file counts, and backup paths is written to `tmp/`; (c) post-run diff analysis confirms no outside-fence user-authored content was deleted; (d) WARN-status repos are reviewed and signed off before any commit. Agent-initiated cross-repo writes are **never** covered by this exception. The one other path is Rule S-VM's standing-grant executor: a change the *executor* computes, pushed to a **new** branch and opened as a pull request (never merged), in a repository root the operator's signed grant names. The agent writes nothing itself; it only requests.
+**Infrastructure Exception Pathway** — CLI-initiated batch operations (`batch_update.py`, or a run combining `--self` and `--update` through any entry point) that write outside the project directory are permitted only when **all four** conditions are satisfied: (a) a complete pre-run backup is verified for each target directory; (b) a results log recording affected repos, file counts, and backup paths is written to `tmp/`; (c) post-run diff analysis confirms no outside-fence user-authored content was deleted; (d) WARN-status repos are reviewed and signed off before any commit. Agent-initiated cross-repo writes are **never** covered by this exception. The one other path is Rule S-VM's standing-grant executor: a change the *executor* computes, pushed to a **new** branch and opened as a pull request (never merged), in a repository root the operator's signed grant names. The agent writes nothing itself; it only requests.
 
 **Rule S-3: Reference Integrity**
 - ✅ Verify every new reference exists in the reference database before adding to a deliverable

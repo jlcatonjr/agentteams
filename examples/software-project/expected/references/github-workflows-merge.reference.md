@@ -33,13 +33,19 @@ This reference defines safe GitHub interaction and merge procedures for WebAppBa
 6. Run post-merge verification — including **CI/CD deployment verification** (see the next section) when the push/merge triggers Actions — and document noteworthy decisions for auditability.
 7. Dispose of the merged branch per `references/branch-lifecycle.reference.md` (post-merge step: `agentteams --branch-post-merge <branch>`), and record `Branch disposition`.
 
+## Pull-Request Merges
+
+A direct `gh pr merge` goes through the constitutional gate's prompt. For `agentteams --merge-pr <N>` (a pull-request
+merge into the integration branch under the operator-signed authorization), see the constitution's
+*Integration-branch merge authorization* section.
+
 ## Post-Merge / Post-Push CI/CD Deployment Verification
 
 **Distinct from pre-merge required status checks** (which *gate* the merge, above): this verifies the GitHub Actions runs that the push/merge itself **triggers** on the target branch — CI **and** deployment workflows (Pages, release, container/package publish, environment deploys). Those runs only come into existence *after* the ref updates, so a green pre-merge PR does not imply a green deployment.
 
 **Applies only when** the operation pushed or merged to a branch, **and** the repository has workflows (`.github/workflows/*.yml`), **and** run status is reachable (the GitHub REST API, or `gh` if installed and authenticated — directly, or through a **Sandbox Operator Handoff** when the agent sandbox cannot reach it; see `references/sandbox-handoff.reference.md`). Otherwise skip and record `N/A` — "unreachable from the sandbox" is not a skip.
 
-**Tooling preference — prefer `git` and the REST API over `gh`.** Use the `git` CLI for all ref/SHA/push work and the GitHub REST API (`curl https://api.github.com/...`) to read run status. `gh` is an *optional convenience* that is frequently **absent or unauthenticated** (headless CI, cron, minimal/sandboxed environments), so never make verification *depend* on it — the `gh` forms below are parenthetical fallbacks for when it happens to be installed. Likewise prefer `git push` over any `gh`-mediated push; when an HTTPS remote has no stored credentials, an SSH remote (`git@github.com:<owner>/<repo>.git`) often still authenticates.
+**Tooling preference — `gh` when it is authenticated, else `git` and the REST API.** Use the `git` CLI for all ref/SHA/push work. Read run status with `gh` when `gh auth status` succeeds (the constitution's GitHub management section authorizes it); `gh` is often **absent or unauthenticated** in headless CI, cron and sandboxed environments, so verification must never *depend* on it: there, use the GitHub REST API (`curl https://api.github.com/...`). The `gh` forms below are given beside the REST ones. Likewise prefer `git push` over any `gh`-mediated push; when an HTTPS remote has no stored credentials, an SSH remote (`git@github.com:<owner>/<repo>.git`) often still authenticates.
 
 **Procedure:**
 

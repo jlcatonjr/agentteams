@@ -94,7 +94,7 @@ _ANCHOR_STEMS: tuple[str, ...] = (
     "verify-key", "signing-key", "enforcement-integrity", "security-decision", "security-approver", "agent-privilege",
     "signing-governed", "claude-md", "copilot-instructions", "agents-md", "goosehints", "instruction-authority",
     "waiver", "carveout", "carve-out", "exception-registry", "authorized-manager", "management-directive",
-    "management-authority", "toolchain-group")
+    "management-authority", "toolchain-group", "dev-merge-authorization")
 _ENTRY_KEYS = frozenset({
     "id", "status", "workspaces", "relaxes", "effect", "effect_class", "conditions", "text", "added", "expires",
     "closes_when", "plan", "ledger", "lineage", "clearance", "author", "note"})

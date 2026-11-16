@@ -45,9 +45,10 @@ def _has_git_history() -> bool:
     return proc.returncode == 0 and proc.stdout.strip() == "false"
 
 
+#: archived pre-public lineage). 116 rows, verified by regeneration with the archive present on 2026-11-13 (#452: +4 rows, conflict-resolution "### Step 2: Apply Decision Rules" x3 and "### Step 3: Apply Decision").
 #: archived pre-public lineage). 112 rows, verified by regeneration with the archive present on 2026-11-11 (item 06: +1 row, conflict-auditor "### Conflict Log Format").
 #: archived pre-public lineage). 111 rows, verified by regeneration with the archive present on 2026-10-10.
-PRE_PUBLIC_DIGEST = "de4a1dd0ec01499fd612d969ac4c6d257e5b96461a71e2f9da0806463c9fd1fe"
+PRE_PUBLIC_DIGEST = "cc355a6d1f9352b7566698d256291be07b8c1c38c1ba76a03c42f7b39f8ac42d"
 
 
 def _public_commits() -> set[str]:

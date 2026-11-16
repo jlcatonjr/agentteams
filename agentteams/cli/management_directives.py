@@ -49,7 +49,7 @@ from pathlib import Path
 
 from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
 from agentteams.cli.frozen_surfaces import UNFREEZE_TOKENS
-from agentteams.cli.governance_targets import target_is_governance_root
+from agentteams.cli.governance_targets import target_is_elevated_constitution, target_is_governance_root
 from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_TOKENS
 from agentteams.cli.signed_ledger import (
     canonical_payload,
@@ -109,6 +109,8 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     # (1) destructive / bulk / cross-repo (stems cover -s/-ed/-ing/-ion/-al inflections)
     "delet", "remov", "rm", "overwrit", "prun", "destroy", "destruct", "drop", "purg",
     "forc", "reset", "bulk", "cross-repo", "push", "deploy", "merg", "wipe", "truncat", "revert",
+    # what guards the default branch (github_management: per-action live approval only; rows 811/816)
+    "protect", "required-check", "ruleset",
     # (2) governance / trust roots (incl. this feature's own ledger + roster + key config,
     # so a directive can never widen its own trust base — @security condition 2c)
     "constitution", "invariant", "governance", "reference-template", "capability-grant",
@@ -136,7 +138,7 @@ def _strong_key(key: str) -> str:
 
 
 def _signing_key() -> str:
-    """Return the management-directive signing key from the environment, or fail closed.
+    """Return the management-directive signing key from the environment or its key file, or fail closed.
 
     The key value is never logged, emitted, or returned anywhere but here (to the internal
     signing primitive).
@@ -147,10 +149,13 @@ def _signing_key() -> str:
     Raises:
         MgmtDirectiveError: The env var is unset or empty — signing/verification cannot proceed.
     """
-    key = os.environ.get(MGMT_KEY_ENV, "")
+    from agentteams.cli.signed_ledger import load_hmac_key
+
+    key = load_hmac_key(MGMT_KEY_ENV, MgmtDirectiveError)
     if not key:
         raise MgmtDirectiveError(
-            f"{MGMT_KEY_ENV} is not set; refusing to sign or verify a management directive "
+            f"{MGMT_KEY_ENV} is not set (and there is no ~/.config/agentteams/keys/management-hmac.key); "
+            "refusing to sign or verify a management directive "
             "without a signing key (fail-closed)."
         )
     return key
@@ -244,8 +249,10 @@ def scope_is_allowed(task_scope: str) -> bool:
     # a trust root by PATH (e.g. security-approvers, agent-privilege, the Ed25519 verify-key
     # store) passed the verb denylist below. A valid signature cannot override this. The ORIGINAL
     # (un-lowercased) scope is passed so the predicate's camelCase folding still applies.
-    if target_is_governance_root((task_scope or "").strip()):
+    # IM item 19: the other surfaces' constitution files (AGENTS.md, .goosehints, ...) are never a directive scope either.
+    if target_is_governance_root((task_scope or "").strip()) or target_is_elevated_constitution((task_scope or "").strip()):
         return False
+    folded = re.sub(r"[_\s]+", "-", scope)
     for token in _REFUSED_SCOPE_TOKENS:
         # Left-boundary (word-START) match: the token must not be PRECEDED by an ASCII letter, but
         # trailing letters are allowed — so a token matches the whole word AND its inflections.
@@ -255,7 +262,9 @@ def scope_is_allowed(task_scope: str) -> bool:
         # there is preceded by a letter). Fail-closed by design: a security denylist must over-
         # refuse (a false refusal only makes the agent ask the operator, as today) rather than
         # under-refuse an inflected destructive/governance verb (which would be fail-OPEN).
-        if re.search(r"(?<![a-z])" + re.escape(token), scope):
+        # Each token is also tried against the scope with `_` and whitespace folded to `-`, so a hyphenated token
+        # ("required-check") refuses "release_required_checks" and "required checks" too (only ever more refusal).
+        if any(re.search(r"(?<![a-z])" + re.escape(token), form) for form in (scope, folded)):
             return False
     return True
 
