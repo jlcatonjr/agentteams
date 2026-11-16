@@ -28,7 +28,7 @@ def test_cli_reference_states_both_requirements() -> None:
 
 def test_help_text_states_both_requirements() -> None:
     action = next(a for a in _build_parser()._actions if "--adopt-only" in a.option_strings)
-    assert "Needs --description or --self" in action.help
+    assert "Needs --description, --self, or the project's own brief" in action.help
     assert "agents directory" in action.help
 
 
