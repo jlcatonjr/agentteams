@@ -209,6 +209,37 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
         os.close(fd)  # closing releases the flock
 
 
+def append_signed_row(path: Path, row: dict[str, str], before: bytes) -> None:
+    """Append an operator-signed decision row with :func:`append_row`, then prove nothing earlier changed (#470).
+
+    ``--sign-decision`` used to rewrite the whole log through ``csv`` (CRLF, minimal quoting) to add one row. This
+    appends it under :func:`append_row`'s lock and guards, and then requires *before* (the bytes the signer read
+    before the operator confirmed) to be an exact prefix of the file.
+
+    Args:
+        path: The existing security-decisions log.
+        row: The signed row, keyed by header names.
+        before: The log's bytes as the signer read them.
+
+    Returns:
+        None.
+
+    Raises:
+        RuntimeError: :func:`append_row` refused the row (the log is untouched, and the message says nothing was
+            appended), or after the append the file no longer starts with *before* (the row WAS appended, and
+            another writer rewrote earlier bytes; the message says not to sign again).
+        OSError: The file cannot be read or appended to.
+    """
+    try:
+        append_row(path, row)
+    except ValueError as exc:
+        raise RuntimeError(f"{path}: the signed row was refused, nothing appended: {exc}") from exc
+    if not path.read_bytes().startswith(before):
+        raise RuntimeError(f"{path}: the signed row was appended, but earlier bytes of the log changed while it was "
+                           "being signed (another writer). Do not sign again; inspect the log with "
+                           "`python -m agentteams.governance_logs check`.")
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI: ``check [ROOT]``, ``append LOG --row-json JSON``, and ``repair LOG [--apply DIGEST]``.
 
@@ -281,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["LOG_DIRS", "LOG_NAMES", "append_row", "check_log", "check_logs", "log_paths", "main"]
+__all__ = ["LOG_DIRS", "LOG_NAMES", "append_row", "append_signed_row", "check_log", "check_logs", "log_paths", "main"]
 
 
 if __name__ == "__main__":

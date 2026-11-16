@@ -23,7 +23,7 @@
     "agentteams/cli/clearance_binding.py": "8dd13178d3f6bc2803a895e05c72d69b1447665ad8d4035f389b5d99cb65e631",
     "agentteams/cli/decision_chain.py": "e796a0712406d38a9bfab6a2829a85457e72d609a63afdd3d73af56471979280",
     "agentteams/cli/decision_lineage.py": "1a287a76f21a3594eb86936acd60b9d682f17855e28a120c29188f9b70b05d57",
-    "agentteams/cli/decision_log.py": "b78926c651e3cc0367f12f22acdb2eb493f32b5a3be2070f36e4b9dd4f1537c1",
+    "agentteams/cli/decision_log.py": "d0f01850f59f98191f94a0d863831a0a7266e7875d46242c70468068b419c5a9",
     "agentteams/cli/decision_text.py": "174d40806dc6e5a3bd62644e49c5b9ec3c8cadbae6fb832d7cecb4cddf707ed3",
     "agentteams/cli/dev_merge.py": "5c6cdd8e71ea4b393ea8db016f3ffeb5611c67023a7555c6ecb532b38837340e",
     "agentteams/cli/dev_merge_commands.py": "d1c8eb79346cc3dce830d03093436a77bf09a1a92b23f02498757090e4055a63",

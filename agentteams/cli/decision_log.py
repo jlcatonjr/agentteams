@@ -412,16 +412,19 @@ def append_signed_decision_row(output_dir: Path, row: dict[str, str]) -> None:
         row: The fully-populated, already-signed row (caller computes prev_digest + signature).
 
     Raises:
-        RuntimeError: The existing log header lacks a signing column (migration needed).
+        RuntimeError: The existing log header lacks a signing column (migration needed), or the append was
+            refused or found earlier bytes changed (``governance_logs.append_signed_row``). OSError: a write failed.
     """
     import csv as _csv
 
-    from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
+    from agentteams.atomicio import _atomic_write_text
+    from agentteams.governance_logs import append_signed_row
 
     log_path = output_dir / "references" / "security-decisions.log.csv"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     required = {"signature", "sig_scheme", "key_id", "derives_from"}
     if log_path.exists():
+        before = log_path.read_bytes()  # #470: the append must leave exactly these bytes in front of the new row
         read = _read_decision_rows(output_dir)
         rows, fieldnames = (read if read is not None else ([], []))
         missing = required - {c.strip() for c in fieldnames}
@@ -440,15 +443,13 @@ def append_signed_decision_row(output_dir: Path, row: dict[str, str]) -> None:
                     f"security-decisions log at {log_path} changed while the decision was being "
                     "confirmed (its chain tip moved); nothing appended. Re-run the signing command."
                 )
-        columns = list(fieldnames)
-        rows = rows + [row]
-        atomic_rewrite_csv_rows(log_path, rows, columns)
+        append_signed_row(log_path, row, before)  # one locked O_APPEND write; earlier bytes never change
     else:
         # The legacy required columns lead, so the new log is readable (_security_decision_schema_kind).
         columns = ["timestamp", "requesting_agent", *SIGNED_DECISION_COLUMNS]
         _atomic_write_text(log_path, ",".join(columns) + "\n")
         with log_path.open("a", encoding="utf-8", newline="") as fh:
-            _csv.DictWriter(fh, fieldnames=columns, extrasaction="ignore").writerow(
+            _csv.DictWriter(fh, fieldnames=columns, extrasaction="ignore", lineterminator="\n").writerow(  # as header
                 {c: row.get(c) or (row.get("date", "") if c == "timestamp" else "") for c in columns}
             )
 

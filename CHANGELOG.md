@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--sign-decision` appends one row; earlier log bytes never change; #470)
+
+- **Signing a decision rewrote the whole security-decisions log.** `append_signed_decision_row` re-read every row and
+  wrote the file again through `csv`, so earlier rows lost their line endings (LF rows became CRLF) and quoting
+  (needless quotes dropped), and a byte-prefix check of the log could not pass. The signed row is now appended
+  through `governance_logs.append_row` (one `O_APPEND` write under its lock, the log validated, a value that would
+  start a forged record refused), and `governance_logs.append_signed_row` then requires the bytes read before the
+  operator confirmed to be an exact prefix of the file. A refusal reaches the signer as "nothing appended"; a new
+  log's first row now has the header's LF ending. `cli/decision_log.py` is re-pinned.
+
 ### fixed (slug checks refuse a trailing newline; #473)
 
 - The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
