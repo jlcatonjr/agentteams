@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
+  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
+  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
+
 ### fixed (fleet: a merge that refuses a file to keep its user region is a FAIL row; #533 follow-up)
 
 - A refused file gets no template updates (tool and permission tightening included) until its region is fixed by
