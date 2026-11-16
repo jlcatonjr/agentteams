@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
+
+- **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and
+  `.claude/settings.worksummary.example.json`.** Both are inert until the operator merges the example's `Stop` block
+  into `.claude/settings.json`. The example is a separate file, so wiring the constitutional gate does not switch
+  it on.
+- **Runs do not appear in any Claude Code session list.** The launcher starts the summarizer with
+  `--no-session-persistence` and keeps the run's output in its own archive under
+  `~/.claude/logs/agentteams-work-summary/` (under `CLAUDE_CONFIG_DIR` when set), readable by the owner only and
+  pruned after 14 days.
+- **It launches only when the day's summary is out of date:**
+  - a day with commits is current when the summary is synthesized and covers the latest commit;
+  - a planning-only day is current when the day's plan files are unchanged since the last run. An operator-written
+    hook without this check launched a run on every Stop event, several hundred a day.
+- **Guards:** the Stop payload is never passed to the run; a hook child never launches another; one run per project
+  at a time; a failed run backs off for 30 minutes; the hook detaches and never blocks the session.
+- **The unattended run has six tools and no others** (`--tools Read,Grep,Glob,Agent,Edit,Write`), in the run and in
+  the agents it calls: no shell, no web tools, no cross-session messaging, no scheduled or remote triggers, no
+  worktree creation. A live probe found that the session tools needing no permission ran unprompted without the
+  cap. The launcher collects the git evidence and hands it over as a file. The mode is a fixed `dontAsk`, with no
+  MCP server, and the child's environment carries no messaging socket or token.
+- **Inherited allow rules are contained.** `--allowedTools` adds to the operator's own allow rules, so deny rules
+  block credential files and the control plane, and the launcher refuses to launch when the operator's settings
+  allow edits outside `workSummaries/` or an unknown tool. The refusal is logged in `hook.log`.
+- **The wiring command verifies the launcher.** The `Stop` block carries the launcher's SHA-256 and runs the
+  installed script only on a match, so an edited script stops the hook until the operator merges the block again.
+- Every skip, run and failure is one line in `hook.log` in the run folder; that log is where to look, because runs
+  do not show in session lists.
+- **Operator extras are read from the run folder, never from the repository,** so a branch or pull request cannot
+  instruct an unattended run.
+- The launcher template and its emitter are pinned in the integrity manifest.
+- This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
+  notification-only. Grok teams do not receive it.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub
