@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (fleet: a merge that refuses a file to keep its user region is a FAIL row; #533 follow-up)
+
+- A refused file gets no template updates (tool and permission tightening included) until its region is fixed by
+  hand, so `--fleet` now marks that target `FAIL`, in a dry run too, not only on stderr. The row detail starts
+  `USER REGION REFUSED (file not updated until fixed by hand):` and names the file. A bare `Errors:` header no
+  longer becomes a FAIL row's whole detail; the line under it does. `first_error` and `region_refusal` move to
+  `agentteams._fleet_report`.
+
 ### fixed (`--update --merge` no longer drops a Goose recipe's Project-Specific Notes; #533)
 
 - **A recipe built from an unfenced template (the work-summarizer, for one) lost its `## Project-Specific Notes`
