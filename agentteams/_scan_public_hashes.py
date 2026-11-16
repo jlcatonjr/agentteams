@@ -70,6 +70,10 @@ _JOINED_GIT_HEX_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: An OpenSSH / git SSH key fingerprint as ``ssh-keygen -l`` and ``git tag -v`` print it: ``SHA256:`` then
+#: exactly 43 unpadded base64 characters (a 32-byte digest).
+_SSH_FINGERPRINT_BODY_RE = re.compile(r"[A-Za-z0-9+/]{43}")
+
 def is_labelled_git_hash(line: str, start: int, end: int) -> bool:
     """True when ``line[start:end]`` is a git object id or hex digest introduced by a git/digest label.
 
@@ -83,7 +87,9 @@ def is_labelled_git_hash(line: str, start: int, end: int) -> bool:
     with no such label is still reported, because some credentials are 40-hex (older GitHub OAuth tokens).
 
     Accepted residue (Rule 12): a secret that is itself exactly 40 or 64 lowercase hex characters, written
-    straight after one of these labels, is not reported.
+    straight after one of these labels, is not reported. A label's ``\\b`` also matches after ``-`` or ``.``, so a
+    label that ends a config key counts too: ``webhook-secret.digest: <64hex>`` or ``x-tag: <hex>``
+    is exempt. ``digest``, ``tag``, ``head`` and ``merge`` are common words; that is the price of reading logs.
 
     Args:
         line: The line being scanned.
@@ -183,3 +189,33 @@ def check_public_hash_exemption(
             continue
         return not any(is_opaque_segment(s) for s in line[start:url.start("sha")].split("/"))
     return False
+
+
+def is_ssh_key_fingerprint(line: str, start: int, end: int) -> bool:
+    """True when ``line[start:end]`` is the body of an SSH key fingerprint, ``SHA256:<43 base64>``.
+
+    Security logs record release-signature checks (``Good "git" signature … key SHA256:IPdnLw…``); the 43-character
+    base64 body clears the entropy bar (about 5 bits) and was reported as a high-severity secret, so the fleet
+    snapshot guard refused every governed team's log (v1.2.0-rc.1 soak, 2026-11-16). A fingerprint is a public
+    digest of a public key.
+
+    Bound to the token span: the token must be exactly 43 characters of unpadded base64, the 7 characters before it
+    must be ``SHA256:`` (as ssh-keygen and git print it, case-sensitive), and the next character must not continue a
+    base64 run. A bare 43-character base64 value with no ``SHA256:`` label is still reported.
+
+    Accepted residue (Rule 12): a secret that is itself 43 unpadded base64 characters, written straight after
+    ``SHA256:``, is not reported.
+
+    Args:
+        line: The line being scanned.
+        start: Start offset of the candidate token in ``line``.
+        end: End offset of the candidate token in ``line``.
+
+    Returns:
+        True to suppress the finding for this token; False to report it.
+    """
+    if _SSH_FINGERPRINT_BODY_RE.fullmatch(line[start:end]) is None:
+        return False
+    if end < len(line) and (line[end].isalnum() or line[end] in "+/="):
+        return False
+    return start >= 7 and line[start - 7:start] == "SHA256:"

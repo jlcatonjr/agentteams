@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_scan_public_hashes.is_labelled_git_hash` exempts a token only when it is exactly 40 or 64 lowercase hex
   characters (or `label=<hex>` / `label:<hex>`) and the text just before it ends with a git or digest label. A bare
   40-hex value with no label is still reported (older GitHub OAuth tokens are 40-hex), as is uppercase hex.
+- `_scan_public_hashes.is_ssh_key_fingerprint` exempts an SSH key fingerprint body, exactly 43 unpadded base64
+  characters straight after `SHA256:` (as `ssh-keygen -l` and `git tag -v` print it). Every governed team's
+  security log records the release-signature check with the key's fingerprint; it was reported as a high-severity
+  secret and was the trigger in the soak. A bare 43-character base64 value, lowercase `sha256:`, a padded or
+  44-character body, or `SHA256: ` with a space is still reported.
 
 ### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
 

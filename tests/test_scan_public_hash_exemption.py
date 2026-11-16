@@ -193,7 +193,7 @@ def test_a_labelled_git_hash_is_not_a_credential(line: str) -> None:
 
 
 @pytest.mark.parametrize("line", [
-    f"GITHUB_TOKEN={_SHA1}",                       # a 40-hex value with no git label: older OAuth tokens look like this
+    f"GITHUB_TOKEN={_SHA1}",                       # no git label; `\btoken\b` misses after `_`, so the context-free branch reports it
     f"Authorization: bearer {_SHA1}",
     f"secret {_SHA256}",
     f"token sha {_SHA1.upper()}",                   # git prints lowercase; uppercase hex is not exempted
@@ -217,3 +217,43 @@ def test_the_fleet_snapshot_guard_passes_a_log_that_cites_commits() -> None:
     start = line.index(_SHA1)
     assert is_labelled_git_hash(line, start, start + 40)
     assert not is_labelled_git_hash(f"token {_SHA1}", 6, 46)
+
+
+
+@pytest.mark.parametrize("line", [
+    f"commit {_SHA1} {hashlib.sha1(b'7').hexdigest()[::-1]}",   # only the labelled first hex is exempt
+    f"token unmerged {_SHA1}",                     # a label inside a word does not count
+    f"token commit foo {_SHA1}",                   # a word between the label and the hex breaks the binding
+    f"token xcommit={_SHA1}",                      # joined form: the token must start with the label
+    f"token commit=={_SHA1}",                      # joined form: exactly one separator
+    f"token commit={_SHA1}f",                      # joined form: exactly 40 or 64 hex
+])
+def test_the_git_hash_binding_is_tight(line: str) -> None:
+    assert _high_credentials(line) or [f for f in scan_content(line, "x.csv") if f.category == "credential"], line
+
+
+def test_a_label_ending_a_config_key_is_exempt_documented_residue() -> None:
+    # Rule 12 residue named in is_labelled_git_hash's docstring: `\b` matches after `-` or `.`.
+    assert _high_credentials(f"webhook-secret.digest: {_SHA256}") == []
+
+
+# --- SSH key fingerprints (v1.2.0-rc.1 soak, 2026-11-16) ------------------------------------------------------------
+
+_FP = "IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM"   # the public release-key fingerprint (SECURITY.md)
+
+
+def test_a_release_signature_line_is_not_a_credential() -> None:
+    line = f"…C4 tags Good SSH signature from release key SHA256:{_FP}; C5 merge pinned"
+    assert _high_credentials(line) == []
+    assert _high_credentials(f'Good "git" signature for jlcatonjr@example.com with RSA key SHA256:{_FP}') == []
+
+
+@pytest.mark.parametrize("line", [
+    f"value {_FP} here",                           # no SHA256: label
+    f"sha256:{_FP}",                               # git and ssh-keygen print SHA256 in capitals
+    f"SHA256:{_FP}A",                              # 44 characters: not a fingerprint body
+    f"SHA256:{_FP[:-1]}=",                         # padded: not the unpadded fingerprint form
+    f"SHA256: {_FP}",                              # a space breaks the binding
+])
+def test_an_unlabelled_or_malformed_fingerprint_is_still_reported(line: str) -> None:
+    assert _high_credentials(line), line

@@ -29,7 +29,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
-from agentteams._scan_public_hashes import check_public_hash_exemption, is_labelled_git_hash
+from agentteams._scan_public_hashes import (
+    check_public_hash_exemption,
+    is_labelled_git_hash,
+    is_ssh_key_fingerprint,
+)
 # Operational-JSON exemption (which pipeline-written JSON skips the absolute-path / entropy /
 # placeholder detectors): carved to the integrity-pinned ``scan_operational`` module.
 from agentteams.scan_operational import (  # noqa: F401  (re-exported)
@@ -747,6 +751,10 @@ def _check_line(
         # ``sha256 <hex>``), bound to this token span. Both branches: a log line saying "operator token" is
         # still citing a commit (v1.2.0-rc.1 soak).
         if is_labelled_git_hash(line, token_match.start(), token_match.end()):
+            continue
+        # An SSH key fingerprint, ``SHA256:<43 base64>`` (``git tag -v`` output in security logs), bound to this
+        # token span.
+        if is_ssh_key_fingerprint(line, token_match.start(), token_match.end()):
             continue
         # #460: a public lockfile SRI hash or GitHub commit-URL SHA, bound to this exact token
         # span (never the line). Context-free branch only, like the path guard above.
