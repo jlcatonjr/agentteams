@@ -78,7 +78,10 @@ def write_report(results, report_root: Path, parent: Path, apply: bool, framewor
     counts: dict[str, int] = {}
     for wr in results:
         for tr in wr.targets:
-            rows.append(asdict(tr))
+            row = asdict(tr)
+            if getattr(wr, "snapshot_notes", None):   # credential warnings or refusals from the pre-update snapshot
+                row["detail"] = "; ".join([row["detail"], *wr.snapshot_notes] if row["detail"] else wr.snapshot_notes)
+            rows.append(row)
             counts[tr.status] = counts.get(tr.status, 0) + 1
 
     # Projects whose brief states no vulnerability_scanning level: reported, never enrolled here.

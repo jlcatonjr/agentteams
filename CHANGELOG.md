@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the fleet snapshot guard refuses only known credential formats; entropy-only findings warn; v1.2.0-rc.1 soak)
+
+- The pre-update snapshot used to be refused on any high-severity credential finding, so a dirty workspace was
+  SKIPped over a public key fingerprint, a lowercased fingerprint fragment in an index, or a slug or path beside the
+  word "token" (19 such findings across the 34 soak repositories after the scanner fix). Operator ruling, 2026-11-16.
+- `_fleet_snapshot.credential_findings` splits the findings: a known credential format (a typed `agentteams.scan` rule,
+  or an Anthropic `sk-ant-`, OpenAI `sk-`/`sk-proj-`, Google `AIza` or AWS `ASIA` key) still blocks the snapshot; an
+  entropy- or keyword-only finding ("High-entropy token detected", "Possible secret-like token detected") is a `[WARN]`
+  naming the file and line, and the snapshot is recorded.
+- Both kinds are recorded in `WorkspaceResult.snapshot_notes` and appended to that workspace's rows in `report.json`
+  and `summary.md`.
+
 ### fixed (the content scanner no longer reports a cited git commit, digest or SSH key fingerprint as a credential; v1.2.0-rc.1 soak)
 
 - Every governed team's security log records the release-signature check, `… key SHA256:<43 base64>`. The scanner
