@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0-rc.1] - 2026-11-16
+
+### release notes
+
+agentteams 1.2.0-rc.1 is the first release candidate of the 1.2 line, cut from `main` at the 1.2.0 release merge
+(`5ec98efd`, #528) onto `release/1.2`. The entries below it are everything on `main` since the 1.1 line branched;
+fixes that 1.1.x already shipped as backports are listed again here because they reach 1.2 through `main`.
+
+- **Behaviour change (#511).** An unscoped Claude agent's fallback grant is now read-only (`Read`, `Grep`, `Glob`),
+  not write and a shell. A team that relied on the old default must give that agent an explicit `tools:` grant.
+- **Optional work-summary Stop hook for Claude teams (#497).** Inert until the operator merges its example block; the
+  only shipped hook that starts a model run, with a six-tool cap, no shell, and a SHA-256-pinned launcher.
+- **GitHub management (#504, #507).** What counts as the operator's approval for actions that guard the default
+  branch, the `--merge-pr` dev-merge path with signed authorization, and the required-checks switch for release PRs.
+- **Trust roots and signing.** The other surfaces' constitution files need the operator's signature (#506); a deleted
+  `signing-governed.marker` still governs (#500); HMAC key files need a recorded fingerprint, and sandboxes
+  write-deny the key directories.
+- **Constitutional gate.** Asks on short force pushes, git alias and push config (#503), and on branch-protection
+  writes (#507); project policy can map trigger classes from ask to deny (#456).
+- **Generated teams run the installed agentteams CLI** rather than repository-only commands (#510).
+- **Sandbox launcher lineage** leaves out side-line commits that never reached `HEAD` (#522).
+- **CI** retries apt and labels a setup network failure as infrastructure (#525).
+- The WASM sandbox, the vulnscan remediation pipeline, cross-surface projection and sync hardening, and the
+  templates' typed fields (#452, #453, #454) all land in 1.2 through `main`.
+
+Release-candidate soak: v1.2.0 follows once infrastructureManagement reports that every consumer repository rendered
+this candidate cleanly.
+
 ### fixed (CI: a runner network outage reads as infrastructure, not a test failure; #442 follow-up)
 
 - `scripts/ci-bwrap-setup.sh` retries apt downloads (`Acquire::Retries=5`, 30-second timeouts) and, when bubblewrap
