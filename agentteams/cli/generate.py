@@ -363,9 +363,9 @@ def _run_generate_locked(
     # Compute template hashes for drift detection
     template_hashes = render.compute_template_hashes(manifest, templates_dir=TEMPLATES_DIR)
 
-    # Apply framework-specific post-processing; runtime-handoffs and pipeline
-    # graph (Step 5c) are appended by _build_final_rendered.
-    final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir)
+    # Framework post-processing; runtime-handoffs and the pipeline graph (Step 5c) are appended by it.
+    final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir,
+                                           filled_from=output_dir if args.update else None)
 
     # --reconcile-front-matter: needs the render, and nothing after it. Policy and rationale
     # live in `front_matter_reconcile`, not here.

@@ -163,6 +163,7 @@ def _build_final_rendered(
     project_name: str,
     *,
     output_dir: Path | None = None,
+    filled_from: Path | None = None,
 ) -> list[tuple[str, str]]:
     """Render templates and apply framework post-processing.
 
@@ -171,6 +172,10 @@ def _build_final_rendered(
     pipeline graph. This is the shared rendering step used by the generate
     path, ``--update``, and ``--check``; ``--check`` uses the result for
     content comparison only and does not write to disk.
+
+    *filled_from* is the output dir whose operator-filled ``{MANUAL:}`` values the run carries forward (``--update``,
+    and ``--check``'s promotion pass that mirrors it); those tokens stay off ``SETUP-REQUIRED.md``. Generate with
+    ``--merge`` or ``--overwrite`` writes the raw render, so it passes None and every token is listed.
     """
     from agentteams import graph as _graph
     from agentteams import mcp_need as _mcp_need
@@ -286,7 +291,7 @@ def _build_final_rendered(
         _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
     ))
     # IM item 13b (G-17-3): the checklist lists every {MANUAL:} token the run leaves open, not only the brief's.
-    return complete_setup_required(manifest, final, effective=_with_filled_values(output_dir))
+    return complete_setup_required(manifest, final, effective=_with_filled_values(filled_from))
 
 
 def _with_filled_values(output_dir: Path | None) -> Callable[[str, str], str] | None:
@@ -296,7 +301,7 @@ def _with_filled_values(output_dir: Path | None) -> Callable[[str, str], str] | 
     filled is not open and stays off the checklist.
 
     Args:
-        output_dir: The run's output dir; None (``--check``'s promotion pass) uses the render as is.
+        output_dir: The dir whose filled values ``--update`` carries forward; None uses the render as is.
 
     Returns:
         A ``(path, rendered) -> content`` function, or None.

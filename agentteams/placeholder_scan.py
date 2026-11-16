@@ -75,13 +75,15 @@ def open_count(manifest: dict[str, Any]) -> int:
         manifest: The team manifest, after :func:`complete_setup_required` ran.
 
     Returns:
-        ``len(manual_required_placeholders) + len(_scanned_manual_placeholders)``; the scanned entries never repeat a
-        listed name.
+        ``len(manual_required_placeholders)`` plus each scanned entry whose name that list lacks. ``--enrich`` replaces
+        the list with its own findings after the scan, so the names can overlap; they are counted once.
 
     Raises:
         Nothing.
     """
-    return len(manifest.get("manual_required_placeholders", [])) + len(manifest.get(SCANNED_KEY, []))
+    listed = manifest.get("manual_required_placeholders", [])
+    names = {item.get("placeholder") for item in listed}
+    return len(listed) + sum(1 for item in manifest.get(SCANNED_KEY, []) if item.get("placeholder") not in names)
 
 
 def complete_setup_required(

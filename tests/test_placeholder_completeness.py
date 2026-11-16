@@ -155,6 +155,26 @@ def test_the_emit_summary_counts_the_scanned_placeholders(capsys):
     assert f"{expected} placeholder(s) require manual completion" in capsys.readouterr().out
 
 
+def test_the_count_does_not_repeat_a_name_enrich_relisted():
+    # --enrich replaces manual_required_placeholders with its findings after the scan (generate.py), names included.
+    manifest = {"manual_required_placeholders": [{"placeholder": "A"}, {"placeholder": "B"}],
+                placeholder_scan.SCANNED_KEY: [{"placeholder": "B"}, {"placeholder": "C"}]}
+    assert placeholder_scan.open_count(manifest) == 3
+
+
+def test_only_update_carries_filled_values_into_the_checklist(tmp_path):
+    # generate --merge / --overwrite writes the raw render, so a filled token on disk is open again and stays listed.
+    manifest, files = _render(EXAMPLES[0], "copilot-vscode")
+    path = next(p for p, body in files.items() if "{MANUAL:ADJACENT_REPO_PATH}" in body)
+    _write_on_disk(tmp_path, path, files[path].replace("{MANUAL:ADJACENT_REPO_PATH}", "/repos/neighbour"))
+    names = lambda m: {item["placeholder"] for item in m[placeholder_scan.SCANNED_KEY]}  # noqa: E731
+    adapter = FRAMEWORKS["copilot-vscode"]()
+    _build_final_rendered(manifest, adapter, "x", output_dir=tmp_path)
+    assert "ADJACENT_REPO_PATH" in names(manifest)
+    _build_final_rendered(manifest, adapter, "x", output_dir=tmp_path, filled_from=tmp_path)
+    assert "ADJACENT_REPO_PATH" not in names(manifest)
+
+
 def _write_on_disk(out: Path, path: str, body: str) -> None:
     from agentteams import emit
 
