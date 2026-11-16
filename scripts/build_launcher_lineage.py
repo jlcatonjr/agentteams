@@ -140,7 +140,8 @@ def build() -> dict:
         blob = _git("cat-file", "blob", f"{sha}:{path}", text=False)
         versions.append({"commit": sha, "date": date, "path": path, "subject": subject,
                          "sha256": hashlib.sha256(bytes(blob)).hexdigest(), "security": _security(sha, subject)})
-    versions = [v for v in versions if v["commit"] in _simplified_commits({v["path"] for v in versions})]
+    kept = _simplified_commits({v["path"] for v in versions})
+    versions = [v for v in versions if v["commit"] in kept]
     if not versions:
         raise RuntimeError(f"no history for {TEMPLATE_REL}")
     versions.reverse()   # git log is newest first
