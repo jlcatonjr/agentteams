@@ -159,10 +159,18 @@ _UNTYPED_CREDENTIAL_MESSAGES = frozenset({"High-entropy token detected", "Possib
 
 #: Known credential formats that ``agentteams.scan``'s typed rules do not cover. A match stops the snapshot.
 _EXTRA_CREDENTIAL_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    # scan.py's typed rule matches only "BEGIN PRIVATE KEY" / "BEGIN RSA PRIVATE KEY"; OpenSSH, EC, DSA, encrypted and
+    # PGP keys were caught only by entropy, which now warns (@security, 2026-11-16).
+    ("private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----")),
     ("AWS temporary access key", re.compile(r"\bASIA[0-9A-Z]{16}\b")),
     ("Anthropic API key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}")),
     ("OpenAI API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}")),
-    ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])")),
+    ("GitLab token", re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}")),
+    ("Hugging Face token", re.compile(r"\bhf_[A-Za-z0-9]{30,}")),
+    ("npm token", re.compile(r"\bnpm_[A-Za-z0-9]{36}(?![A-Za-z0-9])")),
+    ("PyPI token", re.compile(r"\bpypi-[A-Za-z0-9_-]{50,}")),
+    ("Stripe restricted key", re.compile(r"\brk_(?:live|test)_[A-Za-z0-9]{16,}")),
 )
 
 

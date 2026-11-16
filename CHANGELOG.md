@@ -12,7 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SKIPped over a public key fingerprint, a lowercased fingerprint fragment in an index, or a slug or path beside the
   word "token" (19 such findings across the 34 soak repositories after the scanner fix). Operator ruling, 2026-11-16.
 - `_fleet_snapshot.credential_findings` splits the findings: a known credential format (a typed `agentteams.scan` rule,
-  or an Anthropic `sk-ant-`, OpenAI `sk-`/`sk-proj-`, Google `AIza` or AWS `ASIA` key) still blocks the snapshot; an
+  or `_EXTRA_CREDENTIAL_FORMATS`: any `-----BEGIN … PRIVATE KEY-----` header (OpenSSH, EC, DSA, encrypted, PGP), Anthropic
+  `sk-ant-`, OpenAI `sk-`/`sk-proj-`, Google `AIza`, GitLab `glpat-`, Hugging Face `hf_`, npm `npm_`, PyPI `pypi-`,
+  Stripe `rk_live_` and AWS `ASIA` keys) still blocks the snapshot; an
   entropy- or keyword-only finding ("High-entropy token detected", "Possible secret-like token detected") is a `[WARN]`
   naming the file and line, and the snapshot is recorded.
 - Both kinds are recorded in `WorkspaceResult.snapshot_notes` and appended to that workspace's rows in `report.json`
