@@ -148,3 +148,133 @@ def test_the_ledger_is_populated_and_every_reason_is_substantive() -> None:
         if len(reason) < MIN_REASON_CHARS
     }
     assert not thin, f"exemptions with a reason shorter than {MIN_REASON_CHARS} chars: {thin}"
+
+
+# --------------------------------------------------------------------------- E1 measures a render, not a laptop (#478)
+
+#: A clean read-only agent each synthetic set includes, so E1's read-only floor (lowered to 1 here) is met and the
+#: test measures the pattern it adds, not the floor.
+_E1_CLEAN = {"clean/code-hygiene.md": "---\nname: code-hygiene\ntools: Read, Grep, Glob\n---\n"}
+
+
+def _e1_with(monkeypatch: pytest.MonkeyPatch, agents: dict[str, str], *, floor: int = 1):
+    import tests.constitutional_redteam_battery as battery
+
+    monkeypatch.setattr(battery, "_e1_rendered_agents", lambda: {**_E1_CLEAN, **agents})
+    monkeypatch.setattr(battery, "E1_READ_ONLY_FLOOR", floor)
+    before = len(battery.RESULTS)
+    battery.e1_capability_key_not_honoured()
+    row = battery.RESULTS[before]
+    del battery.RESULTS[before:]
+    return row
+
+
+def test_e1_reports_an_emitted_allowed_tools_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sensitivity: a subagent whose limit sits in `allowed-tools:` is EXPLOITED."""
+    row = _e1_with(monkeypatch, {"b/worker.md": "---\nname: w\nallowed-tools: Read\ntools: Read\n---\n"})
+    assert row.outcome == EXPLOITED
+
+
+def test_e1_reports_any_agent_without_a_recognised_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No `tools:`/`disallowedTools:` inherits every tool, read-only or not."""
+    assert _e1_with(monkeypatch, {"b/security.md": "---\nname: security\ndescription: s\n---\n"}).outcome == EXPLOITED
+    assert _e1_with(monkeypatch, {"b/primary-producer.md": "---\nname: p\n---\n"}).outcome == EXPLOITED
+
+
+@pytest.mark.parametrize("tools", ["Bash, Read, Write, Edit", "Read, Edit", "Read, Grep, Bash"])
+def test_e1_reports_a_read_only_agent_emitted_with_write_tools(monkeypatch: pytest.MonkeyPatch, tools: str) -> None:
+    """@adversarial #478 review: a present `tools:` key is not enough; a read-only agent must not get write tools."""
+    row = _e1_with(monkeypatch, {"b/security.md": f"---\nname: security\ntools: {tools}\n---\n"})
+    assert row.outcome == EXPLOITED and "b/security.md" in row.evidence
+
+
+def test_e1_allows_only_the_research_scope_for_a_read_only_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.frameworks.claude import _RETRIEVAL_CLI_SCOPE
+
+    text = f"---\nname: security\ntools: Read, Grep, {_RETRIEVAL_CLI_SCOPE}\n---\n"
+    row = _e1_with(monkeypatch, {"b/security.md": text})
+    assert row.outcome == DEFENDED
+
+
+@pytest.mark.parametrize("tools", [
+    "Read, Task", "Read, Agent",                                      # spawn a subagent that can write
+    "Read, mcp__github__create_issue", "Read, mcp__anything",         # any MCP tool, by prefix
+    "Read, Bash(python -m x:*)", "Read, Bash(git push:*)",            # a scoped Bash other than the research scope
+    "Read, Bash(python -m agentteams.research:* && rm -rf:*)",
+])
+def test_e1_reports_a_read_only_agent_with_spawn_mcp_or_other_scoped_bash(monkeypatch: pytest.MonkeyPatch,
+                                                                           tools: str) -> None:
+    """@security IM #516 conditions 1-2."""
+    row = _e1_with(monkeypatch, {"b/security.md": f"---\nname: security\ntools: {tools}\n---\n"})
+    assert row.outcome == EXPLOITED and "b/security.md" in row.evidence
+
+
+@pytest.mark.parametrize("line", ["tools:", "tools: *", "tools: Read, *"])
+def test_e1_reports_an_empty_or_wildcard_tools_key_as_unrecognised(monkeypatch: pytest.MonkeyPatch, line: str) -> None:
+    """@security IM #516 condition 4: like a missing key, it inherits every tool."""
+    row = _e1_with(monkeypatch, {"b/worker.md": f"---\nname: w\n{line}\n---\n"})
+    assert row.outcome == EXPLOITED and "1 carry no recognised capability key" in row.evidence
+
+
+@pytest.mark.parametrize("floor", [40, 0])
+def test_e1_raises_below_its_read_only_floor(monkeypatch: pytest.MonkeyPatch, floor: int) -> None:
+    """@security IM #516 condition 3: too few read-only agents (or none, whatever the floor) raises."""
+    import tests.constitutional_redteam_battery as battery
+
+    monkeypatch.setattr(battery, "_e1_rendered_agents",
+                        lambda: {"b/primary-producer.md": "---\nname: p\ntools: Read, Write\n---\n"})
+    monkeypatch.setattr(battery, "E1_READ_ONLY_FLOOR", floor)
+    with pytest.raises(RuntimeError, match="read-only agents, below the floor"):
+        battery.e1_capability_key_not_honoured()
+
+
+def test_e1_floor_is_the_measured_count() -> None:
+    import tests.constitutional_redteam_battery as battery
+
+    assert battery.E1_READ_ONLY_FLOOR == 40
+
+
+def test_e1_the_adapters_fallback_grants_no_write_tools() -> None:
+    """The adapter's fallback for a tool list it cannot parse stays read-only (#511, IM item 42).
+
+    It was `Bash, Read, Write, Edit`, the path E1's widened check was written against: a read-only template that hit
+    it was emitted with write access. If the fallback ever widens again, E1 would only catch it for a template that
+    happens to hit the fallback; this pins the fallback itself.
+    """
+    from agentteams.frameworks.claude import _map_allowed_tools
+    import tests.constitutional_redteam_battery as battery
+
+    with pytest.warns(UserWarning, match="no usable tool scope"):
+        fallback = _map_allowed_tools("---\nname: security\ntools:\n  - read\n  - search\n---\n")
+    assert {t.strip() for t in fallback.split(",")} == {"Read", "Grep", "Glob"}
+    assert not battery._e1_widening([t.strip() for t in fallback.split(",")])
+
+
+def test_e1_read_only_set_comes_from_the_templates() -> None:
+    import tests.constitutional_redteam_battery as battery
+
+    slugs = battery._e1_read_only_slugs()
+    assert {"security", "code-hygiene", "adversarial", "conflict-auditor"} <= slugs
+    assert "git-operations" not in slugs and "primary-producer" not in slugs
+
+
+def test_e1_is_defended_when_every_agent_states_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _e1_with(monkeypatch, {"b/security.md": "---\nname: security\ntools: Read, Grep\n---\n"})
+    assert row.outcome == DEFENDED
+
+
+def test_e1_raises_on_an_empty_render(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Anti-vacuity: no rendered subagent file is a probe defect, never DEFENDED (0/0 was the #478 bug)."""
+    import tests.constitutional_redteam_battery as battery
+
+    import agentteams.cli.render_pipeline as rp
+
+    monkeypatch.setattr(rp, "_build_final_rendered", lambda *a, **k: [("../CLAUDE.md", "x")])
+    with pytest.raises(RuntimeError, match="nothing to measure"):
+        battery._e1_rendered_agents()
+
+
+def test_e1_reads_no_gitignored_path() -> None:
+    src = (REPO_ROOT / "tests" / "constitutional_redteam_battery.py").read_text(encoding="utf-8")
+    body = src.split("def e1_capability_key_not_honoured", 1)[1].split("\ndef ", 1)[0]
+    assert '".claude"' not in body and "CLAUDE_AGENTS" not in src

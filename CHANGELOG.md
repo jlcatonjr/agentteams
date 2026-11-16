@@ -17,6 +17,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--prune-backups` reports tracked backups it kept. Generated teams already gitignore new backups; this protects
   teams whose backups were committed anyway.
 
+### fixed (red-team probe E1 measures a rendered team; #478)
+
+- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
+  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
+  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
+  and checks the emitted front matter. Each of these is EXPLOITED:
+  - an `allowed-tools:` key;
+  - any agent with no `tools:`/`disallowedTools:`;
+  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
+    a tool list it cannot parse.
+
+  Read-only means the template grants no write or command capability. An empty render raises.
+- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
+- The probe baseline is re-accepted by the operator after merge; the review is in
+  `references/redteam-probe-revalidation.md`.
+
+### fixed (slug checks refuse a trailing newline; #473)
+
+- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
+  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
+  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
+  - `cli/adopt_only.py`;
+  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
+  - `sandbox_state.py` (agent and profile names);
+  - `sandbox_tokens.py`;
+  - `wasm_config.py`;
+  - `wasm_agent/team.py`;
+  - `interop_helpers.py`;
+  - `update_lock.py` (slug-valued arguments).
+- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
+  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
+  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
+  Integrity pins are re-recorded.
+
 ### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
 
 - `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
