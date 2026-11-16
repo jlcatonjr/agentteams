@@ -455,16 +455,34 @@ def test_the_extra_known_formats_block_the_snapshot(tmp_path, name, key):
     assert name.lower() in notes[0].lower(), notes
 
 
-def test_the_untyped_messages_match_the_scanner() -> None:
-    """The two untyped messages must be what agentteams.scan emits (@security: pin them, so a reworded scanner message
-    is caught here rather than silently blocking or warning)."""
+def test_the_untyped_messages_are_the_scanner_constants() -> None:
+    """The guard keys on scan.py's own constants, and each constant is what scan_content emits (IM @security)."""
     from agentteams._fleet_snapshot import _UNTYPED_CREDENTIAL_MESSAGES
-    from agentteams.scan import scan_content
+    from agentteams.scan import MSG_HIGH_ENTROPY, MSG_SECRET_LIKE, scan_content
 
-    seen = {f.message for line in ("value IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM here",
-                                   "token verify-toolchain-group-dispatcher-lane")
-            for f in scan_content(line, "x.md") if f.category == "credential"}
-    assert seen == set(_UNTYPED_CREDENTIAL_MESSAGES)
+    assert _UNTYPED_CREDENTIAL_MESSAGES == {MSG_HIGH_ENTROPY, MSG_SECRET_LIKE}
+    msgs = lambda line: {f.message for f in scan_content(line, "x.md") if f.category == "credential"}   # noqa: E731
+    assert MSG_HIGH_ENTROPY in msgs("value IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM here")
+    assert MSG_SECRET_LIKE in msgs("token verify-toolchain-group-dispatcher-lane")
+
+
+def test_a_long_kebab_identifier_starting_sk_does_not_block(tmp_path):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    (repo / ".github" / "agents" / "x.agent.md").write_text(
+        "see sk-reviewing-the-fleet-snapshot-guard-for-kebab-case\n", encoding="utf-8")
+    assert fleet._git_snapshot(repo)[1] is True
+
+
+def test_a_binary_or_huge_file_gets_a_not_scanned_note(tmp_path):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    (repo / ".github" / "agents" / "blob.bin").write_bytes(b"\0" * 10)
+    notes: list[str] = []
+    assert fleet._git_snapshot(repo, notes=notes)[1] is True
+    assert any("not scanned for credentials: .github/agents/blob.bin (binary)" in n for n in notes), notes
 
 
 #: v1.2.0-rc.1 soak false positives (data): each is an untyped HIGH finding, so it warns and the snapshot is recorded.
@@ -515,6 +533,38 @@ def test_snapshot_notes_appear_in_the_fleet_report_row(tmp_path):
     row_details = json.dumps(data)
     assert "possible secret to review: .github/agents/x.agent.md:2" in row_details
     assert "possible secret to review" in (root / "summary.md").read_text(encoding="utf-8")
+    assert data["workspaces"][0]["targets"][0]["status"] == "REVIEW"   # a warn-only finding raises the row (IM @security)
+
+
+@pytest.mark.parametrize("status, expected", [("OK", "REVIEW"), ("REVIEW", "REVIEW"), ("FAIL", "FAIL"),
+                                              ("SKIP", "SKIP")])
+def test_snapshot_warnings_raise_rows_to_review_but_not_fail_or_skip(tmp_path, status, expected):
+    import json
+
+    from agentteams import _fleet_report
+    from agentteams._fleet_snapshot import SNAPSHOT_REVIEW_PREFIX
+
+    wr = fleet.WorkspaceResult(path=str(tmp_path / "ws"), is_git=True)
+    wr.snapshot_notes = [f"{SNAPSHOT_REVIEW_PREFIX}.github/agents/x.agent.md:2 (Possible secret-like token detected)"]
+    wr.targets.append(fleet.TargetResult(workspace=wr.path, target="github", status=status, detail="d"))
+    root = tmp_path / "report"
+    root.mkdir()
+    _fleet_report.write_report([wr], root, tmp_path, True, "all")
+    assert json.loads((root / "report.json").read_text(encoding="utf-8"))["workspaces"][0]["targets"][0]["status"] == expected
+
+
+def test_a_not_scanned_note_alone_does_not_raise_review(tmp_path):
+    import json
+
+    from agentteams import _fleet_report
+
+    wr = fleet.WorkspaceResult(path=str(tmp_path / "ws"), is_git=True)
+    wr.snapshot_notes = ["snapshot recorded; not scanned for credentials: .github/agents/references/memory-index.json (5.1 MB)"]
+    wr.targets.append(fleet.TargetResult(workspace=wr.path, target="github", status="OK", detail="d"))
+    root = tmp_path / "report"
+    root.mkdir()
+    _fleet_report.write_report([wr], root, tmp_path, True, "all")
+    assert json.loads((root / "report.json").read_text(encoding="utf-8"))["workspaces"][0]["targets"][0]["status"] == "OK"
 
 
 # ---------------------------------------------------------------------------

@@ -125,7 +125,7 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False,
     if not status.stdout.strip():
         return (head, False)
     tree = worktree_tree(ws, paths)
-    blocking, warnings = credential_findings(ws, head, tree, paths) if tree else ([], [])
+    blocking, warnings, skipped = credential_findings(ws, head, tree, paths) if tree else ([], [], [])
     sink = notes if notes is not None else []
     if blocking:
         # A ref would keep these past gc and carry them in a --mirror clone or push.
@@ -138,7 +138,9 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False,
     for rel, n, msg in warnings:
         print(f"    [WARN] snapshot: possible secret ({msg}; not a known credential format) at {rel}:{n}; "
               "recorded anyway. Review it.", file=sys.stderr)
-        sink.append(f"snapshot recorded with a possible secret to review: {rel}:{n} ({msg})")
+        sink.append(f"{SNAPSHOT_REVIEW_PREFIX}{rel}:{n} ({msg})")
+    if skipped:
+        sink.append(f"snapshot recorded; not scanned for credentials: {', '.join(skipped)}")
     parent = ("-p", head) if head else ()
     commit = run_git(ws, "commit-tree", tree, *parent, "-m", "chore(fleet): pre-update snapshot") if tree else None
     sha = commit.stdout.strip() if commit is not None and commit.returncode == 0 else ""
@@ -155,7 +157,15 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False,
 #: Scanner findings that judge a possible secret by entropy or a nearby keyword, not by its format. They warn; they do
 #: not stop a snapshot (operator ruling, 2026-11-16: the v1.2.0-rc.1 soak SKIPped repos over public fingerprints, slugs
 #: and paths).
-_UNTYPED_CREDENTIAL_MESSAGES = frozenset({"High-entropy token detected", "Possible secret-like token detected"})
+def _untyped_messages() -> frozenset[str]:
+    from agentteams.scan import MSG_HIGH_ENTROPY, MSG_SECRET_LIKE   # deferred, like scan_content below
+    return frozenset({MSG_HIGH_ENTROPY, MSG_SECRET_LIKE})
+
+
+_UNTYPED_CREDENTIAL_MESSAGES = _untyped_messages()
+
+#: Prefix of a snapshot note that raises the workspace's fleet rows to REVIEW (IM @security, 2026-11-16).
+SNAPSHOT_REVIEW_PREFIX = "snapshot recorded with a possible secret to review: "
 
 #: Known credential formats that ``agentteams.scan``'s typed rules do not cover. A match stops the snapshot.
 _EXTRA_CREDENTIAL_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -164,7 +174,7 @@ _EXTRA_CREDENTIAL_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----")),
     ("AWS temporary access key", re.compile(r"\bASIA[0-9A-Z]{16}\b")),
     ("Anthropic API key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}")),
-    ("OpenAI API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}")),
+    ("OpenAI API key", re.compile(r"\bsk-(?:proj-)?(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{32,}")),   # a digit: not a kebab slug
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])")),
     ("GitLab token", re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}")),
     ("Hugging Face token", re.compile(r"\bhf_[A-Za-z0-9]{30,}")),
@@ -178,7 +188,7 @@ Finding = tuple[str, int, str]   # (path, line, scanner message)
 
 
 def credential_findings(ws: Path, head: str | None, tree: str,
-                        paths: list[str]) -> tuple[list[Finding], list[Finding]]:
+                        paths: list[str]) -> tuple[list[Finding], list[Finding], list[str]]:
     """Scan the agent files the snapshot would add or change, split into blocking and warning findings.
 
     A pre-commit secret scanner used to see the snapshot commit; a snapshot ref runs no hook, so the fleet runs
@@ -193,7 +203,8 @@ def credential_findings(ws: Path, head: str | None, tree: str,
         paths: The agent paths.
 
     Returns:
-        (blocking, warnings): ``(path, line, message)`` findings.
+        (blocking, warnings, skipped): ``(path, line, message)`` findings, and ``"<path> (<reason>)"`` for files not
+        scanned (binary or over 1 MB).
     """
     from agentteams.scan import scan_content   # deferred: scan pulls in more than the fleet needs here
 
@@ -203,10 +214,14 @@ def credential_findings(ws: Path, head: str | None, tree: str,
         changed = run_git(ws, "ls-tree", "-r", "--name-only", tree, "--", *paths)
     blocking: list[Finding] = []
     warnings: list[Finding] = []
+    skipped: list[str] = []
     for rel in changed.stdout.splitlines():
         blob = run_git(ws, "cat-file", "blob", f"{tree}:{rel}", text=False)
         data = blob.stdout if blob.returncode == 0 else b""
-        if not data or len(data) > 1_000_000 or b"\0" in data[:8000]:   # unreadable, huge or binary
+        if not data:   # unreadable or empty
+            continue
+        if len(data) > 1_000_000 or b"\0" in data[:8000]:
+            skipped.append(f"{rel} ({len(data) / 1_000_000:.1f} MB)" if len(data) > 1_000_000 else f"{rel} (binary)")
             continue
         text = data.decode("utf-8", "replace")
         for f in scan_content(text, rel):
@@ -215,7 +230,7 @@ def credential_findings(ws: Path, head: str | None, tree: str,
         for n, line in enumerate(text.splitlines(), 1):
             blocking += [(rel, n, f"Possible {name} detected") for name, rx in _EXTRA_CREDENTIAL_FORMATS
                          if rx.search(line)]
-    return blocking, warnings
+    return blocking, warnings, skipped
 
 
 def credential_files(ws: Path, head: str | None, tree: str, paths: list[str]) -> list[str]:
@@ -230,7 +245,7 @@ def credential_files(ws: Path, head: str | None, tree: str, paths: list[str]) ->
     Returns:
         The paths with a blocking finding (see :func:`credential_findings`).
     """
-    blocking, _ = credential_findings(ws, head, tree, paths)
+    blocking, _, _ = credential_findings(ws, head, tree, paths)
     return sorted({rel for rel, _, _ in blocking})
 
 

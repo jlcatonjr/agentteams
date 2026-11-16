@@ -18,7 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entropy- or keyword-only finding ("High-entropy token detected", "Possible secret-like token detected") is a `[WARN]`
   naming the file and line, and the snapshot is recorded.
 - Both kinds are recorded in `WorkspaceResult.snapshot_notes` and appended to that workspace's rows in `report.json`
-  and `summary.md`.
+  and `summary.md`. A warning raises those rows to `REVIEW` (a `FAIL` or `SKIP` row keeps its status), so a recorded
+  possible secret, such as an unprefixed `api_key=<random>`, reaches the operator. A file skipped as binary or over
+  1 MB gets a "not scanned" note. The two untyped messages are `agentteams.scan.MSG_HIGH_ENTROPY` and
+  `MSG_SECRET_LIKE`; an OpenAI key needs a digit in its body, so a long kebab-case `sk-…` identifier does not block.
 
 ### fixed (the content scanner no longer reports a cited git commit, digest or SSH key fingerprint as a credential; v1.2.0-rc.1 soak)
 
