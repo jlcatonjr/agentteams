@@ -25,7 +25,7 @@ __all__ = [
     "BackupResult", "PruneResult", "DEFAULT_BACKUP_KEEP_LAST",
     "BACKUP_MANIFEST_NAME", "BACKUP_MANIFEST_SCHEMA_VERSION",
     "backup_output_dir", "restore_backup", "list_backups", "verify_backup",
-    "prune_backups", "inert_backup_name", "backup_before_projection",
+    "prune_backups", "prune_report", "TRACKED_BACKUPS_KEPT", "inert_backup_name", "backup_before_projection",
     "BACKUP_GITIGNORE_TEXT", "ensure_backup_root_ignored",
 ]
 
@@ -644,6 +644,74 @@ class PruneResult:
     deleted: list[str] = field(default_factory=list)   # timestamps deleted (or would-delete under dry_run)
     kept: list[str] = field(default_factory=list)       # timestamps retained
     dry_run: bool = False
+    #: Backups git tracks that the keep rule alone would have deleted (#541); never deleted.
+    kept_tracked: list[str] = field(default_factory=list)
+    #: Backups whose deletion failed, with the error (``rmtree`` no longer ignores errors, #541).
+    failed: list[str] = field(default_factory=list)
+    #: git could not say what is tracked, so nothing was deleted (#541 fail-safe).
+    tracking_unknown: bool = False
+
+
+#: Leads the line :func:`prune_report` prints for tracked backups kept; ``agentteams._fleet_report`` keys on it.
+TRACKED_BACKUPS_KEPT = "kept backups that git tracks"
+
+
+def _tracked_backup_names(backup_root: Path) -> set[str] | None:
+    """Return the names of the backup directories under *backup_root* that hold a git-tracked file.
+
+    Args:
+        backup_root: The ``.agentteams-backups`` directory.
+
+    Returns:
+        The directory names (empty outside a git work tree), or None when git failed for another reason, is missing,
+        or printed a path it could not decode, so the caller cannot tell what is tracked (and deletes nothing).
+
+    Raises:
+        Nothing: every git failure maps to None.
+    """
+    import subprocess
+
+    from agentteams.git_exec import run_git
+
+    # LC_ALL=C: the "not a git repository" test below reads git's message, which a localised git would translate.
+    env = {**os.environ, "LC_ALL": "C", "LANGUAGE": "C"}
+    try:
+        proc = run_git(backup_root, "ls-files", "-z", "--", ".", hardened=True, env=env, devnull_stdin=True)
+    except (OSError, ValueError, subprocess.SubprocessError):  # no git binary, undecodable path, timeout
+        return None
+    if proc.returncode != 0:
+        # Only git's own "outside any repository" message means untracked. "not a git repository: <path>" is a
+        # broken .git file (a pruned worktree, a moved submodule): the files may well be tracked, so delete nothing.
+        return set() if "not a git repository (or any of the parent directories)" in (proc.stderr or "") else None
+    # A first path component is a tracked backup dir; a bare name is a gitlink (a submodule checked out there).
+    return {rel.split("/", 1)[0] for rel in proc.stdout.split("\0") if rel}
+
+
+def prune_report(result: PruneResult, output_dir: Path) -> list[str]:
+    """Return the lines an automatic prune prints (``backup_before_projection``, ``sync_roster``; #541).
+
+    Args:
+        result: The prune's outcome.
+        output_dir: The directory whose backups were pruned (named in the lines).
+
+    Returns:
+        One line each for deleted backups, tracked backups kept, failed deletions and unknown tracking; empty when
+        the prune changed nothing worth reporting.
+
+    Raises:
+        Nothing.
+    """
+    where = f"{output_dir}/{_BACKUP_DIR_NAME}"
+    lines = []
+    if result.deleted:
+        lines.append(f"pruned {len(result.deleted)} old backup(s) in {where}: {', '.join(result.deleted)}")
+    if result.kept_tracked:
+        lines.append(f"{TRACKED_BACKUPS_KEPT} ({len(result.kept_tracked)} beyond the keep window): "
+                     f"{', '.join(result.kept_tracked)} in {where}. Untrack them, or run --prune-backups after review")
+    lines += [f"could not prune backup {f}" for f in result.failed]
+    if result.tracking_unknown:
+        lines.append(f"no backups pruned in {where}: git could not list tracked files")
+    return lines
 
 
 def _parse_backup_timestamp(name: str) -> datetime | None:
@@ -672,31 +740,66 @@ def prune_backups(
     most-recent backup is **always** kept (even ``keep_last == 0``). A backup
     whose age cannot be determined (unparseable name and no mtime) is KEPT
     (fail-safe). ``dry_run`` reports would-delete without deleting.
+
+    A backup directory holding a git-tracked file is never deleted and does not count toward the window (#541): the
+    rule applies to the untracked backups only, and :attr:`PruneResult.kept_tracked` names the tracked ones the rule
+    alone would have deleted. When git cannot list tracked files, nothing is deleted. A failed deletion is recorded
+    in :attr:`PruneResult.failed`, not ignored.
+
+    Args:
+        output_dir: The agents output directory whose ``.agentteams-backups/`` is pruned.
+        keep_last: How many of the newest untracked backups to keep.
+        keep_within_days: Also keep any untracked backup younger than this many days.
+        dry_run: Report what would be deleted, deleting nothing.
+
+    Returns:
+        The :class:`PruneResult`.
+
+    Raises:
+        Nothing: a deletion error is recorded in the result.
     """
     result = PruneResult(dry_run=dry_run)
     output_dir = output_dir.resolve()
     backups = list_backups(output_dir)  # newest-first: [(ts_name, path, file_count)]
     if not backups:
         return result
-
+    tracked = _tracked_backup_names(output_dir / _BACKUP_DIR_NAME)
+    if tracked is None:
+        result.tracking_unknown = True
+        result.kept = [b[0] for b in backups]
+        return result
     now = datetime.now()
-    for idx, (ts_name, bpath, _count) in enumerate(backups):
-        keep = idx == 0 or idx < keep_last          # always-newest + keep_last window
-        if not keep and keep_within_days is not None:
-            parsed = _parse_backup_timestamp(ts_name)
-            if parsed is None:
-                try:
-                    parsed = datetime.fromtimestamp(bpath.stat().st_mtime)
-                except OSError:
-                    parsed = None
-            # indeterminate age → fail-safe keep; else keep if within the window
-            keep = parsed is None or (now - parsed).days <= keep_within_days
 
+    def keeps(idx: int, ts_name: str, bpath: Path) -> bool:
+        if idx == 0 or idx < keep_last:              # always-newest + keep_last window
+            return True
+        if keep_within_days is None:
+            return False
+        parsed = _parse_backup_timestamp(ts_name)
+        if parsed is None:
+            try:
+                parsed = datetime.fromtimestamp(bpath.stat().st_mtime)
+            except OSError:
+                parsed = None
+        # indeterminate age → fail-safe keep; else keep if within the window
+        return parsed is None or (now - parsed).days <= keep_within_days
+
+    # What the rule alone would have deleted among the tracked backups (#541: reported, never deleted).
+    result.kept_tracked = [b[0] for i, b in enumerate(backups) if b[0] in tracked and not keeps(i, b[0], b[1])]
+    result.kept += [b[0] for b in backups if b[0] in tracked]
+    backups = [b for b in backups if b[0] not in tracked]
+
+    for idx, (ts_name, bpath, _count) in enumerate(backups):
+        keep = keeps(idx, ts_name, bpath)
         if keep:
             result.kept.append(ts_name)
         else:
             if not dry_run:
-                shutil.rmtree(bpath, ignore_errors=True)
+                try:
+                    shutil.rmtree(bpath)
+                except OSError as exc:
+                    result.failed.append(f"{ts_name}: {exc}")
+                    continue
             result.deleted.append(ts_name)
     return result
 
@@ -821,4 +924,5 @@ def backup_before_projection(agents_dir: Path, framework: str) -> None:
     rels = [os.path.relpath(p, agents_dir) for p in files]
     rels.append(adapter.finalize_output_path("../copilot-instructions.md", "instructions"))
     backup_output_dir(agents_dir, files_to_backup=rels, reason="pre-sync-projection", framework=framework)
-    prune_backups(agents_dir)  # keep the default most-recent N; every --sync would add one
+    for line in prune_report(prune_backups(agents_dir), agents_dir):  # every --sync adds one; keep the newest N (#541)
+        print(f"  ⓘ  {line}", file=sys.stderr)
