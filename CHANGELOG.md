@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the launcher lineage left out a reverted side line, so dev's own template was no longer `current`)
+
+- `scripts/build_launcher_lineage.py` walked the template with `git log --follow`, which also lists commits on a line
+  whose change never reached `HEAD`. A fix made on `main` and reverted there (c5ae8582, ee45c106), then merged into
+  `dev` with `dev`'s template kept, sorted after `dev`'s real newest version, so a regenerated lineage would have
+  called the shipped template `older` and pointed at a version without the item-17 protections. The builder now keeps
+  only the commits git's default history simplification lists for the template's path. The shipped lineage is
+  unchanged; `tests/test_launcher_lineage.py::test_lineage_regenerates_byte_for_byte` passes again on `dev`.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub
