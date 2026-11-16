@@ -10,7 +10,8 @@ set -euo pipefail
 
 # A runner DNS or mirror outage (#442: about 1.5 hours of "Temporary failure resolving") is not a test failure. apt
 # retries each download, and a failure here is annotated as CI setup (network), so the checks API tells
-# infrastructure red apart from code red without the job log.
+# infrastructure red apart from code red without the job log. Any apt failure gets this label; a missing package or
+# a dpkg lock would too, so read the job log before blaming the network.
 apt_opts=(-q -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
 if ! { sudo apt-get "${apt_opts[@]}" update && sudo apt-get "${apt_opts[@]}" install -y bubblewrap; }; then
   echo "::error title=CI setup (network)::apt could not install bubblewrap; no test ran. Infrastructure, not code: re-run the job (git-procedures §H)."

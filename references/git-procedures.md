@@ -571,12 +571,13 @@ Two failures on one day led to this section. A `cd` into a removed clone failed,
   ```
 
   Stop and read the output if a step fails. The `until` loop runs forever if the PR's workflows never start. If no checks appear within a few minutes of a push, re-trigger CI without changing the head: `gh pr close "$PR" && gh pr reopen "$PR"`. CI's `pull_request` trigger uses the default types, so `reopened` starts it. Never take `mergeStateStatus` CLEAN as proof that CI ran: a PR into `dev`, which has no required checks, reports CLEAN with zero check runs (PR #487, 2026-11-14).
-- **A runner outage is waited out: there is no admin bypass** (operator ruling, 2026-11-16, #442). `main`'s
+- **A runner outage is waited out: there is no admin bypass** (operator ruling, 2026-11-15, #442). `main`'s
   protection has `enforce_admins: true`, so red required checks block everyone, the operator included, and that is
-  intended. A job that fails in setup before any test runs reports a `CI setup (network)` error annotation
-  (`scripts/ci-bwrap-setup.sh`, which also retries apt). For that case:
+  intended. When the bubblewrap install step (`scripts/ci-bwrap-setup.sh`, which retries apt) fails, it reports a
+  `CI setup (network)` error annotation. An outage can also fail an earlier step, such as `pip install`, with no
+  annotation. Either way:
   1. hold the merge;
-  2. re-run the failed jobs (`gh run rerun <run> --failed`), or close and reopen the PR if no checks started;
+  2. re-run the failed jobs (`gh run rerun <run> --failed`), or re-trigger as above if no checks started;
   3. once every check is green, merge pinned with `--match-head-commit`, as above.
 
   #442 waited about 1.5 hours this way and merged on attempt 5. Never lift protection to merge over red checks.
