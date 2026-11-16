@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (CI: a runner network outage reads as infrastructure, not a test failure; #442 follow-up)
+
+- `scripts/ci-bwrap-setup.sh` retries apt downloads (`Acquire::Retries=5`, 30-second timeouts) and, when bubblewrap
+  still cannot be installed, posts a `CI setup (network)` error annotation, so the checks API tells "infrastructure
+  red" from "code red" without the job log. Job names are unchanged, so `main`'s required checks are not affected.
+- `references/git-procedures.md` §H: a runner outage is waited out (hold, re-run, merge pinned once green). There is
+  no admin bypass: `enforce_admins` on `main` is intended (operator ruling, 2026-11-16).
+
 ### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
 
 - **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and

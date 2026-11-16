@@ -8,7 +8,14 @@
 # Used by the ci.yml jobs test (Ubuntu rows), wasm-live and ubuntu-26-confinement.
 set -euo pipefail
 
-sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+# A runner DNS or mirror outage (#442: about 1.5 hours of "Temporary failure resolving") is not a test failure. apt
+# retries each download, and a failure here is annotated as CI setup (network), so the checks API tells
+# infrastructure red apart from code red without the job log.
+apt_opts=(-q -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+if ! { sudo apt-get "${apt_opts[@]}" update && sudo apt-get "${apt_opts[@]}" install -y bubblewrap; }; then
+  echo "::error title=CI setup (network)::apt could not install bubblewrap; no test ran. Infrastructure, not code: re-run the job (git-procedures §H)."
+  exit 1
+fi
 
 probe() { bwrap --ro-bind / / --dev /dev --unshare-pid --die-with-parent true; }
 knob="$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo absent)"
