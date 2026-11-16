@@ -108,10 +108,10 @@ Once a file is retrofitted with fence markers, it becomes eligible for merge-mod
 
 ```bash
 # Before retrofit: must use --overwrite (requires security clearance)
-python build_team.py --update --overwrite --yes
+agentteams --update --overwrite --yes
 
 # After retrofit: can use --update --merge (preserves user-authored content)
-python build_team.py --update --merge --yes
+agentteams --update --merge --yes
 ```
 
 This is particularly useful for cross-repository target updates where legacy agents lack fence markers. See the [section-fencing guide](../section-fencing-guide.md) for how fenced regions are defined and the [update-lifecycle guide](../update-lifecycle-guide.md) for how merge-mode updates consume them.

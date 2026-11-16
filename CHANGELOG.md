@@ -22,6 +22,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The probe baseline is re-accepted by the operator after merge; the review is in
   `references/redteam-probe-revalidation.md`.
 
+### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
+  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
+  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
+
+### fixed (fleet: a merge that refuses a file to keep its user region is a FAIL row; #533 follow-up)
+
+- A refused file gets no template updates (tool and permission tightening included) until its region is fixed by
+  hand, so `--fleet` now marks that target `FAIL`, in a dry run too, not only on stderr. The row detail starts
+  `USER REGION REFUSED (file not updated until fixed by hand):` and names the file. A bare `Errors:` header no
+  longer becomes a FAIL row's whole detail; the line under it does. `first_error` and `region_refusal` move to
+  `agentteams._fleet_report`.
+
+### fixed (`--update --merge` no longer drops a Goose recipe's Project-Specific Notes; #533)
+
+- **A recipe built from an unfenced template (the work-summarizer, for one) lost its `## Project-Specific Notes`
+  on every `--update --merge`, with no notice.** The merge full-replaces a non-Markdown file that has no
+  `AGENTTEAMS` fence on disk or in the render, and the notes sit outside every fence by design. The full-replace
+  now carries the on-disk regions into the render (`user_regions.merge_carry`). It refuses the write, keeping the
+  file and reporting an error, when a region can't be carried (including a recipe whose notes heading was moved to
+  column 0). Such a recipe stops updating until the region is fixed by hand. `--discard-user-regions` replaces
+  the file as before. Text below a recipe's notes heading is now kept across merges, as it always was in Markdown
+  personas, so review it like any other notes (C-4). Markdown copies of the same agent were never affected. Codex TOML agents are fence-wrapped and Grok and
+  WASM emit Markdown, so today only Goose recipes took this path. Teams on 1.1.x or 1.2.0 that use Goose: check
+  your `.goose/recipes/*.yaml` notes against git history after an update.
+
+### fixed (CI: a runner network outage reads as infrastructure, not a test failure; #442 follow-up)
+
+- `scripts/ci-bwrap-setup.sh` retries apt downloads (`Acquire::Retries=5`, 30-second timeouts) and, when bubblewrap
+  still cannot be installed, posts a `CI setup (network)` error annotation, so the checks API tells "infrastructure
+  red" from "code red" without the job log. Job names are unchanged, so `main`'s required checks are not affected.
+- `references/git-procedures.md` §H: waiting out a runner outage; `enforce_admins` on `main` is intended, with no
+  admin bypass (operator ruling, 2026-11-15).
+
+### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
+
+- **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and
+  `.claude/settings.worksummary.example.json`.** Both are inert until the operator merges the example's `Stop` block
+  into `.claude/settings.json`. The example is a separate file, so wiring the constitutional gate does not switch
+  it on.
+- **Runs do not appear in any Claude Code session list.** The launcher starts the summarizer with
+  `--no-session-persistence` and keeps the run's output in its own archive under
+  `~/.claude/logs/agentteams-work-summary/` (under `CLAUDE_CONFIG_DIR` when set), readable by the owner only and
+  pruned after 14 days.
+- **It launches only when the day's summary is out of date:**
+  - a day with commits is current when the summary is synthesized and covers the latest commit;
+  - a planning-only day is current when the day's plan files are unchanged since the last run. An operator-written
+    hook without this check launched a run on every Stop event, several hundred a day.
+- **Guards:** the Stop payload is never passed to the run; a hook child never launches another; one run per project
+  at a time; a failed run backs off for 30 minutes; the hook detaches and never blocks the session.
+- **The unattended run has six tools and no others** (`--tools Read,Grep,Glob,Agent,Edit,Write`), in the run and in
+  the agents it calls: no shell, no web tools, no cross-session messaging, no scheduled or remote triggers, no
+  worktree creation. A live probe found that the session tools needing no permission ran unprompted without the
+  cap. The launcher collects the git evidence and hands it over as a file. The mode is a fixed `dontAsk`, with no
+  MCP server, and the child's environment carries no messaging socket or token.
+- **Inherited allow rules are contained.** `--allowedTools` adds to the operator's own allow rules, so deny rules
+  block credential files and the control plane, and the launcher refuses to launch when the operator's settings
+  allow edits outside `workSummaries/` or an unknown tool. The refusal is logged in `hook.log`.
+- **The wiring command verifies the launcher.** The `Stop` block carries the launcher's SHA-256 and runs the
+  installed script only on a match, so an edited script stops the hook until the operator merges the block again.
+- Every skip, run and failure is one line in `hook.log` in the run folder; that log is where to look, because runs
+  do not show in session lists.
+- **Operator extras are read from the run folder, never from the repository,** so a branch or pull request cannot
+  instruct an unattended run.
+- The launcher template and its emitter are pinned in the integrity manifest.
+- This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
+  notification-only. Grok teams do not receive it.
+
+### fixed (the launcher lineage left out a reverted side line, so dev's own template was no longer `current`)
+
+- `scripts/build_launcher_lineage.py` walked the template with `git log --follow`, which also lists commits on a line
+  whose change never reached `HEAD`. A fix made on `main` and reverted there (c5ae8582, ee45c106), then merged into
+  `dev` with `dev`'s template kept, sorted after `dev`'s real newest version, so a regenerated lineage would have
+  called the shipped template `older` and pointed at a version without the item-17 protections. The builder now keeps
+  only the commits git's default history simplification lists for the template's path. The shipped lineage is
+  unchanged; `tests/test_launcher_lineage.py::test_lineage_regenerates_byte_for_byte` passes again on `dev`.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub
@@ -52,6 +131,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `release_required_checks … --apply`, including shortened forms (argparse abbreviations are off as well).
 - Security rows 811 and 816 (816 amends 811's condition 3 to allow #504's signed integration-branch authorization)
   are cross-referenced with #504's rows 809, 812 and 815.
+
+### fixed (generated teams are no longer told to run commands that exist only in the agentteams checkout; IM item 23)
+
+- **G-06-2, G-19-4.** The navigator, agent-updater, orchestrator and security templates and all five team-builder
+  templates said to run `python build_team.py …` or `python -m src.graph …`. A generated team has no `build_team.py`
+  (it sits at the root of this repository) and there is no `src/` package anywhere. They now use the installed
+  `agentteams` entry point: `agentteams --refresh-graph` for the pipeline graph, `agentteams --description <brief>
+  --check` / `--update --merge` / `--scan-security`, `--add-fence-markers` and `--migrate`. The security triggers
+  name `agentteams --self --update` and still cover the checkout's `build_team.py`.
+- **G-12-3.** The agent-updater said bare `--update` overwrites whole files, including USER-EDITABLE content, which
+  contradicted its own later section and the CLI (merge is the default). It now says only `--update --overwrite`
+  replaces whole files, and its batch-run assertion requires "never `--update --overwrite`".
+- The agent-updater now says which `agentteams` to run: the pinned installation where `toolchain.lock` pins it, an
+  editable install in the agentteams checkout itself. The navigator notes that `--refresh-graph` maps `.github/agents/`
+  before `.claude/agents/`. The security trigger keys on `--self` with `--update` in either order, through any entry
+  point (`agentteams`, `python -m agentteams.cli.app`, `build_team.py`).
+- `tests/test_template_repo_only_commands.py` refuses `python [path/]build_team.py`, `build_team.py --…`,
+  `python -m src.` and `python -m build_team` in every text file under `agentteams/templates/`.
+- **Existing teams:** `agentteams --update --merge --yes` brings most of this. The security
+  (`security_rules_invariant` v=26, after #507 also revised it), orchestrator (`update_compatibility_source_pack` v=2) and Grok builder (`rules`
+  v=2) changes are inside fences. The agent-updater and the Claude, Copilot and goose builders have no fences of their
+  own, so their whole body is one generated `content` fence (the goose recipe is rewritten whole), and merge replaces
+  it. Merge keeps text outside fences in a file that has fences, so two places keep the old lines: the navigator's two
+  refresh commands and the Grok builder's step 3 and invocation block. Edit those by hand.
+
+### security (an unscoped agent gets a read-only Claude grant, not write and a shell; IM item 42)
+
+- **G-04-9.** The Claude adapter's fallback grant was `Bash, Read, Write, Edit`. `_map_allowed_tools` used it when an
+  agent had no front matter (or front matter that never closes), no inline `tools: [...]` list, or a list none of
+  whose tokens maps to a Claude tool. So the one agent nobody scoped got write access and an unrestricted shell
+  (C-3). The fallback is now `Read, Grep, Glob`, and each fallback emits a `UserWarning` naming the agent and the
+  missing scope. Grok shares the mapping and the change.
+  - **Behaviour change:** a hand-written or converted agent with no usable `tools:` loses `Bash`, `Write` and `Edit`
+    on its next render, `--convert` or interop import. No shipped template reaches the fallback: every agent
+    template declares `tools:`, and a render of each example brief for Claude and Grok produced no fallback.
+  - **Who is affected:** agents the templates don't produce, which are hand-written, operator-added, converted or
+    imported agents. `--convert` reports each narrowed agent in its notices. A source whose `tools:` is a YAML block
+    list is still refused as a widening, not narrowed. Files already on disk keep their grant: `--update --merge`
+    never widens or silently narrows an edited capability line, so an existing agent keeps `Bash, Read, Write, Edit`
+    until it is re-converted or edited.
+  - **The team-builder fails closed (@security):** a Claude builder with no front matter, or no `tools:` /
+    `allowed-tools:` key, now raises instead of passing through, because Claude gives it every tool. Grok's builder
+    already did. The shipped builder declares `tools:`.
+  - **Migration:** if the warning names an agent that needs to write or run commands, give it an inline list, for
+    example `tools: ['read', 'search', 'edit', 'execute']`, and re-render.
+  - The WASM narrowing refusal (`wasm_enforcement._refuse_empty`) still fails closed on an empty list; its message
+    no longer says the default includes the shell.
 
 ### security (the constitution files the other surfaces read need the operator's signature; IM item 19)
 

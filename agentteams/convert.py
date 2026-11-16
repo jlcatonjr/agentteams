@@ -27,6 +27,7 @@ Typical usage
 from __future__ import annotations
 
 import shutil
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -358,10 +359,15 @@ def _convert_file(
         return
 
     try:
-        converted_content = _render(source_path, file_type, adapter, manifest)
+        # A fallback grant (an agent with no usable tool scope, IM item 42) is reported as a notice on the result,
+        # not only on stderr, so callers and --json output see which agents were narrowed to read-only.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", UserWarning)
+            converted_content = _render(source_path, file_type, adapter, manifest)
     except Exception as exc:  # noqa: BLE001
         result.errors.append(f"{source_path}: {exc}")
         return
+    result.notices.extend(str(w.message) for w in caught if issubclass(w.category, UserWarning))
 
     if not dry_run:
         target_dir.mkdir(parents=True, exist_ok=True)
