@@ -388,6 +388,44 @@ def ensure_recipe_notes(recipe: str, notes_section: str) -> str:
     return head + block + ("\n" if end < len(recipe) else "") + recipe[end:]
 
 
+def merge_carry(rel_path: str, existing: str, content: str, messages: list[str], *, discard: bool = False,
+                dry_run: bool = False) -> str:
+    """The full-replace step of ``--update --merge``: carry *existing*'s regions into *content* (#533).
+
+    ``--merge`` full-replaces a non-Markdown file that has no ``AGENTTEAMS`` fence on disk or in the render (a Goose
+    recipe built from an unfenced template). Its user regions sit outside every fence, so without this the replace
+    dropped them. A merge keeps out-of-fence text silently everywhere else, so a carried region is not reported.
+
+    Args:
+        rel_path: The file's output-relative path (for messages).
+        existing: The file on disk.
+        content: The fresh render.
+        messages: Receives one message per region that can't be carried (the run's errors; on a dry run, the
+            dry-run report's notices).
+        discard: ``--discard-user-regions``: return *content* unchanged.
+        dry_run: Word the messages as what the real run would do.
+
+    Returns:
+        *content* with the regions carried; *existing* itself (so the caller writes nothing) when a region can't be.
+
+    Raises:
+        Nothing.
+    """
+    if discard:
+        return content
+    carried, _, problems = carry_regions(existing, content, toml=rel_path.endswith(".toml"))
+    if rel_path.endswith((".yaml", ".yml")):
+        # A heading at column 0 has no indent to end at, so its region would run to the end of the file and pull the
+        # recipe's later keys into the carried text.
+        problems += [f"'{h}' is not indented inside the instructions block" for h in HEADINGS
+                     if (span := find_region(existing, h)) is not None and not span[2]]
+    verb = "would not merge" if dry_run else "not merged"
+    messages.extend(f"{rel_path}: {verb}: {p}; the file is kept as it is and no longer updates until you move that "
+                    "region's text out (or fix it) by hand and re-run, or re-run with --discard-user-regions to drop "
+                    "every such region" for p in problems)
+    return existing if problems else carried
+
+
 def overwrite_carry(rel_path: str, existing: str, content: str, *, notices: list[str],
                     errors: list[str] | None = None, dry_run: bool = False) -> tuple[str, list[str]]:
     """The ``--overwrite`` step of ``emit``: carry *existing*'s regions into *content* and report each one.

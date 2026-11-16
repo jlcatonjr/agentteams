@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--update --merge` no longer drops a Goose recipe's Project-Specific Notes; #533)
+
+- **A recipe built from an unfenced template (the work-summarizer, for one) lost its `## Project-Specific Notes`
+  on every `--update --merge`, with no notice.** The merge full-replaces a non-Markdown file that has no
+  `AGENTTEAMS` fence on disk or in the render, and the notes sit outside every fence by design. The full-replace
+  now carries the on-disk regions into the render (`user_regions.merge_carry`). It refuses the write, keeping the
+  file and reporting an error, when a region can't be carried (including a recipe whose notes heading was moved to
+  column 0). Such a recipe stops updating until the region is fixed by hand. `--discard-user-regions` replaces
+  the file as before. Text below a recipe's notes heading is now kept across merges, as it always was in Markdown
+  personas, so review it like any other notes (C-4). Markdown copies of the same agent were never affected. Codex TOML agents are fence-wrapped and Grok and
+  WASM emit Markdown, so today only Goose recipes took this path. Teams on 1.1.x or 1.2.0 that use Goose: check
+  your `.goose/recipes/*.yaml` notes against git history after an update.
+
 ### fixed (CI: a runner network outage reads as infrastructure, not a test failure; #442 follow-up)
 
 - `scripts/ci-bwrap-setup.sh` retries apt downloads (`Acquire::Retries=5`, 30-second timeouts) and, when bubblewrap

@@ -2,7 +2,7 @@
 
 The user-editable regions of generated files, and how they're carried across `--overwrite` (P5a).
 
-> Source: `agentteams/user_regions.py`. Used by `emit.emit_all` on the overwrite path and by
+> Source: `agentteams/user_regions.py`. Used by `emit.emit_all` on the overwrite and merge full-replace paths and by
 > `project_notes._ensure_project_notes_section`.
 
 ## Regions
@@ -20,8 +20,12 @@ A region runs from its heading to the first of:
 
 ## `--overwrite`
 
-`--merge` has always kept these regions, because they sit outside every fence. `--overwrite` now carries them
-too:
+`--merge` keeps these regions, because they sit outside every fence. The one exception was a non-Markdown file
+with no fence on disk or in the render (a Goose recipe built from an unfenced template, such as the
+work-summarizer): `--merge` full-replaces it, and until #533 that dropped its notes with no notice. The
+full-replace now carries the regions too (`merge_carry`). It refuses the write, keeping the file, when a region
+can't be carried, and `--discard-user-regions` replaces the file as before. A merge carries silently, as it keeps
+out-of-fence text everywhere else. `--overwrite` carries them too:
 - **Carry.** Each region on disk replaces the same region in the new render. For a recipe it is re-indented
   to the new block indentation.
 - **Report.** Every carried region is printed and recorded as a notice. Carried text is instruction-bearing
@@ -35,6 +39,7 @@ too:
 | Name | Purpose |
 |---|---|
 | `carry_regions(old, new) -> (content, carried, problems)` | Carry each region of `old` into `new`. |
+| `merge_carry(rel_path, existing, content, errors, *, discard=False, dry_run=False) -> str` | The `--merge` full-replace step: `content` with `existing`'s regions carried, or `existing` itself (write nothing) with one error per region that can't be carried (#533). |
 | `find_region(text, heading)` | Locate one region: `(start, end, indent)`. |
 | `ensure_recipe_notes(recipe, notes_section)` | Add the notes region to a Goose recipe's `instructions` block. Idempotent. |
 | `reindent(region, old_indent, new_indent)` | Move a region between indents (YAML block scalars); `None` when a line is under-indented. `_reindent` is the older name. |
