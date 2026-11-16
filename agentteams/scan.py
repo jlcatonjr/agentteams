@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
-from agentteams._scan_public_hashes import check_public_hash_exemption
+from agentteams._scan_public_hashes import check_public_hash_exemption, is_labelled_public_identifier
 # Operational-JSON exemption (which pipeline-written JSON skips the absolute-path / entropy /
 # placeholder detectors): carved to the integrity-pinned ``scan_operational`` module.
 from agentteams.scan_operational import (  # noqa: F401  (re-exported)
@@ -742,6 +742,8 @@ def _check_line(
         # Suppress only in the context-free case; the sensitive-context matcher
         # (a secret keyword is on the line) keeps its wider net deliberately.
         if not secret_context and _looks_like_filesystem_path(token):
+            continue
+        if not secret_context and is_labelled_public_identifier(line, token_match.start(), token_match.end()):
             continue
         # #460: a public lockfile SRI hash or GitHub commit-URL SHA, bound to this exact token
         # span (never the line). Context-free branch only, like the path guard above.
