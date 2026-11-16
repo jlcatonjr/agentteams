@@ -219,3 +219,20 @@ def is_ssh_key_fingerprint(line: str, start: int, end: int) -> bool:
     if end < len(line) and (line[end].isalnum() or line[end] in "+/="):
         return False
     return start >= 7 and line[start - 7:start] == "SHA256:"
+
+
+def is_labelled_public_identifier(line: str, start: int, end: int) -> bool:
+    """True when ``line[start:end]`` is a labelled git object id / digest or an SSH key fingerprint.
+
+    The scanner's one call for both public-identifier exemptions (v1.2.0-rc.1 soak), in both matcher branches: a
+    security-log line that says "operator token" is still citing a commit or a release-key fingerprint.
+
+    Args:
+        line: The line being scanned.
+        start: Start offset of the candidate token in ``line``.
+        end: End offset of the candidate token in ``line``.
+
+    Returns:
+        True to suppress the finding for this token; False to report it.
+    """
+    return is_labelled_git_hash(line, start, end) or is_ssh_key_fingerprint(line, start, end)
