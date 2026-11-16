@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from agentteams._fleet_shrink_grants import shrink_grant_summary
+from agentteams._fleet_snapshot import SNAPSHOT_REVIEW_PREFIX
 from agentteams.vulnscan.project_policy import ENROLL_HINT
 
 
@@ -30,8 +31,11 @@ def write_report(results, report_root: Path, parent: Path, apply: bool, framewor
     for wr in results:
         for tr in wr.targets:
             row = asdict(tr)
-            if getattr(wr, "snapshot_notes", None):   # credential warnings or refusals from the pre-update snapshot
-                row["detail"] = "; ".join([row["detail"], *wr.snapshot_notes] if row["detail"] else wr.snapshot_notes)
+            notes = getattr(wr, "snapshot_notes", None) or []   # credential warnings / refusals from the snapshot
+            if notes:
+                row["detail"] = "; ".join([row["detail"], *notes] if row["detail"] else notes)
+            if row["status"] not in ("FAIL", "SKIP") and any(n.startswith(SNAPSHOT_REVIEW_PREFIX) for n in notes):
+                row["status"] = tr.status = "REVIEW"   # a recorded possible secret needs the operator's eyes (IM @security)
             rows.append(row)
             counts[tr.status] = counts.get(tr.status, 0) + 1
 
