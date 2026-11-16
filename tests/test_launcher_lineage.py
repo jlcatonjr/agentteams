@@ -76,6 +76,43 @@ def test_build_refuses_a_shallow_clone(tmp_path: Path, monkeypatch: pytest.Monke
     assert builder.main(["--check"]) == 2
 
 
+def test_a_side_line_that_never_reached_head_is_left_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # dev changes the template; main changes it and reverts the change; main is merged into dev keeping dev's
+    # template. --follow lists main's two commits, but HEAD's template does not descend from them.
+    repo = tmp_path / "repo"
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+
+    def git(*args: str, date: str = "2026-10-01T00:00:00+00:00") -> str:
+        proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+                              env={**env, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date})
+        assert proc.returncode == 0, proc.stderr
+        return proc.stdout.strip()
+
+    def commit(data: bytes, subject: str, date: str) -> str:
+        _write(repo / builder.TEMPLATE_REL, data)
+        git("add", "-A")
+        git("commit", "-q", "-m", subject, date=date)
+        return git("rev-parse", "HEAD")
+
+    repo.mkdir()
+    git("init", "-q", "-b", "main")
+    base = commit(b"v1\n", "feat: launcher", "2026-10-01T00:00:00+00:00")
+    git("switch", "-q", "-c", "dev")
+    dev = commit(b"v2-dev\n", "fix(sandbox): dev change", "2026-10-02T00:00:00+00:00")
+    git("switch", "-q", "main")
+    commit(b"v1-main\n", "fix(sandbox): main change", "2026-10-03T00:00:00+00:00")
+    commit(b"v1\n", "fix(sandbox): revert main change", "2026-10-04T00:00:00+00:00")
+    git("switch", "-q", "dev")
+    git("merge", "-q", "--no-edit", "main", date="2026-10-05T00:00:00+00:00")
+    assert (repo / builder.TEMPLATE_REL).read_bytes() == b"v2-dev\n"
+
+    monkeypatch.setattr(builder, "REPO_ROOT", repo)
+    versions = builder.build()["versions"]
+    assert [v["commit"] for v in versions] == [base, dev]
+    assert versions[-1]["sha256"] == _sha(b"v2-dev\n")
+
+
 def test_security_rule() -> None:
     assert builder._security("0" * 40, "fix(sandbox): close a gap")
     assert builder._security("0" * 40, "fix(launcher): parity")
