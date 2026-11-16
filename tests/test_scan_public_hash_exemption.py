@@ -167,6 +167,7 @@ def test_check_public_hash_exemption_accepts_a_real_sri_body() -> None:
 
 
 # --- labelled git object ids and digests (v1.2.0-rc.1 soak, 2026-11-16) ---------------------------------------------
+# The exemption applies only on a line with no secret keyword, like #460 and the path guard (IM @security).
 
 # Fixed values whose Shannon entropy clears the scanner's 3.8-bit floor (3.871 and 3.964), so the controls below are
 # reported without the exemption; a low-entropy hex run would pass for the wrong reason.
@@ -179,28 +180,39 @@ def _high_credentials(text: str) -> list:
             if f.category == "credential" and f.severity == "high"]
 
 
+def _any_credentials(text: str) -> list:
+    return [f for f in scan_content(text, "x.csv") if f.category == "credential"]
+
+
 @pytest.mark.parametrize("line", [
-    # A security-log merge record that also says "token": the fleet snapshot guard refused this file in the soak.
-    f"2026-11-16,plan,step 3,merged with the operator token: gh pr merge 20 --merge --match-head-commit {_SHA1} ,PASS",
-    f"auth review recorded: sha256 {_SHA256} pinned",
-    f"token rotated; merged as {_SHA1} today",
-    f"credential row: commit {_SHA1} and tree {_SHA1}",
-    f"--match-head-commit={_SHA1} token",
+    f"2026-11-16,plan,step 3,gh pr merge 20 --merge --match-head-commit {_SHA1} ,PASS",
+    f"pinned sha256 {_SHA256} today",
+    f"#536 merged as {_SHA1}",
+    f"commit {_SHA1} and tree {_SHA1}",
+    f"--match-head-commit={_SHA1} done",
 ])
-def test_a_labelled_git_hash_is_not_a_credential(line: str) -> None:
-    assert _high_credentials(line) == [], line
-    assert not [f for f in scan_content(line, "x.csv") if f.category == "credential"], line
+def test_a_labelled_git_hash_on_a_plain_line_is_not_a_credential(line: str) -> None:
+    assert _any_credentials(line) == [], line
+
+
+@pytest.mark.parametrize("line", [
+    # A secret keyword on the line: the exemption does not apply, as in rc1 (IM @security, 2026-11-16).
+    f"secret sha {_SHA256}",
+    f"token: commit {_SHA1}",
+    f"password commit {_SHA1}",
+    f"merged with the operator token: gh pr merge 20 --match-head-commit {_SHA1} ,PASS",
+])
+def test_a_labelled_git_hash_on_a_secret_keyword_line_stays_high(line: str) -> None:
+    assert _high_credentials(line), line
 
 
 @pytest.mark.parametrize("line", [
     f"GITHUB_TOKEN={_SHA1}",                       # no git label; `\btoken\b` misses after `_`, so the context-free branch reports it
     f"Authorization: bearer {_SHA1}",
     f"secret {_SHA256}",
-    f"token sha {_SHA1.upper()}",                   # git prints lowercase; uppercase hex is not exempted
-    f"token commit {_SHA1}x",                       # not exactly 40 hex
     "token ghp_Ab3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5",
 ])
-def test_an_unlabelled_or_malformed_hex_secret_is_still_reported(line: str) -> None:
+def test_an_unlabelled_hex_secret_is_still_reported(line: str) -> None:
     assert _high_credentials(line), line
 
 
@@ -210,36 +222,37 @@ def test_the_control_values_clear_the_entropy_floor() -> None:
     assert _token_entropy(_SHA1) >= _ENTROPY_MIN_BITS and _token_entropy(_SHA256) >= _ENTROPY_MIN_BITS
 
 
-def test_the_fleet_snapshot_guard_passes_a_log_that_cites_commits() -> None:
-    from agentteams._scan_public_hashes import is_labelled_git_hash
-
-    line = f"merged with the operator token: gh pr merge 20 --match-head-commit {_SHA1} done"
-    start = line.index(_SHA1)
-    assert is_labelled_git_hash(line, start, start + 40)
-    assert not is_labelled_git_hash(f"token {_SHA1}", 6, 46)
-
-
-
 @pytest.mark.parametrize("line", [
-    f"commit {_SHA1} {hashlib.sha1(b'7').hexdigest()[::-1]}",   # only the labelled first hex is exempt
-    f"token unmerged {_SHA1}",                     # a label inside a word does not count
-    f"token commit foo {_SHA1}",                   # a word between the label and the hex breaks the binding
-    f"token xcommit={_SHA1}",                      # joined form: the token must start with the label
-    f"token commit=={_SHA1}",                      # joined form: exactly one separator
-    f"token commit={_SHA1}f",                      # joined form: exactly 40 or 64 hex
+    f"commit {_SHA1} {_SHA1[::-1]}",               # only the labelled first hex is exempt
+    f"unmerged {_SHA1}",                           # a label inside a word does not count
+    f"api_key_digest {_SHA256}",                   # nor after an underscore (IM @security)
+    f"oauth_sha {_SHA256}",
+    f"commit foo {_SHA1}",                         # a word between the label and the hex breaks the binding
+    f"commit {_SHA1.upper()}",                     # git prints lowercase; uppercase hex is not exempted
+    f"commit {_SHA1}f",                            # exactly 40 or 64 hex
 ])
 def test_the_git_hash_binding_is_tight(line: str) -> None:
-    assert _high_credentials(line) or [f for f in scan_content(line, "x.csv") if f.category == "credential"], line
+    assert _any_credentials(line), line
 
 
 def test_a_label_ending_a_config_key_is_exempt_documented_residue() -> None:
-    # Rule 12 residue named in is_labelled_git_hash's docstring: `\b` matches after `-` or `.`.
-    assert _high_credentials(f"webhook-secret.digest: {_SHA256}") == []
+    # Rule 12 residue named in is_labelled_git_hash's docstring: the label may follow `-` or `.`.
+    assert _any_credentials(f"webhook.x-digest: {_SHA256}") == []
+
+
+def test_is_labelled_git_hash_directly() -> None:
+    from agentteams._scan_public_hashes import is_labelled_git_hash
+
+    line = f"gh pr merge 20 --match-head-commit {_SHA1} done"
+    start = line.index(_SHA1)
+    assert is_labelled_git_hash(line, start, start + 40)
+    assert not is_labelled_git_hash(f"value {_SHA1}", 6, 46)
 
 
 # --- SSH key fingerprints (v1.2.0-rc.1 soak, 2026-11-16) ------------------------------------------------------------
 
 _FP = "IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM"   # the public release-key fingerprint (SECURITY.md)
+_B43 = base64.b64encode(hashlib.sha256(b"secret-fixture").digest()).decode().rstrip("=")   # a 32-byte "secret"
 
 
 def test_a_release_signature_line_is_not_a_credential() -> None:
@@ -250,6 +263,7 @@ def test_a_release_signature_line_is_not_a_credential() -> None:
 
 @pytest.mark.parametrize("line", [
     f"value {_FP} here",                           # no SHA256: label
+    f"api_key=SHA256:{_B43}",                      # an assignment, not a cited fingerprint (IM @security)
     f"sha256:{_FP}",                               # git and ssh-keygen print SHA256 in capitals
     f"SHA256:{_FP}A",                              # 44 characters: not a fingerprint body
     f"SHA256:{_FP[:-1]}=",                         # padded: not the unpadded fingerprint form
@@ -257,3 +271,12 @@ def test_a_release_signature_line_is_not_a_credential() -> None:
 ])
 def test_an_unlabelled_or_malformed_fingerprint_is_still_reported(line: str) -> None:
     assert _high_credentials(line), line
+
+
+def test_is_ssh_key_fingerprint_directly() -> None:
+    from agentteams._scan_public_hashes import is_ssh_key_fingerprint
+
+    line = f"key SHA256:{_FP}"
+    assert is_ssh_key_fingerprint(line, 11, 54)
+    assert not is_ssh_key_fingerprint(f"key SHA256:{_FP}A", 11, 54)        # the next character continues the run
+    assert not is_ssh_key_fingerprint(f"api_key=SHA256:{_FP}", 15, 58)     # assignment

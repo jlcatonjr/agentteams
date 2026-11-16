@@ -6,20 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### fixed (the content scanner no longer reports a cited git commit or digest as a credential; v1.2.0-rc.1 soak)
+### fixed (the content scanner no longer reports a cited git commit, digest or SSH key fingerprint as a credential; v1.2.0-rc.1 soak)
 
-- A security-decision log line that cites a commit (`--match-head-commit <sha>`, `merged as <sha>`, `commit <sha>`)
-  or a digest (`sha256 <hex>`) and also says "token", "auth" or "credential" was reported as a high-severity secret.
-  The fleet snapshot guard then refused the file ("credential-like content … falling back to HEAD"), and the same
-  verdict reached the constitutional gate and the hygiene rules, which share `agentteams.scan`.
-- `_scan_public_hashes.is_labelled_git_hash` exempts a token only when it is exactly 40 or 64 lowercase hex
-  characters (or `label=<hex>` / `label:<hex>`) and the text just before it ends with a git or digest label. A bare
-  40-hex value with no label is still reported (older GitHub OAuth tokens are 40-hex), as is uppercase hex.
-- `_scan_public_hashes.is_ssh_key_fingerprint` exempts an SSH key fingerprint body, exactly 43 unpadded base64
-  characters straight after `SHA256:` (as `ssh-keygen -l` and `git tag -v` print it). Every governed team's
-  security log records the release-signature check with the key's fingerprint; it was reported as a high-severity
-  secret and was the trigger in the soak. A bare 43-character base64 value, lowercase `sha256:`, a padded or
-  44-character body, or `SHA256: ` with a space is still reported.
+- Every governed team's security log records the release-signature check, `… key SHA256:<43 base64>`. The scanner
+  reported the fingerprint as a high-severity secret, so the fleet snapshot guard refused the file ("credential-like
+  content … falling back to HEAD"); the constitutional gate and the hygiene rules share `agentteams.scan`.
+- `_scan_public_hashes.is_ssh_key_fingerprint` exempts exactly 43 unpadded base64 characters straight after
+  `SHA256:` when `SHA256:` starts the line or follows whitespace, a bracket or a quote. Still reported: a bare
+  43-character value, `api_key=SHA256:<43>`, lowercase `sha256:`, a padded or 44-character body, `SHA256: ` with a space.
+- `_scan_public_hashes.is_labelled_git_hash` exempts exactly 40 or 64 lowercase hex characters straight after a git or
+  digest label (`--match-head-commit`, `merged as`, `commit`, `sha256`, `digest`, …) that does not follow a letter,
+  digit or `_`. Still reported: an unlabelled 40-hex value (older GitHub OAuth tokens), uppercase hex,
+  `api_key_digest <hex>`.
+- Both exemptions apply only on a line with no secret keyword, like the #460 public-hash exemptions: a labelled value
+  on a line that says "token", "secret" or "password" is reported as before.
 
 ### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
 

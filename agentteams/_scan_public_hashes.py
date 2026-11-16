@@ -57,7 +57,7 @@ _GIT_HEX_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 #: The label that must sit immediately before the token (only spaces, ``=`` or ``:`` between) for it to be
 #: read as a git object id or digest: a merge-pin flag, or a git/digest word. Case-insensitive.
 _GIT_HEX_LABEL_RE = re.compile(
-    r"(?:--match-head-commit|\bmerged\s+as|\b(?:commit|sha|sha1|sha-1|sha256|sha-256|digest|head|merge|tree|parent|tag|oid))"
+    r"(?<![A-Za-z0-9_])(?:--match-head-commit|merged\s+as|commit|sha|sha1|sha-1|sha256|sha-256|digest|head|merge|tree|parent|tag|oid)"
     r"[ \t]*[=:]?[ \t]*$",
     re.IGNORECASE,
 )
@@ -78,17 +78,18 @@ def is_labelled_git_hash(line: str, start: int, end: int) -> bool:
     """True when ``line[start:end]`` is a git object id or hex digest introduced by a git/digest label.
 
     Security-decision logs and release records cite commits (``--match-head-commit <sha>``, ``merged as
-    <sha>``) and digests (``sha256 <hex>``). When such a line also carries a secret-context word (for example
-    "operator token"), the scanner's sensitive-context matcher reported the 40/64-hex value as a high-severity
-    secret, and the fleet snapshot guard refused the file (v1.2.0-rc.1 soak, 2026-11-16).
+    <sha>``) and digests (``sha256 <hex>``); the entropy detector reported them (v1.2.0-rc.1 soak, 2026-11-16).
+    The scanner applies this only on a line with no secret keyword: on a line that says "token", "secret" or
+    "password", a labelled hex value is still reported, as before (IM @security, 2026-11-16).
 
     The exemption is bound to the token span, never the line: the token must be exactly 40 or 64 lowercase hex
     characters, and the text before it must end with a label from :data:`_GIT_HEX_LABEL_RE`. A bare hex run
     with no such label is still reported, because some credentials are 40-hex (older GitHub OAuth tokens).
 
     Accepted residue (Rule 12): a secret that is itself exactly 40 or 64 lowercase hex characters, written
-    straight after one of these labels, is not reported. A label's ``\\b`` also matches after ``-`` or ``.``, so a
-    label that ends a config key counts too: ``webhook-secret.digest: <64hex>`` or ``x-tag: <hex>``
+    straight after one of these labels on a line with no secret keyword, is not reported. The label may not follow a
+    letter, digit or ``_`` (``api_key_digest`` does not count), but may follow ``-`` or ``.``, so a label that ends a
+    config key counts too: ``webhook-secret.digest: <64hex>`` or ``x-tag: <hex>``
     is exempt. ``digest``, ``tag``, ``head`` and ``merge`` are common words; that is the price of reading logs.
 
     Args:
@@ -218,14 +219,18 @@ def is_ssh_key_fingerprint(line: str, start: int, end: int) -> bool:
         return False
     if end < len(line) and (line[end].isalnum() or line[end] in "+/="):
         return False
-    return start >= 7 and line[start - 7:start] == "SHA256:"
+    if start < 7 or line[start - 7:start] != "SHA256:":
+        return False
+    # ``key SHA256:…`` (git tag -v, ssh-keygen -l) is a cited fingerprint; ``api_key=SHA256:…`` is an assignment and
+    # stays reported (IM @security, 2026-11-16).
+    return start == 7 or line[start - 8].isspace() or line[start - 8] in "([{<\"'`"
 
 
 def is_labelled_public_identifier(line: str, start: int, end: int) -> bool:
     """True when ``line[start:end]`` is a labelled git object id / digest or an SSH key fingerprint.
 
-    The scanner's one call for both public-identifier exemptions (v1.2.0-rc.1 soak), in both matcher branches: a
-    security-log line that says "operator token" is still citing a commit or a release-key fingerprint.
+    The scanner's one call for both public-identifier exemptions (v1.2.0-rc.1 soak). It is applied only on a line
+    with no secret keyword, like the #460 exemptions and the path guard (IM @security, 2026-11-16).
 
     Args:
         line: The line being scanned.
