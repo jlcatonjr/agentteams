@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the content scanner no longer reports a cited git commit, digest or SSH key fingerprint as a credential; v1.2.0-rc.1 soak)
+
+- Every governed team's security log records the release-signature check, `… key SHA256:<43 base64>`. The scanner
+  reported the fingerprint as a high-severity secret, so the fleet snapshot guard refused the file ("credential-like
+  content … falling back to HEAD"); the constitutional gate and the hygiene rules share `agentteams.scan`.
+- `_scan_public_hashes.is_ssh_key_fingerprint` exempts exactly 43 unpadded base64 characters straight after
+  `SHA256:` when `SHA256:` starts the line or follows whitespace, a bracket or a quote. Still reported: a bare
+  43-character value, `api_key=SHA256:<43>`, lowercase `sha256:`, a padded or 44-character body, `SHA256: ` with a space.
+- `_scan_public_hashes.is_labelled_git_hash` exempts exactly 40 or 64 lowercase hex characters straight after a git or
+  digest label (`--match-head-commit`, `merged as`, `commit`, `sha256`, `digest`, …) that does not follow a letter,
+  digit or `_`. Still reported: an unlabelled 40-hex value (older GitHub OAuth tokens), uppercase hex,
+  `api_key_digest <hex>`.
+- Both exemptions apply only on a line with no secret keyword, like the #460 public-hash exemptions: a labelled value
+  on a line that says "token", "secret" or "password" is reported as before.
+
 ### fixed (red-team probe E1 measures a rendered team; #478)
 
 - Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly

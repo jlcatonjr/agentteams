@@ -50,6 +50,68 @@ _GITHUB_COMMIT_URL_RE = re.compile(
 )
 
 
+#: A git object id or hex digest: exactly 40 (SHA-1) or 64 (SHA-256) lowercase hex characters. Git and
+#: ``sha256sum``/``shasum`` print lowercase; an uppercase or mixed-case run is not exempted.
+_GIT_HEX_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+
+#: The label that must sit immediately before the token (only spaces, ``=`` or ``:`` between) for it to be
+#: read as a git object id or digest: a merge-pin flag, or a git/digest word. Case-insensitive.
+_GIT_HEX_LABEL_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:--match-head-commit|merged\s+as|commit|sha|sha1|sha-1|sha256|sha-256|digest|head|merge|tree|parent|tag|oid)"
+    r"[ \t]*[=:]?[ \t]*$",
+    re.IGNORECASE,
+)
+
+
+#: ``<label>=<hex>`` or ``<label>:<hex>`` read as one token by the sensitive-context matcher.
+_JOINED_GIT_HEX_RE = re.compile(
+    r"(?:--match-head-commit|commit|sha|sha1|sha-1|sha256|sha-256|digest|head|merge|tree|parent|tag|oid)"
+    r"[=:](?P<hex>[0-9a-f]{40}|[0-9a-f]{64})",
+    re.IGNORECASE,
+)
+
+#: An OpenSSH / git SSH key fingerprint as ``ssh-keygen -l`` and ``git tag -v`` print it: ``SHA256:`` then
+#: exactly 43 unpadded base64 characters (a 32-byte digest).
+_SSH_FINGERPRINT_BODY_RE = re.compile(r"[A-Za-z0-9+/]{43}")
+
+def is_labelled_git_hash(line: str, start: int, end: int) -> bool:
+    """True when ``line[start:end]`` is a git object id or hex digest introduced by a git/digest label.
+
+    Security-decision logs and release records cite commits (``--match-head-commit <sha>``, ``merged as
+    <sha>``) and digests (``sha256 <hex>``); the entropy detector reported them (v1.2.0-rc.1 soak, 2026-11-16).
+    The scanner applies this only on a line with no secret keyword: on a line that says "token", "secret" or
+    "password", a labelled hex value is still reported, as before (IM @security, 2026-11-16).
+
+    The exemption is bound to the token span, never the line: the token must be exactly 40 or 64 lowercase hex
+    characters, and the text before it must end with a label from :data:`_GIT_HEX_LABEL_RE`. A bare hex run
+    with no such label is still reported, because some credentials are 40-hex (older GitHub OAuth tokens).
+
+    Accepted residue (Rule 12): a secret that is itself exactly 40 or 64 lowercase hex characters, written
+    straight after one of these labels on a line with no secret keyword, is not reported. The label may not follow a
+    letter, digit or ``_`` (``api_key_digest`` does not count), but may follow ``-`` or ``.``, so a label that ends a
+    config key counts too: ``webhook-secret.digest: <64hex>`` or ``x-tag: <hex>``
+    is exempt. ``digest``, ``tag``, ``head`` and ``merge`` are common words; that is the price of reading logs.
+
+    Args:
+        line: The line being scanned.
+        start: Start offset of the candidate token in ``line``.
+        end: End offset of the candidate token in ``line``.
+
+    Returns:
+        True to suppress the entropy or secret-context finding for this token; False to report it.
+    """
+    token = line[start:end]
+    hex_at = start
+    if _GIT_HEX_RE.fullmatch(token) is None:
+        # The sensitive-context matcher reads ``--match-head-commit=<sha>`` as one token: accept it only when the
+        # token is exactly a label, one ``=`` or ``:``, then the hex, so nothing else in the token is waved through.
+        joined = _JOINED_GIT_HEX_RE.fullmatch(token)
+        if joined is None:
+            return False
+        hex_at = start + joined.start("hex")
+    return _GIT_HEX_LABEL_RE.search(line[:hex_at]) is not None
+
+
 def sri_body_spans(line: str, filepath: str) -> list[tuple[int, int]]:
     """Return the spans of SRI base64 bodies inside a lockfile ``integrity`` value.
 
@@ -128,3 +190,54 @@ def check_public_hash_exemption(
             continue
         return not any(is_opaque_segment(s) for s in line[start:url.start("sha")].split("/"))
     return False
+
+
+def is_ssh_key_fingerprint(line: str, start: int, end: int) -> bool:
+    """True when ``line[start:end]`` is the body of an SSH key fingerprint, ``SHA256:<43 base64>``.
+
+    Security logs record release-signature checks (``Good "git" signature … key SHA256:IPdnLw…``); the 43-character
+    base64 body clears the entropy bar (about 5 bits) and was reported as a high-severity secret, so the fleet
+    snapshot guard refused every governed team's log (v1.2.0-rc.1 soak, 2026-11-16). A fingerprint is a public
+    digest of a public key.
+
+    Bound to the token span: the token must be exactly 43 characters of unpadded base64, the 7 characters before it
+    must be ``SHA256:`` (as ssh-keygen and git print it, case-sensitive), and the next character must not continue a
+    base64 run. A bare 43-character base64 value with no ``SHA256:`` label is still reported.
+
+    Accepted residue (Rule 12): a secret that is itself 43 unpadded base64 characters, written straight after
+    ``SHA256:``, is not reported.
+
+    Args:
+        line: The line being scanned.
+        start: Start offset of the candidate token in ``line``.
+        end: End offset of the candidate token in ``line``.
+
+    Returns:
+        True to suppress the finding for this token; False to report it.
+    """
+    if _SSH_FINGERPRINT_BODY_RE.fullmatch(line[start:end]) is None:
+        return False
+    if end < len(line) and (line[end].isalnum() or line[end] in "+/="):
+        return False
+    if start < 7 or line[start - 7:start] != "SHA256:":
+        return False
+    # ``key SHA256:…`` (git tag -v, ssh-keygen -l) is a cited fingerprint; ``api_key=SHA256:…`` is an assignment and
+    # stays reported (IM @security, 2026-11-16).
+    return start == 7 or line[start - 8].isspace() or line[start - 8] in "([{<\"'`"
+
+
+def is_labelled_public_identifier(line: str, start: int, end: int) -> bool:
+    """True when ``line[start:end]`` is a labelled git object id / digest or an SSH key fingerprint.
+
+    The scanner's one call for both public-identifier exemptions (v1.2.0-rc.1 soak). It is applied only on a line
+    with no secret keyword, like the #460 exemptions and the path guard (IM @security, 2026-11-16).
+
+    Args:
+        line: The line being scanned.
+        start: Start offset of the candidate token in ``line``.
+        end: End offset of the candidate token in ``line``.
+
+    Returns:
+        True to suppress the finding for this token; False to report it.
+    """
+    return is_labelled_git_hash(line, start, end) or is_ssh_key_fingerprint(line, start, end)
