@@ -15,7 +15,7 @@ import pytest
 
 import build_team
 from agentteams.cli import security_gate
-from agentteams._archetype_placeholders import explicitly_selected_unfilled
+from agentteams._archetype_placeholders import named_archetype_keys
 from agentteams.enrich._fills import _fill_reference_db_path, _fill_style_reference_path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -100,11 +100,40 @@ def test_keyword_selection_keeps_the_default_and_warns(capsys) -> None:
 @pytest.mark.parametrize("desc, expected", [
     ({}, set()),
     ({"selected_archetypes": ["style-guardian"]}, {"STYLE_REFERENCE_PATH"}),
-    ({"selected_archetypes": ["reference-manager"], "reference_db": "x.bib"}, set()),
+    ({"selected_archetypes": ["style-guardian", "reference-manager"]}, {"STYLE_REFERENCE_PATH", "REFERENCE_DB_PATH"}),
     ({"selected_archetypes": "style-guardian"}, set()),
+    (["style-guardian"], set()),
 ])
-def test_explicitly_selected_unfilled(desc: dict, expected: set) -> None:
-    assert explicitly_selected_unfilled(desc) == expected
+def test_named_archetype_keys(desc: object, expected: set) -> None:
+    assert named_archetype_keys(desc) == expected
+
+
+def test_a_resolved_value_keeps_its_value_and_is_not_warned_about(capsys) -> None:
+    """analyze can resolve the value itself (a doc-site default); then nothing stays and nothing is warned."""
+    manifest = {
+        "selected_archetypes": ["style-guardian", "reference-manager"],
+        "auto_resolved_placeholders": {"REFERENCE_DB_PATH": "docs/refs.bib", "STYLE_REFERENCE_PATH": "docs/style.md"},
+        "manual_required_placeholders": [],
+    }
+    build_team._apply_placeholder_policy(manifest, strict_manual_placeholders=False,
+                                         description={"selected_archetypes": ["style-guardian", "reference-manager"]})
+    assert manifest["auto_resolved_placeholders"] == {"REFERENCE_DB_PATH": "docs/refs.bib",
+                                                      "STYLE_REFERENCE_PATH": "docs/style.md"}
+    assert "warning" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_named_and_unresolved_warns_in_both_modes(capsys, strict: bool) -> None:
+    manifest = {
+        "selected_archetypes": ["style-guardian"],
+        "auto_resolved_placeholders": {"STYLE_REFERENCE_PATH": "{MANUAL:STYLE_REFERENCE_PATH}"},
+        "manual_required_placeholders": [{"placeholder": "STYLE_REFERENCE_PATH"}],
+    }
+    build_team._apply_placeholder_policy(manifest, strict_manual_placeholders=strict,
+                                         description={"selected_archetypes": ["style-guardian"]})
+    assert manifest["auto_resolved_placeholders"]["STYLE_REFERENCE_PATH"] == "{MANUAL:STYLE_REFERENCE_PATH}"
+    assert manifest["manual_required_placeholders"] == [{"placeholder": "STYLE_REFERENCE_PATH"}]
+    assert "style-guardian is named in selected_archetypes" in capsys.readouterr().err
 
 
 def test_enrich_fills_leave_named_archetypes_unfilled() -> None:
@@ -112,3 +141,16 @@ def test_enrich_fills_leave_named_archetypes_unfilled() -> None:
     assert _fill_style_reference_path(manifest) == ""
     assert _fill_reference_db_path(manifest) == ""
     assert _fill_style_reference_path({"description": {}}).startswith("N/A")
+
+
+def test_keyword_selection_end_to_end_keeps_todays_output(tmp_path: Path, capsys) -> None:
+    """No selected_archetypes: keywords pick both agents, output keeps the N/A defaults, and each is warned."""
+    out = _generate(tmp_path, _brief(tmp_path))
+    err = capsys.readouterr().err
+    assert (out / "style-guardian.agent.md").is_file() and (out / "reference-manager.agent.md").is_file()
+    text = _all_text(out)
+    assert "N/A - no formal style guide defined for this project" in text
+    assert "N/A - no citation database configured for this project" in text
+    assert "{MANUAL:STYLE_REFERENCE_PATH}" not in text and "{MANUAL:REFERENCE_DB_PATH}" not in text
+    assert "style-guardian selected without a style_reference" in err
+    assert "reference-manager selected without a reference_db_path" in err

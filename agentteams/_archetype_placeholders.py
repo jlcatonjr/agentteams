@@ -6,25 +6,25 @@ rule fills (:mod:`agentteams.enrich._fills`), so neither replaces such a token w
 
 from __future__ import annotations
 
-#: Archetypes whose placeholder a brief must fill once it names them in ``selected_archetypes`` (#392 item 1).
-ARCHETYPE_PLACEHOLDERS: dict[str, tuple[str, tuple[str, ...]]] = {
-    "STYLE_REFERENCE_PATH": ("style-guardian", ("style_reference", "style_reference_path")),
-    "REFERENCE_DB_PATH": ("reference-manager", ("reference_db_path", "reference_db")),
+#: Placeholder key -> (the archetype that needs it, the brief field that fills it). Whether the value was filled
+#: is read from the manifest (``analyze`` also infers doc-site defaults), never from brief fields.
+ARCHETYPE_PLACEHOLDERS: dict[str, tuple[str, str]] = {
+    "STYLE_REFERENCE_PATH": ("style-guardian", "style_reference"),
+    "REFERENCE_DB_PATH": ("reference-manager", "reference_db_path"),
 }
 
 
-def explicitly_selected_unfilled(description: dict | None) -> set[str]:
-    """Placeholder keys whose archetype the brief names in ``selected_archetypes`` without the value it needs.
+def named_archetype_keys(description: object) -> set[str]:
+    """Placeholder keys whose archetype the brief names in an explicit ``selected_archetypes`` list.
 
     Args:
-        description: The project description (brief), or ``None``.
+        description: The project description (brief); anything other than a dict names nothing.
 
     Returns:
-        The keys of :data:`ARCHETYPE_PLACEHOLDERS` that stay ``{MANUAL:*}`` in every mode.
+        The keys of :data:`ARCHETYPE_PLACEHOLDERS` whose archetype is named. Such a key must never be
+        replaced by an "N/A" default while its value is unresolved.
     """
-    desc = description or {}
-    named = desc.get("selected_archetypes")
+    named = description.get("selected_archetypes") if isinstance(description, dict) else None
     if not isinstance(named, list):
         return set()
-    return {key for key, (slug, fields) in ARCHETYPE_PLACEHOLDERS.items()
-            if slug in named and not any(desc.get(f) for f in fields)}
+    return {key for key, (slug, _field) in ARCHETYPE_PLACEHOLDERS.items() if slug in named}
