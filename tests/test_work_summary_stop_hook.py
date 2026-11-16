@@ -159,6 +159,19 @@ def _wire(root: Path, body: str) -> list[str]:
     return [sys.executable, "-B", *argv[1:]]
 
 
+def test_the_launcher_and_its_emitter_are_integrity_pinned() -> None:
+    """SEC-AT-WS-STOP-HOOK-2026-11-14 (6): dropping either file from the enforcement set must fail a test."""
+    from agentteams import integrity
+
+    repo = Path(__file__).resolve().parents[1]
+    manifest = json.loads((repo / "references" / "enforcement-integrity.json").read_text(encoding="utf-8"))
+    pinned = json.dumps(manifest)
+    for rel in ("agentteams/templates/universal/hooks/work-summary-stop.py",
+                "agentteams/frameworks/_work_summary_hook_emit.py"):
+        assert rel in integrity.ENFORCEMENT_MODULES, rel
+        assert f'"{rel}"' in pinned, rel
+
+
 def test_wired_command_runs_the_intact_launcher(project) -> None:
     root, calls, rdir = project
     _plan(root)
