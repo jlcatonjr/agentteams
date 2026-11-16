@@ -345,9 +345,12 @@ exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orpha
   with "--description is required (or use --self for self-maintenance)". It does not look up
   `.agentteams/brief.json` the way the retrieval modes do.
 - **`--output` is the agents directory**, the one that holds the orchestrator file: `.github/agents/` (Copilot),
-  `.claude/agents/` (Claude), and so on, as listed under `--output DIR`. Leave it out to use the
-  framework's default under the project. A project-root `--output` refuses with "no regular orchestrator file at
-  …", because the orchestrator is not there.
+  `.claude/agents/` (Claude), and so on, as listed under `--output DIR`. On copilot-vscode, copilot-cli, claude
+  and agents-md the path is used as given, so a project-root `--output` refuses with
+  "no regular orchestrator file at …"; goose, codex, grok and wasm append their agents directory to a project
+  root. Leave `--output` out to
+  use the framework's agents directory under the brief's `existing_project_path`, or else the current directory
+  (with `--self`, this repository's own agents directory).
 
 - **Validation.** Each slug must be an adoptable orphan in the target agent directory: its file is there, this
   build doesn't emit it, and it isn't a tool agent. Any other slug refuses the whole run (`[ADOPT-ONLY] refused`)

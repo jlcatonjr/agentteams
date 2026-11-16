@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The CLI reference and `--adopt-only`'s help (and so the man page) now say that `--adopt-only` needs
   `--description` or `--self`, and that `--output`, when given, is the agents directory that holds the
-  orchestrator: a project-root `--output` refuses with "no regular orchestrator file". Finding
+  orchestrator. On Copilot, Claude and agents-md, which take the path as given, a project-root `--output` refuses
+  with "no regular orchestrator file"; goose, codex, grok and wasm append their agents directory. Finding
   `.agentteams/brief.json` automatically is a separate change.
 - New check in `tests/test_adopt_only_docs.py`.
 
