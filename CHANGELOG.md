@@ -21,6 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Both exemptions apply only on a line with no secret keyword, like the #460 public-hash exemptions: a labelled value
   on a line that says "token", "secret" or "password" is reported as before.
 
+### fixed (red-team probe E1 measures a rendered team; #478)
+
+- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
+  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
+  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
+  and checks the emitted front matter. Each of these is EXPLOITED:
+  - an `allowed-tools:` key;
+  - any agent with no `tools:`/`disallowedTools:`;
+  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
+    a tool list it cannot parse.
+
+  Read-only means the template grants no write or command capability. An empty render raises.
+- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
+- The probe baseline is re-accepted by the operator after merge; the review is in
+  `references/redteam-probe-revalidation.md`.
+
 ### fixed (slug checks refuse a trailing newline; #473)
 
 - The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
