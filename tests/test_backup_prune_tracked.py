@@ -141,3 +141,28 @@ def test_kept_tracked_honours_keep_within_days(tmp_path: Path):
     agents = _repo_with_backups(tmp_path)
     result = prune_backups(agents, keep_last=1, keep_within_days=100000)   # every backup is inside the age window
     assert result.kept_tracked == [] and not result.deleted
+
+
+def test_an_inherited_empty_index_does_not_make_tracked_backups_look_untracked(tmp_path: Path,
+                                                                                monkeypatch: pytest.MonkeyPatch):
+    """IM @security #542: under a hook or wrapper, GIT_INDEX_FILE may name another (here empty) index."""
+    agents = _repo_with_backups(tmp_path)
+    empty = tmp_path / "other"
+    empty.mkdir()
+    _git(empty, "init", "-q")
+    monkeypatch.setenv("GIT_INDEX_FILE", str(empty / ".git" / "index-empty"))
+    result = prune_backups(agents, keep_last=1)
+    assert set(_TRACKED) <= _left(agents) and sorted(result.kept_tracked) == _TRACKED
+
+
+def test_an_inherited_git_dir_elsewhere_does_not_make_tracked_backups_look_untracked(tmp_path: Path,
+                                                                                    monkeypatch: pytest.MonkeyPatch):
+    agents = _repo_with_backups(tmp_path)
+    other = tmp_path / "other"
+    other.mkdir()
+    _git(other, "init", "-q")
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    result = prune_backups(agents, keep_last=1)
+    assert set(_TRACKED) <= _left(agents) and sorted(result.kept_tracked) == _TRACKED

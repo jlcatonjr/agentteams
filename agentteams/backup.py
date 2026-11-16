@@ -656,6 +656,13 @@ class PruneResult:
 TRACKED_BACKUPS_KEPT = "kept backups that git tracks"
 
 
+#: Environment variables that redirect where git finds the repository, its index or its objects; never inherited by
+#: the tracked-backup check.
+_GIT_LOCATION_VARS = frozenset({"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CEILING_DIRECTORIES",
+                                "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+                                "GIT_DISCOVERY_ACROSS_FILESYSTEM", "GIT_NAMESPACE"})
+
+
 def _tracked_backup_names(backup_root: Path) -> set[str] | None:
     """Return the names of the backup directories under *backup_root* that hold a git-tracked file.
 
@@ -674,7 +681,9 @@ def _tracked_backup_names(backup_root: Path) -> set[str] | None:
     from agentteams.git_exec import run_git
 
     # LC_ALL=C: the "not a git repository" test below reads git's message, which a localised git would translate.
-    env = {**os.environ, "LC_ALL": "C", "LANGUAGE": "C"}
+    # The repository-locating variables are dropped (IM @security, #542): under a hook or wrapper, an inherited
+    # GIT_INDEX_FILE, GIT_DIR or ceiling would make tracked backups read as untracked, and they would be deleted.
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_VARS} | {"LC_ALL": "C", "LANGUAGE": "C"}
     try:
         proc = run_git(backup_root, "ls-files", "-z", "--", ".", hardened=True, env=env, devnull_stdin=True)
     except (OSError, ValueError, subprocess.SubprocessError):  # no git binary, undecodable path, timeout
