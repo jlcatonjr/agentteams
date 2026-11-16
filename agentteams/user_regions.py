@@ -388,6 +388,11 @@ def ensure_recipe_notes(recipe: str, notes_section: str) -> str:
     return head + block + ("\n" if end < len(recipe) else "") + recipe[end:]
 
 
+#: The verbs of :func:`merge_carry`'s refusal messages (``"<rel_path>: <verb>: <problem>…"``); the fleet report
+#: keys on them.
+MERGE_REFUSED, MERGE_WOULD_REFUSE = "not merged", "would not merge"
+
+
 def recipe_shape_problems(fresh: str, carried: str) -> list[str]:
     """Check, without a YAML parser, that carrying regions into a recipe changed only the regions (#533 review).
 
@@ -454,7 +459,7 @@ def merge_carry(rel_path: str, existing: str, content: str, messages: list[str],
         problems += [f"'{h}' is not indented inside the instructions block" for h in HEADINGS
                      if (span := find_region(existing, h)) is not None and not span[2]]
         problems += [] if problems else recipe_shape_problems(content, carried)
-    verb = "would not merge" if dry_run else "not merged"
+    verb = MERGE_WOULD_REFUSE if dry_run else MERGE_REFUSED
     messages.extend(f"{rel_path}: {verb}: {p}; the file is kept as it is and no longer updates until you move that "
                     "region's text out (or fix it) by hand and re-run, or re-run with --discard-user-regions to drop "
                     "every such region" for p in problems)

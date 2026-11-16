@@ -39,7 +39,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
-from agentteams._fleet_report import write_report as _write_report
+from agentteams._fleet_report import (first_error as _first_error, region_refusal as _region_refusal,
+                                      write_report as _write_report)
 from agentteams._fleet_shrink_grants import shrink_grant_lines
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX
@@ -862,7 +863,7 @@ def run_fleet(args, parser) -> int:
             if not apply:
                 # Dry-run: report intent; no diff (nothing written).
                 would = "would update"
-                if rc != 0 and "Error" in out:
+                if (rc != 0 and "Error" in out) or _region_refusal(out):  # a refused user region is a FAIL (#533)
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 else:
                     tr.status, tr.detail = "WOULD-UPDATE", would
@@ -890,7 +891,7 @@ def run_fleet(args, parser) -> int:
                 tr.twins_ack_unreviewed = _twin_acks.unreviewed(seen_acks, str(ws), target, tr.twins_acknowledged)
                 tr.duplicates = cls["duplicates"]
                 tr.handoffs_kept = cls["handoffs_kept"]
-                if rc != 0 and _is_hard_error(out):
+                if (rc != 0 and _is_hard_error(out)) or _region_refusal(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
                     # A malformed-fence render must not be pushed — surface it above the
@@ -954,13 +955,6 @@ def run_fleet(args, parser) -> int:
     if apply:   # after the report, so a notice is recorded as seen only once a report has shown it
         _twin_acks.record_seen(report_root, (tr for wr in results for tr in wr.targets), seen_acks)
     return rc
-
-
-def _first_error(out: str) -> str:
-    for l in out.splitlines():
-        if l.strip().startswith("Error") or "Traceback" in l:
-            return l.strip()[:160]
-    return "non-zero exit (see captured output)"
 
 
 def _is_hard_error(out: str) -> bool:
