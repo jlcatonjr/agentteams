@@ -50,6 +50,61 @@ _GITHUB_COMMIT_URL_RE = re.compile(
 )
 
 
+#: A git object id or hex digest: exactly 40 (SHA-1) or 64 (SHA-256) lowercase hex characters. Git and
+#: ``sha256sum``/``shasum`` print lowercase; an uppercase or mixed-case run is not exempted.
+_GIT_HEX_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+
+#: The label that must sit immediately before the token (only spaces, ``=`` or ``:`` between) for it to be
+#: read as a git object id or digest: a merge-pin flag, or a git/digest word. Case-insensitive.
+_GIT_HEX_LABEL_RE = re.compile(
+    r"(?:--match-head-commit|\bmerged\s+as|\b(?:commit|sha|sha1|sha-1|sha256|sha-256|digest|head|merge|tree|parent|tag|oid))"
+    r"[ \t]*[=:]?[ \t]*$",
+    re.IGNORECASE,
+)
+
+
+#: ``<label>=<hex>`` or ``<label>:<hex>`` read as one token by the sensitive-context matcher.
+_JOINED_GIT_HEX_RE = re.compile(
+    r"(?:--match-head-commit|commit|sha|sha1|sha-1|sha256|sha-256|digest|head|merge|tree|parent|tag|oid)"
+    r"[=:](?P<hex>[0-9a-f]{40}|[0-9a-f]{64})",
+    re.IGNORECASE,
+)
+
+def is_labelled_git_hash(line: str, start: int, end: int) -> bool:
+    """True when ``line[start:end]`` is a git object id or hex digest introduced by a git/digest label.
+
+    Security-decision logs and release records cite commits (``--match-head-commit <sha>``, ``merged as
+    <sha>``) and digests (``sha256 <hex>``). When such a line also carries a secret-context word (for example
+    "operator token"), the scanner's sensitive-context matcher reported the 40/64-hex value as a high-severity
+    secret, and the fleet snapshot guard refused the file (v1.2.0-rc.1 soak, 2026-11-16).
+
+    The exemption is bound to the token span, never the line: the token must be exactly 40 or 64 lowercase hex
+    characters, and the text before it must end with a label from :data:`_GIT_HEX_LABEL_RE`. A bare hex run
+    with no such label is still reported, because some credentials are 40-hex (older GitHub OAuth tokens).
+
+    Accepted residue (Rule 12): a secret that is itself exactly 40 or 64 lowercase hex characters, written
+    straight after one of these labels, is not reported.
+
+    Args:
+        line: The line being scanned.
+        start: Start offset of the candidate token in ``line``.
+        end: End offset of the candidate token in ``line``.
+
+    Returns:
+        True to suppress the entropy or secret-context finding for this token; False to report it.
+    """
+    token = line[start:end]
+    hex_at = start
+    if _GIT_HEX_RE.fullmatch(token) is None:
+        # The sensitive-context matcher reads ``--match-head-commit=<sha>`` as one token: accept it only when the
+        # token is exactly a label, one ``=`` or ``:``, then the hex, so nothing else in the token is waved through.
+        joined = _JOINED_GIT_HEX_RE.fullmatch(token)
+        if joined is None:
+            return False
+        hex_at = start + joined.start("hex")
+    return _GIT_HEX_LABEL_RE.search(line[:hex_at]) is not None
+
+
 def sri_body_spans(line: str, filepath: str) -> list[tuple[int, int]]:
     """Return the spans of SRI base64 bodies inside a lockfile ``integrity`` value.
 

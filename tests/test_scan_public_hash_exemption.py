@@ -164,3 +164,56 @@ def test_check_public_hash_exemption_accepts_a_real_sri_body() -> None:
     end = start + 88
     assert check_public_hash_exemption(line, "package-lock.json", start, end, _is_opaque_segment) is True
     assert check_public_hash_exemption(line, "package-lock.json", start + 1, end, _is_opaque_segment) is False
+
+
+# --- labelled git object ids and digests (v1.2.0-rc.1 soak, 2026-11-16) ---------------------------------------------
+
+# Fixed values whose Shannon entropy clears the scanner's 3.8-bit floor (3.871 and 3.964), so the controls below are
+# reported without the exemption; a low-entropy hex run would pass for the wrong reason.
+_SHA1 = hashlib.sha1(b"7").hexdigest()
+_SHA256 = hashlib.sha256(b"103").hexdigest()
+
+
+def _high_credentials(text: str) -> list:
+    return [f for f in scan_content(text, "references/security-decisions.log.csv")
+            if f.category == "credential" and f.severity == "high"]
+
+
+@pytest.mark.parametrize("line", [
+    # A security-log merge record that also says "token": the fleet snapshot guard refused this file in the soak.
+    f"2026-11-16,plan,step 3,merged with the operator token: gh pr merge 20 --merge --match-head-commit {_SHA1} ,PASS",
+    f"auth review recorded: sha256 {_SHA256} pinned",
+    f"token rotated; merged as {_SHA1} today",
+    f"credential row: commit {_SHA1} and tree {_SHA1}",
+    f"--match-head-commit={_SHA1} token",
+])
+def test_a_labelled_git_hash_is_not_a_credential(line: str) -> None:
+    assert _high_credentials(line) == [], line
+    assert not [f for f in scan_content(line, "x.csv") if f.category == "credential"], line
+
+
+@pytest.mark.parametrize("line", [
+    f"GITHUB_TOKEN={_SHA1}",                       # a 40-hex value with no git label: older OAuth tokens look like this
+    f"Authorization: bearer {_SHA1}",
+    f"secret {_SHA256}",
+    f"token sha {_SHA1.upper()}",                   # git prints lowercase; uppercase hex is not exempted
+    f"token commit {_SHA1}x",                       # not exactly 40 hex
+    "token ghp_Ab3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5",
+])
+def test_an_unlabelled_or_malformed_hex_secret_is_still_reported(line: str) -> None:
+    assert _high_credentials(line), line
+
+
+def test_the_control_values_clear_the_entropy_floor() -> None:
+    from agentteams.scan import _ENTROPY_MIN_BITS, _token_entropy
+
+    assert _token_entropy(_SHA1) >= _ENTROPY_MIN_BITS and _token_entropy(_SHA256) >= _ENTROPY_MIN_BITS
+
+
+def test_the_fleet_snapshot_guard_passes_a_log_that_cites_commits() -> None:
+    from agentteams._scan_public_hashes import is_labelled_git_hash
+
+    line = f"merged with the operator token: gh pr merge 20 --match-head-commit {_SHA1} done"
+    start = line.index(_SHA1)
+    assert is_labelled_git_hash(line, start, start + 40)
+    assert not is_labelled_git_hash(f"token {_SHA1}", 6, 46)

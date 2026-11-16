@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the content scanner no longer reports a cited git commit or digest as a credential; v1.2.0-rc.1 soak)
+
+- A security-decision log line that cites a commit (`--match-head-commit <sha>`, `merged as <sha>`, `commit <sha>`)
+  or a digest (`sha256 <hex>`) and also says "token", "auth" or "credential" was reported as a high-severity secret.
+  The fleet snapshot guard then refused the file ("credential-like content … falling back to HEAD"), and the same
+  verdict reached the constitutional gate and the hygiene rules, which share `agentteams.scan`.
+- `_scan_public_hashes.is_labelled_git_hash` exempts a token only when it is exactly 40 or 64 lowercase hex
+  characters (or `label=<hex>` / `label:<hex>`) and the text just before it ends with a git or digest label. A bare
+  40-hex value with no label is still reported (older GitHub OAuth tokens are 40-hex), as is uppercase hex.
+
 ### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
 
 - `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
