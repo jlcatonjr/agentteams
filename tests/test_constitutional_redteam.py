@@ -187,13 +187,19 @@ def test_e1_allows_a_scoped_bash_for_a_read_only_agent(monkeypatch: pytest.Monke
     assert row.outcome == DEFENDED
 
 
-def test_e1_catches_the_adapters_blanket_default() -> None:
-    """The path E1 now guards: a tool list the adapter cannot parse becomes `Bash, Read, Write, Edit`."""
+def test_e1_the_adapters_fallback_grants_no_write_tools() -> None:
+    """The adapter's fallback for a tool list it cannot parse stays read-only (#511, IM item 42).
+
+    It was `Bash, Read, Write, Edit`, the path E1's widened check was written against: a read-only template that hit
+    it was emitted with write access. If the fallback ever widens again, E1 would only catch it for a template that
+    happens to hit the fallback; this pins the fallback itself.
+    """
     from agentteams.frameworks.claude import _map_allowed_tools
     import tests.constitutional_redteam_battery as battery
 
-    fallback = _map_allowed_tools("---\nname: security\ntools:\n  - read\n  - search\n---\n")
-    assert set(t.strip() for t in fallback.split(",")) & battery._E1_WRITE_TOOLS
+    with pytest.warns(UserWarning, match="no usable tool scope"):
+        fallback = _map_allowed_tools("---\nname: security\ntools:\n  - read\n  - search\n---\n")
+    assert not set(t.strip() for t in fallback.split(",")) & battery._E1_WRITE_TOOLS
 
 
 def test_e1_read_only_set_comes_from_the_templates() -> None:

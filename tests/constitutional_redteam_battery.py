@@ -1104,8 +1104,9 @@ def e1_capability_key_not_honoured() -> None:
     checked nothing. Now the subject is Claude teams rendered in memory from every tracked example brief (plus a
     write_policy variant), checked for (a) a limit written to `allowed-tools:`, which Claude Code ignores; (b) a
     subagent with no `tools:`/`disallowedTools:` key, which inherits every tool; and (c) a read-only agent (its
-    template grants no write or command capability) emitted with Write, Edit or bare Bash, which is what the adapter's
-    blanket default produces when it cannot parse a tool list. An empty render raises instead of passing.
+    template grants no write or command capability) emitted with Write, Edit or bare Bash. The adapter's fallback for a
+    tool list it cannot parse was `Bash, Read, Write, Edit` until #511 made it read-only; (c) keeps any regression of
+    that, or any other widening, visible. An empty render raises instead of passing.
     """
     from agentteams.yaml_frontmatter import parse_yaml_front_matter
 
@@ -1138,8 +1139,9 @@ def e1_capability_key_not_honoured() -> None:
         control="E2",
         notes="Measured on in-memory renders, not the gitignored `.claude/agents/` (#478). Claude Code's subagent "
               "schema reads `tools:`/`disallowedTools:`; `allowed-tools:` is ignored and omitting `tools:` inherits "
-              "everything. agentteams/frameworks/claude.py `_map_allowed_tools` falls back to `Bash, Read, Write, "
-              "Edit` when it cannot parse a tool list, so a read-only template that hits that path is flagged here.",
+              "everything. agentteams/frameworks/claude.py `_map_allowed_tools` falls back to the read-only `Read, Grep, "
+              "Glob` when it cannot parse a tool list (it was `Bash, Read, Write, Edit` before #511); a read-only "
+              "template emitted with write or command tools is flagged here whatever the cause.",
     )
 
 
