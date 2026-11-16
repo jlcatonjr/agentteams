@@ -12,7 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   agent the current orchestrator routes to by `` `@slug` `` that the build neither emits nor still routes to,
   whether or not the agent has a file. Before, only the "adopted by merge" advisory named such agents, and only
   those with a file. `--dry-run --json` reports them under `at_risk_routed_agents` (`{"slug", "has_file"}`).
+- It compares against what the run would write: the new orchestrator plus the user-editable regions `--overwrite`
+  carries, so routing kept in Project-Specific Notes is not listed (unless `--discard-user-regions`). A run that
+  does not rewrite the orchestrator (no drift, or a frozen surface) lists nothing.
 - The run still proceeds. Refusing without an acknowledgement is a separate change, after `@security` reviews it.
+  A plain `--overwrite` without `--update`, and `--migrate`, are not covered yet.
 - New `agentteams/cli/routing_at_risk.py` and `tests/test_overwrite_at_risk_routing.py`.
 
 ### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)

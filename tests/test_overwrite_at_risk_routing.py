@@ -70,14 +70,19 @@ def test_real_run_reports_on_stderr_before_any_write(team: tuple[Path, Path], ca
             return fn(*a, **k)
         return wrapper
 
+    from agentteams.cli import generate as _generate
+
     monkeypatch.setattr(emit, "emit_all", _mark("emit_all", real_emit_all))
     monkeypatch.setattr(emit, "backup_output_dir", _mark("backup", real_backup))
+    # The legacy tool-agent migration can back up and delete files; it must also come after the report.
+    monkeypatch.setattr(_generate, "_remove_stale_tool_agents",
+                        _mark("stale_tool_agents", _generate._remove_stale_tool_agents))
     capsys.readouterr()
     assert _update(team, "--overwrite") == 0
     err = capsys.readouterr().err
     report = err.find("agent(s) it routes to are not in this build")
     assert report != -1, err[-2000:]
-    first_write = min(i for i in (err.find("<<backup>>"), err.find("<<emit_all>>")) if i != -1)
+    first_write = min(i for i in (err.find(f"<<{m}>>") for m in ("stale_tool_agents", "backup", "emit_all")) if i != -1)
     assert report < first_write
     assert "@feed-wrangler  — no file" in err and "@ledger-keeper  — file kept on disk" in err
     assert "`@feed-wrangler`" not in (team[1] / "orchestrator.agent.md").read_text(encoding="utf-8")
@@ -100,3 +105,52 @@ def test_slug_scan_ignores_front_matter_emitted_agents_and_chat_participants(tmp
         (tmp_path / "orchestrator.md").read_text(encoding="utf-8") + "And `@still-routed`.\n", encoding="utf-8")
     assert at_risk_routed_slugs(tmp_path, ".md", {"kept"}, rendered) == [{"slug": "dropped", "has_file": False}]
     assert at_risk_routed_slugs(tmp_path / "missing", ".md", set(), rendered) == []
+
+
+def test_an_unreadable_orchestrator_is_warned_about_not_treated_as_safe(tmp_path: Path, capsys) -> None:
+    (tmp_path / "orchestrator.md").write_bytes(b"\xff\xfe `@dropped`")
+    assert at_risk_routed_slugs(tmp_path, ".md", set(), "") == []
+    assert "could not read orchestrator.md" in capsys.readouterr().err
+
+
+class _Adapter:
+    def get_file_extension(self, kind: str) -> str:
+        return ".md"
+
+
+class _Args:
+    def __init__(self, overwrite: bool = True, discard_user_regions: bool = False) -> None:
+        self.overwrite, self.discard_user_regions = overwrite, discard_user_regions
+
+
+def _report(tmp_path: Path, on_disk: str, rendered: str, manifest: dict | None = None, **args) -> list:
+    from agentteams.cli.routing_at_risk import report_at_risk_routing
+
+    (tmp_path / "orchestrator.md").write_text(on_disk, encoding="utf-8")
+    manifest = manifest or {"agent_slug_list": ["orchestrator"]}
+    return report_at_risk_routing(tmp_path, manifest, _Adapter(), [("orchestrator.md", rendered)], _Args(**args))
+
+
+def test_adopted_agents_are_not_at_risk(tmp_path: Path) -> None:
+    manifest = {"agent_slug_list": ["orchestrator"], "adopted_agents": ["adopted"]}
+    assert _report(tmp_path, "Use `@adopted` and `@gone`.\n", "Fresh.\n", manifest) == [
+        {"slug": "gone", "has_file": False}]
+    assert _report(tmp_path, "Use `@gone`.\n", "Fresh.\n", overwrite=False) == []
+
+
+NOTES = "# Orchestrator\n\nBody.\n\n## Project-Specific Notes\n\nRoute ledgers to `@ledger-keeper`.\n"
+
+
+def test_routing_in_a_user_region_survives_overwrite_and_is_not_reported(tmp_path: Path) -> None:
+    fresh = "# Orchestrator\n\nNew body.\n\n## Project-Specific Notes\n\n"
+    assert _report(tmp_path, NOTES, fresh) == []
+    assert _report(tmp_path, NOTES, fresh, discard_user_regions=True) == [
+        {"slug": "ledger-keeper", "has_file": False}]
+
+
+def test_an_orchestrator_this_run_does_not_rewrite_reports_nothing(tmp_path: Path) -> None:
+    from agentteams.cli.routing_at_risk import report_at_risk_routing
+
+    (tmp_path / "orchestrator.md").write_text("Use `@gone`.\n", encoding="utf-8")
+    assert report_at_risk_routing(tmp_path, {"agent_slug_list": []}, _Adapter(),
+                                  [("navigator.md", "x")], _Args()) == []

@@ -537,6 +537,7 @@ def _run_generate_locked(
             if not _sc_disk.exists() or _sc_disk.read_text(encoding="utf-8") != _sc_content:
                 update_rendered.append((_sc_path, _sc_content))
 
+        _at_risk = report_at_risk_routing(output_dir, manifest, adapter, update_rendered, args)  # #392 item 12
         # Migrate away legacy tool-*.agent.md files: tools are now emitted as
         # reference/skill documents, never agents. Runs before the converged
         # early-exit (and before the orphan advisory) so migration happens even
@@ -630,7 +631,6 @@ def _run_generate_locked(
         # `--prune` (build-log removals only) misses. Then the unanswered scan-level notice (prints only).
         build_team._report_orphan_agent_files(final_rendered, output_dir, manifest,
                                               agent_ext=adapter.get_file_extension("agent"))
-        _at_risk = report_at_risk_routing(output_dir, manifest, adapter, final_rendered, overwrite=args.overwrite)
         build_team._report_orphan_reference_docs(final_rendered, output_dir)
         from agentteams.vulnscan.project_policy import report_unanswered
         report_unanswered(description)

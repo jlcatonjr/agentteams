@@ -298,7 +298,8 @@ Overwrite existing agent files without prompting. Default behavior: prompt for e
 
 With `--update`, the orchestrator is replaced too. Before any file is written, the run lists on stderr every agent
 the current orchestrator routes to (a backticked `` `@slug` `` in its body) that this build neither emits nor
-still routes to, with or without a file on disk. `--dry-run --json` puts the same list under
+still routes to, with or without a file on disk. Routing in the Project-Specific Notes region is carried over, so
+it is not listed unless you pass `--discard-user-regions`. `--dry-run --json` puts the same list under
 `at_risk_routed_agents`. The run still proceeds. To keep such an agent, use `--adopt-orphans` (agents with a
 file), add it to the brief, or update with `--merge`, which keeps the orchestrator's body.
 
