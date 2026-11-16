@@ -130,3 +130,29 @@ def test_a_notes_heading_moved_to_column_zero_is_refused_not_swallowed(tmp_path:
     res = emit.emit_all([(_REL, _fresh("NEW"))], output_dir=recipes, merge=True, yes=True)
     assert (recipes / _REL).read_text(encoding="utf-8") == disk
     assert any("not indented" in e for e in res.errors)
+
+
+def test_well_formed_notes_round_trip_through_a_yaml_loader(tmp_path: Path):
+    notes = ("  - key: value lines, quotes ' \" and a colon: stay text\n  - |pipes| and # hashes\n\n"
+             "      - deeper indent\n  - a tab\tinside a line\n")
+    recipes = _recipes(tmp_path, _fresh("OLD") + notes)
+    res = emit.emit_all([(_REL, _fresh("NEW"))], output_dir=recipes, merge=True, yes=True)
+    loaded = yaml.safe_load((recipes / _REL).read_text(encoding="utf-8"))
+    assert not res.errors
+    assert set(loaded) == {"version", "title", "description", "instructions"}
+    tail = loaded["instructions"].split("## Project-Specific Notes", 1)[1]
+    for line in notes.splitlines():
+        assert line[2:] in tail
+
+
+def test_the_shape_check_refuses_a_carry_that_would_break_the_recipe():
+    from agentteams.user_regions import recipe_shape_problems
+    fresh = _fresh("NEW")
+    good = fresh + _NOTE
+    assert recipe_shape_problems(fresh, good) == []
+    # A shallower line ends the region early, so what follows it no longer matches the fresh render.
+    assert recipe_shape_problems(fresh, fresh + " - one-space line ends the block scalar\n")
+    moved_key = fresh.replace("  ## Project-Specific Notes", "  ## Project-Specific Notes\nprompt: injected\n  x")
+    assert recipe_shape_problems(fresh, moved_key)
+    tab_indent = fresh + "\t- tab-indented\n"
+    assert recipe_shape_problems(fresh, tab_indent)

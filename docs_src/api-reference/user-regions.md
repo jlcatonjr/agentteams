@@ -40,6 +40,7 @@ out-of-fence text everywhere else. `--overwrite` carries them too:
 |---|---|
 | `carry_regions(old, new) -> (content, carried, problems)` | Carry each region of `old` into `new`. |
 | `merge_carry(rel_path, existing, content, errors, *, discard=False, dry_run=False) -> str` | The `--merge` full-replace step: `content` with `existing`'s regions carried, or `existing` itself (write nothing) with one error per region that can't be carried (#533). |
+| `recipe_shape_problems(fresh, carried) -> list[str]` | Parser-free check, used by `merge_carry` on a recipe, that a carry changed only the regions: the text after each region matches the fresh render and every region line keeps the space indent (#533). |
 | `find_region(text, heading)` | Locate one region: `(start, end, indent)`. |
 | `ensure_recipe_notes(recipe, notes_section)` | Add the notes region to a Goose recipe's `instructions` block. Idempotent. |
 | `reindent(region, old_indent, new_indent)` | Move a region between indents (YAML block scalars); `None` when a line is under-indented. `_reindent` is the older name. |
