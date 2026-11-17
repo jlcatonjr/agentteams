@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -92,7 +93,8 @@ def worktree_tree(ws: Path, paths: list[str]) -> str | None:
         idx.unlink(missing_ok=True)
 
 
-def git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None, bool]:
+def git_snapshot(ws: Path, *, allow_no_verify: bool = False,
+                 notes: list[str] | None = None) -> tuple[str | None, bool]:
     """Record the current agent-infra state as a recoverable snapshot.
 
     If the agent paths are already clean, the current HEAD is the snapshot. If dirty, a snapshot
@@ -105,6 +107,7 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None
         ws: The workspace.
         allow_no_verify: No effect any more (the --fleet-allow-no-verify flag): no ``git commit``
             runs. Accepted so existing invocations keep working.
+        notes: When given, each credential warning or refusal is appended here for the fleet report row.
 
     Returns:
         (snapshot_ref, committed): the snapshot commit and True, or HEAD (None in a repository
@@ -122,11 +125,22 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None
     if not status.stdout.strip():
         return (head, False)
     tree = worktree_tree(ws, paths)
-    if tree and (secrets := credential_files(ws, head, tree, paths)):
+    blocking, warnings, skipped = credential_findings(ws, head, tree, paths) if tree else ([], [], [])
+    sink = notes if notes is not None else []
+    if blocking:
         # A ref would keep these past gc and carry them in a --mirror clone or push.
-        print(f"    [WARN] snapshot: not recorded in {ws}: credential-like content in "
-              f"{', '.join(secrets)}; falling back to HEAD. Remove it, then re-run.", file=sys.stderr)
+        files = sorted({rel for rel, _, _ in blocking})
+        where = "; ".join(f"{rel}:{n} ({msg})" for rel, n, msg in blocking)
+        print(f"    [WARN] snapshot: not recorded in {ws}: credential-like content in {', '.join(files)} "
+              f"({where}); falling back to HEAD. Remove it, then re-run.", file=sys.stderr)
+        sink.append(f"snapshot not recorded: known credential format at {where}")
         return (head, False)
+    for rel, n, msg in warnings:
+        print(f"    [WARN] snapshot: possible secret ({msg}; not a known credential format) at {rel}:{n}; "
+              "recorded anyway. Review it.", file=sys.stderr)
+        sink.append(f"{SNAPSHOT_REVIEW_PREFIX}{rel}:{n} ({msg})")
+    if skipped:
+        sink.append(f"snapshot recorded; not scanned for credentials: {', '.join(skipped)}")
     parent = ("-p", head) if head else ()
     commit = run_git(ws, "commit-tree", tree, *parent, "-m", "chore(fleet): pre-update snapshot") if tree else None
     sha = commit.stdout.strip() if commit is not None and commit.returncode == 0 else ""
@@ -140,11 +154,47 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None
     return (sha, True)
 
 
-def credential_files(ws: Path, head: str | None, tree: str, paths: list[str]) -> list[str]:
-    """Agent files the snapshot would add or change that hold a high-severity credential finding.
+#: Scanner findings that judge a possible secret by entropy or a nearby keyword, not by its format. They warn; they do
+#: not stop a snapshot (operator ruling, 2026-11-16: the v1.2.0-rc.1 soak SKIPped repos over public fingerprints, slugs
+#: and paths).
+def _untyped_messages() -> frozenset[str]:
+    from agentteams.scan import MSG_HIGH_ENTROPY, MSG_SECRET_LIKE   # deferred, like scan_content below
+    return frozenset({MSG_HIGH_ENTROPY, MSG_SECRET_LIKE})
 
-    A pre-commit secret scanner used to see the snapshot commit; a snapshot ref runs no hook, so the
-    fleet runs :func:`agentteams.scan.scan_content` itself (credential category only) on what changed.
+
+_UNTYPED_CREDENTIAL_MESSAGES = _untyped_messages()
+
+#: Prefix of a snapshot note that raises the workspace's fleet rows to REVIEW (IM @security, 2026-11-16).
+SNAPSHOT_REVIEW_PREFIX = "snapshot recorded with a possible secret to review: "
+
+#: Known credential formats that ``agentteams.scan``'s typed rules do not cover. A match stops the snapshot.
+_EXTRA_CREDENTIAL_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    # scan.py's typed rule matches only "BEGIN PRIVATE KEY" / "BEGIN RSA PRIVATE KEY"; OpenSSH, EC, DSA, encrypted and
+    # PGP keys were caught only by entropy, which now warns (@security, 2026-11-16).
+    ("private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----")),
+    ("AWS temporary access key", re.compile(r"\bASIA[0-9A-Z]{16}\b")),
+    ("Anthropic API key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}")),
+    ("OpenAI API key", re.compile(r"\bsk-(?:proj-)?(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{32,}")),   # a digit: not a kebab slug
+    ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])")),
+    ("GitLab token", re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}")),
+    ("Hugging Face token", re.compile(r"\bhf_[A-Za-z0-9]{30,}")),
+    ("npm token", re.compile(r"\bnpm_[A-Za-z0-9]{36}(?![A-Za-z0-9])")),
+    ("PyPI token", re.compile(r"\bpypi-[A-Za-z0-9_-]{50,}")),
+    ("Stripe restricted key", re.compile(r"\brk_(?:live|test)_[A-Za-z0-9]{16,}")),
+)
+
+
+Finding = tuple[str, int, str]   # (path, line, scanner message)
+
+
+def credential_findings(ws: Path, head: str | None, tree: str,
+                        paths: list[str]) -> tuple[list[Finding], list[Finding], list[str]]:
+    """Scan the agent files the snapshot would add or change, split into blocking and warning findings.
+
+    A pre-commit secret scanner used to see the snapshot commit; a snapshot ref runs no hook, so the fleet runs
+    :func:`agentteams.scan.scan_content` itself (credential category, high severity) on what changed. A finding of a
+    known credential format (a typed scanner rule, or :data:`_EXTRA_CREDENTIAL_FORMATS`) blocks the snapshot; an
+    entropy- or keyword-only finding (:data:`_UNTYPED_CREDENTIAL_MESSAGES`) only warns.
 
     Args:
         ws: The workspace.
@@ -153,7 +203,8 @@ def credential_files(ws: Path, head: str | None, tree: str, paths: list[str]) ->
         paths: The agent paths.
 
     Returns:
-        The paths whose new content has a high-severity credential finding.
+        (blocking, warnings, skipped): ``(path, line, message)`` findings, and ``"<path> (<reason>)"`` for files not
+        scanned (binary or over 1 MB).
     """
     from agentteams.scan import scan_content   # deferred: scan pulls in more than the fleet needs here
 
@@ -161,16 +212,41 @@ def credential_files(ws: Path, head: str | None, tree: str, paths: list[str]) ->
         changed = run_git(ws, "diff", "--name-only", "--no-renames", "--diff-filter=AM", head, tree, "--", *paths)
     else:
         changed = run_git(ws, "ls-tree", "-r", "--name-only", tree, "--", *paths)
-    out = []
+    blocking: list[Finding] = []
+    warnings: list[Finding] = []
+    skipped: list[str] = []
     for rel in changed.stdout.splitlines():
         blob = run_git(ws, "cat-file", "blob", f"{tree}:{rel}", text=False)
         data = blob.stdout if blob.returncode == 0 else b""
-        if not data or len(data) > 1_000_000 or b"\0" in data[:8000]:   # unreadable, huge or binary
+        if not data:   # unreadable or empty
+            continue
+        if len(data) > 1_000_000 or b"\0" in data[:8000]:
+            skipped.append(f"{rel} ({len(data) / 1_000_000:.1f} MB)" if len(data) > 1_000_000 else f"{rel} (binary)")
             continue
         text = data.decode("utf-8", "replace")
-        if any(f.category == "credential" and f.severity == "high" for f in scan_content(text, rel)):
-            out.append(rel)
-    return out
+        for f in scan_content(text, rel):
+            if f.category == "credential" and f.severity == "high":
+                (warnings if f.message in _UNTYPED_CREDENTIAL_MESSAGES else blocking).append((rel, f.line, f.message))
+        for n, line in enumerate(text.splitlines(), 1):
+            blocking += [(rel, n, f"Possible {name} detected") for name, rx in _EXTRA_CREDENTIAL_FORMATS
+                         if rx.search(line)]
+    return blocking, warnings, skipped
+
+
+def credential_files(ws: Path, head: str | None, tree: str, paths: list[str]) -> list[str]:
+    """Agent files the snapshot would add or change that hold a known-format credential (they block the snapshot).
+
+    Args:
+        ws: The workspace.
+        head: HEAD's commit, or None in a repository with no commit.
+        tree: The snapshot tree from :func:`worktree_tree`.
+        paths: The agent paths.
+
+    Returns:
+        The paths with a blocking finding (see :func:`credential_findings`).
+    """
+    blocking, _, _ = credential_findings(ws, head, tree, paths)
+    return sorted({rel for rel, _, _ in blocking})
 
 
 def git_diff(ws: Path, ref: str, paths: list[str], new: str | None = None) -> str:
