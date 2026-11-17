@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from agentteams._fleet_shrink_grants import shrink_grant_summary
+from agentteams._fleet_snapshot import SNAPSHOT_REVIEW_PREFIX
 from agentteams.user_regions import MERGE_REFUSED, MERGE_WOULD_REFUSE
 from agentteams.vulnscan.project_policy import ENROLL_HINT
 
@@ -78,7 +79,13 @@ def write_report(results, report_root: Path, parent: Path, apply: bool, framewor
     counts: dict[str, int] = {}
     for wr in results:
         for tr in wr.targets:
-            rows.append(asdict(tr))
+            row = asdict(tr)
+            notes = getattr(wr, "snapshot_notes", None) or []   # credential warnings / refusals from the snapshot
+            if notes:
+                row["detail"] = "; ".join([row["detail"], *notes] if row["detail"] else notes)
+            if row["status"] not in ("FAIL", "SKIP") and any(n.startswith(SNAPSHOT_REVIEW_PREFIX) for n in notes):
+                row["status"] = tr.status = "REVIEW"   # a recorded possible secret needs the operator's eyes (IM @security)
+            rows.append(row)
             counts[tr.status] = counts.get(tr.status, 0) + 1
 
     # Projects whose brief states no vulnerability_scanning level: reported, never enrolled here.

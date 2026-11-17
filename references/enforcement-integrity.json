@@ -139,7 +139,7 @@
     "agentteams/sandbox_projection.py": "633d4b67abaf294541d473051176c70383d50caf0c66b1e8c86d44643dec3746",
     "agentteams/sandbox_state.py": "a307fdf7bfc613336168f3a97787334324f9c61f929f6e03b96bf3c480a0b062",
     "agentteams/sandbox_tokens.py": "3cad66b27b5327c54138f6d01f1fe4afd6d1c6260dd58e6539074960a63a933f",
-    "agentteams/scan.py": "a51321508a3cb69a367f5346dd105e7b3f17922f39a990bcab823d46e903f2f7",
+    "agentteams/scan.py": "082979728eebf230bda65c656dfb7a614e31a1d6b2b22711d01b6d283f0454a2",
     "agentteams/scan_operational.py": "6b6687b3783d0a6336086ba7453ea7026b86a0c0d6b661551cf6297b98460d6c",
     "agentteams/schemas/sandbox-state.schema.json": "84f181582b2c95a732c1c7efd7540b6a0f4b4c613a6d621d6a4d1228650d9f1e",
     "agentteams/sealed_result.py": "30c467f3551be3e888d0d2bbd24361f87ee02366704b4ed88fc8ee3f7b16a7cc",
