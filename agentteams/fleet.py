@@ -152,6 +152,7 @@ class WorkspaceResult:
     is_git: bool
     snapshot_ref: str | None = None
     snapshot_committed: bool = False
+    snapshot_notes: list[str] = field(default_factory=list)   # credential warnings / refusals (see _fleet_snapshot)
     diff_file: str | None = None
     targets: list[TargetResult] = field(default_factory=list)
     vulnscan_unanswered: bool = False   # the brief states no vulnerability_scanning level
@@ -797,7 +798,7 @@ def run_fleet(args, parser) -> int:
         # Snapshot once per workspace before any apply.
         snap_ref = None
         if apply and is_git:
-            snap_ref, committed = _git_snapshot(ws, allow_no_verify=allow_no_verify)
+            snap_ref, committed = _git_snapshot(ws, allow_no_verify=allow_no_verify, notes=wr.snapshot_notes)
             wr.snapshot_ref, wr.snapshot_committed = snap_ref, committed
             if not committed and _agent_paths_dirty(ws):
                 # Uncommitted agent edits with no snapshot would have no rollback point: never update over them.
