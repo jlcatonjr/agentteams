@@ -399,7 +399,7 @@ SIGNED_DECISION_COLUMNS: tuple[str, ...] = (
 )
 
 
-def append_signed_decision_row(output_dir: Path, row: dict[str, str], *, before: bytes | None = None) -> None:
+def append_signed_decision_row(output_dir: Path, row: dict[str, str], *, before: bytes | None) -> None:
     """Append a fully-formed signed decision ``row`` to the security-decisions log (fail-closed).
 
     Creates the log with :data:`SIGNED_DECISION_COLUMNS` when absent. When a log already exists, its
@@ -411,7 +411,8 @@ def append_signed_decision_row(output_dir: Path, row: dict[str, str], *, before:
         output_dir: The team root.
         row: The fully-populated, already-signed row (caller computes prev_digest + signature).
         before: The log's bytes when the caller read the chain tip, before the operator confirmed (``b""`` when the
-            log was absent then; ``None`` for callers with no confirmation step); checked under the append lock (#470).
+            log was absent then; ``None`` only for callers with no confirmation step); required, so no caller skips
+            the check by omission; checked under the append lock (#470).
 
     Raises:
         RuntimeError: The existing log header lacks a signing column (migration needed), or the append was
