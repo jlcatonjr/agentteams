@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Signing a decision rewrote the whole security-decisions log.** `append_signed_decision_row` re-read every row and
   wrote the file again through `csv`, so earlier rows lost their line endings (LF rows became CRLF) and quoting
   (needless quotes dropped), and a byte-prefix check of the log could not pass. The signed row is now appended
-  through `governance_logs.append_row` (one `O_APPEND` write under its lock, the log validated, a value that would
-  start a forged record refused), and `governance_logs.append_signed_row` then requires the bytes read before the
-  operator confirmed to be an exact prefix of the file. A refusal reaches the signer as "nothing appended"; a new
-  log's first row now has the header's LF ending. `cli/decision_log.py` is re-pinned.
+  through `governance_logs.append_row`: one `O_APPEND` write under its exclusive lock, with the log validated and a
+  value that would start a forged record refused. The signer captures the log's bytes when it reads the chain tip,
+  before the operator confirms, and the append refuses ("nothing appended") unless, under the lock and read through
+  the descriptor it writes, the path still names that file and the file still starts with exactly those bytes; a log
+  that appeared or disappeared meanwhile is refused too, and a new log is created with `O_EXCL`. A rename that
+  replaces the log during the write is reported as "not in the log". `governance_logs.py` is now an enforcement
+  module (integrity-pinned, with verifier-ledger rows for `check_log` and `check_logs`); `cli/decision_log.py`,
+  `cli/operator_signing.py` and `integrity.py` are re-pinned.
 
 ### fixed (an automatic backup prune never deletes git-tracked backups, and is never silent; #541)
 
