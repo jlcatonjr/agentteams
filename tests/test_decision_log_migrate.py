@@ -215,7 +215,7 @@ def test_signed_row_appends_and_legacy_rows_read_as_unsigned(tmp_path: Path,
     allowed, _ = check_clearance(out, action="prune")
     assert allowed                                           # unsigned legacy PASS clears pre-migration
     with pytest.raises(RuntimeError, match="lacks signing column"):
-        append_signed_decision_row(out, signed)
+        append_signed_decision_row(out, signed, before=None)
 
     assert _run(out, "--yes") == 0
     allowed, reason = check_clearance(out, action="prune")
@@ -224,7 +224,7 @@ def test_signed_row_appends_and_legacy_rows_read_as_unsigned(tmp_path: Path,
     allowed, reason = check_clearance(out, action="prune")
     assert not allowed and "no signature" in reason           # the intended revocation
 
-    append_signed_decision_row(out, signed)
+    append_signed_decision_row(out, signed, before=None)
     allowed, reason = check_clearance(out, action="prune")
     assert allowed, reason
     read = _read_decision_rows(out)
