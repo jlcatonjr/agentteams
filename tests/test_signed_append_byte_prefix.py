@@ -44,7 +44,7 @@ def _team(tmp_path: Path, log: bytes) -> Path:
 
 def test_a_signed_append_keeps_a_mixed_ending_quoted_log_byte_for_byte(tmp_path: Path):
     team = _team(tmp_path, _LOG)
-    append_signed_decision_row(team, _row())
+    append_signed_decision_row(team, _row(), before=None)
     after = (team / "references" / "security-decisions.log.csv").read_bytes()
     assert after.startswith(_LOG), "an earlier byte of the log changed"
     added = after[len(_LOG):]
@@ -57,7 +57,7 @@ def test_a_signed_append_keeps_a_mixed_ending_quoted_log_byte_for_byte(tmp_path:
 def test_an_lf_log_gets_an_lf_row(tmp_path: Path):
     log = _LOG.replace(b"\r\n", b"\n")
     team = _team(tmp_path, log)
-    append_signed_decision_row(team, _row())
+    append_signed_decision_row(team, _row(), before=None)
     after = (team / "references" / "security-decisions.log.csv").read_bytes()
     assert after.startswith(log) and after.endswith(b"op-2026,\n") and b"\r\n" not in after
 
@@ -65,7 +65,7 @@ def test_an_lf_log_gets_an_lf_row(tmp_path: Path):
 def test_a_log_without_a_final_newline_keeps_its_prefix(tmp_path: Path):
     log = _LOG.rstrip(b"\n").rstrip(b"\r")
     team = _team(tmp_path, log)
-    append_signed_decision_row(team, _row())
+    append_signed_decision_row(team, _row(), before=None)
     after = (team / "references" / "security-decisions.log.csv").read_bytes()
     assert after.startswith(log) and after[len(log):].lstrip(b"\r\n").startswith(b"2026-11-16,@security,e")
 
@@ -76,7 +76,7 @@ def test_a_row_that_cannot_be_appended_safely_is_refused_and_the_log_left_alone(
     """Refusals reach the signer CLI as RuntimeError ("nothing appended"), which it reports instead of a traceback."""
     team = _team(tmp_path, _LOG)
     with pytest.raises(RuntimeError, match="nothing appended"):
-        append_signed_decision_row(team, _row(**bad))
+        append_signed_decision_row(team, _row(**bad), before=None)
     assert (team / "references" / "security-decisions.log.csv").read_bytes() == _LOG
 
 
@@ -155,6 +155,12 @@ def test_a_refused_first_row_leaves_no_new_log(tmp_path: Path):
 
 def test_a_new_log_is_written_with_one_line_ending(tmp_path: Path):
     team = tmp_path
-    append_signed_decision_row(team, _row())
+    append_signed_decision_row(team, _row(), before=None)
     raw = (team / "references" / "security-decisions.log.csv").read_bytes()
     assert b"\r\n" not in raw and raw.count(b"\n") == 2
+
+
+def test_before_is_required_so_no_caller_skips_the_check_by_omission(tmp_path: Path):
+    """IM @security (#545 follow-up): `before` has no default; a caller must pass the confirm-time bytes or None."""
+    with pytest.raises(TypeError, match="before"):
+        append_signed_decision_row(tmp_path, _row())

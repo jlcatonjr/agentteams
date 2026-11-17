@@ -64,11 +64,11 @@ def test_signing_a_decision_with_a_placeholder_raises_and_writes_nothing(tmp_pat
     row = _decision_row()
     with pytest.raises(RuntimeError, match="decision signing key is too weak"):
         row["signature"] = dl.sign_decision_row(row, key="...")
-        dl.append_signed_decision_row(tmp_path, row)
+        dl.append_signed_decision_row(tmp_path, row, before=None)
     monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "...")
     with pytest.raises(RuntimeError, match="decision signing key is too weak"):
         row["signature"] = dl.sign_decision_row(row)  # the env key
-        dl.append_signed_decision_row(tmp_path, row)
+        dl.append_signed_decision_row(tmp_path, row, before=None)
     assert row["signature"] == ""
     assert not (tmp_path / "references" / "security-decisions.log.csv").exists()
 

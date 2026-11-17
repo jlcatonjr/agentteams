@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`append_signed_decision_row` requires `before=`; #470 follow-up)
+
+- `cli/decision_log.append_signed_decision_row` takes `before` as a required keyword (no default), so no caller can
+  skip the confirm-time byte-prefix check by leaving it out: pass the bytes read with the chain tip (`b""` for no
+  log), or `None` only where there is no confirmation step. `--sign-decision` already passes it. Re-pinned.
+
 ### fixed (`--sign-decision` appends one row; earlier log bytes never change; #470)
 
 - **Signing a decision rewrote the whole security-decisions log.** `append_signed_decision_row` re-read every row and
