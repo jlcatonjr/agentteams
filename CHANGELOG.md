@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (fleet: text in an AGENTTEAMS-BRIDGE fence is generated, not a user-editable deletion; rc2 soak)
+
+- `--fleet` counted a change inside a generated `<!-- AGENTTEAMS-BRIDGE:BEGIN … -->` block as a deleted
+  USER-EDITABLE line whenever a user region (Project-Specific Rules, say) came earlier in the file: the detector knew
+  only `AGENTTEAMS:BEGIN`/`END`, so the user region ran on through the bridge block. In the rc2 soak six
+  goose-bridge / codex-direct targets reported one each, all the AGENTS.md install hint moving from `@v1.1.4` to
+  `@v1.2.0-rc.2`. A bridge block now interrupts a user region and the region resumes after its END, so a real
+  user line deleted before or after the block is still reported. The fence-balance gate counts AGENTTEAMS-BRIDGE
+  BEGIN/END too, so an unclosed bridge block (which would fence the rest of the file) is reported.
+
 ### changed (`append_signed_decision_row` requires `before=`; #470 follow-up)
 
 - `cli/decision_log.append_signed_decision_row` takes `before` as a required keyword (no default), so no caller can
