@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the fleet snapshot guard refuses only known credential formats; entropy-only findings warn; v1.2.0-rc.1 soak)
+
+- The pre-update snapshot used to be refused on any high-severity credential finding, so a dirty workspace was
+  SKIPped over a public key fingerprint, a lowercased fingerprint fragment in an index, or a slug or path beside the
+  word "token" (19 such findings across the 34 soak repositories after the scanner fix). Operator ruling, 2026-11-16.
+- `_fleet_snapshot.credential_findings` splits the findings: a known credential format (a typed `agentteams.scan` rule,
+  or `_EXTRA_CREDENTIAL_FORMATS`: any `-----BEGIN … PRIVATE KEY-----` header (OpenSSH, EC, DSA, encrypted, PGP), Anthropic
+  `sk-ant-`, OpenAI `sk-`/`sk-proj-`, Google `AIza`, GitLab `glpat-`, Hugging Face `hf_`, npm `npm_`, PyPI `pypi-`,
+  Stripe `rk_live_` and AWS `ASIA` keys) still blocks the snapshot; an
+  entropy- or keyword-only finding ("High-entropy token detected", "Possible secret-like token detected") is a `[WARN]`
+  naming the file and line, and the snapshot is recorded.
+- Both kinds are recorded in `WorkspaceResult.snapshot_notes` and appended to that workspace's rows in `report.json`
+  and `summary.md`. A warning raises those rows to `REVIEW` (a `FAIL` or `SKIP` row keeps its status), so a recorded
+  possible secret, such as an unprefixed `api_key=<random>`, reaches the operator. A file skipped as binary or over
+  1 MB gets a "not scanned" note. The two untyped messages are `agentteams.scan.MSG_HIGH_ENTROPY` and
+  `MSG_SECRET_LIKE`; an OpenAI key needs a digit in its body, so a long kebab-case `sk-…` identifier does not block.
+
+### fixed (the content scanner no longer reports a cited git commit, digest or SSH key fingerprint as a credential; v1.2.0-rc.1 soak)
+
+- Every governed team's security log records the release-signature check, `… key SHA256:<43 base64>`. The scanner
+  reported the fingerprint as a high-severity secret, so the fleet snapshot guard refused the file ("credential-like
+  content … falling back to HEAD"); the constitutional gate and the hygiene rules share `agentteams.scan`.
+- `_scan_public_hashes.is_ssh_key_fingerprint` exempts exactly 43 unpadded base64 characters straight after
+  `SHA256:` when `SHA256:` starts the line or follows whitespace, a bracket or a quote. Still reported: a bare
+  43-character value, `api_key=SHA256:<43>`, lowercase `sha256:`, a padded or 44-character body, `SHA256: ` with a space.
+- `_scan_public_hashes.is_labelled_git_hash` exempts exactly 40 or 64 lowercase hex characters straight after a git or
+  digest label (`--match-head-commit`, `merged as`, `commit`, `sha256`, `digest`, …) that does not follow a letter,
+  digit or `_`. Still reported: an unlabelled 40-hex value (older GitHub OAuth tokens), uppercase hex,
+  `api_key_digest <hex>`.
+- Both exemptions apply only on a line with no secret keyword, like the #460 public-hash exemptions: a labelled value
+  on a line that says "token", "secret" or "password" is reported as before.
+
 ## [1.2.0-rc.1] - 2026-11-16
 
 ### release notes
