@@ -432,8 +432,11 @@ def _fence_and_useredit_lines(text: str) -> tuple[set[int], set[int]]:
     """
     fenced, useredit = set(), set()
     in_f = in_u = False
+    resume_u = None   # the user region a bridge block interrupted, resumed at its END (IM @security, #554)
     for i, ln in enumerate(text.splitlines(), 1):
-        if _REAL_FENCE_BEGIN_RE.search(ln) or _BRIDGE_FENCE_RE.search(ln):
+        if _BRIDGE_FENCE_RE.search(ln) and not in_f:
+            resume_u, in_f, in_u = in_u, True, False
+        elif _REAL_FENCE_BEGIN_RE.search(ln):
             in_f = True
             in_u = False
         if in_u and _USER_EDIT_END.search(ln):
@@ -444,7 +447,9 @@ def _fence_and_useredit_lines(text: str) -> tuple[set[int], set[int]]:
             fenced.add(i)
         elif in_u:
             useredit.add(i)
-        if _REAL_FENCE_END_RE.search(ln) or _BRIDGE_FENCE_END_RE.search(ln):
+        if _BRIDGE_FENCE_END_RE.search(ln) and resume_u is not None:
+            in_f, in_u, resume_u = False, resume_u, None
+        elif _REAL_FENCE_END_RE.search(ln):
             in_f = False
     return fenced, useredit
 
@@ -486,7 +491,7 @@ def _fence_imbalances(ws: Path, files: list[str]) -> list[str]:
     Mirrors the researchteam autosync fence-pairing gate so a malformed-fence render is
     surfaced on the fleet path too (previously it had no such check and could be pushed
     undetected). Counts only real HTML-comment markers — a marker quoted in prose or shown
-    as data is not a fence. Generated bridge report/inventory artifacts under
+    as data is not a fence — for AGENTTEAMS and AGENTTEAMS-BRIDGE fences separately. Generated bridge report/inventory artifacts under
     ``references/bridges/`` are exempt: they legitimately DISPLAY marker syntax as table
     data (e.g. ``agent-inventory.md`` lists each agent's BEGIN marker), so a balance check
     over them is a false positive.
@@ -510,8 +515,9 @@ def _fence_imbalances(ws: Path, files: list[str]) -> list[str]:
             continue
         b = len(_REAL_FENCE_BEGIN_RE.findall(text))
         e = len(_REAL_FENCE_END_RE.findall(text))
-        if b != e:
-            out.append(f"{f} ({b}/{e})")
+        bb, be = len(_BRIDGE_FENCE_RE.findall(text)), len(_BRIDGE_FENCE_END_RE.findall(text))
+        if b != e or bb != be:   # an unclosed bridge BEGIN would fence the rest of the file (#554)
+            out.append(f"{f} ({b}/{e})" + (f" (bridge {bb}/{be})" if bb != be else ""))
     return out
 
 

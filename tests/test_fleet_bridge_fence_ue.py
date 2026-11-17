@@ -55,3 +55,21 @@ def test_a_real_user_line_deleted_before_the_bridge_fence_is_still_flagged(tmp_p
                                     encoding="utf-8")
     dels = fleet._user_editable_deletions(repo, ref, "AGENTS.md")
     assert len(dels) == 1 and "our rule two" in dels[0]
+
+
+def test_a_user_line_deleted_after_the_bridge_block_in_the_same_region_is_still_flagged(tmp_path: Path):
+    """IM @security #554: the bridge block interrupts the user region; it must resume after the END."""
+    tail = "- our rule after the bridge\n- another rule after it\n"
+    repo, ref = _repo(tmp_path, _agents_md("v1.1.4") + tail)
+    (repo / "AGENTS.md").write_text(_agents_md("v1.2.0-rc.2") + tail.replace("- another rule after it\n", ""),
+                                    encoding="utf-8")
+    dels = fleet._user_editable_deletions(repo, ref, "AGENTS.md")
+    assert len(dels) == 1 and "another rule after it" in dels[0]
+
+
+def test_an_unclosed_bridge_begin_is_a_fence_imbalance(tmp_path: Path):
+    """IM @security #554: an unclosed bridge BEGIN would mark the rest of the file as fenced, so the gate reports it."""
+    (tmp_path / "AGENTS.md").write_text(_agents_md("v1.1.4").replace(
+        "<!-- AGENTTEAMS-BRIDGE:END goose-bridge-entry -->\n", ""), encoding="utf-8")
+    (tmp_path / "ok.md").write_text(_agents_md("v1.1.4"), encoding="utf-8")
+    assert fleet._fence_imbalances(tmp_path, ["AGENTS.md", "ok.md"]) == ["AGENTS.md (0/0) (bridge 1/0)"]
