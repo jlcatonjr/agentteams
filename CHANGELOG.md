@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (an automatic backup prune never deletes git-tracked backups, and is never silent; #541)
+
+- **A render or sync no longer deletes tracked files under `.agentteams-backups/`.** `backup_before_projection` and
+  `sync_roster` pruned to the newest 10 backups with `rmtree(..., ignore_errors=True)` and dropped the result; in
+  one downstream team a v1.1.4 render deleted 280 tracked files that way. `prune_backups` now leaves any backup
+  directory holding a git-tracked file alone (one `git ls-files`), applies the keep window to the untracked ones,
+  deletes nothing when git can't say what is tracked (including a broken worktree or submodule link), and records a
+  failed deletion. Both automatic callers (the `--sync` projection and roster prune) print what the prune did, and
+  `--prune-backups` reports tracked backups it kept. Generated teams already gitignore new backups; this protects
+  teams whose backups were committed anyway.
+
 ### fixed (the fleet snapshot guard refuses only known credential formats; entropy-only findings warn; v1.2.0-rc.1 soak)
 
 - The pre-update snapshot used to be refused on any high-severity credential finding, so a dirty workspace was

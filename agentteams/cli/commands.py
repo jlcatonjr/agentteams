@@ -472,6 +472,8 @@ def _run_prune_backups(args: argparse.Namespace) -> int:
     )
     for ts in result.deleted:
         print(f"  {verb}: {ts}")
+    for line in emit.prune_report(result, output_dir)[1 if result.deleted else 0:]:  # tracked / failed / unknown (#541)
+        print(f"  {line}")
     return 0
 
 
