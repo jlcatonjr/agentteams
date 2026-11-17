@@ -5,6 +5,20 @@ was last accepted. `agentteams --redteam --redteam-probes tests.constitutional_r
 (operator only) re-records every digest and writes `note: ""` for every probe, so the review behind each accept is kept
 here, newest first, and committed with the baseline change it justifies.
 
+## 2026-11-15 — #478 E1 measures a rendered team (pending the operator's accept)
+
+E1 no longer reads the gitignored `.claude/agents/`. It renders Claude teams in memory from every tracked
+`examples/*/brief.json`, plus software-project under `write_policy: orchestrator-only`, and checks the front matter
+the module emits. An empty render raises, and the
+battery treats a raised probe as a defect, so it can no longer report DEFENDED over `0/0`.
+
+| Probe | Claim | Current evidence | Still attacks what it claims? | Why the evidence changed |
+|---|---|---|---|---|
+| E1 (C-3) | declared read-only limits are written to a key Claude Code does not read | "rendered 161 Claude subagent files from 5 example briefs + 1 variant; 0 use `allowed-tools:`; 0 carry no recognised capability key; read-only agents rendered: 40 (11 read-only templates), emitted with write/command tools: []" | Yes. Each of these is EXPLOITED (sensitivity tests in `tests/test_constitutional_redteam.py`): an emitted `allowed-tools:`; any agent with no `tools:`/`disallowedTools:`; a read-only agent emitted with Write, Edit or bare Bash (a gap @adversarial found in the first draft). That was the adapter's fallback for a tool list it cannot parse until #511 made it read-only (`Read, Grep, Glob`); `test_e1_the_adapters_fallback_grants_no_write_tools` now pins the fallback itself. Re-run on dev 3c0512bf + #516: unchanged evidence, DEFENDED. @security's conditional pass (IM, #516) tightened the checks: a read-only agent with `Task`, `Agent`, any `mcp__*` tool or any scoped `Bash(...)` other than the research scope is EXPLOITED; a `tools:` that is empty or `*` counts as no recognised key; fewer than 40 read-only agents (`E1_READ_ONLY_FLOOR`, the count measured 2026-11-16) raises. The evidence string is unchanged. Read-only means the template grants no write or command capability. An empty render raises | the subject moved from a workstation's untracked copy (35 files, 2026-08-14 note) to a render every checkout reproduces |
+
+**To accept (operator only):** once this lands, run `--accept-probe-baseline`. It re-records E1's digest and writes
+`note: ""`, which removes the last hand-written baseline note (the F-5 residual below).
+
 ## 2026-11-12 — #50 G3 (baseline last accepted 2026-09-04, b6c1c473)
 
 Audit run on origin/dev 875d0315; re-checked on 7db5e379 before the commit (only E4 moved, by the one module named in its row). F-5 flagged nine probes (the accept itself showed three more, below the table): eight whose evidence changed with the outcome still
