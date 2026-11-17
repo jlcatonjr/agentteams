@@ -399,7 +399,7 @@ SIGNED_DECISION_COLUMNS: tuple[str, ...] = (
 )
 
 
-def append_signed_decision_row(output_dir: Path, row: dict[str, str]) -> None:
+def append_signed_decision_row(output_dir: Path, row: dict[str, str], *, before: bytes | None = None) -> None:
     """Append a fully-formed signed decision ``row`` to the security-decisions log (fail-closed).
 
     Creates the log with :data:`SIGNED_DECISION_COLUMNS` when absent. When a log already exists, its
@@ -410,17 +410,21 @@ def append_signed_decision_row(output_dir: Path, row: dict[str, str]) -> None:
     Args:
         output_dir: The team root.
         row: The fully-populated, already-signed row (caller computes prev_digest + signature).
+        before: The log's bytes when the caller read the chain tip, before the operator confirmed (``b""`` when the
+            log was absent then; ``None`` for callers with no confirmation step); checked under the append lock (#470).
 
     Raises:
-        RuntimeError: The existing log header lacks a signing column (migration needed).
+        RuntimeError: The existing log header lacks a signing column (migration needed), or the append was
+            refused or found earlier bytes changed (``governance_logs.append_signed_row``). OSError: a write failed.
     """
-    import csv as _csv
-
-    from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
+    from agentteams.governance_logs import append_signed_row
 
     log_path = output_dir / "references" / "security-decisions.log.csv"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     required = {"signature", "sig_scheme", "key_id", "derives_from"}
+    if before is not None and bool(before) != log_path.exists():
+        raise RuntimeError(f"{log_path} appeared or disappeared while the decision was being confirmed; "
+                           "nothing appended.")
     if log_path.exists():
         read = _read_decision_rows(output_dir)
         rows, fieldnames = (read if read is not None else ([], []))
@@ -440,17 +444,12 @@ def append_signed_decision_row(output_dir: Path, row: dict[str, str]) -> None:
                     f"security-decisions log at {log_path} changed while the decision was being "
                     "confirmed (its chain tip moved); nothing appended. Re-run the signing command."
                 )
-        columns = list(fieldnames)
-        rows = rows + [row]
-        atomic_rewrite_csv_rows(log_path, rows, columns)
+        append_signed_row(log_path, row, before)  # locked O_APPEND; refused unless the log still starts with *before*
     else:
         # The legacy required columns lead, so the new log is readable (_security_decision_schema_kind).
         columns = ["timestamp", "requesting_agent", *SIGNED_DECISION_COLUMNS]
-        _atomic_write_text(log_path, ",".join(columns) + "\n")
-        with log_path.open("a", encoding="utf-8", newline="") as fh:
-            _csv.DictWriter(fh, fieldnames=columns, extrasaction="ignore").writerow(
-                {c: row.get(c) or (row.get("date", "") if c == "timestamp" else "") for c in columns}
-            )
+        cells = {c: row.get(c) or (row.get("date", "") if c == "timestamp" else "") for c in columns}
+        append_signed_row(log_path, cells, None, header=",".join(columns) + "\n")  # O_EXCL create + guarded append
 
 
 def _enforce_decision_signing(output_dir: Path) -> bool:
