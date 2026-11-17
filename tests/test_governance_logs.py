@@ -85,6 +85,13 @@ def test_check_logs_covers_the_known_paths(tmp_path):
     assert len(problems) == 1 and "conflict-log.csv" in problems[0]
 
 
+def test_check_logs_is_clean_when_every_known_log_is_well_formed(tmp_path):
+    """Negative control for check_logs (verifier ledger, #470: governance_logs is an enforcement module)."""
+    _log(tmp_path, "a,b\n1,2\n", "references/agentteams-remediation-log.csv")
+    _log(tmp_path, "a,b\n1,2\n", ".github/agents/references/conflict-log.csv")
+    assert gl.check_logs(tmp_path) == []
+
+
 def test_a_team_dir_layout_is_found_too(tmp_path):
     """In a generated team the logs sit in <team>/references/, conflict-log included."""
     _log(tmp_path, "a,b\n1,2,3\n", "references/conflict-log.csv")

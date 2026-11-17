@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--sign-decision` appends one row; earlier log bytes never change; #470)
+
+- **Signing a decision rewrote the whole security-decisions log.** `append_signed_decision_row` re-read every row and
+  wrote the file again through `csv`, so earlier rows lost their line endings (LF rows became CRLF) and quoting
+  (needless quotes dropped), and a byte-prefix check of the log could not pass. The signed row is now appended
+  through `governance_logs.append_row`: one `O_APPEND` write under its exclusive lock, with the log validated and a
+  value that would start a forged record refused. The signer captures the log's bytes when it reads the chain tip,
+  before the operator confirms, and the append refuses ("nothing appended") unless, under the lock and read through
+  the descriptor it writes, the path still names that file and the file still starts with exactly those bytes; a log
+  that appeared or disappeared meanwhile is refused too, and a new log is created with `O_EXCL`. A rename that
+  replaces the log during the write is reported as "not in the log". `governance_logs.py` is now an enforcement
+  module (integrity-pinned, with verifier-ledger rows for `check_log` and `check_logs`); `cli/decision_log.py`,
+  `cli/operator_signing.py` and `integrity.py` are re-pinned.
+
 ### fixed (an automatic backup prune never deletes git-tracked backups, and is never silent; #541)
 
 - **A render or sync no longer deletes tracked files under `.agentteams-backups/`.** `backup_before_projection` and
