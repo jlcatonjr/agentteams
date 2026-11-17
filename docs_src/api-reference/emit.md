@@ -67,6 +67,9 @@ Results of an emit operation.
 - `skipped` (`list[str]`) — Relative paths of files skipped (already up to date or user declined overwrite).
 - `errors` (`list[str]`) — Error messages for any failed writes.
 - `dry_run` (`bool`) — `True` if this result is from a dry-run invocation.
+- `kept_tracked` (`list[str]`) — Git-tracked backups the keep rule alone would have deleted; never deleted (#541).
+- `failed` (`list[str]`) — Backups whose deletion failed, with the error.
+- `tracking_unknown` (`bool`) — git could not list tracked files, so nothing was deleted.
 - `dry_run_report` (`DryRunReport | None`) — Structured dry-run preview (only when `dry_run=True`).
 - `notices` (`list[str]`) — Aggregated notices from all operations (Plan 3 extension point). May include shrink alerts, deprecation warnings, etc.
 - `skipped_legacy` (`list[str]`) — Subset of `skipped` containing files skipped because they had no fence markers (unfenced legacy files); template updates targeting these files were **not** applied.
@@ -276,6 +279,8 @@ Retain rule (union, fail-safe): a backup is kept if it is among the `keep_last` 
 - `keep_last` (`int`, keyword-only) — Number of most-recent backups to always keep. Default: `DEFAULT_BACKUP_KEEP_LAST` (`10`).
 - `keep_within_days` (`int | None`, keyword-only) — When set, also keep any backup within this many days of now. Default: `None`.
 - `dry_run` (`bool`, keyword-only) — If `True`, report what would be deleted without deleting. Default: `False`.
+
+**Git-tracked backups (#541).** A backup directory holding a git-tracked file is never deleted and doesn't count toward the window; the rule applies to the untracked backups only. `PruneResult.kept_tracked` names the tracked ones the rule alone would have deleted. When git can't list tracked files, nothing is deleted (`tracking_unknown`). A failed deletion is recorded in `failed`, not ignored. A broken `.git` link (a pruned worktree, a moved submodule) also counts as unknown. The automatic callers (`backup_before_projection` and `sync_roster`, both reached only from `--sync`) print `prune_report(result, output_dir)`.
 
 **Returns:** `PruneResult`
 
