@@ -1553,6 +1553,10 @@ Read-only: scan `--output`/`--project` (else CWD) for **all** provider renders (
 
 Read-only: scan `--output`/`--project` (else CWD) for stale agent docs and code/scripts (VCS conflict markers, broken references, git-recency divergence, provenance-gated generated-file integrity). Exits non-zero on any Tier-1 (blocking) finding. Never edits files.
 
+### `--term-check [AGENTS_DIR]` **(beta)**
+
+Read-only: check a team's term register (`<AGENTS_DIR>/terminology/terms.json`; default the working directory) against the text inside well-formed `AGENTTEAMS` fences only, so user-editable sections are never flagged. A file whose fences are unclosed, nested or mismatched is not scanned at all: a `FENCE` defect in a file that also holds a complete fence (a generated file), an advisory `FENCE` review otherwise. The check is live; a committed term index is not compared. Blocking codes: `SCHEMA`, `AMBIG`, `SCOPE`, `DISC`, `ORPHAN`, `FENCE`, `NOREG` (a named directory with no register). Exits `1` on a defect and `2` on an I/O error. With no register in the working directory, it prints `NOTHING CHECKED` and exits `0`. Standalone: it refuses every other option except `--term-check-advisory`. `--term-check-advisory` (which requires `--term-check`) reports defects but exits `0`. Matching finds forms, not meanings. See [`term_index`](api-reference/term-index.md).
+
 ### `--stale-remediate`
 
 Modifier for `--stale-check`: also print a guided remediation plan (suggestions only; does **not** edit files, unlike `--auto-correct`). Adding `--yes` promotes it into an applied, backup-protected revision pass; exit `3` signals "revision applied, but blocking items still need manual/routed handling."

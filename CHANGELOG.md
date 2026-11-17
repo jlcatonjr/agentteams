@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (beta: `agentteams.term_index` and `--term-check`; #548)
+
+- **A term-index core, ported from researchteam and declared beta.** `agentteams.term_index` validates a term
+  register, finds every registered form in a document set, and checks the register and any committed index:
+  `SCHEMA AMBIG SRC SCOPE STALE DISC ORPHAN NOREG` block, `REBUILD NOSRC UNUSED QUOTED` advise. The points that
+  were research-specific are `TermIndexConfig` parameters: register directory, skipped sections, source validator,
+  scanned region and generated-file names. It reads both `agentteams-term-register` and
+  `researchteam-term-register`. With researchteam's parameters, its output matches researchteam's engine byte for
+  byte, checked against a golden fixture. Standard library only, and it writes nothing. Matching finds forms, not
+  meanings.
+- **`agentteams --term-check [AGENTS_DIR]`** checks a team's `terminology/terms.json`, live, against the text inside
+  well-formed `AGENTTEAMS` fences only, never user-editable sections. A file with broken fences is not scanned and
+  is a `FENCE` defect. `--term-check-advisory` reports defects but exits 0.
+- **An opt-in hook.** With `bridge:copilot-vscode-to-claude:hooks` selected and a register in the canonical agents
+  directory, the example hooks block gains an advisory `PostToolUse` term check that logs to
+  `.claude/hook-notices/term-check.log`. A team without a register gets no new hook.
+
 ### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
 
 - `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,

@@ -42,6 +42,9 @@ The supported import surface is everything documented under
 > A beta adapter is shipped, tested and usable. Its adapter API and emitted-artifact shapes may change in a minor
 > release while the integration matures. It graduates to the stable contract once its listed gaps close.
 
+> **Beta modules.** `agentteams.term_index` and the `--term-check` gate (issue #548, new in 1.3.0) are **beta**:
+> shipped and tested, but their API, register schema and finding codes may change in a minor release.
+
 Symbols not documented in `docs_src/api-reference/` are **internal** and may
 change without notice — including modules whose name starts with `_`,
 functions starting with `_`, and any helper not listed in the reference docs.

@@ -31,9 +31,14 @@ class HooksEmissionResult:
 ```
 
 ```python
-build_settings_dict(source_dir: Path) -> dict[str, Any]
+build_settings_dict(source_dir: Path, term_check: str | None = None) -> dict[str, Any]
 ```
-Build the Claude `settings.json` hooks block for active slugs. Only includes entries for slugs whose `<slug>.agent.md` exists in `source_dir`. Each entry runs `bash .claude/hook-guard.sh <event> <slug>`.
+Build the Claude `settings.json` hooks block for active slugs. Only includes entries for slugs whose `<slug>.agent.md` exists in `source_dir`. Each entry runs `bash .claude/hook-guard.sh <event> <slug>`. `term_check` (from `term_check_command`) adds one advisory `PostToolUse` entry first.
+
+```python
+term_check_command(source_dir: Path, output_root: Path) -> str | None
+```
+The opt-in [term-check](term-index.md#the-opt-in-hook) hook command, or `None` when `source_dir` has no `terminology/terms.json`. `emit_hooks_artifacts` passes it to `build_settings_dict`.
 
 ```python
 emit_hooks_artifacts(
