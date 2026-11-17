@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0-rc.2] - 2026-11-17
+
+### release notes
+
+agentteams 1.2.0-rc.2 is the second release candidate of the 1.2 line. It fixes the regression the 1.2.0-rc.1 soak
+found: the fleet's pre-update snapshot was refused, and the workspace SKIPped, whenever a dirty agent file held a
+public value that the content scanner mistook for a credential (a release-key fingerprint in a security log, a cited
+commit SHA, a slug beside the word "token").
+
+- **The content scanner** no longer reports a cited git commit, digest or SSH key fingerprint as a credential on a line
+  with no secret keyword (#540). The constitutional gate and the hygiene rules share it.
+- **The fleet snapshot guard** refuses only known credential formats (typed scanner rules, every private-key header,
+  and Anthropic, OpenAI, Google, GitLab, Hugging Face, npm, PyPI, Stripe and AWS keys). An entropy- or keyword-only
+  finding is a warning naming the file and line, and it raises that workspace's report rows to `REVIEW` (#547).
+
+Everything in 1.2.0-rc.1 is unchanged, including the #511 behaviour change (an unscoped Claude agent's fallback grant
+is read-only).
+
 ### fixed (the fleet snapshot guard refuses only known credential formats; entropy-only findings warn; v1.2.0-rc.1 soak)
 
 - The pre-update snapshot used to be refused on any high-severity credential finding, so a dirty workspace was
