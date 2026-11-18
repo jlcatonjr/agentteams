@@ -8,7 +8,7 @@
   <article id="notes:the-orchestrator">
     <h1>Cliff Notes: Chapter 5: The Orchestrator</h1>
     <p class="part-label">Part III: The Agents at Work</p>
-    <p class="notes-source">A summary of <a href="chapters/05-the-orchestrator.html#ch:the-orchestrator">Chapter 5</a>, written to match the text as it describes agentteams 1.1.</p>
+    <p class="notes-source">A summary of <a href="chapters/05-the-orchestrator.html#ch:the-orchestrator">Chapter 5</a>, written to match the text as it describes agentteams 1.2.</p>
 
     <section id="notes-05-thesis">
       <h2>Thesis</h2>
@@ -21,7 +21,7 @@
       <p>The second section describes the domain agent routing table, which assigns each of ten content areas to exactly one domain agent. The chapter lists them, from chapter experts and the book-content-expert to the voice-style agent, expert-critic, argument-weaver, html-document-builder, graphviz-expert, latex-specialist, bibliography-manager and adversarial agent. It also gives the generalized template names beside the book's names, such as primary-producer for book-content-expert and reference-manager for bibliography-manager. The table encodes an asymmetry. "The orchestrator can invoke any agent in the team. No other agent can invoke the orchestrator." The hub-and-spoke shape makes the orchestrator "a designed bottleneck intended to maintain order." At the framework's anchor the chapter adds a refinement, since an orchestrator may spawn a child orchestrator or become the prime of another conversation, but invocation still never runs from a specialist upward.</p>
       <p>The third section covers authority hierarchy enforcement. The book's hierarchy has six tiers, from source code and agent files on disk down to generated artifacts, and seven constitutional rules limit routing, among them no fabricated citations, never bypassing security, and closing multi-file changes with the conflict-auditor. The hierarchy is entrenched in the invariant core, and only the principal may edit it. The fourth section explains coordinative knowledge without domain knowledge. The orchestrator cannot judge a draft or a citation, so it defers to specialists, for instance forwarding a voice deviation flagged by the voice-style agent to the book-content-expert.</p>
       <p>The fifth section describes dynamic instantiation. Workflow 2 reads chapter-expert.template.md, the book's instance of the module's workstream-expert.template.md, along with the chapter outline, and fills four manual-required placeholders. In a fully automated setup a team-builder agent would run an intake interview, but here the outline substitutes for it. In early April 2026 the team had eighteen agents besides its chapter experts, and it grows as chapter experts are added, so team size is set at runtime. The sixth section shows how the catalog partitions into production, maintenance and dual-purpose workflows, with Workflow 11 for cross-repository coordination, and how mandatory closers weave maintenance into production.</p>
-      <p>The seventh section adds Workflow 12, a post-step gate loop. After each step, remaining rows pass through adversarial review and conflict auditing before the next step runs. This requires the plan to exist as an inspectable table, whose columns the module fixes and the orchestrator must create before the first step. "The columns are the contract" while the content is judgment. Declared dependencies let a procedure report which steps could run together, but "What can be handed to a procedure is the derivation of options, not the choice among them." The chapter then describes what comes in release 1.2. A request with several separable items will receive one plan per item and an audited metaplan that schedules them, and choices that belong to the operator will go through the host's interactive picker under a protocol the framework calls the Operator Decision Query. An answer there never clears a HALT, replaces a clearance or widens a capability, and the chapter says the channel "opens no route around the constitution."</p>
+      <p>The seventh section adds Workflow 12, a post-step gate loop. After each step, remaining rows pass through adversarial review and conflict auditing before the next step runs. This requires the plan to exist as an inspectable table, whose columns the module fixes and the orchestrator must create before the first step. "The columns are the contract" while the content is judgment. Declared dependencies let a procedure report which steps could run together, but "What can be handed to a procedure is the derivation of options, not the choice among them." The chapter then describes what release 1.2 adds. A request with several separable items receives one plan per item and an audited metaplan that schedules them, and choices that belong to the operator go through the host's interactive picker under a protocol the framework calls the Operator Decision Query. An answer there never clears a HALT, replaces a clearance or widens a capability, and the chapter says the channel "opens no route around the constitution."</p>
     </section>
 
     <section id="notes-05-concepts">
@@ -35,7 +35,7 @@
         <li><strong>Dynamic instantiation.</strong> New chapter experts built at runtime from a template with auto-resolved and manual-required placeholders.</li>
         <li><strong>Post-step gate loop.</strong> Adversarial and conflict audits of the remaining plan after every step.</li>
         <li><strong>Plan as artifact.</strong> A step table with fixed columns and declared dependencies.</li>
-        <li><strong>Metaplan and Operator Decision Query.</strong> Features the chapter marks as coming in release 1.2.</li>
+        <li><strong>Metaplan and Operator Decision Query.</strong> Features new in release 1.2.</li>
       </ul>
     </section>
 
@@ -51,7 +51,7 @@
 
     <section id="notes-05-currency">
       <h2>Currency</h2>
-      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Like Chapters 1 through 21 generally, it describes the book's own team as configured through July 2026, with framework passages, such as child orchestrators and the plan table, at the 1.1 anchor. The chapter flags two items for release 1.2, the per-item plans with an audited metaplan and the Operator Decision Query.</p>
+      <p>This note summarizes the chapter as revised for agentteams 1.2 (release candidate 2, commit 871c6c5c, 17 November 2026). Like Chapters 1 through 21 generally, it describes the book's own team as configured through July 2026, with framework passages, such as child orchestrators and the plan table, at the 1.2 anchor. The chapter describes two features new in release 1.2, the per-item plans with an audited metaplan and the Operator Decision Query.</p>
     </section>
   </article>
 </body>
