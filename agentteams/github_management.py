@@ -123,14 +123,17 @@ def section_body(description: dict[str, Any], roster: Iterable[str] | None = Non
     Args:
         description: The project brief.
         roster: The team's agent slugs (archetypes). When given, the section names ``@pr-manager`` and
-            ``@pr-notifier`` only if they are on it; when None, the brief decides
-            (:func:`agentteams.mcp_catalog.wants_pr_agents`).
+            ``@pr-notifier`` only if they are on it. When None, the brief decides
+            (:func:`agentteams.mcp_catalog.wants_pr_agents`): both roles or neither. That fallback can disagree
+            with the rendered roster (an explicit archetype list naming one of them), so a renderer passes the
+            roster; :func:`agentteams.analyze.build_manifest` does.
 
     Returns:
         The authorized-by-default rules, or the off notice.
 
     Raises:
         ValueError: As :func:`enabled`.
+        TypeError: *roster* is a string rather than a collection of slugs (it would read as characters).
     """
     if not enabled(description):
         return _OFF
@@ -140,6 +143,8 @@ def section_body(description: dict[str, Any], roster: Iterable[str] | None = Non
         both = wants_pr_agents(description)
         key = (both, both)
     else:
+        if isinstance(roster, (str, bytes)):
+            raise TypeError(f"roster must be a collection of agent slugs, not {type(roster).__name__}")
         slugs = set(roster)
         key = ("pr-manager" in slugs, "pr-notifier" in slugs)
     return _ON.replace("{PR_ROLES}", _PR_ROLES[key])
@@ -157,6 +162,7 @@ def placeholders(description: dict[str, Any], roster: Iterable[str] | None = Non
 
     Raises:
         ValueError: As :func:`enabled`.
+        TypeError: As :func:`section_body`.
     """
     on = enabled(description)
     return {PLACEHOLDER: section_body(description, roster), **{k: (v if on else "") for k, v in _ROWS.items()}}
