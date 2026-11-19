@@ -46,6 +46,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                          # same constitutional weight and must be tracked too.
     "agentteams/cli/decision_chain.py",  # the decisions log's hash chain (deletion detection)
     "agentteams/cli/decision_text.py",   # binds a signed row's conditions/evidence (text_digest)
+    "agentteams/governance_logs.py",     # the one appender of signed decision rows: lock, chain-break,
+                                         # check_log and forged-record guards, confirm-time prefix (#470)
     "agentteams/cli/decision_lineage.py",  # C-2: derives_from lineage, so a rename can't evade a HALT
     "agentteams/cli/action_ids.py",      # C-2/C-5: which rows clear an action, which HALTs block it
     "agentteams/scan.py",                # C-4: the deterministic content scanner
