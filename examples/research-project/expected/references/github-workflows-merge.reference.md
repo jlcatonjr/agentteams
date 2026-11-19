@@ -78,9 +78,21 @@ workflow. Before adding or changing a workflow, and when Actions spend is a conc
    (check the current rates in GitHub's *Billing for GitHub Actions*). Run those jobs only where they decide a
    merge (the PR into the default branch, tags), and run the rest locally.
 4. **Irrelevant changes.** Use `paths` / `paths-ignore` so documentation-only changes skip the test matrix, and
-   code-only changes skip the docs build. Skip draft PRs (`if: github.event.pull_request.draft == false`).
+   code-only changes skip the docs build. Skip draft PRs (`if: github.event.pull_request.draft == false`), and add
+   `ready_for_review` to the `pull_request` trigger's `types` (beside `opened`, `synchronize`, `reopened`), so
+   marking the PR ready runs the jobs the draft skipped.
 5. **Bookkeeping pushes.** `[skip ci]` in a commit message skips `push` and `pull_request` runs. Keep it off
    any merge that deploys.
+
+   **Required checks and the skips in 4 and 5.** Before adding a skip, check which jobs the default branch requires
+   (`gh api repos/<owner>/<repo>/rules/branches/<default branch>` for rulesets, and
+   `gh api repos/<owner>/<repo>/branches/<default branch>/protection/required_status_checks` for classic branch
+   protection, which needs admin read). A workflow skipped
+   by `paths` / `paths-ignore` or `[skip ci]` does not report its checks, so a required one stays *Expected* and the
+   PR cannot merge. A job skipped by an `if:` condition (the draft skip) reports *Success*, so a required check
+   can pass without having run. Keep required jobs out of path-filtered workflows, or give them an always-running
+   job that decides inside its steps whether to do the work, and confirm the checks ran on the head SHA before
+   merging.
 6. **Schedules.** A scheduled job runs whether or not anything changed. Review its frequency, and whether it
    can exit early when the default branch has not moved.
 7. **Batching.** Fewer, larger merges to the default branch cost less than many small ones. The

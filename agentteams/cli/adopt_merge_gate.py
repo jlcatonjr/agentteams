@@ -38,7 +38,7 @@ from agentteams.cli.exception_registry import ExceptionRegistryError, assert_wit
 #: The gate action id. Distinct from ``overwrite`` so neither clearance satisfies the other.
 ACTION = "adopt-orphans-merge"
 
-_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_SLUG_RE = re.compile(r"[a-z0-9][a-z0-9-]*")  # used with fullmatch: "$" would accept a trailing newline (#473)
 _FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\n(.*?\n)---[ \t]*\n", re.S)
 _AGENTS_BLOCK_RE = re.compile(r"^agents:[ \t]*\n((?:[ \t]+-[ \t]*\S[^\n]*\n)+)", re.M)
 _AGENTS_ITEM_RE = re.compile(r"^([ \t]+)-[ \t]*['\"]?([^'\"\s]+)['\"]?[ \t]*$", re.M)
@@ -122,7 +122,7 @@ def union_agents(text: str, slugs: list[str]) -> tuple[str, list[str]]:
 
 
 def _check_slugs(slugs: list[str]) -> None:
-    bad = [s for s in slugs if not _SLUG_RE.match(s)]
+    bad = [s for s in slugs if not _SLUG_RE.fullmatch(s)]
     if bad:
         raise AdoptMergeError(f"refusing malformed agent slug(s): {', '.join(sorted(bad))}")
 

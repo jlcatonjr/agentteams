@@ -1,0 +1,61 @@
+{
+  "_comment": [
+    "Work-summary Stop hook: OPTIONAL. Merge this `hooks` block into your .claude/settings.json only",
+    "if you want this project's daily work summary brought up to date automatically when a session",
+    "stops. It is a separate file from settings.hooks.example.json on purpose: wiring the",
+    "constitutional gate must never switch this on as a side effect.",
+    "",
+    "What it does: on each Stop event, .claude/hooks/work-summary-stop.py checks whether today's",
+    "commits or plan files are already reflected in workSummaries/daily/<today>.md. If not, it runs",
+    "`claude --print` as @work-summarizer in the background. Each run is an ordinary Claude Code run",
+    "against your account, so the hook skips whenever nothing has changed since its last run.",
+    "",
+    "No conversation is left behind: the run uses --no-session-persistence, so Claude Code saves no",
+    "session and no session list shows it. The run's full output is kept instead under",
+    "<claude config dir>/logs/agentteams-work-summary/<project>-<hash>/runs/ for 14 days",
+    "(AGENTTEAMS_WS_KEEP_DAYS; 0 keeps none). The decision log is hook.log in the same folder.",
+    "",
+    "The unattended run's tool set is capped (--tools) to Read, Grep, Glob, Agent, Edit and Write. No",
+    "other tool exists in it or in the agents it calls: no shell, no web tools, no cross-session",
+    "messaging, no scheduled or remote triggers, no worktree creation. The hook collects the git",
+    "evidence itself and hands it over as a file. No MCP server is loaded.",
+    "Within those six tools the run is in dontAsk permission mode and is granted reads, searches, the",
+    "Agent tool and writes under workSummaries/ only. That grant ADDS to the allow rules in your own",
+    "settings and cannot cap them, so: deny rules block credential files and edits under .claude/ and",
+    ".github/; and the hook refuses to launch, with a line in hook.log, if your user, project or local",
+    "settings allow Edit/Write outside workSummaries/ or a tool it does not know. Like every hook, the",
+    "run is outside the OS sandbox, and it reads commit messages and plan files others may have",
+    "written: look at the workSummaries/ diff before you push.",
+    "Claude Code saves no transcript for the run, but when the run calls an agent it still leaves a",
+    "small folder of agent metadata stubs under <claude config dir>/projects/. No session list shows",
+    "them.",
+    "",
+    "The command below carries the SHA-256 of the script as emitted. On every Stop it re-hashes",
+    ".claude/hooks/work-summary-stop.py and runs it only on a match; otherwise it prints an error and",
+    "launches nothing. So an edit to the script (by an agent, or by a later --update --merge) stops",
+    "the hook until you review the script and merge this block again. settings.json, which holds the",
+    "digest, is the file Claude Code itself guards.",
+    "Check the first live run: if your summarizer needs more, set AGENTTEAMS_WS_ALLOWED_TOOLS rather",
+    "than editing the script, which --update --merge replaces. Project-specific instructions go in",
+    "extra.md in the run folder named above (your config directory, not the repository).",
+    "",
+    "If a user-level Stop hook already launches a summarizer for this project, remove this project",
+    "from it BEFORE wiring this block, or both will launch. Any other harness that runs this",
+    "project's .claude/settings.json hooks will fire this hook too. A scheduler can call the script",
+    "directly: python3 .claude/hooks/work-summary-stop.py --foreground --project <project root>.",
+    "To switch it off without unwiring: AGENTTEAMS_WS_DISABLE=1. To remove it: delete the Stop entry."
+  ],
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I -c \"import hashlib,runpy,sys;p,h=sys.argv[1:3];sys.argv=[p];hashlib.sha256(open(p,'rb').read()).hexdigest()==h or sys.exit('work-summary-stop.py does not match the digest recorded in settings.json: review the script, then merge settings.worksummary.example.json again');runpy.run_path(p,run_name='__main__')\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/work-summary-stop.py\" __LAUNCHER_SHA256__",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
