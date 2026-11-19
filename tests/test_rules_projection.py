@@ -299,6 +299,23 @@ def test_every_top_level_rule_bullet_is_listed_even_when_its_title_wraps():
     assert all(f"- {t}" in content for t in titles)
 
 
+def test_numbered_and_plus_items_are_listed():
+    """Code-hygiene review of #11: a numbered rules list gave an empty title list (no `Rules:` at all)."""
+    body = "1. **First rule wraps\n   here.** Body.\n2) Second plain\n   1. nested, not a rule\n+ **Third**\n"
+    assert R.table_of_contents(body) == ["First rule wraps here.", "Second plain", "Third"]
+
+
+def test_an_indented_rules_section_keeps_its_items():
+    """rules_body keeps the region's indent; the items sit at the section's own column, not column 0."""
+    body = "    - **A rule.** x\n      - nested\n    - plain b\n"
+    assert R.table_of_contents(body) == ["A rule.", "plain b"]
+
+
+def test_headings_take_precedence_over_bullets():
+    """Documented limit: with any heading, bullets are the headed rules' bodies, not rules of their own."""
+    assert R.table_of_contents("### One\n\n- detail\n\n### Two\n") == ["One", "Two"]
+
+
 def test_a_long_title_is_cut_at_a_word_boundary():
     [title] = R.table_of_contents("- **" + "word " * 40 + "end**\n")
     assert len(title) <= 100 and title.endswith("…") and title[:-1].endswith("word")
