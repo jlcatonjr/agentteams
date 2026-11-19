@@ -6,6 +6,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-18
+
+### release notes
+
+agentteams 1.2.0 is the first release of the 1.2 line. It is v1.2.0-rc.2 plus a docs-only update of the book
+(#556), after a fleet soak of both release candidates across the consumer repositories. The full changes are in
+the [1.2.0-rc.2] and [1.2.0-rc.1] sections below; the highlights:
+
+- **Behaviour change (#511).** An unscoped Claude agent's fallback grant is read-only (`Read`, `Grep`, `Glob`), not
+  write and a shell. A team that relied on the old default must give that agent an explicit `tools:` grant.
+- **GitHub management (#504, #507):** what counts as the operator's approval for actions that guard the default branch,
+  the signed `--merge-pr` dev-merge path, and the required-checks switch for release PRs.
+- **Trust roots and signing (#500, #506):** the other surfaces' constitution files need the operator's signature; a
+  deleted `signing-governed.marker` still governs; HMAC key files need a recorded fingerprint.
+- **Constitutional gate (#503, #507, #456):** asks on short force pushes, git alias and push config and
+  branch-protection writes; project policy can map trigger classes from ask to deny.
+- **Optional work-summary Stop hook for Claude teams (#497).**
+- **Fleet (rc2: #540, #547):** the content scanner no longer mistakes a cited commit, digest or SSH key fingerprint for a
+  credential, and the snapshot guard refuses only known credential formats, warning (and raising rows to `REVIEW`) on
+  entropy-only findings.
+- **Book (docs only, #556):** the book is re-anchored to the 1.2 line, with its claims checked against
+  v1.2.0-rc.2. No package or template change.
+
+## [1.2.0-rc.2] - 2026-11-17
+
+### release notes
+
+agentteams 1.2.0-rc.2 is the second release candidate of the 1.2 line. It fixes the regression the 1.2.0-rc.1 soak
+found: the fleet's pre-update snapshot was refused, and the workspace SKIPped, whenever a dirty agent file held a
+public value that the content scanner mistook for a credential (a release-key fingerprint in a security log, a cited
+commit SHA, a slug beside the word "token").
+
+- **The content scanner** no longer reports a cited git commit, digest or SSH key fingerprint as a credential on a line
+  with no secret keyword (#540). The constitutional gate and the hygiene rules share it.
+- **The fleet snapshot guard** refuses only known credential formats (typed scanner rules, every private-key header,
+  and Anthropic, OpenAI, Google, GitLab, Hugging Face, npm, PyPI, Stripe and AWS keys). An entropy- or keyword-only
+  finding is a warning naming the file and line, and it raises that workspace's report rows to `REVIEW` (#547).
+
+Everything in 1.2.0-rc.1 is unchanged, including the #511 behaviour change (an unscoped Claude agent's fallback grant
+is read-only).
+
+### fixed (the fleet snapshot guard refuses only known credential formats; entropy-only findings warn; v1.2.0-rc.1 soak)
+
+- The pre-update snapshot used to be refused on any high-severity credential finding, so a dirty workspace was
+  SKIPped over a public key fingerprint, a lowercased fingerprint fragment in an index, or a slug or path beside the
+  word "token" (19 such findings across the 34 soak repositories after the scanner fix). Operator ruling, 2026-11-16.
+- `_fleet_snapshot.credential_findings` splits the findings: a known credential format (a typed `agentteams.scan` rule,
+  or `_EXTRA_CREDENTIAL_FORMATS`: any `-----BEGIN … PRIVATE KEY-----` header (OpenSSH, EC, DSA, encrypted, PGP), Anthropic
+  `sk-ant-`, OpenAI `sk-`/`sk-proj-`, Google `AIza`, GitLab `glpat-`, Hugging Face `hf_`, npm `npm_`, PyPI `pypi-`,
+  Stripe `rk_live_` and AWS `ASIA` keys) still blocks the snapshot; an
+  entropy- or keyword-only finding ("High-entropy token detected", "Possible secret-like token detected") is a `[WARN]`
+  naming the file and line, and the snapshot is recorded.
+- Both kinds are recorded in `WorkspaceResult.snapshot_notes` and appended to that workspace's rows in `report.json`
+  and `summary.md`. A warning raises those rows to `REVIEW` (a `FAIL` or `SKIP` row keeps its status), so a recorded
+  possible secret, such as an unprefixed `api_key=<random>`, reaches the operator. A file skipped as binary or over
+  1 MB gets a "not scanned" note. The two untyped messages are `agentteams.scan.MSG_HIGH_ENTROPY` and
+  `MSG_SECRET_LIKE`; an OpenAI key needs a digit in its body, so a long kebab-case `sk-…` identifier does not block.
+
+### fixed (the content scanner no longer reports a cited git commit, digest or SSH key fingerprint as a credential; v1.2.0-rc.1 soak)
+
+- Every governed team's security log records the release-signature check, `… key SHA256:<43 base64>`. The scanner
+  reported the fingerprint as a high-severity secret, so the fleet snapshot guard refused the file ("credential-like
+  content … falling back to HEAD"); the constitutional gate and the hygiene rules share `agentteams.scan`.
+- `_scan_public_hashes.is_ssh_key_fingerprint` exempts exactly 43 unpadded base64 characters straight after
+  `SHA256:` when `SHA256:` starts the line or follows whitespace, a bracket or a quote. Still reported: a bare
+  43-character value, `api_key=SHA256:<43>`, lowercase `sha256:`, a padded or 44-character body, `SHA256: ` with a space.
+- `_scan_public_hashes.is_labelled_git_hash` exempts exactly 40 or 64 lowercase hex characters straight after a git or
+  digest label (`--match-head-commit`, `merged as`, `commit`, `sha256`, `digest`, …) that does not follow a letter,
+  digit or `_`. Still reported: an unlabelled 40-hex value (older GitHub OAuth tokens), uppercase hex,
+  `api_key_digest <hex>`.
+- Both exemptions apply only on a line with no secret keyword, like the #460 public-hash exemptions: a labelled value
+  on a line that says "token", "secret" or "password" is reported as before.
+
+## [1.2.0-rc.1] - 2026-11-16
+
+### release notes
+
+agentteams 1.2.0-rc.1 is the first release candidate of the 1.2 line, cut from `main` at the 1.2.0 release merge
+(`5ec98efd`, #528) onto `release/1.2`. The entries below it are everything on `main` since the 1.1 line branched;
+fixes that 1.1.x already shipped as backports are listed again here because they reach 1.2 through `main`.
+
+- **Behaviour change (#511).** An unscoped Claude agent's fallback grant is now read-only (`Read`, `Grep`, `Glob`),
+  not write and a shell. A team that relied on the old default must give that agent an explicit `tools:` grant.
+- **Optional work-summary Stop hook for Claude teams (#497).** Inert until the operator merges its example block; the
+  only shipped hook that starts a model run, with a six-tool cap, no shell, and a SHA-256-pinned launcher.
+- **GitHub management (#504, #507).** What counts as the operator's approval for actions that guard the default
+  branch, the `--merge-pr` dev-merge path with signed authorization, and the required-checks switch for release PRs.
+- **Trust roots and signing.** The other surfaces' constitution files need the operator's signature (#506); a deleted
+  `signing-governed.marker` still governs (#500); HMAC key files need a recorded fingerprint, and sandboxes
+  write-deny the key directories.
+- **Constitutional gate.** Asks on short force pushes, git alias and push config (#503), and on branch-protection
+  writes (#507); project policy can map trigger classes from ask to deny (#456).
+- **Generated teams run the installed agentteams CLI** rather than repository-only commands (#510).
+- **Sandbox launcher lineage** leaves out side-line commits that never reached `HEAD` (#522).
+- **CI** retries apt and labels a setup network failure as infrastructure (#525).
+- The WASM sandbox, the vulnscan remediation pipeline, cross-surface projection and sync hardening, and the
+  templates' typed fields (#452, #453, #454) all land in 1.2 through `main`.
+
+Release-candidate soak: v1.2.0 follows once infrastructureManagement reports that every consumer repository rendered
+this candidate cleanly.
+
 ### fixed (CI: a runner network outage reads as infrastructure, not a test failure; #442 follow-up)
 
 - `scripts/ci-bwrap-setup.sh` retries apt downloads (`Acquire::Retries=5`, 30-second timeouts) and, when bubblewrap
