@@ -87,7 +87,7 @@ workflow. Before adding or changing a workflow, and when Actions spend is a conc
    (`gh api repos/<owner>/<repo>/rules/branches/<default branch>` for rulesets, and
    `gh api repos/<owner>/<repo>/branches/<default branch>/protection/required_status_checks` for classic branch
    protection, which needs admin read). A workflow skipped
-   by `paths` / `paths-ignore` or `[skip ci]` never reports its checks, so a required one stays *Expected* and the
+   by `paths` / `paths-ignore` or `[skip ci]` does not report its checks, so a required one stays *Expected* and the
    PR cannot merge. A job skipped by an `if:` condition (the draft skip) reports *Success*, so a required check
    can pass without having run. Keep required jobs out of path-filtered workflows, or give them an always-running
    job that decides inside its steps whether to do the work, and confirm the checks ran on the head SHA before
