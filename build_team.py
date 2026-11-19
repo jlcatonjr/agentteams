@@ -692,7 +692,7 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
 
     from agentteams import __version__ as _agentteams_version
     from agentteams import drift as _drift
-    from agentteams.source_provenance import source_provenance as _source_provenance
+    from agentteams.source_provenance import source_provenance as _source_provenance, warn_if_unpushed
 
     from agentteams import front_matter_baseline as _fm_baseline
 
@@ -729,9 +729,9 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # Older logs omit these; consumers must treat them as optional.
         "agentteams_version": _agentteams_version,
         # Which agentteams code produced the render: kind (checkout / vcs-pin / local-snapshot / package),
-        # commit, branch and a dirty flag. Optional; never an absolute path (CA-033: a stale, unrecorded
+        # commit, branch, dirty and on_remote. Optional; never an absolute path (CA-033: a stale, unrecorded
         # snapshot silently dropped a consumer's adopted routing rows).
-        "agentteams_source": _source_provenance(),
+        "agentteams_source": warn_if_unpushed(_source_provenance()),  # IM item 29: warns on an unpushed checkout
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "project_name": manifest["project_name"],
         "framework": manifest["framework"],

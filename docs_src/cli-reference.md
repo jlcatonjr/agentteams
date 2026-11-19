@@ -469,6 +469,9 @@ else the working directory, and the brief found there. The report covers:
 - **Backup stubs (WARN):** a backed-up agent file under any runtime dir's `.agentteams-backups/` (`.claude/agents`,
   `.goose/recipes`, `.codex/agents`, `.grok/agents`) that the runtime would still load as a live agent: a copy made
   before 2026-10-12. The next `--update --merge` or `--bridge-merge` that takes a backup renames it inert.
+- **Agentteams source (WARN):** a surface's build log records a `checkout` render whose agentteams commit is on
+  no local remote-tracking ref, so a CI that pins it may not fetch it (IM item 29). It re-checks live when the
+  running checkout knows the commit, and every run that writes a build log prints the same warning.
 - **Signing governance (WARN):** a team dir whose `signing-governed.marker` is absent on disk and in HEAD and was
   deleted in a commit. The WARN names the commit and says whether the team:
   - still governs, because the deletion is only on the current branch;
@@ -1324,7 +1327,7 @@ Read-only: report the validity (signature, expiry, use-limit, manager roster, an
 
 ### `--issue-directive`
 
-Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/management-hmac.key`, when its fingerprint is recorded) and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change. With `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, the key is read from `~/.config/agentteams/keys/management-hmac.key` (mode 600; trusted only when its fingerprint is recorded with `--record-hmac-fingerprint`; refused from an install an agent could edit; see the [security hardening guide](security-hardening-guide.md)).
+Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/management-hmac.key`, when its fingerprint is recorded) and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature; the scope must also start with a benign verb from `management_directives.BENIGN_SCOPE_VERBS`, such as `draft`, `review`, `report`, `test`, `lint` or `audit`, and a scope that publishes, releases, signs, rotates or tags is refused too, IM item 05), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change. With `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, the key is read from `~/.config/agentteams/keys/management-hmac.key` (mode 600; trusted only when its fingerprint is recorded with `--record-hmac-fingerprint`; refused from an install an agent could edit; see the [security hardening guide](security-hardening-guide.md)).
 
 ### `--sign-carveouts`
 
@@ -1746,7 +1749,8 @@ Validate generated Goose recipe YAML files in the `--output` directory (or `.goo
 ### `--version`
 
 Print the version and exit. It also names the source that is running: the kind (`checkout`, `vcs-pin`,
-`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known.
+`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known, and
+`, not on a remote` for a checkout whose commit no local remote-tracking ref contains.
 
 ---
 
