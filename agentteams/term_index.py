@@ -93,8 +93,10 @@ def read_capped(root: Path, rel: str | Path, cap: int) -> bytes | None:
             for part in parts[:-1]:
                 try:
                     fds.append(os.open(part, os.O_RDONLY | os.O_DIRECTORY | _NOFOLLOW, dir_fd=fds[-1]))
-                except NotADirectoryError:  # a symlink under O_NOFOLLOW|O_DIRECTORY, or a file
-                    return None
+                except OSError as exc:  # a link under O_NOFOLLOW|O_DIRECTORY (ENOTDIR, ELOOP or EMLINK), or a file
+                    if exc.errno in (errno.ENOTDIR, errno.ELOOP, getattr(errno, "EMLINK", -1)):
+                        return None
+                    raise
             opener = {"dir_fd": fds[-1]}
             target: str | Path = parts[-1]
         else:  # no dir_fd (Windows): check every component, then open the last without following it

@@ -95,7 +95,7 @@ def _fence_findings(root: Path) -> tuple[list, list]:
         return [], []
     defects, reviews = [], []
     for rel in ti.documents(root, a.register, TEAM_CONFIG):
-        raw = ti.read_document(root / rel)
+        raw = ti.read_document(root / rel, root)
         text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n") if raw else ""
         problem = fence_scan(text)[1]
         if problem:
