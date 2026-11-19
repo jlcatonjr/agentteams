@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--sync-project-rules`: a rule whose bold title wraps a line is no longer dropped from a reference list; #11, 1.2.2)
+
+- In reference mode (Codex's `AGENTS.md`), the projected rules block lists each operator rule's title, and that list
+  is how Codex learns which rules exist. Titles were read with a one-line regex, so a bold title that wrapped onto
+  a second line matched nothing and its rule silently dropped out of the list (researchteam's PS-2, the
+  merge-approval rule). When any bullet had a bold lead, plain bullets dropped out too. Each top-level bullet now
+  yields exactly one title: its bold lead, read across lines, else its first line. A title over 100 characters is
+  cut at a word boundary.
+
+### fixed (Codex role gate: WASM mode never applies under the write policy; researchteam @security, 1.2.2)
+
 ### fixed (work-summary Stop hook: no absolute project path in the prompt; the detached worker re-checks the launcher; researchteam @security, 1.2.2)
 
 - The summarizer prompt named the absolute project root, a home path carrying the OS username, which a summary
