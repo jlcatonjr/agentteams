@@ -34,7 +34,7 @@ def test_false_renders_the_off_notice() -> None:
 
 
 def test_the_section_allocates_by_role_and_keeps_the_gate() -> None:
-    body = gm.section_body({})
+    body = gm.section_body({}, ["pr-manager", "pr-notifier"])
     assert "`@git-operations` runs git and the `gh` writes" in body
     assert "read-only `gh` queries itself" in body
     assert "never merges" in body
@@ -42,6 +42,33 @@ def test_the_section_allocates_by_role_and_keeps_the_gate() -> None:
     assert "is not\n  operator consent" in body or "is not operator consent" in " ".join(body.split())
     for floor in ("force-push", "release/*", "signing", "cross-repository"):
         assert floor in body
+
+
+@pytest.mark.parametrize("roster, named, absent", [
+    (["pr-manager", "pr-notifier"], ["@pr-manager", "@pr-notifier"], []),
+    (["pr-manager"], ["@pr-manager"], ["@pr-notifier"]),
+    (["pr-notifier"], ["@pr-notifier"], ["@pr-manager"]),
+    ([], [], ["@pr-manager", "@pr-notifier"]),
+])
+def test_the_section_names_only_rostered_pr_roles(roster, named, absent) -> None:
+    """researchteam finding #2 (1.2.2): a team without the PR agents was told to route work to them."""
+    body = gm.section_body({}, roster)
+    assert all(n in body for n in named) and not any(a in body for a in absent)
+    assert "{PR_ROLES}" not in body
+    if "pr-manager" not in roster:
+        assert "`@git-operations` also owns the pull-request lifecycle" in body
+
+
+def test_without_a_roster_the_brief_decides() -> None:
+    assert "@pr-manager" not in gm.section_body({})
+    assert "`@pr-manager` owns" in gm.section_body({"pr_management": True})
+
+
+def test_a_rendered_team_names_only_its_own_pr_roles() -> None:
+    for pr_management, has in ((False, False), (True, True)):
+        manifest = _manifest(pr_management=pr_management)
+        body = manifest["auto_resolved_placeholders"][gm.PLACEHOLDER]
+        assert ("`@pr-manager` owns" in body) is has and ("`@pr-notifier` proposes" in body) is has
 
 
 def test_no_tools_line_widens() -> None:
@@ -79,3 +106,11 @@ def test_the_git_agent_prefers_gh_when_authenticated() -> None:
 def test_a_non_boolean_flag_is_refused(value) -> None:
     with pytest.raises(ValueError):
         gm.enabled({"github_management": value})
+
+
+def test_the_ci_cost_levers_warn_about_required_checks() -> None:
+    """researchteam finding #9 (1.2.2): the path, draft and [skip ci] skips came with no required-check caveat."""
+    text = " ".join((TEMPLATES / "universal" / "github-workflows-merge.reference.template.md").read_text(
+        encoding="utf-8").split())
+    assert "**Required checks and the skips in 4 and 5.**" in text
+    assert "stays *Expected* and the PR cannot merge" in text and "reports *Success*" in text
