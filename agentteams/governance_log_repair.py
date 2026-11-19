@@ -135,10 +135,15 @@ def _records_with_spans(text: str) -> list[tuple[list[str], int, int]]:
     return out
 
 
-def _propose(cells: list[str], header: list[str]) -> tuple[list[str] | None, str]:
+def _propose(cells: list[str], header: list[str], migratable: bool = False) -> tuple[list[str] | None, str]:
     width = len(header)
     extra = len(cells) - width
     if extra <= 0:
+        from agentteams.cli.decision_log_migrate import narrowest_paddable
+
+        if migratable and narrowest_paddable(header) <= len(cells):
+            return None, (f"has {len(cells)} fields, fewer than the header's {width}, short only by trailing signing "
+                          "columns: not a repair; run `agentteams --migrate-decision-log --dry-run`, then `--yes`")
         return None, f"has {len(cells)} fields, fewer than the header's {width}: no safe fix; repair by hand"
     splits = [j for j in range(1, len(cells)) if cells[j].startswith(" ")]
     if len(splits) != extra:
@@ -184,7 +189,7 @@ def _plan_from_bytes(path: Path, raw: bytes) -> RepairPlan:
     for number, (cells, first, last) in enumerate(all_records[header_index + 1:], 1):
         if not cells or len(cells) == width:
             continue
-        fixed, reason = _propose(cells, header)
+        fixed, reason = _propose(cells, header, migratable=path.name == "security-decisions.log.csv")
         plan.items.append(RepairItem(number, first, last, cells, fixed, reason))
     if signed and plan.items:
         plan.refusal = (f"the log is signed or chained ({', '.join(signed)}); a repair would void a signature or "
