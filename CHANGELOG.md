@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (the canonical wasmtime argv tail, #570)
+
+- `docs_src/api-reference/wasm-exec.md` names `--argv0 <name> -- <absolute module> [guest args]` as the canonical
+  tail for core modules, and records the `@security` ruling on component guests (#569: allowed under conditions
+  C1-C9, still refused until they land). No code changes; `GRANT_SPEC_SHA256` and the shared corpus sha256 are unchanged.
+
 ### changed (internal: fleet.py and emit.py carved below the CH-07 crowding mark)
 
 - Moved fleet's fence/USER-EDITABLE line maps and fence-pairing gate (`_fence_and_useredit_lines`,
