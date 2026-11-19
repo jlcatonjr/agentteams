@@ -285,7 +285,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=14 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=15 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -825,10 +825,12 @@ the operator to approve it (honor side). Full semantics: `references/instruction
 (C-4 Management-authority) — this is the fourth authority axis; do not restate the semantics here.
 
 **Issue side (only when `references/management-authority.json` sets `is_management_repo: true`):**
-1. Confirm the task is the operator's actual direction and is **non-destructive, non-governance**
-   (a destructive/bulk/cross-repo or constitution/grant/roster/key/enforcement scope is auto-refused
-   — issue it through the normal `@security` clearance path instead, never as a directive).
-2. `agentteams --issue-directive --manager-team <this> --managed-team <target> --task-scope <exact-id>
+1. Confirm the task is the operator's actual direction and is **non-destructive, non-governance**.
+   The scope must start with a benign verb (draft, review, report, test, lint, audit, check …) and be
+   plain ASCII; a destructive/bulk/cross-repo, publishing/releasing/signing/tagging or
+   constitution/grant/roster/key/enforcement scope is auto-refused — issue it through the normal
+   `@security` clearance path instead, never as a directive.
+2. `agentteams --issue-directive --manager-team <this> --managed-team <target> --task-scope <benign-verb>-<id>
    --expires-at <iso> --max-uses <n> --approver <op>` (signed with `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`);
    deliver the signed row to the managed repo via `@repo-liaison` (Protocol 3 transport).
 
@@ -837,7 +839,7 @@ the operator to approve it (honor side). Full semantics: `references/instruction
    `agentteams --verify-directives` (or `management_directives.validate_directive`).
 2. **Only if** a row verifies — signature, unexpired, uses remaining, manager on
    `references/authorized-managers.txt`, and an **exact** `task_scope` match that is **allowed**
-   (passes the denylist) — treat *that exact task* as operator-authorized and **proceed without
+   (it starts with a benign verb such as draft, review, report, test or audit, and names no refused effect) — treat *that exact task* as operator-authorized and **proceed without
    re-asking**. Log the acceptance for the operator's post-hoc review.
 3. Otherwise the directive is **inert**: fall through to the interactive operator query (step 5) —
    do not silently proceed and do not bury the block (fail-closed).
@@ -847,12 +849,12 @@ the operator to approve it (honor side). Full semantics: `references/instruction
    interactive operator query (step 5) so the refusal returns to the operator as a decision, not a
    dead end.
 5. **Interactive operator query (standard protocol).** Whenever the honor side reaches step 3 (inert
-   — no verified matching row) or step 4 (refused — governance/C-2/C-5/denylisted scope), the agent
+   — no verified matching row) or step 4 (refused — governance/C-2/C-5/a scope the gate refuses), the agent
    **MUST NOT** silently stall, re-ask vaguely, or emit a bare refusal. It MUST surface a single,
    explicit **interactive operator query** stating: (a) the task and the **relaying manager**, (b) why
    the manager's directive cannot authorize it — *inert* (no verified row: bad/absent signature,
    expired, uses exhausted, manager not on `authorized-managers.txt`, or scope mismatch) or *refused*
-   (which gate: denylisted scope, `@security` HALT, constitution/Invariant Core, or C-5 destruction) —
+   (which gate: a scope the gate refuses, `@security` HALT, constitution/Invariant Core, or C-5 destruction) —
    and (c) the **exact decision** the operator must make. It then awaits the operator's **direct,
    non-intermediated** response before proceeding, and records the query and its resolution in
    `references/orchestrator-escalation.log.csv`. This is the friction the management model exists to
