@@ -160,3 +160,19 @@ def test_the_repair_preview_routes_a_migratable_row_to_the_migration(tmp_path):
     [item] = plan_repair(path).items
     assert item.fixed is None and "--migrate-decision-log" in item.reason
 
+
+def test_the_hint_never_raises(tmp_path, monkeypatch):
+    """@security #12 condition 2: check_log stays raise-free (the pinned gate calls it) if the hint's import fails."""
+    import builtins
+
+    real = builtins.__import__
+
+    def refuse(name, *a, **k):
+        if name == "agentteams.cli.decision_log_migrate":
+            raise ImportError("blocked")
+        return real(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+    problems = gl.check_log(_log(tmp_path, _MIGRATED + "\n2026-10-25T17:36:14Z,security,y,PASS,c,yes,03b4\n"))
+    assert len(problems) == 1 and "--migrate-decision-log" not in problems[0]
+

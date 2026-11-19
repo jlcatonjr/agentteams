@@ -278,6 +278,34 @@ def narrowest_paddable(header: list[str]) -> int:
     return max(len(header) - trailing, max((header.index(c) + 1 for c in required), default=0))
 
 
+def short_row_problem(header: list[str], fields: list[str]) -> str | None:
+    """Why a row narrower than *header* must not be padded, or None when padding reads it as written.
+
+    A row of the right width for padding can still be a row split by an unquoted comma (a legacy HALT with a comma
+    in ``action_reviewed`` parses as seven fields, ``HALT`` landing in ``conditions``); padding it would make the log
+    readable with that HALT unseen (C-2; @security, #12 review). So a padded row's verdict cell must hold a verdict
+    word, and no field may start with a space (the mark of a comma-split prose fragment, as in
+    :mod:`agentteams.governance_log_repair`).
+
+    Args:
+        header: The header the row must match after padding (stripped names).
+        fields: The row's cells.
+
+    Returns:
+        The reason, or None.
+    """
+    from agentteams.governance_log_repair import _VERDICT_WORDS
+
+    if len(fields) < narrowest_paddable(header) or narrowest_paddable(header) == 0:
+        return "it is narrower than any row of this log's schema (torn or truncated)"
+    column = next((c for c in ("verdict", "status") if c in header), None)
+    if column is None or header.index(column) >= len(fields) or not _VERDICT_WORDS.match(fields[header.index(column)]):
+        return "its verdict cell holds no verdict word (an unquoted comma may have shifted its cells)"
+    if any(f.startswith(" ") for f in fields[1:]):
+        return "a field starts with a space (an unquoted comma may have split a cell)"
+    return None
+
+
 def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: list[str],
                  log_path: Path) -> tuple[bytes, list[int]]:
     """Append empty cells to rows narrower than *final*, at the end of each row's last line.
@@ -308,6 +336,12 @@ def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: 
             raise DecisionLogMigrationError(
                 f"{log_path} line {start} has {len(fields)} fields; a row of this log has at least "
                 f"{narrowest}. Refusing to pad a torn or truncated row: fix it first"
+            )
+        problem = short_row_problem(final, fields)
+        if problem:
+            raise DecisionLogMigrationError(
+                f"{log_path} line {start} has {len(fields)} fields and {problem}. Refusing to pad it: "
+                "repair it by hand first (`python -m agentteams.governance_logs repair` previews it)"
             )
         line = lines[end - 1]
         body = line.rstrip("\r\n")

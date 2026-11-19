@@ -55,13 +55,16 @@ _MIGRATE_HINT = (" (short only by trailing signing columns: `agentteams --migrat
                  "`--yes`, pads it without changing any signed payload)")
 
 
-def _migration_floor(path: Path, header: list[str]) -> int | None:
-    """The narrowest row ``--migrate-decision-log`` pads in this log, or None when it isn't a decisions log."""
+def _migratable(path: Path, header: list[str], fields: list[str]) -> bool:
+    """Whether ``--migrate-decision-log`` would pad this short decisions-log row as written (never raises)."""
     if path.name != "security-decisions.log.csv":
-        return None
-    from agentteams.cli.decision_log_migrate import narrowest_paddable  # lazy: the CLI package imports this module
+        return False
+    try:
+        from agentteams.cli.decision_log_migrate import short_row_problem  # lazy: the CLI package imports this module
 
-    return narrowest_paddable([c.strip() for c in header])
+        return short_row_problem([c.strip() for c in header], fields) is None
+    except (ImportError, ValueError, TypeError, IndexError):  # a hint is optional; never raise from here
+        return False
 
 
 def check_log(path: Path) -> list[str]:
@@ -88,9 +91,8 @@ def check_log(path: Path) -> list[str]:
     if not rows or not rows[0]:
         return [f"{path}: no header row"]
     width = len(rows[0])
-    floor = _migration_floor(path, rows[0])
     problems = [f"{path}: record {i} has {len(r)} fields, header has {width}"
-                + (_MIGRATE_HINT if floor is not None and floor <= len(r) < width else "")
+                + (_MIGRATE_HINT if len(r) < width and _migratable(path, rows[0], r) else "")
                 for i, r in enumerate(rows[1:], 1) if r and len(r) != width]
     problems += [f"{path}: record {i} has a field holding later dated rows (an unclosed quote swallowed them)"
                  for i, r in enumerate(rows[1:], 1) if any(_RECORD_START.search(f) for f in r)]

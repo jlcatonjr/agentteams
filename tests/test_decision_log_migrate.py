@@ -305,3 +305,22 @@ def test_a_torn_row_under_a_migrated_header_is_refused(tmp_path: Path) -> None:
     with pytest.raises(dlm.DecisionLogMigrationError, match="torn or truncated"):
         dlm.plan_migration(out / dlm.DECISION_LOG_REL)
 
+
+def test_a_comma_split_halt_is_neither_padded_nor_hinted(tmp_path: Path) -> None:
+    """@security #12 condition 1: a legacy HALT with a comma in action_reviewed parses as 7 fields with HALT in
+    conditions; padding it would make the log readable and the HALT unseen."""
+    from agentteams import governance_logs as gl
+
+    split = "2026-10-25T17:36:14Z,security,merge x, then y,HALT,,"
+    data = "\n".join([_MIGRATED, split]) + "\n"
+    out = _team(tmp_path, data.encode())
+    with pytest.raises(dlm.DecisionLogMigrationError, match="verdict cell holds no verdict word|starts with a space"):
+        dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert not any("--migrate-decision-log" in p for p in gl.check_log(out / dlm.DECISION_LOG_REL))
+    assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "c", "yes", " frag"])
+
+
+def test_no_hint_for_a_header_of_no_schema() -> None:
+    """@security #12 condition 3: floor 0 means no schema; nothing is paddable."""
+    assert dlm.short_row_problem(["a", "b", "signature"], ["1", "2"]) is not None
+
