@@ -323,6 +323,23 @@ def test_a_comma_split_halt_is_neither_padded_nor_hinted(tmp_path: Path) -> None
     assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "c", "yes", "03b4"]) is None
 
 
+def test_a_full_row_gaining_added_columns_is_not_a_short_row(tmp_path: Path) -> None:
+    """#12 regression: when migration adds columns, a row that fills its own header is padded only into the
+    added ones, so the short-row checks (non-hex signature, verdict word) do not apply to it."""
+    header = ("timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,scope,derives_from,"
+              "effect_class,effect_grants,effect_targets,effect_relaxes,effect_destructive,effect_cross_repo,"
+              "effect_bulk,sig_scheme,key_id,signature,consumed")
+    full = "2026-10-31,security,x,PASS,,verified,x,base,,,,,,,,ed25519,op,stub" + "0" * 64 + ","
+    assert len(full.split(",")) == len(header.split(","))
+    out = _team(tmp_path, "\n".join([header, full]).encode() + b"\n")
+    plan = dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert plan.added_columns and plan.padded_lines == [2]
+    short = "2026-10-31,security,merge x, then y,HALT,,"        # still short of its own header: still checked
+    out2 = _team(tmp_path / "b", "\n".join([header, short]).encode() + b"\n")
+    with pytest.raises(dlm.DecisionLogMigrationError):
+        dlm.plan_migration(out2 / dlm.DECISION_LOG_REL)
+
+
 def test_no_hint_for_a_header_of_no_schema() -> None:
     """@security #12 condition 3: floor 0 means no schema; nothing is paddable."""
     assert dlm.short_row_problem(["a", "b", "signature"], ["1", "2"]) is not None
