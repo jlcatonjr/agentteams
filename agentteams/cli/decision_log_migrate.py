@@ -312,7 +312,7 @@ def short_row_problem(header: list[str], fields: list[str]) -> str | None:
 
 
 def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: list[str],
-                 log_path: Path) -> tuple[bytes, list[int]]:
+                 log_path: Path, current: int | None = None) -> tuple[bytes, list[int]]:
     """Append empty cells to rows narrower than *final*, at the end of each row's last line.
 
     Only a row short by trailing signing columns (the run of *final*'s last columns that are
@@ -324,6 +324,9 @@ def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: 
         records: ``(first file line, last data line, fields)`` per row, from :func:`_records`.
         final: The header the rows must match after migration.
         log_path: The log, for messages.
+        current: The width of the log's own header, when *final* adds columns to it. A row that
+            fills that header is padded only into the added columns, so it is not a short row of its
+            own schema and :func:`short_row_problem` does not apply to it. Defaults to ``len(final)``.
 
     Returns:
         ``(padded bytes, first file line of each padded row)``.
@@ -342,7 +345,7 @@ def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: 
                 f"{log_path} line {start} has {len(fields)} fields; a row of this log has at least "
                 f"{narrowest}. Refusing to pad a torn or truncated row: fix it first"
             )
-        problem = short_row_problem(final, fields)
+        problem = short_row_problem(final, fields) if len(fields) < (current or len(final)) else None
         if problem:
             raise DecisionLogMigrationError(
                 f"{log_path} line {start} has {len(fields)} fields and {problem}. Refusing to pad it: "
@@ -418,7 +421,7 @@ def plan_migration(log_path: Path) -> MigrationPlan:
                 "Refusing (no laundering): fix the row first"
             )
     revoked = _revoked_rows(columns, records) if "signature" in added else []
-    padded_rest, padded = _pad_records(rest, records, columns + added, log_path)
+    padded_rest, padded = _pad_records(rest, records, columns + added, log_path, len(columns))
     new_bytes = header + ("," + ",".join(added)).encode("utf-8") + ending + padded_rest
     _assert_migrated(new_bytes, columns, added, log_path)
     _assert_payloads_unchanged(raw, new_bytes, log_path)
