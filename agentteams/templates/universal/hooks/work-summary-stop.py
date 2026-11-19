@@ -54,7 +54,8 @@ Environment:
 * ``AGENTTEAMS_WS_TIMEOUT`` — child timeout in seconds (default 420).
 * ``AGENTTEAMS_WS_RETRY_S`` — wait after a failed run before trying again (default 1800).
 * ``AGENTTEAMS_WS_ALLOWED_TOOLS`` — replaces the default tool grant (comma-separated rules). The
-  deny rules still win, so it cannot grant a shell.
+  deny rules still win, so it cannot grant a shell, and a rule that would reach beyond
+  ``workSummaries/`` (or a list that cannot be parsed) skips the run, as an inherited one does.
 * ``AGENTTEAMS_WS_EVIDENCE_DAYS`` — how many days of git history the evidence file covers
   (default 8, so a backfill sweep has what it needs).
 * ``AGENTTEAMS_WS_DISABLE=1`` — do nothing.
@@ -75,6 +76,7 @@ import datetime as _dt
 import hashlib
 import json
 import os
+import re
 import select
 import shutil
 import subprocess
@@ -114,6 +116,15 @@ _HARMLESS_INHERITED = frozenset({
     "Bash", "WebFetch", "WebSearch", "NotebookEdit",
 })
 _EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit"})
+#: sha256 of this file as this process loaded it; the detached worker refuses to run a file that no longer matches.
+_SELF_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+#: The detached worker's entry: verify the file against the digest, then run it (mirrors the wired settings command).
+_REEXEC = ("import hashlib,runpy,sys;p,h=sys.argv[1:3];sys.argv=[p,*sys.argv[3:]];"
+           "hashlib.sha256(open(p,'rb').read()).hexdigest()==h or sys.exit(1);runpy.run_path(p,run_name='__main__')")
+#: The only rule shape judged at all: a tool name, optionally one ``(spec)`` with no nested parentheses, and nothing
+#: after it. Anything else (``Edit(workSummaries/**) Write``, ``Edit(x)(y)``) is refused rather than parsed, because
+#: Claude Code may read the trailing text as a further rule (SEC review of 1.2.0 cut item 4).
+_RULE_SHAPE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*(?:\(([^()]*)\))?")
 _EVIDENCE_MAX_BYTES = 400_000
 EXTRA_PROMPT_NAME = "extra.md"
 _EXTRA_PROMPT_MAX = 4000
@@ -315,11 +326,15 @@ def settings_files(root: Path) -> list[Path]:
 
 
 def _rule_is_harmless(rule: str) -> bool:
-    tool, _, spec = rule.partition("(")
-    tool, spec = tool.strip(), spec.rstrip(")").strip()
+    shape = _RULE_SHAPE.fullmatch(rule.strip())
+    if not shape:
+        return False
+    tool, spec = rule.strip().partition("(")[0], shape.group(1)
     if tool in _HARMLESS_INHERITED or tool.startswith("mcp__"):  # no MCP server is loaded
         return True
     if tool in _EDIT_TOOLS:
+        if spec is None or any(ch.isspace() or ch == "," for ch in spec):
+            return False
         spec = spec.removeprefix("./").removeprefix("/")
         return spec.startswith("workSummaries/") and ".." not in spec
     return False
@@ -331,7 +346,8 @@ def unsafe_inherited_allows(root: Path) -> list[str]:
     ``--allowedTools`` adds to the operator's own allow rules, and ``dontAsk`` turns every one of
     them into silent permission. Deny rules switch off the shell and the web tools; what is left
     is an inherited rule that lets the run edit files outside ``workSummaries/``, or one for a
-    tool this hook does not know.
+    tool this hook does not know. ``AGENTTEAMS_WS_ALLOWED_TOOLS`` replaces the default grant, so
+    its rules are judged the same way; an override that cannot be parsed is itself reported.
 
     Args:
         root: The project root.
@@ -352,7 +368,37 @@ def unsafe_inherited_allows(root: Path) -> list[str]:
             continue
         found.extend(f"{path.name}: {rule}" for rule in allow
                      if not (isinstance(rule, str) and _rule_is_harmless(rule)))
+    override = os.environ.get("AGENTTEAMS_WS_ALLOWED_TOOLS")
+    if override:  # it replaces ALLOWED_TOOLS on --allowedTools, so its rules are judged like inherited ones
+        rules = _split_rules(override)
+        if not rules:
+            found.append("AGENTTEAMS_WS_ALLOWED_TOOLS: no rules could be read from it")
+        found.extend(f"AGENTTEAMS_WS_ALLOWED_TOOLS: {rule}" for rule in rules or []
+                     if not _rule_is_harmless(rule))
     return found
+
+
+def _split_rules(value: str) -> list[str] | None:
+    """Split a comma-separated rule list, keeping commas inside ``Tool(...)`` specifiers.
+
+    Returns None when the parentheses do not balance, so a malformed list is refused, not guessed at.
+    """
+    rules: list[str] = []
+    depth, start = 0, 0
+    for i, ch in enumerate(value):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif ch == "," and depth == 0:
+            rules.append(value[start:i].strip())
+            start = i + 1
+    if depth:
+        return None
+    rules.append(value[start:].strip())
+    return [r for r in rules if r]
 
 
 def collect_evidence(root: Path, days: int) -> str:
@@ -408,7 +454,8 @@ def build_prompt(root: Path, decision: dict, today: str, audit_ran: bool, extra:
     head = (
         f"You are @work-summarizer for the {name} repository. Write today's daily work summary "
         f"({today}) to workSummaries/daily/{today}.md using {mode} mode, scoped to THIS repository "
-        f"({root}) only. "
+        "(your current working directory) only. Never write an absolute path (a home directory, a temp "
+        "directory) into the summary: name files relative to the repository. "
     )
     if audit_ran:
         audit = (
@@ -452,6 +499,30 @@ def build_prompt(root: Path, decision: dict, today: str, audit_ran: bool, extra:
             "and research work. Do NOT run Workflow D. " + contract + audit
         )
     return head + body + extra
+
+
+def absolute_paths_in(summary: Path, root: Path, evidence_dir: Path) -> list[str]:
+    """Name the machine paths a written summary contains: the project root, the evidence directory, or the home dir.
+
+    Args:
+        summary: The summary file the run wrote.
+        root: The project root.
+        evidence_dir: The temporary directory that held the git evidence.
+
+    Returns:
+        Labels (``project root``, ``evidence dir``, ``home dir``) for each path found; never the path itself, so the
+        log does not repeat it. An unreadable summary returns an empty list.
+    """
+    try:
+        text = summary.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    found: list[str] = []
+    for label, path in (("project root", root), ("evidence dir", evidence_dir), ("home dir", Path.home())):
+        forms = {str(path), str(path.resolve())}
+        if any(len(f) > 1 and f in text for f in forms):
+            found.append(label)
+    return found
 
 
 def extra_prompt(rdir: Path) -> str:
@@ -644,7 +715,8 @@ def work(root: Path) -> int:
             return 0
         unsafe = unsafe_inherited_allows(root)
         if unsafe:
-            _log(rdir, f"skip: {len(unsafe)} allow rule(s) in your settings would let the unattended "
+            _log(rdir, f"skip: {len(unsafe)} allow rule(s) in your settings or AGENTTEAMS_WS_ALLOWED_TOOLS "
+                       f"would let the unattended "
                        f"run reach beyond workSummaries/ (first: {unsafe[0][:160]}). Narrow or remove "
                        "them, or leave this hook unwired.")
             return 0
@@ -681,6 +753,11 @@ def work(root: Path) -> int:
             shutil.rmtree(evidence_dir, ignore_errors=True)
         summary = root / "workSummaries" / "daily" / f"{today}.md"
         wrote = summary.is_file() and summary.stat().st_size > 0
+        if wrote:
+            leaked = absolute_paths_in(summary, root, evidence_dir)
+            if leaked:  # the prompt forbids them; a summary is committed, so a home path would leak the username (S-8)
+                _log(rdir, f"warning: {summary.relative_to(root)} names {len(leaked)} absolute machine path(s) "
+                           f"({', '.join(leaked)}); replace them with repository-relative paths before committing")
         if code == 0 and wrote:
             # Recorded only after a run that exited cleanly AND left a summary on disk, so a failed
             # run is retried (after the back-off) instead of being mistaken for a current day.
@@ -715,9 +792,12 @@ def main(argv: list[str]) -> int:
     root = project_root(argv)
     if "--foreground" in argv:
         return work(root)
+    me = Path(__file__).resolve()
     with contextlib.suppress(OSError):
+        # The detached worker re-checks this file against the digest of the bytes this process loaded, the same check
+        # the wired settings command makes, so a launcher swapped after that check is never run (1.2.2).
         subprocess.Popen(  # noqa: S603 - fixed argv, our own file
-            [sys.executable, str(Path(__file__).resolve()), "--foreground", "--project", str(root)],
+            [sys.executable, "-I", "-c", _REEXEC, str(me), _SELF_SHA256, "--foreground", "--project", str(root)],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True, close_fds=True,
         )

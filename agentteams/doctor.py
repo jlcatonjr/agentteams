@@ -20,6 +20,9 @@ the project's providers see the same rules, the same memory, and the same agents
   deleted in a commit, naming that commit and whether the team still governs. Governance ends once the deletion has
   reached the upstream and default branch (IM item 17) —
   :func:`agentteams.signing_switch.marker_deletion_commits`.
+* **Agentteams source** (WARN, never FAIL): a surface's build log records a ``checkout`` render whose commit no
+  local remote-tracking ref contains, so a CI pinning it may not fetch it (IM item 29). Re-checked live when the
+  running checkout knows the commit — :func:`agentteams.source_provenance.unpushed_line`.
 
 Exit code 1 when any FAIL is reported.
 
@@ -199,6 +202,41 @@ def _signing_governance(root: Path) -> tuple[list[str], int]:
     return lines, 0
 
 
+def _agentteams_source(root: Path) -> tuple[list[str], int]:
+    """WARN per surface whose build log records an agentteams commit no remote has (IM item 29, G-19-3).
+
+    A render from the shared editable checkout on a local branch records a commit no CI can fetch, so a drift CI or
+    lock that pins it never passes. Whenever the running checkout knows the commit it is re-checked live, so a commit
+    pushed since the render stops warning (@adversarial); otherwise the log's recorded ``on_remote`` is used, and the
+    line says so. A log that can't be read gets its own WARN line: this section never FAILs and never skips the other
+    surfaces.
+    """
+    from agentteams.memory_index_surfaces import surface_dirs
+    from agentteams.source_provenance import commit_on_remote, unpushed_line
+
+    lines: list[str] = []
+    for agents_dir in surface_dirs(root):
+        log_path = agents_dir / "references" / "build-log.json"
+        if log_path.is_symlink() or not log_path.is_file():
+            continue
+        rel = log_path.relative_to(root).as_posix()
+        try:
+            log = json.loads(log_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            lines.append(f"  !  WARN {rel}: could not be read ({type(exc).__name__}); its agentteams source is unchecked")
+            continue
+        source = log.get("agentteams_source") if isinstance(log, dict) else None  # a list or string: nothing to read
+        if not isinstance(source, dict) or source.get("kind") != "checkout":
+            continue
+        live = commit_on_remote(str(source.get("commit") or ""))
+        if live is not None:
+            source = {**source, "on_remote": live}
+        if line := unpushed_line(source):
+            note = "" if live is not None else " (as recorded at render; this agentteams can't re-check it)"
+            lines.append(f"  !  WARN {rel}: {line}{note}")
+    return lines, 0
+
+
 def run_doctor(project: str | None) -> int:
     """``--doctor``: print the cross-surface report for the project at *project* (else the working directory).
 
@@ -219,7 +257,8 @@ def run_doctor(project: str | None) -> int:
                 ("Copilot body limit", lambda: _body_limit(root)), ("Agents", lambda: (_agents(root), 0)),
                 ("Shared AGENTS.md", lambda: (_shared_agents_md(root), 0)), ("Backup stubs", lambda: _backup_stubs(root)),
                 ("Hygiene rule ids", lambda: _hygiene_rule_ids(root)),
-                ("Signing governance", lambda: _signing_governance(root)))
+                ("Signing governance", lambda: _signing_governance(root)),
+                ("Agentteams source", lambda: _agentteams_source(root)))
     for title, section in sections:
         try:
             lines, failed = section()

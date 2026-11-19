@@ -20,7 +20,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--code-query-strategy {lexical,vector}] [--code-kind {local,api,doc,all}]
            [--refresh-graph] [--refresh-architecture]
            [--install-git-hooks] [--no-git-hooks] [--code-index-hook]
-           [--allow-foreign-output] [--pin-templates]
+           [--allow-foreign-output] [--allow-roster-shrink] [--pin-templates]
            [--reconcile-front-matter] [--reconcile-apply]
            [--fail-on-legacy-skip] [--no-vscode-tasks] [--no-add-fence-markers]
            [--scan-security] [--check-budget] [--self] [--allow-external-self-output]
@@ -469,6 +469,9 @@ else the working directory, and the brief found there. The report covers:
 - **Backup stubs (WARN):** a backed-up agent file under any runtime dir's `.agentteams-backups/` (`.claude/agents`,
   `.goose/recipes`, `.codex/agents`, `.grok/agents`) that the runtime would still load as a live agent: a copy made
   before 2026-10-12. The next `--update --merge` or `--bridge-merge` that takes a backup renames it inert.
+- **Agentteams source (WARN):** a surface's build log records a `checkout` render whose agentteams commit is on
+  no local remote-tracking ref, so a CI that pins it may not fetch it (IM item 29). It re-checks live when the
+  running checkout knows the commit, and every run that writes a build log prints the same warning.
 - **Signing governance (WARN):** a team dir whose `signing-governed.marker` is absent on disk and in HEAD and was
   deleted in a commit. The WARN names the commit and says whether the team:
   - still governs, because the deletion is only on the current branch;
@@ -1330,7 +1333,7 @@ Read-only: report the validity (signature, expiry, use-limit, manager roster, an
 
 ### `--issue-directive`
 
-Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/management-hmac.key`, when its fingerprint is recorded) and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change. With `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, the key is read from `~/.config/agentteams/keys/management-hmac.key` (mode 600; trusted only when its fingerprint is recorded with `--record-hmac-fingerprint`; refused from an install an agent could edit; see the [security hardening guide](security-hardening-guide.md)).
+Mint and sign a **management directive** (the management-repository endowment) and append it to the **managed** workspace's `references/management-directives.log.csv`. Fields are given as flags: `--manager-team` (this management repo's id), `--managed-team` (the recipient), `--task-scope` (the exact, non-destructive task id it authorizes), `--expires-at` (ISO-8601), `--max-uses`, and `--approver`. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` (or its key file, `~/.config/agentteams/keys/management-hmac.key`, when its fingerprint is recorded) and the manager on the managed team's `references/authorized-managers.txt` roster. A directive is an *authenticated operator artifact*, not a tier elevation: it authorizes only the exact scope named, can **never** clear C-5 destruction, pierce a C-2 HALT, or change governance (such scopes are mechanically auto-refused regardless of a valid signature; the scope must also start with a benign verb from `management_directives.BENIGN_SCOPE_VERBS`, such as `draft`, `review`, `report`, `test`, `lint` or `audit`, and a scope that publishes, releases, signs, rotates or tags is refused too, IM item 05), and is fail-closed inert if it does not verify. Enrolling a manager in the roster is a privileged `@security` cross-repo change. With `AGENTTEAMS_MANAGEMENT_SIGNING_KEY` unset, the key is read from `~/.config/agentteams/keys/management-hmac.key` (mode 600; trusted only when its fingerprint is recorded with `--record-hmac-fingerprint`; refused from an install an agent could edit; see the [security hardening guide](security-hardening-guide.md)).
 
 ### `--sign-carveouts`
 
@@ -1585,13 +1588,13 @@ agentteams --fleet /path/to/parent --update --merge --yes       # apply
 How it works, per discovered workspace:
 
 1. **Discovery** — finds dirs containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals.
-2. **Snapshot (to a ref)** — before applying, each git workspace's agent-infra state is recorded as a commit (`chore(fleet): pre-update snapshot`) under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace hash>`, or left at `HEAD` when already clean. The checked-out branch, `HEAD`, the index and the working tree are never changed, so a live checkout keeps fast-forwarding from its remote. No commit hook runs; a workspace whose changed agent files hold a high-severity credential finding gets no snapshot, and a dirty workspace with no snapshot is SKIPped, never updated. This is the recoverable rollback point and the diff base. The refs stay local (never pushed), but `clone --mirror` / `push --mirror` copy them; list them with `git for-each-ref refs/agentteams/fleet-snapshots/` and delete one with `git update-ref -d <ref>`. (Non-git workspaces rely on the automatic `.agentteams-backups/` snapshot.)
+2. **Snapshot (to a ref)** — before applying, each git workspace's agent-infra state is recorded as a commit (`chore(fleet): pre-update snapshot`) under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace hash>`, or left at `HEAD` when already clean. The checked-out branch, `HEAD`, the index and the working tree are never changed, so a live checkout keeps fast-forwarding from its remote. No commit hook runs; a workspace whose changed agent files hold a known credential format (a GitHub, GitLab, AWS, Slack, Stripe, Anthropic, OpenAI, Google, Hugging Face, npm or PyPI key or token, a JWT, any `-----BEGIN … PRIVATE KEY-----` header, or a password or connection-string assignment) gets no snapshot, and a dirty workspace with no snapshot is SKIPped, never updated. An entropy- or keyword-only finding is a `[WARN]` naming the file and line; the snapshot is recorded, the warning is added to that workspace's report rows, and those rows become `REVIEW` (a `FAIL` or `SKIP` row keeps its status). A file skipped as binary or over 1 MB gets a "not scanned" note. This is the recoverable rollback point and the diff base. The refs stay local (never pushed), but `clone --mirror` / `push --mirror` copy them; list them with `git for-each-ref refs/agentteams/fleet-snapshots/` and delete one with `git update-ref -d <ref>`. (Non-git workspaces rely on the automatic `.agentteams-backups/` snapshot.)
 3. **In-process update** — re-enters the standard update path per target with `--update --merge` (copilot-vscode `.github/agents/`, or a native Claude team's `.claude/agents/`) or `--bridge-merge` (for bridge-consumer `.claude/`). No subprocess is spawned, so a successful merge is never misreported because of an interpreter/exit-code quirk; a failure in one target is isolated and the run continues.
 4. **Diff analysis** — after applying, the snapshot is diffed against the agent paths as they are now (tree to tree, so files untracked before the update count correctly) and classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
 
 Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `REVIEW` (shrink Notice or USER-EDITABLE deletion — inspect the diff), `FAIL` (the merge itself errored), `SKIP` (ambiguous `.claude` with no bridge signal and no descriptor), `WOULD-UPDATE` (dry-run).
 
-**Safety:** fleet mode is non-destructive by construction. It is **merge-only** — `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, and `--shrink-policy=allow` are rejected, and `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` over the thin `_build-description.json` stub.
+**Safety:** fleet mode is non-destructive by construction. It is **merge-only** — `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, and `--shrink-policy=allow` are rejected, and `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` (then the root `brief.json`) over the thin `_build-description.json` stub. A brief with no `selected_archetypes` takes the stub's roster when it is loaded, so a fleet re-render keeps the agents the stub records (`agentteams/descriptor_union.py`, IM item 12).
 
 ### `--fleet DIR`
 
@@ -1647,6 +1650,16 @@ so it is never auto-committed as OK. A lock that cannot be trusted counts as a l
 directory, a dangling or looping symlink, unreadable, not UTF-8, or has a non-comment line without `=`. A `.git`
 marks a repository toplevel only as a directory or a `gitdir:` file. The constitutional gate routes any command
 using this flag (or a prefix of it, down to `--fleet-i`) to the operator ("ask").
+
+### `--allow-roster-shrink`
+
+With `--update --yes`, accept a run whose roster cannot be known: the description has no
+`selected_archetypes` and the project's `.github/agents/_build-description.json` exists but cannot be
+read. Without it such a run **refuses** before anything is written; without `--yes` it only warns.
+When the stub is readable and lists known archetypes, its roster fills a description that has none;
+a description that sets its own roster is never refused (IM item 12: a description with no roster re-runs keyword selection and can drop agents).
+
+---
 
 ### `--allow-foreign-output`
 
@@ -1742,7 +1755,8 @@ Validate generated Goose recipe YAML files in the `--output` directory (or `.goo
 ### `--version`
 
 Print the version and exit. It also names the source that is running: the kind (`checkout`, `vcs-pin`,
-`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known.
+`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known, and
+`, not on a remote` for a checkout whose commit no local remote-tracking ref contains.
 
 ---
 

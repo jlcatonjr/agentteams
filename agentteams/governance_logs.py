@@ -49,6 +49,24 @@ def _parse(raw: bytes) -> list[list[str]]:
     return list(csv.reader(io.StringIO(raw.decode("utf-8", "replace"))))
 
 
+#: Appended to a short decisions-log row the migration can pad (#12, 1.2.2): the row lacks only trailing signing
+#: columns, a legacy-width row under a migrated header, which a hand edit would risk mangling.
+_MIGRATE_HINT = (" (short only by trailing signing columns: `agentteams --migrate-decision-log --dry-run`, then "
+                 "`--yes`, pads it without changing any signed payload)")
+
+
+def _migratable(path: Path, header: list[str], fields: list[str]) -> bool:
+    """Whether ``--migrate-decision-log`` would pad this short decisions-log row as written (never raises)."""
+    if path.name != "security-decisions.log.csv":
+        return False
+    try:
+        from agentteams.cli.decision_log_migrate import short_row_problem  # lazy: the CLI package imports this module
+
+        return short_row_problem([c.strip() for c in header], fields) is None
+    except (ImportError, ValueError, TypeError, IndexError):  # a hint is optional; never raise from here
+        return False
+
+
 def check_log(path: Path) -> list[str]:
     """Report malformed rows in one CSV log.
 
@@ -74,6 +92,7 @@ def check_log(path: Path) -> list[str]:
         return [f"{path}: no header row"]
     width = len(rows[0])
     problems = [f"{path}: record {i} has {len(r)} fields, header has {width}"
+                + (_MIGRATE_HINT if len(r) < width and _migratable(path, rows[0], r) else "")
                 for i, r in enumerate(rows[1:], 1) if r and len(r) != width]
     problems += [f"{path}: record {i} has a field holding later dated rows (an unclosed quote swallowed them)"
                  for i, r in enumerate(rows[1:], 1) if any(_RECORD_START.search(f) for f in r)]
@@ -141,7 +160,31 @@ def _refuse_a_chain_break(raw: bytes, header: list[str], cells: dict[str, str]) 
         ) from exc
 
 
-def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
+def _same_file(fd: int, path: Path, what: str) -> None:
+    """Raise ValueError unless *path* still names the file open on *fd* (same device and inode).
+
+    Raises:
+        ValueError: *path* is missing or names another file; the message is ``f"{path} {what}"``.
+    """
+    try:
+        now = os.stat(path)
+    except FileNotFoundError:
+        raise ValueError(f"{path} {what}") from None
+    held = os.fstat(fd)
+    if (now.st_dev, now.st_ino) != (held.st_dev, held.st_ino):
+        raise ValueError(f"{path} {what}")
+
+
+def _read_fd(fd: int) -> bytes:
+    """Return the whole file open on *fd*, read from the start through that descriptor."""
+    os.lseek(fd, 0, os.SEEK_SET)
+    chunks = []
+    while chunk := os.read(fd, 1 << 16):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def append_row(path: Path, row: dict[str, str] | list[str], *, expect_prefix: bytes | None = None) -> None:
     """Append one row to an existing CSV log, validated, without ever rewriting the file.
 
     The row is rendered and checked in memory, then written with one ``os.write`` on an ``O_APPEND`` descriptor
@@ -152,6 +195,8 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
         path: An existing log with a header row.
         row: The values, as a list in header order or a dict keyed by header names (every key must be a header
             name; missing names are written empty).
+        expect_prefix: When given, the file must start with exactly these bytes, read under the lock through the
+            descriptor that is written (#470: the bytes the signer read before the operator confirmed).
 
     Returns:
         None.
@@ -160,14 +205,20 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
         ValueError: The log is malformed or headerless, a dict has unknown keys, a security decision row has no
             action id or no verdict, or the row would break a chained decisions log, a value is not a ``str``, a value
             holds a line that starts a dated record, or the rendered row does not round-trip to the header's field
-            count. The file is untouched in every case.
+            count, the path no longer names the file that was opened and locked (it was replaced by a rename), or
+            the file does not start with *expect_prefix*. The file is untouched in every case, except the last:
+            a rename that lands after the write leaves the row in the replaced file only, and that is reported
+            with "not in the log".
         OSError: The file cannot be read or appended to.
     """
     fd = os.open(path, os.O_RDWR | os.O_APPEND)
     try:
         if fcntl is not None:
             fcntl.flock(fd, fcntl.LOCK_EX)
-        raw = path.read_bytes()
+        _same_file(fd, path, "was replaced before it could be locked")
+        raw = _read_fd(fd)
+        if expect_prefix is not None and not raw.startswith(expect_prefix):
+            raise ValueError(f"{path} changed since it was read for confirmation (its earlier bytes differ)")
         problems = check_log(path)
         if problems:
             raise ValueError("refusing to append to a malformed log: " + "; ".join(problems[:3]))
@@ -205,8 +256,53 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
         data = (("" if not raw or raw.endswith(b"\n") else newline) + rendered).encode("utf-8")
         if os.write(fd, data) != len(data):
             raise OSError(f"short write appending to {path}")
+        _same_file(fd, path, "was replaced while the row was being written: the row is in the replaced file, "
+                             "not in the log")
     finally:
         os.close(fd)  # closing releases the flock
+
+
+def append_signed_row(path: Path, row: dict[str, str], before: bytes | None, *, header: str | None = None) -> None:
+    """Append an operator-signed decision row with :func:`append_row`'s lock and guards (#470).
+
+    ``--sign-decision`` used to rewrite the whole log through ``csv`` (CRLF, minimal quoting) to add one row. The row
+    is now appended under :func:`append_row`'s lock, and only if the log, read through the locked descriptor, still
+    starts with *before*: the bytes the signer read when it computed the chain tip, before the operator confirmed.
+    With *header*, the log must not exist: it is created holding just that header line (``O_CREAT | O_EXCL``, so a
+    log that appeared meanwhile is never overwritten) and the row is appended through the same guards.
+
+    Args:
+        path: The security-decisions log.
+        row: The signed row, keyed by header names.
+        before: The log's bytes as read before the operator confirmed; None skips that comparison (callers with no
+            confirmation step), never the lock or the guards.
+        header: Create a new log with this header line (it ends in a newline) instead of appending to one.
+
+    Returns:
+        None.
+
+    Raises:
+        RuntimeError: The row was refused or the log changed, so nothing was appended; or (message says so) a rename
+            replaced the log during the write and the row is not in it.
+        OSError: The file cannot be created, read or appended to.
+    """
+    try:
+        if header is not None:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+            try:
+                os.write(fd, header.encode("utf-8"))
+            finally:
+                os.close(fd)
+            before = header.encode("utf-8")
+        append_row(path, row, expect_prefix=before)
+    except FileExistsError as exc:
+        raise RuntimeError(f"{path} appeared while the decision was being confirmed; nothing appended. Re-run the "
+                           "signing command.") from exc
+    except ValueError as exc:
+        if header is not None and path.read_bytes() == header.encode("utf-8"):
+            path.unlink()   # the header-only log this call created (O_EXCL), so a refusal leaves no new file
+        where = "not in the log" in str(exc)
+        raise RuntimeError(f"{path}: {exc}" if where else f"{path}: nothing appended: {exc}") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -281,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["LOG_DIRS", "LOG_NAMES", "append_row", "check_log", "check_logs", "log_paths", "main"]
+__all__ = ["LOG_DIRS", "LOG_NAMES", "append_row", "append_signed_row", "check_log", "check_logs", "log_paths", "main"]
 
 
 if __name__ == "__main__":

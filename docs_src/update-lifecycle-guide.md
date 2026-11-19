@@ -56,7 +56,7 @@ A project may have more than one descriptor on disk:
 |---|---|---|
 | `.agentteams/brief.json` | **Canonical brief** — schema-valid against `agentteams/schemas/project-description.schema.json`; carries the full `components`, `tools`, `selected_archetypes`, `memory_index_extra_dirs`, output-directory fields, etc. | **Yes** when present |
 | `brief.json` (project root) | Same role as `.agentteams/brief.json` for older layouts | Yes when present |
-| `.github/agents/_build-description.json` | Operator-side scaffold created by setup; may be a thin stub (project_name + project_goal + governance_agents) or may be a full mirror of the brief | Only if it is a full mirror; otherwise treat as stale |
+| `.github/agents/_build-description.json` | Operator-side scaffold created by setup; may be a thin stub (project_name + project_goal + governance_agents) or may be a full mirror of the brief | Only if it is a full mirror; otherwise treat its content as stale. Its `selected_archetypes` still fill a brief that has none (IM item 12) |
 
 If a `.agentteams/README.md` exists it usually quotes the exact `agentteams --update --merge --description …` command the project expects. Run that command verbatim instead of guessing.
 
@@ -69,7 +69,7 @@ A descriptor missing fields the renderer needs will silently substitute defaults
 - **Pipeline graph drops archetypes** (e.g. `visual-designer`, `retrieval-integrator`) when `selected_archetypes` is absent and analyzer auto-selection differs from the historical brief.
 - **Memory index loses extra-dir coverage** (e.g. `docs/`, `docs/decisions/`) when `memory_index_extra_dirs` is absent. The agent files themselves are preserved, but their content surfaces less in `--query-index` results.
 
-Because `--merge` only re-renders inside fences, these regressions are valid merges from the renderer's perspective — there is no warning. The only signal is the diff.
+Because `--merge` only re-renders inside fences, most of these regressions are valid merges from the renderer's perspective, with no warning; the only signal is the diff. The roster is the exception (IM item 12). A description with no `selected_archetypes` takes the stub's, and the run prints where they came from. Other roster keys the stub sets (`write_policy`, `governance_agents`, `retrieval_integration`) are reported, not applied. When the stub cannot be read, `--update --yes` refuses before writing unless `--allow-roster-shrink` is given. A description that sets its own roster wins, and the archetypes it leaves out are reported. The dual-descriptor advisory also reports a `selected_archetypes` divergence.
 
 ### Pre-update verification
 
