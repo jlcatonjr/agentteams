@@ -167,15 +167,48 @@ def test_review_report_lists_pinned_sections_with_provenance(tmp_path, monkeypat
     assert report.with_suffix(".md").exists()
 
 
-def test_token_provenance_uses_template_history():
-    checkout = shrink_allow._agentteams_checkout()
-    if checkout is None:
-        pytest.skip("not running from a full-history agentteams git checkout (CI is shallow)")
-    # Retired from git-operations.template.md on 2026-06-20 (703b1e2).
-    assert shrink_allow.token_provenance("references/git-procedures.md", checkout) == "retired"
-    assert shrink_allow.token_provenance("references/github-workflows-merge.reference.md",
-                                         checkout) == "current"
+def _template_history_repo(root: Path) -> Path:
+    """A throwaway git repo whose template history retires one token and keeps another.
+
+    The test used to assert against agentteams' own history (a token retired in 703b1e2), which only held in a
+    clone that had that commit; it now builds the history it checks.
+    """
+    import subprocess
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                        "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args],
+                       check=True, capture_output=True)
+
+    root.mkdir(parents=True)
+
+    tpl = root / "agentteams" / "templates" / "agent.template.md"
+    tpl.parent.mkdir(parents=True)
+    git("init", "-q")
+    (root / "notes.md").write_text("references/only-in-notes.md\n")   # committed, but outside the templates dir
+    tpl.write_text("See references/retired-doc.md and references/kept-doc.md.\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "add both")
+    tpl.write_text("See references/kept-doc.md.\n")
+    git("commit", "-q", "-am", "retire one")
+    return root
+
+
+def test_token_provenance_uses_template_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Isolate every git call (fixture and token_provenance) from the caller's repository and config: under a git hook,
+    # GIT_DIR and friends would otherwise point the fixture's init/add/commit at the real repository.
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR",
+                "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CEILING_DIRECTORIES"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    checkout = _template_history_repo(tmp_path / "repo")
+    assert shrink_allow.token_provenance("references/retired-doc.md", checkout) == "retired"
+    assert shrink_allow.token_provenance("references/kept-doc.md", checkout) == "current"
     assert shrink_allow.token_provenance("zz-never-in-any-template-zz", checkout) == "never"
+    assert shrink_allow.token_provenance("references/retired-doc.md", None) == "unknown"
+    # A token committed outside the templates directory does not count as template history.
+    assert shrink_allow.token_provenance("references/only-in-notes.md", checkout) == "never"
 
 
 # ---------------------------------------------------------------------------

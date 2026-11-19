@@ -73,11 +73,8 @@ def test_check_slugs_accepts_well_formed_slugs_in_any_order() -> None:
     amg._check_slugs(["x9", "a", "agent-2", "a"])
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "_SLUG_RE uses '$', which matches before a trailing newline, so 'agent\\n' is accepted; "
-    "\\Z (or re.fullmatch) would refuse it. Reported, not fixed (source is out of scope)."))
 def test_check_slugs_refuses_a_trailing_newline() -> None:
-    """Known gap: a slug with a trailing newline should be refused like any other malformed slug."""
+    """A slug with a trailing newline is refused like any other malformed slug (#473: fullmatch, not '$')."""
     with pytest.raises(amg.AdoptMergeError):
         amg._check_slugs(["agent\n"])
 

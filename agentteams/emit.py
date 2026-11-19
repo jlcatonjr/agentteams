@@ -75,7 +75,7 @@ from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     PruneResult,
     backup_output_dir, inert_backup_name,
     list_backups,
-    prune_backups,
+    prune_backups, prune_report,
     restore_backup,
     verify_backup,
     _backup_rel,
