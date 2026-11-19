@@ -3746,7 +3746,7 @@ mounts it whole.
 
 Remediation handoff to the target repository's own orchestrator (plan phase H). The operator side writes a handoff
 packet `<home>/.vulnscan-handoff/<YYYYMMDD><6 digits>.md` (git-excluded) and issues a signed management directive
-with scope `review-vulnscan-handoff-<id>` (review only: the directive denylist refuses push and merge scopes). The
+with scope `review-vulnscan-handoff-<id>` (review only: the directive scope gate refuses push and merge scopes (and any scope not led by a benign verb)). The
 repository's orchestrator reviews the staged branch and appends a row to `<home>/.vulnscan-handoff/verdicts.csv`
 (`handoff_id,verdict,branch,notes`; `verdict` one of `VERDICTS`: `approve-staged`, `own-pr`, `defer`, `reject`).
 A *home* is the checkout or one of its linked worktrees under `<repo>.worktrees/<name>/`. agentteams ships only the

@@ -1493,7 +1493,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help=(
             "Read-only: report the validity (signature, expiry, use-limit, manager roster, "
-            "and non-denylisted scope) of every management directive in "
+            "and allowed scope) of every management directive in "
             "references/management-directives.log.csv under --output/--project (else CWD). "
             "Never consumes a directive. Exits non-zero if any directive is invalid. Requires "
             "AGENTTEAMS_MANAGEMENT_SIGNING_KEY."
@@ -1534,8 +1534,10 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="task_scope",
         default=None,
         metavar="SCOPE",
-        help="With --issue-directive: the EXACT, benign, non-denylisted task scope the "
-             "directive authorizes (matched by literal equality when honoured).",
+        help="With --issue-directive: the EXACT task scope the directive authorizes (matched by "
+             "literal equality when honoured). It must start with a benign verb (draft, review, "
+             "report, test, lint, audit, check, ...), be plain ASCII, and name no destructive, "
+             "publishing, releasing, signing, tagging or governance effect.",
     )
     parser.add_argument(
         "--expires-at",
