@@ -264,12 +264,46 @@ def table_of_contents(body: str) -> list[str]:
     """
     titles = re.findall(r"^#{3,6}[ \t]+(.+?)[ \t]*$", body, re.MULTILINE)
     if not titles:
-        titles = re.findall(r"^[-*][ \t]+\*\*(.+?)\*\*", body, re.MULTILINE)
-    if not titles:
-        titles = re.findall(r"^[-*][ \t]+(.+?)[ \t]*$", body, re.MULTILINE)
-    # A title is a label, not an instruction: comment markers and backticks out, capped.
-    clean = (re.sub(r"<!--|-->|`", "", t).strip() for t in titles)
-    return [t if len(t) <= 100 else t[:99] + "…" for t in clean if t]
+        titles = [_item_title(item) for item in _top_level_items(body)]
+    # A title is a label, not an instruction: comment markers and backticks out, capped at a word boundary.
+    clean = (" ".join(re.sub(r"<!--|-->|`", "", t).split()) for t in titles)
+    return [_cap(t) for t in clean if t]
+
+
+def _top_level_items(body: str) -> list[tuple[str, str]]:
+    """Each top-level list item as ``(first line, first paragraph)``; a bold title may wrap onto the next line.
+
+    Every top-level bullet yields exactly one item, so no rule can drop out of a reference list (#11, 1.2.2). The
+    paragraph runs from the bullet to the first blank line, nested bullet or heading.
+    """
+    items: list[tuple[str, list[str]]] = []
+    open_par = False
+    for line in body.splitlines():
+        if re.match(r"^[-*][ \t]+\S", line):
+            first = re.sub(r"^[-*][ \t]+", "", line).rstrip()
+            items.append((first, [first]))
+            open_par = True
+        elif not line.strip() or re.match(r"^[ \t]*([-*]|\d+[.)])[ \t]+", line) or line.lstrip().startswith("#"):
+            open_par = False
+        elif open_par and items:
+            items[-1][1].append(line.strip())
+    return [(first, " ".join(par)) for first, par in items]
+
+
+def _item_title(item: tuple[str, str]) -> str:
+    """The item's bold lead (it may span lines), else the item's first line."""
+    first, paragraph = item
+    bold = re.match(r"\*\*(.+?)\*\*", paragraph, re.DOTALL)
+    return bold.group(1) if bold else first
+
+
+def _cap(title: str, limit: int = 100) -> str:
+    """Cap *title* at *limit* characters, cutting at a word boundary and marking the cut with an ellipsis."""
+    if len(title) <= limit:
+        return title
+    cut = title[:limit - 1]
+    space = cut.rfind(" ")
+    return (cut[:space] if space > limit // 2 else cut).rstrip(" ,;:(") + "…"
 
 
 def _block(kind: str, source: str, source_sha: str, content: str, mode: str | None, indent: str = "") -> str:
