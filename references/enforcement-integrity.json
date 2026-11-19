@@ -110,7 +110,7 @@
     "agentteams/front_matter_reconcile.py": "e07758e1606ea49553959009d22698933fd9e0d0c3069a64d64096bb838140fe",
     "agentteams/gate_policy.py": "018b18e03cc20f23e558156b2681a7c8cb45ed56430118132825aa174aa972a9",
     "agentteams/git_exec.py": "4ddf3486c7d54369907f2af17ad630d858fd6ab3dd2e6f8b0eeb402a965f7742",
-    "agentteams/governance_logs.py": "3f19f3198738bb5fce0e13c76db84e6542649c8e0a7b17245f8376aaf921379d",
+    "agentteams/governance_logs.py": "6dbb6b23fe9e58f98f271e0f2b9f09a85b5dfde761cada25c6d990ddcfbf99ad",
     "agentteams/grok_config_emit.py": "6f713619f8ecbbae9d0f0e7d4eac367bdcb387743db2650236ac0ba6b31724ca",
     "agentteams/host_features.py": "e4e94c25a2b010fb4de46e2c652a06e399908a31db3945df2040fcdc839e03e0",
     "agentteams/integrity.py": "bf8a33fca592910e9e189e4ed61b3593e500f702a411d3f045d097d811b61d7b",
