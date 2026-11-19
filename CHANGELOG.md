@@ -63,47 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `test_host_timeout_kills_the_group` accepts -9 or 137 (the shell reporting its child's SIGKILL first, seen on a
   multi-core macOS runner) and now checks directly that the whole process group is gone.
 
-### fixed (fleet: text in an AGENTTEAMS-BRIDGE fence is generated, not a user-editable deletion; rc2 soak)
-
-- `--fleet` counted a change inside a generated `<!-- AGENTTEAMS-BRIDGE:BEGIN … -->` block as a deleted
-  USER-EDITABLE line whenever a user region (Project-Specific Rules, say) came earlier in the file: the detector knew
-  only `AGENTTEAMS:BEGIN`/`END`, so the user region ran on through the bridge block. In the rc2 soak six
-  goose-bridge / codex-direct targets reported one each, all the AGENTS.md install hint moving from `@v1.1.4` to
-  `@v1.2.0-rc.2`. A bridge block now interrupts a user region and the region resumes after its END, so a real
-  user line deleted before or after the block is still reported. The fence-balance gate counts AGENTTEAMS-BRIDGE
-  BEGIN/END too, so an unclosed bridge block (which would fence the rest of the file) is reported.
-
-### changed (`append_signed_decision_row` requires `before=`; #470 follow-up)
-
-- `cli/decision_log.append_signed_decision_row` takes `before` as a required keyword (no default), so no caller can
-  skip the confirm-time byte-prefix check by leaving it out: pass the bytes read with the chain tip (`b""` for no
-  log), or `None` only where there is no confirmation step. `--sign-decision` already passes it. Re-pinned.
-
-### fixed (`--sign-decision` appends one row; earlier log bytes never change; #470)
-
-- **Signing a decision rewrote the whole security-decisions log.** `append_signed_decision_row` re-read every row and
-  wrote the file again through `csv`, so earlier rows lost their line endings (LF rows became CRLF) and quoting
-  (needless quotes dropped), and a byte-prefix check of the log could not pass. The signed row is now appended
-  through `governance_logs.append_row`: one `O_APPEND` write under its exclusive lock, with the log validated and a
-  value that would start a forged record refused. The signer captures the log's bytes when it reads the chain tip,
-  before the operator confirms, and the append refuses ("nothing appended") unless, under the lock and read through
-  the descriptor it writes, the path still names that file and the file still starts with exactly those bytes; a log
-  that appeared or disappeared meanwhile is refused too, and a new log is created with `O_EXCL`. A rename that
-  replaces the log during the write is reported as "not in the log". `governance_logs.py` is now an enforcement
-  module (integrity-pinned, with verifier-ledger rows for `check_log` and `check_logs`); `cli/decision_log.py`,
-  `cli/operator_signing.py` and `integrity.py` are re-pinned.
-
-### fixed (an automatic backup prune never deletes git-tracked backups, and is never silent; #541)
-
-- **A render or sync no longer deletes tracked files under `.agentteams-backups/`.** `backup_before_projection` and
-  `sync_roster` pruned to the newest 10 backups with `rmtree(..., ignore_errors=True)` and dropped the result; in
-  one downstream team a v1.1.4 render deleted 280 tracked files that way. `prune_backups` now leaves any backup
-  directory holding a git-tracked file alone (one `git ls-files`), applies the keep window to the untracked ones,
-  deletes nothing when git can't say what is tracked (including a broken worktree or submodule link), and records a
-  failed deletion. Both automatic callers (the `--sync` projection and roster prune) print what the prune did, and
-  `--prune-backups` reports tracked backups it kept. Generated teams already gitignore new backups; this protects
-  teams whose backups were committed anyway.
-
 ### fixed (red-team probe E1 measures a rendered team; #478)
 
 - Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
@@ -145,15 +104,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
   `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
 
-### fixed (fleet: a merge that refuses a file to keep its user region is a FAIL row; #533 follow-up)
+## [1.2.1] - 2026-11-19
 
-- A refused file gets no template updates (tool and permission tightening included) until its region is fixed by
-  hand, so `--fleet` now marks that target `FAIL`, in a dry run too, not only on stderr. The row detail starts
-  `USER REGION REFUSED (file not updated until fixed by hand):` and names the file. A bare `Errors:` header no
-  longer becomes a FAIL row's whole detail; the line under it does. `first_error` and `region_refusal` move to
-  `agentteams._fleet_report`.
+### release notes
 
-### fixed (`--update --merge` no longer drops a Goose recipe's Project-Specific Notes; #533)
+agentteams 1.2.1 backports six fixes from `dev` to the 1.2 line: #534, #537, #542, #545, #552 and #554
+(issues #533, #541 and #470, and the rc2 soak finding). Nothing else from `dev` is included.
+
+### fixed (`--update --merge` no longer drops a Goose recipe's Project-Specific Notes; #533; PR #534)
 
 - **A recipe built from an unfenced template (the work-summarizer, for one) lost its `## Project-Specific Notes`
   on every `--update --merge`, with no notice.** The merge full-replaces a non-Markdown file that has no
@@ -165,6 +123,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   personas, so review it like any other notes (C-4). Markdown copies of the same agent were never affected. Codex TOML agents are fence-wrapped and Grok and
   WASM emit Markdown, so today only Goose recipes took this path. Teams on 1.1.x or 1.2.0 that use Goose: check
   your `.goose/recipes/*.yaml` notes against git history after an update.
+
+### fixed (fleet: a merge that refuses a file to keep its user region is a FAIL row; #533 follow-up; PR #537)
+
+- A refused file gets no template updates (tool and permission tightening included) until its region is fixed by
+  hand, so `--fleet` now marks that target `FAIL`, in a dry run too, not only on stderr. The row detail starts
+  `USER REGION REFUSED (file not updated until fixed by hand):` and names the file. A bare `Errors:` header no
+  longer becomes a FAIL row's whole detail; the line under it does. `first_error` and `region_refusal` move to
+  `agentteams._fleet_report`.
+
+### fixed (an automatic backup prune never deletes git-tracked backups, and is never silent; #541; PR #542)
+
+- **A render or sync no longer deletes tracked files under `.agentteams-backups/`.** `backup_before_projection` and
+  `sync_roster` pruned to the newest 10 backups with `rmtree(..., ignore_errors=True)` and dropped the result; in
+  one downstream team a v1.1.4 render deleted 280 tracked files that way. `prune_backups` now leaves any backup
+  directory holding a git-tracked file alone (one `git ls-files`), applies the keep window to the untracked ones,
+  deletes nothing when git can't say what is tracked (including a broken worktree or submodule link), and records a
+  failed deletion. Both automatic callers (the `--sync` projection and roster prune) print what the prune did, and
+  `--prune-backups` reports tracked backups it kept. Generated teams already gitignore new backups; this protects
+  teams whose backups were committed anyway.
+
+### fixed (`--sign-decision` appends one row; earlier log bytes never change; #470; PR #545)
+
+- **Signing a decision rewrote the whole security-decisions log.** `append_signed_decision_row` re-read every row and
+  wrote the file again through `csv`, so earlier rows lost their line endings (LF rows became CRLF) and quoting
+  (needless quotes dropped), and a byte-prefix check of the log could not pass. The signed row is now appended
+  through `governance_logs.append_row`: one `O_APPEND` write under its exclusive lock, with the log validated and a
+  value that would start a forged record refused. The signer captures the log's bytes when it reads the chain tip,
+  before the operator confirms, and the append refuses ("nothing appended") unless, under the lock and read through
+  the descriptor it writes, the path still names that file and the file still starts with exactly those bytes; a log
+  that appeared or disappeared meanwhile is refused too, and a new log is created with `O_EXCL`. A rename that
+  replaces the log during the write is reported as "not in the log". `governance_logs.py` is now an enforcement
+  module (integrity-pinned, with verifier-ledger rows for `check_log` and `check_logs`); `cli/decision_log.py`,
+  `cli/operator_signing.py` and `integrity.py` are re-pinned.
+
+### changed (`append_signed_decision_row` requires `before=`; #470 follow-up; PR #552)
+
+- `cli/decision_log.append_signed_decision_row` takes `before` as a required keyword (no default), so no caller can
+  skip the confirm-time byte-prefix check by leaving it out: pass the bytes read with the chain tip (`b""` for no
+  log), or `None` only where there is no confirmation step. `--sign-decision` already passes it. Re-pinned.
+
+### fixed (fleet: text in an AGENTTEAMS-BRIDGE fence is generated, not a user-editable deletion; rc2 soak; PR #554)
+
+- `--fleet` counted a change inside a generated `<!-- AGENTTEAMS-BRIDGE:BEGIN … -->` block as a deleted
+  USER-EDITABLE line whenever a user region (Project-Specific Rules, say) came earlier in the file: the detector knew
+  only `AGENTTEAMS:BEGIN`/`END`, so the user region ran on through the bridge block. In the rc2 soak six
+  goose-bridge / codex-direct targets reported one each, all the AGENTS.md install hint moving from `@v1.1.4` to
+  `@v1.2.0-rc.2`. A bridge block now interrupts a user region and the region resumes after its END, so a real
+  user line deleted before or after the block is still reported. The fence-balance gate counts AGENTTEAMS-BRIDGE
+  BEGIN/END too, so an unclosed bridge block (which would fence the rest of the file) is reported.
 
 ## [1.2.0] - 2026-11-18
 
