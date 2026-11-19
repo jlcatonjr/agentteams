@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (CI and test robustness: bwrap step timeout, hermetic provenance test, timeout exit code; 1.2.0 cut items)
+
+- Each "Install and probe bubblewrap" step in `ci.yml` has `timeout-minutes: 10`, so a hung apt fails the step
+  instead of holding the job to its own timeout (SEC-IM-AT525 C2). Job names are unchanged.
+- `test_token_provenance_uses_template_history` builds its own template history in a throwaway repo. It used to
+  assert a token retired in a commit that is not on `dev`, so it failed in any full clone without that ref.
+- `test_host_timeout_kills_the_group` accepts -9 or 137 (the shell reporting its child's SIGKILL first, seen on a
+  multi-core macOS runner) and now checks directly that the whole process group is gone.
+
 ### fixed (fleet: text in an AGENTTEAMS-BRIDGE fence is generated, not a user-editable deletion; rc2 soak)
 
 - `--fleet` counted a change inside a generated `<!-- AGENTTEAMS-BRIDGE:BEGIN … -->` block as a deleted
