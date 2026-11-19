@@ -42,6 +42,7 @@ import argparse
 import csv
 import io
 import json
+import re
 import stat
 import sys
 from dataclasses import dataclass, field
@@ -303,6 +304,10 @@ def short_row_problem(header: list[str], fields: list[str]) -> str | None:
         return "its verdict cell holds no verdict word (an unquoted comma may have shifted its cells)"
     if any(f.startswith(" ") for f in fields[1:]):
         return "a field starts with a space (an unquoted comma may have split a cell)"
+    if "signature" in header and header.index("signature") < len(fields):
+        sig = fields[header.index("signature")].strip()
+        if sig and not re.fullmatch(r"[0-9a-fA-F]+", sig):  # a shifted prose cell, not a signature
+            return "its signature cell holds no signature (an unquoted comma may have shifted its cells)"
     return None
 
 

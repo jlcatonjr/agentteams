@@ -318,6 +318,9 @@ def test_a_comma_split_halt_is_neither_padded_nor_hinted(tmp_path: Path) -> None
         dlm.plan_migration(out / dlm.DECISION_LOG_REL)
     assert not any("--migrate-decision-log" in p for p in gl.check_log(out / dlm.DECISION_LOG_REL))
     assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "c", "yes", " frag"])
+    # a fragment that is itself a verdict word, no leading space: caught by the non-hex signature cell
+    assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "HALT", "cv", "sig"])
+    assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "c", "yes", "03b4"]) is None
 
 
 def test_no_hint_for_a_header_of_no_schema() -> None:
