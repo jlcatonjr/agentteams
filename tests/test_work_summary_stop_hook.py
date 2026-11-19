@@ -185,6 +185,19 @@ def test_wired_command_runs_the_intact_launcher(project) -> None:
     assert len(calls()) == 1
 
 
+def test_wired_command_is_isolated_from_modules_planted_in_the_project(project) -> None:
+    """A committed hashlib.py or runpy.py in the project root must not replace the digest check (1.2.2, @security)."""
+    root, calls, rdir = project
+    _plan(root)
+    assert " -I -c " in _emitted_command()
+    for name in ("hashlib.py", "runpy.py"):
+        (root / name).write_text("import sys\nsys.exit(0)  # a planted module that would skip the check\n")
+    edited = _LAUNCHER.read_text(encoding="utf-8") + "\n# edited\n"
+    refused = subprocess.run(_wire(root, edited), input="{}", cwd=root, capture_output=True, text=True, timeout=20)
+    assert refused.returncode != 0 and "does not match the digest" in refused.stderr
+    assert calls() == []
+
+
 def test_wired_command_refuses_an_edited_launcher(project, tmp_path) -> None:
     root, calls, _ = project
     _plan(root)
@@ -565,6 +578,53 @@ def test_default_run_dir_is_outside_the_project(hook, tmp_path, monkeypatch) -> 
     rdir = hook.run_dir(root)
     assert rdir.parent == tmp_path / "cfg" / "logs" / "agentteams-work-summary"
     assert rdir.name.startswith("proj-") and root not in rdir.parents
+
+
+def test_the_prompt_carries_no_absolute_project_path(hook, project) -> None:
+    """researchteam @security (1.2.2): the absolute root (a home path, so the OS username) could reach a summary."""
+    root, _, _ = project
+    for kind in ("commits", "plan-only"):
+        decision = {"kind": kind, "mode": "append", "count": 1, "latest": "abc1234", "digest": "d"}
+        prompt = hook.build_prompt(root, decision, "2026-11-19", False, evidence=Path("/tmp/x/git-evidence.txt"))
+        assert str(root) not in prompt and str(root.resolve()) not in prompt
+        assert "current working directory" in prompt and "Never write an absolute path" in prompt
+
+
+def test_the_detached_worker_refuses_a_launcher_changed_after_the_check(hook, project, tmp_path) -> None:
+    assert hook._SELF_SHA256 == hashlib.sha256(_LAUNCHER.read_bytes()).hexdigest()
+    root, calls, _ = project
+    _plan(root)
+    copy = tmp_path / "work-summary-stop.py"
+    copy.write_bytes(_LAUNCHER.read_bytes() + b"\n# swapped after the wired check\n")
+    stale = subprocess.run([sys.executable, "-I", "-c", hook._REEXEC, str(copy), hook._SELF_SHA256,
+                            "--foreground", "--project", str(root)], capture_output=True, text=True, timeout=20)
+    assert stale.returncode == 1 and calls() == []
+    ok = subprocess.run([sys.executable, "-I", "-c", hook._REEXEC, str(_LAUNCHER), hook._SELF_SHA256,
+                         "--foreground", "--project", str(root)], capture_output=True, text=True, timeout=60)
+    assert ok.returncode == 0 and len(calls()) == 1
+
+
+def test_main_starts_the_detached_worker_through_the_verifying_entry(hook, project, monkeypatch) -> None:
+    root, _, _ = project
+    started: list[list[str]] = []
+    monkeypatch.setattr(hook.subprocess, "Popen", lambda argv, **kw: started.append(argv))
+    assert hook.main(["--project", str(root)]) == 0
+    [argv] = started
+    assert argv[1:5] == ["-I", "-c", hook._REEXEC, str(Path(hook.__file__).resolve())]
+    assert argv[5] == hook._SELF_SHA256 and argv[6:] == ["--foreground", "--project", str(root)]
+
+
+def test_a_summary_naming_machine_paths_is_flagged_in_the_log(hook, project, monkeypatch) -> None:
+    root, calls, rdir = project
+    _plan(root)
+    monkeypatch.setenv("STUB_BODY", f"- see {root}/tmp/by-week/x.plan.md")
+    _run(hook, root)
+    [warning] = [line for line in (rdir / "hook.log").read_text().splitlines() if "warning:" in line]
+    assert "absolute machine path(s) (project root" in warning
+    assert str(root) not in warning                                  # the log names the kind, never the path
+    clean = root / "workSummaries" / "daily" / "clean.md"
+    clean.write_text("- see tmp/by-week/x.plan.md\n")
+    assert hook.absolute_paths_in(clean, root, root / "nowhere") == []
 
 
 def test_detached_entry_returns_at_once_and_prints_nothing(project) -> None:
