@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (work-summary Stop hook: no absolute project path in the prompt; the detached worker re-checks the launcher; researchteam @security, 1.2.2)
+
+- The summarizer prompt named the absolute project root, a home path carrying the OS username, which a summary
+  could copy into a committed file (S-8). It now names the repository as the run's working directory and tells the
+  run never to write an absolute path into the summary. The evidence file stays in the system temp directory.
+- The detached worker re-ran the launcher by path without re-checking it, so a file swapped after the wired settings
+  check would run. The worker now starts through the same verify-then-run entry, against the sha256 of the bytes
+  the parent loaded, and exits without launching anything on a mismatch. Re-pinned.
+- After a run, the hook logs a warning when the summary names the project root, the evidence directory or the home
+  directory (it logs which kind, never the path), so a username path is caught before the summary is committed.
+- The wired settings command runs `python3 -I -c`. Without `-I`, Python puts the working directory (the project
+  root) first on `sys.path`, so a committed `hashlib.py` or `runpy.py` would have replaced the digest check. Teams
+  that wired the hook re-merge `settings.worksummary.example.json` (the launcher digest changed too).
+
 ### fixed (work-summary Stop hook: an `AGENTTEAMS_WS_ALLOWED_TOOLS` override passes the unsafe-rule check; 1.2.0 cut item 4)
 
 - `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the hook's default `--allowedTools` grant, but its rules used to skip the

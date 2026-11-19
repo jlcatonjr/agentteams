@@ -116,6 +116,11 @@ _HARMLESS_INHERITED = frozenset({
     "Bash", "WebFetch", "WebSearch", "NotebookEdit",
 })
 _EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit"})
+#: sha256 of this file as this process loaded it; the detached worker refuses to run a file that no longer matches.
+_SELF_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+#: The detached worker's entry: verify the file against the digest, then run it (mirrors the wired settings command).
+_REEXEC = ("import hashlib,runpy,sys;p,h=sys.argv[1:3];sys.argv=[p,*sys.argv[3:]];"
+           "hashlib.sha256(open(p,'rb').read()).hexdigest()==h or sys.exit(1);runpy.run_path(p,run_name='__main__')")
 #: The only rule shape judged at all: a tool name, optionally one ``(spec)`` with no nested parentheses, and nothing
 #: after it. Anything else (``Edit(workSummaries/**) Write``, ``Edit(x)(y)``) is refused rather than parsed, because
 #: Claude Code may read the trailing text as a further rule (SEC review of 1.2.0 cut item 4).
@@ -449,7 +454,8 @@ def build_prompt(root: Path, decision: dict, today: str, audit_ran: bool, extra:
     head = (
         f"You are @work-summarizer for the {name} repository. Write today's daily work summary "
         f"({today}) to workSummaries/daily/{today}.md using {mode} mode, scoped to THIS repository "
-        f"({root}) only. "
+        "(your current working directory) only. Never write an absolute path (a home directory, a temp "
+        "directory) into the summary: name files relative to the repository. "
     )
     if audit_ran:
         audit = (
@@ -493,6 +499,30 @@ def build_prompt(root: Path, decision: dict, today: str, audit_ran: bool, extra:
             "and research work. Do NOT run Workflow D. " + contract + audit
         )
     return head + body + extra
+
+
+def absolute_paths_in(summary: Path, root: Path, evidence_dir: Path) -> list[str]:
+    """Name the machine paths a written summary contains: the project root, the evidence directory, or the home dir.
+
+    Args:
+        summary: The summary file the run wrote.
+        root: The project root.
+        evidence_dir: The temporary directory that held the git evidence.
+
+    Returns:
+        Labels (``project root``, ``evidence dir``, ``home dir``) for each path found; never the path itself, so the
+        log does not repeat it. An unreadable summary returns an empty list.
+    """
+    try:
+        text = summary.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    found: list[str] = []
+    for label, path in (("project root", root), ("evidence dir", evidence_dir), ("home dir", Path.home())):
+        forms = {str(path), str(path.resolve())}
+        if any(len(f) > 1 and f in text for f in forms):
+            found.append(label)
+    return found
 
 
 def extra_prompt(rdir: Path) -> str:
@@ -723,6 +753,11 @@ def work(root: Path) -> int:
             shutil.rmtree(evidence_dir, ignore_errors=True)
         summary = root / "workSummaries" / "daily" / f"{today}.md"
         wrote = summary.is_file() and summary.stat().st_size > 0
+        if wrote:
+            leaked = absolute_paths_in(summary, root, evidence_dir)
+            if leaked:  # the prompt forbids them; a summary is committed, so a home path would leak the username (S-8)
+                _log(rdir, f"warning: {summary.relative_to(root)} names {len(leaked)} absolute machine path(s) "
+                           f"({', '.join(leaked)}); replace them with repository-relative paths before committing")
         if code == 0 and wrote:
             # Recorded only after a run that exited cleanly AND left a summary on disk, so a failed
             # run is retried (after the back-off) instead of being mistaken for a current day.
@@ -757,9 +792,12 @@ def main(argv: list[str]) -> int:
     root = project_root(argv)
     if "--foreground" in argv:
         return work(root)
+    me = Path(__file__).resolve()
     with contextlib.suppress(OSError):
+        # The detached worker re-checks this file against the digest of the bytes this process loaded, the same check
+        # the wired settings command makes, so a launcher swapped after that check is never run (1.2.2).
         subprocess.Popen(  # noqa: S603 - fixed argv, our own file
-            [sys.executable, str(Path(__file__).resolve()), "--foreground", "--project", str(root)],
+            [sys.executable, "-I", "-c", _REEXEC, str(me), _SELF_SHA256, "--foreground", "--project", str(root)],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True, close_fds=True,
         )
