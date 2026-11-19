@@ -62,6 +62,7 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 from agentteams.frameworks.structural_merge import post_merge_structural
 from agentteams.frameworks.codex import write_checked
 from agentteams.learned_blocks import carry_learned_block
+from agentteams._emit_build_state import _unmodified_since_build  # noqa: F401  (tests use emit.*)
 from agentteams.fence_baseline import block_digests as _fence_digests, for_run as _fence_baseline_for_run
 from agentteams.fence_twins import persist_dropped as _persist_twins
 from agentteams.front_matter_baseline import (
@@ -212,32 +213,6 @@ def _normalize_generated_content(rel_path: str, content: str) -> str:
         normalized += "\n"
     normalized += "<!-- AGENTTEAMS:END content -->\n"
     return normalized
-
-
-def _unmodified_since_build(output_dir: Path) -> frozenset[str]:
-    """Return the rel-paths that still match their recorded build-log hash.
-
-    Args:
-        output_dir: The agents directory being written to.
-
-    Returns:
-        Rel-paths unmodified since last generation. Empty when there is no build log, or on any
-        failure — "assume modified" is the safe default, because reporting template drift on a
-        file the operator actually edited would misattribute their own work.
-    """
-    try:
-        from agentteams import drift as _drift
-
-        build_log = _drift.load_build_log(output_dir)
-        if _drift.is_interop_marker(build_log):
-            return frozenset()  # a projection marker authorises no overwrite (cond 13)
-        recorded = set(build_log.get("file_hashes", {}))
-        modified = {c["rel_path"] for c in _drift.detect_user_customizations(
-            output_dir, build_log=build_log
-        )}
-    except (FileNotFoundError, ValueError, OSError, KeyError):
-        return frozenset()
-    return frozenset(recorded - modified)
 
 
 def emit_all(

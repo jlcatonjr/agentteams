@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detecting a `*.bib` file as `reference_db_path` is not part of this change; it moves to 1.3 with item 2.
 - New `tests/test_archetype_placeholders_not_silenced.py`; the shared rule is in `agentteams/_archetype_placeholders.py`.
 
+### changed (internal: fleet.py and emit.py carved below the CH-07 crowding mark)
+
+- Moved fleet's fence/USER-EDITABLE line maps and fence-pairing gate (`_fence_and_useredit_lines`,
+  `_fence_imbalances` and their marker regexes) to `agentteams/_fleet_fences.py`, and emit's
+  `_unmodified_since_build` to `agentteams/_emit_build_state.py`. Both remain importable from `fleet` and `emit`;
+  behaviour is unchanged. fleet.py 974 → 894 lines, emit.py 974 → 949, so the pending #521 and #524 fit.
+
 ### fixed (a fleet re-render no longer drops the agents the stub records; IM item 12)
 
 - **G-17-1.** `fleet._resolve_descriptor` took the root `brief.json` whole whenever it existed. In researchteam-derived
