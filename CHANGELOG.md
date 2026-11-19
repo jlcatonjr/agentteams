@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without changing any signed payload. Before, the preview said "repair by hand".
 - The migration's padding floor is now also the schema's required columns. In a migrated legacy header the signing
   columns reach back to `action_reviewed`, so a torn 2-field row would have been padded.
+- The migration also refuses to pad, and nothing hints it for, a short row whose verdict cell holds no verdict word
+  or that has a field starting with a space. A legacy HALT split by an unquoted comma parses as a paddable width with
+  `HALT` in `conditions`, and padding it would have made the log readable with that HALT unseen.
 - The migration guide warns 1.2 upgraders to run `python -m agentteams.governance_logs check .` before re-rendering.
 
 ### fixed (work-summary Stop hook: no absolute project path in the prompt; the detached worker re-checks the launcher; researchteam @security, 1.2.2)

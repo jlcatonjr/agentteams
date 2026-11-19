@@ -135,13 +135,21 @@ def _records_with_spans(text: str) -> list[tuple[list[str], int, int]]:
     return out
 
 
+def _migration_pads(header: list[str], cells: list[str]) -> bool:
+    """Whether ``--migrate-decision-log`` would pad this short row as written (never raises; a hint is optional)."""
+    try:
+        from agentteams.cli.decision_log_migrate import short_row_problem
+
+        return short_row_problem(header, cells) is None
+    except (ImportError, ValueError, TypeError, IndexError):  # a hint is optional; never raise from here
+        return False
+
+
 def _propose(cells: list[str], header: list[str], migratable: bool = False) -> tuple[list[str] | None, str]:
     width = len(header)
     extra = len(cells) - width
     if extra <= 0:
-        from agentteams.cli.decision_log_migrate import narrowest_paddable
-
-        if migratable and narrowest_paddable(header) <= len(cells):
+        if migratable and _migration_pads(header, cells):
             return None, (f"has {len(cells)} fields, fewer than the header's {width}, short only by trailing signing "
                           "columns: not a repair; run `agentteams --migrate-decision-log --dry-run`, then `--yes`")
         return None, f"has {len(cells)} fields, fewer than the header's {width}: no safe fix; repair by hand"
