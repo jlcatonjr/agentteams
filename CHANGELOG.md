@@ -17,7 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to give no list at all), and an indented Rules section is read at its own indentation. A section with headings is
   still listed by its headings alone.
 
-
 ### fixed (GitHub management: the section names `@pr-manager` and `@pr-notifier` only when the team has them; researchteam #2, 1.2.2)
 
 - The constitution's GitHub management section told every team that `@pr-manager` owns the pull-request lifecycle
@@ -31,6 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interact with required checks. A skipped workflow leaves a required check *Expected*, so the PR can't merge; a job
   skipped by `if:` reports *Success*, so a required check can pass without running. The reference now says so and
   how to keep required jobs reporting.
+
+### fixed (decisions log: a legacy-width row under a migrated header is routed to `--migrate-decision-log`, and a torn one is never padded; baseAgent #12, 1.2.2)
+
+- From 1.2 the gate refuses a decisions log with any malformed row, so a log that 1.1.x read can block every gate
+  check after the upgrade. For a row short only by trailing signing columns, `governance_logs check`, the gate's
+  refusal and the `governance_logs repair` preview now name `agentteams --migrate-decision-log`, which pads it
+  without changing any signed payload. Before, the preview said "repair by hand".
+- The migration's padding floor is now also the schema's required columns. In a migrated legacy header the signing
+  columns reach back to `action_reviewed`, so a torn 2-field row would have been padded.
+- The migration also refuses to pad, and nothing hints it for, a short row whose verdict cell holds no verdict word
+  or that has a field starting with a space. A legacy HALT split by an unquoted comma parses as a paddable width with
+  `HALT` in `conditions`, and padding it would have made the log readable with that HALT unseen.
+- The migration guide warns 1.2 upgraders to run `python -m agentteams.governance_logs check .` before re-rendering.
 
 ### fixed (work-summary Stop hook: no absolute project path in the prompt; the detached worker re-checks the launcher; researchteam @security, 1.2.2)
 
