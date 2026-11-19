@@ -103,7 +103,7 @@ workspace is not classified at all, so neither this check nor the kept-twin one 
 
 ### Safety guarantees
 
-Fleet mode is **non-destructive by construction**: it is merge-only, and `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, `--shrink-policy=allow`, and every single-target flag (`--description`, `--project`, `--output`, `--self`, …) are rejected — see the [full exclusivity list](../cli-reference.md#explicitly-excluded-option-pairs). `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` over the thin `_build-description.json` stub. The exit code is `1` only when a target genuinely `FAIL`ed; a `REVIEW` exits `0` with a warning so the report can be inspected.
+Fleet mode is **non-destructive by construction**: it is merge-only, and `--overwrite`, `--prune`, `--migrate`, `--bridge-refresh`, `--shrink-policy=allow`, and every single-target flag (`--description`, `--project`, `--output`, `--self`, …) are rejected — see the [full exclusivity list](../cli-reference.md#explicitly-excluded-option-pairs). `.claude/` is only ever **bridge-merged**, never bridge-refreshed. Descriptor resolution prefers `.agentteams/brief.json` over the thin `_build-description.json` stub; a brief with no `selected_archetypes` takes the stub's roster when it is loaded ([`descriptor_union`](descriptor-union.md), IM item 12). The exit code is `1` only when a target genuinely `FAIL`ed; a `REVIEW` exits `0` with a warning so the report can be inspected.
 
 ---
 

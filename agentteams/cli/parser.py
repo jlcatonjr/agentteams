@@ -1043,6 +1043,17 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-roster-shrink",
+        action="store_true",
+        dest="allow_roster_shrink",
+        help=(
+            "With --update --yes, accept a run whose roster cannot be known: the description has "
+            "no selected_archetypes and the project's .github/agents/_build-description.json "
+            "cannot be read. Without this flag such a run is refused before anything is written; "
+            "without --yes it only warns (IM item 12)."
+        ),
+    )
+    parser.add_argument(
         "--shrink-policy",
         choices=("preserve", "additive", "warn", "halt", "allow"),
         default="preserve",
