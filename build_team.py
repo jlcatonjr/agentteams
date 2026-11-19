@@ -174,7 +174,7 @@ from agentteams.cli.security_gate import (
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
+_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables", "selected_archetypes")
 
 
 def _check_dual_descriptor(args: argparse.Namespace) -> None:
@@ -182,7 +182,7 @@ def _check_dual_descriptor(args: argparse.Namespace) -> None:
     descriptor and a sibling `_build-description.json` that diverges on a
     small set of stable fields. Read-only; never modifies either file.
     Records hits to tmp/daily-pipeline/dual-descriptor-events/<date>.md (gitignored).
-    Rationale and field list: references/plans/dual-descriptor-divergence-2026-05-25.plan.md
+    Field list: _DUAL_DESCRIPTOR_FIELDS (selected_archetypes added by IM item 12; see agentteams/descriptor_union.py).
     """
     if getattr(args, "self_update", False):
         return
@@ -223,7 +223,7 @@ def _check_dual_descriptor(args: argparse.Namespace) -> None:
         f"[WARN] Dual descriptor detected; {len(diverging)} field(s) diverge "
         f"between\n  primary: {desc_path}\n  sibling: {sibling}\n"
         f"  divergent fields: {', '.join(diverging)}\n"
-        f"  Resolution: align or remove the sibling. Primary is authoritative for this run.",
+        f"  Resolution: align or remove the sibling. Primary is authoritative (a roster it lacks comes from the stub).",
         file=sys.stderr,
     )
     try:

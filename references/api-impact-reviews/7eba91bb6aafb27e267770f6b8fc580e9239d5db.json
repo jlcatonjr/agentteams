@@ -1,0 +1,8 @@
+{
+  "patch_id": "7eba91bb6aafb27e267770f6b8fc580e9239d5db",
+  "commit": "91af1221fde4610c3cac2a6eec2e5d9649105401",
+  "subject": "fix(item 12): take the stub's roster where the description is loaded, not in a fleet temp file (audits)",
+  "impact": "1 symbols added, 2 symbols removed, 2 symbols changed",
+  "note": "IM item 12 redesign: descriptor_union.for_fleet and union removed; apply_stub_roster added (called after ingest in cli/generate.py); stub_for and dropped_archetypes signatures changed; FORCE_APPENDED added. docs_src/api-reference/descriptor-union.md rewritten; fleet.md, cli-reference.md, update-lifecycle-guide.md and agentteams.1 updated.",
+  "recorded_at": "2026-11-15T17:23:12Z"
+}

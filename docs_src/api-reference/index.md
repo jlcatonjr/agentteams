@@ -37,6 +37,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`gitdirs`](gitdirs.md) | Find a checkout's per-checkout and common git directories from its files (no git spawn; symlinks and borrowed worktree dirs refused) |
 | [`update-lock`](update-lock.md) | Per-checkout update lock (`<git-dir>/agentteams-update.lock`) and run record (`agentteams-update-runs.log.csv`): a concurrent writer refuses and names the holder |
 | [`fleet`](fleet.md) | Multi-workspace `--update --merge` (`--fleet DIR`) with git snapshot + diff audit |
+| [`descriptor_union`](descriptor-union.md) | A description with no roster takes the stub's `selected_archetypes` on `--update`/`--check`; the roster-shrink guard and `--allow-roster-shrink` |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
 
