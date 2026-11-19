@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -256,12 +257,20 @@ def table_of_contents(body: str) -> list[str]:
     Args:
         body: The rules text.
 
+    Headings take precedence: a rules section with any ``###``–``######`` heading is listed by its headings alone,
+    and its bullets are read as the headed rules' bodies. A list item is a ``-``, ``*`` or ``+`` bullet or a numbered
+    item (``1.`` / ``1)``) at the section's own indentation; the section is dedented first.
+
+    Args:
+        body: The rules text.
+
     Returns:
         The titles, in order, each at most 100 characters, with comment markers and backticks removed.
 
     Raises:
         Nothing.
     """
+    body = textwrap.dedent(body)  # rules_body keeps the region's indent; top level is the section's own column
     titles = re.findall(r"^#{3,6}[ \t]+(.+?)[ \t]*$", body, re.MULTILINE)
     if not titles:
         titles = [_item_title(item) for item in _top_level_items(body)]
@@ -271,7 +280,7 @@ def table_of_contents(body: str) -> list[str]:
 
 
 def _top_level_items(body: str) -> list[tuple[str, str]]:
-    """Each top-level list item as ``(first line, first paragraph)``; a bold title may wrap onto the next line.
+    """Each top-level list item (bullet or numbered) as ``(first line, first paragraph)``; a bold title may wrap.
 
     Every top-level bullet yields exactly one item, so no rule can drop out of a reference list (#11, 1.2.2). The
     paragraph runs from the bullet to the first blank line, nested bullet or heading.
@@ -279,11 +288,11 @@ def _top_level_items(body: str) -> list[tuple[str, str]]:
     items: list[tuple[str, list[str]]] = []
     open_par = False
     for line in body.splitlines():
-        if re.match(r"^[-*][ \t]+\S", line):
-            first = re.sub(r"^[-*][ \t]+", "", line).rstrip()
+        if re.match(r"^([-*+]|\d+[.)])[ \t]+\S", line):
+            first = re.sub(r"^([-*+]|\d+[.)])[ \t]+", "", line).rstrip()
             items.append((first, [first]))
             open_par = True
-        elif not line.strip() or re.match(r"^[ \t]*([-*]|\d+[.)])[ \t]+", line) or line.lstrip().startswith("#"):
+        elif not line.strip() or re.match(r"^[ \t]*([-*+]|\d+[.)])[ \t]+", line) or line.lstrip().startswith("#"):
             open_par = False
         elif open_par and items:
             items[-1][1].append(line.strip())

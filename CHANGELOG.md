@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a second line matched nothing and its rule silently dropped out of the list (researchteam's PS-2, the
   merge-approval rule). When any bullet had a bold lead, plain bullets dropped out too. Each top-level bullet now
   yields exactly one title: its bold lead, read across lines, else its first line. A title over 100 characters is
-  cut at a word boundary.
+  cut at a word boundary. Numbered items (`1.`, `1)`) and `+` bullets count as rules too (a numbered rules list used
+  to give no list at all), and an indented Rules section is read at its own indentation. A section with headings is
+  still listed by its headings alone.
 
 ### fixed (Codex role gate: WASM mode never applies under the write policy; researchteam @security, 1.2.2)
 
