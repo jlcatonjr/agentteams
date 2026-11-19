@@ -52,6 +52,7 @@ from agentteams.atomicio import write_new_atomic
 from agentteams.backup import backup_output_dir
 from agentteams.cli.decision_log import (
     _HALT_RETRACTION_VERDICT,
+    _SECURITY_DECISION_REQUIRED_COLUMNS,
     SIGNED_DECISION_COLUMNS,
     _decision_signature_payload,
     _security_decision_schema_kind,
@@ -252,6 +253,31 @@ def _assert_migrated(new_bytes: bytes, columns: list[str], added: list[str], log
             )
 
 
+def narrowest_paddable(header: list[str]) -> int:
+    """The fewest fields a row of a log with *header* may have and still be padded by the migration.
+
+    A row is padded only when what it lacks is a run of the header's last columns that are all
+    :data:`~agentteams.cli.decision_log.SIGNED_DECISION_COLUMNS`, and only when it still holds every column its
+    schema requires (the legacy or repository decision columns), so a torn row is never filled in: in a header
+    that begins with the legacy six columns, the signing run reaches back into them, and the run alone would let
+    a 2-field fragment through.
+
+    Args:
+        header: The header the rows must match after migration (stripped names).
+
+    Returns:
+        The minimum field count.
+    """
+    signing = set(SIGNED_DECISION_COLUMNS)
+    trailing = 0
+    for column in reversed(header):
+        if column not in signing:
+            break
+        trailing += 1
+    required = [c for cols in _SECURITY_DECISION_REQUIRED_COLUMNS.values() if cols <= set(header) for c in cols]
+    return max(len(header) - trailing, max((header.index(c) + 1 for c in required), default=0))
+
+
 def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: list[str],
                  log_path: Path) -> tuple[bytes, list[int]]:
     """Append empty cells to rows narrower than *final*, at the end of each row's last line.
@@ -272,13 +298,7 @@ def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: 
     Raises:
         DecisionLogMigrationError: A row is narrower than any legacy width (torn or truncated).
     """
-    signing = set(SIGNED_DECISION_COLUMNS)
-    trailing = 0
-    for column in reversed(final):
-        if column not in signing:
-            break
-        trailing += 1
-    narrowest = len(final) - trailing
+    narrowest = narrowest_paddable(final)
     lines = io.StringIO(rest.decode("utf-8"), newline="").readlines()
     padded: list[int] = []
     for start, end, fields in records:

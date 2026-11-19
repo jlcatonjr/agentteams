@@ -49,6 +49,21 @@ def _parse(raw: bytes) -> list[list[str]]:
     return list(csv.reader(io.StringIO(raw.decode("utf-8", "replace"))))
 
 
+#: Appended to a short decisions-log row the migration can pad (#12, 1.2.2): the row lacks only trailing signing
+#: columns, a legacy-width row under a migrated header, which a hand edit would risk mangling.
+_MIGRATE_HINT = (" (short only by trailing signing columns: `agentteams --migrate-decision-log --dry-run`, then "
+                 "`--yes`, pads it without changing any signed payload)")
+
+
+def _migration_floor(path: Path, header: list[str]) -> int | None:
+    """The narrowest row ``--migrate-decision-log`` pads in this log, or None when it isn't a decisions log."""
+    if path.name != "security-decisions.log.csv":
+        return None
+    from agentteams.cli.decision_log_migrate import narrowest_paddable  # lazy: the CLI package imports this module
+
+    return narrowest_paddable([c.strip() for c in header])
+
+
 def check_log(path: Path) -> list[str]:
     """Report malformed rows in one CSV log.
 
@@ -73,7 +88,9 @@ def check_log(path: Path) -> list[str]:
     if not rows or not rows[0]:
         return [f"{path}: no header row"]
     width = len(rows[0])
+    floor = _migration_floor(path, rows[0])
     problems = [f"{path}: record {i} has {len(r)} fields, header has {width}"
+                + (_MIGRATE_HINT if floor is not None and floor <= len(r) < width else "")
                 for i, r in enumerate(rows[1:], 1) if r and len(r) != width]
     problems += [f"{path}: record {i} has a field holding later dated rows (an unclosed quote swallowed them)"
                  for i, r in enumerate(rows[1:], 1) if any(_RECORD_START.search(f) for f in r)]
