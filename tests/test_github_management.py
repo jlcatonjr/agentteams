@@ -59,6 +59,12 @@ def test_the_section_names_only_rostered_pr_roles(roster, named, absent) -> None
         assert "`@git-operations` also owns the pull-request lifecycle" in body
 
 
+def test_a_string_roster_is_refused() -> None:
+    """Code-hygiene review of #2: a bare slug would be read as a set of characters, naming no PR role."""
+    with pytest.raises(TypeError):
+        gm.section_body({}, "pr-manager")
+
+
 def test_without_a_roster_the_brief_decides() -> None:
     assert "@pr-manager" not in gm.section_body({})
     assert "`@pr-manager` owns" in gm.section_body({"pr_management": True})
@@ -114,3 +120,4 @@ def test_the_ci_cost_levers_warn_about_required_checks() -> None:
         encoding="utf-8").split())
     assert "**Required checks and the skips in 4 and 5.**" in text
     assert "stays *Expected* and the PR cannot merge" in text and "reports *Success*" in text
+    assert "`ready_for_review`" in text and "rules/branches/" in text
