@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-18
+
+### release notes
+
+agentteams 1.2.0 is the first release of the 1.2 line. It is v1.2.0-rc.2 plus a docs-only update of the book
+(#556), after a fleet soak of both release candidates across the consumer repositories. The full changes are in
+the [1.2.0-rc.2] and [1.2.0-rc.1] sections below; the highlights:
+
+- **Behaviour change (#511).** An unscoped Claude agent's fallback grant is read-only (`Read`, `Grep`, `Glob`), not
+  write and a shell. A team that relied on the old default must give that agent an explicit `tools:` grant.
+- **GitHub management (#504, #507):** what counts as the operator's approval for actions that guard the default branch,
+  the signed `--merge-pr` dev-merge path, and the required-checks switch for release PRs.
+- **Trust roots and signing (#500, #506):** the other surfaces' constitution files need the operator's signature; a
+  deleted `signing-governed.marker` still governs; HMAC key files need a recorded fingerprint.
+- **Constitutional gate (#503, #507, #456):** asks on short force pushes, git alias and push config and
+  branch-protection writes; project policy can map trigger classes from ask to deny.
+- **Optional work-summary Stop hook for Claude teams (#497).**
+- **Fleet (rc2: #540, #547):** the content scanner no longer mistakes a cited commit, digest or SSH key fingerprint for a
+  credential, and the snapshot guard refuses only known credential formats, warning (and raising rows to `REVIEW`) on
+  entropy-only findings.
+- **Book (docs only, #556):** the book is re-anchored to the 1.2 line, with its claims checked against
+  v1.2.0-rc.2. No package or template change.
+
 ## [1.2.0-rc.2] - 2026-11-17
 
 ### release notes
