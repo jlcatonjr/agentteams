@@ -31,6 +31,9 @@ operator's ``native_exec_keep``). Then a spawned agent outside that list is deni
 :data:`SHELL_TOOLS` and steered to ``run_wasm``; every other tool (``run_wasm`` included) passes. Only ``Bash``
 was probed live (codex-cli 0.160.1); the other names are unprobed defensive spellings, and an unknown shell
 tool name passes (stated in the team's ``wasm_enforcement`` record). A malformed keep list denies everything.
+WASM mode never applies under the write policy: its runner sets ``AGENTTEAMS_CODEX_WRITE_POLICY=1`` (and an explicit
+``AGENTTEAMS_CODEX_WASM=0``), and with that marker set the gate ignores ``AGENTTEAMS_CODEX_WASM`` and enforces the
+read-only rule above, so a stray ``AGENTTEAMS_CODEX_WASM=1`` cannot widen it (researchteam @security finding, 1.2.2).
 
 FAIL-CLOSED
 -----------
@@ -133,7 +136,9 @@ def main() -> int:
         if len(raw) > _MAX_INPUT:
             reason: str | None = "hook input too large"
         else:
-            wasm = os.environ.get("AGENTTEAMS_CODEX_WASM") == "1"
+            # The write policy's marker wins: WASM mode would let a spawned agent use every non-shell tool.
+            wasm = (os.environ.get("AGENTTEAMS_CODEX_WASM") == "1"
+                    and os.environ.get("AGENTTEAMS_CODEX_WRITE_POLICY") != "1")
             keep = parse_keep(os.environ.get("AGENTTEAMS_CODEX_NATIVE_KEEP", "")) if wasm else frozenset()
             reason = decide(json.loads(raw.decode("utf-8")),
                             os.environ.get("AGENTTEAMS_CODEX_CONFINED") == "1", wasm, keep)
