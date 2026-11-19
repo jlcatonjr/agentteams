@@ -33,7 +33,7 @@ INSTRUCTIONAL_HOMES = {
 }
 #: Python files that write an instructional name as ``{MANUAL:X}`` (all in docstrings or comments, explaining the syntax).
 CODE_HOMES = {
-    "TOKEN": {"enrich/_audit.py", "enrich/_enrich.py", "enrich/_models.py"},
+    "TOKEN": {"enrich/_audit.py", "enrich/_enrich.py"},
     "PLACEHOLDER_NAME": {"render.py"},
 }
 #: Templates that write an instructional name as a plain ``{X}`` (explaining auto placeholders, never a slot).

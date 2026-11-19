@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agentteams import emit, render, vscode_tasks
-from agentteams.placeholder_scan import complete_setup_required
+from agentteams.placeholder_scan import MANUAL_TOKEN_RE, complete_setup_required
 from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
@@ -548,7 +548,6 @@ def _guess_file_type(rel_path: str) -> str:
     if rel_path.startswith("references/") or "/references/" in rel_path:
         return "reference"
     return "agent"
-_MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
 def _preserve_manual_values(existing_content: str, new_content: str) -> str:
     """Carry forward manually-filled {MANUAL:*} values from existing files.
 
@@ -564,7 +563,7 @@ def _preserve_manual_values(existing_content: str, new_content: str) -> str:
         New content with manual values preserved from the existing file.
     """
     # Find all {MANUAL:*} tokens in the new content
-    manual_tokens = set(_MANUAL_RE.findall(new_content))
+    manual_tokens = set(MANUAL_TOKEN_RE.findall(new_content))
     if not manual_tokens:
         return new_content
 
