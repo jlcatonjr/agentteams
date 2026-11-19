@@ -456,7 +456,7 @@ def require_safe_slug(slug: str) -> None:
     Raises:
         ValueError: If the slug is not a single safe path component.
     """
-    if not _SAFE_SLUG_RE.match(slug) or ".." in slug:
+    if not _SAFE_SLUG_RE.fullmatch(slug) or ".." in slug:
         raise ValueError(f"unsafe CAI slug {slug!r}: must match {_SAFE_SLUG_RE.pattern} and not contain '..'")
 
 

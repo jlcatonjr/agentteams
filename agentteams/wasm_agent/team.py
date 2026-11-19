@@ -551,7 +551,7 @@ def write_lock(project_root: str | Path) -> Path:
     root = os.path.realpath(str(project_root))
     rels = agent_files_on_disk(root)
     slugs = [Path(r).stem for r in rels]
-    bad = [s for s in slugs if not _SLUG_RE.match(s)]
+    bad = [s for s in slugs if not _SLUG_RE.fullmatch(s)]
     if bad:
         raise TeamError(f"{AGENTS_REL}: agent file names must be slugs: {bad}")
     data = {rel: read_locked(root, rel, _cap(rel)) for rel in [*rels, *TEAM_FILES_REL]}

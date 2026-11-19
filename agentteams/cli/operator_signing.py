@@ -567,7 +567,11 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     # Imported with the other signing modules: this verb's imports stay local to the signing path.
     from agentteams.cli.decision_chain import chain_tip, is_chained
 
+    log_path = output_dir / "references" / "security-decisions.log.csv"
     try:
+        # #470: the bytes behind the chain tip the operator confirms; the append refuses unless the log still starts
+        # with exactly these, checked under its lock (b"" = no log yet).
+        log_before = log_path.read_bytes() if log_path.exists() else b""
         read = dl._read_decision_rows(output_dir)
         if read is None:
             row["prev_digest"] = ""  # the first row of a new (chained) log carries an empty link
@@ -676,7 +680,7 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
                 f"the signature does not verify against {dl._VERIFY_KEY_STORE_REL}/"
                 f"{row.get('key_id', '')}.pub.pem in {output_dir} (a private/public key mismatch, "
                 "or the public key was provisioned into another team dir). Nothing appended.")
-        dl.append_signed_decision_row(output_dir, row)
+        dl.append_signed_decision_row(output_dir, row, before=log_before)
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
