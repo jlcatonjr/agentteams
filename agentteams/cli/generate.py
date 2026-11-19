@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
-from agentteams import descriptor_union, update_lock
+from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
@@ -83,7 +83,6 @@ __all__ = ["_finalize_exit_code", "run_generate"]
 
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
-
 
 
 def _mcp_seed_rows(manifest: dict) -> list[dict[str, str]] | None:
@@ -845,6 +844,7 @@ def _run_generate_locked(
                 print(f"     ... and {len(customized) - 10} more")
             print("     These files will have their fenced sections updated; "
                   "user-authored content outside fences is preserved.")
+    github_management.print_update_notice(final_rendered, output_dir) if args.merge else None
 
     # Destructive-action gate must clear BEFORE backup/migration so a blocked
     # overwrite produces no spurious backup or log migration. A --migrate-driven

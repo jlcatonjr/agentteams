@@ -30,7 +30,7 @@ from agentteams.atomicio import (  # noqa: F401 — re-exported for callers/test
     _resolve_path,
     _target_mode,
 )
-from agentteams.user_regions import overwrite_carry as _overwrite_carry
+from agentteams.user_regions import merge_carry as _merge_carry, overwrite_carry as _overwrite_carry
 from agentteams.hygiene_rules import HYGIENE_REF_NAME, migrate_project_rules
 
 from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-exported)
@@ -75,7 +75,7 @@ from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     PruneResult,
     backup_output_dir, inert_backup_name,
     list_backups,
-    prune_backups,
+    prune_backups, prune_report,
     restore_backup,
     verify_backup,
     _backup_rel,
@@ -419,12 +419,11 @@ def emit_all(
             if auto_fenced_now and _auto_wrapped is not None:
                 existing_text = _auto_wrapped
 
-            if (
-                merge
-                and existing_text is not None
-                and _is_machine_managed_merge_overwrite_path(rel_path, normalized_content, existing_text)
-            ):
-                # Mirror the real path: machine-managed maps full-replace in merge.
+            if (merge and existing_text is not None
+                    and _is_machine_managed_merge_overwrite_path(rel_path, normalized_content, existing_text)):
+                # Mirror the real path: machine-managed maps full-replace in merge, carrying user regions (#533).
+                normalized_content = _merge_carry(rel_path, existing_text, normalized_content,
+                                                  result.dry_run_report.notices, discard=discard_user_regions, dry_run=True)
                 if existing_text == normalized_content:
                     entry.action = "UNCHANGED"
                 else:
@@ -615,6 +614,8 @@ def emit_all(
             # _merge_fenced_content would keep the stale body and the roster table
             # would drift behind its companion diagram when the team grows.
             if _is_machine_managed_merge_overwrite_path(rel_path, normalized_content, existing_text):
+                normalized_content = _merge_carry(rel_path, existing_text, normalized_content, result.errors,
+                                                  discard=discard_user_regions)
                 if existing_text == normalized_content:
                     result.unchanged.append(str(target))
                 else:

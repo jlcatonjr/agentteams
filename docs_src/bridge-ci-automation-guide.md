@@ -108,7 +108,7 @@ Use `--bridge-check` in CI to validate bridge freshness on every pull request:
 ```yaml
 - name: Check bridge freshness
   run: |
-    python build_team.py \
+    agentteams \
       --bridge-from .github/agents \
       --framework claude \
       --output . \
@@ -120,7 +120,7 @@ Use `--bridge-refresh` in a separate job triggered on pushes to your main branch
 ```yaml
 - name: Refresh bridge artifacts
   run: |
-    python build_team.py \
+    agentteams \
       --bridge-from .github/agents \
       --framework claude \
       --output . \

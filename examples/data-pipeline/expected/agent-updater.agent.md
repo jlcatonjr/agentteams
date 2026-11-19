@@ -45,7 +45,7 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 | What Changed | Why It Matters |
 |-------------|----------------|
 | New file added to `src/` | `@navigator`, `@conflict-auditor`, `@primary-producer` need awareness |
-| Team initialized (first successful `build_team.py` generation) | Establishes the canonical baseline for agent docs, references, workflow triggers, and output-file inventory used by future drift and update checks |
+| Team initialized (first successful `agentteams` generation) | Establishes the canonical baseline for agent docs, references, workflow triggers, and output-file inventory used by future drift and update checks |
 | Deliverable revised | `@conflict-auditor` may need re-audit |
 | Reference database updated | `@reference-manager`, `@output-compiler` need updating |
 | Style reference updated | `@style-guardian`, `@primary-producer` need recalibration |
@@ -72,9 +72,11 @@ Use `references/github-workflows-merge.reference.md` when repository updates inv
 
 ## Workflow
 
-1. **Detect drift:** Run `python build_team.py --description <brief> --check` to identify templates that have changed since the last build
-2. **Re-render drifted files:** Run `python build_team.py --description <brief> --update --merge` to re-render only changed agent files while preserving manual fields and user-authored content outside fenced regions
-3. **Security scan:** Run `python build_team.py --description <brief> --scan-security` to check all agent files for PII, credentials, and unresolved placeholders
+Run the `agentteams` this repository expects, not just the first one on `PATH`. In a repository whose `toolchain.lock` pins `agentteams`, use the pinned installation (compare `agentteams --version` with the lock). In the agentteams checkout itself, use an editable install of that checkout (`pip install -e .`), so the command renders the checkout's own templates.
+
+1. **Detect drift:** Run `agentteams --description <brief> --check` to identify templates that have changed since the last build
+2. **Re-render drifted files:** Run `agentteams --description <brief> --update --merge` to re-render only changed agent files while preserving manual fields and user-authored content outside fenced regions
+3. **Security scan:** Run `agentteams --description <brief> --scan-security` to check all agent files for PII, credentials, and unresolved placeholders
 4. Run a repository change census across tracked additions/modifications/deletions/merges/reverts/restores
 5. Evaluate whether the census implies updates to published docs or API docs (`REQUIRED`, `REVIEW`, or `NONE`) and document rationale
 6. Identify any additional changed files not covered by template drift and determine scope of impact
@@ -96,7 +98,7 @@ Agent knowledge can drift silently when project structure evolves without a trig
 - Whenever `@adversarial` flags a **Temporal (T)** presupposition in a plan review
 
 **Re-verification protocol:**
-1. Run `python build_team.py --description <brief> --check` → identify drift between current templates and deployed agents
+1. Run `agentteams --description <brief> --check` → identify drift between current templates and deployed agents
 2. If drift exists → run `--update --merge` to re-render; preserve all `{MANUAL:*}` values and user-authored content outside fenced regions
 3. Invoke `@technical-validator` → verify that key factual claims in active plan steps (file paths, agent slugs, workflow counts) still match on-disk state
 4. If any claim is UNVERIFIED → surface to orchestrator before the plan step executes; do not allow the step to proceed on an unverified belief
@@ -110,14 +112,14 @@ Any run of `--update` or `--update --merge` against a deployed agent team must f
 
 ### Pre-Update
 
-1. **Backup** — Confirm that `emit.backup_output_dir()` will be called before any write. For scripted batch runs, verify that `--update --merge --yes` is used (not bare `--update`), which calls `emit.backup_output_dir()` automatically. For non-git repos, this is the only rollback path; confirm the backup directory exists after the run.
+1. **Backup** — Confirm that `emit.backup_output_dir()` will be called before any write. For scripted batch runs, verify that `--update --merge --yes` is used (merge is the default; `--update --overwrite` needs explicit approval), which calls `emit.backup_output_dir()` automatically. For non-git repos, this is the only rollback path; confirm the backup directory exists after the run.
 2. **Dry-run** — Run `--update --merge --dry-run` first to see which files would be written. Review the list for unexpected targets. For programmatic/CI review, pipe through `--dry-run --json` and process the JSON `entries` list with `jq` or another consumer (W21 `--update` improvements Plan 1).
 2b. **Cost-routing (opt-in)** — `--cost-routing` (default OFF) instructs the run to additionally emit `references/model-routing.json` — a framework-neutral per-agent model-tier contract (`primary` / `cheap`) used by downstream runtimes that honor multi-model routing. The flag does NOT modify any rendered agent file; toggle it only when the target runtime supports tier-aware model selection.
 3. **Drift check** — Run `--check` to confirm which templates have changed since the last build. This establishes the expected scope of changes.
 
 ### During Update
 
-- **Always use `--update --merge`** (never bare `--update`) when running against repos that may contain user-authored content in any section. Bare `--update` overwrites entire files including USER-EDITABLE content.
+- **Write `--update --merge`** when running against repos that may contain user-authored content in any section. Merge is the default, so it keeps content outside fence markers; only `--update --overwrite` replaces whole files, including USER-EDITABLE content.
 - For git repos: capture `git diff -- .github/agents/` **before** the run and store it as a baseline.
 - For non-git repos: note that no pre-update diff is available; the auto-backup is the only pre-update snapshot. Document this in the run notes.
 
@@ -145,7 +147,7 @@ For batch runs across multiple repos, use `batch_update.py` (or an equivalent sc
 - **Non-git repos** (`git: False` in REPOS list): pre-diff column is blank; backup path is recorded; diff is backup-vs-current only
 - Print the results CSV path on completion so the operator can inspect before committing
 
-**Pre-run security assertion** — Before executing any batch run, assert in the run log or script output: (a) backup will be created for each target, (b) `--update --merge` (not bare `--update`) will be used, (c) operator has reviewed the dry-run output. This satisfies the Rule S-2 Infrastructure Exception Pathway conditions required by `@security`.
+**Pre-run security assertion** — Before executing any batch run, assert in the run log or script output: (a) backup will be created for each target, (b) `--update --merge` (never `--update --overwrite`) will be used, (c) operator has reviewed the dry-run output. This satisfies the Rule S-2 Infrastructure Exception Pathway conditions required by `@security`.
 
 **No batch commit until the operator has reviewed the results CSV and all WARN entries.**
 
@@ -157,8 +159,8 @@ These maintenance practices keep deployed teams compatible with `--update --merg
 
 - Periodically scan generated agent files for missing `AGENTTEAMS:BEGIN` markers.
 - If legacy files are detected, remediate with either:
-  - Targeted retrofit: `build_team.py --add-fence-markers <path> --in-place --yes`
-  - One-step fleet migration: `build_team.py --description <brief> --migrate --yes`
+  - Targeted retrofit: `agentteams --add-fence-markers <path> --in-place --yes`
+  - One-step fleet migration: `agentteams --description <brief> --migrate --yes`
 - Treat repeated `No fence markers detected` warnings during merge as infrastructure debt requiring planned remediation.
 
 ### 2) Safe Invocation Discipline

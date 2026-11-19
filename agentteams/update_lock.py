@@ -171,7 +171,7 @@ def redact_argv(argv: Sequence[str], known: Collection[str] | None = None) -> li
         token = str(token)
         if keep_next:
             keep_next = False
-            if not token.startswith("-") and _SLUG_VALUE_RE.match(token):
+            if not token.startswith("-") and _SLUG_VALUE_RE.fullmatch(token):
                 out.append(token)
                 continue
         if not token.startswith("-") or token in ("-", "--"):
@@ -183,7 +183,7 @@ def redact_argv(argv: Sequence[str], known: Collection[str] | None = None) -> li
         if name in _KEPT_VALUE_FLAGS:
             if not has_value:
                 keep_next = True
-            elif _SLUG_VALUE_RE.match(value):
+            elif _SLUG_VALUE_RE.fullmatch(value):
                 out[-1] = f"{name}={value}"
     return out
 
