@@ -281,3 +281,27 @@ def test_padding_keeps_every_signed_payload(tmp_path: Path) -> None:
     after = [_decision_signature_payload({k: v or "" for k, v in r.items() if k})
              for r in csv.DictReader(io.StringIO(_log(out).decode()))]
     assert before == after
+
+
+_MIGRATED = ("timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,signature,date,scope,"
+             "evidence,author,derives_from,effect_class,effect_grants,effect_targets,effect_relaxes,effect_destructive,"
+             "effect_cross_repo,effect_bulk,text_digest,sig_scheme,key_id")
+
+
+def test_a_legacy_width_row_under_a_migrated_header_is_padded(tmp_path: Path) -> None:
+    """#12 (baseAgent, 1.2.2): a 7-field row whose signature sits in column 7 lacks only trailing signing columns."""
+    full = "2026-11-01T00:00:00Z,security,x,PASS,,verified," + "," * 15
+    data = "\n".join([_MIGRATED, full, "2026-10-25T17:36:14Z,security,y,PASS,c,yes,03b4"]) + "\n"
+    out = _team(tmp_path, data.encode())
+    plan = dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert plan.padded_lines == [3]
+
+
+def test_a_torn_row_under_a_migrated_header_is_refused(tmp_path: Path) -> None:
+    """The signing run of a migrated legacy header reaches back to column 3; the schema's columns set the floor."""
+    data = "\n".join([_MIGRATED, "2026-10-25T17:36:14Z,security,y"]) + "\n"
+    out = _team(tmp_path, data.encode())
+    assert dlm.narrowest_paddable(_MIGRATED.split(",")) == 6
+    with pytest.raises(dlm.DecisionLogMigrationError, match="torn or truncated"):
+        dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+
