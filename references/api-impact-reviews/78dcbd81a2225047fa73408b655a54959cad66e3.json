@@ -1,0 +1,8 @@
+{
+  "patch_id": "78dcbd81a2225047fa73408b655a54959cad66e3",
+  "commit": "6a2bc4caf2d0b5107c9a432351f1195925dc74d5",
+  "subject": "feat(provenance): record whether the agentteams commit is on a remote; warn in --update and --doctor (IM item 29, G-19-3)",
+  "impact": "3 symbols added",
+  "note": "IM item 29: source_provenance adds unpushed_line, warn_if_unpushed, commit_on_remote and the on_remote field; documented in docs_src/api-reference/source-provenance.md, doctor.md and cli-reference.md (--doctor Agentteams source).",
+  "recorded_at": "2026-11-15T18:10:05Z"
+}

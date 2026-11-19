@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
-from agentteams import github_management, update_lock
+from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
@@ -85,7 +85,6 @@ _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
 
-
 def _mcp_seed_rows(manifest: dict) -> list[dict[str, str]] | None:
     """Brief-hint rows for a new MCP need register under the switch (MCP-need protocol N4), else ``None``."""
     if not _write_policy.enabled(manifest):
@@ -107,7 +106,6 @@ def run_generate(
         _run_generate_inner, args, strict_manual_placeholders,
         migrate_exemption=migrate_exemption,
     )
-
 
 
 def _run_generate_inner(
@@ -144,6 +142,7 @@ def _run_generate_inner(
             description = ingest._supplement_from_directory(
                 description, Path(description["existing_project_path"])
             )
+    descriptor_union.apply_stub_roster(description, args)  # IM item 12: a description with no roster
 
     # Retrieval references are brief-authoritative only for a DECLARED contract (not an inferred one).
     retrieval_inferred = bool(description.pop("_retrieval_integration_inferred", False))
@@ -188,7 +187,8 @@ def _run_generate_inner(
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
-    if not args.check and refuse_if_frozen(manifest, framework_id, output_dir):  # before anything is written
+    if not args.check and (refuse_if_frozen(manifest, framework_id, output_dir)  # before anything is written
+                           or descriptor_union.refuse_roster_shrink(args, manifest, project_root)):  # IM item 12
         return 1
 
     # Everything after this point writes, so it runs under the per-checkout update lock and leaves one

@@ -416,6 +416,157 @@ def test_a_credential_in_an_agent_file_is_never_kept_in_a_snapshot_ref(tmp_path,
     assert "credential-like content in .github/agents/x.agent.md" in capsys.readouterr().err
 
 
+def test_a_known_format_credential_blocks_the_snapshot_and_reaches_the_notes(tmp_path, capsys):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    token = "ghp_" + "Ab3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5"
+    (repo / ".github" / "agents" / "x.agent.md").write_text(f"note\ngh token: {token}\n", encoding="utf-8")
+    notes: list[str] = []
+    ref, committed = fleet._git_snapshot(repo, notes=notes)
+    assert committed is False and _snapshot_refs(repo) == []
+    assert "credential-like content in .github/agents/x.agent.md" in capsys.readouterr().err
+    assert len(notes) == 1 and "known credential format at .github/agents/x.agent.md:2" in notes[0]
+
+
+@pytest.mark.parametrize("name, key", [
+    ("Anthropic", "sk-ant-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3"),
+    ("OpenAI", "sk-proj-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"),
+    ("Google", "AIza" + "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q"),
+    ("Google", "AIza" + "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6-"),       # ends in '-': no trailing \b (@security)
+    ("AWS temporary", "ASIA" + "ABCDEFGHIJKLMNOP"),
+    ("private key", "-----BEGIN OPENSSH" + " PRIVATE KEY-----"),
+    ("private key", "-----BEGIN EC" + " PRIVATE KEY-----"),
+    ("private key", "-----BEGIN ENCRYPTED" + " PRIVATE KEY-----"),
+    ("private key", "-----BEGIN PGP" + " PRIVATE KEY BLOCK-----"),
+    ("GitLab", "glpat-" + "a1B2c3D4e5F6g7H8i9J0"),
+    ("Hugging Face", "hf_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6"),
+    ("npm", "npm_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"),
+    ("PyPI", "pypi-" + "AgEIcHlwaS5vcmcCJ" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0"),
+    ("Stripe restricted", "rk_live_" + "a1B2c3D4e5F6g7H8i9J0"),
+])
+def test_the_extra_known_formats_block_the_snapshot(tmp_path, name, key):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    (repo / ".github" / "agents" / "x.agent.md").write_text(f"see {key} here\n", encoding="utf-8")
+    notes: list[str] = []
+    assert fleet._git_snapshot(repo, notes=notes)[1] is False, name
+    assert name.lower() in notes[0].lower(), notes
+
+
+def test_the_untyped_messages_are_the_scanner_constants() -> None:
+    """The guard keys on scan.py's own constants, and each constant is what scan_content emits (IM @security)."""
+    from agentteams._fleet_snapshot import _UNTYPED_CREDENTIAL_MESSAGES
+    from agentteams.scan import MSG_HIGH_ENTROPY, MSG_SECRET_LIKE, scan_content
+
+    assert _UNTYPED_CREDENTIAL_MESSAGES == {MSG_HIGH_ENTROPY, MSG_SECRET_LIKE}
+    msgs = lambda line: {f.message for f in scan_content(line, "x.md") if f.category == "credential"}   # noqa: E731
+    assert MSG_HIGH_ENTROPY in msgs("value IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM here")
+    assert MSG_SECRET_LIKE in msgs("token verify-toolchain-group-dispatcher-lane")
+
+
+def test_a_long_kebab_identifier_starting_sk_does_not_block(tmp_path):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    (repo / ".github" / "agents" / "x.agent.md").write_text(
+        "see sk-reviewing-the-fleet-snapshot-guard-for-kebab-case\n", encoding="utf-8")
+    assert fleet._git_snapshot(repo)[1] is True
+
+
+def test_a_binary_or_huge_file_gets_a_not_scanned_note(tmp_path):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    (repo / ".github" / "agents" / "blob.bin").write_bytes(b"\0" * 10)
+    notes: list[str] = []
+    assert fleet._git_snapshot(repo, notes=notes)[1] is True
+    assert any("not scanned for credentials: .github/agents/blob.bin (binary)" in n for n in notes), notes
+
+
+#: v1.2.0-rc.1 soak false positives (data): each is an untyped HIGH finding, so it warns and the snapshot is recorded.
+_SOAK_FALSE_POSITIVES = (
+    "the memory index token ipdnlwlfdhnhr7qgkvwu40bokyyzv2u8qxp",          # lowercased fingerprint fragment
+    "index: ipdnlwlfdhnhr7qgkvwu40bokyyzv2u8qxp qxnztnm",
+    "token verify-toolchain-group-dispatcher-lane",                         # a slug beside "token"
+    "api token for jlcatonjr/biographies-research-team",                    # a repo path beside "token"
+    "truncated in prose: SHA256:IPdnL… and IPdnLwlFdHNhr7QGKVWU40BOKyY",     # truncated fingerprint
+)
+
+
+@pytest.mark.parametrize("line", _SOAK_FALSE_POSITIVES)
+def test_a_soak_false_positive_is_untyped_high(line):
+    from agentteams._fleet_snapshot import _UNTYPED_CREDENTIAL_MESSAGES
+    from agentteams.scan import scan_content
+
+    high = [f for f in scan_content(line, "x.agent.md") if f.category == "credential" and f.severity == "high"]
+    assert high and all(f.message in _UNTYPED_CREDENTIAL_MESSAGES for f in high), line   # the fixture is meaningful
+
+
+@pytest.mark.parametrize("line", _SOAK_FALSE_POSITIVES)
+def test_an_untyped_finding_warns_and_the_snapshot_is_recorded(tmp_path, capsys, line):
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    (repo / ".github" / "agents" / "x.agent.md").write_text(f"note\n{line}\n", encoding="utf-8")
+    notes: list[str] = []
+    ref, committed = fleet._git_snapshot(repo, notes=notes)
+    assert committed is True and len(_snapshot_refs(repo)) == 1
+    assert "recorded anyway" in capsys.readouterr().err
+    assert notes and all(n.startswith("snapshot recorded with a possible secret to review: .github/agents/x.agent.md:2")
+                         for n in notes)
+
+
+def test_snapshot_notes_appear_in_the_fleet_report_row(tmp_path):
+    import json
+
+    from agentteams import _fleet_report
+
+    wr = fleet.WorkspaceResult(path=str(tmp_path / "ws"), is_git=True)
+    wr.snapshot_notes = ["snapshot recorded with a possible secret to review: .github/agents/x.agent.md:2 (High-entropy token detected)"]
+    wr.targets.append(fleet.TargetResult(workspace=wr.path, target="github", status="OK", detail="updated"))
+    root = tmp_path / "report"
+    root.mkdir()
+    _fleet_report.write_report([wr], root, tmp_path, True, "all")
+    data = json.loads((root / "report.json").read_text(encoding="utf-8"))
+    row_details = json.dumps(data)
+    assert "possible secret to review: .github/agents/x.agent.md:2" in row_details
+    assert "possible secret to review" in (root / "summary.md").read_text(encoding="utf-8")
+    assert data["workspaces"][0]["targets"][0]["status"] == "REVIEW"   # a warn-only finding raises the row (IM @security)
+
+
+@pytest.mark.parametrize("status, expected", [("OK", "REVIEW"), ("REVIEW", "REVIEW"), ("FAIL", "FAIL"),
+                                              ("SKIP", "SKIP")])
+def test_snapshot_warnings_raise_rows_to_review_but_not_fail_or_skip(tmp_path, status, expected):
+    import json
+
+    from agentteams import _fleet_report
+    from agentteams._fleet_snapshot import SNAPSHOT_REVIEW_PREFIX
+
+    wr = fleet.WorkspaceResult(path=str(tmp_path / "ws"), is_git=True)
+    wr.snapshot_notes = [f"{SNAPSHOT_REVIEW_PREFIX}.github/agents/x.agent.md:2 (Possible secret-like token detected)"]
+    wr.targets.append(fleet.TargetResult(workspace=wr.path, target="github", status=status, detail="d"))
+    root = tmp_path / "report"
+    root.mkdir()
+    _fleet_report.write_report([wr], root, tmp_path, True, "all")
+    assert json.loads((root / "report.json").read_text(encoding="utf-8"))["workspaces"][0]["targets"][0]["status"] == expected
+
+
+def test_a_not_scanned_note_alone_does_not_raise_review(tmp_path):
+    import json
+
+    from agentteams import _fleet_report
+
+    wr = fleet.WorkspaceResult(path=str(tmp_path / "ws"), is_git=True)
+    wr.snapshot_notes = ["snapshot recorded; not scanned for credentials: .github/agents/references/memory-index.json (5.1 MB)"]
+    wr.targets.append(fleet.TargetResult(workspace=wr.path, target="github", status="OK", detail="d"))
+    root = tmp_path / "report"
+    root.mkdir()
+    _fleet_report.write_report([wr], root, tmp_path, True, "all")
+    assert json.loads((root / "report.json").read_text(encoding="utf-8"))["workspaces"][0]["targets"][0]["status"] == "OK"
+
+
 # ---------------------------------------------------------------------------
 # USER-EDITABLE deletion detection
 # ---------------------------------------------------------------------------

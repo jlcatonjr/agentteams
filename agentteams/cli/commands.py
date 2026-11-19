@@ -83,7 +83,7 @@ def _run_verify_directives(args: argparse.Namespace) -> int:
 
     Resolves the managed workspace root from ``--output``/``--project`` (else CWD), validates
     every row in ``references/management-directives.log.csv`` (signature, expiry, use-limit,
-    manager roster, non-denylisted scope) without consuming any, and prints one line per problem.
+    manager roster, a scope the gate allows) without consuming any, and prints one line per problem.
     Returns 0 when all directives are valid (or none exist), 1 otherwise. Mirrors
     :func:`_run_verify_grants`.
 
@@ -123,8 +123,8 @@ def _run_issue_directive(args: argparse.Namespace) -> int:
     ``--output``/``--project`` must point at the managed repo, whose own agents read the ledger.
     Fails closed (clear message + nonzero exit) if a required flag is absent, the key is unset,
     the manager is off the managed repo's roster, ``expires_at`` is malformed, or the scope is
-    DENYLISTED (a directive can never clear a destructive/bulk/cross-repo or governance/trust
-    scope — a valid signature cannot override this). Mirrors :func:`_run_issue_grant`.
+    refused by the gate (it must start with a benign verb and name no destructive/bulk/cross-repo,
+    publishing/releasing/signing/tagging or governance/trust effect — a valid signature cannot override this). Mirrors :func:`_run_issue_grant`.
 
     Args:
         args: Parsed CLI namespace (the directive-field flags carry the values).
@@ -472,6 +472,8 @@ def _run_prune_backups(args: argparse.Namespace) -> int:
     )
     for ts in result.deleted:
         print(f"  {verb}: {ts}")
+    for line in emit.prune_report(result, output_dir)[1 if result.deleted else 0:]:  # tracked / failed / unknown (#541)
+        print(f"  {line}")
     return 0
 
 

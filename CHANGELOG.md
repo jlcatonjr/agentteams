@@ -26,6 +26,442 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   note survives, and an edit inside the generated list is replaced, as before. Nothing is refused for open
   placeholders.
 
+### changed (internal: fleet.py and emit.py carved below the CH-07 crowding mark)
+
+- Moved fleet's fence/USER-EDITABLE line maps and fence-pairing gate (`_fence_and_useredit_lines`,
+  `_fence_imbalances` and their marker regexes) to `agentteams/_fleet_fences.py`, and emit's
+  `_unmodified_since_build` to `agentteams/_emit_build_state.py`. Both remain importable from `fleet` and `emit`;
+  behaviour is unchanged. fleet.py 974 → 894 lines, emit.py 974 → 949, so the pending #521 and #524 fit.
+
+### fixed (a fleet re-render no longer drops the agents the stub records; IM item 12)
+
+- **G-17-1.** `fleet._resolve_descriptor` took the root `brief.json` whole whenever it existed. In researchteam-derived
+  repos the roster lives only in `.github/agents/_build-description.json`, so a brief-only re-render re-ran keyword
+  selection and dropped agents, and `--yes` applied the shrunken roster.
+  - **The stub's roster fills a description that has none.** When an `--update` or `--check` run loads a description (the fleet
+    and a hand-run `--update --description brief.json` alike; a fresh render keeps keyword selection), a description
+    with no `selected_archetypes` takes the stub's, if every item is a known archetype, and the run prints where they came from. The stub is found from
+    `--project` alone when it is given, else from `--output` (the places the dual-descriptor advisory probes) or beside
+    the description's project.
+    A symlinked or non-regular stub is never read. No temp file is written, and every record keeps the real
+    descriptor path.
+  - **Other roster keys are reported, not applied.** When the stub sets `write_policy`, `governance_agents` or
+    `retrieval_integration` and the description doesn't, the run warns and leaves them out. They change capability
+    and governance, and nothing rewrites the stub's roster, so a stale stub would otherwise undo a key an operator
+    deleted from the brief (@security, @adversarial).
+  - **The description's own roster wins.** Archetypes it leaves out of the stub's are reported, not refused, so a
+    stale stub never fails a run. The force-appended capability archetypes (`retrieval-integrator`,
+    `research-analyst`, `agentteams-updater`, `vuln-remediation`) are not counted as losses.
+  - **Guard:** when the description has no roster and the stub exists but cannot be used (unparseable, or a roster
+    with an unknown archetype), `--update --yes` refuses
+    before writing (the roster cannot be known) unless the new `--allow-roster-shrink` is given; without `--yes` it
+    warns.
+  - **Dual-descriptor advisory:** `selected_archetypes` is now one of the compared fields.
+  - **Behaviour change:** a brief-only render in a repo with a stub roster now renders that roster instead of the
+    keyword selection, which restores the agents earlier fleet runs dropped. Agents the stub records but the brief
+    never selected are added on the next update.
+
+### added (a render from an agentteams commit no remote has is reported; IM item 29)
+
+- **G-19-3.** A render from the shared editable checkout on a local branch recorded a commit no CI could fetch
+  (Tracers and MarketForge got pins that exist only on a local branch). `source_provenance` recorded it and
+  nothing more.
+  - `agentteams_source` in `references/build-log.json` gains `on_remote`: for a `checkout`, whether a
+    remote-tracking branch contains the commit (`git branch -r --contains`, local refs only, no fetch); `None` for
+    the other kinds or when git can't tell. `--version` adds `, not on a remote`.
+  - Every run that writes a build log (a generate or an `--update`; not `--dry-run`) prints a WARN for an unpushed
+    checkout, naming the commit and branch.
+  - `--doctor` has a new **Agentteams source** section (WARN, never FAIL): a surface whose build log records a
+    checkout commit that no local remote-tracking ref contains. Whenever the running checkout knows the commit it
+    re-checks live, so a commit pushed since the render stops warning; otherwise it uses the recorded value and
+    says so. An unreadable log gets its own WARN line.
+  - Warn only. A commit pushed since the last `git fetch` reads as not on a remote until the next fetch.
+
+### security (a directive scope must name a benign task; IM item 05)
+
+- **G-24-1.** `management_directives.scope_is_allowed` was a stem denylist: any non-empty scope that named no
+  governance root and no listed stem was authorizable. So `rewrite-history`, `git-clean-fdx`, `publish-release`,
+  `sign-row` and `rotate-key` passed, although C-4 says destructive scopes are mechanically auto-refused.
+  - **The directive gate is positive (operator ruling 2026-11-15).** A scope is allowed only when it is plain ASCII
+    (`[a-z0-9 ._/:-]` after lowercasing, so no homoglyph or zero-width character hides a stem) and starts with a
+    verb from `BENIGN_SCOPE_VERBS` (`draft`, `review`, `report`, `test`, `lint`, `audit`, `check`, `verify` …;
+    `s`/`es`/`ed`/`ing` inflections, dropping a final `e`).
+    - `refresh`, `format`, `comment`, `label` and `triage` are deliberately not on the list (@security): a bridge
+      refresh is destructive at its target, `format-disk-volume` would pass, and the other three write to GitHub.
+    - The scope must also name no governance root and no destructive effect anywhere, so a benign verb can't launder
+      a tail (`review-then-delete-stale-branches`). Publishing, releasing, signing and tagging are refused too
+      (`_DIRECTIVE_ONLY_TOKENS`).
+    - The vulnscan handoff's `review-vulnscan-handoff-<id>` still passes.
+  - **The shared denylist gains nine precise stems:** `eras`, `unlink`, `clobber`, `clean`, `rewrit`, `shred`, `chmod`,
+    `chown` and `rotat` (rotating a key changes a trust root).
+  - **The effect classifier keeps its vocabulary plus those nine stems (operator ruling).** It now calls
+    `scope_names_refused_effect`, the denylist half of the gate, never the verb allowlist, because decision rows are
+    free text. The plan's full stem list would have reclassified about 130 of the agentteams and infrastructureManagement
+    rows, mostly false positives ("sign-off", "release/* ruleset").
+  - **Behaviour change and migration:**
+    - A directive whose scope doesn't start with a benign verb is refused when issued and is inert when verified. No
+      `management-directives.log.csv` existed in the workspace at the time, so no directive was affected. Issue a
+      directive as `<benign-verb>-<id>` (the orchestrator's issue-side step now says so).
+    - **Decision rows:** across every `security-decisions.log.csv` in the workspace (2,387 rows with scope text), 26
+      now read as relaxing because of the new stems (baseAgent 8, baseAgent-alignment 8, infrastructureManagement 7,
+      agentteams 3; e.g. "branch-cleanup-…", "…66-clean-snapshot"). Relaxing is the broad class (`is_relaxing`): it
+      brings the row under the HALT and lineage machinery. It does **not** by itself require the operator's Ed25519
+      signature (`requires_operator_signature` also needs a granted capability, a relaxed constraint, cross-repo or
+      bulk reach, or a trust-root target), so no re-minting is needed.
+    - The one failure mode: a row that declares `effect_class: non-relaxing` but now derives as relaxing makes
+      `classify_row` raise (fail closed). None of the 26 declares it.
+  - **Known gap (documented, latent):** `effect_classifier` classifies a directive row's text with the denylist half
+    only, so for `kind="directive"` its text axis can call a scope non-relaxing that the gate refuses (an unknown verb).
+    No production caller classifies directive rows, and the gate refuses such a row before anything honours it.
+  - The orchestrator template's directive steps describe the gate as a benign-verb check, issue side and honor side
+    (`available_workflows` v=15).
+
+### fixed (`--sync-project-rules`: a rule whose bold title wraps a line is no longer dropped from a reference list; #11, 1.2.2)
+
+- In reference mode (Codex's `AGENTS.md`), the projected rules block lists each operator rule's title, and that list
+  is how Codex learns which rules exist. Titles were read with a one-line regex, so a bold title that wrapped onto
+  a second line matched nothing and its rule silently dropped out of the list (researchteam's PS-2, the
+  merge-approval rule). When any bullet had a bold lead, plain bullets dropped out too. Each top-level bullet now
+  yields exactly one title: its bold lead, read across lines, else its first line. A title over 100 characters is
+  cut at a word boundary. Numbered items (`1.`, `1)`) and `+` bullets count as rules too (a numbered rules list used
+  to give no list at all), and an indented Rules section is read at its own indentation. A section with headings is
+  still listed by its headings alone.
+
+### fixed (GitHub management: the section names `@pr-manager` and `@pr-notifier` only when the team has them; researchteam #2, 1.2.2)
+
+- The constitution's GitHub management section told every team that `@pr-manager` owns the pull-request lifecycle
+  and `@pr-notifier` proposes the notices, including teams without those agents (they join only with
+  `pr_management: true` or a GitHub MCP opt-in). The sentence now follows the rendered roster; without
+  `@pr-manager`, `@git-operations` owns the pull-request lifecycle.
+
+### fixed (CI cost levers: a required-checks caveat for path filters, draft skips and `[skip ci]`; researchteam #9, 1.2.2)
+
+- `github-workflows-merge` recommended `paths` / `paths-ignore`, a draft skip and `[skip ci]` without saying how they
+  interact with required checks. A skipped workflow leaves a required check *Expected*, so the PR can't merge; a job
+  skipped by `if:` reports *Success*, so a required check can pass without running. The reference now says so and
+  how to keep required jobs reporting.
+
+### fixed (decisions log: a legacy-width row under a migrated header is routed to `--migrate-decision-log`, and a torn one is never padded; baseAgent #12, 1.2.2)
+
+- From 1.2 the gate refuses a decisions log with any malformed row, so a log that 1.1.x read can block every gate
+  check after the upgrade. For a row short only by trailing signing columns, `governance_logs check`, the gate's
+  refusal and the `governance_logs repair` preview now name `agentteams --migrate-decision-log`, which pads it
+  without changing any signed payload. Before, the preview said "repair by hand".
+- The migration's padding floor is now also the schema's required columns. In a migrated legacy header the signing
+  columns reach back to `action_reviewed`, so a torn 2-field row would have been padded.
+- The migration also refuses to pad, and nothing hints it for, a short row whose verdict cell holds no verdict word
+  or that has a field starting with a space. A legacy HALT split by an unquoted comma parses as a paddable width with
+  `HALT` in `conditions`, and padding it would have made the log readable with that HALT unseen.
+- The migration guide warns 1.2 upgraders to run `python -m agentteams.governance_logs check .` before re-rendering.
+
+### fixed (work-summary Stop hook: no absolute project path in the prompt; the detached worker re-checks the launcher; researchteam @security, 1.2.2)
+
+- The summarizer prompt named the absolute project root, a home path carrying the OS username, which a summary
+  could copy into a committed file (S-8). It now names the repository as the run's working directory and tells the
+  run never to write an absolute path into the summary. The evidence file stays in the system temp directory.
+- The detached worker re-ran the launcher by path without re-checking it, so a file swapped after the wired settings
+  check would run. The worker now starts through the same verify-then-run entry, against the sha256 of the bytes
+  the parent loaded, and exits without launching anything on a mismatch. Re-pinned.
+- After a run, the hook logs a warning when the summary names the project root, the evidence directory or the home
+  directory (it logs which kind, never the path), so a username path is caught before the summary is committed.
+- The wired settings command runs `python3 -I -c`. Without `-I`, Python puts the working directory (the project
+  root) first on `sys.path`, so a committed `hashlib.py` or `runpy.py` would have replaced the digest check. Teams
+  that wired the hook re-merge `settings.worksummary.example.json` (the launcher digest changed too).
+
+### fixed (Codex role gate: WASM mode never applies under the write policy; researchteam @security, 1.2.2)
+
+- With `AGENTTEAMS_CODEX_WASM=1`, the Codex role gate let a spawned agent use every tool except five shell names,
+  and nothing tied that mode to the absence of `write_policy: orchestrator-only`. The renderer never set both, and
+  the launcher clears the guest environment, so it took an operator `--env-allow` or a hand-set environment to reach.
+  The write-policy runner now passes `--setenv AGENTTEAMS_CODEX_WASM=0 --setenv AGENTTEAMS_CODEX_WRITE_POLICY=1`,
+  and with that marker set the gate ignores `AGENTTEAMS_CODEX_WASM` and keeps the read-only `agentteams_readfs`
+  rule. Re-pinned: `codex-role-gate.py`, `_codex_role_gate_emit.py` (its `CODEX_ROLE_GATE_SHA256`) and
+  `_codex_sandbox_emit.py`. Unknown shell tool names in WASM mode without the policy still pass, as the team's
+  `wasm_enforcement` record states.
+
+### fixed (work-summary Stop hook: an `AGENTTEAMS_WS_ALLOWED_TOOLS` override passes the unsafe-rule check; 1.2.0 cut item 4)
+
+- `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the hook's default `--allowedTools` grant, but its rules used to skip the
+  check that inherited settings rules go through. `unsafe_inherited_allows` now judges them the same way, so an
+  override that would edit outside `workSummaries/`, names a tool the hook does not know, or cannot be parsed
+  (unbalanced parentheses, no rules) skips the run and says why in the hook log. The `--tools` cap is unchanged.
+- Every allow rule the hook judges, inherited or override, must now be exactly `Tool` or `Tool(spec)`, with no nested
+  parentheses and nothing after the closing one, and an edit rule's spec may not contain whitespace or commas. Before,
+  `Edit(workSummaries/**) Write` read as one contained rule, though Claude Code may take the trailing `Write` as a
+  separate, unscoped grant.
+  Re-pinned. The launcher's integrity-pin test reads `manifest["modules"]` (item 3).
+
+### fixed (CI and test robustness: bwrap step timeout, hermetic provenance test, timeout exit code; 1.2.0 cut items)
+
+- Each "Install and probe bubblewrap" step in `ci.yml` has `timeout-minutes: 10`, so a hung apt fails the step
+  instead of holding the job to its own timeout (SEC-IM-AT525 C2). Job names are unchanged.
+- `test_token_provenance_uses_template_history` builds its own template history in a throwaway repo. It used to
+  assert a token retired in a commit that is not on `dev`, so it failed in any full clone without that ref.
+- `test_host_timeout_kills_the_group` accepts -9 or 137 (the shell reporting its child's SIGKILL first, seen on a
+  multi-core macOS runner) and now checks directly that the whole process group is gone.
+
+### fixed (red-team probe E1 measures a rendered team; #478)
+
+- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
+  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
+  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
+  and checks the emitted front matter. Each of these is EXPLOITED:
+  - an `allowed-tools:` key;
+  - any agent with no `tools:`/`disallowedTools:`;
+  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
+    a tool list it cannot parse.
+
+  Read-only means the template grants no write or command capability. An empty render raises.
+- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
+- The probe baseline is re-accepted by the operator after merge; the review is in
+  `references/redteam-probe-revalidation.md`.
+
+### fixed (slug checks refuse a trailing newline; #473)
+
+- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
+  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
+  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
+  - `cli/adopt_only.py`;
+  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
+  - `sandbox_state.py` (agent and profile names);
+  - `sandbox_tokens.py`;
+  - `wasm_config.py`;
+  - `wasm_agent/team.py`;
+  - `interop_helpers.py`;
+  - `update_lock.py` (slug-valued arguments).
+- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
+  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
+  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
+  Integrity pins are re-recorded.
+
+### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
+  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
+  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
+
+## [1.2.1] - 2026-11-19
+
+### release notes
+
+agentteams 1.2.1 backports six fixes from `dev` to the 1.2 line: #534, #537, #542, #545, #552 and #554
+(issues #533, #541 and #470, and the rc2 soak finding). Nothing else from `dev` is included.
+
+### fixed (`--update --merge` no longer drops a Goose recipe's Project-Specific Notes; #533; PR #534)
+
+- **A recipe built from an unfenced template (the work-summarizer, for one) lost its `## Project-Specific Notes`
+  on every `--update --merge`, with no notice.** The merge full-replaces a non-Markdown file that has no
+  `AGENTTEAMS` fence on disk or in the render, and the notes sit outside every fence by design. The full-replace
+  now carries the on-disk regions into the render (`user_regions.merge_carry`). It refuses the write, keeping the
+  file and reporting an error, when a region can't be carried (including a recipe whose notes heading was moved to
+  column 0). Such a recipe stops updating until the region is fixed by hand. `--discard-user-regions` replaces
+  the file as before. Text below a recipe's notes heading is now kept across merges, as it always was in Markdown
+  personas, so review it like any other notes (C-4). Markdown copies of the same agent were never affected. Codex TOML agents are fence-wrapped and Grok and
+  WASM emit Markdown, so today only Goose recipes took this path. Teams on 1.1.x or 1.2.0 that use Goose: check
+  your `.goose/recipes/*.yaml` notes against git history after an update.
+
+### fixed (fleet: a merge that refuses a file to keep its user region is a FAIL row; #533 follow-up; PR #537)
+
+- A refused file gets no template updates (tool and permission tightening included) until its region is fixed by
+  hand, so `--fleet` now marks that target `FAIL`, in a dry run too, not only on stderr. The row detail starts
+  `USER REGION REFUSED (file not updated until fixed by hand):` and names the file. A bare `Errors:` header no
+  longer becomes a FAIL row's whole detail; the line under it does. `first_error` and `region_refusal` move to
+  `agentteams._fleet_report`.
+
+### fixed (an automatic backup prune never deletes git-tracked backups, and is never silent; #541; PR #542)
+
+- **A render or sync no longer deletes tracked files under `.agentteams-backups/`.** `backup_before_projection` and
+  `sync_roster` pruned to the newest 10 backups with `rmtree(..., ignore_errors=True)` and dropped the result; in
+  one downstream team a v1.1.4 render deleted 280 tracked files that way. `prune_backups` now leaves any backup
+  directory holding a git-tracked file alone (one `git ls-files`), applies the keep window to the untracked ones,
+  deletes nothing when git can't say what is tracked (including a broken worktree or submodule link), and records a
+  failed deletion. Both automatic callers (the `--sync` projection and roster prune) print what the prune did, and
+  `--prune-backups` reports tracked backups it kept. Generated teams already gitignore new backups; this protects
+  teams whose backups were committed anyway.
+
+### fixed (`--sign-decision` appends one row; earlier log bytes never change; #470; PR #545)
+
+- **Signing a decision rewrote the whole security-decisions log.** `append_signed_decision_row` re-read every row and
+  wrote the file again through `csv`, so earlier rows lost their line endings (LF rows became CRLF) and quoting
+  (needless quotes dropped), and a byte-prefix check of the log could not pass. The signed row is now appended
+  through `governance_logs.append_row`: one `O_APPEND` write under its exclusive lock, with the log validated and a
+  value that would start a forged record refused. The signer captures the log's bytes when it reads the chain tip,
+  before the operator confirms, and the append refuses ("nothing appended") unless, under the lock and read through
+  the descriptor it writes, the path still names that file and the file still starts with exactly those bytes; a log
+  that appeared or disappeared meanwhile is refused too, and a new log is created with `O_EXCL`. A rename that
+  replaces the log during the write is reported as "not in the log". `governance_logs.py` is now an enforcement
+  module (integrity-pinned, with verifier-ledger rows for `check_log` and `check_logs`); `cli/decision_log.py`,
+  `cli/operator_signing.py` and `integrity.py` are re-pinned.
+
+### changed (`append_signed_decision_row` requires `before=`; #470 follow-up; PR #552)
+
+- `cli/decision_log.append_signed_decision_row` takes `before` as a required keyword (no default), so no caller can
+  skip the confirm-time byte-prefix check by leaving it out: pass the bytes read with the chain tip (`b""` for no
+  log), or `None` only where there is no confirmation step. `--sign-decision` already passes it. Re-pinned.
+
+### fixed (fleet: text in an AGENTTEAMS-BRIDGE fence is generated, not a user-editable deletion; rc2 soak; PR #554)
+
+- `--fleet` counted a change inside a generated `<!-- AGENTTEAMS-BRIDGE:BEGIN … -->` block as a deleted
+  USER-EDITABLE line whenever a user region (Project-Specific Rules, say) came earlier in the file: the detector knew
+  only `AGENTTEAMS:BEGIN`/`END`, so the user region ran on through the bridge block. In the rc2 soak six
+  goose-bridge / codex-direct targets reported one each, all the AGENTS.md install hint moving from `@v1.1.4` to
+  `@v1.2.0-rc.2`. A bridge block now interrupts a user region and the region resumes after its END, so a real
+  user line deleted before or after the block is still reported. The fence-balance gate counts AGENTTEAMS-BRIDGE
+  BEGIN/END too, so an unclosed bridge block (which would fence the rest of the file) is reported.
+
+## [1.2.0] - 2026-11-18
+
+### release notes
+
+agentteams 1.2.0 is the first release of the 1.2 line. It is v1.2.0-rc.2 plus a docs-only update of the book
+(#556), after a fleet soak of both release candidates across the consumer repositories. The full changes are in
+the [1.2.0-rc.2] and [1.2.0-rc.1] sections below; the highlights:
+
+- **Behaviour change (#511).** An unscoped Claude agent's fallback grant is read-only (`Read`, `Grep`, `Glob`), not
+  write and a shell. A team that relied on the old default must give that agent an explicit `tools:` grant.
+- **GitHub management (#504, #507):** what counts as the operator's approval for actions that guard the default branch,
+  the signed `--merge-pr` dev-merge path, and the required-checks switch for release PRs.
+- **Trust roots and signing (#500, #506):** the other surfaces' constitution files need the operator's signature; a
+  deleted `signing-governed.marker` still governs; HMAC key files need a recorded fingerprint.
+- **Constitutional gate (#503, #507, #456):** asks on short force pushes, git alias and push config and
+  branch-protection writes; project policy can map trigger classes from ask to deny.
+- **Optional work-summary Stop hook for Claude teams (#497).**
+- **Fleet (rc2: #540, #547):** the content scanner no longer mistakes a cited commit, digest or SSH key fingerprint for a
+  credential, and the snapshot guard refuses only known credential formats, warning (and raising rows to `REVIEW`) on
+  entropy-only findings.
+- **Book (docs only, #556):** the book is re-anchored to the 1.2 line, with its claims checked against
+  v1.2.0-rc.2. No package or template change.
+
+## [1.2.0-rc.2] - 2026-11-17
+
+### release notes
+
+agentteams 1.2.0-rc.2 is the second release candidate of the 1.2 line. It fixes the regression the 1.2.0-rc.1 soak
+found: the fleet's pre-update snapshot was refused, and the workspace SKIPped, whenever a dirty agent file held a
+public value that the content scanner mistook for a credential (a release-key fingerprint in a security log, a cited
+commit SHA, a slug beside the word "token").
+
+- **The content scanner** no longer reports a cited git commit, digest or SSH key fingerprint as a credential on a line
+  with no secret keyword (#540). The constitutional gate and the hygiene rules share it.
+- **The fleet snapshot guard** refuses only known credential formats (typed scanner rules, every private-key header,
+  and Anthropic, OpenAI, Google, GitLab, Hugging Face, npm, PyPI, Stripe and AWS keys). An entropy- or keyword-only
+  finding is a warning naming the file and line, and it raises that workspace's report rows to `REVIEW` (#547).
+
+Everything in 1.2.0-rc.1 is unchanged, including the #511 behaviour change (an unscoped Claude agent's fallback grant
+is read-only).
+
+### fixed (the fleet snapshot guard refuses only known credential formats; entropy-only findings warn; v1.2.0-rc.1 soak)
+
+- The pre-update snapshot used to be refused on any high-severity credential finding, so a dirty workspace was
+  SKIPped over a public key fingerprint, a lowercased fingerprint fragment in an index, or a slug or path beside the
+  word "token" (19 such findings across the 34 soak repositories after the scanner fix). Operator ruling, 2026-11-16.
+- `_fleet_snapshot.credential_findings` splits the findings: a known credential format (a typed `agentteams.scan` rule,
+  or `_EXTRA_CREDENTIAL_FORMATS`: any `-----BEGIN … PRIVATE KEY-----` header (OpenSSH, EC, DSA, encrypted, PGP), Anthropic
+  `sk-ant-`, OpenAI `sk-`/`sk-proj-`, Google `AIza`, GitLab `glpat-`, Hugging Face `hf_`, npm `npm_`, PyPI `pypi-`,
+  Stripe `rk_live_` and AWS `ASIA` keys) still blocks the snapshot; an
+  entropy- or keyword-only finding ("High-entropy token detected", "Possible secret-like token detected") is a `[WARN]`
+  naming the file and line, and the snapshot is recorded.
+- Both kinds are recorded in `WorkspaceResult.snapshot_notes` and appended to that workspace's rows in `report.json`
+  and `summary.md`. A warning raises those rows to `REVIEW` (a `FAIL` or `SKIP` row keeps its status), so a recorded
+  possible secret, such as an unprefixed `api_key=<random>`, reaches the operator. A file skipped as binary or over
+  1 MB gets a "not scanned" note. The two untyped messages are `agentteams.scan.MSG_HIGH_ENTROPY` and
+  `MSG_SECRET_LIKE`; an OpenAI key needs a digit in its body, so a long kebab-case `sk-…` identifier does not block.
+
+### fixed (the content scanner no longer reports a cited git commit, digest or SSH key fingerprint as a credential; v1.2.0-rc.1 soak)
+
+- Every governed team's security log records the release-signature check, `… key SHA256:<43 base64>`. The scanner
+  reported the fingerprint as a high-severity secret, so the fleet snapshot guard refused the file ("credential-like
+  content … falling back to HEAD"); the constitutional gate and the hygiene rules share `agentteams.scan`.
+- `_scan_public_hashes.is_ssh_key_fingerprint` exempts exactly 43 unpadded base64 characters straight after
+  `SHA256:` when `SHA256:` starts the line or follows whitespace, a bracket or a quote. Still reported: a bare
+  43-character value, `api_key=SHA256:<43>`, lowercase `sha256:`, a padded or 44-character body, `SHA256: ` with a space.
+- `_scan_public_hashes.is_labelled_git_hash` exempts exactly 40 or 64 lowercase hex characters straight after a git or
+  digest label (`--match-head-commit`, `merged as`, `commit`, `sha256`, `digest`, …) that does not follow a letter,
+  digit or `_`. Still reported: an unlabelled 40-hex value (older GitHub OAuth tokens), uppercase hex,
+  `api_key_digest <hex>`.
+- Both exemptions apply only on a line with no secret keyword, like the #460 public-hash exemptions: a labelled value
+  on a line that says "token", "secret" or "password" is reported as before.
+
+## [1.2.0-rc.1] - 2026-11-16
+
+### release notes
+
+agentteams 1.2.0-rc.1 is the first release candidate of the 1.2 line, cut from `main` at the 1.2.0 release merge
+(`5ec98efd`, #528) onto `release/1.2`. The entries below it are everything on `main` since the 1.1 line branched;
+fixes that 1.1.x already shipped as backports are listed again here because they reach 1.2 through `main`.
+
+- **Behaviour change (#511).** An unscoped Claude agent's fallback grant is now read-only (`Read`, `Grep`, `Glob`),
+  not write and a shell. A team that relied on the old default must give that agent an explicit `tools:` grant.
+- **Optional work-summary Stop hook for Claude teams (#497).** Inert until the operator merges its example block; the
+  only shipped hook that starts a model run, with a six-tool cap, no shell, and a SHA-256-pinned launcher.
+- **GitHub management (#504, #507).** What counts as the operator's approval for actions that guard the default
+  branch, the `--merge-pr` dev-merge path with signed authorization, and the required-checks switch for release PRs.
+- **Trust roots and signing.** The other surfaces' constitution files need the operator's signature (#506); a deleted
+  `signing-governed.marker` still governs (#500); HMAC key files need a recorded fingerprint, and sandboxes
+  write-deny the key directories.
+- **Constitutional gate.** Asks on short force pushes, git alias and push config (#503), and on branch-protection
+  writes (#507); project policy can map trigger classes from ask to deny (#456).
+- **Generated teams run the installed agentteams CLI** rather than repository-only commands (#510).
+- **Sandbox launcher lineage** leaves out side-line commits that never reached `HEAD` (#522).
+- **CI** retries apt and labels a setup network failure as infrastructure (#525).
+- The WASM sandbox, the vulnscan remediation pipeline, cross-surface projection and sync hardening, and the
+  templates' typed fields (#452, #453, #454) all land in 1.2 through `main`.
+
+Release-candidate soak: v1.2.0 follows once infrastructureManagement reports that every consumer repository rendered
+this candidate cleanly.
+
+### fixed (CI: a runner network outage reads as infrastructure, not a test failure; #442 follow-up)
+
+- `scripts/ci-bwrap-setup.sh` retries apt downloads (`Acquire::Retries=5`, 30-second timeouts) and, when bubblewrap
+  still cannot be installed, posts a `CI setup (network)` error annotation, so the checks API tells "infrastructure
+  red" from "code red" without the job log. Job names are unchanged, so `main`'s required checks are not affected.
+- `references/git-procedures.md` §H: waiting out a runner outage; `enforce_admins` on `main` is intended, with no
+  admin bypass (operator ruling, 2026-11-15).
+
+### added (optional work-summary Stop hook for Claude teams; runs leave no conversation behind)
+
+- **A Claude team with `@work-summarizer` now receives `.claude/hooks/work-summary-stop.py` and
+  `.claude/settings.worksummary.example.json`.** Both are inert until the operator merges the example's `Stop` block
+  into `.claude/settings.json`. The example is a separate file, so wiring the constitutional gate does not switch
+  it on.
+- **Runs do not appear in any Claude Code session list.** The launcher starts the summarizer with
+  `--no-session-persistence` and keeps the run's output in its own archive under
+  `~/.claude/logs/agentteams-work-summary/` (under `CLAUDE_CONFIG_DIR` when set), readable by the owner only and
+  pruned after 14 days.
+- **It launches only when the day's summary is out of date:**
+  - a day with commits is current when the summary is synthesized and covers the latest commit;
+  - a planning-only day is current when the day's plan files are unchanged since the last run. An operator-written
+    hook without this check launched a run on every Stop event, several hundred a day.
+- **Guards:** the Stop payload is never passed to the run; a hook child never launches another; one run per project
+  at a time; a failed run backs off for 30 minutes; the hook detaches and never blocks the session.
+- **The unattended run has six tools and no others** (`--tools Read,Grep,Glob,Agent,Edit,Write`), in the run and in
+  the agents it calls: no shell, no web tools, no cross-session messaging, no scheduled or remote triggers, no
+  worktree creation. A live probe found that the session tools needing no permission ran unprompted without the
+  cap. The launcher collects the git evidence and hands it over as a file. The mode is a fixed `dontAsk`, with no
+  MCP server, and the child's environment carries no messaging socket or token.
+- **Inherited allow rules are contained.** `--allowedTools` adds to the operator's own allow rules, so deny rules
+  block credential files and the control plane, and the launcher refuses to launch when the operator's settings
+  allow edits outside `workSummaries/` or an unknown tool. The refusal is logged in `hook.log`.
+- **The wiring command verifies the launcher.** The `Stop` block carries the launcher's SHA-256 and runs the
+  installed script only on a match, so an edited script stops the hook until the operator merges the block again.
+- Every skip, run and failure is one line in `hook.log` in the run folder; that log is where to look, because runs
+  do not show in session lists.
+- **Operator extras are read from the run folder, never from the repository,** so a branch or pull request cannot
+  instruct an unattended run.
+- The launcher template and its emitter are pinned in the integrity manifest.
+- This is the one hook agentteams ships that starts a model run; the bridge hooks in `hooks_emit.py` stay
+  notification-only. Grok teams do not receive it.
+
+### fixed (the launcher lineage left out a reverted side line, so dev's own template was no longer `current`)
+
+- `scripts/build_launcher_lineage.py` walked the template with `git log --follow`, which also lists commits on a line
+  whose change never reached `HEAD`. A fix made on `main` and reverted there (c5ae8582, ee45c106), then merged into
+  `dev` with `dev`'s template kept, sorted after `dev`'s real newest version, so a regenerated lineage would have
+  called the shipped template `older` and pointed at a version without the item-17 protections. The builder now keeps
+  only the commits git's default history simplification lists for the template's path. The shipped lineage is
+  unchanged; `tests/test_launcher_lineage.py::test_lineage_regenerates_byte_for_byte` passes again on `dev`.
+
 ### added (what counts as approval for actions that guard the default branch; `github_management`)
 
 - **For every team on `--update` with `github_management` on (the default).** The instruction file's GitHub

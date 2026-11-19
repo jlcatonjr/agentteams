@@ -36,7 +36,7 @@ def test_checkout_records_commit_branch_and_dirty(tmp_path):
     repo = _repo(tmp_path)
     clean = sp._from_checkout(repo / "agentteams")
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
-    assert clean == {"kind": "checkout", "commit": head, "branch": "main", "dirty": False}
+    assert clean == {"kind": "checkout", "commit": head, "branch": "main", "dirty": False, "on_remote": False}
     (repo / "untracked.csv").write_text("x")          # untracked residue counts as dirty
     assert sp._from_checkout(repo / "agentteams")["dirty"] is True
 
@@ -48,10 +48,10 @@ def test_not_a_checkout_falls_through(tmp_path):
 
 @pytest.mark.parametrize("direct_url, expected", [
     ({"url": "https://github.com/x/agentteams", "vcs_info": {"vcs": "git", "commit_id": "abc1234def"}},
-     {"kind": "vcs-pin", "commit": "abc1234def", "branch": None, "dirty": False}),
+     {"kind": "vcs-pin", "commit": "abc1234def", "branch": None, "dirty": False, "on_remote": None}),
     ({"url": "file:///somewhere/agentteams", "dir_info": {}},
-     {"kind": "local-snapshot", "commit": None, "branch": None, "dirty": None}),
-    (None, {"kind": "package", "commit": None, "branch": None, "dirty": None}),
+     {"kind": "local-snapshot", "commit": None, "branch": None, "dirty": None, "on_remote": None}),
+    (None, {"kind": "package", "commit": None, "branch": None, "dirty": None, "on_remote": None}),
 ])
 def test_installed_kinds(monkeypatch, direct_url, expected):
     class _Dist:
@@ -87,7 +87,7 @@ def test_build_log_records_the_source_without_paths(tmp_path):
     assert proc.returncode == 0, proc.stdout[-800:] + proc.stderr[-800:]
     log = json.loads((out / "references" / "build-log.json").read_text())
     source = log["agentteams_source"]
-    assert set(source) == {"kind", "commit", "branch", "dirty"}
+    assert set(source) == {"kind", "commit", "branch", "dirty", "on_remote"}
     assert str(REPO) not in json.dumps(source) and "/Users/" not in json.dumps(source)
 
 

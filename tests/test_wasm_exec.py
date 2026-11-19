@@ -553,11 +553,32 @@ def test_src_files_written_private_and_read_only(tmp_path: Path) -> None:
 
 
 def test_host_timeout_kills_the_group(tmp_path: Path) -> None:
-    launch = W.Launch(argv=["/bin/sh", "-c", "sleep 30 & sleep 30"], env={}, cwd=str(tmp_path), run_dir=None,
+    pids = tmp_path / "pids"
+    # The shell is the group leader (start_new_session), so its pid is the group id; it records the background child too.
+    script = f'echo $$ > "{pids}"; sleep 30 & echo $! >> "{pids}"; sleep 30'
+    launch = W.Launch(argv=["/bin/sh", "-c", script], env={}, cwd=str(tmp_path), run_dir=None,
                       cleanup=lambda: None, os_confinement="none", os_reason="off", read_only_mode="none",
                       timeout_s=1, module_sha256="x")
     code, out, err, host = W._execute(launch, b"", 1 << 10, 1 << 10)
-    assert host == "host-timeout" and code == -9
+    # -9 is the shell's own SIGKILL. 137 (128 + 9) is the shell reporting its foreground child's SIGKILL when it wakes
+    # and exits before its own SIGKILL lands, which a multi-core runner can do (#528 macOS run 43796327357). Either way
+    # the whole group was killed, which is what the timeout guarantees, and that is checked directly below.
+    assert host == "host-timeout" and code in (-9, 137), code
+    leader, child = (int(x) for x in pids.read_text().split())
+    import time
+
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            os.killpg(leader, 0)
+        except ProcessLookupError:
+            break
+        except PermissionError:  # the group id was reused by a process we may not signal: ours is gone
+            break
+        assert time.monotonic() < deadline, f"process group {leader} still has members after the host timeout"
+        time.sleep(0.05)
+    with pytest.raises(ProcessLookupError):
+        os.kill(child, 0)
 
 
 def test_stdin_and_caps_validated(tmp_path: Path) -> None:

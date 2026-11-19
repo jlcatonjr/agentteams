@@ -38,6 +38,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`gitdirs`](gitdirs.md) | Find a checkout's per-checkout and common git directories from its files (no git spawn; symlinks and borrowed worktree dirs refused) |
 | [`update-lock`](update-lock.md) | Per-checkout update lock (`<git-dir>/agentteams-update.lock`) and run record (`agentteams-update-runs.log.csv`): a concurrent writer refuses and names the holder |
 | [`fleet`](fleet.md) | Multi-workspace `--update --merge` (`--fleet DIR`) with git snapshot + diff audit |
+| [`descriptor_union`](descriptor-union.md) | A description with no roster takes the stub's `selected_archetypes` on `--update`/`--check`; the roster-shrink guard and `--allow-roster-shrink` |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
 
@@ -159,7 +160,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`runner_wasm`](runner-wasm.md) | The runner's `sandbox: wasm` jails: `wasm:<lang> <path>` commands run as the pinned wasmtime in a fresh OS wrap, and the `wasm-to-os-switch` gate (WASM P12) |
 | [`sealed_result`](sealed-result.md) | Seals the orchestrator's runner results (in the session-readable `.agentteams-status/` tree) to the process that queued each request |
 | [`git_exec`](git-exec.md) | The one git core: argv, run, and the read-only hardening against repo-planted config |
-| [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty), recorded in build-log.json and printed by `--version` |
+| [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty, on_remote), recorded in build-log.json and printed by `--version` |
 | [`user_regions`](user-regions.md) | The user-editable Notes/Rules regions of generated files, carried across `--overwrite` (P5a) |
 | [`write_policy`](write-policy.md) | Orchestrator-only-writes pilot (P3): narrow generated non-orchestrator agents to read-only tools and add the proposal sections |
 | [`adopted_agents`](adopted-agents.md) | `--adopt-orphans` routing rows: adopted agents reach every orchestrator body (Claude included) |

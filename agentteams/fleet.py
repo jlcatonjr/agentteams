@@ -39,8 +39,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
-from agentteams._fleet_report import write_report as _write_report
+from agentteams._fleet_report import (first_error as _first_error, region_refusal as _region_refusal,
+                                      write_report as _write_report)
 from agentteams._fleet_shrink_grants import shrink_grant_lines
+from agentteams._fleet_fences import _fence_and_useredit_lines, _fence_imbalances  # noqa: F401  (tests use fleet.*)
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX
 from agentteams.whole_body_migration import DUPLICATE_PREFIX
@@ -79,14 +81,6 @@ _PRUNE_DIRS = {
 }
 _PRUNE_SUBSTR = (".worktrees", "/archive/")
 
-# REAL fence markers (HTML-comment form only), for the fence-balance gate and the USER-EDITABLE detector.
-# A bare-substring match would miscount a marker quoted in prose or displayed as data.
-_REAL_FENCE_BEGIN_RE = re.compile(r"<!--\s*AGENTTEAMS:BEGIN\s")
-_REAL_FENCE_END_RE = re.compile(r"<!--\s*AGENTTEAMS:END\s")
-_USER_EDIT_END = re.compile(r"END USER-EDITABLE|/USER-EDITABLE|END USER EDITABLE")
-#: What opens a user region: a blockquote notice naming USER-EDITABLE (Project-Specific Notes' and the
-#: orchestrator's "This section is USER-EDITABLE"), a heading naming it, or a BEGIN comment. Plain prose doesn't.
-_USER_EDIT_MARKER = re.compile(r"^\s*>.*USER[- ]EDITABLE|^#{1,6}\s.*USER[- ]EDITABLE|BEGIN USER[- ]EDITABLE")
 _BRIDGE_FENCE = "AGENTTEAMS-BRIDGE:BEGIN"
 _SUBAGENT_STUB_SIGNAL = "source_sha256"
 # Structural bridge signals (fleet.py false-positive fix, 2026-08-25). A real bridge fence is an
@@ -152,6 +146,7 @@ class WorkspaceResult:
     is_git: bool
     snapshot_ref: str | None = None
     snapshot_committed: bool = False
+    snapshot_notes: list[str] = field(default_factory=list)   # credential warnings / refusals (see _fleet_snapshot)
     diff_file: str | None = None
     targets: list[TargetResult] = field(default_factory=list)
     vulnscan_unanswered: bool = False   # the brief states no vulnerability_scanning level
@@ -415,36 +410,6 @@ def _walk(parent: Path, prune=None):
 # Content-audit on the diff
 # ---------------------------------------------------------------------------
 
-def _fence_and_useredit_lines(text: str) -> tuple[set[int], set[int]]:
-    """Return the line numbers inside AGENTTEAMS fences, and those inside USER-EDITABLE regions.
-
-    A user region starts only at a real marker: a blockquote notice naming USER-EDITABLE (the one that opens
-    ``## Project-Specific Notes``, ``fences.PROJECT_NOTES_SECTION``, or the orchestrator's project-rules
-    notice), a heading naming it, or an explicit ``BEGIN USER-EDITABLE`` comment. It runs to the next real
-    fence BEGIN, an end marker, or the end of the file, so a user's own ``## `` heading inside it doesn't
-    hide later deletions. Prose that merely mentions USER-EDITABLE (agent-updater's own instructions, for one)
-    opens nothing. Fences are the real HTML-comment markers only (a quoted marker in prose is not a fence),
-    and a fenced line is never user-editable.
-    """
-    fenced, useredit = set(), set()
-    in_f = in_u = False
-    for i, ln in enumerate(text.splitlines(), 1):
-        if _REAL_FENCE_BEGIN_RE.search(ln):
-            in_f = True
-            in_u = False
-        if in_u and _USER_EDIT_END.search(ln):
-            in_u = False
-        if not in_f and _USER_EDIT_MARKER.search(ln) and not _USER_EDIT_END.search(ln):
-            in_u = True
-        if in_f:
-            fenced.add(i)
-        elif in_u:
-            useredit.add(i)
-        if _REAL_FENCE_END_RE.search(ln):
-            in_f = False
-    return fenced, useredit
-
-
 def _user_editable_deletions(ws: Path, ref: str, rel_file: str, new: str | None = None) -> list[str]:
     """Deleted lines (vs snapshot) that fall inside a USER-EDITABLE region — the
     only category that represents real hand-authored content loss."""
@@ -473,41 +438,6 @@ def _user_editable_deletions(ws: Path, ref: str, rel_file: str, new: str | None 
             pass
         else:
             old_ln += 1
-    return out
-
-
-def _fence_imbalances(ws: Path, files: list[str]) -> list[str]:
-    """Changed markdown files whose REAL fence markers do not pair up.
-
-    Mirrors the researchteam autosync fence-pairing gate so a malformed-fence render is
-    surfaced on the fleet path too (previously it had no such check and could be pushed
-    undetected). Counts only real HTML-comment markers — a marker quoted in prose or shown
-    as data is not a fence. Generated bridge report/inventory artifacts under
-    ``references/bridges/`` are exempt: they legitimately DISPLAY marker syntax as table
-    data (e.g. ``agent-inventory.md`` lists each agent's BEGIN marker), so a balance check
-    over them is a false positive.
-
-    Args:
-        ws: Workspace root.
-        files: Repo-relative changed paths from the diff.
-
-    Returns:
-        ``["<path> (<begin>/<end>)", ...]`` for each imbalanced file; empty when all pair.
-    """
-    out: list[str] = []
-    for f in files:
-        if not f.endswith(".md"):
-            continue
-        if f.startswith("references/bridges/") or "/references/bridges/" in f:
-            continue
-        try:
-            text = (ws / f).read_text(encoding="utf-8")
-        except OSError:
-            continue
-        b = len(_REAL_FENCE_BEGIN_RE.findall(text))
-        e = len(_REAL_FENCE_END_RE.findall(text))
-        if b != e:
-            out.append(f"{f} ({b}/{e})")
     return out
 
 
@@ -797,7 +727,7 @@ def run_fleet(args, parser) -> int:
         # Snapshot once per workspace before any apply.
         snap_ref = None
         if apply and is_git:
-            snap_ref, committed = _git_snapshot(ws, allow_no_verify=allow_no_verify)
+            snap_ref, committed = _git_snapshot(ws, allow_no_verify=allow_no_verify, notes=wr.snapshot_notes)
             wr.snapshot_ref, wr.snapshot_committed = snap_ref, committed
             if not committed and _agent_paths_dirty(ws):
                 # Uncommitted agent edits with no snapshot would have no rollback point: never update over them.
@@ -861,7 +791,7 @@ def run_fleet(args, parser) -> int:
             if not apply:
                 # Dry-run: report intent; no diff (nothing written).
                 would = "would update"
-                if rc != 0 and "Error" in out:
+                if (rc != 0 and "Error" in out) or _region_refusal(out):  # a refused user region is a FAIL (#533)
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 else:
                     tr.status, tr.detail = "WOULD-UPDATE", would
@@ -889,7 +819,7 @@ def run_fleet(args, parser) -> int:
                 tr.twins_ack_unreviewed = _twin_acks.unreviewed(seen_acks, str(ws), target, tr.twins_acknowledged)
                 tr.duplicates = cls["duplicates"]
                 tr.handoffs_kept = cls["handoffs_kept"]
-                if rc != 0 and _is_hard_error(out):
+                if (rc != 0 and _is_hard_error(out)) or _region_refusal(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
                     # A malformed-fence render must not be pushed — surface it above the
@@ -953,13 +883,6 @@ def run_fleet(args, parser) -> int:
     if apply:   # after the report, so a notice is recorded as seen only once a report has shown it
         _twin_acks.record_seen(report_root, (tr for wr in results for tr in wr.targets), seen_acks)
     return rc
-
-
-def _first_error(out: str) -> str:
-    for l in out.splitlines():
-        if l.strip().startswith("Error") or "Traceback" in l:
-            return l.strip()[:160]
-    return "non-zero exit (see captured output)"
 
 
 def _is_hard_error(out: str) -> bool:
