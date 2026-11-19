@@ -1,0 +1,8 @@
+{
+  "patch_id": "cb39816ef51cac13ef1347ff37f26d536ee2bec2",
+  "commit": "54dd2f94ea3ba75ba9fc292bb17ddcf9398ec470",
+  "subject": "fix(directives): a directive scope must start with a benign verb; precise destructive stems for the classifier (IM item 05, G-24-1)",
+  "impact": "1 symbols added, 1 symbols changed",
+  "note": "IM item 05: management_directives adds scope_names_refused_effect (the denylist half of the directive gate, now used by effect_classifier) and BENIGN_SCOPE_VERBS; scope_is_allowed becomes a positive gate. No dedicated API page exists for cli/management_directives; the behaviour is documented in docs_src/cli-reference.md (--issue-directive) and the CHANGELOG security entry.",
+  "recorded_at": "2026-11-15T20:17:28Z"
+}
