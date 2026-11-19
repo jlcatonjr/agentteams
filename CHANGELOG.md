@@ -6,18 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### fixed (decisions log: a legacy-width row under a migrated header is routed to `--migrate-decision-log`, and a torn one is never padded; baseAgent #12, 1.2.2)
+### fixed (`--sync-project-rules`: a rule whose bold title wraps a line is no longer dropped from a reference list; #11, 1.2.2)
 
-- From 1.2 the gate refuses a decisions log with any malformed row, so a log that 1.1.x read can block every gate
-  check after the upgrade. For a row short only by trailing signing columns, `governance_logs check`, the gate's
-  refusal and the `governance_logs repair` preview now name `agentteams --migrate-decision-log`, which pads it
-  without changing any signed payload. Before, the preview said "repair by hand".
-- The migration's padding floor is now also the schema's required columns. In a migrated legacy header the signing
-  columns reach back to `action_reviewed`, so a torn 2-field row would have been padded.
-- The migration also refuses to pad, and nothing hints it for, a short row whose verdict cell holds no verdict word
-  or that has a field starting with a space. A legacy HALT split by an unquoted comma parses as a paddable width with
-  `HALT` in `conditions`, and padding it would have made the log readable with that HALT unseen.
-- The migration guide warns 1.2 upgraders to run `python -m agentteams.governance_logs check .` before re-rendering.
+- In reference mode (Codex's `AGENTS.md`), the projected rules block lists each operator rule's title, and that list
+  is how Codex learns which rules exist. Titles were read with a one-line regex, so a bold title that wrapped onto
+  a second line matched nothing and its rule silently dropped out of the list (researchteam's PS-2, the
+  merge-approval rule). When any bullet had a bold lead, plain bullets dropped out too. Each top-level bullet now
+  yields exactly one title: its bold lead, read across lines, else its first line. A title over 100 characters is
+  cut at a word boundary. Numbered items (`1.`, `1)`) and `+` bullets count as rules too (a numbered rules list used
+  to give no list at all), and an indented Rules section is read at its own indentation. A section with headings is
+  still listed by its headings alone.
 
 ### fixed (GitHub management: the section names `@pr-manager` and `@pr-notifier` only when the team has them; researchteam #2, 1.2.2)
 
@@ -33,18 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   skipped by `if:` reports *Success*, so a required check can pass without running. The reference now says so and
   how to keep required jobs reporting.
 
-### fixed (`--sync-project-rules`: a rule whose bold title wraps a line is no longer dropped from a reference list; #11, 1.2.2)
+### fixed (decisions log: a legacy-width row under a migrated header is routed to `--migrate-decision-log`, and a torn one is never padded; baseAgent #12, 1.2.2)
 
-- In reference mode (Codex's `AGENTS.md`), the projected rules block lists each operator rule's title, and that list
-  is how Codex learns which rules exist. Titles were read with a one-line regex, so a bold title that wrapped onto
-  a second line matched nothing and its rule silently dropped out of the list (researchteam's PS-2, the
-  merge-approval rule). When any bullet had a bold lead, plain bullets dropped out too. Each top-level bullet now
-  yields exactly one title: its bold lead, read across lines, else its first line. A title over 100 characters is
-  cut at a word boundary. Numbered items (`1.`, `1)`) and `+` bullets count as rules too (a numbered rules list used
-  to give no list at all), and an indented Rules section is read at its own indentation. A section with headings is
-  still listed by its headings alone.
-
-### fixed (Codex role gate: WASM mode never applies under the write policy; researchteam @security, 1.2.2)
+- From 1.2 the gate refuses a decisions log with any malformed row, so a log that 1.1.x read can block every gate
+  check after the upgrade. For a row short only by trailing signing columns, `governance_logs check`, the gate's
+  refusal and the `governance_logs repair` preview now name `agentteams --migrate-decision-log`, which pads it
+  without changing any signed payload. Before, the preview said "repair by hand".
+- The migration's padding floor is now also the schema's required columns. In a migrated legacy header the signing
+  columns reach back to `action_reviewed`, so a torn 2-field row would have been padded.
+- The migration also refuses to pad, and nothing hints it for, a short row whose verdict cell holds no verdict word
+  or that has a field starting with a space. A legacy HALT split by an unquoted comma parses as a paddable width with
+  `HALT` in `conditions`, and padding it would have made the log readable with that HALT unseen.
+- The migration guide warns 1.2 upgraders to run `python -m agentteams.governance_logs check .` before re-rendering.
 
 ### fixed (work-summary Stop hook: no absolute project path in the prompt; the detached worker re-checks the launcher; researchteam @security, 1.2.2)
 
@@ -60,6 +58,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root) first on `sys.path`, so a committed `hashlib.py` or `runpy.py` would have replaced the digest check. Teams
   that wired the hook re-merge `settings.worksummary.example.json` (the launcher digest changed too).
 
+### fixed (Codex role gate: WASM mode never applies under the write policy; researchteam @security, 1.2.2)
+
+- With `AGENTTEAMS_CODEX_WASM=1`, the Codex role gate let a spawned agent use every tool except five shell names,
+  and nothing tied that mode to the absence of `write_policy: orchestrator-only`. The renderer never set both, and
+  the launcher clears the guest environment, so it took an operator `--env-allow` or a hand-set environment to reach.
+  The write-policy runner now passes `--setenv AGENTTEAMS_CODEX_WASM=0 --setenv AGENTTEAMS_CODEX_WRITE_POLICY=1`,
+  and with that marker set the gate ignores `AGENTTEAMS_CODEX_WASM` and keeps the read-only `agentteams_readfs`
+  rule. Re-pinned: `codex-role-gate.py`, `_codex_role_gate_emit.py` (its `CODEX_ROLE_GATE_SHA256`) and
+  `_codex_sandbox_emit.py`. Unknown shell tool names in WASM mode without the policy still pass, as the team's
+  `wasm_enforcement` record states.
+
 ### fixed (work-summary Stop hook: an `AGENTTEAMS_WS_ALLOWED_TOOLS` override passes the unsafe-rule check; 1.2.0 cut item 4)
 
 - `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the hook's default `--allowedTools` grant, but its rules used to skip the
@@ -73,6 +82,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Re-pinned. The launcher's integrity-pin test reads `manifest["modules"]` (item 3).
 
 ### fixed (CI and test robustness: bwrap step timeout, hermetic provenance test, timeout exit code; 1.2.0 cut items)
+
+- Each "Install and probe bubblewrap" step in `ci.yml` has `timeout-minutes: 10`, so a hung apt fails the step
+  instead of holding the job to its own timeout (SEC-IM-AT525 C2). Job names are unchanged.
+- `test_token_provenance_uses_template_history` builds its own template history in a throwaway repo. It used to
+  assert a token retired in a commit that is not on `dev`, so it failed in any full clone without that ref.
+- `test_host_timeout_kills_the_group` accepts -9 or 137 (the shell reporting its child's SIGKILL first, seen on a
+  multi-core macOS runner) and now checks directly that the whole process group is gone.
 
 ## [1.2.1] - 2026-11-19
 
