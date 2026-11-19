@@ -80,6 +80,14 @@ workflow. Before adding or changing a workflow, and when Actions spend is a conc
    code-only changes skip the docs build. Skip draft PRs (`if: github.event.pull_request.draft == false`).
 5. **Bookkeeping pushes.** `[skip ci]` in a commit message skips `push` and `pull_request` runs. Keep it off
    any merge that deploys.
+
+   **Required checks and the skips in 4 and 5.** Before adding a skip, check which jobs the default branch requires
+   (`gh api repos/<owner>/<repo>/branches/<default branch>/protection/required_status_checks`). A workflow skipped
+   by `paths` / `paths-ignore` or `[skip ci]` never reports its checks, so a required one stays *Expected* and the
+   PR cannot merge. A job skipped by an `if:` condition (the draft skip) reports *Success*, so a required check
+   can pass without having run. Keep required jobs out of path-filtered workflows, or give them an always-running
+   job that decides inside its steps whether to do the work, and confirm the checks ran on the head SHA before
+   merging.
 6. **Schedules.** A scheduled job runs whether or not anything changed. Review its frequency, and whether it
    can exit early when the default branch has not moved.
 7. **Batching.** Fewer, larger merges to the default branch cost less than many small ones. The

@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (GitHub management: the section names `@pr-manager` and `@pr-notifier` only when the team has them; researchteam #2, 1.2.2)
+
+- The constitution's GitHub management section told every team that `@pr-manager` owns the pull-request lifecycle
+  and `@pr-notifier` proposes the notices, including teams without those agents (they join only with
+  `pr_management: true` or a GitHub MCP opt-in). The sentence now follows the rendered roster; without
+  `@pr-manager`, `@git-operations` owns the pull-request lifecycle.
+
+### fixed (CI cost levers: a required-checks caveat for path filters, draft skips and `[skip ci]`; researchteam #9, 1.2.2)
+
+- `github-workflows-merge` recommended `paths` / `paths-ignore`, a draft skip and `[skip ci]` without saying how they
+  interact with required checks. A skipped workflow leaves a required check *Expected*, so the PR can't merge; a job
+  skipped by `if:` reports *Success*, so a required check can pass without running. The reference now says so and
+  how to keep required jobs reporting.
+
 ### fixed (`--sync-project-rules`: a rule whose bold title wraps a line is no longer dropped from a reference list; #11, 1.2.2)
 
 - In reference mode (Codex's `AGENTS.md`), the projected rules block lists each operator rule's title, and that list

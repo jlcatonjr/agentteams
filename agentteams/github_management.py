@@ -27,7 +27,7 @@ Stdlib only.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from agentteams.release_required_checks import COMMAND  # the one definition of the command
 
@@ -55,8 +55,7 @@ _ON = """GitHub management through the `gh` and `git` CLIs is authorized for thi
 question.
 
 - **Who does what.** `@git-operations` runs git and the `gh` writes: branches, pushes of work branches, pull
-  requests, issue comments, labels and closing, re-running CI, and checking CI and Pages runs. `@pr-manager` owns
-  the pull-request lifecycle and never merges; `@pr-notifier` proposes the notices. The orchestrator coordinates and
+  requests, issue comments, labels and closing, re-running CI, and checking CI and Pages runs.{PR_ROLES} The orchestrator coordinates and
   may run read-only `gh` queries itself (`gh pr view`, `gh pr checks`, `gh run list`, `gh issue view`). Every other
   agent routes GitHub work through these roles. When the operator has activated the `github-read` / `github-write`
   MCP servers, the same split applies (`github-write` has no merge).
@@ -85,6 +84,15 @@ question.
   never call the branch-protection or ruleset API directly. `--restore` follows the same steps.
 - **Tokens.** Use the credentials `gh` already holds. Never print, paste or log a token."""
 
+#: The "Who does what" clause for the PR roles, keyed by which of ``pr-manager`` / ``pr-notifier`` are on the roster
+#: (researchteam finding #2: a team without them was told to route work to agents it doesn't have).
+_PR_ROLES = {
+    (True, True): " `@pr-manager` owns the pull-request lifecycle and never merges; `@pr-notifier` proposes the notices.",
+    (True, False): " `@pr-manager` owns the pull-request lifecycle and never merges.",
+    (False, True): " `@pr-notifier` proposes the notices; `@git-operations` also owns the pull-request lifecycle.",
+    (False, False): " `@git-operations` also owns the pull-request lifecycle.",
+}
+
 _OFF = """GitHub management by agents is not authorized by default in this team (the brief sets `github_management`
 to false): every GitHub write (a push, a pull request, an issue or a CI action) goes to the operator first.
 Read-only queries need no question."""
@@ -109,11 +117,14 @@ def enabled(description: dict[str, Any]) -> bool:
     return value
 
 
-def section_body(description: dict[str, Any]) -> str:
+def section_body(description: dict[str, Any], roster: Iterable[str] | None = None) -> str:
     """Return the ``{GITHUB_MANAGEMENT_RULE}`` text for this brief.
 
     Args:
         description: The project brief.
+        roster: The team's agent slugs (archetypes). When given, the section names ``@pr-manager`` and
+            ``@pr-notifier`` only if they are on it; when None, the brief decides
+            (:func:`agentteams.mcp_catalog.wants_pr_agents`).
 
     Returns:
         The authorized-by-default rules, or the off notice.
@@ -121,23 +132,34 @@ def section_body(description: dict[str, Any]) -> str:
     Raises:
         ValueError: As :func:`enabled`.
     """
-    return _ON if enabled(description) else _OFF
+    if not enabled(description):
+        return _OFF
+    if roster is None:
+        from agentteams.mcp_catalog import wants_pr_agents
+
+        both = wants_pr_agents(description)
+        key = (both, both)
+    else:
+        slugs = set(roster)
+        key = ("pr-manager" in slugs, "pr-notifier" in slugs)
+    return _ON.replace("{PR_ROLES}", _PR_ROLES[key])
 
 
-def placeholders(description: dict[str, Any]) -> dict[str, str]:
+def placeholders(description: dict[str, Any], roster: Iterable[str] | None = None) -> dict[str, str]:
     """Return this module's placeholder map for *description*.
 
     Args:
         description: The project brief.
+        roster: The team's agent slugs, as :func:`section_body`.
 
     Returns:
-        ``{PLACEHOLDER: section_body(description)}``.
+        ``{PLACEHOLDER: section_body(description, roster)}`` plus the fenced-region rows (``""`` when off).
 
     Raises:
         ValueError: As :func:`enabled`.
     """
     on = enabled(description)
-    return {PLACEHOLDER: section_body(description), **{k: (v if on else "") for k, v in _ROWS.items()}}
+    return {PLACEHOLDER: section_body(description, roster), **{k: (v if on else "") for k, v in _ROWS.items()}}
 
 
 _ROWS: dict[str, str] = {
