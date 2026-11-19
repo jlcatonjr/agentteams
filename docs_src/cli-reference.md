@@ -469,6 +469,9 @@ else the working directory, and the brief found there. The report covers:
 - **Backup stubs (WARN):** a backed-up agent file under any runtime dir's `.agentteams-backups/` (`.claude/agents`,
   `.goose/recipes`, `.codex/agents`, `.grok/agents`) that the runtime would still load as a live agent: a copy made
   before 2026-10-12. The next `--update --merge` or `--bridge-merge` that takes a backup renames it inert.
+- **Agentteams source (WARN):** a surface's build log records a `checkout` render whose agentteams commit is on
+  no local remote-tracking ref, so a CI that pins it may not fetch it (IM item 29). It re-checks live when the
+  running checkout knows the commit, and every run that writes a build log prints the same warning.
 - **Signing governance (WARN):** a team dir whose `signing-governed.marker` is absent on disk and in HEAD and was
   deleted in a commit. The WARN names the commit and says whether the team:
   - still governs, because the deletion is only on the current branch;
@@ -1736,7 +1739,8 @@ Validate generated Goose recipe YAML files in the `--output` directory (or `.goo
 ### `--version`
 
 Print the version and exit. It also names the source that is running: the kind (`checkout`, `vcs-pin`,
-`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known.
+`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known, and
+`, not on a remote` for a checkout whose commit no local remote-tracking ref contains.
 
 ---
 

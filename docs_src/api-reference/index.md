@@ -158,7 +158,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`runner_wasm`](runner-wasm.md) | The runner's `sandbox: wasm` jails: `wasm:<lang> <path>` commands run as the pinned wasmtime in a fresh OS wrap, and the `wasm-to-os-switch` gate (WASM P12) |
 | [`sealed_result`](sealed-result.md) | Seals the orchestrator's runner results (in the session-readable `.agentteams-status/` tree) to the process that queued each request |
 | [`git_exec`](git-exec.md) | The one git core: argv, run, and the read-only hardening against repo-planted config |
-| [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty), recorded in build-log.json and printed by `--version` |
+| [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty, on_remote), recorded in build-log.json and printed by `--version` |
 | [`user_regions`](user-regions.md) | The user-editable Notes/Rules regions of generated files, carried across `--overwrite` (P5a) |
 | [`write_policy`](write-policy.md) | Orchestrator-only-writes pilot (P3): narrow generated non-orchestrator agents to read-only tools and add the proposal sections |
 | [`adopted_agents`](adopted-agents.md) | `--adopt-orphans` routing rows: adopted agents reach every orchestrator body (Claude included) |

@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (a render from an agentteams commit no remote has is reported; IM item 29)
+
+- **G-19-3.** A render from the shared editable checkout on a local branch recorded a commit no CI could fetch
+  (Tracers and MarketForge got pins that exist only on a local branch). `source_provenance` recorded it and
+  nothing more.
+  - `agentteams_source` in `references/build-log.json` gains `on_remote`: for a `checkout`, whether a
+    remote-tracking branch contains the commit (`git branch -r --contains`, local refs only, no fetch); `None` for
+    the other kinds or when git can't tell. `--version` adds `, not on a remote`.
+  - Every run that writes a build log (a generate or an `--update`; not `--dry-run`) prints a WARN for an unpushed
+    checkout, naming the commit and branch.
+  - `--doctor` has a new **Agentteams source** section (WARN, never FAIL): a surface whose build log records a
+    checkout commit that no local remote-tracking ref contains. Whenever the running checkout knows the commit it
+    re-checks live, so a commit pushed since the render stops warning; otherwise it uses the recorded value and
+    says so. An unreadable log gets its own WARN line.
+  - Warn only. A commit pushed since the last `git fetch` reads as not on a remote until the next fetch.
+
 ### security (a directive scope must name a benign task; IM item 05)
 
 - **G-24-1.** `management_directives.scope_is_allowed` was a stem denylist: any non-empty scope that named no
