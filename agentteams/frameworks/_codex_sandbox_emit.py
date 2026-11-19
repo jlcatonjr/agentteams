@@ -291,7 +291,11 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
     extra_block = (f'for p in {" ".join(extra)}; do [ -e "$ROOT/$p" ] && PROTECT+=( --protect "$ROOT/$p" ); done\n'
                    if extra else "")
     bypass = " --dangerously-bypass-hook-trust" if hook else ""
-    py_setenv = (' --setenv AGENTTEAMS_PYTHON="$PY"' if hook else "") + (runner_env_flags(manifest) if wasm_gate else "")
+    # Under the write policy the runner pins WASM mode off and marks the policy, so the gate never runs in WASM mode
+    # there whatever the launcher's environment carries (an explicit --setenv wins over --env-allow).
+    policy_flags = " --setenv AGENTTEAMS_CODEX_WASM=0 --setenv AGENTTEAMS_CODEX_WRITE_POLICY=1" if gate else ""
+    py_setenv = ((' --setenv AGENTTEAMS_PYTHON="$PY"' if hook else "") + policy_flags
+                 + (runner_env_flags(manifest) if wasm_gate else ""))
     return (
         "#!/usr/bin/env bash\n"
         "# .codex/confined-run.example.sh - EXAMPLE: run Codex inside agentteams' launcher (Linux + macOS).\n"

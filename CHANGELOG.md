@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root) first on `sys.path`, so a committed `hashlib.py` or `runpy.py` would have replaced the digest check. Teams
   that wired the hook re-merge `settings.worksummary.example.json` (the launcher digest changed too).
 
+### fixed (Codex role gate: WASM mode never applies under the write policy; researchteam @security, 1.2.2)
+
+- With `AGENTTEAMS_CODEX_WASM=1`, the Codex role gate let a spawned agent use every tool except five shell names,
+  and nothing tied that mode to the absence of `write_policy: orchestrator-only`. The renderer never set both, and
+  the launcher clears the guest environment, so it took an operator `--env-allow` or a hand-set environment to reach.
+  The write-policy runner now passes `--setenv AGENTTEAMS_CODEX_WASM=0 --setenv AGENTTEAMS_CODEX_WRITE_POLICY=1`,
+  and with that marker set the gate ignores `AGENTTEAMS_CODEX_WASM` and keeps the read-only `agentteams_readfs`
+  rule. Re-pinned: `codex-role-gate.py`, `_codex_role_gate_emit.py` (its `CODEX_ROLE_GATE_SHA256`) and
+  `_codex_sandbox_emit.py`. Unknown shell tool names in WASM mode without the policy still pass, as the team's
+  `wasm_enforcement` record states.
+
 ### fixed (work-summary Stop hook: an `AGENTTEAMS_WS_ALLOWED_TOOLS` override passes the unsafe-rule check; 1.2.0 cut item 4)
 
 - `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the hook's default `--allowedTools` grant, but its rules used to skip the
