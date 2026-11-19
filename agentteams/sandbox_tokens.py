@@ -30,7 +30,7 @@ def checked_slug(value: str, what: str) -> str:
     Raises:
         ValueError: ``value`` is not a slug.
     """
-    if not isinstance(value, str) or not _SLUG_RE.match(value):
+    if not isinstance(value, str) or not _SLUG_RE.fullmatch(value):
         raise ValueError(f"{what} {value!r} is not a slug (^[a-z0-9][a-z0-9-]*$)")
     return value
 

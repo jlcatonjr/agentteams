@@ -157,10 +157,10 @@ def test_no_template_declares_the_retired_allowed_tools_key():
             if re.search(r"^allowed-tools:", p.read_text(encoding="utf-8"), re.MULTILINE)]
     assert not hits, f"templates still declare `allowed-tools:` (Claude Code ignores it): {hits}"
     guide = (templates / "AUTHORING-GUIDE.md").read_text(encoding="utf-8")
-    # The Claude adapter DOES fall back to `Bash, Read, Write, Edit` for an agent with no `tools:`; the guide
-    # must say so, and must not claim the bridge's warn-only behaviour for the adapter.
+    # The Claude adapter falls back to the read-only `Read, Grep, Glob` for an agent with no `tools:` (IM item
+    # 42); the guide must say so, and must not claim the bridge's warn-only behaviour for the adapter.
     row = next(ln for ln in guide.splitlines() if ln.startswith("| `tools` | **Mapped**"))
-    assert "falls back to `Bash, Read, Write, Edit`" in row and "bridge" in row
+    assert "the read-only `Read, Grep, Glob`" in row and "bridge" in row
 
 
 def test_an_unparseable_capability_value_is_reported_not_skipped():

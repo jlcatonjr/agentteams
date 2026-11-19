@@ -9,7 +9,57 @@ from dataclasses import asdict
 from pathlib import Path
 
 from agentteams._fleet_shrink_grants import shrink_grant_summary
+from agentteams._fleet_snapshot import SNAPSHOT_REVIEW_PREFIX
+from agentteams.user_regions import MERGE_REFUSED, MERGE_WOULD_REFUSE
 from agentteams.vulnscan.project_policy import ENROLL_HINT
+
+#: What ``user_regions.merge_carry`` writes when a merge refuses a file to keep its user region (#533).
+REGION_REFUSAL_MARKERS = (f": {MERGE_REFUSED}: ", f": {MERGE_WOULD_REFUSE}: ")
+#: Leads the row detail for such a refusal: the file no longer receives template updates until it is fixed by hand.
+REGION_REFUSAL_LABEL = "USER REGION REFUSED (file not updated until fixed by hand): "
+
+
+def region_refusal(out: str) -> str | None:
+    """Return the first user-region refusal in a target's captured output, labelled for the report row.
+
+    Args:
+        out: The target run's captured stdout and stderr.
+
+    Returns:
+        The labelled refusal line (at most 160 characters), or None when the run refused nothing.
+
+    Raises:
+        Nothing.
+    """
+    for line in out.splitlines():
+        if any(m in line for m in REGION_REFUSAL_MARKERS):
+            return (REGION_REFUSAL_LABEL + line.strip().removeprefix("Notice: "))[:160]
+    return None
+
+
+def first_error(out: str) -> str:
+    """Return the line a FAIL row's detail shows: a user-region refusal first, else the first error line.
+
+    A bare ``Errors:`` header (``emit.print_summary``) gives way to the line under it, so the detail names the
+    file rather than the header.
+
+    Args:
+        out: The target run's captured stdout and stderr.
+
+    Returns:
+        At most 160 characters.
+
+    Raises:
+        Nothing.
+    """
+    refused = region_refusal(out)
+    if refused:
+        return refused
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    for i, line in enumerate(lines):
+        if line.startswith("Error") or "Traceback" in line:
+            return (lines[i + 1] if line == "Errors:" and i + 1 < len(lines) else line)[:160]
+    return "non-zero exit (see captured output)"
 
 
 def write_report(results, report_root: Path, parent: Path, apply: bool, frameworks: str) -> int:
@@ -29,7 +79,13 @@ def write_report(results, report_root: Path, parent: Path, apply: bool, framewor
     counts: dict[str, int] = {}
     for wr in results:
         for tr in wr.targets:
-            rows.append(asdict(tr))
+            row = asdict(tr)
+            notes = getattr(wr, "snapshot_notes", None) or []   # credential warnings / refusals from the snapshot
+            if notes:
+                row["detail"] = "; ".join([row["detail"], *notes] if row["detail"] else notes)
+            if row["status"] not in ("FAIL", "SKIP") and any(n.startswith(SNAPSHOT_REVIEW_PREFIX) for n in notes):
+                row["status"] = tr.status = "REVIEW"   # a recorded possible secret needs the operator's eyes (IM @security)
+            rows.append(row)
             counts[tr.status] = counts.get(tr.status, 0) + 1
 
     # Projects whose brief states no vulnerability_scanning level: reported, never enrolled here.

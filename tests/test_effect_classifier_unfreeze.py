@@ -89,7 +89,7 @@ def test_a_directive_can_never_authorize_an_unfreeze():
     assert not scope_is_allowed("unfreeze-surface-codex")
     assert not scope_is_allowed("render --unfreeze codex")
     assert not scope_is_allowed("codex-unfrozen-render")
-    assert scope_is_allowed("refresh-readme")  # unchanged for benign scopes
+    assert scope_is_allowed("review-readme")  # unchanged for benign scopes (refresh left the allowlist, IM item 05)
     row = {"task_scope": "unfreeze-surface-codex"}
     assert ec.derive_effect_class(row, kind="directive") == ec.RELAXING
 

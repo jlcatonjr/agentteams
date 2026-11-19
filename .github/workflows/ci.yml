@@ -62,6 +62,9 @@ jobs:
       # here and the job still went green. Install and probe it, and make a missing bwrap fail the run.
       - name: Install and probe bubblewrap
         if: startsWith(matrix.os, 'ubuntu')
+        # A hung apt (runner network outage) fails this step in 10 minutes rather than holding the job to its own
+        # timeout (SEC-IM-AT525 C2); the script's retries and its CI setup (network) annotation cover shorter outages.
+        timeout-minutes: 10
         run: bash scripts/ci-bwrap-setup.sh
 
       - name: Run tests
@@ -198,6 +201,9 @@ jobs:
         run: pip install -e ".[test]"
 
       - name: Install and probe bubblewrap
+        # A hung apt (runner network outage) fails this step in 10 minutes rather than holding the job to its own
+        # timeout (SEC-IM-AT525 C2); the script's retries and its CI setup (network) annotation cover shorter outages.
+        timeout-minutes: 10
         run: bash scripts/ci-bwrap-setup.sh
 
       - name: Evidence (os-release, bwrap, coreutils)
@@ -260,6 +266,9 @@ jobs:
         run: pip install -e ".[test]"
 
       - name: Install and probe bubblewrap (AppArmor user-namespace restriction)
+        # A hung apt (runner network outage) fails this step in 10 minutes rather than holding the job to its own
+        # timeout (SEC-IM-AT525 C2); the script's retries and its CI setup (network) annotation cover shorter outages.
+        timeout-minutes: 10
         run: bash scripts/ci-bwrap-setup.sh
 
       # The install refuses a missing project root (wasm_runtime._check_project_root).
