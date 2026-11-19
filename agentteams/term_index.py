@@ -24,6 +24,7 @@ Nothing here writes a file. Standard library only.
 """
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -54,6 +55,79 @@ MAX_TERMS, MAX_FORMS, MAX_FORM_CHARS, MAX_ALL_FORMS = 5000, 50, 200, 20000
 # Bounds on matching work, refused at load time so that no input can stall a scan.
 MAX_FORM_WORDS, MAX_FORMS_PER_LEAD, MAX_SCOPE_PATTERNS = 16, 32, 64
 MAX_REGISTER_BYTES, MAX_DOC_BYTES = 1_000_000, 5_000_000
+#: Cap on a committed generated file read back (the manifest, an index file), so a planted huge file can't be loaded.
+MAX_GENERATED_BYTES = 20_000_000
+
+_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_DIR_FD = os.open in os.supports_dir_fd and _NOFOLLOW and hasattr(os, "O_DIRECTORY")
+
+
+def read_capped(root: Path, rel: str | Path, cap: int) -> bytes | None:
+    """The bytes of ``root/rel`` when it is a regular file of at most *cap* bytes reached through no symbolic link.
+
+    Every component is opened relative to its parent's descriptor with ``O_NOFOLLOW`` (where the platform has
+    ``dir_fd``), so a link swapped in after any earlier check is not followed; the file itself is opened
+    ``O_NONBLOCK`` (a FIFO can't hang the read), checked with ``fstat``, and read through that descriptor up to
+    *cap* + 1 bytes, so a file that grows after the size check is still refused (researchteam #193, #551 review).
+
+    Args:
+        root: The directory the path is relative to (the project); it is trusted.
+        rel: The path below *root*, with no ``..`` component.
+        cap: The size limit in bytes.
+
+    Returns:
+        The bytes, or ``None`` for a link anywhere below *root*, a non-regular file, or a file over *cap*.
+
+    Raises:
+        FileNotFoundError: A component does not exist.
+        OSError: Another error opening or reading the file.
+        ValueError: *rel* is absolute or has a ``..`` component.
+    """
+    parts = Path(rel).parts
+    if not parts or Path(rel).is_absolute() or ".." in parts:
+        raise ValueError(f"not a path below the project: {rel}")
+    fds: list[int] = []
+    try:
+        if _DIR_FD:
+            fds.append(os.open(root, os.O_RDONLY | os.O_DIRECTORY))
+            for part in parts[:-1]:
+                try:
+                    fds.append(os.open(part, os.O_RDONLY | os.O_DIRECTORY | _NOFOLLOW, dir_fd=fds[-1]))
+                except NotADirectoryError:  # a symlink under O_NOFOLLOW|O_DIRECTORY, or a file
+                    return None
+            opener = {"dir_fd": fds[-1]}
+            target: str | Path = parts[-1]
+        else:  # no dir_fd (Windows): check every component, then open the last without following it
+            here = root
+            for part in parts:
+                here = here / part
+                if here.is_symlink():
+                    return None
+            opener, target = {}, root.joinpath(*parts)
+        try:
+            fd = os.open(target, os.O_RDONLY | _NOFOLLOW | getattr(os, "O_NONBLOCK", 0), **opener)
+        except OSError as exc:
+            if isinstance(exc, FileNotFoundError):
+                raise
+            if exc.errno in (errno.ELOOP, getattr(errno, "EMLINK", -1)):
+                return None  # the last component is a link
+            raise
+        fds.append(fd)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > cap:
+            return None
+        chunks, left = [], cap + 1
+        while left > 0:
+            chunk = os.read(fd, min(left, 1 << 20))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            left -= len(chunk)
+        data = b"".join(chunks)
+        return None if len(data) > cap else data
+    finally:
+        for fd in reversed(fds):
+            os.close(fd)
 MISSING, FOREIGN, BAD, OK = "missing", "foreign", "bad", "ok"  # register status
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 SAFE_PATH = re.compile(r"^[A-Za-z0-9._/ -]+$")
@@ -272,10 +346,11 @@ def load_register(proj: Path, config: TermIndexConfig = TermIndexConfig()) -> As
         return Assessment(BAD, problems=[("SCHEMA", f"{config.dir_name}/ or terms.json is a symbolic link (refused)")])
     if not path.is_file():
         return Assessment(MISSING)
-    if path.stat().st_size > MAX_REGISTER_BYTES:
-        return Assessment(BAD, problems=[("SCHEMA", f"terms.json is larger than {MAX_REGISTER_BYTES} bytes")])
     try:
-        raw = path.read_bytes()
+        raw = read_capped(proj, Path(config.dir_name) / "terms.json", MAX_REGISTER_BYTES)
+        if raw is None:
+            return Assessment(BAD, problems=[("SCHEMA", f"terms.json is a link, not a regular file, or larger than "
+                                                        f"{MAX_REGISTER_BYTES} bytes (refused)")])
         reg = json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as exc:
         where = f"line {exc.lineno}, column {exc.colno}"
@@ -349,11 +424,13 @@ def documents(proj: Path, reg: dict, config: TermIndexConfig = TermIndexConfig()
     return found
 
 
-def read_document(path: Path) -> bytes | None:
+def read_document(path: Path, root: Path | None = None) -> bytes | None:
     """The bytes of a regular file within the size limit; ``None`` for anything else (a link, a pipe, too big).
 
     Args:
         path: The file.
+        root: The project; given, *path* is read through :func:`read_capped` below it (no link anywhere on the
+            path, nothing past the cap read). Without it, the file's parent is taken as the root.
 
     Returns:
         Its bytes, or ``None``.
@@ -361,10 +438,11 @@ def read_document(path: Path) -> bytes | None:
     Raises:
         OSError: The file cannot be inspected or read.
     """
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_DOC_BYTES:
+    base = root if root is not None else path.parent
+    try:
+        return read_capped(base, path.relative_to(base), MAX_DOC_BYTES)
+    except FileNotFoundError:
         return None
-    return path.read_bytes()
 
 
 def disc_violations(reg: dict, rel: str, occs: list[dict]) -> list[dict]:
@@ -428,10 +506,12 @@ def _glossary(proj: Path, reg: dict, config: TermIndexConfig) -> bytes:
 
 
 # ----------------------------------------------------------------------------- manifest and assessment
-def _read_json(path: Path):
-    """A committed generated file as parsed JSON, or ``None`` when it is absent, a link, or not JSON."""
+def _read_json(proj: Path, rel: Path):
+    """A committed generated file as parsed JSON, or ``None`` when it is absent, reached through a link, larger than
+    :data:`MAX_GENERATED_BYTES`, or not JSON."""
     try:
-        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() and not path.is_symlink() else None
+        raw = read_capped(proj, rel, MAX_GENERATED_BYTES)
+        return None if raw is None else json.loads(raw.decode("utf-8"))
     except (OSError, ValueError, RecursionError):
         return None
 
@@ -446,7 +526,7 @@ def read_manifest(proj: Path, config: TermIndexConfig = TermIndexConfig()) -> di
     Returns:
         The manifest, or ``None``.
     """
-    data = _read_json(proj / config.dir_name / "term-index.json")
+    data = _read_json(proj, Path(config.dir_name) / "term-index.json")
     return data if isinstance(data, dict) and isinstance(data.get("documents"), dict) else None
 
 
@@ -458,7 +538,7 @@ def _well_formed(occ, forms: set) -> bool:
 
 def _reusable(proj: Path, reg: dict, rel: str, sha: str, config: TermIndexConfig) -> list[dict] | None:
     """The committed occurrences of an unchanged document, each record checked against the register."""
-    data = _read_json(proj / config.dir_name / "index" / f"{rel}.json")
+    data = _read_json(proj, Path(config.dir_name) / "index" / f"{rel}.json")
     occs = data.get("occurrences") if isinstance(data, dict) and data.get("sha256") == sha else None
     forms = {(t["id"], form, kind) for t in reg["terms"] for form, kind in term_forms(t)}
     return occs if isinstance(occs, list) and all(_well_formed(o, forms) for o in occs) else None
@@ -492,7 +572,7 @@ def assess(proj: Path, config: TermIndexConfig = TermIndexConfig(), reuse: bool 
         a.problems.append(("SCOPE", "the scope matches no document"))
     matcher = None
     for rel in names:
-        raw = read_document(proj / rel)
+        raw = read_document(proj / rel, proj)
         if raw is None:
             a.problems.append(("SCOPE", f"{shown(rel)}: not a regular file, or larger than {MAX_DOC_BYTES} bytes"))
             continue
@@ -553,9 +633,13 @@ def _freshness(proj: Path, a: Assessment, config: TermIndexConfig) -> tuple[list
     defects = []
     for rel, data in sorted(a.files.items()):  # a different generator may write other bytes: skip only then
         path = proj / d / rel
+        try:  # no link anywhere on the path; nothing past the expected size is read (None: a link, or larger)
+            on_disk = read_capped(proj, Path(d) / rel, len(data))
+        except (OSError, ValueError):
+            on_disk = None
         if path.is_symlink() or not path.is_file():
             defects.append(("STALE", f"{d}/{shown(rel)}: missing (edited by hand, or incomplete; run: {config.rebuild_hint})"))
-        elif same_generator and path.read_bytes() != data:
+        elif same_generator and on_disk != data:
             defects.append(("STALE", f"{d}/{shown(rel)}: differs from a fresh build although the inputs are unchanged "
                                      f"(edited by hand, or incomplete; run: {config.rebuild_hint})"))
     defects += [("STALE", f"{d}/{shown(rel)}: not a file the builder writes (edited by hand, or incomplete; "

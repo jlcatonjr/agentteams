@@ -84,12 +84,16 @@ assess(proj, config=..., reuse=False, is_project=None) -> Assessment         # .
 check_project(proj, config=..., *, required=False, indexed=True, is_project=None) -> (checked, defects, reviews)
 discover(base, is_project, *, pruned=frozenset(), skip_dir="terminology", max_depth=12) -> list[Path]
 read_manifest(proj, config=...) -> dict | None
+read_document(path, root=None) -> bytes | None                               # None: a link, not a regular file, or over MAX_DOC_BYTES
+read_capped(root, rel, cap) -> bytes | None                                  # no link anywhere below root; reads at most cap + 1 bytes
 stray_index_files(proj, files, config=...) -> set[str]
 disc_violations(reg, rel, occs) -> list[dict]
 glob_match(pattern, path) -> bool
 mask(text, skip_heading=None) -> (masked, heading_ends)
 Matcher(reg, skip_heading=None).occurrences(text) -> list[dict]             # {term, line, column, form, kind, quoted}
 ```
+
+Every file the module reads (the register, each document, the manifest and the index files) goes through `read_capped`: each path component is opened with `O_NOFOLLOW` relative to its parent (where the platform has `dir_fd`), the file is checked with `fstat` and read through the same descriptor up to its cap (`MAX_REGISTER_BYTES`, `MAX_DOC_BYTES`, `MAX_GENERATED_BYTES`), so a link or a larger file swapped in after a check is refused, not followed or read whole.
 
 `check_project` returns `(code, message)` findings in two groups.
 

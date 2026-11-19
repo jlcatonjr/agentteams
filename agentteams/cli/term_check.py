@@ -128,7 +128,9 @@ def run_term_check(args: argparse.Namespace) -> int:
         fence_defects, fence_reviews = _fence_findings(root)
         defects, reviews = fence_defects + defects, fence_reviews + reviews
     except (OSError, ValueError) as exc:  # the I/O boundary: an unreadable file is an environment error
-        print(f"ERROR: the term check could not run ({type(exc).__name__}: {exc})", file=sys.stderr)
+        # The type only: an OSError's text carries an absolute path, and this goes to the hook log (#551 review).
+        print(f"ERROR: the term check could not run ({type(exc).__name__}); run it by hand for the detail",
+              file=sys.stderr)
         return 2
     tdir = root / TEAM_CONFIG.dir_name
     if checked and any((tdir / n).exists() for n in ("term-index.json", "index", "glossary.md")):

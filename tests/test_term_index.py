@@ -410,6 +410,74 @@ def test_more_than_64_scope_patterns_are_refused(tmp_path: Path) -> None:
     assert ("SCOPE", "scope 'include' lists more than 64 patterns") in a.problems
 
 
+def test_more_than_64_exclude_patterns_are_refused(tmp_path: Path) -> None:
+    """#551 review condition 4: the exclude list has the same cap as include."""
+    pats = [f"d{n}/*.md" for n in range(65)]
+    a = ti.load_register(_project(tmp_path, _reg(_term("a", "alpha"), scope={"exclude": pats}), {"a.md": "x"}))
+    assert ("SCOPE", "scope 'exclude' lists more than 64 patterns") in a.problems
+
+
+def test_read_capped_refuses_links_anywhere_on_the_path(tmp_path: Path) -> None:
+    """#551 review condition 1: no link is followed, at the last component or any parent."""
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "a.md").write_text("alpha")
+    proj = tmp_path / "proj"
+    (proj / "docs").mkdir(parents=True)
+    (proj / "docs" / "ok.md").write_text("alpha")
+    (proj / "linked").symlink_to(real, target_is_directory=True)
+    (proj / "docs" / "l.md").symlink_to(real / "a.md")
+    assert ti.read_capped(proj, "docs/ok.md", 100) == b"alpha"
+    assert ti.read_capped(proj, "linked/a.md", 100) is None
+    assert ti.read_capped(proj, "docs/l.md", 100) is None
+    assert ti.read_document(proj / "linked" / "a.md", proj) is None
+    for bad in ("../real/a.md", str(real / "a.md")):
+        with pytest.raises(ValueError):
+            ti.read_capped(proj, bad, 100)
+
+
+def test_read_capped_reads_no_more_than_the_cap(tmp_path: Path, monkeypatch) -> None:
+    """A file that grows after the size check (here: fstat reports it small) is still refused, from the read."""
+    (tmp_path / "big.md").write_bytes(b"x" * 1000)
+    real_fstat = ti.os.fstat
+
+    class Small:
+        def __init__(self, info):
+            self.st_mode, self.st_size = info.st_mode, 10
+
+    monkeypatch.setattr(ti.os, "fstat", lambda fd: Small(real_fstat(fd)))
+    assert ti.read_capped(tmp_path, "big.md", 100) is None
+    assert ti.read_capped(tmp_path, "big.md", 1000) == b"x" * 1000
+
+
+@pytest.mark.skipif(not hasattr(__import__("os"), "mkfifo"), reason="no FIFOs")
+def test_read_capped_does_not_hang_on_a_fifo(tmp_path: Path) -> None:
+    __import__("os").mkfifo(tmp_path / "pipe.md")
+    started = time.monotonic()
+    assert ti.read_capped(tmp_path, "pipe.md", 100) is None
+    assert time.monotonic() - started < 5
+
+
+def test_a_register_or_manifest_behind_a_linked_parent_is_not_read(tmp_path: Path) -> None:
+    """#551 review condition 2: the generated files and the register refuse a linked parent too."""
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "index").mkdir(parents=True)
+    (elsewhere / "index" / "a.md.json").write_text("{}")
+    (elsewhere / "term-index.json").write_text("{}")
+    assert ti._read_json(elsewhere, Path("term-index.json")) == {}
+    proj = tmp_path / "p"
+    proj.mkdir()
+    (proj / "t").symlink_to(elsewhere, target_is_directory=True)
+    assert ti._read_json(proj, Path("t") / "term-index.json") is None
+    assert ti._read_json(proj, Path("t") / "index" / "a.md.json") is None
+
+
+def test_a_generated_file_over_the_cap_is_not_parsed(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "term-index.json").write_text("{}" + " " * 100)
+    monkeypatch.setattr(ti, "MAX_GENERATED_BYTES", 50)
+    assert ti._read_json(tmp_path, Path("term-index.json")) is None
+
+
 def test_a_document_over_the_size_limit_is_not_read(tmp_path: Path, monkeypatch) -> None:
     proj = _project(tmp_path, _reg(_term("a", "alpha")), {"a.md": "alpha " * 20, "b.md": "alpha"})
     monkeypatch.setattr(ti, "MAX_DOC_BYTES", 50)
@@ -519,3 +587,18 @@ def test_discovery_takes_researchteams_predicate_depth_and_pruned_names(tmp_path
     reg = ti.load_register(base / "a").register
     assert "inner/00-research-plan.md" in ti.documents(base / "a", reg)
     assert "inner/00-research-plan.md" not in ti.documents(base / "a", reg, is_project=is_project)
+
+
+def test_an_environment_error_names_no_path(tmp_path: Path, monkeypatch, capsys) -> None:
+    """#551 review condition 3: the hook log gets the error type only, never an OSError's absolute path."""
+    proj = _project(tmp_path, _reg(_term("a", "alpha")), {"a.md": "alpha"})
+    secret = str(tmp_path / "SECRETDIR" / "x.md")
+
+    def boom(*a, **k):
+        raise PermissionError(13, "Permission denied", secret)
+
+    monkeypatch.setattr(ti, "check_project", boom)
+    assert run_term_check(_args(str(proj))) == 2
+    err = capsys.readouterr().err
+    assert "PermissionError" in err and "SECRETDIR" not in err and str(tmp_path) not in err
+
