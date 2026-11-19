@@ -148,7 +148,7 @@
     "agentteams/templates/universal/hooks/constitutional-gate.py": "4ac32257dd996bfa54c9bbcd0e3f7a22dcd880ce369e5edbd8a81fa2f4286746",
     "agentteams/templates/universal/hooks/grok-gate-shim.py": "7e0c71dd5f2de44e5d981ff00dc5140746b57198c9fdf77d3d97bc3bc128cfdf",
     "agentteams/templates/universal/hooks/settings.hooks.example.json": "700bf14dce3ba97ad608e48df651b113f248232aa2b3bf3e48da0713e0d3371f",
-    "agentteams/templates/universal/hooks/work-summary-stop.py": "9402db4619f49ba02a7ea0502d756bc26c4e1719237848ec5e8d1e5a8f276b1a",
+    "agentteams/templates/universal/hooks/work-summary-stop.py": "45cbfed20c3ea25c99d2ff88a1112bc418b2be9607fd18287ec935c070c5cf60",
     "agentteams/templates/universal/sandbox/confine-run.sh": "026b5417af423125aedbae0ef5fc9299dc1441f2fe10823f6c68b734a2643f15",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "369ca51f0388d18a12e2bd1503f4efec0a36f61e03d4820256b1307ca59295ed",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",

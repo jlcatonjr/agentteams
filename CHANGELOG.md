@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (work-summary Stop hook: an `AGENTTEAMS_WS_ALLOWED_TOOLS` override passes the unsafe-rule check; 1.2.0 cut item 4)
+
+- `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the hook's default `--allowedTools` grant, but its rules used to skip the
+  check that inherited settings rules go through. `unsafe_inherited_allows` now judges them the same way, so an
+  override that would edit outside `workSummaries/`, names a tool the hook does not know, or cannot be parsed
+  (unbalanced parentheses, no rules) skips the run and says why in the hook log. The `--tools` cap is unchanged.
+- Every allow rule the hook judges, inherited or override, must now be exactly `Tool` or `Tool(spec)`, with no nested
+  parentheses and nothing after the closing one, and an edit rule's spec may not contain whitespace or commas. Before,
+  `Edit(workSummaries/**) Write` read as one contained rule, though Claude Code may take the trailing `Write` as a
+  separate, unscoped grant.
+  Re-pinned. The launcher's integrity-pin test reads `manifest["modules"]` (item 3).
+
+### fixed (CI and test robustness: bwrap step timeout, hermetic provenance test, timeout exit code; 1.2.0 cut items)
+
 ## [1.2.1] - 2026-11-19
 
 ### release notes

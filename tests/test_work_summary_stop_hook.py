@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -165,11 +166,11 @@ def test_the_launcher_and_its_emitter_are_integrity_pinned() -> None:
 
     repo = Path(__file__).resolve().parents[1]
     manifest = json.loads((repo / "references" / "enforcement-integrity.json").read_text(encoding="utf-8"))
-    pinned = json.dumps(manifest)
+    modules = manifest["modules"]   # a path cited elsewhere in the manifest (its note, say) is not a pin
     for rel in ("agentteams/templates/universal/hooks/work-summary-stop.py",
                 "agentteams/frameworks/_work_summary_hook_emit.py"):
         assert rel in integrity.ENFORCEMENT_MODULES, rel
-        assert f'"{rel}"' in pinned, rel
+        assert rel in modules and re.fullmatch(r"[0-9a-f]{64}", str(modules[rel])), rel
 
 
 def test_wired_command_runs_the_intact_launcher(project) -> None:
@@ -254,6 +255,10 @@ def test_tool_set_is_capped_and_messaging_credentials_are_stripped(hook, project
     assert cmd[cmd.index("--tools") + 1] == "Read,Grep,Glob,Agent,Edit,Write"
     env = hook.child_env()
     assert "CLAUDE_CODE_MESSAGING_SOCKET" not in env and "CLAUDE_CODE_MESSAGING_TOKEN" not in env
+    # An override naming a tool the hook does not know now stops the launch outright (item 4), so the cap is checked
+    # on a launch whose override passes the rule check: Bash is denied, so its allow is dead, and the cap holds.
+    assert any("SendMessage" in u for u in hook.unsafe_inherited_allows(root))
+    monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", "Read,Bash")
     _run(hook, root)
     argv = calls()[0]["argv"]
     cap = argv[argv.index("--tools") + 1].split(",")
@@ -311,7 +316,8 @@ def test_broad_inherited_shell_allow_is_neutralised_not_inherited(hook, project,
 
 @pytest.mark.parametrize("where", ["user", "project", "local"])
 @pytest.mark.parametrize("rule", ["Write(**)", "Edit", "Edit(src/**)", "Write(workSummaries/../x)",
-                                  "SomeFutureTool(*)"])
+                                  "SomeFutureTool(*)", "Edit(workSummaries/**) Write",
+                                  "Edit(workSummaries/**)(x)", "Edit(workSummaries/(x)/**)"])
 def test_inherited_rule_that_escapes_worksummaries_stops_the_launch(
         hook, project, tmp_path, where: str, rule: str) -> None:
     root, calls, rdir = project
@@ -323,6 +329,44 @@ def test_inherited_rule_that_escapes_worksummaries_stops_the_launch(
     _run(hook, root)
     assert calls() == []
     assert "would let the unattended run reach beyond workSummaries/" in (rdir / "hook.log").read_text()
+
+
+@pytest.mark.parametrize("override", ["Read,Write(**)", "Read,Edit", "Edit(src/**),Read",
+                                      "Write(workSummaries/../x)", "SomeFutureTool(*)",
+                                      "Read,Edit(workSummaries/**", ",", " ",
+                                      # Trailing text or nested parentheses: Claude Code may read "Write" as a
+                                      # further, unscoped rule (SEC review of item 4).
+                                      "Edit(workSummaries/**) Write", "Edit(workSummaries/**)\tWrite",
+                                      "Edit(workSummaries/**)\nWrite", "Edit(workSummaries/**)(x)",
+                                      "Edit(workSummaries/(x)/**)", "Edit(workSummaries/a,b/**)"])
+def test_an_override_grant_that_escapes_worksummaries_stops_the_launch(
+        hook, project, monkeypatch, override: str) -> None:
+    """AGENTTEAMS_WS_ALLOWED_TOOLS replaces the default grant, so its rules pass the same check (1.2.0 cut item 4)."""
+    root, calls, rdir = project
+    _plan(root)
+    monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", override)
+    assert hook.unsafe_inherited_allows(root), override
+    _run(hook, root)
+    assert calls() == []
+    assert "would let the unattended run reach beyond workSummaries/" in (rdir / "hook.log").read_text()
+
+
+def test_a_contained_override_grant_still_runs_and_is_passed_through(hook, project, monkeypatch) -> None:
+    root, calls, _ = project
+    _plan(root)
+    grant = "Read,Grep,Glob,Agent,Edit(workSummaries/**),Write(./workSummaries/daily/**)"
+    monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", grant)
+    assert hook.unsafe_inherited_allows(root) == []
+    _run(hook, root)
+    argv = calls()[0]["argv"]
+    assert argv[argv.index("--allowedTools") + 1] == grant
+
+
+def test_override_rules_split_on_top_level_commas_only(hook) -> None:
+    assert hook._split_rules("Read, Edit(workSummaries/a,b/**) ,Glob") == [
+        "Read", "Edit(workSummaries/a,b/**)", "Glob"]
+    assert hook._split_rules("Read,Edit(x") is None and hook._split_rules("Read)") is None
+    assert hook._split_rules(" , ") == []
 
 
 def test_unreadable_settings_stop_the_launch(hook, project) -> None:
