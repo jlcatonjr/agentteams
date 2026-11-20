@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs_src/api-reference/wasm-exec.md` names `--argv0 <name> -- <absolute module> [guest args]` as the canonical
   tail for core modules, and records the `@security` ruling on component guests (#569: allowed under conditions
   C1-C9, still refused until they land). No code changes; `GRANT_SPEC_SHA256` and the shared corpus sha256 are unchanged.
+
 ### fixed (the project-description schema matches the code and is checked on load, warn only; IM item 13a)
 
 - **G-17-2.** `ingest.validate` checked three fields and `schemas/project-description.schema.json` was never run on
