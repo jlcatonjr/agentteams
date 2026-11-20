@@ -98,9 +98,12 @@ def check_conformance_report(report: dict[str, Any], rc_commit: str, template_te
     for wid in live:
         for model in models:
             r = got.get((wid, model))
+            draws, ok = (r or {}).get("draws"), (r or {}).get("conforming")
             if r is None:
                 problems.append(f"Workflow {wid}: no result for {model}")
-            elif r.get("draws", 0) < n or r.get("conforming", 0) < k:
+            elif not (isinstance(draws, int) and isinstance(ok, int) and 0 <= ok <= draws):
+                problems.append(f"Workflow {wid}: {model} has invalid counts {ok!r}/{draws!r}")
+            elif draws < n or ok < k:
                 problems.append(f"Workflow {wid}: {model} conformed {r.get('conforming', 0)}/{r.get('draws', 0)}, "
                                 f"needs {k}/{n}")
     return problems

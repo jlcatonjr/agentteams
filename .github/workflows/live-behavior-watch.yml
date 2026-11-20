@@ -33,6 +33,7 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       run: ${{ steps.gate.outputs.run }}
     steps:

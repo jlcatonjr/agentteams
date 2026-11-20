@@ -64,6 +64,24 @@ def test_workflow_7_requires_security_before_cleanup() -> None:
     assert _agents(spec) == [("1", "technical-validator"), ("2", "adversarial"), ("3", "security"), ("4", "cleanup")]
 
 
+def test_routes_expand_into_the_closeout_and_final_check() -> None:
+    """'→ Standard Doc-Sync Closeout' adds the closeout's agents and then Workflow 11's audits, in order."""
+    routes = workflow_spec.parse_routes(TEMPLATE)
+    spec = workflow_spec.derive_workflow_spec(_wf("7"), CORE | {"agent-updater"}, routes)
+    assert _agents(spec)[4:] == [("closeout.1", "agent-updater"), ("closeout.2", "adversarial"),
+                                 ("closeout.3", "conflict-auditor"), ("11.3", "adversarial"),
+                                 ("11.4", "conflict-auditor")]
+    assert spec["routes"] == [workflow_spec.CLOSEOUT, workflow_spec.FINAL_CHECK]
+    final = workflow_spec.derive_workflow_spec(_wf("11"), CORE, routes)
+    assert _agents(final) == [("3", "adversarial"), ("4", "conflict-auditor")]  # Part A is skippable; 11 is terminal
+
+
+def test_run_verb_and_before_marking_are_read_correctly() -> None:
+    """'run `@x`' is an invocation (Workflow 13 step 5); 'before marking any step' is conditional (Workflow 10)."""
+    assert ("5", "conflict-auditor") in _agents(workflow_spec.derive_workflow_spec(_wf("13"), CORE))
+    assert "technical-validator" in workflow_spec.derive_workflow_spec(_wf("10"), CORE)["optional"]
+
+
 def test_team_conditional_steps_follow_the_roster() -> None:
     """*(If `@x` in team)* steps are required with x in the roster and dropped without it."""
     without = workflow_spec.derive_workflow_spec(_wf("1"), CORE)
@@ -111,9 +129,9 @@ def _claude(*items: dict) -> list[str]:
 
 
 def test_agent_slug_normalises_host_names() -> None:
-    assert workflow_trace.agent_slug("Security — AgentTeamsModule") == "security"
-    assert workflow_trace.agent_slug("Code Hygiene — X") == "code-hygiene"
-    assert workflow_trace.agent_slug("code_hygiene") == "code-hygiene"
+    assert workflow_trace.host_agent_slug("Security — AgentTeamsModule") == "security"
+    assert workflow_trace.host_agent_slug("Code Hygiene — X") == "code-hygiene"
+    assert workflow_trace.host_agent_slug("code_hygiene") == "code-hygiene"
 
 
 def test_claude_stream_events_and_gate_denial() -> None:
@@ -166,10 +184,14 @@ def _inv(agent: str) -> dict:
     return {"kind": "invoke", "agent": agent}
 
 
+#: The routed tail every closing workflow needs: the doc-sync closeout, then Final Check's Part B audits.
+CLOSE = ["agent-updater", "adversarial", "conflict-auditor", "adversarial", "conflict-auditor"]
+
+
 def test_scorer_accepts_a_conforming_run_with_extra_invocations() -> None:
     """Negative control: required order present, extras allowed, no rule triggered -> conforming."""
     res = _score([_inv("technical-validator"), _inv("navigator"), _inv("adversarial"), _inv("security"),
-                  {"kind": "destructive", "detail": "rm"}, _inv("cleanup")])
+                  {"kind": "destructive", "detail": "rm"}, _inv("cleanup"), *map(_inv, CLOSE)])
     assert res["conforming"] and res["first_deviation"] is None
     assert res["rules"]["c5-security-first"]["verdict"] == "pass"
 
@@ -183,10 +205,10 @@ def test_scorer_reports_the_first_deviating_step() -> None:
 
 def test_scorer_wildcard_expert_and_unknown_workflow() -> None:
     res = _score([_inv("auth-expert"), _inv("adversarial"), _inv("primary-producer"), _inv("auth-expert"),
-                  _inv("quality-auditor"), _inv("conflict-auditor")], workflow="1")
+                  _inv("quality-auditor"), _inv("conflict-auditor"), *map(_inv, CLOSE)], workflow="1")
     assert res["conforming"]
     with pytest.raises(KeyError):
-        _score([], workflow="6")  # no invocations, so no sequence scenario
+        _score([], workflow="99")  # not a workflow in the template
 
 
 # --- item 5 / AC2: controls -----------------------------------------------------------------------------------
@@ -354,3 +376,71 @@ def test_the_gate_refuses_an_edited_rebound_or_short_report() -> None:
 def test_report_refuses_a_short_sha_or_bad_threshold(commit: str, threshold: dict) -> None:
     with pytest.raises(ValueError):
         conformance_report.build_conformance_report(commit, threshold, PANEL, [])
+
+
+@pytest.mark.parametrize("path", ["..", "../x.md", "~/x.md", "/elsewhere/x.md"])
+def test_paths_outside_the_work_tree_are_cross_repo(path: str) -> None:
+    lines = _claude({"type": "tool_use", "id": "t1", "name": "Write", "input": {"file_path": path}})
+    ev = workflow_trace.normalise("claude", lines, work_tree="/w", session_slug="s")["events"][0]
+    assert ev["cross_repo"]
+
+
+def test_the_gate_refuses_impossible_counts() -> None:
+    body = {k: v for k, v in _report().items() if k != "report_sha256"}
+    body["results"][0]["conforming"] = 9  # more conforming draws than draws
+    bad = conformance_report.build_conformance_report(RC, body["threshold"], body["panel"], body["results"])
+    assert any("invalid counts" in p for p in conformance_report.check_conformance_report(bad, RC, TEMPLATE))
+
+
+def test_a_trace_with_unparseable_lines_is_void_not_conforming() -> None:
+    """A dropped line could hide a destructive step, so a trace with non-JSON lines never conforms."""
+    good = [{"type": "tool_use", "id": f"t{i}", "name": "Task", "input": {"subagent_type": a}}
+            for i, a in enumerate(["technical-validator", "adversarial", "security", "cleanup", *CLOSE])]
+    scenarios = workflow_spec.build_workflow_scenarios(TEMPLATE, {"agent_slug_list": sorted(CORE)})
+    clean = workflow_trace.normalise("claude", _claude(*good), work_tree="/w", session_slug="s")
+    assert workflow_score.check_workflow_conformance(clean, scenarios, "7")["conforming"]
+    broken = workflow_trace.normalise("claude", _claude(*good) + ['{"type": "assistant", "message": {trunc'],
+                                      work_tree="/w", session_slug="s")
+    res = workflow_score.check_workflow_conformance(broken, scenarios, "7")
+    assert broken["skipped_lines"] == 1 and res["void"] and not res["conforming"]
+
+
+
+def test_shell_writes_and_subagent_messages() -> None:
+    """Bash redirects and plan/summary helpers are writes; a subagent's prose and Task calls are not the orchestrator's."""
+    lines = _claude(
+        {"type": "tool_use", "id": "t1", "name": "Bash",
+         "input": {"command": "python -m agentteams.plan_steps write_steps tmp/by-week/2026-W47/p.steps.csv"}},
+        {"type": "tool_use", "id": "t2", "name": "Bash", "input": {"command": "echo hi >> workSummaries/daily/d.md"}},
+        {"type": "tool_use", "id": "t3", "name": "Bash", "input": {"command": "cat tmp/by-week/2026-W47/p.plan.md"}},
+        {"type": "tool_use", "id": "t4", "name": "Bash", "input": {"command": "make 2>/dev/null"}},
+    )
+    lines.append(json.dumps({"type": "assistant", "parent_tool_use_id": "t0", "message": {"content": [
+        {"type": "text", "text": "Workflow 11: Final Check"},
+        {"type": "tool_use", "id": "t5", "name": "Task", "input": {"subagent_type": "security"}},
+        {"type": "tool_use", "id": "t6", "name": "Write", "input": {"file_path": "/w/src/x.py"}}]}}))
+    events = workflow_trace.normalise("claude", lines, work_tree="/w", session_slug="s")["events"]
+    assert [(e["kind"], e.get("path")) for e in events] == [
+        ("write", "tmp/by-week/2026-W47/p.steps.csv"), ("write", "workSummaries/daily/d.md"), ("write", "src/x.py")]
+    assert events[0]["plan_artifact"] == "steps"
+
+
+def test_restating_the_final_check_heading_is_not_recursion() -> None:
+    """Two announcements with no action between are one entry; re-entry after an action is a FAIL."""
+    restated = _score([{"kind": "workflow", "workflow": "11"}, {"kind": "workflow", "workflow": "11"},
+                       _inv("adversarial")])
+    assert restated["rules"]["wf11-terminal"]["verdict"] == "pass"
+    again = _score([{"kind": "workflow", "workflow": "11"}, _inv("adversarial"),
+                    {"kind": "workflow", "workflow": "7"}, {"kind": "workflow", "workflow": "11"}])
+    assert again["rules"]["wf11-terminal"] == {"verdict": "fail", "seq": 4}
+
+
+def test_a_plan_completed_by_an_unseen_write_still_needs_a_summary() -> None:
+    """A completed steps CSV with no visible write is recorded at an unknown position; Rule 10 still applies."""
+    done = "step,agent,action,inputs,outputs,status,notes\n1,a,b,c,d,done,\n"
+    trace = workflow_trace.normalise("claude", [], work_tree="/w", session_slug="s",
+                                     final_state={"tmp/by-week/2026-W47/p.steps.csv": done})
+    assert trace["events"][-1]["position"] == "unknown"
+    scenarios = workflow_spec.build_workflow_scenarios(TEMPLATE, {"agent_slug_list": sorted(CORE)})
+    res = workflow_score.check_workflow_conformance(trace, scenarios, "11")
+    assert res["rules"]["rule10-summary-after-plan"]["verdict"] == "fail"

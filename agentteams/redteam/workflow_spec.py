@@ -9,13 +9,20 @@ Reads the ``### Workflow <id>: <title>`` sections of ``orchestrator.template.md`
 
 **Derivation rules** (deterministic; the template is the only input besides the roster):
 
-* An agent is *invoked* by a step only when it follows an invoke verb (``Invoke `@a```, ``invoke `@a` and `@b```) or
+* A step is its numbered line plus the wrapped lines under it, up to a blank line or the next step.
+* An agent is *invoked* by a step only when it follows an invoke verb (``Invoke `@a```, ``run `@a` and `@b```) or
   the step returns to the workstream expert. An agent merely mentioned (``requires `@security` clearance``,
   ``iterate with `@primary-producer```) is not a sequence step; C-5 and the other rules cover those.
 * A step guarded by *(If `@x` in team)* is required when ``x`` is in the roster and dropped otherwise.
 * A runtime-conditional step is **optional**: its agents may appear but are never required. That is a step whose
-  text starts with ``If`` or ``When``, or that carries *Only when*, **Exception:** or ``if in team``. A mid-step
-  *(If `@x` in team: ...)* clause is optional too.
+  text starts with ``If`` or ``When``, or that carries *Only when*, **Exception:**, ``before marking any step`` or
+  ``if in team``. A mid-step *(If `@x` in team: ...)* clause is optional too.
+* Steps under a ``####`` subsection whose note reads *(Skip ... if ...)* are optional.
+* **Routes are expanded.** An unconditional ``→ **Standard Doc-Sync Closeout**``, ``→ **Post-Deliverable
+  Retrospective**`` or ``→ **Invoke Workflow 11**`` adds the routed section's own required invocations (labelled
+  ``<section>.<step>``), so a run that skips Final Check is missing agents rather than passing a rule as n/a.
+  Workflow 11 is terminal and routes nowhere. The retrospective's own invocations are optional, because its step 2
+  skips them when there is nothing to retrospect; its route on to the closeout is still required.
 * ``@*-expert`` (the relevant workstream expert) matches any agent whose slug ends in ``-expert``.
 
 **Coverage (AC3).** Every Workflow heading in the template gets one class: ``live`` (run in a fresh tree),
@@ -27,7 +34,7 @@ Pure: no I/O except :func:`load_template`. stdlib only.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -77,14 +84,24 @@ RULES: dict[str, str] = {
 }
 
 _HEADING_RE = re.compile(r"^### Workflow (\w+): (.+?)\s*$", re.M)
+#: Sections a workflow step can route to, by the bold name the step uses.
+CLOSEOUT = "Standard Doc-Sync Closeout"
+RETROSPECTIVE = "Post-Deliverable Retrospective"
+FINAL_CHECK = "Workflow 11"
+#: A subsection note that makes its steps skippable: "*(Skip Part A if no plan was active ...)*".
+_SKIP_NOTE_RE = re.compile(r"^\*\(Skip .+ if ")
+_ROUTE_RE = re.compile(r"→ \*\*(?:Invoke )?(Standard Doc-Sync Closeout|Post-Deliverable Retrospective|Workflow 11)\b")
+#: A routed section whose own invocations are optional (its step 2 skips them when there is nothing to do).
+_OPTIONAL_BODY_ROUTES = frozenset({RETROSPECTIVE})
 _SECTION_END_RE = re.compile(r"^#{2,3} ", re.M)
 _TEAM_PREFIX_RE = re.compile(r"^\*\(If `?@([a-z0-9-]+)`? in team\)\*\s*")
 _STEP_RE = re.compile(r"^(?:\*\(If `?@([a-z0-9-]+)`? in team\)\*\s*)?(\d+[a-z]?)\.\s+(.*)$")
 _MID_TEAM_CLAUSE_RE = re.compile(r"\*\(If `?@[a-z0-9-]+`? in team[^)]*\)\*")
-_INVOKE_RE = re.compile(r"[Ii]nvoke (?:the relevant )?(`@[^`]+`(?:(?:,| and|, and|;? also) `@[^`]+`)*)")
+_INVOKE_RE = re.compile(r"(?:[Ii]nvoke|[Rr]un) (?:the relevant )?(`@[^`]+`(?:(?:,| and|, and|;? also) `@[^`]+`)*)")
 _AGENT_RE = re.compile(r"`@([a-z0-9*-]+)`")
 #: A runtime-conditional step: "If ...", "When ...", "*Only when ...*", "**Exception:** ...", "... if in team".
-_CONDITIONAL_RE = re.compile(r"^\s*(?:If|When) |\*Only when\b|\*\*Exception:\*\*| if in team\b")
+_CONDITIONAL_RE = re.compile(
+    r"^\s*(?:If|When) |\*Only when\b|\*\*Exception:\*\*| if in team\b|\bbefore marking any step\b")
 #: A leading bold step title ("**Daily work-summary capture (closeout gate).**"), skipped before the condition test.
 _BOLD_LABEL_RE = re.compile(r"^\s*\*\*[^*]+\*\*\s*")
 _RETURN_TO_EXPERT_RE = re.compile(r"\bReturn to the workstream expert\b")
@@ -99,6 +116,7 @@ class Step:
     invoked: tuple[str, ...]
     optional: bool
     team_condition: str | None
+    routes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -149,7 +167,64 @@ def _parse_step(team_cond: str | None, label: str, text: str) -> Step:
         invoked.extend(_AGENT_RE.findall(m.group(1)))
     if _RETURN_TO_EXPERT_RE.search(core):
         invoked.append(EXPERT_WILDCARD)
-    return Step(label=label, text=text, invoked=tuple(invoked), optional=optional, team_condition=team_cond)
+    routes = tuple(m.group(1) for m in _ROUTE_RE.finditer(core))
+    return Step(label=label, text=text, invoked=tuple(invoked), optional=optional, team_condition=team_cond,
+                routes=routes)
+
+
+def _steps(body: str) -> tuple[Step, ...]:
+    """Parse the numbered steps of one section body, joining each step's wrapped lines."""
+    raw: list[tuple[str | None, str, str]] = []
+    skippable: set[int] = set()  # indexes of steps under a "*(Skip ... if ...)*" subsection note
+    in_skip = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("####"):
+            in_skip = False
+        elif _SKIP_NOTE_RE.match(stripped):
+            in_skip = True
+        m = _STEP_RE.match(stripped)
+        if m:
+            if in_skip:
+                skippable.add(len(raw))
+            raw.append((m.group(1), m.group(2), m.group(3)))
+        elif stripped and raw and not stripped.startswith(("#", "|", "<!--")):
+            team, label, text = raw[-1]
+            raw[-1] = (team, label, f"{text} {stripped}")
+        elif not stripped and raw and raw[-1][1] != "":
+            raw.append((None, "", ""))  # a blank line ends the step; the sentinel is dropped below
+    steps = []
+    for i, (team, label, text) in enumerate(raw):
+        if label:
+            step = _parse_step(team, label, text)
+            steps.append(replace(step, optional=True) if i in skippable else step)
+    return tuple(steps)
+
+
+def _section_body(template_text: str, start: int) -> str:
+    nxt = _SECTION_END_RE.search(template_text, start)
+    return template_text[start: nxt.start() if nxt else len(template_text)]
+
+
+def parse_routes(template_text: str) -> dict[str, Workflow]:
+    """Parse the sections a step can route to (the closeout, the retrospective and Workflow 11).
+
+    Args:
+        template_text: ``orchestrator.template.md`` text.
+
+    Returns:
+        ``{route name: Workflow}`` for each route present in the template.
+    """
+    out: dict[str, Workflow] = {}
+    for name in (CLOSEOUT, RETROSPECTIVE):
+        m = re.search(rf"^### {re.escape(name)}\s*$", template_text, re.M)
+        if m:
+            out[name] = Workflow(wid=name, title=name, line=template_text.count("\n", 0, m.start()) + 1,
+                                 steps=_steps(_section_body(template_text, m.end())))
+    final = next((w for w in parse_workflows(template_text) if w.wid == "11"), None)
+    if final:
+        out[FINAL_CHECK] = final
+    return out
 
 
 def parse_workflows(template_text: str) -> list[Workflow]:
@@ -163,16 +238,9 @@ def parse_workflows(template_text: str) -> list[Workflow]:
     """
     out: list[Workflow] = []
     for m in _HEADING_RE.finditer(template_text):
-        start = m.end()
-        nxt = _SECTION_END_RE.search(template_text, start)
-        body = template_text[start: nxt.start() if nxt else len(template_text)]
-        steps = []
-        for raw in body.splitlines():
-            s = _STEP_RE.match(raw.strip())
-            if s:
-                steps.append(_parse_step(s.group(1), s.group(2), s.group(3)))
         line = template_text.count("\n", 0, m.start()) + 1
-        out.append(Workflow(wid=m.group(1), title=m.group(2), line=line, steps=tuple(steps)))
+        out.append(Workflow(wid=m.group(1), title=m.group(2), line=line,
+                            steps=_steps(_section_body(template_text, m.end()))))
     return out
 
 
@@ -197,27 +265,48 @@ def check_coverage_is_complete(template_text: str) -> list[str]:
     return sorted(problems)
 
 
-def derive_workflow_spec(workflow: Workflow, roster: set[str]) -> dict[str, Any]:
-    """Resolve one workflow against a team roster.
+def _route_label(route: str) -> str:
+    return {CLOSEOUT: "closeout", RETROSPECTIVE: "retrospective", FINAL_CHECK: "11"}[route]
+
+
+def derive_workflow_spec(workflow: Workflow, roster: set[str],
+                         routes: dict[str, Workflow] | None = None) -> dict[str, Any]:
+    """Resolve one workflow against a team roster, expanding unconditional routes.
 
     Args:
         workflow: A parsed workflow.
         roster: The team's agent slugs (``agent_slug_list``).
+        routes: From :func:`parse_routes`; without it, routes are not expanded.
 
     Returns:
-        ``{"workflow", "title", "required": [{"agent", "step"}], "optional": [agent, ...]}``. ``required`` is in
-        template order.
+        ``{"workflow", "title", "required": [{"agent", "step"}], "optional": [agent, ...], "routes": [...]}``.
+        ``required`` is in template order; a routed section's entries are labelled ``<section>.<step>``.
     """
     required: list[dict[str, str]] = []
     optional: list[str] = []
-    for step in workflow.steps:
-        if step.team_condition and step.team_condition not in roster:
-            continue
-        if step.optional:
-            optional.extend(a for a in step.invoked if a not in optional)
-            continue
-        required.extend({"agent": a, "step": step.label} for a in step.invoked)
-    return {"workflow": workflow.wid, "title": workflow.title, "required": required, "optional": optional}
+    followed: list[str] = []
+
+    def walk(wf: Workflow, prefix: str, body_optional: bool, depth: int) -> None:
+        for step in wf.steps:
+            if step.team_condition and step.team_condition not in roster:
+                continue
+            label = f"{prefix}{step.label}"
+            if step.optional or body_optional:
+                optional.extend(a for a in step.invoked if a not in optional)
+            else:
+                required.extend({"agent": a, "step": label} for a in step.invoked)
+            if step.optional or not routes or depth > 3:
+                continue
+            for route in step.routes:
+                target = routes.get(route)
+                if target is None or target.wid == wf.wid or (route == FINAL_CHECK and workflow.wid == "11"):
+                    continue
+                followed.append(route)
+                walk(target, f"{_route_label(route)}.", route in _OPTIONAL_BODY_ROUTES, depth + 1)
+
+    walk(workflow, "", False, 0)
+    return {"workflow": workflow.wid, "title": workflow.title, "required": required, "optional": optional,
+            "routes": followed}
 
 
 def build_workflow_scenarios(template_text: str, manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -228,17 +317,18 @@ def build_workflow_scenarios(template_text: str, manifest: dict[str, Any]) -> li
         manifest: The team manifest; ``agent_slug_list`` is the roster.
 
     Returns:
-        Scenario dicts in the eval-suite scenario shape (category ``workflow``). Workflows with no invocations and
-        those classed ``not-applicable`` get no sequence scenario.
+        Scenario dicts in the eval-suite scenario shape (category ``workflow``). Every workflow not classed
+        ``not-applicable`` gets a sequence scenario; one with no required invocation is checked by the rules only.
     """
     roster = set(manifest.get("agent_slug_list", []))
+    routes = parse_routes(template_text)
     scenarios: list[dict[str, Any]] = []
     for wf in parse_workflows(template_text):
         cls, reason = COVERAGE.get(wf.wid, (NOT_APPLICABLE, "unclassified"))
-        spec = derive_workflow_spec(wf, roster)
-        if cls == NOT_APPLICABLE or not spec["required"]:
+        spec = derive_workflow_spec(wf, roster, routes)
+        if cls == NOT_APPLICABLE:
             continue
-        agents = ", ".join(f"@{r['agent']}" for r in spec["required"])
+        agents = ", ".join(f"@{r['agent']}" for r in spec["required"]) or "no required invocation (rules only)"
         scenarios.append({
             "id": f"workflow-{wf.wid.lower()}-sequence",
             "category": "workflow",
@@ -248,6 +338,7 @@ def build_workflow_scenarios(template_text: str, manifest: dict[str, Any]) -> li
                 "workflow": wf.wid,
                 "required": spec["required"],
                 "optional": spec["optional"],
+                "routes": spec["routes"],
                 "coverage": cls,
                 "coverage_reason": reason,
             },
@@ -272,10 +363,14 @@ __all__ = [
     "Step",
     "TEMPLATE_REL",
     "Workflow",
+    "CLOSEOUT",
+    "FINAL_CHECK",
+    "RETROSPECTIVE",
     "build_workflow_scenarios",
     "check_coverage_is_complete",
     "derive_workflow_spec",
     "load_template",
+    "parse_routes",
     "parse_workflows",
     "workflow_headings",
 ]

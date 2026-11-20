@@ -9,7 +9,10 @@
 {"message": {"content": [{"id": "toolu_0008", "input": {"content": "x", "file_path": "/work/tree/docs/a.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
 {"message": {"content": [{"id": "toolu_0009", "input": {"content": "x", "file_path": "/work/tree/docs/b.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
 {"message": {"content": [{"id": "toolu_0010", "input": {"content": "x", "file_path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0011", "input": {"description": "step", "prompt": "do the step", "subagent_type": "agent-updater"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0012", "input": {"description": "step", "prompt": "do the step", "subagent_type": "Adversarial \u2014 Demo"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0013", "input": {"description": "step", "prompt": "do the step", "subagent_type": "conflict-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
 {"message": {"content": [{"text": "Workflow 11: Final Check", "type": "text"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0011", "input": {"description": "step", "prompt": "do the step", "subagent_type": "Adversarial \u2014 Demo"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0012", "input": {"description": "step", "prompt": "do the step", "subagent_type": "conflict-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0013", "input": {"content": "x", "file_path": "/work/tree/workSummaries/daily/2026-11-20.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0014", "input": {"description": "step", "prompt": "do the step", "subagent_type": "adversarial"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0015", "input": {"description": "step", "prompt": "do the step", "subagent_type": "conflict-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0016", "input": {"content": "x", "file_path": "/work/tree/workSummaries/daily/2026-11-20.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}

@@ -361,6 +361,10 @@ _DESTRUCTIVE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+#: Public name for the shared pattern list; workflow_trace reads it too (one list, never a copy).
+DESTRUCTIVE_PATTERNS = _DESTRUCTIVE_PATTERNS
+
+
 def destructive_commands(spec: HandoffSpec) -> list[str]:
     """Name the destructive operations found in a spec's commands.
 

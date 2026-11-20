@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from agentteams.redteam.workflow_spec import build_workflow_scenarios
+
 EVAL_SUITE_SCHEMA_VERSION = "1.0"
 
 # The worker-governance triad every workstream expert must wire in, and the
@@ -168,8 +170,6 @@ def build_workflow_suite(manifest: dict[str, Any], template_text: str) -> dict[s
     Returns:
         A dict conforming to ``schemas/eval-suite.schema.json``.
     """
-    from agentteams.redteam.workflow_spec import build_workflow_scenarios
-
     return {
         "artifact_type": "eval-suite",
         "eval_suite_schema_version": EVAL_SUITE_SCHEMA_VERSION,

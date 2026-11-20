@@ -8,18 +8,18 @@ has today's marker is not run again; its recorded exit code is returned instead,
 A VOID (exit 2) is also written to a **status file** at a path IM can read (AC4):
 ``~/.local/state/agentteams/workflow-conformance/status.json`` by default. Phase B adds the macOS notification.
 
-stdlib only; every write is a temp file plus ``os.replace``.
+stdlib only; every write goes through :func:`agentteams.atomicio._atomic_write_text` (temp file, fsync, replace).
 """
 from __future__ import annotations
 
 import json
-import os
 import re
-import tempfile
 from collections.abc import Callable
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from agentteams.atomicio import _atomic_write_text
 
 #: Default state directory (markers and status file), outside every work tree.
 DEFAULT_STATE_DIR = Path("~/.local/state/agentteams/workflow-conformance")
@@ -37,16 +37,7 @@ def default_status_path() -> Path:
 
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, sort_keys=True, indent=2)
-            fh.write("\n")
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+    _atomic_write_text(path, json.dumps(payload, sort_keys=True, indent=2) + "\n")
 
 
 def write_status(path: Path, payload: dict[str, Any]) -> None:
@@ -91,6 +82,9 @@ def read_marker(state_dir: Path, stage: str, day: date) -> dict[str, Any] | None
 
     Returns:
         The marker record, or None.
+
+    Raises:
+        ValueError: For a bad stage name (see :func:`marker_path`).
     """
     path = marker_path(state_dir, stage, day)
     if not path.exists():
@@ -136,6 +130,11 @@ def run_stage_once(state_dir: Path, stage: str, run: Callable[[], int], *, day: 
 
     Returns:
         The stage's exit code (fresh or recorded).
+
+    Raises:
+        ValueError: For a bad stage name.
+        OSError: When a marker or the status file cannot be written.
+        BaseException: Whatever ``run`` raised, after it is recorded as exit 2.
     """
     day = day or date.today()
     prior = read_marker(state_dir, stage, day)

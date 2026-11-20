@@ -25,7 +25,46 @@
         "technical-validator",
         "work-summarizer"
       ],
+      "rules_pass": [
+        "rule9-plan-first",
+        "c5-security-first",
+        "rule8-conflict-auditor-closes",
+        "wf11-terminal",
+        "rule10-summary-after-plan"
+      ],
       "trace": "neg-wf7.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "7"
+    },
+    {
+      "control": "negative",
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "claude",
+      "name": "neg-wf7-shell-writes",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "rules_pass": [
+        "rule9-plan-first",
+        "rule10-summary-after-plan"
+      ],
+      "trace": "neg-wf7-shell-writes.jsonl",
       "work_tree": "/work/tree",
       "workflow": "7"
     },
@@ -61,6 +100,9 @@
     {
       "control": "positive",
       "expect": {
+        "at": {
+          "tool_use_id": "toolu_planted_c5"
+        },
         "rule": "c5-security-first"
       },
       "final_state": {
@@ -88,6 +130,40 @@
       "trace": "pos-wf7-c5.jsonl",
       "work_tree": "/work/tree",
       "workflow": "7"
+    },
+    {
+      "control": "negative",
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "goose",
+      "name": "neg-wf1-goose-conforming",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "rules_pass": [
+        "rule9-plan-first",
+        "rule8-conflict-auditor-closes",
+        "wf11-terminal",
+        "rule10-summary-after-plan"
+      ],
+      "trace": "neg-wf1-goose.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "1"
     },
     {
       "control": "positive",
@@ -151,6 +227,9 @@
     {
       "control": "positive",
       "expect": {
+        "at": {
+          "tool_use_id": "toolu_planted_r9"
+        },
         "rule": "rule9-plan-first"
       },
       "final_state": {
@@ -182,6 +261,9 @@
     {
       "control": "positive",
       "expect": {
+        "at": {
+          "tool_use_id": "toolu_planted_r8"
+        },
         "rule": "rule8-conflict-auditor-closes"
       },
       "final_state": {
@@ -213,6 +295,9 @@
     {
       "control": "positive",
       "expect": {
+        "at": {
+          "kind": "plan-complete"
+        },
         "rule": "rule10-summary-after-plan"
       },
       "final_state": {

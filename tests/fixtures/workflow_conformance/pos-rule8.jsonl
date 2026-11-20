@@ -1,12 +1,18 @@
 {"message": {"content": [{"text": "Workflow 2: Revise a Deliverable", "type": "text"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0065", "input": {"content": "x", "file_path": "/work/tree/tmp/by-week/2026-W47/demo.plan.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0066", "input": {"content": "x", "file_path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0067", "input": {"description": "step", "prompt": "do the step", "subagent_type": "primary-producer"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0068", "input": {"content": "x", "file_path": "/work/tree/src/a.py"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0069", "input": {"description": "step", "prompt": "do the step", "subagent_type": "adversarial"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0070", "input": {"description": "step", "prompt": "do the step", "subagent_type": "quality-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0071", "input": {"description": "step", "prompt": "do the step", "subagent_type": "conflict-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0072", "input": {"description": "step", "prompt": "do the step", "subagent_type": "reference-manager"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0073", "input": {"content": "x", "file_path": "/work/tree/src/b.py"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0074", "input": {"content": "x", "file_path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
-{"message": {"content": [{"id": "toolu_0075", "input": {"content": "x", "file_path": "/work/tree/workSummaries/daily/2026-11-20.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0108", "input": {"content": "x", "file_path": "/work/tree/tmp/by-week/2026-W47/demo.plan.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0109", "input": {"content": "x", "file_path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0110", "input": {"description": "step", "prompt": "do the step", "subagent_type": "primary-producer"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0111", "input": {"content": "x", "file_path": "/work/tree/src/a.py"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0112", "input": {"description": "step", "prompt": "do the step", "subagent_type": "adversarial"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0113", "input": {"description": "step", "prompt": "do the step", "subagent_type": "quality-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0114", "input": {"description": "step", "prompt": "do the step", "subagent_type": "conflict-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0115", "input": {"description": "step", "prompt": "do the step", "subagent_type": "reference-manager"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0116", "input": {"content": "x", "file_path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0117", "input": {"description": "step", "prompt": "do the step", "subagent_type": "agent-updater"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0118", "input": {"description": "step", "prompt": "do the step", "subagent_type": "Adversarial \u2014 Demo"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0119", "input": {"description": "step", "prompt": "do the step", "subagent_type": "conflict-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"text": "Workflow 11: Final Check", "type": "text"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0120", "input": {"description": "step", "prompt": "do the step", "subagent_type": "adversarial"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0121", "input": {"description": "step", "prompt": "do the step", "subagent_type": "conflict-auditor"}, "name": "Task", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_planted_r8", "input": {"content": "x", "file_path": "/work/tree/src/b.py"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
+{"message": {"content": [{"id": "toolu_0122", "input": {"content": "x", "file_path": "/work/tree/workSummaries/daily/2026-11-20.md"}, "name": "Write", "type": "tool_use"}]}, "type": "assistant"}
