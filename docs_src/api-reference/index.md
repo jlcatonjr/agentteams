@@ -11,11 +11,13 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`ingest`](ingest.md) | Load and normalize project description files |
+| [`brief_schema`](brief-schema.md) | The project-description schema, checked on load (warn only); the archetypes agentteams renders |
 | [`analyze`](analyze.md) | Classify project type, select archetypes (including contextual post-production selection), build team manifest |
 | [`analyze_tools`](analyze-tools.md) | Tool importance classification + tool/reference-doc detection (carved from analyze) |
 | [`tool_version_source`](tool-version-source.md) | Tool versions read from the target project's pin file (`tools[].version_source`) |
 | [`manifest_format`](manifest-format.md) | Manifest field derivation/formatting helpers (_format_*/_default_*/_collect_*) — carved from analyze |
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
+| [`placeholder_scan`](placeholder-scan.md) | `SETUP-REQUIRED.md` lists every `{MANUAL:}` token in the emitted text; one rule for every scanner |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
 | [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
 | [`fence_baseline`](fence-baseline.md) | Per-fence digests of what agentteams authored, so a fence unedited since generation takes a shrinking template update instead of being preserved |
@@ -37,6 +39,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`gitdirs`](gitdirs.md) | Find a checkout's per-checkout and common git directories from its files (no git spawn; symlinks and borrowed worktree dirs refused) |
 | [`update-lock`](update-lock.md) | Per-checkout update lock (`<git-dir>/agentteams-update.lock`) and run record (`agentteams-update-runs.log.csv`): a concurrent writer refuses and names the holder |
 | [`fleet`](fleet.md) | Multi-workspace `--update --merge` (`--fleet DIR`) with git snapshot + diff audit |
+| [`descriptor_union`](descriptor-union.md) | A description with no roster takes the stub's `selected_archetypes` on `--update`/`--check`; the roster-shrink guard and `--allow-roster-shrink` |
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
 
@@ -138,6 +141,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`confinement`](confinement.md) | Orchestrator-only-writes pilot (P4b): run the runner's commands and gates in a Seatbelt/bwrap sandbox built from `confined_programs` |
 | [`wasm_runtime`](wasm-runtime.md) | WASM sandbox: pinned download, safe extraction and verify-on-use for wasmtime and the guest interpreters (`--wasm-install`) |
 | [`wasm_exec`](wasm-exec.md) | The wasmtime executor: pinned compute-only grant, exact-shape argv check, OS nesting, capability probe (WASM P02) |
+| [`wasm_session`](wasm-session.md) | Streaming session mode: one long-lived guest, stdio relayed frame by frame, host status records on a separate fd (beta, #567) |
 | [`wasm_pins`](wasm-pins.md) | Pure re-hash of an installed WASM runtime against its pins; `TODO-PIN` fails closed |
 | [`wasm_guests`](wasm-guests.md) | Python / JavaScript / core-module guests on the pinned grant, with per-language deny probes (WASM P04) |
 | [`sandbox_projection`](sandbox-projection.md) | The model-substrate WASM switch projected to `.agentteams/sandbox-state.json` for consumers that run model code (WASM P20) |
@@ -158,7 +162,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`runner_wasm`](runner-wasm.md) | The runner's `sandbox: wasm` jails: `wasm:<lang> <path>` commands run as the pinned wasmtime in a fresh OS wrap, and the `wasm-to-os-switch` gate (WASM P12) |
 | [`sealed_result`](sealed-result.md) | Seals the orchestrator's runner results (in the session-readable `.agentteams-status/` tree) to the process that queued each request |
 | [`git_exec`](git-exec.md) | The one git core: argv, run, and the read-only hardening against repo-planted config |
-| [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty), recorded in build-log.json and printed by `--version` |
+| [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty, on_remote), recorded in build-log.json and printed by `--version` |
 | [`user_regions`](user-regions.md) | The user-editable Notes/Rules regions of generated files, carried across `--overwrite` (P5a) |
 | [`write_policy`](write-policy.md) | Orchestrator-only-writes pilot (P3): narrow generated non-orchestrator agents to read-only tools and add the proposal sections |
 | [`adopted_agents`](adopted-agents.md) | `--adopt-orphans` routing rows: adopted agents reach every orchestrator body (Claude included) |

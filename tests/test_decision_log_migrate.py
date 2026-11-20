@@ -281,3 +281,66 @@ def test_padding_keeps_every_signed_payload(tmp_path: Path) -> None:
     after = [_decision_signature_payload({k: v or "" for k, v in r.items() if k})
              for r in csv.DictReader(io.StringIO(_log(out).decode()))]
     assert before == after
+
+
+_MIGRATED = ("timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,signature,date,scope,"
+             "evidence,author,derives_from,effect_class,effect_grants,effect_targets,effect_relaxes,effect_destructive,"
+             "effect_cross_repo,effect_bulk,text_digest,sig_scheme,key_id")
+
+
+def test_a_legacy_width_row_under_a_migrated_header_is_padded(tmp_path: Path) -> None:
+    """#12 (baseAgent, 1.2.2): a 7-field row whose signature sits in column 7 lacks only trailing signing columns."""
+    full = "2026-11-01T00:00:00Z,security,x,PASS,,verified," + "," * 15
+    data = "\n".join([_MIGRATED, full, "2026-10-25T17:36:14Z,security,y,PASS,c,yes,03b4"]) + "\n"
+    out = _team(tmp_path, data.encode())
+    plan = dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert plan.padded_lines == [3]
+
+
+def test_a_torn_row_under_a_migrated_header_is_refused(tmp_path: Path) -> None:
+    """The signing run of a migrated legacy header reaches back to column 3; the schema's columns set the floor."""
+    data = "\n".join([_MIGRATED, "2026-10-25T17:36:14Z,security,y"]) + "\n"
+    out = _team(tmp_path, data.encode())
+    assert dlm.narrowest_paddable(_MIGRATED.split(",")) == 6
+    with pytest.raises(dlm.DecisionLogMigrationError, match="torn or truncated"):
+        dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+
+
+def test_a_comma_split_halt_is_neither_padded_nor_hinted(tmp_path: Path) -> None:
+    """@security #12 condition 1: a legacy HALT with a comma in action_reviewed parses as 7 fields with HALT in
+    conditions; padding it would make the log readable and the HALT unseen."""
+    from agentteams import governance_logs as gl
+
+    split = "2026-10-25T17:36:14Z,security,merge x, then y,HALT,,"
+    data = "\n".join([_MIGRATED, split]) + "\n"
+    out = _team(tmp_path, data.encode())
+    with pytest.raises(dlm.DecisionLogMigrationError, match="verdict cell holds no verdict word|starts with a space"):
+        dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert not any("--migrate-decision-log" in p for p in gl.check_log(out / dlm.DECISION_LOG_REL))
+    assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "c", "yes", " frag"])
+    # a fragment that is itself a verdict word, no leading space: caught by the non-hex signature cell
+    assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "HALT", "cv", "sig"])
+    assert dlm.short_row_problem(_MIGRATED.split(","), ["2026", "s", "x", "PASS", "c", "yes", "03b4"]) is None
+
+
+def test_a_full_row_gaining_added_columns_is_not_a_short_row(tmp_path: Path) -> None:
+    """#12 regression: when migration adds columns, a row that fills its own header is padded only into the
+    added ones, so the short-row checks (non-hex signature, verdict word) do not apply to it."""
+    header = ("timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,scope,derives_from,"
+              "effect_class,effect_grants,effect_targets,effect_relaxes,effect_destructive,effect_cross_repo,"
+              "effect_bulk,sig_scheme,key_id,signature,consumed")
+    full = "2026-10-31,security,x,PASS,,verified,x,base,,,,,,,,ed25519,op,stub" + "0" * 64 + ","
+    assert len(full.split(",")) == len(header.split(","))
+    out = _team(tmp_path, "\n".join([header, full]).encode() + b"\n")
+    plan = dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert plan.added_columns and plan.padded_lines == [2]
+    short = "2026-10-31,security,merge x, then y,HALT,,"        # still short of its own header: still checked
+    out2 = _team(tmp_path / "b", "\n".join([header, short]).encode() + b"\n")
+    with pytest.raises(dlm.DecisionLogMigrationError):
+        dlm.plan_migration(out2 / dlm.DECISION_LOG_REL)
+
+
+def test_no_hint_for_a_header_of_no_schema() -> None:
+    """@security #12 condition 3: floor 0 means no schema; nothing is paddable."""
+    assert dlm.short_row_problem(["a", "b", "signature"], ["1", "2"]) is not None
+

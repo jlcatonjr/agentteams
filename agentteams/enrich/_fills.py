@@ -5,12 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from agentteams._archetype_placeholders import named_archetype_keys
+
 
 def _fill_reference_db_path(manifest: dict[str, Any]) -> str:
     """Return 'N/A' when no reference database is configured."""
     desc = manifest.get("description", {}) or {}
     if desc.get("reference_db") or desc.get("reference_db_path"):
         return ""  # has a real value — don't overwrite
+    if "REFERENCE_DB_PATH" in named_archetype_keys(desc):
+        return ""  # the brief named reference-manager: the operator must supply it (#392 item 1)
     return "N/A — no citation database configured for this project"
 
 
@@ -21,6 +25,8 @@ def _fill_style_reference_path(manifest: dict[str, Any]) -> str:
         return str(desc.get("style_reference") or desc.get("style_reference_path"))
     if manifest.get("style_reference"):
         return str(manifest["style_reference"])
+    if "STYLE_REFERENCE_PATH" in named_archetype_keys(desc):
+        return ""  # the brief named style-guardian: the operator must supply it (#392 item 1)
     return "N/A — no formal style guide defined for this project"
 
 

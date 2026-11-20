@@ -122,7 +122,7 @@
           "category": {
             "type": "string",
             "description": "Category of tool.",
-            "enum": ["language", "framework", "build-system", "database", "cli", "library", "other"]
+            "enum": ["language", "framework", "build-system", "build", "database", "cli", "library", "infrastructure", "other"]
           },
           "config_files": {
             "type": "array",
@@ -241,34 +241,19 @@
     },
     "selected_archetypes": {
       "type": "array",
-      "description": "Override the auto-detected archetype selection. If absent, the analyzer selects archetypes from the project description.",
+      "description": "Override the auto-detected archetype selection. If absent, the analyzer selects archetypes from the project description. Any lowercase slug is accepted: one with no agentteams domain template is not rendered by agentteams (another layer may provide it) and is reported when the description is loaded. x-agentteams-known-archetypes lists the ones agentteams renders; tests/test_brief_schema_on_load.py keeps it equal to the domain templates.",
       "items": {
         "type": "string",
-        "enum": [
-          "primary-producer",
-          "quality-auditor",
-          "cohesion-repairer",
-          "style-guardian",
-          "technical-validator",
-          "retrieval-integrator",
-          "research-analyst",
-          "post-production-auditor",
-          "format-converter",
-          "reference-manager",
-          "output-compiler",
-          "visual-designer",
-          "module-doc-author",
-          "module-doc-validator",
-          "tool-specific"
-        ]
-      }
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "x-agentteams-known-archetypes": ["agentteams-updater", "cohesion-repairer", "content-enricher", "format-converter", "module-doc-author", "module-doc-validator", "output-compiler", "post-production-auditor", "pr-manager", "pr-notifier", "primary-producer", "quality-auditor", "reference-manager", "research-analyst", "retrieval-integrator", "style-guardian", "technical-validator", "tool-doc-researcher", "visual-designer", "vuln-remediation", "work-summarizer"]
     },
     "capabilities": {
       "type": "array",
       "description": "Explicit, opt-in capabilities this project wants beyond archetype selection. `research_verification` selects the `research-analyst` archetype, which orchestrates the optional `agentteams[research]` runtime library (real, installable Python — not a design-time-only template) — a project must deliberately choose this, since it adds a real runtime dependency to the generated project, unlike every other archetype selection. `vulnerability_remediation` adds the request-only `vuln-remediation` agent (goose: an orchestrator sub-recipe, plus a `task` recipe parameter) that triages the daily `python -m agentteams.vulnscan` scan and queues requests for the operator's grant-gated executor. Whether THIS project's own dependencies are scanned (and offered for remediation) is the separate `vulnerability_scanning.level`.",
       "items": {
         "type": "string",
-        "enum": ["research_verification", "vulnerability_remediation"]
+        "enum": ["research_verification", "vulnerability_remediation", "instance_maintenance"]
       }
     },
   "vulnerability_scanning": {

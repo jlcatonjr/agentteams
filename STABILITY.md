@@ -45,6 +45,11 @@ The supported import surface is everything documented under
 > **Beta modules.** `agentteams.term_index` and the `--term-check` gate (issue #548, new in 1.3.0) are **beta**:
 > shipped and tested, but their API, register schema and finding codes may change in a minor release.
 
+> **Beta: `agentteams.wasm_session`** (issue #567, new in 1.3.0), the WASM streaming session mode and its
+> `python -I -m agentteams.wasm_session` entry point. It is shipped and tested, but its flags, status records
+> (schema `agentteams-wasm-session/1`) and exit codes may change in a minor release. Any such change bumps the schema
+> major and gets a CHANGELOG `breaking` entry. It joins the supported surface after one real consumer certification.
+
 Symbols not documented in `docs_src/api-reference/` are **internal** and may
 change without notice — including modules whose name starts with `_`,
 functions starting with `_`, and any helper not listed in the reference docs.

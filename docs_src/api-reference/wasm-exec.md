@@ -31,6 +31,32 @@ The `profiles` module supplies `available`, `seatbelt_profile`, `bwrap_argv`, `s
   traps, and a read-only write attempt. They never answer just "a binary exists".
 - `WasmResolver` (protocol), `WasmExecError`.
 
+## Canonical argv tail
+
+For a core module, the canonical wasmtime command line ends with
+`--argv0 <name> -- <absolute module> [guest args...]` (#570):
+
+```
+[wasmtime, "run", "-C", <C>, "-W", <W>, "-S", <S>, ("--dir", <host>::<guest>)*, "--argv0", <name>, "--", <abs module>, <guest args>...]
+```
+
+- `--` ends wasmtime's option parsing, so no guest argument can be read as a wasmtime flag under any wasmtime
+  version's parser.
+- The module path must be absolute, so it never depends on the working directory.
+- `<name>` must match `[A-Za-z0-9_.-]`, at most 64 characters (`_argv0` falls back to `guest`).
+- Guest arguments are capped by `MAX_ARGS` and `MAX_ARGS_BYTES`.
+
+`build_argv` emits this form, and `assert_grant_shape` refuses any other, in grant mode and in parity mode alike.
+baseAgent's `--argv0 <name> <module>` (no `--`) is the one recorded difference (`INTENTIONAL_DIFFERENCES["argv-tail"]`
+in `tests/test_wasm_grant_spec.py`). `GRANT_SPEC` and the shared corpus did not change for this, so their sha256 values
+are unchanged. Once baseAgent runs on this executor, the executor builds the argv and the difference goes away.
+
+Component guests are refused in grant mode. agentteams' `@security` ruled on 2026-11-19 (#569) to allow them under
+nine conditions, C1–C9, which have not landed yet. Among them: each memory's limit is halved so that two memories fit
+in one grant, the table size is limited, imports are checked against an allowlist before launch, and the host builds
+`--invoke` from a closed grammar. The component tail will be
+`--invoke <wave> -- <absolute component>`, with no `--argv0`.
+
 ## Notes
 
 - wasmtime 36 has no read-only preopen (`--dir H::G::readonly` is accepted and writable). `ro` is therefore enforced

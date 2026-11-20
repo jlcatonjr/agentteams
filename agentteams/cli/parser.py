@@ -207,8 +207,12 @@ def _build_parser() -> argparse.ArgumentParser:
              "workspace, Ed25519-signed decision with effect_grants exactly agents:<slug>). "
              "--dry-run --json reports the row diff, the agents: additions and each slug's tools: "
              "line, flagged when wider than read-only (Read/Grep/Glob, read/search; any other or "
-             "unknown tool counts as wider). Mutually exclusive with --update, "
-             "--overwrite, --migrate, --prune and --adopt-orphans.",
+             "unknown tool counts as wider). Needs --description, --self, or the project's own brief "
+             "(found under --project or the working directory when the agents directory is in that "
+             "project); --output, when given, is "
+             "the agents directory that holds the orchestrator (copilot and claude take it as given, "
+             "so a project root refuses). Mutually exclusive with --update, --overwrite, --migrate, "
+             "--prune and --adopt-orphans.",
     )
     parser.add_argument(
         "--migrate-decision-log",
@@ -1063,6 +1067,17 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-roster-shrink",
+        action="store_true",
+        dest="allow_roster_shrink",
+        help=(
+            "With --update --yes, accept a run whose roster cannot be known: the description has "
+            "no selected_archetypes and the project's .github/agents/_build-description.json "
+            "cannot be read. Without this flag such a run is refused before anything is written; "
+            "without --yes it only warns (IM item 12)."
+        ),
+    )
+    parser.add_argument(
         "--shrink-policy",
         choices=("preserve", "additive", "warn", "halt", "allow"),
         default="preserve",
@@ -1513,7 +1528,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help=(
             "Read-only: report the validity (signature, expiry, use-limit, manager roster, "
-            "and non-denylisted scope) of every management directive in "
+            "and allowed scope) of every management directive in "
             "references/management-directives.log.csv under --output/--project (else CWD). "
             "Never consumes a directive. Exits non-zero if any directive is invalid. Requires "
             "AGENTTEAMS_MANAGEMENT_SIGNING_KEY."
@@ -1554,8 +1569,10 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="task_scope",
         default=None,
         metavar="SCOPE",
-        help="With --issue-directive: the EXACT, benign, non-denylisted task scope the "
-             "directive authorizes (matched by literal equality when honoured).",
+        help="With --issue-directive: the EXACT task scope the directive authorizes (matched by "
+             "literal equality when honoured). It must start with a benign verb (draft, review, "
+             "report, test, lint, audit, check, ...), be plain ASCII, and name no destructive, "
+             "publishing, releasing, signing, tagging or governance effect.",
     )
     parser.add_argument(
         "--expires-at",

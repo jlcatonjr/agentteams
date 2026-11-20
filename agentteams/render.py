@@ -458,6 +458,21 @@ Already committed one by mistake? `.gitignore` does not untrack an existing file
 """
 
 
+def render_setup_required(manifest: dict[str, Any]) -> str:
+    """Return the ``SETUP-REQUIRED.md`` text for *manifest*'s ``manual_required_placeholders`` (public wrapper).
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        The checklist's Markdown.
+
+    Raises:
+        KeyError: *manifest* has no ``project_name``.
+    """
+    return _render_setup_required(manifest)
+
+
 def _render_setup_required(manifest: dict[str, Any]) -> str:
     manual_items = manifest.get("manual_required_placeholders", [])
 
