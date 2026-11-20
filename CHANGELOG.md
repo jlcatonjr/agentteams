@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workspace, or raises `SandboxRelaxationError` naming the failed check (paths removed). It reads only. It is
   stricter than the gate's internal check: a governed workspace and an Ed25519 row are required.
 - It is a point-in-time read, so call it before each use and never cache the result.
-- New page `docs_src/api-reference/sandbox-relaxation-gate.md`. This function is the module's only supported
-  symbol. Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
+- Documented in `docs_src/api-reference/cli.md` ("Supported API"). This function is the one supported symbol in
+  `agentteams.cli`. Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
 
 ### changed (`--adopt-only` finds the project's brief when none is named, #392 item 13)
 

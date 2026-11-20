@@ -325,7 +325,6 @@ nav:
               - wasm_enforcement: api-reference/wasm-enforcement.md
               - wasm_policy: api-reference/wasm-policy.md
               - sandbox_projection: api-reference/sandbox-projection.md
-              - cli.sandbox_relaxation_gate: api-reference/sandbox-relaxation-gate.md
               - proposal_policy: api-reference/proposal-policy.md
               - mcp_direct_grants: api-reference/mcp-direct-grants.md
               - interop_write_policy: api-reference/interop-write-policy.md

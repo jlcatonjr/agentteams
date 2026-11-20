@@ -145,7 +145,6 @@ This reference defines the **supported public API surface** (documented modules 
 | [`wasm_pins`](wasm-pins.md) | Pure re-hash of an installed WASM runtime against its pins; `TODO-PIN` fails closed |
 | [`wasm_guests`](wasm-guests.md) | Python / JavaScript / core-module guests on the pinned grant, with per-language deny probes (WASM P04) |
 | [`sandbox_projection`](sandbox-projection.md) | The model-substrate WASM switch projected to `.agentteams/sandbox-state.json` for consumers that run model code (WASM P20) |
-| [`cli.sandbox_relaxation_gate`](sandbox-relaxation-gate.md) | The Ed25519 sandbox-relaxation gate; supported: `spent_off_decision`, a read-only check that the operator's `sandbox-wasm-off` decision is spent (#574) |
 | [`wasm_config`](wasm-config.md) | The brief's `wasm_sandbox` block, `--wasm-sandbox`, per-agent grants as `Grant(mounts, limits)`, and `wasm_eligible` (WASM P01) |
 | [`wasm_agent`](wasm-agent.md) | The WASM agent host: step-mode protocol, Stage 0/1 split, budgets, DLP, key custody, hash-chained transcript (WASM P05) |
 | [`model_providers`](model-providers.md) | One stdlib-only client for the model APIs the WASM agent host calls: Anthropic, OpenAI-compatible, Gemini and an offline stub; key custody and egress rules (WASM P06) |
