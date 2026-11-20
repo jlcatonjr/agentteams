@@ -91,12 +91,26 @@ def _classify_without_override(tool: dict[str, Any]) -> str:
 
 
 def _merge_known_tool_metadata(tool: dict[str, Any]) -> dict[str, Any]:
-    """Overlay built-in tool metadata when the brief omits it."""
+    """Overlay built-in tool metadata when the brief omits it.
+
+    Args:
+        tool: One brief tool entry.
+
+    Returns:
+        A copy with ``docs_url``, ``api_surface`` and ``common_patterns`` filled from the catalog where the brief left
+        them empty; ``docs_url`` falls back to :func:`tool_metadata_catalog.well_known_docs_url` (IM item 13b).
+
+    Raises:
+        Nothing.
+    """
     merged = dict(tool)
     defaults = tool_metadata_catalog.get_tool_metadata(tool.get("name", ""))
     for field in ("docs_url", "api_surface", "common_patterns"):
         if not merged.get(field) and defaults.get(field):
             merged[field] = defaults[field]
+    # IM item 13b: official docs for git, gh, PostgreSQL, … (tools a brief names, never import names)
+    if not merged.get("docs_url") and (url := tool_metadata_catalog.well_known_docs_url(tool.get("name", ""))):
+        merged["docs_url"] = url
     return merged
 
 

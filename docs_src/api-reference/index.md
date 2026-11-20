@@ -11,11 +11,13 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`ingest`](ingest.md) | Load and normalize project description files |
+| [`brief_schema`](brief-schema.md) | The project-description schema, checked on load (warn only); the archetypes agentteams renders |
 | [`analyze`](analyze.md) | Classify project type, select archetypes (including contextual post-production selection), build team manifest |
 | [`analyze_tools`](analyze-tools.md) | Tool importance classification + tool/reference-doc detection (carved from analyze) |
 | [`tool_version_source`](tool-version-source.md) | Tool versions read from the target project's pin file (`tools[].version_source`) |
 | [`manifest_format`](manifest-format.md) | Manifest field derivation/formatting helpers (_format_*/_default_*/_collect_*) — carved from analyze |
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
+| [`placeholder_scan`](placeholder-scan.md) | `SETUP-REQUIRED.md` lists every `{MANUAL:}` token in the emitted text; one rule for every scanner |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
 | [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
 | [`fence_baseline`](fence-baseline.md) | Per-fence digests of what agentteams authored, so a fence unedited since generation takes a shrinking template update instead of being preserved |

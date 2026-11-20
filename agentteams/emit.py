@@ -62,6 +62,7 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 from agentteams.frameworks.structural_merge import post_merge_structural
 from agentteams.frameworks.codex import write_checked
 from agentteams.learned_blocks import carry_learned_block
+from agentteams.placeholder_scan import open_count
 from agentteams._emit_build_state import _unmodified_since_build  # noqa: F401  (tests use emit.*)
 from agentteams.fence_baseline import block_digests as _fence_digests, for_run as _fence_baseline_for_run
 from agentteams.fence_twins import persist_dropped as _persist_twins
@@ -902,7 +903,7 @@ def print_summary(result: EmitResult, manifest: dict[str, Any]) -> None:
 
         print_merge_notices(result.notices)
 
-    manual_count = len(manifest.get("manual_required_placeholders", []))
+    manual_count = open_count(manifest)  # the brief's placeholders plus the scanned ones (IM item 13b)
     if manual_count > 0:
         print(f"\n  ⚠  {manual_count} placeholder(s) require manual completion.")
         print("     Review SETUP-REQUIRED.md in the output directory.")

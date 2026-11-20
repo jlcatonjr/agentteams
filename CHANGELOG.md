@@ -30,6 +30,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Beta:** see STABILITY.md. New tests are in `tests/test_wasm_session.py`, and the test guest is
   `tests/fixtures/wasm/session_echo.{wat,wasm}`.
 
+### fixed (`SETUP-REQUIRED.md` lists every `{MANUAL:}` token the team emits; IM item 13b, G-17-3)
+
+- **For every team, on generate, `--update` and `--check`.** The checklist was built only from the brief-derived
+  `manual_required_placeholders`, so tokens written literally in templates were never listed. On dev, every example
+  emitted `{MANUAL:PROJECT_REDTEAM_NOTES}`, `{MANUAL:ADJACENT_REPO_PATH}` and `{MANUAL:ADJACENT_REPO_AGENTS_PATH}`
+  without listing them. The new `placeholder_scan` builds the list from the emitted text, and the emit summary counts
+  them. A token the operator has filled in leaves the list on the next `--update`. The scanned entries are kept under
+  the manifest's `_scanned_manual_placeholders`, which the drift fingerprint skips, so `--check` does not report
+  manifest drift.
+- **One rule for every scanner.** The `--post-audit` check and `--enrich`'s `scan_defaults` skipped tokens in inline
+  code, and the adjacent-repos placeholders are written in inline code. Now the only names skipped are the
+  instructional `TOKEN`, `UPPER_SNAKE_CASE` and `PLACEHOLDER_NAME`. A test pins where those may appear, and every
+  other name a template writes must be listed in `PLACEHOLDER-CONVENTIONS.md`.
+- **Official docs URLs for well-known tools.** Reference docs for git, gh, PostgreSQL, Python, Docker, Terraform and
+  GNU make no longer ship `{MANUAL:TOOL_DOCS_URL}`. These are vendor or project pages, applied only to tools a brief
+  names, never matched by Python import name.
+- **Unchanged:** how `SETUP-REQUIRED.md` is written. `--check` stays read-only; on `--update` an appended operator
+  note survives, and an edit inside the generated list is replaced, as before. Nothing is refused for open
+  placeholders.
+
+### fixed (the project-description schema matches the code and is checked on load, warn only; IM item 13a)
+
+- **G-17-2.** `ingest.validate` checked three fields and `schemas/project-description.schema.json` was never run on
+  a brief. It had also drifted: 96 of 155 descriptors in the workspace failed it.
+  - **The schema matches the code.** `selected_archetypes` takes any lowercase slug, so archetypes another layer
+    provides are no longer schema errors. `x-agentteams-known-archetypes` lists the 21 agentteams renders, and a
+    test keeps it equal to the domain templates, so it can't drift again. The old enum lacked `agentteams-updater`,
+    `tool-doc-researcher`, `vuln-remediation`, `work-summarizer`, `pr-manager`, `pr-notifier` and `content-enricher`,
+    and listed `tool-specific`, which has no template. `tools[].category` accepts `build` and `infrastructure`
+    (both passive, as the code already treated them).
+  - **Checked on load, warn only.** `ingest.load` runs the schema on every JSON description and prints one `[WARN]`
+    per file per run (the count and the first five issues). It never refuses and never changes the exit code,
+    `--check` included.
+  - **Archetypes agentteams doesn't render.** A `selected_archetypes` slug with no domain template gets one `[INFO]`
+    line instead of being dropped silently; another layer (researchteam's `interpretation-advisor`) may provide it.
+  - **The team-manifest schema matches too** (@conflict-auditor): its `selected_archetypes` enum is now the same slug
+    pattern, and its two `tool_category` enums accept `build` and `infrastructure`, which `analyze_tools` copies in.
+  - **The capability the code reads** (`instance_maintenance`) is in the schema's `capabilities` enum (@adversarial).
+  - **The fleet shows the warning** (@adversarial): it captures each render's output, so a printed WARN never reached
+    the operator. The fleet report's `schema_warnings` carries it, on the first target of each workspace.
+  - **The check never fails a load:** an error while checking is a `[WARN]` too, and each listed issue is clipped to
+    160 characters, so a `oneOf` message can't echo a whole brief value. The validator registers the sibling
+    schemas by `$id`, so `mcp_servers` items resolve against `mcp-server.schema.json`.
+  - **Census for the later refusal:** 96 of 155 descriptors failing before the schema fix, 23 after (unchanged by the
+    `instance_maintenance` addition, which no failing brief used). The 23 include project names with spaces, which
+    the schema documents as slug-safe and the code tolerates.
+
 ### changed (internal: fleet.py and emit.py carved below the CH-07 crowding mark)
 
 - Moved fleet's fence/USER-EDITABLE line maps and fence-pairing gate (`_fence_and_useredit_lines`,
