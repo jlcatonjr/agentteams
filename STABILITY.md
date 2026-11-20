@@ -180,8 +180,9 @@ The following rules apply on top of the general ones above:
   CHANGELOG entry. Pin the sha and refuse on a mismatch. A structural change (a key removed or renamed, or a type
   changed) bumps `agentteams-wasm-grant/vN` and is breaking.
 - **`assert_grant_shape`**: its signature and its "raises `WasmExecError`" contract are frozen. **The set of accepted
-  argv is defined by `GRANT_SPEC`, not by SemVer.** Tightening it is never breaking. Widening it needs a new spec sha,
-  a CHANGELOG entry and a recorded `@security` clearance.
+  argv is defined by `GRANT_SPEC`, not by SemVer.** Tightening it falls under the security-tightening clause in the
+  release cadence (a CHANGELOG `security` entry). Widening it is a `GRANT_SPEC` content change (a new sha, a CHANGELOG
+  entry) that needs a recorded `@security` clearance; it is never shipped as a security fix.
 - **`profiles=`** (on `run` and `materialize`): the only supported value is `agentteams._sandbox_profiles`, or the
   bundle's exec-loaded copy. The functions that module provides are internal.
 - **May change in any release:**
@@ -237,11 +238,14 @@ Removal of a deprecated surface always requires a **major** bump.
 - **Patch** (1.0.x): bugfixes, doc fixes, security fixes. No new public
   surface. No behavior change for any documented input, except the security
   tightening below.
-- **Security tightening** (patch or minor): a security fix may add or tighten a
-  refusal, such as a new `WasmExecError`, `WasmPinError` or `SandboxRelaxationError`
-  case, a smaller bound or a longer deny list. Signatures, return types and
-  exception classes stay fixed. Loosening a refusal is a minor change, needs
-  `@security` clearance and is never shipped in a patch.
+- **Security tightening** (patch or minor; operator ruling 2026-11-20): a security
+  fix may tighten a refusal, so that something previously accepted is now refused.
+  Examples: a new `WasmExecError`, `WasmPinError` or `SandboxRelaxationError` case, a
+  smaller bound, a longer deny list. It must carry a CHANGELOG `security` entry that
+  says what is newly refused and how to migrate. Signatures, return types and
+  exception classes stay fixed. This clause never loosens a refusal and never changes
+  the shape of an output. Like the known-limitation carve-out above, it lets a fix
+  block something that used to pass.
 - **Minor** (1.x.0): new features, new flags, new templates, new schemas,
   additive changes to existing schemas, new deprecation notices.
 - **Major** (x.0.0): removals, contract changes, schema breaking changes,
