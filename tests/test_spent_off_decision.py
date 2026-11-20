@@ -63,19 +63,40 @@ def test_it_writes_nothing(tmp_path: Path, stub_ed25519) -> None:
     assert before == after
 
 
-@pytest.mark.parametrize("row, fragment, private", [
-    (lambda: _spent(consumed=""), "not marked consumed", False),
-    (lambda: _spent(verdict="FAIL"), "does not authorize", False),
-    (lambda: _spent(verdict="CONDITIONAL PASS") | {"conditions_verified": "pending"}, "CONDITIONAL PASS", False),
-    (lambda: _spent() | {"signature": "stub" + "0" * 64}, "failed Ed25519 verification", False),
-    (lambda: _spent(scope="sandbox-wasm-off:codex"), f"no decision row is scoped to {ACTION}", False),
-], ids=["unconsumed", "fail-verdict", "cp-unverified", "bad-signature", "other-scope"])
-def test_each_failed_check_is_a_refusal_and_the_private_answer_is_unchanged(tmp_path: Path, stub_ed25519, row,
-                                                                          fragment: str, private: bool) -> None:
+@pytest.mark.parametrize("row, fragment", [
+    (lambda: _spent(consumed=""), "not marked consumed"),
+    (lambda: _spent(verdict="FAIL"), "does not authorize"),
+    (lambda: _spent(verdict="CONDITIONAL PASS") | {"conditions_verified": "pending"}, "conditions are not verified"),
+    (lambda: _spent() | {"signature": "stub" + "0" * 64}, "failed Ed25519 verification"),
+    (lambda: _spent(scope="sandbox-wasm-off:codex"), f"no decision row is scoped to {ACTION}"),
+    (lambda: _spent() | {"key_id": ""}, "key_id"),   # no key to verify with
+], ids=["unconsumed", "fail-verdict", "cp-unverified", "bad-signature", "other-scope", "no-key-id"])
+def test_each_failed_check_is_a_refusal_and_the_private_answer_is_false(tmp_path: Path, stub_ed25519, row,
+                                                                       fragment: str) -> None:
     team = _team(tmp_path)
     _write(team, row())
     _refused(team, fragment)
-    assert G._spent_off_decision(team, ACTION) is private
+    assert G._spent_off_decision(team, ACTION) is False
+
+
+def test_a_broken_hash_chain_refuses(tmp_path: Path, stub_ed25519) -> None:
+    team = _team(tmp_path)
+    log = _write(team, _spent())
+    rows = list(csv.DictReader(log.open(newline="")))
+    fields = [*FIELDS, "prev_digest"]
+    with log.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        w.writerows([r | {"prev_digest": "0" * 64} for r in rows])   # a chained log whose digests don't link
+    _refused(team, "chain broken")
+    assert G._spent_off_decision(team, ACTION) is False
+
+
+def test_a_workspace_without_its_privilege_config_counts_as_ungoverned_and_refuses(tmp_path: Path,
+                                                                                  stub_ed25519) -> None:
+    team = _team(tmp_path, governed=None)   # no agent-privilege.json
+    _write(team, _spent())
+    _refused(team, "not governed")
 
 
 def test_an_hmac_row_is_refused_publicly(tmp_path: Path, stub_ed25519) -> None:
@@ -109,9 +130,24 @@ def test_no_decisions_log_is_refused(tmp_path: Path) -> None:
     _refused(_team(tmp_path), "no decisions log")
 
 
-@pytest.mark.parametrize("fw", ["model-substrate", "not-a-framework", "", "../claude"])
-def test_only_a_rendered_framework_is_a_valid_qualifier(tmp_path: Path, fw: str) -> None:
-    _refused(_team(tmp_path), "framework_id must be a framework", fw)
+@pytest.mark.parametrize("fw", ["model-substrate", "not-a-framework", "", "../claude", None, 1])
+def test_only_a_rendered_framework_is_a_valid_qualifier(tmp_path: Path, fw: object) -> None:
+    _refused(_team(tmp_path), "framework_id must be a framework", fw)   # type: ignore[arg-type]
+
+
+def test_team_dir_must_be_a_path() -> None:
+    with pytest.raises(SandboxRelaxationError, match="team_dir must be a pathlib.Path"):
+        spent_off_decision("/some/team", FW)   # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("message, leaked", [
+    (str(OSError(2, "No such file", "C:\\Users\\jdoe\\repo\\log.csv")), "jdoe"),
+    ("log at /Users/Jane Doe/repo/references/x.csv: unreadable", "Doe"),
+    ("bad: /home/someone/.claude/agents/references/x.csv", "someone"),
+], ids=["windows-repr", "spaced-username", "posix"])
+def test_public_reasons_drop_every_path_form(message: str, leaked: str) -> None:
+    reason = G._public_reason(RuntimeError(message))
+    assert "<path>" in reason and leaked not in reason, reason
 
 
 def test_a_refusal_reason_carries_no_path(tmp_path: Path) -> None:

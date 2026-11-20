@@ -464,12 +464,16 @@ def _spent_off_decision(team_dir: Path, action: str) -> bool:
     return True
 
 
-_PATH_RE = re.compile(r"(?:[A-Za-z]:)?(?:[\\/][^\s'\"\\/:]+){2,}[\\/]?")
+#: A multi-segment filesystem path in a message: POSIX or Windows, doubled separators (an ``OSError`` repr), segments
+#: with spaces (a user name like ``Jane Doe``). It stops at quotes, colons and punctuation, so prose is kept.
+_PATH_RE = re.compile(r"""(?:[A-Za-z]:)?(?:[\\/]+[^\\/'"\n:;,()]+){2,}[\\/]*""")
+#: The longest public refusal reason (a message leaves the process).
+_PUBLIC_REASON_MAX = 400
 
 
 def _public_reason(exc: BaseException) -> str:
     """An exception's message with filesystem paths removed (a refusal reason leaves the process; Rule S-8)."""
-    return _PATH_RE.sub("<path>", str(exc))[:400] or type(exc).__name__
+    return _PATH_RE.sub("<path>", str(exc))[:_PUBLIC_REASON_MAX] or type(exc).__name__
 
 
 def spent_off_decision(team_dir: Path, framework_id: str) -> str:
@@ -507,6 +511,8 @@ def spent_off_decision(team_dir: Path, framework_id: str) -> str:
     """
     from agentteams.frameworks.registry import FRAMEWORKS
 
+    if not isinstance(team_dir, Path):
+        raise SandboxRelaxationError("team_dir must be a pathlib.Path")
     if not isinstance(framework_id, str) or framework_id == MODEL_SUBSTRATE_QUALIFIER or framework_id not in FRAMEWORKS:
         raise SandboxRelaxationError("framework_id must be a framework agentteams renders (not model-substrate)")
     try:
@@ -516,7 +522,8 @@ def spent_off_decision(team_dir: Path, framework_id: str) -> str:
         row = _spent_off_row(team_dir, action)
         scheme = (row.get("sig_scheme") or "").strip().lower()
         key_id, signature = (row.get("key_id") or "").strip(), (row.get("signature") or "").strip()
-        if scheme != "ed25519" or not key_id or not signature:
+        if scheme != "ed25519" or not key_id or not signature:   # defence in depth: authenticity already requires
+            # ed25519 for a relaxing row; this keeps the returned id well-formed if that ever changes
             raise RuntimeError(f"the newest {action} decision is not Ed25519-signed")
     except (RuntimeError, OSError, ValueError) as exc:
         raise SandboxRelaxationError(_public_reason(exc)) from None
