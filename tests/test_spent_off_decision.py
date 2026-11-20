@@ -143,7 +143,7 @@ def test_team_dir_must_be_a_path() -> None:
 @pytest.mark.parametrize("message, leaked", [
     (str(OSError(2, "No such file", "C:\\Users\\jdoe\\repo\\log.csv")), "jdoe"),
     ("log at /Users/Jane Doe/repo/references/x.csv: unreadable", "Doe"),
-    ("bad: /home/someone/.claude/agents/references/x.csv", "someone"),
+    ("bad: /home/user/.claude/agents/references/x.csv", "/home/user"),
 ], ids=["windows-repr", "spaced-username", "posix"])
 def test_public_reasons_drop_every_path_form(message: str, leaked: str) -> None:
     reason = G._public_reason(RuntimeError(message))
