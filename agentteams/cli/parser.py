@@ -215,6 +215,16 @@ def _build_parser() -> argparse.ArgumentParser:
              "--prune and --adopt-orphans.",
     )
     parser.add_argument(
+        "--accept-routing-loss",
+        metavar="SLUG[,SLUG...]",
+        dest="accept_routing_loss",
+        default=None,
+        help="Let an --overwrite (or --migrate) replace an orchestrator that routes to agents this build "
+             "does not keep (#392 item 12). Without it such a run refuses before any write and names them. "
+             "The list must equal exactly the slugs the refusal (or --dry-run --json's routing_loss) names: "
+             "no wildcard, superset or subset. --yes never acknowledges the loss.",
+    )
+    parser.add_argument(
         "--migrate-decision-log",
         action="store_true",
         dest="migrate_decision_log",
