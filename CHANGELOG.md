@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (a public, read-only check for a spent `sandbox-wasm-off` decision, #574)
+
+- **`agentteams.cli.sandbox_relaxation_gate.spent_off_decision(team_dir, framework_id)`** returns
+  `<key_id>@<sig16>` for the operator's spent, Ed25519-signed `sandbox-wasm-off:<framework_id>` decision in a governed
+  workspace, or raises `SandboxRelaxationError` naming the failed check (paths removed). It reads only. It is
+  stricter than the gate's internal check: a governed workspace and an Ed25519 row are required.
+- It is a point-in-time read, so call it before each use and never cache the result.
+- New page `docs_src/api-reference/sandbox-relaxation-gate.md`. This function is the module's only supported
+  symbol. Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
+
 ### changed (`--adopt-only` finds the project's brief when none is named, #392 item 13)
 
 - With no `--description` and no `--self`, `--adopt-only` now uses the project's own brief under `--project`
