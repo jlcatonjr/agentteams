@@ -118,6 +118,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_unmodified_since_build` to `agentteams/_emit_build_state.py`. Both remain importable from `fleet` and `emit`;
   behaviour is unchanged. fleet.py 974 → 894 lines, emit.py 974 → 949, so the pending #521 and #524 fit.
 
+### fixed (red-team probe E1 measures a rendered team; #478)
+
+- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
+  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
+  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
+  and checks the emitted front matter. Each of these is EXPLOITED:
+  - an `allowed-tools:` key;
+  - any agent with no `tools:`/`disallowedTools:`;
+  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
+    a tool list it cannot parse.
+
+  Read-only means the template grants no write or command capability. An empty render raises.
+- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
+- The probe baseline is re-accepted by the operator after merge; the review is in
+  `references/redteam-probe-revalidation.md`.
+
+### fixed (slug checks refuse a trailing newline; #473)
+
+- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
+  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
+  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
+  - `cli/adopt_only.py`;
+  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
+  - `sandbox_state.py` (agent and profile names);
+  - `sandbox_tokens.py`;
+  - `wasm_config.py`;
+  - `wasm_agent/team.py`;
+  - `interop_helpers.py`;
+  - `update_lock.py` (slug-valued arguments).
+- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
+  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
+  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
+  Integrity pins are re-recorded.
+
+### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
+  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
+  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
+
+## [1.2.2] - 2026-11-19
+
+### release notes
+
+agentteams 1.2.2 backports fixes from `dev` to the 1.2 line: the work-summary Stop hook (#6 and 1.2.0 cut items 3
+and 4), `--sync-project-rules` titles (#11), the GitHub management roster and CI caveat (#2, #9), the decisions-log
+migrate hint (#12), CI and test robustness (1.2.0 cut items 2, 6 and 7), the Codex role gate in WASM mode, and the
+PRs #517 (directive scopes, security), #513 and #512. Nothing else from `dev` is included.
+
 ### fixed (a fleet re-render no longer drops the agents the stub records; IM item 12)
 
 - **G-17-1.** `fleet._resolve_descriptor` took the root `brief.json` whole whenever it existed. In researchteam-derived
@@ -284,47 +334,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assert a token retired in a commit that is not on `dev`, so it failed in any full clone without that ref.
 - `test_host_timeout_kills_the_group` accepts -9 or 137 (the shell reporting its child's SIGKILL first, seen on a
   multi-core macOS runner) and now checks directly that the whole process group is gone.
-
-### fixed (red-team probe E1 measures a rendered team; #478)
-
-- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
-  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
-  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
-  and checks the emitted front matter. Each of these is EXPLOITED:
-  - an `allowed-tools:` key;
-  - any agent with no `tools:`/`disallowedTools:`;
-  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
-    a tool list it cannot parse.
-
-  Read-only means the template grants no write or command capability. An empty render raises.
-- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
-- The probe baseline is re-accepted by the operator after merge; the review is in
-  `references/redteam-probe-revalidation.md`.
-
-### fixed (slug checks refuse a trailing newline; #473)
-
-- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
-  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
-  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
-  - `cli/adopt_only.py`;
-  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
-  - `sandbox_state.py` (agent and profile names);
-  - `sandbox_tokens.py`;
-  - `wasm_config.py`;
-  - `wasm_agent/team.py`;
-  - `interop_helpers.py`;
-  - `update_lock.py` (slug-valued arguments).
-- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
-  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
-  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
-  Integrity pins are re-recorded.
-
-### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
-
-- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
-  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
-- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
-  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
 
 ## [1.2.1] - 2026-11-19
 
