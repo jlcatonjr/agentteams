@@ -107,12 +107,17 @@ def bench(args: argparse.Namespace, seams: Any) -> int:
     try:
         limits = W.Limits(fuel=W.LIMIT_BOUNDS["fuel"][1], max_memory_bytes=W.DEFAULT_LIMITS.max_memory_bytes,
                           timeout_s=args.timeout)
+        if not os.path.isabs(args.module):
+            raise W.WasmExecError("MODULE must be an absolute path")
         prepared = W.prepare(args.module, grant=W.Grant((), limits))
         report: dict[str, Any] = {"asks": args.asks, "module_sha256": prepared.module_sha256,
                                   "session": leg(args.os_confine, relayed=True)}
         if args.unconfined_baseline:
             S._note("WASM SANDBOX: the bench baseline runs wasmtime without OS confinement (comparison only)")
             report["baseline_unconfined"] = leg("off", relayed=False)
+    except subprocess.TimeoutExpired:   # the bare guest outlived stdin EOF; its group is already killed
+        S._note("bench refused: the baseline guest did not exit after stdin closed")
+        return S.EXIT_REFUSED
     except (W.WasmExecError, *runtime_errors, OSError) as exc:
         S._note(f"bench refused: {exc}")
         return S.EXIT_REFUSED

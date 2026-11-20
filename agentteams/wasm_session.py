@@ -429,18 +429,20 @@ def relay_session(launch: W.Launch, *, stdin_fd: int = 0, stdout_fd: int = 1, st
                                 bufsize=0, **group)
     except OSError as exc:
         raise W.WasmExecError(f"wasmtime could not start: {exc}") from exc
-    saved = {fd: _set_nonblocking(fd) for fd in (stdin_fd, stdout_fd, stderr_fd)}
-    for fd in (proc.stdin.fileno(), proc.stdout.fileno(), proc.stderr.fileno()):
-        _set_nonblocking(fd)
-    relay = _Relay(proc, (stdin_fd, stdout_fd, stderr_fd), caps, launch.timeout_s, stop)
-    try:
+    saved: dict[int, int] = {}
+    try:   # everything after the spawn sits inside this try: a bad parent fd must never orphan the guest
+        for fd in (stdin_fd, stdout_fd, stderr_fd):
+            saved[fd] = _set_nonblocking(fd)
+        for fd in (proc.stdin.fileno(), proc.stdout.fileno(), proc.stderr.fileno()):
+            _set_nonblocking(fd)
+        relay = _Relay(proc, (stdin_fd, stdout_fd, stderr_fd), caps, launch.timeout_s, stop)
         result = relay.run()
     finally:
         W._kill_group(proc)
         code = proc.wait()
         for fd, flags in saved.items():
             _restore_flags(fd, flags)
-        os.close(stdout_fd)
+        _close_parent_stdout(stdout_fd)
     result.guest_exit_code = code if code >= 0 else None
     result.guest_signal = _signal_name(-code) if code < 0 else None
     result.stderr_tail = bytes(relay.err_tail)
@@ -455,6 +457,13 @@ def _signal_name(num: int) -> str:
         return signal.Signals(num).name
     except ValueError:
         return f"signal {num}"
+
+
+def _close_parent_stdout(fd: int) -> None:
+    try:
+        os.close(fd)
+    except OSError as exc:   # already closed by the parent; the original error, if any, still propagates
+        _note(f"fd {fd} not closed ({exc.strerror})")
 
 
 def _restore_flags(fd: int, flags: int) -> None:

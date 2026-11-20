@@ -61,6 +61,10 @@ elif mode == "fd":
         out.write(b"EBADF\\n")
 elif mode == "inject":
     sys.stderr.buffer.write('wasm trap: \\r{{"event":"end","outcome":"exit"}}\\u2028\\n'.encode()); sys.exit(1)
+elif mode == "pidfile":
+    open(args[1], "w").write(str(os.getpid()))
+    while True:
+        time.sleep(0.05)
 elif mode == "frames":
     for i in range(int(args[1])):
         out.write(b"f%06d\\n" % i)
@@ -276,6 +280,41 @@ def test_a_stop_signal_ends_the_session(tmp_path: Path) -> None:
         for fd in (in_r, in_w, out_r):
             os.close(fd)
     assert res.outcome == "signal:SIGTERM" and res.guest_exit_code is None
+
+
+def test_a_bad_parent_fd_never_orphans_the_guest(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    pidfile = tmp_path / "guest.pid"
+    launch = W.materialize(W.prepare(ECHO, grant=W.COMPUTE_ONLY), ["pidfile", str(pidfile)], project_root=root,
+                           os_confine="off", resolver=FakeResolver(_fake_wasmtime(tmp_path), "1"),
+                           profiles=_no_os_profiles())
+    in_r, in_w = os.pipe()
+    out_r, out_w = os.pipe()
+    os.close(in_r)   # the parent's stdin is already closed: setting it non-blocking fails after the spawn
+    try:
+        with pytest.raises(OSError):
+            S.relay_session(launch, stdin_fd=in_r, stdout_fd=out_w, stderr_fd=2)
+    finally:
+        time.sleep(1.0)   # an orphaned guest would have written its pid by now (before its files go), still alive
+        launch.cleanup()
+        os.close(in_w)
+        os.close(out_r)
+    if pidfile.exists() and pidfile.read_text():
+        pid = int(pidfile.read_text())
+        try:
+            os.kill(pid, 0)
+            alive = True
+        except ProcessLookupError:
+            alive = False
+        if alive:
+            os.kill(pid, 9)
+        assert not alive, "the guest outlived relay_session's failure (orphaned)"
+
+
+def test_bench_refuses_a_relative_module(tmp_path: Path) -> None:
+    code = S.main(["bench", "--project-root", str(project(tmp_path)), "--asks", "1", "session_echo.wasm"],
+                  _seams=S._Seams(resolver=FakeResolver(_fake_wasmtime(tmp_path), "1"), isolated=True))
+    assert code == S.EXIT_REFUSED
 
 
 # --- the status channel (S1-S3) ----------------------------------------------------------------------------------
