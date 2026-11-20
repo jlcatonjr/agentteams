@@ -122,6 +122,9 @@ def _run_pipeline(brief_path: Path, tmp_path: Path, framework: str = "copilot-vs
         "references/pipeline-handoffs.svg",
         _graph.generate_graph_handoff_svg(_graph_fmap, project_name=_graph_name),
     ))
+    # Mirrors render_pipeline._build_final_rendered (IM item 13b): the checklist lists the emitted {MANUAL:} tokens.
+    from agentteams.placeholder_scan import complete_setup_required
+    final_rendered = complete_setup_required(manifest, final_rendered)
 
     result = emit.emit_all(final_rendered, output_dir=tmp_path, dry_run=False, overwrite=True, yes=True)
     assert result.success, f"emit failed: {result.errors}"

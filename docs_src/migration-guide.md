@@ -91,6 +91,15 @@ This step is needed when the team's `references/security-decisions.log.csv` is o
 
 Otherwise the command is a no-op.
 
+!!! warning "Upgrading to 1.2: check the governance logs first"
+    From 1.2 the security gate refuses every decision in a decisions log with a malformed row (a row read into the
+    wrong columns can hide a HALT), where 1.1.x read past it. A log that clears under 1.1.x can therefore block every
+    gate check right after a 1.2 render. Before re-rendering, run `python -m agentteams.governance_logs check .`
+    from the new install. A row it reports as *short only by trailing signing columns* is fixed by this step. Any
+    other malformed row (an unquoted comma in prose, a torn row) is listed by
+    `python -m agentteams.governance_logs repair <log>`, which previews a fix where one is safe and otherwise says to
+    repair the row by hand, under `@security` clearance.
+
 ```bash
 agentteams --description <brief> --framework <fw> --output <team dir> --migrate-decision-log --dry-run
 agentteams --description <brief> --framework <fw> --output <team dir> --migrate-decision-log --yes

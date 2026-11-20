@@ -1,0 +1,8 @@
+{
+  "patch_id": "e8795ed1abdc494772f92fc34fcdb220b766f968",
+  "commit": "088e5786b72a60aff777582d79fbf7fa539a2195",
+  "subject": "fix(ingest): the project-description schema matches the code and is checked on load, warn only (IM item 13a, G-17-2)",
+  "impact": "1 modules added, 4 symbols added, 1 schemas changed",
+  "note": "IM item 13a: new public module brief_schema (known_archetypes, schema_errors, unrendered_archetypes, warn_on_load), called from ingest.load; project-description schema: selected_archetypes is a slug pattern with x-agentteams-known-archetypes pinned to the domain templates, tools[].category gains build and infrastructure. Documented in docs_src/api-reference/brief-schema.md, DESCRIPTION-FORMAT.md and known-limitations.md.",
+  "recorded_at": "2026-11-15T21:35:05Z"
+}

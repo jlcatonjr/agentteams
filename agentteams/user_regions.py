@@ -388,6 +388,84 @@ def ensure_recipe_notes(recipe: str, notes_section: str) -> str:
     return head + block + ("\n" if end < len(recipe) else "") + recipe[end:]
 
 
+#: The verbs of :func:`merge_carry`'s refusal messages (``"<rel_path>: <verb>: <problem>…"``); the fleet report
+#: keys on them.
+MERGE_REFUSED, MERGE_WOULD_REFUSE = "not merged", "would not merge"
+
+
+def recipe_shape_problems(fresh: str, carried: str) -> list[str]:
+    """Check, without a YAML parser, that carrying regions into a recipe changed only the regions (#533 review).
+
+    Two structural invariants, enough to keep the recipe loadable when the fresh render was:
+
+    * everything after each region in *carried* is byte-identical to what follows it in *fresh*, so the carry
+      never moved, ended or added a YAML key;
+    * the region's indent is spaces only and every non-blank line of it starts with that indent, so the text stays
+      inside the ``instructions: |`` block scalar (YAML forbids tabs as indentation).
+
+    Args:
+        fresh: The fresh render.
+        carried: *fresh* with the on-disk regions carried in.
+
+    Returns:
+        One message per broken invariant; empty when the recipe keeps its shape.
+
+    Raises:
+        Nothing.
+    """
+    problems: list[str] = []
+    for heading in HEADINGS:
+        c_span, f_span = find_region(carried, heading), find_region(fresh, heading)
+        if c_span is None:
+            continue
+        if f_span is None or carried[c_span[1]:] != fresh[f_span[1]:]:
+            problems.append(f"carrying '{heading}' would change the recipe after the region")
+        indent = c_span[2]
+        if not indent or indent.strip(" ") or any(ln.strip() and not ln.startswith(indent)
+                                                  for ln in carried[c_span[0]:c_span[1]].splitlines()):
+            problems.append(f"'{heading}' would not stay inside the instructions block (indent)")
+    return problems
+
+
+def merge_carry(rel_path: str, existing: str, content: str, messages: list[str], *, discard: bool = False,
+                dry_run: bool = False) -> str:
+    """The full-replace step of ``--update --merge``: carry *existing*'s regions into *content* (#533).
+
+    ``--merge`` full-replaces a non-Markdown file that has no ``AGENTTEAMS`` fence on disk or in the render (a Goose
+    recipe built from an unfenced template). Its user regions sit outside every fence, so without this the replace
+    dropped them. A merge keeps out-of-fence text silently everywhere else, so a carried region is not reported.
+
+    Args:
+        rel_path: The file's output-relative path (for messages).
+        existing: The file on disk.
+        content: The fresh render.
+        messages: Receives one message per region that can't be carried (the run's errors; on a dry run, the
+            dry-run report's notices).
+        discard: ``--discard-user-regions``: return *content* unchanged.
+        dry_run: Word the messages as what the real run would do.
+
+    Returns:
+        *content* with the regions carried; *existing* itself (so the caller writes nothing) when a region can't be.
+
+    Raises:
+        Nothing.
+    """
+    if discard:
+        return content
+    carried, _, problems = carry_regions(existing, content, toml=rel_path.endswith(".toml"))
+    if rel_path.endswith((".yaml", ".yml")):
+        # A heading at column 0 has no indent to end at, so its region would run to the end of the file and pull the
+        # recipe's later keys into the carried text.
+        problems += [f"'{h}' is not indented inside the instructions block" for h in HEADINGS
+                     if (span := find_region(existing, h)) is not None and not span[2]]
+        problems += [] if problems else recipe_shape_problems(content, carried)
+    verb = MERGE_WOULD_REFUSE if dry_run else MERGE_REFUSED
+    messages.extend(f"{rel_path}: {verb}: {p}; the file is kept as it is and no longer updates until you move that "
+                    "region's text out (or fix it) by hand and re-run, or re-run with --discard-user-regions to drop "
+                    "every such region" for p in problems)
+    return existing if problems else carried
+
+
 def overwrite_carry(rel_path: str, existing: str, content: str, *, notices: list[str],
                     errors: list[str] | None = None, dry_run: bool = False) -> tuple[str, list[str]]:
     """The ``--overwrite`` step of ``emit``: carry *existing*'s regions into *content* and report each one.

@@ -1,0 +1,8 @@
+{
+  "patch_id": "a812694f9f97aa88a651e3760341c7a6595d194b",
+  "commit": "9c6f731da6c3c485a7be41b1b0d6e65632379514",
+  "subject": "fix(fleet): render with the brief plus the stub's roster; refuse an --update --yes that drops archetypes (IM item 12, G-17-1)",
+  "impact": "1 modules added, 5 symbols added, 1 cli added",
+  "note": "IM item 12: new public module descriptor_union (union, for_fleet, stub_for, dropped_archetypes, refuse_roster_shrink) documented at docs_src/api-reference/descriptor-union.md; new CLI flag --allow-roster-shrink documented in cli-reference.md and agentteams.1.",
+  "recorded_at": "2026-11-15T17:15:05Z"
+}

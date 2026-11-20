@@ -20,10 +20,11 @@ that file too, not only drop the agent from the dict.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
-from agentteams.backup import backup_output_dir, prune_backups
+from agentteams.backup import backup_output_dir, prune_backups, prune_report
 from agentteams.git_exec import run_git
 
 __all__ = ["RosterRecord", "apply_pin_roster", "prune_hub_agents", "refuse_empty_pin", "refuse_missing_pin",
@@ -164,7 +165,8 @@ def prune_hub_agents(canonical_dir: Path, canonical_cai: dict[str, Any], *, dry_
     if gone and not dry_run:
         # The same store as the frameworks' (load_canonical reads only agents/*.md, so a backup is never an agent).
         backup_output_dir(agents_dir, files_to_backup=[p.name for p in gone], reason="pre-sync-hub-prune")
-        prune_backups(agents_dir)
+        for line in prune_report(prune_backups(agents_dir), agents_dir):  # #541: never silent
+            print(f"  ⓘ  {line}", file=sys.stderr)
         for path in gone:
             path.unlink()
     return [p.stem for p in gone]

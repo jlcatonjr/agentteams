@@ -85,6 +85,13 @@ def test_check_logs_covers_the_known_paths(tmp_path):
     assert len(problems) == 1 and "conflict-log.csv" in problems[0]
 
 
+def test_check_logs_is_clean_when_every_known_log_is_well_formed(tmp_path):
+    """Negative control for check_logs (verifier ledger, #470: governance_logs is an enforcement module)."""
+    _log(tmp_path, "a,b\n1,2\n", "references/agentteams-remediation-log.csv")
+    _log(tmp_path, "a,b\n1,2\n", ".github/agents/references/conflict-log.csv")
+    assert gl.check_logs(tmp_path) == []
+
+
 def test_a_team_dir_layout_is_found_too(tmp_path):
     """In a generated team the logs sit in <team>/references/, conflict-log included."""
     _log(tmp_path, "a,b\n1,2,3\n", "references/conflict-log.csv")
@@ -129,3 +136,43 @@ def test_verify_integrity_exits_1_on_a_malformed_log(tmp_path):
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--verify-integrity", "--output", str(tmp_path)],
                           capture_output=True, text=True, timeout=120)
     assert proc.returncode == 1 and "Governance logs: MALFORMED" in proc.stderr
+
+
+_MIGRATED = ("timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,signature,date,scope,"
+             "evidence,author,derives_from,effect_class,effect_grants,effect_targets,effect_relaxes,effect_destructive,"
+             "effect_cross_repo,effect_bulk,text_digest,sig_scheme,key_id")
+
+
+def test_a_migratable_short_row_names_the_migration(tmp_path):
+    """#12 (1.2.2): the problem (and so the gate's refusal) says which command fixes a legacy-width row."""
+    text = _MIGRATED + "\n2026-10-25T17:36:14Z,security,y,PASS,c,yes,03b4\n2026-10-25T17:36:14Z,security,y\n"
+    problems = gl.check_log(_log(tmp_path, text))
+    assert len(problems) == 2
+    assert "--migrate-decision-log" in problems[0] and "--migrate-decision-log" not in problems[1]
+    other = gl.check_log(_log(tmp_path, text, name="references/agentteams-remediation-log.csv"))
+    assert not any("--migrate-decision-log" in p for p in other)
+
+
+def test_the_repair_preview_routes_a_migratable_row_to_the_migration(tmp_path):
+    from agentteams.governance_log_repair import plan_repair
+
+    path = _log(tmp_path, _MIGRATED + "\n2026-10-25T17:36:14Z,security,y,PASS,c,yes,03b4\n")
+    [item] = plan_repair(path).items
+    assert item.fixed is None and "--migrate-decision-log" in item.reason
+
+
+def test_the_hint_never_raises(tmp_path, monkeypatch):
+    """@security #12 condition 2: check_log stays raise-free (the pinned gate calls it) if the hint's import fails."""
+    import builtins
+
+    real = builtins.__import__
+
+    def refuse(name, *a, **k):
+        if name == "agentteams.cli.decision_log_migrate":
+            raise ImportError("blocked")
+        return real(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+    problems = gl.check_log(_log(tmp_path, _MIGRATED + "\n2026-10-25T17:36:14Z,security,y,PASS,c,yes,03b4\n"))
+    assert len(problems) == 1 and "--migrate-decision-log" not in problems[0]
+
