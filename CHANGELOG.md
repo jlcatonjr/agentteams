@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`--update --overwrite` reports the routed agents it would orphan, #392 item 12)
+
+- `--update --overwrite` replaces the orchestrator. It now lists, on stderr and before any file is written, every
+  agent the current orchestrator routes to by `` `@slug` `` that the build neither emits nor still routes to,
+  whether or not the agent has a file. Before, only the "adopted by merge" advisory named such agents, and only
+  those with a file. `--dry-run --json` reports them under `at_risk_routed_agents` (`{"slug", "has_file"}`).
+- It compares against what the run would write: the new orchestrator plus the user-editable regions `--overwrite`
+  carries, so routing kept in Project-Specific Notes is not listed (unless `--discard-user-regions`). A run that
+  does not rewrite the orchestrator (no drift, or a frozen surface) lists nothing.
+- The run still proceeds. Refusing without an acknowledgement is a separate change, after `@security` reviews it.
+  A plain `--overwrite` without `--update`, and `--migrate`, are not covered yet.
+- New `agentteams/cli/routing_at_risk.py` and `tests/test_overwrite_at_risk_routing.py`.
+
 ### added (beta: the WASM streaming session mode and its entry point, #567)
 
 - **New `agentteams/wasm_session.py`** runs one WASM guest as a long-lived session:
