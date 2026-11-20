@@ -22,6 +22,7 @@ from agentteams._utils import _slugify
 from agentteams._ingest_authority import has_list_or_table as _has_list_or_table
 from agentteams._ingest_authority import parse_authority_sources as _parse_authority_sources
 from agentteams.tool_version_source import version_source_errors
+from agentteams.brief_schema import warn_on_load
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ def load(source: str | Path, *, scan_project: bool = True) -> dict[str, Any]:
 
     if path.suffix == ".json":
         description = _load_json(path)
+        warn_on_load(path, description)  # IM item 13a: the schema only WARNS this release (never refuses or changes rc)
     elif path.suffix in {".md", ".txt", ""}:
         description = _load_markdown(path)
     else:

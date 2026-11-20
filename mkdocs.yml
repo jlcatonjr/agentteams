@@ -209,6 +209,7 @@ nav:
           - "API reference: overview": api-reference/index.md
           - Pipeline modules:
               - ingest: api-reference/ingest.md
+              - brief-schema: api-reference/brief-schema.md
               - analyze: api-reference/analyze.md
               - analyze-tools: api-reference/analyze-tools.md
               - tool-version-source: api-reference/tool-version-source.md
