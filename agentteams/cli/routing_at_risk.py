@@ -67,7 +67,7 @@ def _target(value: str) -> str | None:
     value = value.strip().strip("'\"").strip()
     if value == "*":
         return None
-    if _SLUG_RE.match(value.lower()):
+    if _SLUG_RE.fullmatch(value.lower()):
         return value.lower()
     raise _Unparseable(value[:40])
 
@@ -263,7 +263,7 @@ def parse_accept_list(raw: object) -> frozenset[str]:
     if not isinstance(raw, str):
         raise ValueError("--accept-routing-loss takes a comma list of agent slugs")
     items = [s.strip() for s in raw.split(",")]
-    bad = [s for s in items if not _ACCEPT_RE.match(s)]
+    bad = [s for s in items if not _ACCEPT_RE.fullmatch(s)]
     if bad:
         raise ValueError(f"--accept-routing-loss takes a comma list of agent slugs (no wildcard or empty item; "
                          f"got {bad[0]!r})")

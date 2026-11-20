@@ -180,6 +180,14 @@ def test_plain_overwrite_dry_run_reports_the_loss(team: tuple[Path, Path], capsy
     assert [i["slug"] for i in payload["at_risk_routed_agents"]] == ["feed-wrangler", "ledger-keeper"]
 
 
+def test_no_newline_survives_the_acknowledgement_parse() -> None:
+    from agentteams.cli.routing_at_risk import parse_accept_list
+
+    assert parse_accept_list("ledger-keeper\n") == frozenset({"ledger-keeper"})   # surrounding whitespace is trimmed
+    with pytest.raises(ValueError):
+        parse_accept_list("ledger\nkeeper")                                       # a newline inside a slug is refused
+
+
 def test_an_acknowledgement_with_nothing_at_risk_refuses() -> None:
     assert RoutingLoss(accepted=frozenset({"x"})).would_refuse        # exact means exact: {x} != {}
     assert not RoutingLoss().would_refuse and not RoutingLoss(accepted=None).would_refuse
