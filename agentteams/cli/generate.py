@@ -22,7 +22,8 @@ from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, r
 from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import finish_dry_run, run_adopt_step
-from agentteams.cli.routing_at_risk import assess_routing_loss, record_accepted_loss, refuse_routing_loss
+from agentteams.cli.routing_at_risk import (assess_routing_loss, guard_update_overwrite, record_accepted_loss,
+                                            refuse_routing_loss)
 from agentteams.cli.update_notices import report_before_write
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
@@ -405,12 +406,9 @@ def _run_generate_locked(
         # ..."). A team that cannot be updated must not show a misleading
         # drift report or create a spurious backup. compute_structural_diff
         # above is read-only, so evaluating the gate here is safe.
-        if (rc := refuse_routing_loss(output_dir, manifest, adapter, final_rendered, args, keep_manual=(
-                _preserve_manual_values), only={f["path"] for f in sdreport.update_files})) is not None:
-            return rc  # #392 item 12: on what this update rewrites, before the overwrite clearance is spent
         if not args.dry_run and args.overwrite:
-            try:
-                security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
+            try:  # checked here, spent by guard_update_overwrite once the routing-loss refusal passes (#392 item 12)
+                security_gate._assert_destructive_action_allowed(output_dir, action="overwrite", consume=False)
             except RuntimeError as exc:
                 print(
                     f"[SEC-GATE/DESTRUCTIVE:overwrite-update] blocked: {exc}\n"
@@ -542,6 +540,8 @@ def _run_generate_locked(
                 update_rendered.append((_sc_path, _sc_content))
 
         _at_risk = report_before_write(output_dir, manifest, adapter, update_rendered, args)  # #392 items 12, 15
+        if (rc := guard_update_overwrite(output_dir, manifest, adapter, update_rendered, args)) is not None:
+            return rc  # refuse on routing loss in exactly what this update writes, then spend the clearance
         # Migrate away legacy tool-*.agent.md files: tools are now emitted as
         # reference/skill documents, never agents. Runs before the converged
         # early-exit (and before the orphan advisory) so migration happens even

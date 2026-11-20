@@ -32,12 +32,11 @@ _MENTION = re.compile(rf"`@({_SLUG})`")
 #: A bare ``@slug`` in prose; it counts only when an agent file with that slug exists (condition 5).
 _BARE = re.compile(rf"(?<![\w`/@])@({_SLUG})(?![\w/-])")
 #: Front-matter routing targets: an ``agents:`` list item, or a ``handoffs:`` entry's ``agent:`` value.
-_FM_KEY = re.compile(r"^([A-Za-z_][\w-]*)\s*:(.*)$")
-_FM_ITEM = re.compile(rf"^\s+-\s+['\"]?({_SLUG})['\"]?\s*$")
-_FM_AGENT = re.compile(rf"^\s+(?:-\s+)?agent:\s*['\"]?({_SLUG})['\"]?\s*$")
-_FM_FLOW = re.compile(rf"^\[\s*(?:['\"]?{_SLUG}['\"]?\s*(?:,\s*['\"]?{_SLUG}['\"]?\s*)*,?)?\]$")
-#: Handoff keys that carry no routing target.
-_HANDOFF_KEYS = re.compile(r"^\s+(?:-\s+)?(?:label|prompt|send|model|description)\s*:")
+_FM_KEY = re.compile(r"""^['"]?([A-Za-z_][\w-]*)['"]?\s*:(.*)$""")
+_FM_ITEM = re.compile(r"""^\s*-\s+['"]?([^'"\s]+)['"]?\s*$""")
+_FM_AGENT = re.compile(r"^\s*(?:-\s+)?['\"]?agent['\"]?\s*:(.*)$")
+_FM_FLOW = re.compile(r"^\[(.*)\]$")
+_SLUG_RE = re.compile(rf"^{_SLUG}$")
 #: Chat participants and tools that templates mention in backticks but that are never team agents, unless an
 #: agent file with that slug exists (condition 5: a bespoke ``github`` agent is still an agent).
 _NOT_AGENTS = frozenset({"workspace", "vscode", "terminal", "github"})
@@ -59,11 +58,26 @@ class _Unparseable(ValueError):
 
 
 def _strip_comment(line: str) -> str:
-    return re.sub(r"\s+#.*$", "", line).rstrip()
+    return "" if line.lstrip().startswith("#") else re.sub(r"\s+#.*$", "", line).rstrip()
+
+
+def _target(value: str) -> str | None:
+    """A routing target from a front-matter value: a slug (case-folded, quotes stripped), ``None`` for ``*`` (no
+    single agent); raises :class:`_Unparseable` for anything else, since it could name an agent this reader misses."""
+    value = value.strip().strip("'\"").strip()
+    if value == "*":
+        return None
+    if _SLUG_RE.match(value.lower()):
+        return value.lower()
+    raise _Unparseable(value[:40])
 
 
 def _front_matter_targets(front: str) -> set[str]:
-    """``agents:`` items and ``handoffs:`` ``agent:`` values; raises :class:`_Unparseable` on a form it can't read."""
+    """``agents:`` items and ``handoffs:`` ``agent:`` values; raises :class:`_Unparseable` on a value it can't read.
+
+    Only a routing target can hide routing, so other handoff keys (``label``, ``prompt``, ...) and their continuation
+    lines are ignored, and a block may be indented or not.
+    """
     targets: set[str] = set()
     key = ""
     for raw in front.splitlines():
@@ -73,22 +87,21 @@ def _front_matter_targets(front: str) -> set[str]:
         if m := _FM_KEY.match(line):
             key, inline = m[1], m[2].strip()
             if key == "agents" and inline:
-                if not _FM_FLOW.match(inline):
+                flow = _FM_FLOW.match(inline)
+                if not flow:
                     raise _Unparseable(f"agents: {inline[:40]}")
-                targets |= {s.strip(" '\"") for s in inline[1:-1].split(",") if s.strip(" '\"")}
+                targets |= {t for v in flow[1].split(",") if v.strip() and (t := _target(v))}
             elif key == "handoffs" and inline not in ("", "[]"):
                 raise _Unparseable(f"handoffs: {inline[:40]}")
             continue
         if key == "agents":
             if not (m := _FM_ITEM.match(line)):
                 raise _Unparseable(line.strip()[:40])
-            targets.add(m[1])
-        elif key == "handoffs":
-            if m := _FM_AGENT.match(line):
-                targets.add(m[1])
-            elif re.match(r"^\s+(?:-\s+)?agent\s*:", line) or not (_HANDOFF_KEYS.match(line) or
-                                                                       line.startswith((" " * 6, "\t"))):
-                raise _Unparseable(line.strip()[:40])
+            if t := _target(m[1]):
+                targets.add(t)
+        elif key == "handoffs" and (m := _FM_AGENT.match(line)):
+            if t := _target(m[1]):
+                targets.add(t)
     return targets
 
 
@@ -261,8 +274,7 @@ def _accepted(args: Any) -> frozenset[str] | None:
 
 
 def assess_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered: list[tuple[str, str]],
-                        args: Any, *, only: set[str] | None = None,
-                        keep_manual: Callable[[str, str], str] | None = None) -> RoutingLoss:
+                        args: Any) -> RoutingLoss:
     """Compute what this ``--overwrite`` run would drop from the orchestrator's routing; the one function both the
     real run's refusal and the dry-run report use (condition 8).
 
@@ -277,8 +289,6 @@ def assess_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered
         adapter: The framework adapter, for the agent-file extension.
         rendered: The ``(relative path, content)`` pairs the run would write.
         args: Parsed CLI arguments (``overwrite``, ``discard_user_regions``, ``accept_routing_loss``).
-        only: The update path's rewrite set (``sdreport.update_files``): an orchestrator outside it is not rewritten.
-        keep_manual: The update path's ``_preserve_manual_values(existing, new)``, applied as the run applies it.
 
     Returns:
         A :class:`RoutingLoss`.
@@ -296,7 +306,7 @@ def assess_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered
 
     ext = adapter.get_file_extension("agent")
     entry = next(((p, c) for p, c in rendered if Path(p).name == f"orchestrator{ext}"), None)
-    if entry is None or (only is not None and entry[0] not in only):
+    if entry is None:
         return RoutingLoss(accepted=accepted)
     guard = getattr(adapter, "guard_rendered_files", None)   # what apply_adapter_guard keeps, without its notices
     if not drop_frozen(manifest, [entry], output_dir, quiet=True) or (guard and not guard([entry], output_dir)[0]):
@@ -308,7 +318,7 @@ def assess_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered
         return RoutingLoss(unreadable=True, accepted=accepted)
     if old is None:
         return RoutingLoss(accepted=accepted)
-    new = keep_manual(old, entry[1]) if keep_manual else entry[1]
+    new = entry[1]
     # As emit_all does before it carries the regions: normalise, ensure the Notes section, carry learned blocks.
     new = emit._ensure_project_notes_section(entry[0], emit._normalize_generated_content(entry[0], new))
     new = emit.carry_learned_block(entry[0], new, path)[0]
@@ -356,7 +366,7 @@ def report_at_risk_routing(output_dir: Path, manifest: dict, adapter: Any, updat
 
 
 def refuse_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered: list[tuple[str, str]],
-                        args: Any, **assess: Any) -> int | None:
+                        args: Any) -> int | None:
     """The guard: refuse a real ``--overwrite`` that would drop routing it was not told to drop.
 
     Called before the overwrite clearance is consumed and before any backup, migration or write, on every
@@ -368,7 +378,6 @@ def refuse_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered
         adapter: The framework adapter.
         rendered: The ``(relative path, content)`` pairs the run would write.
         args: Parsed CLI arguments.
-        **assess: ``only`` and ``keep_manual``, passed to :func:`assess_routing_loss`.
 
     Returns:
         1 when the run must stop (the reason is on stderr), else None. An exactly acknowledged loss prints one
@@ -380,7 +389,7 @@ def refuse_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered
     """
     if not getattr(args, "overwrite", False) or getattr(args, "dry_run", False):
         return None
-    loss = assess_routing_loss(output_dir, manifest, adapter, rendered, args, **assess)
+    loss = assess_routing_loss(output_dir, manifest, adapter, rendered, args)
     if loss.would_refuse:
         if loss.unreadable:
             why = ("the orchestrator can't be read (or has agents:/handoffs: front matter this reader can't parse), "
@@ -397,6 +406,42 @@ def refuse_routing_loss(output_dir: Path, manifest: dict, adapter: Any, rendered
         print(f"  ℹ  routing loss accepted: {', '.join(sorted(loss.slugs))} "
               f"(orchestrator sha256 {loss.orchestrator_sha256})", file=sys.stderr)
         args.routing_loss_accepted = {"slugs": sorted(loss.slugs), "orchestrator_sha256": loss.orchestrator_sha256}
+    return None
+
+
+def guard_update_overwrite(output_dir: Path, manifest: dict, adapter: Any, update_rendered: list[tuple[str, str]],
+                           args: Any) -> int | None:
+    """The ``--update --overwrite`` guard: refuse on routing loss, then spend the overwrite clearance.
+
+    The update path checks the clearance early without spending it (so a refused run burns no decision), builds the
+    exact list it will write, and calls this before any backup, migration or write: the refusal judges that list
+    (``@security`` F1), and only a run that passes spends the clearance.
+
+    Args:
+        output_dir: The team's agents directory.
+        manifest: The build manifest.
+        adapter: The framework adapter.
+        update_rendered: Exactly the ``(relative path, content)`` pairs this update writes.
+        args: Parsed CLI arguments.
+
+    Returns:
+        1 when the run must stop (the reason is on stderr), else None.
+
+    Raises:
+        Nothing.
+    """
+    if (rc := refuse_routing_loss(output_dir, manifest, adapter, update_rendered, args)) is not None:
+        return rc
+    if getattr(args, "dry_run", False) or not getattr(args, "overwrite", False):
+        return None
+    from agentteams.cli import security_gate
+
+    try:
+        security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
+    except RuntimeError as exc:   # checked moments ago; only a concurrent run spending it lands here
+        print(f"  !  the overwrite clearance was no longer available when this run came to spend it ({exc}); "
+              "nothing was written", file=sys.stderr)
+        return 1
     return None
 
 
@@ -422,6 +467,6 @@ def record_accepted_loss(result: Any, args: Any, output_dir: Path, backup_path: 
         update_report.report_run(result, output_dir, backup_path, routing_loss_accepted=accepted)
 
 
-__all__ = ["RoutingLoss", "assess_routing_loss", "at_risk_routed_slugs", "mentioned_slugs", "refuse_routing_loss",
+__all__ = ["RoutingLoss", "assess_routing_loss", "at_risk_routed_slugs", "guard_update_overwrite", "mentioned_slugs", "refuse_routing_loss",
            "parse_accept_list", "record_accepted_loss",
            "report_at_risk_routing"]

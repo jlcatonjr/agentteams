@@ -118,6 +118,31 @@ def test_overwrite_refuses_before_the_clearance_or_any_write(team: tuple[Path, P
     assert security_gate.check_clearance(team[1], action="overwrite") == (True, ""), "the clearance was spent"
 
 
+def test_an_edited_orchestrator_with_no_template_drift_still_refuses(team: tuple[Path, Path], capsys,
+                                                                     monkeypatch) -> None:
+    # @security F1: a hand-edited orchestrator whose template did not drift is not in the drift report's update set,
+    # yet the update path still rewrites it (its "sidecar" loop adds every file that differs from disk). The refusal
+    # must judge exactly what the run writes.
+    from agentteams import drift
+
+    real = drift.compute_structural_diff
+
+    def no_orchestrator_drift(*a, **k):
+        report = real(*a, **k)
+        for name in ("added_files", "drifted_files"):   # update_files is derived from these
+            setattr(report, name, [f for f in getattr(report, name) if not f["path"].endswith("orchestrator.agent.md")])
+        assert not any(f["path"].endswith("orchestrator.agent.md") for f in report.update_files)
+        return report
+
+    monkeypatch.setattr(drift, "compute_structural_diff", no_orchestrator_drift)
+    before = (team[1] / "orchestrator.agent.md").read_bytes()
+    capsys.readouterr()
+    assert _run(team, "--update", "--overwrite") == 1
+    assert "[ROUTING-LOSS] blocked" in capsys.readouterr().err
+    assert (team[1] / "orchestrator.agent.md").read_bytes() == before
+    assert security_gate.check_clearance(team[1], action="overwrite") == (True, ""), "the clearance was spent"
+
+
 def test_the_migrate_reentry_refuses_too(team: tuple[Path, Path], capsys, monkeypatch) -> None:
     # --migrate re-enters main() with --overwrite --yes and migrate_exemption=True (build_team._run_migrate).
     _marked_writes(monkeypatch)
@@ -206,9 +231,14 @@ def test_front_matter_handoffs_bare_mentions_and_participant_collisions(tmp_path
 
 @pytest.mark.parametrize("front, expect", [
     ("agents: [orchestrator, flow-one, 'flow-two']\n", {"orchestrator", "flow-one", "flow-two"}),
-    ("agents:\n  - orchestrator   # the hub\n  - commented  # bespoke\n", {"orchestrator", "commented"}),
+    ("agents:\n  - orchestrator   # the hub\n# a column-0 comment\n  - commented  # bespoke\n",
+     {"orchestrator", "commented"}),
     ("handoffs:\n  - label: Go\n    agent: handed  # comment\n    send: false\n", {"handed"}),
-], ids=["flow-list", "comments", "handoff-comment"])
+    ("handoffs:\n- label: Go\n  agent: unindented\n  custom-key: anything\n", {"unindented"}),
+    ("handoffs:\n  - label: Go\n    agent: Plan\n", {"plan"}),
+    ("agents: ['*']\n", set()),
+    ("\"agents\":\n  - quoted-key\n", {"quoted-key"}),
+], ids=["flow-list", "comments", "handoff-comment", "column-0-sequence", "display-name", "star", "quoted-key"])
 def test_front_matter_forms_are_parsed(front: str, expect: set[str]) -> None:
     assert mentioned_slugs(f"\ufeff---\n{front}---\nBody.\n") == expect   # a BOM before --- too
 
