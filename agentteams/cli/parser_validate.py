@@ -75,6 +75,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("--wasm-install", getattr(args, "wasm_install", None) is not None),
         ("--wasm-status", getattr(args, "wasm_status", None) is not None),
         ("--wasm-pin-update", getattr(args, "wasm_pin_update", None) is not None),
+        ("--term-check", getattr(args, "term_check", None) is not None),  # "" (bare flag) is still on
     ]
     _active_ops = [flag for flag, on in _standalone_ops if on]
     if len(_active_ops) > 1:
@@ -82,6 +83,15 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             f"{' and '.join(_active_ops)} are mutually exclusive "
             "(each is a standalone, dispatch-shadowing integrity/retention operation)"
         )
+
+    # #548: --term-check is a read-only standalone gate; a render or update flag beside it would be ignored.
+    if getattr(args, "term_check_advisory", False) and getattr(args, "term_check", None) is None:
+        parser.error("--term-check-advisory requires --term-check")
+    if "--term-check" in _active_ops:  # every other flag would be ignored or would run instead: refuse them all
+        _beside = sorted(a.option_strings[0] for a in parser._actions if a.option_strings and a.dest not in
+                         ("help", "term_check", "term_check_advisory") and getattr(args, a.dest, a.default) != a.default)
+        if _beside:
+            parser.error(f"--term-check is a standalone read-only check; drop {', '.join(_beside)}")
 
     # P03 (D4): the WASM provisioning commands are standalone operator acts; they never ride along with
     # a render, so combining one with a generation flag is refused rather than silently ignored.
@@ -153,6 +163,16 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                            ("update", "--update")):
             if getattr(args, attr, False):
                 parser.error(f"--adopt-only and {flag} are mutually exclusive")
+
+    if getattr(args, "accept_routing_loss", None) is not None:
+        from agentteams.cli.routing_at_risk import parse_accept_list
+
+        if not (args.overwrite or getattr(args, "migrate", False)):
+            parser.error("--accept-routing-loss needs --overwrite or --migrate (only they replace the orchestrator)")
+        try:
+            parse_accept_list(args.accept_routing_loss)
+        except ValueError as exc:
+            parser.error(str(exc))
 
     if getattr(args, "migrate_decision_log", False):
         # A standalone header upgrade of one file (cli/decision_log_migrate.py): the render modes, the

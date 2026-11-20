@@ -121,6 +121,7 @@ class DryRunReport:
     #: exact slugs its ``agents:`` list would gain, and the clearance status. ``None`` otherwise.
     adopt_orphans_merge: dict[str, Any] | None = None
     at_risk_routed_agents: list[dict[str, Any]] = field(default_factory=list)  # cli.routing_at_risk (#392 item 12)
+    routing_loss: dict[str, Any] | None = None  # RoutingLoss.as_report(): would_refuse + clear_with (#392 item 12)
 
 
 @dataclass
@@ -820,7 +821,7 @@ def print_dry_run_report(
             "notices": list(report.notices),
             "counts": _dry_run_counts(report),
         }
-        payload.update({k: getattr(report, k) for k in ("adopt_orphans_merge", "at_risk_routed_agents") if getattr(report, k)})
+        payload.update({k: getattr(report, k) for k in ("adopt_orphans_merge", "at_risk_routed_agents", "routing_loss") if getattr(report, k)})
         print(_json.dumps(payload, indent=2), file=out)
         return
 

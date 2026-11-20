@@ -169,6 +169,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`orphan_advisory`](orphan-advisory.md) | `--update` orphan-agent-file advisory: orphaned / bespoke-keep / bridge-managed-keep buckets |
 | [`bridge_subagents_goose`](bridge-subagents-goose.md) | Per-agent Goose stub-recipe emitter (bridge:`<src>`-to-goose:subagents) |
 | [`bridge_sources`](bridge-sources.md) | Source-team inventory, file collection, hashing + bridge-freshness check (framework-aware) |
+| [`term_index`](term-index.md) | **Beta.** Term register, occurrence index and checks (`--term-check`; researchteam-compatible) |
 | [`hooks_emit`](hooks-emit.md) | Claude hooks settings + recursion-bounded guard emitter (bridge:copilot-vscode-to-claude:hooks) |
 | [`instructions_split`](instructions-split.md) | Cache-aware CLAUDE.md layout: preamble + boundary + dynamic stanza (bridge:copilot-vscode-to-claude:cache-split) |
 | [`schedule_emit`](schedule-emit.md) | `/schedule` routine spec emitter (bridge:copilot-vscode-to-claude:schedule) |
