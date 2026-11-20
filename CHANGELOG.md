@@ -6,7 +6,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ### added (`--update --overwrite` reports the routed agents it would orphan, #392 item 12)
 
 - `--update --overwrite` replaces the orchestrator. It now lists, on stderr and before any file is written, every
@@ -19,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The run still proceeds. Refusing without an acknowledgement is a separate change, after `@security` reviews it.
   A plain `--overwrite` without `--update`, and `--migrate`, are not covered yet.
 - New `agentteams/cli/routing_at_risk.py` and `tests/test_overwrite_at_risk_routing.py`.
-=======
+
 ### fix (no silent N/A for archetypes a brief names, #392 item 1)
 
 - When a brief names `style-guardian` in `selected_archetypes` and sets no `style_reference`,
@@ -34,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged, and a one-line warning says which value is missing (the warning half of #392 item 8).
 - Detecting a `*.bib` file as `reference_db_path` is not part of this change; it moves to 1.3 with item 2.
 - New `tests/test_archetype_placeholders_not_silenced.py`; the shared rule is in `agentteams/_archetype_placeholders.py`.
->>>>>>> origin/dev
 
 ### fixed (`SETUP-REQUIRED.md` lists every `{MANUAL:}` token the team emits; IM item 13b, G-17-3)
 
