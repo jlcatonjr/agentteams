@@ -307,7 +307,7 @@ class SandboxState:
 
 def _grant_from_record(agent: object, entry: object, project_root: Path) -> Any | None:
     """Return one recorded grant, or None when malformed. An ImportError (no ``wasm_exec``) propagates."""
-    if not isinstance(agent, str) or not _SLUG_RE.match(agent):
+    if not isinstance(agent, str) or not _SLUG_RE.fullmatch(agent):
         return None
     if not isinstance(entry, dict) or set(entry) != {"tokens", "limits"}:
         return None
@@ -393,7 +393,7 @@ class SandboxExceptions:
         sets: list[frozenset[str]] = []
         for key in keys:
             value = rec.get(key, [])
-            if not isinstance(value, list) or not all(isinstance(v, str) and _SLUG_RE.match(v) for v in value):
+            if not isinstance(value, list) or not all(isinstance(v, str) and _SLUG_RE.fullmatch(v) for v in value):
                 return None
             sets.append(frozenset(value))
         auto = rec.get("mcp_approval_auto", "off")
@@ -656,7 +656,7 @@ def _os_switch(manifest: dict[str, Any]) -> tuple[bool, str]:
     tokens = _sandbox_tokens(manifest)
     if tokens:
         return True, f"host-feature:{tokens[0]}"
-    return False, f"profile:{profile}" if isinstance(profile, str) and _SLUG_RE.match(profile) else "profile:none"
+    return False, f"profile:{profile}" if isinstance(profile, str) and _SLUG_RE.fullmatch(profile) else "profile:none"
 
 
 def os_switch_state(manifest: dict[str, Any]) -> tuple[bool, str]:

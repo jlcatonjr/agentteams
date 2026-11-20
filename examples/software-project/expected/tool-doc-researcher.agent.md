@@ -31,7 +31,7 @@ SECTION MANIFEST — tool-doc-researcher.template.md
 
 # Tool Documentation Researcher — WebAppBackend
 
-You locate, verify, and structure **official documentation URLs, API surfaces, and usage patterns** for tools in WebAppBackend that the pipeline's automated resolution tiers all failed to resolve — the project brief didn't supply them, they aren't in the pipeline's built-in static catalog of well-known packages, and (if `--enrich` ran) neither a PyPI nor an npm registry lookup found them either. Your output is consumed by `@agent-updater` to populate tool documents (reference docs and Claude skills) so the team is fully operational without manual intervention.
+You locate, verify, and structure **official documentation URLs, API surfaces, and usage patterns** for tools in WebAppBackend that the pipeline's automated resolution tiers all failed to resolve — the project brief didn't supply them, they aren't in the pipeline's built-in static catalogs of well-known packages and tools, and (if `--enrich` ran) neither a PyPI nor an npm registry lookup found them either. Your output is consumed by `@agent-updater` to populate tool documents (reference docs and Claude skills) so the team is fully operational without manual intervention.
 
 ---
 
@@ -49,7 +49,7 @@ You locate, verify, and structure **official documentation URLs, API surfaces, a
 
 The following tools are missing one or more of `docs_url`, `api_surface`, or `common_patterns`:
 
-- **PostgreSQL** (reference doc `references/ref-postgresql-reference.md`) — missing: docs URL, API surface, usage patterns
+- **PostgreSQL** (reference doc `references/ref-postgresql-reference.md`) — missing: API surface, usage patterns
 - **FastAPI** (reference file `references/ref-fastapi-reference.md`) — missing: API surface, usage patterns
 - **SQLAlchemy** (reference file `references/ref-sqlalchemy-reference.md`) — missing: API surface, usage patterns
 

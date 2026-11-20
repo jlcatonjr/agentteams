@@ -295,10 +295,14 @@ def test_directive_cannot_authorize_its_own_ledger_or_roster():
 
 
 def test_scope_denylist_uses_word_boundaries_not_substrings():
-    """Benign scopes containing a denyword as a substring (transform->rm) are NOT refused."""
+    """Benign scopes containing a denyword as a substring (transform->rm) are NOT read as a refused effect.
+
+    IM item 05: the directive gate is now an allowlist of leading verbs, so ingest-/confirm-/transform- scopes are
+    refused there for another reason; the word-boundary rule is a property of the denylist half, tested directly."""
     from agentteams.cli import management_directives as md
     for benign in ("ingest-transform-data", "confirm-order", "format-report", "transform-load"):
-        assert md.scope_is_allowed(benign) is True, benign
+        assert md.scope_names_refused_effect(benign) is False, benign
+    assert md.scope_is_allowed("review-format-report") is True  # an allowlisted verb, "rm" mid-word in the tail
     for bad in ("rm-tmp", "delete-logs", "cross-repo-sync", "force-push"):
         assert md.scope_is_allowed(bad) is False, bad
 
@@ -318,6 +322,8 @@ def test_denylist_refuses_inflected_destructive_and_governance_scopes():
     for benign in ("ingest-transform-data", "confirm-order", "format-report", "transform-load",
                    "migrate-schema", "generate-invoice", "render-chart", "validate-input",
                    "normalize-records", "draft-weekly-report"):
+        assert md.scope_names_refused_effect(benign) is False, benign  # the denylist half (IM item 05)
+    for benign in ("review-format-report", "validate-input", "draft-weekly-report"):  # allowlisted leading verbs
         assert md.scope_is_allowed(benign) is True, benign
 
 
@@ -330,7 +336,7 @@ def test_every_sandbox_relaxation_spelling_is_refused():
     for token in SANDBOX_RELAXATION_TOKENS:
         assert not md.scope_is_allowed(token), token
         assert not md.scope_is_allowed(f"run tests with {token.upper()}:claude"), token
-    assert md.scope_is_allowed("format the sandbox docs")
+    assert md.scope_is_allowed("review the sandbox docs")  # "format" left the allowlist (IM item 05, @security)
 
 
 # --------------------------------------------------------------------------
