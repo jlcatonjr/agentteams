@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from agentteams import analyze, emit
 from agentteams.adopted_agents import (
@@ -29,6 +29,9 @@ from agentteams.adopted_agents import (
     set_adopted_rows,
 )
 from agentteams.cli import adopt_merge_gate
+
+if TYPE_CHECKING:
+    from agentteams.cli.routing_at_risk import RoutingLoss
 
 
 def run_adopt_step(
@@ -117,7 +120,7 @@ def _refuse_dropped_rows(manifest: dict, output_dir: Path, agent_ext: str, *, dr
 
 
 def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, result: emit.EmitResult,
-                        *, routing_loss: Any = None) -> None:
+                        *, routing_loss: RoutingLoss | None = None) -> None:
     """Put a dry-run merge-mode plan, and the ``--overwrite`` routing loss, into the ``--dry-run --json`` report.
 
     Args:
@@ -143,7 +146,7 @@ def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, resu
 
 
 def finish_dry_run(result: emit.EmitResult, manifest: dict, args: Any, *, merge_plan: Any = None,
-                   routing_loss: Any = None) -> None:
+                   routing_loss: RoutingLoss | Callable[[], RoutingLoss] | None = None) -> None:
     """Attach the dry-run extras and print the dry-run report (text, or JSON on the JSON stdout).
 
     Args:

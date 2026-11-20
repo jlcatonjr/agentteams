@@ -22,7 +22,8 @@ from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, r
 from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import finish_dry_run, run_adopt_step
-from agentteams.cli.routing_at_risk import assess_routing_loss, refuse_routing_loss, report_at_risk_routing
+from agentteams.cli.routing_at_risk import (assess_routing_loss, record_accepted_loss, refuse_routing_loss,
+                                            report_at_risk_routing)
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
@@ -404,8 +405,9 @@ def _run_generate_locked(
         # ..."). A team that cannot be updated must not show a misleading
         # drift report or create a spurious backup. compute_structural_diff
         # above is read-only, so evaluating the gate here is safe.
-        if (rc := refuse_routing_loss(output_dir, manifest, adapter, final_rendered, args)) is not None:
-            return rc  # #392 item 12: before the overwrite clearance is spent
+        if (rc := refuse_routing_loss(output_dir, manifest, adapter, final_rendered, args, keep_manual=(
+                _preserve_manual_values), only={f["path"] for f in sdreport.update_files})) is not None:
+            return rc  # #392 item 12: on what this update rewrites, before the overwrite clearance is spent
         if not args.dry_run and args.overwrite:
             try:
                 security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
@@ -677,6 +679,7 @@ def _run_generate_locked(
             shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
+        record_accepted_loss(result, args, output_dir, backup_path)  # #392 item 12: the durable record
         if not args.dry_run and not args.overwrite and result.success:  # merge kept on-disk front matter
             git_hooks.redraw_graph_after_merge(output_dir)
         if framework_id == "goose" and manifest.get("goose_tool_scoping") == "grant" and not args.overwrite:
@@ -906,7 +909,7 @@ def _run_generate_locked(
     # Durable record of this run's decisions; silent when nothing to attribute.
     if not args.dry_run:
         from agentteams import update_report as _ur
-        _ur.report_run(result, output_dir, backup_path)
+        _ur.report_run(result, output_dir, backup_path, routing_loss_accepted=getattr(args, "routing_loss_accepted", None))
 
     finish_dry_run(result, manifest, args,
                    routing_loss=lambda: assess_routing_loss(output_dir, manifest, adapter, final_rendered, args))

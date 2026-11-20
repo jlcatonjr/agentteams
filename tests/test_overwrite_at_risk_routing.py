@@ -138,6 +138,28 @@ def test_the_exact_acknowledgement_proceeds_and_is_audited(team: tuple[Path, Pat
     assert "`@feed-wrangler`" not in (team[1] / "orchestrator.agent.md").read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("mode", [("--update", "--overwrite"), ("--overwrite",)], ids=["update-overwrite", "plain"])
+def test_an_accepted_loss_is_in_the_durable_update_report(team: tuple[Path, Path], mode: tuple[str, ...]) -> None:
+    assert _run(team, *mode, "--accept-routing-loss", BOTH) == 0
+    report = (team[1] / "update.report.md").read_text(encoding="utf-8")
+    assert "## Routing loss accepted" in report and "orchestrator sha256 before the run" in report
+    assert "- dropped: `@feed-wrangler`" in report and "- dropped: `@ledger-keeper`" in report
+
+
+def test_plain_overwrite_dry_run_reports_the_loss(team: tuple[Path, Path], capsys) -> None:
+    capsys.readouterr()
+    assert _run(team, "--overwrite", "--dry-run", "--json") == 0
+    out = capsys.readouterr().out
+    payload = json.loads(out[out.find("{"):])
+    assert payload["routing_loss"]["would_refuse"] is True
+    assert [i["slug"] for i in payload["at_risk_routed_agents"]] == ["feed-wrangler", "ledger-keeper"]
+
+
+def test_an_acknowledgement_with_nothing_at_risk_refuses() -> None:
+    assert RoutingLoss(accepted=frozenset({"x"})).would_refuse        # exact means exact: {x} != {}
+    assert not RoutingLoss().would_refuse and not RoutingLoss(accepted=None).would_refuse
+
+
 @pytest.mark.parametrize("accepted", ["feed-wrangler", f"{BOTH},extra-agent"], ids=["subset", "superset"])
 def test_an_inexact_acknowledgement_refuses(team: tuple[Path, Path], capsys, accepted: str) -> None:
     capsys.readouterr()
@@ -157,7 +179,11 @@ def test_adoption_clears_only_the_agents_it_adopts(team: tuple[Path, Path], caps
 @pytest.mark.parametrize("argv, message", [
     (["--update", "--accept-routing-loss", "x"], "needs --overwrite or --migrate"),
     (["--overwrite", "--accept-routing-loss", "*"], "no wildcard"),
-])
+    (["--overwrite", "--accept-routing-loss", ""], "no wildcard or empty item"),
+    (["--overwrite", "--accept-routing-loss", "a,"], "no wildcard or empty item"),
+    (["--overwrite", "--accept-routing-loss", "a,,b"], "no wildcard or empty item"),
+    (["--overwrite", "--accept-routing-loss", "Ledger-Keeper"], "no wildcard or empty item"),
+], ids=["no-overwrite", "wildcard", "empty", "trailing-comma", "double-comma", "uppercase"])
 def test_the_flag_is_validated(team: tuple[Path, Path], capsys, argv: list[str], message: str) -> None:
     with pytest.raises(SystemExit):
         _run(team, *argv)
@@ -176,6 +202,25 @@ def test_front_matter_handoffs_bare_mentions_and_participant_collisions(tmp_path
     (tmp_path / "orchestrator.md").write_text(on_disk, encoding="utf-8")
     got = {i["slug"] for i in at_risk_routed_slugs(tmp_path, ".md", {"kept", "orchestrator"}, "---\n---\n")}
     assert got == {"listed-only", "handoff-only", "github", "bare-one"}
+
+
+@pytest.mark.parametrize("front, expect", [
+    ("agents: [orchestrator, flow-one, 'flow-two']\n", {"orchestrator", "flow-one", "flow-two"}),
+    ("agents:\n  - orchestrator   # the hub\n  - commented  # bespoke\n", {"orchestrator", "commented"}),
+    ("handoffs:\n  - label: Go\n    agent: handed  # comment\n    send: false\n", {"handed"}),
+], ids=["flow-list", "comments", "handoff-comment"])
+def test_front_matter_forms_are_parsed(front: str, expect: set[str]) -> None:
+    assert mentioned_slugs(f"\ufeff---\n{front}---\nBody.\n") == expect   # a BOM before --- too
+
+
+@pytest.mark.parametrize("front", ["agents: {a: 1}\n", "agents:\n  - Not A Slug!\n",
+                                   "handoffs:\n  - label: Go\n    agent: [weird]\n", "handoffs: inline\n"],
+                         ids=["mapping", "bad-item", "bad-handoff-agent", "inline-handoffs"])
+def test_unparseable_routing_front_matter_fails_closed(tmp_path: Path, front: str) -> None:
+    with pytest.raises(ValueError):
+        mentioned_slugs(f"---\n{front}---\nBody.\n")
+    loss = _assess(tmp_path, f"---\n{front}---\nUse `@gone`.\n", "Fresh.\n")
+    assert loss.unreadable and loss.would_refuse
 
 
 def test_without_files_a_bare_mention_or_a_participant_is_not_an_agent() -> None:
@@ -248,7 +293,9 @@ def test_a_dry_run_never_refuses(tmp_path: Path) -> None:
                                _Args(dry_run=True)) is None
 
 
-def test_carried_region_problems_leave_the_orchestrator_unwritten(team: tuple[Path, Path], capsys) -> None:
+@pytest.mark.parametrize("mode", [("--update", "--overwrite"), ("--overwrite",)], ids=["update-overwrite", "plain"])
+def test_carried_region_problems_leave_the_orchestrator_unwritten(team: tuple[Path, Path], capsys,
+                                                                    mode: tuple[str, ...]) -> None:
     # Condition 9: when the user region can't be carried, the assessment reports no loss because emit refuses to
     # write the orchestrator. Prove that emit really leaves it as it was.
     from agentteams import user_regions
@@ -267,5 +314,9 @@ def test_carried_region_problems_leave_the_orchestrator_unwritten(team: tuple[Pa
     assert user_regions.carry_regions(orch.read_text(encoding="utf-8"), text, toml=False)[2], "not a carry problem"
     before = orch.read_bytes()
     capsys.readouterr()
-    _run(team, "--update", "--overwrite")   # no acknowledgement: the assessment reports no loss in this case
-    assert orch.read_bytes() == before
+    rc = _run(team, *mode)   # no acknowledgement: the assessment reports no loss in this case
+    err = capsys.readouterr().err
+    assert "[ROUTING-LOSS]" not in err, "a carry problem must not be reported as a routing loss"
+    assert orch.read_bytes() == before, "emit wrote an orchestrator whose user region it couldn't carry"
+    # emit refuses this one file and says why, and that error is the run's exit 1; nothing was a routing refusal.
+    assert rc == 1 and "orchestrator.agent.md: not overwritten:" in err

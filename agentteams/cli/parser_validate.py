@@ -155,12 +155,14 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                 parser.error(f"--adopt-only and {flag} are mutually exclusive")
 
     if getattr(args, "accept_routing_loss", None) is not None:
-        from agentteams.cli.routing_at_risk import valid_accept_list
+        from agentteams.cli.routing_at_risk import parse_accept_list
 
         if not (args.overwrite or getattr(args, "migrate", False)):
             parser.error("--accept-routing-loss needs --overwrite or --migrate (only they replace the orchestrator)")
-        if not valid_accept_list(args.accept_routing_loss):
-            parser.error("--accept-routing-loss takes a comma list of agent slugs (no wildcard)")
+        try:
+            parse_accept_list(args.accept_routing_loss)
+        except ValueError as exc:
+            parser.error(str(exc))
 
     if getattr(args, "migrate_decision_log", False):
         # A standalone header upgrade of one file (cli/decision_log_migrate.py): the render modes, the
