@@ -1,7 +1,7 @@
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 # SETUP-REQUIRED.md
 
-The following **12 placeholder(s)** could not be automatically resolved
+The following **14 placeholder(s)** could not be automatically resolved
 for project **WebAppBackend** and require manual attention.
 
 ---
@@ -56,17 +56,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 6. `{TOOL_DOCS_URL}`
-
-**Found in:** `references/ref-postgresql-reference.md`
-**Context:** The reference document for 'PostgreSQL' is missing a official documentation URL. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
-
-**Action required:** Search for `{MANUAL:TOOL_DOCS_URL}` across all generated
-agent files and replace with the correct value.
-
----
-
-## 7. `{TOOL_API_SURFACE}`
+## 6. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-postgresql-reference.md`
 **Context:** The reference document for 'PostgreSQL' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -76,7 +66,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 8. `{TOOL_COMMON_PATTERNS}`
+## 7. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-postgresql-reference.md`
 **Context:** The reference document for 'PostgreSQL' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -86,7 +76,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 9. `{TOOL_API_SURFACE}`
+## 8. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-fastapi-reference.md`
 **Context:** The reference file for 'FastAPI' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -96,7 +86,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 10. `{TOOL_COMMON_PATTERNS}`
+## 9. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-fastapi-reference.md`
 **Context:** The reference file for 'FastAPI' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -106,7 +96,7 @@ agent files and replace with the correct value.
 
 ---
 
-## 11. `{TOOL_API_SURFACE}`
+## 10. `{TOOL_API_SURFACE}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a project-relevant API surface summary. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
@@ -116,12 +106,42 @@ agent files and replace with the correct value.
 
 ---
 
-## 12. `{TOOL_COMMON_PATTERNS}`
+## 11. `{TOOL_COMMON_PATTERNS}`
 
 **Found in:** `references/ref-sqlalchemy-reference.md`
 **Context:** The reference file for 'SQLAlchemy' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_COMMON_PATTERNS}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 12. `{ADJACENT_REPO_AGENTS_PATH}`
+
+**Found in:** `references/adjacent-repos.md`
+**Context:** Written in the template (line 33): | **Agent infra path** | `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` |
+
+**Action required:** Search for `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 13. `{ADJACENT_REPO_PATH}`
+
+**Found in:** `references/adjacent-repos.md`
+**Context:** Written in the template (line 32): | **Local path**       | `{MANUAL:ADJACENT_REPO_PATH}` (use `~/` notation, not an absolute home path) |
+
+**Action required:** Search for `{MANUAL:ADJACENT_REPO_PATH}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 14. `{PROJECT_REDTEAM_NOTES}`
+
+**Found in:** `references/redteam-methodology.reference.md`
+**Context:** Written in the template (line 237): {MANUAL:PROJECT_REDTEAM_NOTES}
+
+**Action required:** Search for `{MANUAL:PROJECT_REDTEAM_NOTES}` across all generated
 agent files and replace with the correct value.
 
 ---

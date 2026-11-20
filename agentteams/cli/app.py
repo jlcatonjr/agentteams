@@ -718,6 +718,12 @@ def _main_dispatch(
         return run_sync_project_rules(getattr(args, "project", None), dry_run=bool(getattr(args, "dry_run", False)))
     if any(getattr(args, flag, None) for flag in ("query_index", "refresh_index", "query_code")):
         _resolve_retrieval_brief(args)  # baseAgent P6: the recall skills' bare commands
+    if getattr(args, "adopt_only", None):
+        from agentteams.cli.adopt_only import resolve_adopt_only_brief
+
+        refusal = resolve_adopt_only_brief(args)  # #392 item 13
+        if refusal:
+            parser.error(refusal)
     if not args.description:
         parser.error("--description is required (or use --self for self-maintenance)")
 

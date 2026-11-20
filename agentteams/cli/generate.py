@@ -19,9 +19,10 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
-from agentteams import github_management, update_lock
+from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
+from agentteams.cli.update_notices import report_before_write
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
@@ -85,7 +86,6 @@ _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
 
-
 def _mcp_seed_rows(manifest: dict) -> list[dict[str, str]] | None:
     """Brief-hint rows for a new MCP need register under the switch (MCP-need protocol N4), else ``None``."""
     if not _write_policy.enabled(manifest):
@@ -107,7 +107,6 @@ def run_generate(
         _run_generate_inner, args, strict_manual_placeholders,
         migrate_exemption=migrate_exemption,
     )
-
 
 
 def _run_generate_inner(
@@ -144,6 +143,7 @@ def _run_generate_inner(
             description = ingest._supplement_from_directory(
                 description, Path(description["existing_project_path"])
             )
+    descriptor_union.apply_stub_roster(description, args)  # IM item 12: a description with no roster
 
     # Retrieval references are brief-authoritative only for a DECLARED contract (not an inferred one).
     retrieval_inferred = bool(description.pop("_retrieval_integration_inferred", False))
@@ -174,7 +174,7 @@ def _run_generate_inner(
         # fails closed with a clean message rather than a traceback.
         print(f"Error building manifest: {exc}", file=sys.stderr)
         return 1
-    _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders)
+    _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders, description=description)
     manifest["no_vscode_tasks"] = bool(getattr(args, "no_vscode_tasks", False))
 
     project_name = manifest["project_name"]
@@ -188,7 +188,8 @@ def _run_generate_inner(
     # Step 4: Resolve output directory
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
-    if not args.check and refuse_if_frozen(manifest, framework_id, output_dir):  # before anything is written
+    if not args.check and (refuse_if_frozen(manifest, framework_id, output_dir)  # before anything is written
+                           or descriptor_union.refuse_roster_shrink(args, manifest, project_root)):  # IM item 12
         return 1
 
     # Everything after this point writes, so it runs under the per-checkout update lock and leaves one
@@ -363,9 +364,9 @@ def _run_generate_locked(
     # Compute template hashes for drift detection
     template_hashes = render.compute_template_hashes(manifest, templates_dir=TEMPLATES_DIR)
 
-    # Apply framework-specific post-processing; runtime-handoffs and pipeline
-    # graph (Step 5c) are appended by _build_final_rendered.
-    final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir)
+    # Framework post-processing; runtime-handoffs and the pipeline graph (Step 5c) are appended by it.
+    final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir,
+                                           filled_from=output_dir if args.update else None)
 
     # --reconcile-front-matter: needs the render, and nothing after it. Policy and rationale
     # live in `front_matter_reconcile`, not here.
@@ -536,6 +537,7 @@ def _run_generate_locked(
             if not _sc_disk.exists() or _sc_disk.read_text(encoding="utf-8") != _sc_content:
                 update_rendered.append((_sc_path, _sc_content))
 
+        _at_risk = report_before_write(output_dir, manifest, adapter, update_rendered, args)  # #392 items 12, 15
         # Migrate away legacy tool-*.agent.md files: tools are now emitted as
         # reference/skill documents, never agents. Runs before the converged
         # early-exit (and before the orphan advisory) so migration happens even
@@ -627,10 +629,8 @@ def _run_generate_locked(
 
         # Orphan advisories (in build_team.py, CH-07): files on disk the team no longer emits, which
         # `--prune` (build-log removals only) misses. Then the unanswered scan-level notice (prints only).
-        build_team._report_orphan_agent_files(
-            final_rendered, output_dir, manifest,
-            agent_ext=adapter.get_file_extension("agent"),
-        )
+        build_team._report_orphan_agent_files(final_rendered, output_dir, manifest,
+                                              agent_ext=adapter.get_file_extension("agent"))
         build_team._report_orphan_reference_docs(final_rendered, output_dir)
         from agentteams.vulnscan.project_policy import report_unanswered
         report_unanswered(description)
@@ -681,7 +681,7 @@ def _run_generate_locked(
             goose_grant_merge_notice(output_dir)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
         _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
-        attach_dry_run_plan(_adopt_plan, result)
+        attach_dry_run_plan(_adopt_plan, result, at_risk_routed=_at_risk)
         if args.dry_run and result.dry_run_report is not None:
             emit.print_dry_run_report(
                 result, manifest,

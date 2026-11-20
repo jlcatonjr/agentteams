@@ -272,7 +272,53 @@ def test_the_source_region_stops_at_the_next_section():
 
 def test_titles_are_labels_not_instructions():
     titles = R.table_of_contents("### `run <!-- this --> now`\n\n### " + "x" * 300 + "\n")
-    assert titles[0] == "run  this  now" and len(titles[1]) == 100
+    assert titles[0] == "run this now" and len(titles[1]) == 100
+
+
+_WRAPPED = """Intro.
+
+- **PS-1 Short rule.** Body.
+- **PS-2 The agent manages the GitHub repository (operator ruling, 2026-11-14; merge approval added
+  2026-11-19).** It may open PRs.
+  - a nested detail is not a rule
+- PS-3 a plain bullet
+  continues here
+
+* **PS-4 star bullet**
+"""
+
+
+def test_every_top_level_rule_bullet_is_listed_even_when_its_title_wraps():
+    """#11 (1.2.2): a bold title that wrapped a line dropped its rule from the reference list, fail-open."""
+    titles = R.table_of_contents(_WRAPPED)
+    bullets = [ln for ln in _WRAPPED.splitlines() if ln.startswith(("- ", "* "))]
+    assert len(titles) == len(bullets) == 4
+    assert titles[0] == "PS-1 Short rule." and titles[2] == "PS-3 a plain bullet" and titles[3] == "PS-4 star bullet"
+    assert titles[1].startswith("PS-2 The agent manages the GitHub repository")
+    content = R.projection_content("AGENTS.md", _WRAPPED, "reference")
+    assert all(f"- {t}" in content for t in titles)
+
+
+def test_numbered_and_plus_items_are_listed():
+    """Code-hygiene review of #11: a numbered rules list gave an empty title list (no `Rules:` at all)."""
+    body = "1. **First rule wraps\n   here.** Body.\n2) Second plain\n   1. nested, not a rule\n+ **Third**\n"
+    assert R.table_of_contents(body) == ["First rule wraps here.", "Second plain", "Third"]
+
+
+def test_an_indented_rules_section_keeps_its_items():
+    """rules_body keeps the region's indent; the items sit at the section's own column, not column 0."""
+    body = "    - **A rule.** x\n      - nested\n    - plain b\n"
+    assert R.table_of_contents(body) == ["A rule.", "plain b"]
+
+
+def test_headings_take_precedence_over_bullets():
+    """Documented limit: with any heading, bullets are the headed rules' bodies, not rules of their own."""
+    assert R.table_of_contents("### One\n\n- detail\n\n### Two\n") == ["One", "Two"]
+
+
+def test_a_long_title_is_cut_at_a_word_boundary():
+    [title] = R.table_of_contents("- **" + "word " * 40 + "end**\n")
+    assert len(title) <= 100 and title.endswith("…") and title[:-1].endswith("word")
 
 
 def test_a_projected_only_region_does_not_block_overwrite(root: Path):

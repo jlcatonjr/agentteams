@@ -108,9 +108,9 @@ def _write_log(root: Path, rows: list[dict[str, str]]) -> None:
 def test_signed_append_refuses_when_the_tip_moved(tmp_path):
     rows = _chained(_legacy(2))
     _write_log(tmp_path, rows)
-    dl.append_signed_decision_row(tmp_path, _row(3, prev=row_chain_digest(rows[-1])))
+    dl.append_signed_decision_row(tmp_path, _row(3, prev=row_chain_digest(rows[-1])), before=None)
     with pytest.raises(RuntimeError, match="changed while the decision was being confirmed"):
-        dl.append_signed_decision_row(tmp_path, _row(4, prev=row_chain_digest(rows[-1])))  # stale tip
+        dl.append_signed_decision_row(tmp_path, _row(4, prev=row_chain_digest(rows[-1])), before=None)  # stale tip
     read = dl._read_decision_rows(tmp_path)
     assert read is not None and len(read[0]) == 3
     dl._assert_decision_chain_intact(*read)
@@ -119,10 +119,10 @@ def test_signed_append_refuses_when_the_tip_moved(tmp_path):
 def test_a_log_created_by_the_first_signed_row_is_readable_and_chains(tmp_path):
     """The first signed append creates the log; it must be readable, and the second row must chain."""
     (tmp_path / "references").mkdir()
-    dl.append_signed_decision_row(tmp_path, _row(1))
+    dl.append_signed_decision_row(tmp_path, _row(1), before=None)
     read = dl._read_decision_rows(tmp_path)  # raised "malformed" before 1.0
     assert read is not None and read[0][0]["timestamp"] == "2026-10-01"
-    dl.append_signed_decision_row(tmp_path, _row(2, prev=chain_tip(*read, signing_active=True)))
+    dl.append_signed_decision_row(tmp_path, _row(2, prev=chain_tip(*read, signing_active=True)), before=None)
     read = dl._read_decision_rows(tmp_path)
     assert read is not None and len(read[0]) == 2
     assert verify_chain(*read, signing_active=True).legacy_prefix == 0
@@ -133,7 +133,7 @@ def test_appending_to_a_pre_fix_log_starts_the_chain(tmp_path):
     _write_log(tmp_path, rows)
     read = dl._read_decision_rows(tmp_path)
     assert read is not None
-    dl.append_signed_decision_row(tmp_path, _row(4, prev=chain_tip(*read, signing_active=True)))
+    dl.append_signed_decision_row(tmp_path, _row(4, prev=chain_tip(*read, signing_active=True)), before=None)
     read = dl._read_decision_rows(tmp_path)
     assert read is not None
     dl._assert_decision_chain_intact(*read)  # the legacy prefix plus a correctly bound row

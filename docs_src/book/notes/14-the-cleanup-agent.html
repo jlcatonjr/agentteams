@@ -8,7 +8,7 @@
   <article id="notes:the-cleanup-agent">
     <h1>Cliff Notes: Chapter 14: The Cleanup Agent</h1>
     <p class="part-label">Part III: The Agents at Work</p>
-    <p class="notes-source">A summary of <a href="chapters/14-the-cleanup-agent.html#ch:the-cleanup-agent">Chapter 14</a>, written to match the text as it describes agentteams 1.1.</p>
+    <p class="notes-source">A summary of <a href="chapters/14-the-cleanup-agent.html#ch:the-cleanup-agent">Chapter 14</a>, written to match the text as it describes agentteams 1.2.</p>
     <section id="notes-14-thesis"><h2>Thesis</h2>
       <p>The cleanup agent removes stale files, and the chapter calls it the most dangerous agent in the team by one measure, the irreversibility of its actions. Its design answers that risk with a four-gate safety system that every deletion of a file that cannot be regenerated must pass. The chapter argues that the gates are proportionate to an extreme asymmetry, since over-retention costs clutter while over-deletion can destroy the only copy of something. It then qualifies the argument. Recoverability lowers the cost of a mistake as gates lower its chance, and the two substitute only within the losses that recovery can reach.</p>
     </section>
@@ -28,7 +28,7 @@
         <li>Error asymmetry. A false negative costs disk space, while a false positive costs irreversible information loss.</li>
         <li>Centralized deletion. One agent with one safety architecture instead of safeguards replicated in every agent.</li>
         <li>Branch lifecycle. A later framework extension that classifies branches and defers to the operator on idle work.</li>
-        <li>Recovery mechanisms. A timestamped copy by default before any rewrite, with the most recent copy exempt from pruning, a listing of affected files without writing, and a withheld write, by default, when a merge would shorten a fenced passage materially.</li>
+        <li>Recovery mechanisms. A timestamped copy by default before any rewrite, with the most recent copy exempt from pruning, a listing of affected files without writing, and a withheld write, by default, when a merge would shorten materially a fenced passage that the build log does not record as exactly an earlier render of the framework's own.</li>
       </ul>
     </section>
     <section id="notes-14-frames"><h2>Theoretical frames</h2>
@@ -39,7 +39,7 @@
       <p>The chapter applies the team's separation of detection from remediation to the one agent whose actions cannot simply be redone. It explains why deletion authority sits in a single agent and why a whitelist, a uniqueness check and a security gate are all needed rather than any one of them. Its final argument changes the shape of the justification rather than its conclusion. The gates are not defended by irreversibility in general. They are defended by "the residue of irreversibility that no snapshot can reach". Examples include a deletion whose consequences are noticed only after the recovery window has been reasoned away, or damage that lies in what an external repository can no longer resolve. This gives a principled reason to keep costly checks even after recovery tooling exists, and it marks where snapshots, dry runs and shrink guards can safely carry part of the load.</p>
     </section>
     <section id="notes-14-currency"><h2>Currency</h2>
-      <p>This note summarizes the chapter as revised for agentteams 1.1 (release candidate 17, commit aabd676b, 9 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.1 anchor. The chapter flags no items as arriving in release 1.2.</p>
+      <p>This note summarizes the chapter as revised for agentteams 1.2 (release candidate 2, commit 871c6c5c, 17 November 2026). Chapters 1 through 21 describe the book's own team as configured through July 2026, with framework passages at the 1.2 anchor.</p>
     </section>
   </article>
 </body>
