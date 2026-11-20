@@ -174,7 +174,7 @@ def _run_generate_inner(
         # fails closed with a clean message rather than a traceback.
         print(f"Error building manifest: {exc}", file=sys.stderr)
         return 1
-    _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders)
+    _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders, description=description)
     manifest["no_vscode_tasks"] = bool(getattr(args, "no_vscode_tasks", False))
 
     project_name = manifest["project_name"]
