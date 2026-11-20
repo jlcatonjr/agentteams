@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A plain `--overwrite` without `--update`, and `--migrate`, are not covered yet.
 - New `agentteams/cli/routing_at_risk.py` and `tests/test_overwrite_at_risk_routing.py`.
 
+### docs (the canonical wasmtime argv tail, #570)
+
+- `docs_src/api-reference/wasm-exec.md` names `--argv0 <name> -- <absolute module> [guest args]` as the canonical
+  tail for core modules, and records the `@security` ruling on component guests (#569: allowed under conditions
+  C1-C9, still refused until they land). No code changes; `GRANT_SPEC_SHA256` and the shared corpus sha256 are unchanged.
+
 ### fix (no silent N/A for archetypes a brief names, #392 item 1)
 
 - When a brief names `style-guardian` in `selected_archetypes` and sets no `style_reference`,
