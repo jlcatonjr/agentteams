@@ -200,6 +200,38 @@ TOOL_METADATA_CATALOG: dict[str, dict[str, str]] = {
     },
 }
 
+# IM item 13b (G-17-3): official documentation for well-known tools a brief names, so their reference docs don't
+# ship {MANUAL:TOOL_DOCS_URL}. Vendor or project pages only, checked to resolve on 2026-11-15; docs_url only.
+# Kept out of TOOL_METADATA_CATALOG on purpose: enrich looks that up by Python import name, and `import git`
+# (GitPython) or `import docker` (the Docker SDK) are not the git or Docker CLI.
+WELL_KNOWN_TOOL_DOCS: dict[str, str] = {
+    "git": "https://git-scm.com/docs",
+    "gh": "https://cli.github.com/manual/",
+    "githubcli": "https://cli.github.com/manual/",
+    "postgresql": "https://www.postgresql.org/docs/current/",
+    "postgres": "https://www.postgresql.org/docs/current/",
+    "python": "https://docs.python.org/3/",
+    "docker": "https://docs.docker.com/reference/",
+    "terraform": "https://developer.hashicorp.com/terraform/docs",
+    "make": "https://www.gnu.org/software/make/manual/",
+    "gnumake": "https://www.gnu.org/software/make/manual/",
+}
+
+
+def well_known_docs_url(name: str) -> str:
+    """Return the official docs URL for a well-known tool a brief names (git, gh, PostgreSQL, …), or ``""``.
+
+    Args:
+        name: The tool name from the brief's ``tools[]``.
+
+    Returns:
+        The URL, or ``""`` when the tool is not in :data:`WELL_KNOWN_TOOL_DOCS`.
+
+    Raises:
+        Nothing.
+    """
+    return WELL_KNOWN_TOOL_DOCS.get(normalize_tool_key(name), "")
+
 
 def get_tool_metadata(name: str) -> dict[str, str]:
     """Return {docs_url, api_surface, common_patterns} for a known tool, or {} if unknown."""

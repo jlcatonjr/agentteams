@@ -52,6 +52,9 @@ the first two tiers:
 2. **Unified static catalog** (`agentteams/tool_metadata_catalog.py`, zero network) —
    known-package metadata for common tools (numpy, pandas, boto3, requests,
    sqlalchemy, pytest, and others). Consulted via `analyze._merge_known_tool_metadata`.
+   For tools a brief names, `WELL_KNOWN_TOOL_DOCS` in the same module also supplies the
+   official `docs_url` of git, gh, PostgreSQL, Python, Docker, Terraform and GNU make. It is
+   not looked up by Python import name: `import git` is GitPython, not git.
 3. **Network fetch** (`agentteams/enrich/_tools.py::build_tool_catalog`, PyPI then npm)
    — opt-in via `--enrich` (or `--post-audit`, which implies it). Not run by default,
    since it makes outbound network calls.
@@ -82,6 +85,10 @@ These cannot be inferred from the project description and require human completi
 - `{MANUAL:TOOL_DOCS_URL}` — Documentation URL when none of the resolution tiers above found one
 - `{MANUAL:TOOL_API_SURFACE}` — Key API surface when none of the resolution tiers above found one
 - `{MANUAL:TOOL_COMMON_PATTERNS}` — Common patterns when none of the resolution tiers above found one
+- `{MANUAL:ADJACENT_REPO_PATH}` / `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` — Local path, and agent-infrastructure path, of an adjacent repository (`adjacent-repos.reference.template.md`)
+- `{MANUAL:PROJECT_REDTEAM_NOTES}` — Project-specific red-team notes (`redteam-methodology.reference.template.md`)
+
+**How the checklist is built (IM item 13b).** `SETUP-REQUIRED.md` lists the brief-derived items from `analyze` *and* every `{MANUAL:X}` left in the emitted text (`agentteams/placeholder_scan.py`), so a token written literally in a template is listed too. A token the operator has filled in leaves the list on the next `--update`. Inline code is not a hiding place: `` `{MANUAL:X}` `` in a table is still a placeholder. The names left off the list are the instructional ones in `placeholder_scan.INSTRUCTIONAL_TOKENS` (`TOKEN`, `UPPER_SNAKE_CASE`, `PLACEHOLDER_NAME`), which this guide and the content-enricher use to *explain* placeholders. When a template writes a new `{MANUAL:X}` name, list it here, or add it to `INSTRUCTIONAL_TOKENS` if it only explains; `tests/test_placeholder_completeness.py` fails until one of the two is done.
 
 ### Post-Production-Auditor Specific Placeholders
 

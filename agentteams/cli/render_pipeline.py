@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agentteams import emit, render, vscode_tasks
+from agentteams.placeholder_scan import MANUAL_TOKEN_RE, complete_setup_required
 from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
@@ -162,6 +163,7 @@ def _build_final_rendered(
     project_name: str,
     *,
     output_dir: Path | None = None,
+    filled_from: Path | None = None,
 ) -> list[tuple[str, str]]:
     """Render templates and apply framework post-processing.
 
@@ -170,6 +172,10 @@ def _build_final_rendered(
     pipeline graph. This is the shared rendering step used by the generate
     path, ``--update``, and ``--check``; ``--check`` uses the result for
     content comparison only and does not write to disk.
+
+    *filled_from* is the output dir whose operator-filled ``{MANUAL:}`` values the run carries forward (``--update``,
+    and ``--check``'s promotion pass that mirrors it); those tokens stay off ``SETUP-REQUIRED.md``. Generate with
+    ``--merge`` or ``--overwrite`` writes the raw render, so it passes None and every token is listed.
     """
     from agentteams import graph as _graph
     from agentteams import mcp_need as _mcp_need
@@ -284,7 +290,34 @@ def _build_final_rendered(
         "references/pipeline-handoffs.svg",
         _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
     ))
-    return final
+    # IM item 13b (G-17-3): the checklist lists every {MANUAL:} token the run leaves open, not only the brief's.
+    return complete_setup_required(manifest, final, effective=_with_filled_values(filled_from))
+
+
+def _with_filled_values(output_dir: Path | None) -> Callable[[str, str], str] | None:
+    """Return the ``effective`` hook for :func:`complete_setup_required`: the operator's filled values carried forward.
+
+    ``--update`` writes :func:`_preserve_manual_values` of the on-disk file and the render, so a token the operator
+    filled is not open and stays off the checklist.
+
+    Args:
+        output_dir: The dir whose filled values ``--update`` carries forward; None uses the render as is.
+
+    Returns:
+        A ``(path, rendered) -> content`` function, or None.
+
+    Raises:
+        Nothing.
+    """
+    if output_dir is None:
+        return None
+
+    def _effective(path: str, rendered: str) -> str:
+        disk_path = emit._resolve_path(output_dir, path)
+        if not disk_path.is_file():
+            return rendered
+        return _preserve_manual_values(disk_path.read_text(encoding="utf-8", errors="replace"), rendered)
+    return _effective
 
 
 def twin_sources(manifest: dict[str, Any], adapter: Any, output_dir: Path | None = None) -> dict[str, Any]:
@@ -515,7 +548,6 @@ def _guess_file_type(rel_path: str) -> str:
     if rel_path.startswith("references/") or "/references/" in rel_path:
         return "reference"
     return "agent"
-_MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
 def _preserve_manual_values(existing_content: str, new_content: str) -> str:
     """Carry forward manually-filled {MANUAL:*} values from existing files.
 
@@ -531,7 +563,7 @@ def _preserve_manual_values(existing_content: str, new_content: str) -> str:
         New content with manual values preserved from the existing file.
     """
     # Find all {MANUAL:*} tokens in the new content
-    manual_tokens = set(_MANUAL_RE.findall(new_content))
+    manual_tokens = set(MANUAL_TOKEN_RE.findall(new_content))
     if not manual_tokens:
         return new_content
 

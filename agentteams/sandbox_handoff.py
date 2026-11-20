@@ -390,7 +390,7 @@ def validate_spec(spec: HandoffSpec) -> None:
             clearance, a destructive command in a spec not marked ``destructive``, a ``cwd`` that escapes the root, a malformed ``requires`` name, a single-line field
             containing a newline, a trust-root path or signing-key name, or credential-shaped content.
     """
-    if not _SLUG_RE.match(spec.slug):
+    if not _SLUG_RE.fullmatch(spec.slug):
         raise HandoffError(f"slug {spec.slug!r} must be lowercase letters, digits and hyphens (max 80)")
     if not spec.purpose:
         raise HandoffError("'purpose' is required: say what running the script accomplishes")

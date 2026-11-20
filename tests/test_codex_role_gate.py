@@ -204,8 +204,10 @@ def test_runner_checks_pins_writes_the_server_entry_and_trusts_the_hook(tmp_path
     assert argv[argv.index("--") + 1:argv.index("--") + 3] == ["bash", "-c"]      # the probe text is multi-line
     assert argv[argv.index("codex-confined"):] == ["codex-confined", "--sandbox", "danger-full-access",
                                                    "--dangerously-bypass-hook-trust", "exec", "hi"]
-    for setenv in ("AGENTTEAMS_CODEX_CONFINED=1", "AGENTTEAMS_PROBE_GATE=1", f"AGENTTEAMS_ROOT={proj.resolve()}"):
+    for setenv in ("AGENTTEAMS_CODEX_CONFINED=1", "AGENTTEAMS_PROBE_GATE=1", f"AGENTTEAMS_ROOT={proj.resolve()}",
+                   "AGENTTEAMS_CODEX_WASM=0", "AGENTTEAMS_CODEX_WRITE_POLICY=1"):
         assert setenv in argv, setenv
+    assert "AGENTTEAMS_CODEX_WASM=1" not in argv
     [py] = [a.split("=", 1)[1] for a in argv if a.startswith("AGENTTEAMS_PYTHON=")]
     assert py.startswith("/")                                                   # absolute, resolved outside
     config = (Path(env["AGENTTEAMS_CODEX_HOME"]) / "config.toml").read_text(encoding="utf-8")
@@ -389,6 +391,22 @@ def test_wasm_mode_exit_codes_and_a_malformed_keep_list_denies_everything() -> N
         assert _run_wasm_gate(run, bad).returncode == 2, bad
 
 
+@pytest.mark.parametrize("tool", ["mcp__agentteams_wasm__run_wasm", "Edit", "apply_patch", "SomeUnknownShell"])
+def test_the_write_policy_marker_overrides_a_stray_wasm_variable(tool: str) -> None:
+    # researchteam @security (1.2.2): WASM=1 under the write policy would let a spawned agent use every non-shell
+    # tool. With the policy runner's marker set, the gate ignores WASM=1 and keeps the readfs-only rule.
+    event = {"hook_event_name": "PreToolUse", "agent_type": "cleanup", "tool_name": tool}
+    env = {"PATH": os.environ.get("PATH", ""), "AGENTTEAMS_CODEX_CONFINED": "1", "AGENTTEAMS_CODEX_WASM": "1",
+           "AGENTTEAMS_CODEX_NATIVE_KEEP": "navigator", "AGENTTEAMS_CODEX_WRITE_POLICY": "1"}
+    out = subprocess.run([sys.executable, "-I", "-S", str(GATE)], input=json.dumps(event).encode(), env=env,
+                         capture_output=True)
+    assert out.returncode == 2 and b"write_policy orchestrator-only" in out.stderr, tool
+    assert _run_wasm_gate(event, "navigator").returncode == 0   # without the marker WASM mode passes it: the gap
+    readfs = {**event, "tool_name": "mcp__agentteams_readfs__read_file"}
+    assert subprocess.run([sys.executable, "-I", "-S", str(GATE)], input=json.dumps(readfs).encode(), env=env,
+                          capture_output=True).returncode == 0
+
+
 def test_without_the_wasm_variable_the_write_policy_shape_applies() -> None:
     # AGENTTEAMS_CODEX_WASM unset -> the stricter readfs-only mode (fail toward the narrower gate).
     deny = _run_gate(json.dumps({"hook_event_name": "PreToolUse", "agent_type": "qa",
@@ -411,6 +429,7 @@ def test_wasm_team_emits_the_gate_without_the_readfs_server_and_selects_wasm_mod
                           text=True, check=True).stdout.splitlines()
     assert "--dangerously-bypass-hook-trust" in argv and "AGENTTEAMS_PROBE_GATE=1" in argv
     assert "AGENTTEAMS_CODEX_WASM=1" in argv and "AGENTTEAMS_CODEX_NATIVE_KEEP=navigator,orchestrator" in argv
+    assert "AGENTTEAMS_CODEX_WRITE_POLICY=1" not in argv and "AGENTTEAMS_CODEX_WASM=0" not in argv
     assert not (Path(env["AGENTTEAMS_CODEX_HOME"]) / "config.toml").read_text(encoding="utf-8")  # no readfs entry
 
 
@@ -432,4 +451,7 @@ def test_no_wasm_mode_gate_when_off_under_the_policy_or_under_keep(extra: dict) 
         team.pop("_wasm_sandbox_cli")
     assert not codex_wasm_gate_enabled(team)
     runner = dict(emit.codex_sandbox_output_files(team, platform="linux"))["../confined-run.example.sh"]
-    assert "AGENTTEAMS_CODEX_WASM" not in runner
+    assert "AGENTTEAMS_CODEX_WASM=1" not in runner and "AGENTTEAMS_CODEX_NATIVE_KEEP" not in runner
+    # Under the policy the runner pins WASM mode off and sets the marker the gate checks (1.2.2).
+    policy = "write_policy" in extra
+    assert ("AGENTTEAMS_CODEX_WASM=0" in runner) is policy and ("AGENTTEAMS_CODEX_WRITE_POLICY=1" in runner) is policy

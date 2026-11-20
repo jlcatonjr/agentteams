@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
-from agentteams._scan_public_hashes import check_public_hash_exemption
+from agentteams._scan_public_hashes import check_public_hash_exemption, is_labelled_public_identifier
 # Operational-JSON exemption (which pipeline-written JSON skips the absolute-path / entropy /
 # placeholder detectors): carved to the integrity-pinned ``scan_operational`` module.
 from agentteams.scan_operational import (  # noqa: F401  (re-exported)
@@ -72,6 +72,9 @@ _CREDENTIAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 #: possible secret. Named so the gate and the path-shape guard below share one
 #: source of truth and cannot drift.
 _ENTROPY_MIN_BITS = 3.8
+
+#: The two untyped credential messages (entropy / nearby keyword, not a known format); the fleet snapshot guard keys on them.
+MSG_HIGH_ENTROPY, MSG_SECRET_LIKE = "High-entropy token detected", "Possible secret-like token detected"
 
 #: High-entropy tokens that look like opaque secrets when they are contiguous
 #: opaque strings rather than human-readable identifiers.
@@ -743,6 +746,8 @@ def _check_line(
         # (a secret keyword is on the line) keeps its wider net deliberately.
         if not secret_context and _looks_like_filesystem_path(token):
             continue
+        if not secret_context and is_labelled_public_identifier(line, token_match.start(), token_match.end()):
+            continue
         # #460: a public lockfile SRI hash or GitHub commit-URL SHA, bound to this exact token
         # span (never the line). Context-free branch only, like the path guard above.
         if not secret_context and check_public_hash_exemption(
@@ -756,9 +761,9 @@ def _check_line(
             category="credential",
             severity=severity,
             message=(
-                "Possible secret-like token detected"
+                MSG_SECRET_LIKE
                 if secret_context
-                else "High-entropy token detected"
+                else MSG_HIGH_ENTROPY
             ),
             snippet=stripped,
         ))
