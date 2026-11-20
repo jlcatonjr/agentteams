@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (main-team HALTs bind clearances checked in any team dir; gates-only team dirs, #578)
+
+- `check_file_clearance` (`--check-clearance`) now also refuses on an unretracted HALT for the scope, or for the
+  file-bound action, in the repository's canonical team dirs (`.claude/agents`, `.github/agents`) and in a
+  `parent_team` the team dir declares in `references/agent-privilege.json`. Before, it read only the team dir it was
+  given, so a clearance checked in a separate dir escaped a main-team HALT (C-2).
+- The link is fail-closed. It refuses on an unreadable log, a symlinked canonical dir, or a `parent_team` that is
+  absolute, uses `..`, has a symbolic-link component, is not a team dir, names itself or chains. Outside a git
+  repository only the team dir's own log is read, and a declared `parent_team` refuses.
+- Upgrade note: a clearance that passed in 1.2 now fails if a canonical team dir's log holds an unretracted HALT on
+  its scope, or if that log is malformed.
+- Docs: the gates-only team dir layout for signed sign-off rows, and the process-wide `AGENTTEAMS_DECISION_SIGNING_KEY`
+  caveat (`api-reference/workspace-privilege-scoping.md`). New `tests/test_gates_only_team_dir.py`.
+
 ### added (beta: `agentteams.term_index` and `--term-check`; #548)
 
 - **A term-index core, ported from researchteam and declared beta.** `agentteams.term_index` validates a term
