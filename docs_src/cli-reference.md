@@ -307,6 +307,16 @@ file), add it to the brief, or update with `--merge`, which keeps the orchestrat
 
 Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. The one exception is generated: the `PROJECTED-RULES` and `PROJECT-RULES-POINTER` blocks inside the user regions, which every generate and `--update` regenerates in every provider's files (see `--sync-project-rules`). Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
 
+
+A team with no generation baseline (its `references/build-log.json` records no fence digests; every team generated
+by 1.1.x or earlier) gets one notice before any file is written: a merge cannot tell an older template's text from
+an edit, so each changed fence keeps its on-disk body and prints a shrink notice. To take the current templates,
+preview `--update --overwrite --dry-run --json`, review its plan and `at_risk_routed_agents`, then run it;
+`--overwrite` replaces hand enrichment inside fences (the backup keeps it) and carries the Project-Specific Notes
+and Rules. A merge records the baseline for each fence it writes as the template renders it, so the notice stops
+after one merge, but the fences it preserved stay unrecorded and keep their shrink notices. A missing or malformed
+build log gets its own notice; an interop projection and a run with nothing to write get none.
+`--capture-baseline` records an emission snapshot, not this baseline.
 ### `--yes` / `-y`
 
 Non-interactive mode: answer yes to all prompts automatically.
@@ -348,6 +358,22 @@ merge, no manifest or build-log write. It is a standalone mode (`agentteams/cli/
 exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
 `--self` or `--description`, `--framework`, `--output`, `--dry-run`, `--json` and `--no-backup`.
 
+- **It needs a brief.** Pass `--description PATH` (the project's brief) or `--self`. Without either, it uses the
+  project's own brief under `--project` (else the working directory), found as the retrieval modes find it
+  (`.agentteams/brief.json`, then `brief.json`; a symlink, a brief outside the project, or one naming another
+  project is not used). It does so only when the agents directory the run writes to is inside that same
+  project, and no project nested between the two has a brief of its own; otherwise it refuses and asks for
+  `--description`. It never uses the `--self` brief (`.github/agents/_build-description.json`) without `--self`.
+  A `--description` you name is never replaced, even if the file is missing. With no brief at all the run stops with "--description is required (or use --self for
+  self-maintenance)".
+- **`--output` is the agents directory**, the one that holds the orchestrator file: `.github/agents/` (Copilot),
+  `.claude/agents/` (Claude), and so on, as listed under `--output DIR`. On copilot-vscode, copilot-cli, claude
+  and agents-md the path is used as given, so a project-root `--output` refuses with
+  "no regular orchestrator file at …"; goose, codex, grok and wasm append their agents directory to a project
+  root. Leave `--output` out to
+  use the framework's agents directory under the brief's `existing_project_path`, or else the current directory
+  (with `--self`, this repository's own agents directory).
+
 - **Validation.** Each slug must be an adoptable orphan in the target agent directory: its file is there, this
   build doesn't emit it, and it isn't a tool agent. Any other slug refuses the whole run (`[ADOPT-ONLY] refused`)
   and is named.
@@ -376,6 +402,9 @@ exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orpha
   wider: `['read', 'search']` is read-only, `['read', 'web']` is not.
 
 Example: `agentteams --self --framework claude --adopt-only injection-test-designer --dry-run --json`.
+
+For another project: `agentteams --description path/to/brief.json --framework copilot-vscode --output
+path/to/project/.github/agents --adopt-only my-agent --dry-run --json`.
 
 ### `--migrate-decision-log`
 

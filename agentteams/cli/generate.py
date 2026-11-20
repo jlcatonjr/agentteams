@@ -22,7 +22,7 @@ from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, r
 from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
-from agentteams.cli.routing_at_risk import report_at_risk_routing
+from agentteams.cli.update_notices import report_before_write
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
@@ -537,7 +537,7 @@ def _run_generate_locked(
             if not _sc_disk.exists() or _sc_disk.read_text(encoding="utf-8") != _sc_content:
                 update_rendered.append((_sc_path, _sc_content))
 
-        _at_risk = report_at_risk_routing(output_dir, manifest, adapter, update_rendered, args)  # #392 item 12
+        _at_risk = report_before_write(output_dir, manifest, adapter, update_rendered, args)  # #392 items 12, 15
         # Migrate away legacy tool-*.agent.md files: tools are now emitted as
         # reference/skill documents, never agents. Runs before the converged
         # early-exit (and before the orphan advisory) so migration happens even
