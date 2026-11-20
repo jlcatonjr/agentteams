@@ -1,0 +1,2 @@
+step,agent,action,inputs,outputs,status,notes
+1,cleanup,remove,a,b,done,

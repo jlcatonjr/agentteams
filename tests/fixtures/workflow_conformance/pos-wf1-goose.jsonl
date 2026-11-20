@@ -1,0 +1,11 @@
+{"content": [{"text": "Workflow 1: Produce a Deliverable", "type": "text"}], "role": "assistant"}
+{"content": [{"id": "toolu_0040", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/tmp/by-week/2026-W47/demo.plan.md"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0041", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0042", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__auth_expert"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0043", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__adversarial"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0044", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__primary_producer"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0045", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/src/a.py"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0046", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__auth_expert"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0047", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__quality_auditor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0048", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0049", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/workSummaries/daily/2026-11-20.md"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}

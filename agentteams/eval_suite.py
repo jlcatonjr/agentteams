@@ -152,10 +152,39 @@ def build_eval_suite(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_workflow_suite(manifest: dict[str, Any], template_text: str) -> dict[str, Any]:
+    """Return a framework-neutral suite of workflow scenarios for *manifest* (workflow-conformance, Phase A).
+
+    Same envelope and schema as :func:`build_eval_suite`, holding only the ``workflow-sequence`` and
+    ``rule-order`` scenarios that :func:`agentteams.redteam.workflow_spec.build_workflow_scenarios` derives from
+    ``orchestrator.template.md``. They are scored against a recorded trace, not a team's files, so they are kept
+    out of :func:`build_eval_suite` and the emitted ``references/eval-suite.json``: the structural adapters would
+    score an unknown kind as a failure. Deterministic.
+
+    Args:
+        manifest: The team manifest; ``agent_slug_list`` resolves *(If `@x` in team)* steps.
+        template_text: The ``orchestrator.template.md`` text the workflows are read from.
+
+    Returns:
+        A dict conforming to ``schemas/eval-suite.schema.json``.
+    """
+    from agentteams.redteam.workflow_spec import build_workflow_scenarios
+
+    return {
+        "artifact_type": "eval-suite",
+        "eval_suite_schema_version": EVAL_SUITE_SCHEMA_VERSION,
+        "project_name": manifest.get("project_name", ""),
+        "framework": manifest.get("framework", ""),
+        "generated_from": "manifest",
+        "scenarios": build_workflow_scenarios(template_text, manifest),
+    }
+
+
 __all__ = [
     "EVAL_SUITE_SCHEMA_VERSION",
     "WORKER_GOVERNANCE_TRIAD",
     "RETURN_TO_ORCHESTRATOR",
     "FRAMEWORK_COUPLED_TOKENS",
     "build_eval_suite",
+    "build_workflow_suite",
 ]

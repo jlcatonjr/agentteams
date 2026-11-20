@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **481**
+- Modules mapped: **486**
 - Packages: **14**
-- Internal import edges: **1825**
+- Internal import edges: **1831**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 208 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 208 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.redteam`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 67 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -32,7 +32,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.frameworks` | 41 | `agentteams`, `agentteams.cli`, `agentteams.wasm_agent` |
 | `agentteams.mcp_servers` | 3 | `agentteams`, `agentteams.cli` |
 | `agentteams.model_providers` | 8 | `agentteams`, `agentteams.vulnscan` |
-| `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams.redteam` | 21 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.research` | 11 | `agentteams` |
 | `agentteams.vulnscan` | 95 | `agentteams`, `agentteams.cli`, `agentteams.frameworks` |
 | `agentteams.wasm_agent` | 13 | `agentteams`, `agentteams.frameworks`, `agentteams.vulnscan` |
@@ -212,7 +212,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.eval_adapters` | — | — |
 | `agentteams.eval_adapters.inspect_ai` | — | — |
 | `agentteams.eval_adapters.openai_evals` | — | — |
-| `agentteams.eval_suite` | — | `agentteams.cli.artifacts` |
+| `agentteams.eval_suite` | `agentteams.redteam.workflow_spec` | `agentteams.cli.artifacts` |
 | `agentteams.feature_audit` | — | — |
 | `agentteams.fence_baseline` | `agentteams.cli.artifacts`, `agentteams.drift`, `agentteams.fences` | `agentteams.cli.update_notices`, `agentteams.emit`, `agentteams.fences` |
 | `agentteams.fence_inject` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.emit`, `agentteams.fences`, `agentteams.frameworks.codex` | `agentteams.cli.app`, `agentteams.emit` |
@@ -344,6 +344,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.redteam.budget` | — | — |
 | `agentteams.redteam.checks_report` | `agentteams.redteam.registry` | `agentteams.redteam.cycle`, `agentteams.redteam.selfaudit` |
 | `agentteams.redteam.checks_static` | `agentteams.integrity`, `agentteams.redteam.registry` | `agentteams.redteam.selfaudit` |
+| `agentteams.redteam.conformance_report` | `agentteams.redteam.workflow_spec` | — |
 | `agentteams.redteam.corpus` | `agentteams.scan` | `agentteams.redteam.runner` |
 | `agentteams.redteam.coverage` | `agentteams.redteam.registry` | — |
 | `agentteams.redteam.cycle` | `agentteams.redteam.checks_report`, `agentteams.redteam.kev_correlation`, `agentteams.redteam.realcopy`, `agentteams.redteam.registry`, `agentteams.redteam.report`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` | `agentteams.cli.commands` |
@@ -356,7 +357,11 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.redteam.report` | `agentteams.redteam.registry`, `agentteams.redteam.runner`, `agentteams.redteam.selfaudit` | `agentteams.redteam.cycle` |
 | `agentteams.redteam.runner` | `agentteams.integrity`, `agentteams.redteam.corpus`, `agentteams.redteam.registry` | `agentteams.redteam.cycle`, `agentteams.redteam.report` |
 | `agentteams.redteam.selfaudit` | `agentteams.redteam.checks_report`, `agentteams.redteam.checks_static`, `agentteams.redteam.registry` | `agentteams.redteam.cycle`, `agentteams.redteam.report` |
+| `agentteams.redteam.stage_markers` | — | `agentteams.redteam.workflow_score` |
 | `agentteams.redteam.sweep` | `agentteams.frameworks.registry` | — |
+| `agentteams.redteam.workflow_score` | `agentteams.redteam.stage_markers`, `agentteams.redteam.workflow_spec`, `agentteams.redteam.workflow_trace` | — |
+| `agentteams.redteam.workflow_spec` | — | `agentteams.eval_suite`, `agentteams.redteam.conformance_report`, `agentteams.redteam.workflow_score` |
+| `agentteams.redteam.workflow_trace` | `agentteams.sandbox_handoff` | `agentteams.redteam.workflow_score` |
 | `agentteams.release_required_checks` | `agentteams.branch_model` | `agentteams.github_management` |
 | `agentteams.remediate` | — | — |
 | `agentteams.render` | `agentteams.frameworks.registry`, `agentteams.manifest_format`, `agentteams.tool_version_source` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.frameworks._agents_md_rules`, `agentteams.placeholder_scan`, `agentteams.template_pins` |
@@ -375,7 +380,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.rules_projection` | `agentteams.cli.frozen_surfaces`, `agentteams.user_regions` | `agentteams.carveouts`, `agentteams.cli.post_build`, `agentteams.doctor` |
 | `agentteams.runner_mcp` | `agentteams.backup` | `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_runner`, `agentteams.wasm_mcp` |
 | `agentteams.runner_wasm` | `agentteams._sandbox_profiles`, `agentteams.cli.sandbox_effects`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.confinement`, `agentteams.frameworks.registry`, `agentteams.proposal_policy`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_exec`, `agentteams.wasm_guests`, `agentteams.wasm_runtime` | `agentteams.cli.os_sandbox_switch`, `agentteams.cli.proposal_commands`, `agentteams.confinement`, `agentteams.proposal_run`, `agentteams.proposal_runner` |
-| `agentteams.sandbox_handoff` | `agentteams.atomicio`, `agentteams.cli.governance_targets`, `agentteams.scan` | — |
+| `agentteams.sandbox_handoff` | `agentteams.atomicio`, `agentteams.cli.governance_targets`, `agentteams.scan` | `agentteams.redteam.workflow_trace` |
 | `agentteams.sandbox_projection` | `agentteams`, `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit`, `agentteams.sandbox_state`, `agentteams.wasm_config` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.multi_sync` |
 | `agentteams.sandbox_state` | `agentteams._sandbox_profiles`, `agentteams.codex_mcp_emit`, `agentteams.frameworks._write_roots`, `agentteams.gate_policy`, `agentteams.sandbox_tokens`, `agentteams.signing_switch`, `agentteams.wasm_config`, `agentteams.wasm_exec` | `agentteams.analyze`, `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_team_docs`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.claude`, `agentteams.frameworks.wasm`, `agentteams.multi_sync`, `agentteams.runner_wasm`, `agentteams.sandbox_projection`, `agentteams.wasm_agent.team`, `agentteams.wasm_config`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp` |
 | `agentteams.sandbox_tokens` | — | `agentteams.cli.sandbox_effects`, `agentteams.sandbox_state`, `agentteams.wasm_agent.team` |
@@ -587,6 +592,7 @@ flowchart LR
     agentteams --> agentteams_frameworks
     agentteams --> agentteams_mcp_servers
     agentteams --> agentteams_model_providers
+    agentteams --> agentteams_redteam
     agentteams --> agentteams_research
     agentteams --> agentteams_vulnscan
     agentteams --> agentteams_wasm_agent
@@ -640,6 +646,7 @@ digraph "agentteams architecture" {
     "agentteams" -> "agentteams.frameworks";
     "agentteams" -> "agentteams.mcp_servers";
     "agentteams" -> "agentteams.model_providers";
+    "agentteams" -> "agentteams.redteam";
     "agentteams" -> "agentteams.research";
     "agentteams" -> "agentteams.vulnscan";
     "agentteams" -> "agentteams.wasm_agent";
@@ -2780,7 +2787,9 @@ digraph "agentteams architecture" {
       "package": "agentteams",
       "path": "agentteams/eval_suite.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.redteam.workflow_spec"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -4367,6 +4376,16 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.redteam.conformance_report": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/conformance_report.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.redteam.workflow_spec"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.redteam.corpus": {
       "package": "agentteams.redteam",
       "path": "agentteams/redteam/corpus.py",
@@ -4496,12 +4515,50 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.redteam.stage_markers": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/stage_markers.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.redteam.sweep": {
       "package": "agentteams.redteam",
       "path": "agentteams/redteam/sweep.py",
       "is_package": false,
       "imports_internal": [
         "agentteams.frameworks.registry"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.workflow_score": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/workflow_score.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.redteam.stage_markers",
+        "agentteams.redteam.workflow_spec",
+        "agentteams.redteam.workflow_trace"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.workflow_spec": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/workflow_spec.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.redteam.workflow_trace": {
+      "package": "agentteams.redteam",
+      "path": "agentteams/redteam/workflow_trace.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.sandbox_handoff"
       ],
       "external": [],
       "repo_local": []
@@ -6778,6 +6835,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams",
       "target": "agentteams.model_providers"
+    },
+    {
+      "source": "agentteams",
+      "target": "agentteams.redteam"
     },
     {
       "source": "agentteams",
@@ -9582,6 +9643,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.scan"
     },
     {
+      "source": "agentteams.eval_suite",
+      "target": "agentteams.redteam.workflow_spec"
+    },
+    {
       "source": "agentteams.fence_baseline",
       "target": "agentteams.cli.artifacts"
     },
@@ -11282,6 +11347,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.redteam.registry"
     },
     {
+      "source": "agentteams.redteam.conformance_report",
+      "target": "agentteams.redteam.workflow_spec"
+    },
+    {
       "source": "agentteams.redteam.corpus",
       "target": "agentteams.scan"
     },
@@ -11376,6 +11445,22 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.redteam.sweep",
       "target": "agentteams.frameworks.registry"
+    },
+    {
+      "source": "agentteams.redteam.workflow_score",
+      "target": "agentteams.redteam.stage_markers"
+    },
+    {
+      "source": "agentteams.redteam.workflow_score",
+      "target": "agentteams.redteam.workflow_spec"
+    },
+    {
+      "source": "agentteams.redteam.workflow_score",
+      "target": "agentteams.redteam.workflow_trace"
+    },
+    {
+      "source": "agentteams.redteam.workflow_trace",
+      "target": "agentteams.sandbox_handoff"
     },
     {
       "source": "agentteams.release_required_checks",

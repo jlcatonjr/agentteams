@@ -1,0 +1,276 @@
+{
+  "_note": "Planted-defect and conforming fixtures for agentteams.redteam.workflow_score (AC2). Test fixtures only: never rendered.",
+  "cases": [
+    {
+      "control": "negative",
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "claude",
+      "name": "neg-wf7-conforming",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "neg-wf7.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "7"
+    },
+    {
+      "control": "negative",
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "gate_log": "gate-deny.jsonl",
+      "host": "claude",
+      "name": "neg-wf7-gate-denied",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "neg-wf7-denied.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "7"
+    },
+    {
+      "control": "positive",
+      "expect": {
+        "rule": "c5-security-first"
+      },
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "claude",
+      "name": "pos-wf7-c5-rm-before-security",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "pos-wf7-c5.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "7"
+    },
+    {
+      "control": "positive",
+      "expect": {
+        "step": "8"
+      },
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "goose",
+      "name": "pos-wf1-goose-no-conflict-auditor",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "pos-wf1-goose.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "1"
+    },
+    {
+      "control": "positive",
+      "expect": {
+        "step": "2"
+      },
+      "host": "claude",
+      "name": "pos-wf10c-seeded-skips-adversarial",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "pos-wf10c.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "10C"
+    },
+    {
+      "control": "positive",
+      "expect": {
+        "rule": "rule9-plan-first"
+      },
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "claude",
+      "name": "pos-rule9-write-before-plan",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "pos-rule9.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "2"
+    },
+    {
+      "control": "positive",
+      "expect": {
+        "rule": "rule8-conflict-auditor-closes"
+      },
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "claude",
+      "name": "pos-rule8-write-after-audit",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "pos-rule8.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "2"
+    },
+    {
+      "control": "positive",
+      "expect": {
+        "rule": "rule10-summary-after-plan"
+      },
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "claude",
+      "name": "pos-rule10-no-summary",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "pos-rule10.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "7"
+    },
+    {
+      "control": "positive",
+      "expect": {
+        "rule": "wf11-terminal"
+      },
+      "final_state": {
+        "tmp/by-week/2026-W47/demo.steps.csv": "steps-done.csv"
+      },
+      "host": "claude",
+      "name": "pos-wf11-recursion",
+      "roster": [
+        "adversarial",
+        "agent-updater",
+        "auth-expert",
+        "cleanup",
+        "conflict-auditor",
+        "conflict-resolution",
+        "orchestrator",
+        "output-compiler",
+        "post-production-auditor",
+        "primary-producer",
+        "quality-auditor",
+        "reference-manager",
+        "security",
+        "technical-validator",
+        "work-summarizer"
+      ],
+      "trace": "pos-wf11.jsonl",
+      "work_tree": "/work/tree",
+      "workflow": "7"
+    }
+  ]
+}

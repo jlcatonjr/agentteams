@@ -32,7 +32,7 @@
           "id": { "type": "string", "minLength": 1 },
           "category": {
             "type": "string",
-            "enum": ["routing", "handoff", "governance", "output-shape", "refusal", "escalation"]
+            "enum": ["routing", "handoff", "governance", "output-shape", "refusal", "escalation", "workflow"]
           },
           "claim": { "type": "string", "minLength": 1 },
           "predicate": {
@@ -46,7 +46,9 @@
                   "frontmatter-list-contains-all",
                   "agent-count",
                   "handoff-chain",
-                  "frontmatter-and-body"
+                  "frontmatter-and-body",
+                  "workflow-sequence",
+                  "rule-order"
                 ]
               }
             }
