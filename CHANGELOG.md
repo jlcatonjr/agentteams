@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-19
+
+### release notes
+
+agentteams 1.2.2 backports fixes from `dev` to the 1.2 line: the work-summary Stop hook (#6 and 1.2.0 cut items 3
+and 4), `--sync-project-rules` titles (#11), the GitHub management roster and CI caveat (#2, #9), the decisions-log
+migrate hint (#12), CI and test robustness (1.2.0 cut items 2, 6 and 7), the Codex role gate in WASM mode, and PRs
+#517 (directive scopes, security), #513 and #512. Nothing else from `dev` is included.
+
 ### fixed (a fleet re-render no longer drops the agents the stub records; IM item 12)
 
 - **G-17-1.** `fleet._resolve_descriptor` took the root `brief.json` whole whenever it existed. In researchteam-derived
