@@ -45,18 +45,23 @@ def _get(result: Any, name: str) -> list:
     return list(value) if value else []
 
 
-def has_attributable_events(result: Any) -> bool:
+def has_attributable_events(result: Any, *, routing_loss_accepted: dict | None = None) -> bool:
     """True when the run made a decision worth recording.
 
     A run that simply wrote or left files alone has nothing to attribute. A run
-    that preserved, skipped, retrofitted, or set content aside does.
+    that preserved, skipped, retrofitted, set content aside, or dropped routing
+    it was told to drop (``--accept-routing-loss``) does.
 
     Args:
         result: An EmitResult-like object from the emit phase.
+        routing_loss_accepted: ``{"slugs", "orchestrator_sha256"}`` when an
+            ``--overwrite`` dropped routing under ``--accept-routing-loss`` (#392 item 12).
 
     Returns:
         Whether a report should be written for this run.
     """
+    if routing_loss_accepted:
+        return True
     for name in (
         "skipped_legacy",
         "sections_preserved",
@@ -69,12 +74,14 @@ def has_attributable_events(result: Any) -> bool:
     return False
 
 
-def build_report(result: Any, *, backup_path: str | None = None) -> str:
+def build_report(result: Any, *, backup_path: str | None = None,
+                 routing_loss_accepted: dict | None = None) -> str:
     """Render the Markdown report for a completed update.
 
     Args:
         result: An EmitResult-like object from the emit phase.
         backup_path: Directory holding this run's backup, when one was taken.
+        routing_loss_accepted: As :func:`has_attributable_events`.
 
     Returns:
         The report body. Callers should only write it when
@@ -98,6 +105,19 @@ def build_report(result: Any, *, backup_path: str | None = None) -> str:
         f"- files merged: {len(merged)}",
         "",
     ]
+
+    if routing_loss_accepted:
+        lines.append("## Routing loss accepted")
+        lines.append("")
+        lines.append(
+            "`--overwrite` replaced an orchestrator that routed to these agents, "
+            "which this build does not keep, under `--accept-routing-loss`."
+        )
+        lines.append("")
+        lines.append(f"- orchestrator sha256 before the run: `{routing_loss_accepted.get('orchestrator_sha256')}`")
+        for slug in routing_loss_accepted.get("slugs", []):
+            lines.append(f"- dropped: `@{slug}`")
+        lines.append("")
 
     if preserved:
         lines.append("## Fenced bodies preserved")
@@ -155,7 +175,8 @@ def build_report(result: Any, *, backup_path: str | None = None) -> str:
 
 
 def write_report(
-    result: Any, output_dir: Path, *, backup_path: str | None = None
+    result: Any, output_dir: Path, *, backup_path: str | None = None,
+    routing_loss_accepted: dict | None = None,
 ) -> Path | None:
     """Write the update report beside the agent files, when warranted.
 
@@ -163,6 +184,7 @@ def write_report(
         result: An EmitResult-like object from the emit phase.
         output_dir: The agents directory this run wrote to.
         backup_path: Directory holding this run's backup, when one was taken.
+        routing_loss_accepted: As :func:`has_attributable_events`.
 
     Returns:
         The report path, or None when the run had nothing to attribute.
@@ -170,14 +192,16 @@ def write_report(
     Raises:
         OSError: If the report cannot be written to *output_dir*.
     """
-    if not has_attributable_events(result):
+    if not has_attributable_events(result, routing_loss_accepted=routing_loss_accepted):
         return None
     path = Path(output_dir) / REPORT_NAME
-    path.write_text(build_report(result, backup_path=backup_path), encoding="utf-8")
+    path.write_text(build_report(result, backup_path=backup_path, routing_loss_accepted=routing_loss_accepted),
+                    encoding="utf-8")
     return path
 
 
-def report_run(result: Any, output_dir: Path, backup_path: object = None) -> None:
+def report_run(result: Any, output_dir: Path, backup_path: object = None, *,
+               routing_loss_accepted: dict | None = None) -> None:
     """Write the update report for a completed run and announce it.
 
     Wraps :func:`write_report` with the announcement and the guarantee callers
@@ -188,10 +212,12 @@ def report_run(result: Any, output_dir: Path, backup_path: object = None) -> Non
         result: An EmitResult-like object from the emit phase.
         output_dir: The agents directory this run wrote to.
         backup_path: Backup location for this run, if one was taken.
+        routing_loss_accepted: As :func:`has_attributable_events`.
     """
     try:
         path = write_report(
-            result, output_dir, backup_path=str(backup_path) if backup_path else None
+            result, output_dir, backup_path=str(backup_path) if backup_path else None,
+            routing_loss_accepted=routing_loss_accepted,
         )
     except OSError as exc:
         print(f"  !  Could not write update report: {exc}")
