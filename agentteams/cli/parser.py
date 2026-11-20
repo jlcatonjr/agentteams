@@ -207,8 +207,12 @@ def _build_parser() -> argparse.ArgumentParser:
              "workspace, Ed25519-signed decision with effect_grants exactly agents:<slug>). "
              "--dry-run --json reports the row diff, the agents: additions and each slug's tools: "
              "line, flagged when wider than read-only (Read/Grep/Glob, read/search; any other or "
-             "unknown tool counts as wider). Mutually exclusive with --update, "
-             "--overwrite, --migrate, --prune and --adopt-orphans.",
+             "unknown tool counts as wider). Needs --description, --self, or the project's own brief "
+             "(found under --project or the working directory when the agents directory is in that "
+             "project); --output, when given, is "
+             "the agents directory that holds the orchestrator (copilot and claude take it as given, "
+             "so a project root refuses). Mutually exclusive with --update, --overwrite, --migrate, "
+             "--prune and --adopt-orphans.",
     )
     parser.add_argument(
         "--accept-routing-loss",

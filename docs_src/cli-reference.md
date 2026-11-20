@@ -381,6 +381,22 @@ merge, no manifest or build-log write. It is a standalone mode (`agentteams/cli/
 exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
 `--self` or `--description`, `--framework`, `--output`, `--dry-run`, `--json` and `--no-backup`.
 
+- **It needs a brief.** Pass `--description PATH` (the project's brief) or `--self`. Without either, it uses the
+  project's own brief under `--project` (else the working directory), found as the retrieval modes find it
+  (`.agentteams/brief.json`, then `brief.json`; a symlink, a brief outside the project, or one naming another
+  project is not used). It does so only when the agents directory the run writes to is inside that same
+  project, and no project nested between the two has a brief of its own; otherwise it refuses and asks for
+  `--description`. It never uses the `--self` brief (`.github/agents/_build-description.json`) without `--self`.
+  A `--description` you name is never replaced, even if the file is missing. With no brief at all the run stops with "--description is required (or use --self for
+  self-maintenance)".
+- **`--output` is the agents directory**, the one that holds the orchestrator file: `.github/agents/` (Copilot),
+  `.claude/agents/` (Claude), and so on, as listed under `--output DIR`. On copilot-vscode, copilot-cli, claude
+  and agents-md the path is used as given, so a project-root `--output` refuses with
+  "no regular orchestrator file at …"; goose, codex, grok and wasm append their agents directory to a project
+  root. Leave `--output` out to
+  use the framework's agents directory under the brief's `existing_project_path`, or else the current directory
+  (with `--self`, this repository's own agents directory).
+
 - **Validation.** Each slug must be an adoptable orphan in the target agent directory: its file is there, this
   build doesn't emit it, and it isn't a tool agent. Any other slug refuses the whole run (`[ADOPT-ONLY] refused`)
   and is named.
@@ -409,6 +425,9 @@ exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orpha
   wider: `['read', 'search']` is read-only, `['read', 'web']` is not.
 
 Example: `agentteams --self --framework claude --adopt-only injection-test-designer --dry-run --json`.
+
+For another project: `agentteams --description path/to/brief.json --framework copilot-vscode --output
+path/to/project/.github/agents --adopt-only my-agent --dry-run --json`.
 
 ### `--migrate-decision-log`
 
