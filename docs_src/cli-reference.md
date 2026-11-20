@@ -307,6 +307,16 @@ file), add it to the brief, or update with `--merge`, which keeps the orchestrat
 
 Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. The one exception is generated: the `PROJECTED-RULES` and `PROJECT-RULES-POINTER` blocks inside the user regions, which every generate and `--update` regenerates in every provider's files (see `--sync-project-rules`). Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
 
+
+A team with no generation baseline (its `references/build-log.json` records no fence digests; every team generated
+by 1.1.x or earlier) gets one notice before any file is written: a merge cannot tell an older template's text from
+an edit, so each changed fence keeps its on-disk body and prints a shrink notice. To take the current templates,
+preview `--update --overwrite --dry-run --json`, review its plan and `at_risk_routed_agents`, then run it;
+`--overwrite` replaces hand enrichment inside fences (the backup keeps it) and carries the Project-Specific Notes
+and Rules. A merge records the baseline for each fence it writes as the template renders it, so the notice stops
+after one merge, but the fences it preserved stay unrecorded and keep their shrink notices. A missing or malformed
+build log gets its own notice; an interop projection and a run with nothing to write get none.
+`--capture-baseline` records an emission snapshot, not this baseline.
 ### `--yes` / `-y`
 
 Non-interactive mode: answer yes to all prompts automatically.
