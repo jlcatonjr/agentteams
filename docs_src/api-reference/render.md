@@ -75,6 +75,22 @@ Return a list of all unresolved `{MANUAL:*}` token names remaining in rendered t
 
 ---
 
+### `render_setup_required(manifest)`
+
+> *Source: `agentteams/render.py`*
+
+Return the `SETUP-REQUIRED.md` text for the manifest's `manual_required_placeholders`. [`placeholder_scan.complete_setup_required`](placeholder-scan.md) calls it with the brief's items plus the scanned ones.
+
+**Args:**
+
+- `manifest` (`dict`) — The team manifest.
+
+**Returns:** `str` — The checklist's Markdown.
+
+**Raises:** `KeyError` — the manifest has no `project_name`.
+
+---
+
 ### `validate_cross_refs(rendered_files)`
 
 > *Source: `agentteams/render.py`*

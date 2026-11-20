@@ -111,7 +111,6 @@ from agentteams.cli.commands import (
 # Render/merge helpers extracted to agentteams/cli/render_pipeline.py (CH-07);
 # re-exported so main and tests resolve them in build_team's namespace.
 from agentteams.cli.render_pipeline import (
-    _MANUAL_RE,
     _build_final_rendered,
     _make_content_matches,
     _guess_file_type,

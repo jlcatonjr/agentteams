@@ -46,7 +46,7 @@ agentteams \
   --enrich --post-audit
 ```
 
-`--post-audit` implies `--enrich` automatically. Running `--post-audit` without `--enrich` would expose the audit to unresolved placeholders, which generate false positives. The pipeline sets `--enrich = True` if `--post-audit` is requested and `--enrich` was not explicitly set.
+`--post-audit` implies `--enrich` automatically. Without `--enrich`, the audit would report every placeholder enrich can fill as an unresolved-placeholder warning. The pipeline sets `--enrich = True` if `--post-audit` is requested and `--enrich` was not explicitly set.
 
 ---
 

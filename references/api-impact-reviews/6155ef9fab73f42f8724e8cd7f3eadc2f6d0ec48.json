@@ -1,0 +1,8 @@
+{
+  "patch_id": "6155ef9fab73f42f8724e8cd7f3eadc2f6d0ec48",
+  "commit": "409b757998e5cd6dac0e5c501d75170814d13de5",
+  "subject": "fix(item 13b): SETUP-REQUIRED.md lists every {MANUAL:} token the team emits (G-17-3)",
+  "impact": "1 modules added, 3 symbols added",
+  "note": "item 13b: new placeholder_scan (scan_manual_tokens, complete_setup_required, INSTRUCTIONAL_TOKENS) documented in api-reference/placeholder-scan.md; tool_metadata_catalog.well_known_docs_url documented there and in PLACEHOLDER-CONVENTIONS. Additive; no signature changed.",
+  "recorded_at": "2026-11-15T23:20:14Z"
+}

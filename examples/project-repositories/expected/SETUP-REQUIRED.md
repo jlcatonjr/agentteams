@@ -1,7 +1,7 @@
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 # SETUP-REQUIRED.md
 
-The following **2 placeholder(s)** could not be automatically resolved
+The following **5 placeholder(s)** could not be automatically resolved
 for project **ProjectRepositories** and require manual attention.
 
 ---
@@ -22,6 +22,36 @@ agent files and replace with the correct value.
 **Context:** The placeholder {DOC_SITE_CONFIG_FILE} could not be auto-resolved.
 
 **Action required:** Search for `{MANUAL:DOC_SITE_CONFIG_FILE}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 3. `{ADJACENT_REPO_AGENTS_PATH}`
+
+**Found in:** `references/adjacent-repos.md`
+**Context:** Written in the template (line 33): | **Agent infra path** | `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` |
+
+**Action required:** Search for `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 4. `{ADJACENT_REPO_PATH}`
+
+**Found in:** `references/adjacent-repos.md`
+**Context:** Written in the template (line 32): | **Local path**       | `{MANUAL:ADJACENT_REPO_PATH}` (use `~/` notation, not an absolute home path) |
+
+**Action required:** Search for `{MANUAL:ADJACENT_REPO_PATH}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 5. `{PROJECT_REDTEAM_NOTES}`
+
+**Found in:** `references/redteam-methodology.reference.md`
+**Context:** Written in the template (line 237): {MANUAL:PROJECT_REDTEAM_NOTES}
+
+**Action required:** Search for `{MANUAL:PROJECT_REDTEAM_NOTES}` across all generated
 agent files and replace with the correct value.
 
 ---
