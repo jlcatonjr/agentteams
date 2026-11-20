@@ -244,8 +244,9 @@ def test_front_matter_forms_are_parsed(front: str, expect: set[str]) -> None:
 
 
 @pytest.mark.parametrize("front", ["agents: {a: 1}\n", "agents:\n  - Not A Slug!\n",
-                                   "handoffs:\n  - label: Go\n    agent: [weird]\n", "handoffs: inline\n"],
-                         ids=["mapping", "bad-item", "bad-handoff-agent", "inline-handoffs"])
+                                   "handoffs:\n  - label: Go\n    agent: [weird]\n", "handoffs: inline\n",
+                                   "handoffs:\n  - {label: Go, agent: foo}\n"],
+                         ids=["mapping", "bad-item", "bad-handoff-agent", "inline-handoffs", "flow-mapping-handoff"])
 def test_unparseable_routing_front_matter_fails_closed(tmp_path: Path, front: str) -> None:
     with pytest.raises(ValueError):
         mentioned_slugs(f"---\n{front}---\nBody.\n")

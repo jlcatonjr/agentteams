@@ -99,8 +99,10 @@ def _front_matter_targets(front: str) -> set[str]:
                 raise _Unparseable(line.strip()[:40])
             if t := _target(m[1]):
                 targets.add(t)
-        elif key == "handoffs" and (m := _FM_AGENT.match(line)):
-            if t := _target(m[1]):
+        elif key == "handoffs":
+            if "{" in line or "[" in line:   # a flow mapping/sequence could hold an agent: this reader can't see
+                raise _Unparseable(line.strip()[:40])
+            if (m := _FM_AGENT.match(line)) and (t := _target(m[1])):
                 targets.add(t)
     return targets
 
