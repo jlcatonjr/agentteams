@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agentteams.cli.routing_at_risk import report_at_risk_routing
+from agentteams.cli.routing_at_risk import RoutingLoss, report_at_risk_routing
 
 _ADVICE = (
     "     A merge cannot tell an older template's text from your edits, so each fence the template changed keeps\n"
@@ -66,8 +66,8 @@ def no_baseline_notice(output_dir: Path, args: Any, update_rendered: list[tuple[
 
 
 def report_before_write(output_dir: Path, manifest: dict, adapter: Any, update_rendered: list[tuple[str, str]],
-                        args: Any) -> list[dict[str, Any]]:
-    """Print the update's up-front notices and return the at-risk routed agents for the dry-run report.
+                        args: Any) -> RoutingLoss:
+    """Print the update's up-front notices and return the routing-loss assessment for the dry-run report.
 
     Args:
         output_dir: The team's agents directory.
@@ -77,7 +77,7 @@ def report_before_write(output_dir: Path, manifest: dict, adapter: Any, update_r
         args: Parsed CLI arguments.
 
     Returns:
-        :func:`~agentteams.cli.routing_at_risk.report_at_risk_routing`'s entries.
+        :func:`~agentteams.cli.routing_at_risk.report_at_risk_routing`'s :class:`RoutingLoss`.
 
     Raises:
         Nothing.

@@ -21,7 +21,9 @@ from typing import Any
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
-from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
+from agentteams.cli.adopt_step import finish_dry_run, run_adopt_step
+from agentteams.cli.routing_at_risk import (assess_routing_loss, guard_update_overwrite, record_accepted_loss,
+                                            refuse_routing_loss)
 from agentteams.cli.update_notices import report_before_write
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
@@ -41,7 +43,7 @@ from agentteams.cli.artifacts import (
 )
 from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
-from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
+from agentteams.cli.json_mode import run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
 from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
 from agentteams.cli.s10_exempt_gate import authorize_into
@@ -405,8 +407,8 @@ def _run_generate_locked(
         # drift report or create a spurious backup. compute_structural_diff
         # above is read-only, so evaluating the gate here is safe.
         if not args.dry_run and args.overwrite:
-            try:
-                security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
+            try:  # checked here, spent by guard_update_overwrite once the routing-loss refusal passes (#392 item 12)
+                security_gate._assert_destructive_action_allowed(output_dir, action="overwrite", consume=False)
             except RuntimeError as exc:
                 print(
                     f"[SEC-GATE/DESTRUCTIVE:overwrite-update] blocked: {exc}\n"
@@ -538,6 +540,8 @@ def _run_generate_locked(
                 update_rendered.append((_sc_path, _sc_content))
 
         _at_risk = report_before_write(output_dir, manifest, adapter, update_rendered, args)  # #392 items 12, 15
+        if (rc := guard_update_overwrite(output_dir, manifest, adapter, update_rendered, args)) is not None:
+            return rc  # refuse on routing loss in exactly what this update writes, then spend the clearance
         # Migrate away legacy tool-*.agent.md files: tools are now emitted as
         # reference/skill documents, never agents. Runs before the converged
         # early-exit (and before the orphan advisory) so migration happens even
@@ -675,19 +679,14 @@ def _run_generate_locked(
             shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
+        record_accepted_loss(result, args, output_dir, backup_path)  # #392 item 12: the durable record
         if not args.dry_run and not args.overwrite and result.success:  # merge kept on-disk front matter
             git_hooks.redraw_graph_after_merge(output_dir)
         if framework_id == "goose" and manifest.get("goose_tool_scoping") == "grant" and not args.overwrite:
             goose_grant_merge_notice(output_dir)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
         _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
-        attach_dry_run_plan(_adopt_plan, result, at_risk_routed=_at_risk)
-        if args.dry_run and result.dry_run_report is not None:
-            emit.print_dry_run_report(
-                result, manifest,
-                fmt="json" if args.json else "text",
-                stream=json_stdout() if args.json else None,
-            )
+        finish_dry_run(result, manifest, args, merge_plan=_adopt_plan, routing_loss=_at_risk)
 
         # ------------------------------------------------------------------
         # Post-generation audit (--update path)
@@ -852,6 +851,8 @@ def _run_generate_locked(
     # pre-fencing-snapshot git tag + --revert-migration). The exemption arrives as an
     # explicit PARAMETER from _run_migrate, not as module state — see the removal note in
     # security_gate.py. A caller that does not pass it cannot enable it.
+    if (rc := refuse_routing_loss(output_dir, manifest, adapter, final_rendered, args)) is not None:
+        return rc  # #392 item 12: every --overwrite (and --migrate's), before the clearance or any backup
     if not args.dry_run and args.overwrite and not migrate_exemption:
         try:
             security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
@@ -908,14 +909,10 @@ def _run_generate_locked(
     # Durable record of this run's decisions; silent when nothing to attribute.
     if not args.dry_run:
         from agentteams import update_report as _ur
-        _ur.report_run(result, output_dir, backup_path)
+        _ur.report_run(result, output_dir, backup_path, routing_loss_accepted=getattr(args, "routing_loss_accepted", None))
 
-    if args.dry_run and result.dry_run_report is not None:
-        emit.print_dry_run_report(
-            result, manifest,
-            fmt="json" if args.json else "text",
-            stream=json_stdout() if args.json else None,
-        )
+    finish_dry_run(result, manifest, args,
+                   routing_loss=lambda: assess_routing_loss(output_dir, manifest, adapter, final_rendered, args))
 
     # -----------------------------------------------------------------------
     # Step 8.5: Post-generation audit (if --post-audit)

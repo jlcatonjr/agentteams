@@ -296,12 +296,35 @@ With `--dry-run`: emit the per-file action plan as a single JSON document on std
 
 Overwrite existing agent files without prompting. Default behavior: prompt for each existing file.
 
-With `--update`, the orchestrator is replaced too. Before any file is written, the run lists on stderr every agent
-the current orchestrator routes to (a backticked `` `@slug` `` in its body) that this build neither emits nor
-still routes to, with or without a file on disk. Routing in the Project-Specific Notes region is carried over, so
-it is not listed unless you pass `--discard-user-regions`. `--dry-run --json` puts the same list under
-`at_risk_routed_agents`. The run still proceeds. To keep such an agent, use `--adopt-orphans` (agents with a
-file), add it to the brief, or update with `--merge`, which keeps the orchestrator's body.
+**`--overwrite` refuses to drop an orchestrator's routing** (#392 item 12; new in 1.3). This applies to `--overwrite`,
+`--update --overwrite`, and the `--overwrite` that `--migrate` runs.
+
+An agent counts as routed if the current orchestrator names it in any of these forms:
+- a backticked `` `@slug` `` in its body;
+- a front-matter `agents:` item or `handoffs:` target;
+- a bare `@slug` with an agent file on disk.
+
+If a routed agent is neither emitted nor adopted by this build, nor still named by the new orchestrator, the run
+lists it on stderr and refuses with `[ROUTING-LOSS] blocked`. The refusal comes before the overwrite clearance is
+spent and before any backup or write. `--yes` does not get past it.
+
+An orchestrator that exists but can't be read also refuses. Routing in the Project-Specific Notes region is carried
+over, so it isn't counted unless you pass `--discard-user-regions`.
+
+To clear the refusal, keep the agents, or name exactly the ones you are dropping:
+- `--adopt-orphans`, for agents with a file (this adopts every orphan agent file);
+- add them to the brief;
+- `--update --merge`, which keeps the orchestrator's body;
+- `--accept-routing-loss SLUG[,SLUG...]`, naming exactly the at-risk set.
+
+`--dry-run --json` never refuses. It lists the agents under `at_risk_routed_agents`, and puts `would_refuse` and the
+clearing options under `routing_loss`.
+
+### `--accept-routing-loss SLUG[,SLUG...]`
+
+Let an `--overwrite` (or `--migrate`) drop the routing to exactly these agents. The list must equal the at-risk set
+that the refusal or `routing_loss` names: no wildcard, superset or subset, or the run refuses again. The accepted
+slugs and the orchestrator's sha256 are printed on stderr. Requires `--overwrite` or `--migrate`.
 
 ### `--merge`
 

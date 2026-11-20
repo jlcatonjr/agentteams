@@ -28,6 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory, the example hooks block gains an advisory `PostToolUse` term check that logs to
   `.claude/hook-notices/term-check.log`. A team without a register gets no new hook.
 
+### changed (`--overwrite` refuses to drop an orchestrator's routing; #392 item 12)
+
+- **An `--overwrite` now refuses to replace an orchestrator that routes to agents the build doesn't keep.** This
+  covers `--overwrite`, `--update --overwrite`, and the `--overwrite` that `--migrate` runs. The refusal is
+  `[ROUTING-LOSS] blocked`, and it comes before the overwrite clearance is spent and before any backup or write.
+  - Routed means a backticked `` `@slug` ``, a front-matter `agents:`/`handoffs:` target, or a bare `@slug` with an
+    agent file on disk.
+  - `--yes` doesn't acknowledge the loss, and an unreadable orchestrator refuses.
+  - In 1.2, #526 only reported the loss and the run proceeded.
+- **Migration.** A scripted `--overwrite` that drops bespoke routing on purpose now needs
+  `--accept-routing-loss SLUG[,SLUG...]`, naming exactly the at-risk set (shown in the refusal or in
+  `--dry-run --json`'s new `routing_loss.clear_with`). Alternatively, keep the agents with `--adopt-orphans`, the
+  brief, or `--update --merge`.
+- `@security` design conditions 1–10 (2026-11-19). The tests are in `tests/test_overwrite_at_risk_routing.py`.
+
 ### changed (`--adopt-only` finds the project's brief when none is named, #392 item 13)
 
 - With no `--description` and no `--self`, `--adopt-only` now uses the project's own brief under `--project`
