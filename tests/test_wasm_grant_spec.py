@@ -56,7 +56,8 @@ INTENTIONAL_DIFFERENCES = {
                          "every --dir exactly as baseAgent does.",
     "argv-tail": "agentteams checks the whole argv and requires '--argv0 <name> -- <absolute module>'; baseAgent "
                  "checks only the six flags and passes '--argv0 <name> <module> args' with no '--' and no "
-                 "absoluteness check. agentteams refuses more.",
+                 "absoluteness check. agentteams refuses more. agentteams' form is the canonical tail (#570); "
+                 "GRANT_SPEC and the corpus are unchanged by that ruling.",
     "grant-mode-timeout-seconds": "agentteams' Limits carry whole seconds (1..3600 s) and grant_flags emits only "
                                   "'<n>s'; an '<n>ms' timeout is accepted only in parity mode. baseAgent accepts "
                                   "'<n>ms' down to 1 ms everywhere. agentteams refuses more in grant mode.",
