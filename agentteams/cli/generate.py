@@ -21,8 +21,8 @@ from typing import Any
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
-from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
-from agentteams.cli.routing_at_risk import report_at_risk_routing
+from agentteams.cli.adopt_step import finish_dry_run, run_adopt_step
+from agentteams.cli.routing_at_risk import assess_routing_loss, refuse_routing_loss, report_at_risk_routing
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
@@ -41,7 +41,7 @@ from agentteams.cli.artifacts import (
 )
 from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
-from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
+from agentteams.cli.json_mode import run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
 from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
 from agentteams.cli.s10_exempt_gate import authorize_into
@@ -404,6 +404,8 @@ def _run_generate_locked(
         # ..."). A team that cannot be updated must not show a misleading
         # drift report or create a spurious backup. compute_structural_diff
         # above is read-only, so evaluating the gate here is safe.
+        if (rc := refuse_routing_loss(output_dir, manifest, adapter, final_rendered, args)) is not None:
+            return rc  # #392 item 12: before the overwrite clearance is spent
         if not args.dry_run and args.overwrite:
             try:
                 security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
@@ -681,13 +683,7 @@ def _run_generate_locked(
             goose_grant_merge_notice(output_dir)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
         _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
-        attach_dry_run_plan(_adopt_plan, result, at_risk_routed=_at_risk)
-        if args.dry_run and result.dry_run_report is not None:
-            emit.print_dry_run_report(
-                result, manifest,
-                fmt="json" if args.json else "text",
-                stream=json_stdout() if args.json else None,
-            )
+        finish_dry_run(result, manifest, args, merge_plan=_adopt_plan, routing_loss=_at_risk)
 
         # ------------------------------------------------------------------
         # Post-generation audit (--update path)
@@ -852,6 +848,8 @@ def _run_generate_locked(
     # pre-fencing-snapshot git tag + --revert-migration). The exemption arrives as an
     # explicit PARAMETER from _run_migrate, not as module state — see the removal note in
     # security_gate.py. A caller that does not pass it cannot enable it.
+    if (rc := refuse_routing_loss(output_dir, manifest, adapter, final_rendered, args)) is not None:
+        return rc  # #392 item 12: every --overwrite (and --migrate's), before the clearance or any backup
     if not args.dry_run and args.overwrite and not migrate_exemption:
         try:
             security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
@@ -910,12 +908,8 @@ def _run_generate_locked(
         from agentteams import update_report as _ur
         _ur.report_run(result, output_dir, backup_path)
 
-    if args.dry_run and result.dry_run_report is not None:
-        emit.print_dry_run_report(
-            result, manifest,
-            fmt="json" if args.json else "text",
-            stream=json_stdout() if args.json else None,
-        )
+    finish_dry_run(result, manifest, args,
+                   routing_loss=lambda: assess_routing_loss(output_dir, manifest, adapter, final_rendered, args))
 
     # -----------------------------------------------------------------------
     # Step 8.5: Post-generation audit (if --post-audit)

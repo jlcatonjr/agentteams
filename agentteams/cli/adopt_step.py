@@ -117,13 +117,13 @@ def _refuse_dropped_rows(manifest: dict, output_dir: Path, agent_ext: str, *, dr
 
 
 def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, result: emit.EmitResult,
-                        *, at_risk_routed: list[dict] | None = None) -> None:
-    """Put a dry-run merge-mode plan, and any at-risk routed agents, into the ``--dry-run --json`` report.
+                        *, routing_loss: Any = None) -> None:
+    """Put a dry-run merge-mode plan, and the ``--overwrite`` routing loss, into the ``--dry-run --json`` report.
 
     Args:
         merge_plan: The plan from :func:`run_adopt_step`, or ``None``.
         result: The emit result.
-        at_risk_routed: Routed agents an ``--overwrite`` would orphan (``cli.routing_at_risk``, #392 item 12).
+        routing_loss: A ``cli.routing_at_risk.RoutingLoss`` (#392 item 12), or ``None``.
 
     Returns:
         None.
@@ -131,7 +131,38 @@ def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, resu
     Raises:
         Nothing.
     """
-    if merge_plan is not None and result.dry_run_report is not None:
-        result.dry_run_report.adopt_orphans_merge = merge_plan.as_report()
-    if at_risk_routed and result.dry_run_report is not None:
-        result.dry_run_report.at_risk_routed_agents = list(at_risk_routed)
+    report = result.dry_run_report
+    if report is None:
+        return
+    if merge_plan is not None:
+        report.adopt_orphans_merge = merge_plan.as_report()
+    if routing_loss is not None and routing_loss.at_risk:
+        report.at_risk_routed_agents = list(routing_loss.at_risk)
+    if routing_loss is not None and (routing_loss.at_risk or routing_loss.would_refuse):
+        report.routing_loss = routing_loss.as_report()
+
+
+def finish_dry_run(result: emit.EmitResult, manifest: dict, args: Any, *, merge_plan: Any = None,
+                   routing_loss: Any = None) -> None:
+    """Attach the dry-run extras and print the dry-run report (text, or JSON on the JSON stdout).
+
+    Args:
+        result: The emit result.
+        manifest: The build manifest.
+        args: Parsed CLI arguments (``dry_run``, ``json``).
+        merge_plan: As :func:`attach_dry_run_plan`.
+        routing_loss: A ``RoutingLoss``, or a zero-argument callable returning one (evaluated only in a dry run).
+
+    Returns:
+        None.
+
+    Raises:
+        Nothing.
+    """
+    if not args.dry_run or result.dry_run_report is None:
+        return
+    from agentteams.cli.json_mode import json_stdout
+
+    attach_dry_run_plan(merge_plan, result, routing_loss=routing_loss() if callable(routing_loss) else routing_loss)
+    emit.print_dry_run_report(result, manifest, fmt="json" if args.json else "text",
+                              stream=json_stdout() if args.json else None)
