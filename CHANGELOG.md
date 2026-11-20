@@ -12,6 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tail for core modules, and records the `@security` ruling on component guests (#569: allowed under conditions
   C1-C9, still refused until they land). No code changes; `GRANT_SPEC_SHA256` and the shared corpus sha256 are unchanged.
 
+### fix (no silent N/A for archetypes a brief names, #392 item 1)
+
+- When a brief names `style-guardian` in `selected_archetypes` and sets no `style_reference`,
+  `{MANUAL:STYLE_REFERENCE_PATH}` now stays in the rendered files and in `SETUP-REQUIRED.md`, and a warning names
+  it, in every mode. Before, a normal (non-strict) run replaced it with "N/A - no formal style guide defined for
+  this project", and `--enrich` wrote an em-dash variant. The same now holds for `reference-manager` without a
+  `reference_db_path`.
+- **Existing teams:** a team whose brief already names either agent in `selected_archetypes` without that value
+  will see the `{MANUAL:*}` token, and a `SETUP-REQUIRED.md` entry, on its next `--update`. Set the value to
+  clear it.
+- When the analyzer picks either agent from keywords ("paper", "research", "reference" and others), output is
+  unchanged, and a one-line warning says which value is missing (the warning half of #392 item 8).
+- Detecting a `*.bib` file as `reference_db_path` is not part of this change; it moves to 1.3 with item 2.
+- New `tests/test_archetype_placeholders_not_silenced.py`; the shared rule is in `agentteams/_archetype_placeholders.py`.
+
 ### fixed (`SETUP-REQUIRED.md` lists every `{MANUAL:}` token the team emits; IM item 13b, G-17-3)
 
 - **For every team, on generate, `--update` and `--check`.** The checklist was built only from the brief-derived
