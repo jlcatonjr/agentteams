@@ -1,0 +1,8 @@
+{
+  "patch_id": "c008db7200bd4f9153b634d32b72a4b43b803efc",
+  "commit": "a504eb63bcb5fb725d22461e31693d7046a24a97",
+  "subject": "fix(item 13a): fleet report carries schema warnings, manifest schema in sync, never-raise check (audits)",
+  "impact": "1 symbols added, 2 schemas changed",
+  "note": "IM item 13a audit fixes: brief_schema adds schema_warning_lines, WARN_PREFIX, WARN_MARKER (documented in brief-schema.md); fleet.TargetResult gains schema_warnings (fleet report JSON); team-manifest.schema.json selected_archetypes is a slug pattern and tool_category gains build/infrastructure; project-description capabilities gains instance_maintenance.",
+  "recorded_at": "2026-11-15T21:42:29Z"
+}

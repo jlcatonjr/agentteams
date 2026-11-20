@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs_src/api-reference/wasm-exec.md` names `--argv0 <name> -- <absolute module> [guest args]` as the canonical
   tail for core modules, and records the `@security` ruling on component guests (#569: allowed under conditions
   C1-C9, still refused until they land). No code changes; `GRANT_SPEC_SHA256` and the shared corpus sha256 are unchanged.
+### fixed (the project-description schema matches the code and is checked on load, warn only; IM item 13a)
+
+- **G-17-2.** `ingest.validate` checked three fields and `schemas/project-description.schema.json` was never run on
+  a brief. It had also drifted: 96 of 155 descriptors in the workspace failed it.
+  - **The schema matches the code.** `selected_archetypes` takes any lowercase slug, so archetypes another layer
+    provides are no longer schema errors. `x-agentteams-known-archetypes` lists the 21 agentteams renders, and a
+    test keeps it equal to the domain templates, so it can't drift again. The old enum lacked `agentteams-updater`,
+    `tool-doc-researcher`, `vuln-remediation`, `work-summarizer`, `pr-manager`, `pr-notifier` and `content-enricher`,
+    and listed `tool-specific`, which has no template. `tools[].category` accepts `build` and `infrastructure`
+    (both passive, as the code already treated them).
+  - **Checked on load, warn only.** `ingest.load` runs the schema on every JSON description and prints one `[WARN]`
+    per file per run (the count and the first five issues). It never refuses and never changes the exit code,
+    `--check` included.
+  - **Archetypes agentteams doesn't render.** A `selected_archetypes` slug with no domain template gets one `[INFO]`
+    line instead of being dropped silently; another layer (researchteam's `interpretation-advisor`) may provide it.
+  - **The team-manifest schema matches too** (@conflict-auditor): its `selected_archetypes` enum is now the same slug
+    pattern, and its two `tool_category` enums accept `build` and `infrastructure`, which `analyze_tools` copies in.
+  - **The capability the code reads** (`instance_maintenance`) is in the schema's `capabilities` enum (@adversarial).
+  - **The fleet shows the warning** (@adversarial): it captures each render's output, so a printed WARN never reached
+    the operator. The fleet report's `schema_warnings` carries it, on the first target of each workspace.
+  - **The check never fails a load:** an error while checking is a `[WARN]` too, and each listed issue is clipped to
+    160 characters, so a `oneOf` message can't echo a whole brief value. The validator registers the sibling
+    schemas by `$id`, so `mcp_servers` items resolve against `mcp-server.schema.json`.
+  - **Census for the later refusal:** 96 of 155 descriptors failing before the schema fix, 23 after (unchanged by the
+    `instance_maintenance` addition, which no failing brief used). The 23 include project names with spaces, which
+    the schema documents as slug-safe and the code tolerates.
 
 ### changed (internal: fleet.py and emit.py carved below the CH-07 crowding mark)
 
