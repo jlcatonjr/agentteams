@@ -202,22 +202,20 @@ def events_from_goose_session(lines: Iterable[str], work_tree: str, roster: set[
     return events
 
 
-def apply_gate_log(events: list[dict[str, Any]], gate_lines: Iterable[str]) -> list[dict[str, Any]]:
+def apply_gate_log(events: list[dict[str, Any]], gate_lines: Iterable[str],
+                   skipped: list[int] | None = None) -> list[dict[str, Any]]:
     """Mark events the gate denied (by ``tool_use_id``).
 
     Args:
         events: Events from a host extractor.
         gate_lines: ``AGENTTEAMS_GATE_LOG`` lines.
+        skipped: A one-item counter of gate-log lines that were not JSON (they void the score, like trace lines).
 
     Returns:
         The same events, each with ``denied`` set.
     """
     denied: set[str] = set()
-    for line in gate_lines:
-        try:
-            rec = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
+    for rec in _parse_lines(gate_lines, skipped if skipped is not None else [0]):
         if isinstance(rec, dict) and rec.get("decision") in _DENIED and rec.get("tool_use_id"):
             denied.add(str(rec["tool_use_id"]))
     for ev in events:
@@ -294,7 +292,7 @@ def normalise(host: str, lines: Iterable[str], *, work_tree: str, session_slug: 
 
     Returns:
         An ``agent_session_trajectory`` with an added ``events`` list (each numbered by ``seq``) and
-        ``skipped_lines``, the count of trace lines that were not JSON.
+        ``skipped_lines``, the count of trace and gate-log lines that were not JSON.
 
     Raises:
         ValueError: For an unknown host.
@@ -306,7 +304,7 @@ def normalise(host: str, lines: Iterable[str], *, work_tree: str, session_slug: 
         events = events_from_goose_session(lines, work_tree, roster or set(), skipped)
     else:
         raise ValueError(f"unknown host {host!r}")
-    events = add_plan_completion(apply_gate_log(events, gate_lines), final_state or {})
+    events = add_plan_completion(apply_gate_log(events, gate_lines, skipped), final_state or {})
     for i, ev in enumerate(events, 1):
         ev["seq"] = i
     trajectory = to_trajectory(events, session_slug)

@@ -140,16 +140,14 @@ def run_stage_once(state_dir: Path, stage: str, run: Callable[[], int], *, day: 
     prior = read_marker(state_dir, stage, day)
     if prior is not None:
         return int(prior.get("exit", 2))
+    code, detail = 2, "raised before returning an exit code"
     try:
-        code = int(run())
-    except BaseException as exc:
-        record_stage(state_dir, stage, day, 2, f"raised {type(exc).__name__}")
-        write_status(status_path or state_dir / STATUS_NAME, {"stage": stage, "exit": 2,
-                                                              "problems": [f"raised {type(exc).__name__}"]})
-        raise
-    record_stage(state_dir, stage, day, code)
-    if code == 2:
-        write_status(status_path or state_dir / STATUS_NAME, {"stage": stage, "exit": 2, "problems": []})
+        code, detail = int(run()), ""
+    finally:  # no except: whatever ``run`` raises propagates after it is recorded as exit 2
+        record_stage(state_dir, stage, day, code, detail)
+        if code == 2:
+            write_status(status_path or state_dir / STATUS_NAME,
+                         {"stage": stage, "exit": 2, "problems": [detail] if detail else []})
     return code
 
 
