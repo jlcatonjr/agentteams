@@ -205,3 +205,51 @@ def test_a_malformed_privilege_file_refuses(repo: Path, script: Path) -> None:
     gates = _gates(repo, script)
     (gates / "references" / "agent-privilege.json").write_text("[1, 2]")
     assert cb.check_file_clearance(gates, "survey-s5", script)[0] is False
+
+
+def test_a_planted_git_between_the_gates_dir_and_the_root_does_not_hide_a_halt(repo: Path, script: Path) -> None:
+    main = _team(repo / ".github" / "agents", build_log=True)
+    _decisions(main, [("survey-s5", "HALT")])
+    gates = _gates(repo, script)
+    (gates / ".git").mkdir()  # an empty, planted marker in the gates dir itself
+    (repo / ".github" / ".git").write_text("gitdir: /nowhere\n")  # and one in between
+    assert cb.check_file_clearance(gates, "survey-s5", script)[0] is False
+
+
+def test_a_gates_dir_reached_through_a_symlink_still_sees_the_repo(repo: Path, script: Path, tmp_path: Path) -> None:
+    main = _team(repo / ".github" / "agents", build_log=True)
+    _decisions(main, [("survey-s5", "HALT")])
+    outside = _team(tmp_path / "outside" / "gates")
+    _decisions(outside, [(cb.clearance_action("survey-s5", script), "PASS")])
+    os.symlink(outside, repo / ".github" / "gates")
+    assert cb.check_file_clearance(repo / ".github" / "gates", "survey-s5", script)[0] is False
+
+
+@pytest.mark.parametrize("team_rel", [".codex/agents", ".goose/recipes", ".grok/agents"])
+def test_a_halt_in_any_generated_team_location_binds(repo: Path, script: Path, team_rel: str) -> None:
+    other = _team(repo / team_rel, build_log=True)
+    _decisions(other, [("survey-s5", "HALT")])
+    gates = _gates(repo, script)
+    assert cb.check_file_clearance(gates, "survey-s5", script)[0] is False
+
+
+def test_a_symlinked_log_in_a_canonical_dir_refuses(repo: Path, script: Path, tmp_path: Path) -> None:
+    main = _team(repo / ".github" / "agents", build_log=True)
+    elsewhere = tmp_path / "elsewhere.csv"
+    elsewhere.write_text(",".join(_COLS) + "\n")
+    os.symlink(elsewhere, main / "references" / "security-decisions.log.csv")
+    gates = _gates(repo, script)
+    ok, reason = cb.check_file_clearance(gates, "survey-s5", script)
+    assert ok is False and "symbolic link" in reason
+
+
+def test_is_team_dir_is_the_one_signing_uses(tmp_path: Path) -> None:
+    from agentteams.cli import operator_signing
+
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert cb.is_team_dir(plain) is False
+    assert operator_signing.sign_decision_team_refusal(plain) is not None
+    _team(plain)
+    assert cb.is_team_dir(plain) is True
+    assert operator_signing.sign_decision_team_refusal(plain) is None

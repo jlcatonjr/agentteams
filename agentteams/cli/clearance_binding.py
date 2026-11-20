@@ -8,7 +8,7 @@ answer, exposed as ``agentteams --check-clearance SCOPE --clearance-file PATH``.
 **Which HALTs bind (#578).** A clearance may be checked in a *gates-only team dir*: a separate team dir that holds only
 signed sign-off rows, so the main team's log need not become signing-active. A HALT must not be escapable by checking
 in a fresh dir (C-2), so :func:`halt_scan_dirs` adds, for every team dir, the repository's canonical team dirs
-(``.claude/agents``, ``.github/agents`` under the git toplevel) and an optional declared ``parent_team``. All of it is
+(every generated team location under each enclosing git root) and an optional declared ``parent_team``. All of it is
 fail-closed (@security ruling, 2026-11-20).
 
 Stdlib only.
@@ -18,28 +18,52 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
 _SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 
-#: Team dirs whose HALTs bind every clearance checked anywhere in the same repository.
-CANONICAL_TEAM_DIRS: tuple[str, ...] = (".claude/agents", ".github/agents")
-
 #: The ``agent-privilege.json`` key naming one more team dir (relative to the git toplevel) whose HALTs bind.
 PARENT_TEAM_KEY = "parent_team"
 
 
-def _is_team_dir(path: Path) -> bool:
+def canonical_team_dirs() -> tuple[str, ...]:
+    """Every generated team location, relative to a repository root; their HALTs bind clearances checked anywhere
+    in that repository. The same list :data:`agentteams.carveouts.TEAM_DIRS` names, so a team rendered for any
+    framework is covered (scanning more dirs only adds refusals)."""
+    from agentteams.carveouts import TEAM_DIRS
+
+    return TEAM_DIRS
+
+
+def is_team_dir(path: Path) -> bool:
+    """Whether *path* is an agentteams team dir: it holds ``references/agent-privilege.json`` or ``build-log.json``.
+
+    Args:
+        path: The directory to test.
+
+    Returns:
+        True when either file is present.
+    """
     refs = path / "references"
     return (refs / "agent-privilege.json").is_file() or (refs / "build-log.json").is_file()
 
 
-def _git_toplevel(start: Path) -> Path | None:
-    for candidate in (start, *start.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return None
+def _git_roots(team_dir: Path) -> list[Path]:
+    """Every ancestor of *team_dir* holding a ``.git`` entry of any kind, innermost first.
+
+    Both the path as given (made absolute) and its resolved form are walked, and every match is kept rather than
+    the nearest: a ``.git`` planted between a gates dir and the repository root, or a gates dir reached through a
+    symbolic link, must add roots to scan, never hide the real one (@security review of #578). For the same reason
+    an empty or fake ``.git`` counts here, unlike ``_fleet_locks._is_git_marker``.
+    """
+    roots: list[Path] = []
+    for start in (Path(os.path.abspath(team_dir)), team_dir.resolve()):
+        for candidate in (start, *start.parents):
+            if (candidate / ".git").exists() and candidate not in roots:
+                roots.append(candidate)
+    return roots
 
 
 def _declared_parent(team_dir: Path) -> str | None:
@@ -76,13 +100,19 @@ def _no_symlink_below(top: Path, rel_parts: tuple[str, ...], what: str) -> Path:
     return current
 
 
+def _log_not_linked(team: Path) -> None:
+    for part in (team / "references", team / "references" / "security-decisions.log.csv"):
+        if part.is_symlink():
+            raise RuntimeError(f"'{part}' is a symbolic link; a HALT log is never read through one (fail-closed)")
+
+
 def halt_scan_dirs(team_dir: Path) -> list[Path]:
     """The team dirs whose decisions logs are scanned for HALTs when a clearance is checked in *team_dir*.
 
-    Always *team_dir* itself. Inside a git repository, also each canonical team dir (:data:`CANONICAL_TEAM_DIRS`)
-    that exists, and the team dir named by *team_dir*'s ``parent_team`` (in ``references/agent-privilege.json``),
+    Always *team_dir* itself. Inside a git repository, also each generated team dir (:func:`canonical_team_dirs`)
+    that exists under every enclosing ``.git`` root, and the team dir named by *team_dir*'s ``parent_team`` (in ``references/agent-privilege.json``),
     so a HALT cannot be escaped by checking a clearance in another dir. The parent path is relative to the git
-    toplevel; it must stay inside it, have no symbolic-link component, be a team dir other than *team_dir*, and not
+    toplevel (the innermost root); it must stay inside it, have no symbolic-link component, be a team dir other than *team_dir*, and not
     declare a ``parent_team`` of its own (one level, no chains).
 
     Args:
@@ -92,7 +122,7 @@ def halt_scan_dirs(team_dir: Path) -> list[Path]:
         The dirs to scan, *team_dir* first, without duplicates.
 
     Raises:
-        RuntimeError: Fail-closed refusals: a canonical team dir is or sits under a symbolic link; a declared parent
+        RuntimeError: Fail-closed refusals: a canonical team dir is or sits under a symbolic link, or a scanned dir's ``references/`` or log is one; a declared parent
             is absolute, escapes the toplevel, has a symbolic-link component, is missing or not a team dir, is
             *team_dir* itself, or declares its own parent; a parent is declared outside any git repository; or an
             ``agent-privilege.json`` cannot be read.
@@ -101,24 +131,27 @@ def halt_scan_dirs(team_dir: Path) -> list[Path]:
     dirs = [team_dir]
     seen = {team_dir.resolve()}
     declared = _declared_parent(team_dir)
-    top = _git_toplevel(team_dir.resolve())
-    if top is None:
+    roots = _git_roots(team_dir)
+    if not roots:
         if declared is not None:
             raise RuntimeError(f"{team_dir} declares {PARENT_TEAM_KEY} '{declared}' but is not inside a git "
                                "repository, so the parent cannot be checked for containment; refusing")
         return dirs
-    for rel in CANONICAL_TEAM_DIRS:
-        canonical = _no_symlink_below(top, Path(rel).parts, "canonical team dir")
-        if canonical.is_dir() and canonical.resolve() not in seen:
-            seen.add(canonical.resolve())
-            dirs.append(canonical)
+    for root in roots:
+        for rel in canonical_team_dirs():
+            canonical = _no_symlink_below(root, Path(rel).parts, "canonical team dir")
+            if canonical.is_dir() and canonical.resolve() not in seen:
+                _log_not_linked(canonical)
+                seen.add(canonical.resolve())
+                dirs.append(canonical)
     if declared is not None:
+        top = roots[0]
         rel_path = Path(declared)
         if rel_path.is_absolute() or ".." in rel_path.parts or not rel_path.parts:
             raise RuntimeError(f"{PARENT_TEAM_KEY} '{declared}' must be a path relative to the repository root, "
                                "without '..'; refusing")
         parent = _no_symlink_below(top, rel_path.parts, f"{PARENT_TEAM_KEY} component")
-        if not _is_team_dir(parent):
+        if not is_team_dir(parent):
             raise RuntimeError(f"{PARENT_TEAM_KEY} '{declared}' is not a team dir (no references/agent-privilege.json "
                                "or references/build-log.json); refusing")
         if parent.resolve() == team_dir.resolve():
@@ -127,6 +160,7 @@ def halt_scan_dirs(team_dir: Path) -> list[Path]:
             raise RuntimeError(f"{PARENT_TEAM_KEY} '{declared}' declares a {PARENT_TEAM_KEY} of its own; "
                                "only one level is allowed; refusing")
         if parent.resolve() not in seen:
+            _log_not_linked(parent)
             seen.add(parent.resolve())
             dirs.append(parent)
     return dirs

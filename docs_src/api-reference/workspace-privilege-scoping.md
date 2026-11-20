@@ -732,8 +732,9 @@ references/
 the scope, or on the file-bound action, in any of these logs refuses it (C-2):
 
 - the team dir's own log;
-- inside a git repository, the canonical team dirs `.claude/agents` and `.github/agents` under the repository root,
-  whether or not the gates dir names them;
+- inside a git repository, every generated team dir (`.claude/agents`, `.github/agents`, `.codex/agents`,
+  `.goose/recipes`, `.grok/agents`) under each enclosing git root, whether or not the gates dir names them. Every
+  enclosing `.git` counts, so a planted marker or a symlinked gates dir adds roots rather than hiding one;
 - the team dir named by `"parent_team"` in the gates dir's `references/agent-privilege.json`: a path relative to the
   repository root.
 
@@ -741,13 +742,13 @@ Each log is read under its own rules: an unsigned HALT binds, and a retraction c
 log. The check is fail-closed. It refuses when:
 
 - a scanned log cannot be read or parsed;
-- a canonical team dir is, or sits under, a symbolic link;
+- a scanned team dir, its `references/` or its log is, or sits under, a symbolic link;
 - the `parent_team` path is absolute, uses `..`, has a symbolic-link component, is not a team dir, names the gates dir
   itself, or declares a `parent_team` of its own (one level only);
 - a `parent_team` is declared outside any git repository. Outside a repository, only the team dir's own log is read.
 
-A governing team kept outside the canonical locations binds only through a declared `parent_team`. Leaving the link
-out drops that team's HALTs, so keep governing teams in `.claude/agents` or `.github/agents`.
+A governing team kept outside the generated locations binds only through a declared `parent_team`. Leaving the link
+out drops that team's HALTs, so keep governing teams in a generated team location.
 
 **`AGENTTEAMS_DECISION_SIGNING_KEY` applies to the whole process.** If it is exported in a shell, every decisions log
 that process touches becomes signing-active, including the main team's. Set it only for the sign-off command itself,
