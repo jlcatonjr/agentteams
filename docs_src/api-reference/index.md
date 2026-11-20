@@ -139,6 +139,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`confinement`](confinement.md) | Orchestrator-only-writes pilot (P4b): run the runner's commands and gates in a Seatbelt/bwrap sandbox built from `confined_programs` |
 | [`wasm_runtime`](wasm-runtime.md) | WASM sandbox: pinned download, safe extraction and verify-on-use for wasmtime and the guest interpreters (`--wasm-install`) |
 | [`wasm_exec`](wasm-exec.md) | The wasmtime executor: pinned compute-only grant, exact-shape argv check, OS nesting, capability probe (WASM P02) |
+| [`wasm_session`](wasm-session.md) | Streaming session mode: one long-lived guest, stdio relayed frame by frame, host status records on a separate fd (beta, #567) |
 | [`wasm_pins`](wasm-pins.md) | Pure re-hash of an installed WASM runtime against its pins; `TODO-PIN` fails closed |
 | [`wasm_guests`](wasm-guests.md) | Python / JavaScript / core-module guests on the pinned grant, with per-language deny probes (WASM P04) |
 | [`sandbox_projection`](sandbox-projection.md) | The model-substrate WASM switch projected to `.agentteams/sandbox-state.json` for consumers that run model code (WASM P20) |

@@ -397,6 +397,13 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # cli/wasm_commands the only caller of install/pin_update. A silent edit to any of them runs an unverified
     # wasmtime or interpreter, or widens what a guest may touch, without tripping --verify-integrity.
     "agentteams/wasm_exec.py",
+    # wasm_session (#567) is the second place wasmtime starts: it spawns wasm_exec's materialized argv for a
+    # streaming session and owns the host status channel, the relay caps and the run-directory reaper. A silent edit
+    # lets a guest reach the status fd, lifts a cap, or turns the reaper into a deletion primitive.
+    "agentteams/wasm_session.py",
+    # Its bench (#567, @security R1) spawns wasmtime too, with os_confine="off" for the comparison leg: an edit could
+    # drop the --unconfined-baseline opt-in or leave an unconfined guest running.
+    "agentteams/_wasm_session_bench.py",
     "agentteams/wasm_pins.py",
     "agentteams/wasm_runtime.py",
     "agentteams/_wasm_archive.py",

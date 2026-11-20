@@ -313,6 +313,7 @@ nav:
               - confinement: api-reference/confinement.md
               - wasm_runtime: api-reference/wasm-runtime.md
               - wasm_exec: api-reference/wasm-exec.md
+              - wasm_session: api-reference/wasm-session.md
               - wasm_pins: api-reference/wasm-pins.md
               - wasm_guests: api-reference/wasm-guests.md
               - wasm_config: api-reference/wasm-config.md

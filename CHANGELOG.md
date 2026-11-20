@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (beta: the WASM streaming session mode and its entry point, #567)
+
+- **New `agentteams/wasm_session.py`** runs one WASM guest as a long-lived session:
+  `python -I -m agentteams.wasm_session run --project-root DIR [options] -- MODULE [guest args]`. It keeps the guest's
+  stdin open across turns and relays stdio byte for byte, a complete line at a time. Host status records (JSON Lines,
+  schema `agentteams-wasm-session/1`) go to `--status-fd` (default 3), which the guest never holds. Pre-start refusals
+  and host-set outcomes therefore can't be forged from guest output, and the guest's exit code stays separate from
+  the entry point's.
+- The guest runs with `wasm_exec`'s grant, limits, empty environment, verified copies and OS nesting, unchanged, and
+  no new wasmtime flag.
+- Caps:
+  - per-frame cap of 1 MiB by default, minimum 262,145 B;
+  - total caps of 256 MiB for output and 64 MiB for input;
+  - stderr is truncated, never fatal;
+  - the idle timeout is opt-in;
+  - a guest is killed when its parent closes stdin or goes away;
+  - a reaper removes stale run directories, without following symlinks.
+- A `bench` subcommand reports per-request relay overhead. At 3×10⁵ requests on macOS arm64 the relay added about
+  70 µs per request over a bare wasmtime spawn.
+- Contract: [#567](https://github.com/jlcatonjr/agentteams/issues/567#issuecomment-7026367447). `@security` design
+  conditions S1–S12.
+- **Beta:** see STABILITY.md. New tests are in `tests/test_wasm_session.py`, and the test guest is
+  `tests/fixtures/wasm/session_echo.{wat,wasm}`.
+
 ### changed (internal: fleet.py and emit.py carved below the CH-07 crowding mark)
 
 - Moved fleet's fence/USER-EDITABLE line maps and fence-pairing gate (`_fence_and_useredit_lines`,
