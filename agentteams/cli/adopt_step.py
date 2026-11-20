@@ -116,12 +116,14 @@ def _refuse_dropped_rows(manifest: dict, output_dir: Path, agent_ext: str, *, dr
     return 1
 
 
-def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, result: emit.EmitResult) -> None:
-    """Put a dry-run merge-mode plan into the ``--dry-run --json`` report.
+def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, result: emit.EmitResult,
+                        *, at_risk_routed: list[dict] | None = None) -> None:
+    """Put a dry-run merge-mode plan, and any at-risk routed agents, into the ``--dry-run --json`` report.
 
     Args:
         merge_plan: The plan from :func:`run_adopt_step`, or ``None``.
         result: The emit result.
+        at_risk_routed: Routed agents an ``--overwrite`` would orphan (``cli.routing_at_risk``, #392 item 12).
 
     Returns:
         None.
@@ -131,3 +133,5 @@ def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, resu
     """
     if merge_plan is not None and result.dry_run_report is not None:
         result.dry_run_report.adopt_orphans_merge = merge_plan.as_report()
+    if at_risk_routed and result.dry_run_report is not None:
+        result.dry_run_report.at_risk_routed_agents = list(at_risk_routed)

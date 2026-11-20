@@ -1,0 +1,8 @@
+{
+  "patch_id": "4b9100bc267ae8a9ac81d55b6158d4cd3c0569ef",
+  "commit": "49b9d67bb096f34123276c8f138a06d7dc8572a8",
+  "subject": "fix(item 13b): audit fixes: fingerprint-safe scan, filled tokens leave the checklist",
+  "impact": "2 symbols added, 1 symbols changed",
+  "note": "Item 13b audit fixes: open_count, render_setup_required wrapper, effective hook on complete_setup_required; api-reference/placeholder-scan.md updated; render wrapper documented in its docstring",
+  "recorded_at": "2026-11-16T00:47:13Z"
+}

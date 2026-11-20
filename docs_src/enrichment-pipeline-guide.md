@@ -46,7 +46,7 @@ agentteams \
   --enrich --post-audit
 ```
 
-`--post-audit` implies `--enrich` automatically. Running `--post-audit` without `--enrich` would expose the audit to unresolved placeholders, which generate false positives. The pipeline sets `--enrich = True` if `--post-audit` is requested and `--enrich` was not explicitly set.
+`--post-audit` implies `--enrich` automatically. Without `--enrich`, the audit would report every placeholder enrich can fill as an unresolved-placeholder warning. The pipeline sets `--enrich = True` if `--post-audit` is requested and `--enrich` was not explicitly set.
 
 ---
 
@@ -67,8 +67,8 @@ Applies known fill rules for standard token patterns:
 
 | Token | Rule |
 |---|---|
-| `{MANUAL:REFERENCE_DB_PATH}` | Returns `N/A — no citation database configured for this project` when no `reference_db` is set in the description |
-| `{MANUAL:STYLE_REFERENCE_PATH}` | Returns `N/A — no formal style guide defined for this project` or the value from `style_reference` if present |
+| `{MANUAL:REFERENCE_DB_PATH}` | Returns `N/A — no citation database configured for this project` when no `reference_db` is set in the description, unless the brief names `reference-manager` in `selected_archetypes` (then it stays for the operator) |
+| `{MANUAL:STYLE_REFERENCE_PATH}` | Returns the value from `style_reference` if present; otherwise `N/A — no formal style guide defined for this project`, unless the brief names `style-guardian` in `selected_archetypes` (then it stays for the operator) |
 | `{MANUAL:CONVERSION_PIPELINE}` | Returns `N/A — [format] files are the final deliverable format` when source and output formats match |
 | `{MANUAL:CONFLICT_LOG_PATH}` | Returns the standard path `.github/agents/references/conflict-log.csv` |
 | `{MANUAL:FIGURES_DIR}` | Returns `<primary_output_dir>/figures` |

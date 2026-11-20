@@ -209,11 +209,13 @@ nav:
           - "API reference: overview": api-reference/index.md
           - Pipeline modules:
               - ingest: api-reference/ingest.md
+              - brief-schema: api-reference/brief-schema.md
               - analyze: api-reference/analyze.md
               - analyze-tools: api-reference/analyze-tools.md
               - tool-version-source: api-reference/tool-version-source.md
               - manifest-format: api-reference/manifest-format.md
               - render: api-reference/render.md
+              - placeholder-scan: api-reference/placeholder-scan.md
               - emit: api-reference/emit.md
               - fences: api-reference/fences.md
               - fence-baseline: api-reference/fence-baseline.md
@@ -231,6 +233,7 @@ nav:
               - gitdirs: api-reference/gitdirs.md
               - update-lock: api-reference/update-lock.md
               - fleet: api-reference/fleet.md
+              - descriptor-union: api-reference/descriptor-union.md
               - drift: api-reference/drift.md
               - behavioral-drift: api-reference/behavioral-drift.md
           - Audit & security support:
@@ -312,6 +315,7 @@ nav:
               - confinement: api-reference/confinement.md
               - wasm_runtime: api-reference/wasm-runtime.md
               - wasm_exec: api-reference/wasm-exec.md
+              - wasm_session: api-reference/wasm-session.md
               - wasm_pins: api-reference/wasm-pins.md
               - wasm_guests: api-reference/wasm-guests.md
               - wasm_config: api-reference/wasm-config.md
