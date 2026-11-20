@@ -294,6 +294,23 @@ def test_no_intra_package_imports(mod: types.ModuleType) -> None:
             assert not any(a.name.startswith("agentteams") for a in node.names)
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             assert node.func.id not in ("__import__",), "dynamic import"
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            assert node.func.attr != "import_module", "dynamic import (importlib.import_module)"
+
+
+@pytest.mark.parametrize("mod", [W, wasm_pins])
+def test_supported_wasm_core_imports_only_the_standard_library(mod: types.ModuleType) -> None:
+    """STABILITY §7 (#568): wasm_exec and wasm_pins import nothing beyond the standard library, at any time."""
+    import sys
+
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(Path(mod.__file__).read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names |= {a.name.split(".")[0] for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names.add(node.module.split(".")[0])
+    outside = sorted(n for n in names if n not in sys.stdlib_module_names and n != "__future__")
+    assert not outside, f"{mod.__name__} imports outside the standard library: {outside}"
 
 
 #: Files allowed to pass os_confine="inherited" (R5): the executor itself and the P08 launcher (merged as
