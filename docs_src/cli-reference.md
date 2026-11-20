@@ -358,9 +358,14 @@ merge, no manifest or build-log write. It is a standalone mode (`agentteams/cli/
 exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
 `--self` or `--description`, `--framework`, `--output`, `--dry-run`, `--json` and `--no-backup`.
 
-- **It needs a brief.** Pass `--description PATH` (the project's brief) or `--self`; without either the run stops
-  with "--description is required (or use --self for self-maintenance)". It does not look up
-  `.agentteams/brief.json` the way the retrieval modes do.
+- **It needs a brief.** Pass `--description PATH` (the project's brief) or `--self`. Without either, it uses the
+  project's own brief under `--project` (else the working directory), found as the retrieval modes find it
+  (`.agentteams/brief.json`, then `brief.json`; a symlink, a brief outside the project, or one naming another
+  project is not used). It does so only when the agents directory the run writes to is inside that same
+  project, and no project nested between the two has a brief of its own; otherwise it refuses and asks for
+  `--description`. It never uses the `--self` brief (`.github/agents/_build-description.json`) without `--self`.
+  A `--description` you name is never replaced, even if the file is missing. With no brief at all the run stops with "--description is required (or use --self for
+  self-maintenance)".
 - **`--output` is the agents directory**, the one that holds the orchestrator file: `.github/agents/` (Copilot),
   `.claude/agents/` (Claude), and so on, as listed under `--output DIR`. On copilot-vscode, copilot-cli, claude
   and agents-md the path is used as given, so a project-root `--output` refuses with
