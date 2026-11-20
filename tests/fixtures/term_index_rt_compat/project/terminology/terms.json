@@ -1,0 +1,5 @@
+{"schema":"researchteam-term-register","schema_version":"1.0","scope":{"include":["**/*.md"],"exclude":["sub/**"]},
+ "terms":[{"id":"data-pipeline","label":"data pipeline","definition":"A pipe.","variants":["Data Pipeline"],"discouraged":["legacy flow"],"source":"project definition"},
+ {"id":"net","label":".NET runtime","definition":"rt","plural":false,"source":["k1"]},
+ {"id":"fetch-tier","label":"fetch tier","definition":"f","notes":"n <b>"}],
+ "allow":[{"term":"data-pipeline","file":"sub/02-more.md","reason":"r"}]}

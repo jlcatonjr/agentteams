@@ -344,6 +344,7 @@ nav:
               - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
               - bridge-sources: api-reference/bridge-sources.md
               - hooks-emit: api-reference/hooks-emit.md
+              - term-index: api-reference/term-index.md
               - instructions-split: api-reference/instructions-split.md
               - schedule-emit: api-reference/schedule-emit.md
               - goose-config: api-reference/goose-config.md

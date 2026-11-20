@@ -22,6 +22,8 @@ write is too aggressive for a first cut.
 from __future__ import annotations
 
 import json
+import os
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -97,10 +99,46 @@ def _collect_active_slugs(source_dir: Path) -> set[str]:
     return slugs
 
 
-def build_settings_dict(source_dir: Path) -> dict[str, Any]:
-    """Build the Claude settings.json hooks block for active slugs."""
+def term_check_command(source_dir: Path, output_root: Path) -> str | None:
+    """The opt-in term-check hook command, or ``None`` when the team has no term register (#548).
+
+    A team opts in by keeping ``terminology/terms.json`` in its canonical agents directory. The hook is
+    advisory: it runs ``agentteams --term-check --term-check-advisory`` over that directory (fenced,
+    generated text only) and appends the report to ``.claude/hook-notices/term-check.log`` under
+    ``$CLAUDE_PROJECT_DIR``. It never blocks a tool call; it exits 0 even when ``agentteams`` is not on
+    ``PATH`` (the shell's error lands in the log). The log is appended to on every Write/Edit and is
+    not rotated.
+
+    Args:
+        source_dir: The canonical agents directory.
+        output_root: The project root the hooks run from.
+
+    Returns:
+        The shell command, or ``None``.
+    """
+    if not (source_dir / "terminology" / "terms.json").is_file():
+        return None
+    rel = Path(os.path.relpath(source_dir.resolve(), output_root.resolve())).as_posix()
+    # Paths are anchored at $CLAUDE_PROJECT_DIR (else "."), not the session's working directory. The log
+    # takes stderr too, so a missing or too-old agentteams is recorded there rather than lost.
+    return ('d="${CLAUDE_PROJECT_DIR:-.}"; mkdir -p "$d/.claude/hook-notices" && agentteams --term-check "$d"/'
+            + shlex.quote(rel) + ' --term-check-advisory >> "$d/.claude/hook-notices/term-check.log" 2>&1 || true')
+
+
+def build_settings_dict(source_dir: Path, term_check: str | None = None) -> dict[str, Any]:
+    """Build the Claude settings.json hooks block for active slugs.
+
+    Args:
+        source_dir: The canonical agents directory.
+        term_check: The opt-in term-check command (:func:`term_check_command`), or ``None``.
+
+    Returns:
+        The settings block.
+    """
     active = _collect_active_slugs(source_dir)
     events: dict[str, list[dict[str, Any]]] = {}
+    if term_check:
+        events["PostToolUse"] = [{"matcher": "Write|Edit", "hooks": [{"type": "command", "command": term_check}]}]
     for slug, pairs in sorted(_HOOK_MAP.items()):
         if slug not in active:
             continue
@@ -140,7 +178,7 @@ def emit_hooks_artifacts(
     settings_path = claude_dir / "settings.agentteams.example.json"
     guard_path = claude_dir / "hook-guard.sh"
 
-    settings = build_settings_dict(source_dir)
+    settings = build_settings_dict(source_dir, term_check_command(source_dir, output_root))
     settings_content = json.dumps(settings, indent=2, sort_keys=True) + "\n"
 
     for path, content, mode in (
@@ -164,5 +202,6 @@ def emit_hooks_artifacts(
 __all__ = [
     "HooksEmissionResult",
     "build_settings_dict",
+    "term_check_command",
     "emit_hooks_artifacts",
 ]

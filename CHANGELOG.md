@@ -16,6 +16,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented in `docs_src/api-reference/cli.md` ("Supported API"). This function is the one supported symbol in
   `agentteams.cli`. Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
 
+### added (beta: `agentteams.term_index` and `--term-check`; #548)
+
+- **A term-index core, ported from researchteam and declared beta.** `agentteams.term_index` validates a term
+  register, finds every registered form in a document set, and checks the register and any committed index:
+  `SCHEMA AMBIG SRC SCOPE STALE DISC ORPHAN NOREG` block, `REBUILD NOSRC UNUSED QUOTED` advise. The points that
+  were research-specific are `TermIndexConfig` parameters: register directory, skipped sections, source validator,
+  scanned region and generated-file names. It reads both `agentteams-term-register` and
+  `researchteam-term-register`. With researchteam's parameters, its output matches researchteam's engine byte for
+  byte, checked against a golden fixture. Standard library only, and it writes nothing. Matching finds forms, not
+  meanings.
+- **Input limits (researchteam #193).** At most 16 words per form, 32 forms per first word and 64 patterns in each
+  of `include` and `exclude`; a register over 1 MB, a document over 5 MB and a generated file over 20 MB are not read.
+  Every read goes through `read_capped`: no symbolic link is followed at any path component (opened relative to its
+  parent with `O_NOFOLLOW`), and nothing past the cap is read, so a file swapped or grown after a check is refused.
+  `--term-check` reports an environment error by its type only, so no absolute path reaches the hook log.
+- **`agentteams --term-check [AGENTS_DIR]`** checks a team's `terminology/terms.json`, live, against the text inside
+  well-formed `AGENTTEAMS` fences only, never user-editable sections. A file with broken fences is not scanned and
+  is a `FENCE` defect. `--term-check-advisory` reports defects but exits 0.
+- **An opt-in hook.** With `bridge:copilot-vscode-to-claude:hooks` selected and a register in the canonical agents
+  directory, the example hooks block gains an advisory `PostToolUse` term check that logs to
+  `.claude/hook-notices/term-check.log`. A team without a register gets no new hook.
+
+### changed (`--overwrite` refuses to drop an orchestrator's routing; #392 item 12)
+
+- **An `--overwrite` now refuses to replace an orchestrator that routes to agents the build doesn't keep.** This
+  covers `--overwrite`, `--update --overwrite`, and the `--overwrite` that `--migrate` runs. The refusal is
+  `[ROUTING-LOSS] blocked`, and it comes before the overwrite clearance is spent and before any backup or write.
+  - Routed means a backticked `` `@slug` ``, a front-matter `agents:`/`handoffs:` target, or a bare `@slug` with an
+    agent file on disk.
+  - `--yes` doesn't acknowledge the loss, and an unreadable orchestrator refuses.
+  - In 1.2, #526 only reported the loss and the run proceeded.
+- **Migration.** A scripted `--overwrite` that drops bespoke routing on purpose now needs
+  `--accept-routing-loss SLUG[,SLUG...]`, naming exactly the at-risk set (shown in the refusal or in
+  `--dry-run --json`'s new `routing_loss.clear_with`). Alternatively, keep the agents with `--adopt-orphans`, the
+  brief, or `--update --merge`.
+- `@security` design conditions 1–10 (2026-11-19). The tests are in `tests/test_overwrite_at_risk_routing.py`.
+
 ### changed (`--adopt-only` finds the project's brief when none is named, #392 item 13)
 
 - With no `--description` and no `--self`, `--adopt-only` now uses the project's own brief under `--project`
@@ -163,6 +200,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_fence_imbalances` and their marker regexes) to `agentteams/_fleet_fences.py`, and emit's
   `_unmodified_since_build` to `agentteams/_emit_build_state.py`. Both remain importable from `fleet` and `emit`;
   behaviour is unchanged. fleet.py 974 → 894 lines, emit.py 974 → 949, so the pending #521 and #524 fit.
+
+### fixed (red-team probe E1 measures a rendered team; #478)
+
+- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
+  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
+  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
+  and checks the emitted front matter. Each of these is EXPLOITED:
+  - an `allowed-tools:` key;
+  - any agent with no `tools:`/`disallowedTools:`;
+  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
+    a tool list it cannot parse.
+
+  Read-only means the template grants no write or command capability. An empty render raises.
+- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
+- The probe baseline is re-accepted by the operator after merge; the review is in
+  `references/redteam-probe-revalidation.md`.
+
+### fixed (slug checks refuse a trailing newline; #473)
+
+- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
+  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
+  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
+  - `cli/adopt_only.py`;
+  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
+  - `sandbox_state.py` (agent and profile names);
+  - `sandbox_tokens.py`;
+  - `wasm_config.py`;
+  - `wasm_agent/team.py`;
+  - `interop_helpers.py`;
+  - `update_lock.py` (slug-valued arguments).
+- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
+  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
+  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
+  Integrity pins are re-recorded.
+
+### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
+  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
+  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
+
+## [1.2.2] - 2026-11-19
+
+### release notes
+
+agentteams 1.2.2 backports fixes from `dev` to the 1.2 line: the work-summary Stop hook (#6 and 1.2.0 cut items 3
+and 4), `--sync-project-rules` titles (#11), the GitHub management roster and CI caveat (#2, #9), the decisions-log
+migrate hint (#12), CI and test robustness (1.2.0 cut items 2, 6 and 7), the Codex role gate in WASM mode, and the
+PRs #517 (directive scopes, security), #513 and #512. Nothing else from `dev` is included.
 
 ### fixed (a fleet re-render no longer drops the agents the stub records; IM item 12)
 
@@ -330,47 +417,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assert a token retired in a commit that is not on `dev`, so it failed in any full clone without that ref.
 - `test_host_timeout_kills_the_group` accepts -9 or 137 (the shell reporting its child's SIGKILL first, seen on a
   multi-core macOS runner) and now checks directly that the whole process group is gone.
-
-### fixed (red-team probe E1 measures a rendered team; #478)
-
-- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
-  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
-  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
-  and checks the emitted front matter. Each of these is EXPLOITED:
-  - an `allowed-tools:` key;
-  - any agent with no `tools:`/`disallowedTools:`;
-  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
-    a tool list it cannot parse.
-
-  Read-only means the template grants no write or command capability. An empty render raises.
-- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
-- The probe baseline is re-accepted by the operator after merge; the review is in
-  `references/redteam-probe-revalidation.md`.
-
-### fixed (slug checks refuse a trailing newline; #473)
-
-- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
-  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
-  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
-  - `cli/adopt_only.py`;
-  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
-  - `sandbox_state.py` (agent and profile names);
-  - `sandbox_tokens.py`;
-  - `wasm_config.py`;
-  - `wasm_agent/team.py`;
-  - `interop_helpers.py`;
-  - `update_lock.py` (slug-valued arguments).
-- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
-  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
-  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
-  Integrity pins are re-recorded.
-
-### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
-
-- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
-  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
-- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
-  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
 
 ## [1.2.1] - 2026-11-19
 

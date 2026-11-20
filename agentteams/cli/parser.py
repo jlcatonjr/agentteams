@@ -215,6 +215,16 @@ def _build_parser() -> argparse.ArgumentParser:
              "--prune and --adopt-orphans.",
     )
     parser.add_argument(
+        "--accept-routing-loss",
+        metavar="SLUG[,SLUG...]",
+        dest="accept_routing_loss",
+        default=None,
+        help="Let an --overwrite (or --migrate) replace an orchestrator that routes to agents this build "
+             "does not keep (#392 item 12). Without it such a run refuses before any write and names them. "
+             "The list must equal exactly the slugs the refusal (or --dry-run --json's routing_loss) names: "
+             "no wildcard, superset or subset. --yes never acknowledges the loss.",
+    )
+    parser.add_argument(
         "--migrate-decision-log",
         action="store_true",
         dest="migrate_decision_log",
@@ -528,6 +538,26 @@ def _build_parser() -> argparse.ArgumentParser:
         "these is not live (warns only when no confinement was requested). Also "
         "checks that the constitutional gate's interpreter pin (<hooks>/agentteams-python) or "
         "plain python3 can import agentteams, and fails with the fix when neither can.",
+    )
+    parser.add_argument(
+        "--term-check",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="AGENTS_DIR",
+        dest="term_check",
+        help="Beta (#548): check a team's term register (<AGENTS_DIR>/terminology/terms.json, default the "
+        "working directory) against the text inside well-formed AGENTTEAMS fences only, never user-editable "
+        "sections; a file with broken fences is not scanned and is a FENCE defect. Live check: blocking codes "
+        "SCHEMA AMBIG SCOPE DISC ORPHAN NOREG FENCE (NOREG for a named directory with no register). Read-only "
+        "and standalone; exits 1 on a defect, 2 on an I/O error, and 0 with NOTHING CHECKED when the working "
+        "directory has no register. Matching finds forms, not meanings.",
+    )
+    parser.add_argument(
+        "--term-check-advisory",
+        action="store_true",
+        dest="term_check_advisory",
+        help="With --term-check: report defects but exit 0 (for the opt-in hook).",
     )
     parser.add_argument(
         "--wasm-install",

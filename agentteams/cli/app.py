@@ -389,6 +389,9 @@ def _main_dispatch(
     # -----------------------------------------------------------------------
     if getattr(args, "stale_check", False):
         return _run_stale_check(args)
+    if getattr(args, "term_check", None) is not None:  # --term-check: read-only term-register gate (#548)
+        from agentteams.cli.term_check import run_term_check
+        return run_term_check(args)
 
     # -----------------------------------------------------------------------
     # --framework-freshness: standalone read-only cross-framework render-staleness

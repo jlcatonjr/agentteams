@@ -32,11 +32,13 @@ _GENERATE = _REPO_ROOT / "agentteams" / "cli" / "generate.py"
 #: are about the CLI's *output contract*, which is a property of the surface as a whole rather
 #: than of one file — so they read both halves. This test caught the move, which is the point.
 _STANDALONE = _REPO_ROOT / "agentteams" / "cli" / "standalone_modes.py"
+_ADOPT_STEP = _GENERATE.with_name("adopt_step.py")
 
 
 def _cli_source() -> str:
     """The generate/update/check surface, across the modules it now spans."""
-    return _GENERATE.read_text(encoding="utf-8") + "\n" + _STANDALONE.read_text(encoding="utf-8")
+    # cli.adopt_step.finish_dry_run is now the one dry-run print site the update and generate paths share (#392).
+    return "\n".join(p.read_text(encoding="utf-8") for p in (_GENERATE, _STANDALONE, _ADOPT_STEP))
 
 
 # --- 1. --dry-run --json emits exactly one JSON document -------------------
@@ -114,7 +116,9 @@ def test_every_dry_run_report_call_site_passes_the_json_stream():
     call_sites = re.findall(
         r"emit\.print_dry_run_report\((.*?)\)\n", source, re.DOTALL
     )
-    assert len(call_sites) >= 2, "expected at least the update and generate call sites"
+    assert call_sites, "expected the shared dry-run print site (cli.adopt_step.finish_dry_run)"
+    assert len(re.findall(r"\bfinish_dry_run\(", _GENERATE.read_text(encoding="utf-8"))) >= 2, (
+        "expected the update and generate paths both to print through finish_dry_run")
     missing = [c for c in call_sites if "stream=" not in c]
     assert not missing, (
         f"{len(missing)} print_dry_run_report call site(s) omit `stream=`; in JSON mode their "
