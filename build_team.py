@@ -174,7 +174,7 @@ from agentteams.cli.security_gate import (
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
+_DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables", "selected_archetypes")
 
 
 def _check_dual_descriptor(args: argparse.Namespace) -> None:
@@ -182,7 +182,7 @@ def _check_dual_descriptor(args: argparse.Namespace) -> None:
     descriptor and a sibling `_build-description.json` that diverges on a
     small set of stable fields. Read-only; never modifies either file.
     Records hits to tmp/daily-pipeline/dual-descriptor-events/<date>.md (gitignored).
-    Rationale and field list: references/plans/dual-descriptor-divergence-2026-05-25.plan.md
+    Field list: _DUAL_DESCRIPTOR_FIELDS (selected_archetypes added by IM item 12; see agentteams/descriptor_union.py).
     """
     if getattr(args, "self_update", False):
         return
@@ -223,7 +223,7 @@ def _check_dual_descriptor(args: argparse.Namespace) -> None:
         f"[WARN] Dual descriptor detected; {len(diverging)} field(s) diverge "
         f"between\n  primary: {desc_path}\n  sibling: {sibling}\n"
         f"  divergent fields: {', '.join(diverging)}\n"
-        f"  Resolution: align or remove the sibling. Primary is authoritative for this run.",
+        f"  Resolution: align or remove the sibling. Primary is authoritative (a roster it lacks comes from the stub).",
         file=sys.stderr,
     )
     try:
@@ -692,7 +692,7 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
 
     from agentteams import __version__ as _agentteams_version
     from agentteams import drift as _drift
-    from agentteams.source_provenance import source_provenance as _source_provenance
+    from agentteams.source_provenance import source_provenance as _source_provenance, warn_if_unpushed
 
     from agentteams import front_matter_baseline as _fm_baseline
 
@@ -729,9 +729,9 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # Older logs omit these; consumers must treat them as optional.
         "agentteams_version": _agentteams_version,
         # Which agentteams code produced the render: kind (checkout / vcs-pin / local-snapshot / package),
-        # commit, branch and a dirty flag. Optional; never an absolute path (CA-033: a stale, unrecorded
+        # commit, branch, dirty and on_remote. Optional; never an absolute path (CA-033: a stale, unrecorded
         # snapshot silently dropped a consumer's adopted routing rows).
-        "agentteams_source": _source_provenance(),
+        "agentteams_source": warn_if_unpushed(_source_provenance()),  # IM item 29: warns on an unpushed checkout
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "project_name": manifest["project_name"],
         "framework": manifest["framework"],

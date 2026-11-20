@@ -6,6 +6,173 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a fleet re-render no longer drops the agents the stub records; IM item 12)
+
+- **G-17-1.** `fleet._resolve_descriptor` took the root `brief.json` whole whenever it existed. In researchteam-derived
+  repos the roster lives only in `.github/agents/_build-description.json`, so a brief-only re-render re-ran keyword
+  selection and dropped agents, and `--yes` applied the shrunken roster.
+  - **The stub's roster fills a description that has none.** When an `--update` or `--check` run loads a description (the fleet
+    and a hand-run `--update --description brief.json` alike; a fresh render keeps keyword selection), a description
+    with no `selected_archetypes` takes the stub's, if every item is a known archetype, and the run prints where they came from. The stub is found from
+    `--project` alone when it is given, else from `--output` (the places the dual-descriptor advisory probes) or beside
+    the description's project.
+    A symlinked or non-regular stub is never read. No temp file is written, and every record keeps the real
+    descriptor path.
+  - **Other roster keys are reported, not applied.** When the stub sets `write_policy`, `governance_agents` or
+    `retrieval_integration` and the description doesn't, the run warns and leaves them out. They change capability
+    and governance, and nothing rewrites the stub's roster, so a stale stub would otherwise undo a key an operator
+    deleted from the brief (@security, @adversarial).
+  - **The description's own roster wins.** Archetypes it leaves out of the stub's are reported, not refused, so a
+    stale stub never fails a run. The force-appended capability archetypes (`retrieval-integrator`,
+    `research-analyst`, `agentteams-updater`, `vuln-remediation`) are not counted as losses.
+  - **Guard:** when the description has no roster and the stub exists but cannot be used (unparseable, or a roster
+    with an unknown archetype), `--update --yes` refuses
+    before writing (the roster cannot be known) unless the new `--allow-roster-shrink` is given; without `--yes` it
+    warns.
+  - **Dual-descriptor advisory:** `selected_archetypes` is now one of the compared fields.
+  - **Behaviour change:** a brief-only render in a repo with a stub roster now renders that roster instead of the
+    keyword selection, which restores the agents earlier fleet runs dropped. Agents the stub records but the brief
+    never selected are added on the next update.
+
+### added (a render from an agentteams commit no remote has is reported; IM item 29)
+
+- **G-19-3.** A render from the shared editable checkout on a local branch recorded a commit no CI could fetch
+  (Tracers and MarketForge got pins that exist only on a local branch). `source_provenance` recorded it and
+  nothing more.
+  - `agentteams_source` in `references/build-log.json` gains `on_remote`: for a `checkout`, whether a
+    remote-tracking branch contains the commit (`git branch -r --contains`, local refs only, no fetch); `None` for
+    the other kinds or when git can't tell. `--version` adds `, not on a remote`.
+  - Every run that writes a build log (a generate or an `--update`; not `--dry-run`) prints a WARN for an unpushed
+    checkout, naming the commit and branch.
+  - `--doctor` has a new **Agentteams source** section (WARN, never FAIL): a surface whose build log records a
+    checkout commit that no local remote-tracking ref contains. Whenever the running checkout knows the commit it
+    re-checks live, so a commit pushed since the render stops warning; otherwise it uses the recorded value and
+    says so. An unreadable log gets its own WARN line.
+  - Warn only. A commit pushed since the last `git fetch` reads as not on a remote until the next fetch.
+
+### security (a directive scope must name a benign task; IM item 05)
+
+- **G-24-1.** `management_directives.scope_is_allowed` was a stem denylist: any non-empty scope that named no
+  governance root and no listed stem was authorizable. So `rewrite-history`, `git-clean-fdx`, `publish-release`,
+  `sign-row` and `rotate-key` passed, although C-4 says destructive scopes are mechanically auto-refused.
+  - **The directive gate is positive (operator ruling 2026-11-15).** A scope is allowed only when it is plain ASCII
+    (`[a-z0-9 ._/:-]` after lowercasing, so no homoglyph or zero-width character hides a stem) and starts with a
+    verb from `BENIGN_SCOPE_VERBS` (`draft`, `review`, `report`, `test`, `lint`, `audit`, `check`, `verify` …;
+    `s`/`es`/`ed`/`ing` inflections, dropping a final `e`).
+    - `refresh`, `format`, `comment`, `label` and `triage` are deliberately not on the list (@security): a bridge
+      refresh is destructive at its target, `format-disk-volume` would pass, and the other three write to GitHub.
+    - The scope must also name no governance root and no destructive effect anywhere, so a benign verb can't launder
+      a tail (`review-then-delete-stale-branches`). Publishing, releasing, signing and tagging are refused too
+      (`_DIRECTIVE_ONLY_TOKENS`).
+    - The vulnscan handoff's `review-vulnscan-handoff-<id>` still passes.
+  - **The shared denylist gains nine precise stems:** `eras`, `unlink`, `clobber`, `clean`, `rewrit`, `shred`, `chmod`,
+    `chown` and `rotat` (rotating a key changes a trust root).
+  - **The effect classifier keeps its vocabulary plus those nine stems (operator ruling).** It now calls
+    `scope_names_refused_effect`, the denylist half of the gate, never the verb allowlist, because decision rows are
+    free text. The plan's full stem list would have reclassified about 130 of the agentteams and infrastructureManagement
+    rows, mostly false positives ("sign-off", "release/* ruleset").
+  - **Behaviour change and migration:**
+    - A directive whose scope doesn't start with a benign verb is refused when issued and is inert when verified. No
+      `management-directives.log.csv` existed in the workspace at the time, so no directive was affected. Issue a
+      directive as `<benign-verb>-<id>` (the orchestrator's issue-side step now says so).
+    - **Decision rows:** across every `security-decisions.log.csv` in the workspace (2,387 rows with scope text), 26
+      now read as relaxing because of the new stems (baseAgent 8, baseAgent-alignment 8, infrastructureManagement 7,
+      agentteams 3; e.g. "branch-cleanup-…", "…66-clean-snapshot"). Relaxing is the broad class (`is_relaxing`): it
+      brings the row under the HALT and lineage machinery. It does **not** by itself require the operator's Ed25519
+      signature (`requires_operator_signature` also needs a granted capability, a relaxed constraint, cross-repo or
+      bulk reach, or a trust-root target), so no re-minting is needed.
+    - The one failure mode: a row that declares `effect_class: non-relaxing` but now derives as relaxing makes
+      `classify_row` raise (fail closed). None of the 26 declares it.
+  - **Known gap (documented, latent):** `effect_classifier` classifies a directive row's text with the denylist half
+    only, so for `kind="directive"` its text axis can call a scope non-relaxing that the gate refuses (an unknown verb).
+    No production caller classifies directive rows, and the gate refuses such a row before anything honours it.
+  - The orchestrator template's directive steps describe the gate as a benign-verb check, issue side and honor side
+    (`available_workflows` v=15).
+
+### fixed (`--sync-project-rules`: a rule whose bold title wraps a line is no longer dropped from a reference list; #11, 1.2.2)
+
+- In reference mode (Codex's `AGENTS.md`), the projected rules block lists each operator rule's title, and that list
+  is how Codex learns which rules exist. Titles were read with a one-line regex, so a bold title that wrapped onto
+  a second line matched nothing and its rule silently dropped out of the list (researchteam's PS-2, the
+  merge-approval rule). When any bullet had a bold lead, plain bullets dropped out too. Each top-level bullet now
+  yields exactly one title: its bold lead, read across lines, else its first line. A title over 100 characters is
+  cut at a word boundary. Numbered items (`1.`, `1)`) and `+` bullets count as rules too (a numbered rules list used
+  to give no list at all), and an indented Rules section is read at its own indentation. A section with headings is
+  still listed by its headings alone.
+
+### fixed (GitHub management: the section names `@pr-manager` and `@pr-notifier` only when the team has them; researchteam #2, 1.2.2)
+
+- The constitution's GitHub management section told every team that `@pr-manager` owns the pull-request lifecycle
+  and `@pr-notifier` proposes the notices, including teams without those agents (they join only with
+  `pr_management: true` or a GitHub MCP opt-in). The sentence now follows the rendered roster; without
+  `@pr-manager`, `@git-operations` owns the pull-request lifecycle.
+
+### fixed (CI cost levers: a required-checks caveat for path filters, draft skips and `[skip ci]`; researchteam #9, 1.2.2)
+
+- `github-workflows-merge` recommended `paths` / `paths-ignore`, a draft skip and `[skip ci]` without saying how they
+  interact with required checks. A skipped workflow leaves a required check *Expected*, so the PR can't merge; a job
+  skipped by `if:` reports *Success*, so a required check can pass without running. The reference now says so and
+  how to keep required jobs reporting.
+
+### fixed (decisions log: a legacy-width row under a migrated header is routed to `--migrate-decision-log`, and a torn one is never padded; baseAgent #12, 1.2.2)
+
+- From 1.2 the gate refuses a decisions log with any malformed row, so a log that 1.1.x read can block every gate
+  check after the upgrade. For a row short only by trailing signing columns, `governance_logs check`, the gate's
+  refusal and the `governance_logs repair` preview now name `agentteams --migrate-decision-log`, which pads it
+  without changing any signed payload. Before, the preview said "repair by hand".
+- The migration's padding floor is now also the schema's required columns. In a migrated legacy header the signing
+  columns reach back to `action_reviewed`, so a torn 2-field row would have been padded.
+- The migration also refuses to pad, and nothing hints it for, a short row whose verdict cell holds no verdict word
+  or that has a field starting with a space. A legacy HALT split by an unquoted comma parses as a paddable width with
+  `HALT` in `conditions`, and padding it would have made the log readable with that HALT unseen.
+- The migration guide warns 1.2 upgraders to run `python -m agentteams.governance_logs check .` before re-rendering.
+
+### fixed (work-summary Stop hook: no absolute project path in the prompt; the detached worker re-checks the launcher; researchteam @security, 1.2.2)
+
+- The summarizer prompt named the absolute project root, a home path carrying the OS username, which a summary
+  could copy into a committed file (S-8). It now names the repository as the run's working directory and tells the
+  run never to write an absolute path into the summary. The evidence file stays in the system temp directory.
+- The detached worker re-ran the launcher by path without re-checking it, so a file swapped after the wired settings
+  check would run. The worker now starts through the same verify-then-run entry, against the sha256 of the bytes
+  the parent loaded, and exits without launching anything on a mismatch. Re-pinned.
+- After a run, the hook logs a warning when the summary names the project root, the evidence directory or the home
+  directory (it logs which kind, never the path), so a username path is caught before the summary is committed.
+- The wired settings command runs `python3 -I -c`. Without `-I`, Python puts the working directory (the project
+  root) first on `sys.path`, so a committed `hashlib.py` or `runpy.py` would have replaced the digest check. Teams
+  that wired the hook re-merge `settings.worksummary.example.json` (the launcher digest changed too).
+
+### fixed (Codex role gate: WASM mode never applies under the write policy; researchteam @security, 1.2.2)
+
+- With `AGENTTEAMS_CODEX_WASM=1`, the Codex role gate let a spawned agent use every tool except five shell names,
+  and nothing tied that mode to the absence of `write_policy: orchestrator-only`. The renderer never set both, and
+  the launcher clears the guest environment, so it took an operator `--env-allow` or a hand-set environment to reach.
+  The write-policy runner now passes `--setenv AGENTTEAMS_CODEX_WASM=0 --setenv AGENTTEAMS_CODEX_WRITE_POLICY=1`,
+  and with that marker set the gate ignores `AGENTTEAMS_CODEX_WASM` and keeps the read-only `agentteams_readfs`
+  rule. Re-pinned: `codex-role-gate.py`, `_codex_role_gate_emit.py` (its `CODEX_ROLE_GATE_SHA256`) and
+  `_codex_sandbox_emit.py`. Unknown shell tool names in WASM mode without the policy still pass, as the team's
+  `wasm_enforcement` record states.
+
+### fixed (work-summary Stop hook: an `AGENTTEAMS_WS_ALLOWED_TOOLS` override passes the unsafe-rule check; 1.2.0 cut item 4)
+
+- `AGENTTEAMS_WS_ALLOWED_TOOLS` replaces the hook's default `--allowedTools` grant, but its rules used to skip the
+  check that inherited settings rules go through. `unsafe_inherited_allows` now judges them the same way, so an
+  override that would edit outside `workSummaries/`, names a tool the hook does not know, or cannot be parsed
+  (unbalanced parentheses, no rules) skips the run and says why in the hook log. The `--tools` cap is unchanged.
+- Every allow rule the hook judges, inherited or override, must now be exactly `Tool` or `Tool(spec)`, with no nested
+  parentheses and nothing after the closing one, and an edit rule's spec may not contain whitespace or commas. Before,
+  `Edit(workSummaries/**) Write` read as one contained rule, though Claude Code may take the trailing `Write` as a
+  separate, unscoped grant.
+  Re-pinned. The launcher's integrity-pin test reads `manifest["modules"]` (item 3).
+
+### fixed (CI and test robustness: bwrap step timeout, hermetic provenance test, timeout exit code; 1.2.0 cut items)
+
+- Each "Install and probe bubblewrap" step in `ci.yml` has `timeout-minutes: 10`, so a hung apt fails the step
+  instead of holding the job to its own timeout (SEC-IM-AT525 C2). Job names are unchanged.
+- `test_token_provenance_uses_template_history` builds its own template history in a throwaway repo. It used to
+  assert a token retired in a commit that is not on `dev`, so it failed in any full clone without that ref.
+- `test_host_timeout_kills_the_group` accepts -9 or 137 (the shell reporting its child's SIGKILL first, seen on a
+  multi-core macOS runner) and now checks directly that the whole process group is gone.
+
 ## [1.2.1] - 2026-11-19
 
 ### release notes

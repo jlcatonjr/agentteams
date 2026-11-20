@@ -538,7 +538,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     auto_resolved.update(_branch_model.default_placeholders())  # filled by branch_model at render time
     # #453 opt-in: "" unless the brief sets agent_refactor.violation_codes, so the default render is byte-identical.
     auto_resolved[_agent_refactor_codes.PLACEHOLDER] = _agent_refactor_codes.section(description)
-    auto_resolved.update(_github_management.placeholders(description))  # the GitHub management section
+    auto_resolved.update(_github_management.placeholders(description, archetypes))  # names only rostered PR roles
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)

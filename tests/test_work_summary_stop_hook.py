@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -165,11 +166,11 @@ def test_the_launcher_and_its_emitter_are_integrity_pinned() -> None:
 
     repo = Path(__file__).resolve().parents[1]
     manifest = json.loads((repo / "references" / "enforcement-integrity.json").read_text(encoding="utf-8"))
-    pinned = json.dumps(manifest)
+    modules = manifest["modules"]   # a path cited elsewhere in the manifest (its note, say) is not a pin
     for rel in ("agentteams/templates/universal/hooks/work-summary-stop.py",
                 "agentteams/frameworks/_work_summary_hook_emit.py"):
         assert rel in integrity.ENFORCEMENT_MODULES, rel
-        assert f'"{rel}"' in pinned, rel
+        assert rel in modules and re.fullmatch(r"[0-9a-f]{64}", str(modules[rel])), rel
 
 
 def test_wired_command_runs_the_intact_launcher(project) -> None:
@@ -182,6 +183,19 @@ def test_wired_command_runs_the_intact_launcher(project) -> None:
     while time.time() < deadline and not (calls() and not (rdir / "lock").exists()):
         time.sleep(0.1)
     assert len(calls()) == 1
+
+
+def test_wired_command_is_isolated_from_modules_planted_in_the_project(project) -> None:
+    """A committed hashlib.py or runpy.py in the project root must not replace the digest check (1.2.2, @security)."""
+    root, calls, rdir = project
+    _plan(root)
+    assert " -I -c " in _emitted_command()
+    for name in ("hashlib.py", "runpy.py"):
+        (root / name).write_text("import sys\nsys.exit(0)  # a planted module that would skip the check\n")
+    edited = _LAUNCHER.read_text(encoding="utf-8") + "\n# edited\n"
+    refused = subprocess.run(_wire(root, edited), input="{}", cwd=root, capture_output=True, text=True, timeout=20)
+    assert refused.returncode != 0 and "does not match the digest" in refused.stderr
+    assert calls() == []
 
 
 def test_wired_command_refuses_an_edited_launcher(project, tmp_path) -> None:
@@ -254,6 +268,10 @@ def test_tool_set_is_capped_and_messaging_credentials_are_stripped(hook, project
     assert cmd[cmd.index("--tools") + 1] == "Read,Grep,Glob,Agent,Edit,Write"
     env = hook.child_env()
     assert "CLAUDE_CODE_MESSAGING_SOCKET" not in env and "CLAUDE_CODE_MESSAGING_TOKEN" not in env
+    # An override naming a tool the hook does not know now stops the launch outright (item 4), so the cap is checked
+    # on a launch whose override passes the rule check: Bash is denied, so its allow is dead, and the cap holds.
+    assert any("SendMessage" in u for u in hook.unsafe_inherited_allows(root))
+    monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", "Read,Bash")
     _run(hook, root)
     argv = calls()[0]["argv"]
     cap = argv[argv.index("--tools") + 1].split(",")
@@ -311,7 +329,8 @@ def test_broad_inherited_shell_allow_is_neutralised_not_inherited(hook, project,
 
 @pytest.mark.parametrize("where", ["user", "project", "local"])
 @pytest.mark.parametrize("rule", ["Write(**)", "Edit", "Edit(src/**)", "Write(workSummaries/../x)",
-                                  "SomeFutureTool(*)"])
+                                  "SomeFutureTool(*)", "Edit(workSummaries/**) Write",
+                                  "Edit(workSummaries/**)(x)", "Edit(workSummaries/(x)/**)"])
 def test_inherited_rule_that_escapes_worksummaries_stops_the_launch(
         hook, project, tmp_path, where: str, rule: str) -> None:
     root, calls, rdir = project
@@ -323,6 +342,44 @@ def test_inherited_rule_that_escapes_worksummaries_stops_the_launch(
     _run(hook, root)
     assert calls() == []
     assert "would let the unattended run reach beyond workSummaries/" in (rdir / "hook.log").read_text()
+
+
+@pytest.mark.parametrize("override", ["Read,Write(**)", "Read,Edit", "Edit(src/**),Read",
+                                      "Write(workSummaries/../x)", "SomeFutureTool(*)",
+                                      "Read,Edit(workSummaries/**", ",", " ",
+                                      # Trailing text or nested parentheses: Claude Code may read "Write" as a
+                                      # further, unscoped rule (SEC review of item 4).
+                                      "Edit(workSummaries/**) Write", "Edit(workSummaries/**)\tWrite",
+                                      "Edit(workSummaries/**)\nWrite", "Edit(workSummaries/**)(x)",
+                                      "Edit(workSummaries/(x)/**)", "Edit(workSummaries/a,b/**)"])
+def test_an_override_grant_that_escapes_worksummaries_stops_the_launch(
+        hook, project, monkeypatch, override: str) -> None:
+    """AGENTTEAMS_WS_ALLOWED_TOOLS replaces the default grant, so its rules pass the same check (1.2.0 cut item 4)."""
+    root, calls, rdir = project
+    _plan(root)
+    monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", override)
+    assert hook.unsafe_inherited_allows(root), override
+    _run(hook, root)
+    assert calls() == []
+    assert "would let the unattended run reach beyond workSummaries/" in (rdir / "hook.log").read_text()
+
+
+def test_a_contained_override_grant_still_runs_and_is_passed_through(hook, project, monkeypatch) -> None:
+    root, calls, _ = project
+    _plan(root)
+    grant = "Read,Grep,Glob,Agent,Edit(workSummaries/**),Write(./workSummaries/daily/**)"
+    monkeypatch.setenv("AGENTTEAMS_WS_ALLOWED_TOOLS", grant)
+    assert hook.unsafe_inherited_allows(root) == []
+    _run(hook, root)
+    argv = calls()[0]["argv"]
+    assert argv[argv.index("--allowedTools") + 1] == grant
+
+
+def test_override_rules_split_on_top_level_commas_only(hook) -> None:
+    assert hook._split_rules("Read, Edit(workSummaries/a,b/**) ,Glob") == [
+        "Read", "Edit(workSummaries/a,b/**)", "Glob"]
+    assert hook._split_rules("Read,Edit(x") is None and hook._split_rules("Read)") is None
+    assert hook._split_rules(" , ") == []
 
 
 def test_unreadable_settings_stop_the_launch(hook, project) -> None:
@@ -521,6 +578,53 @@ def test_default_run_dir_is_outside_the_project(hook, tmp_path, monkeypatch) -> 
     rdir = hook.run_dir(root)
     assert rdir.parent == tmp_path / "cfg" / "logs" / "agentteams-work-summary"
     assert rdir.name.startswith("proj-") and root not in rdir.parents
+
+
+def test_the_prompt_carries_no_absolute_project_path(hook, project) -> None:
+    """researchteam @security (1.2.2): the absolute root (a home path, so the OS username) could reach a summary."""
+    root, _, _ = project
+    for kind in ("commits", "plan-only"):
+        decision = {"kind": kind, "mode": "append", "count": 1, "latest": "abc1234", "digest": "d"}
+        prompt = hook.build_prompt(root, decision, "2026-11-19", False, evidence=Path("/tmp/x/git-evidence.txt"))
+        assert str(root) not in prompt and str(root.resolve()) not in prompt
+        assert "current working directory" in prompt and "Never write an absolute path" in prompt
+
+
+def test_the_detached_worker_refuses_a_launcher_changed_after_the_check(hook, project, tmp_path) -> None:
+    assert hook._SELF_SHA256 == hashlib.sha256(_LAUNCHER.read_bytes()).hexdigest()
+    root, calls, _ = project
+    _plan(root)
+    copy = tmp_path / "work-summary-stop.py"
+    copy.write_bytes(_LAUNCHER.read_bytes() + b"\n# swapped after the wired check\n")
+    stale = subprocess.run([sys.executable, "-I", "-c", hook._REEXEC, str(copy), hook._SELF_SHA256,
+                            "--foreground", "--project", str(root)], capture_output=True, text=True, timeout=20)
+    assert stale.returncode == 1 and calls() == []
+    ok = subprocess.run([sys.executable, "-I", "-c", hook._REEXEC, str(_LAUNCHER), hook._SELF_SHA256,
+                         "--foreground", "--project", str(root)], capture_output=True, text=True, timeout=60)
+    assert ok.returncode == 0 and len(calls()) == 1
+
+
+def test_main_starts_the_detached_worker_through_the_verifying_entry(hook, project, monkeypatch) -> None:
+    root, _, _ = project
+    started: list[list[str]] = []
+    monkeypatch.setattr(hook.subprocess, "Popen", lambda argv, **kw: started.append(argv))
+    assert hook.main(["--project", str(root)]) == 0
+    [argv] = started
+    assert argv[1:5] == ["-I", "-c", hook._REEXEC, str(Path(hook.__file__).resolve())]
+    assert argv[5] == hook._SELF_SHA256 and argv[6:] == ["--foreground", "--project", str(root)]
+
+
+def test_a_summary_naming_machine_paths_is_flagged_in_the_log(hook, project, monkeypatch) -> None:
+    root, calls, rdir = project
+    _plan(root)
+    monkeypatch.setenv("STUB_BODY", f"- see {root}/tmp/by-week/x.plan.md")
+    _run(hook, root)
+    [warning] = [line for line in (rdir / "hook.log").read_text().splitlines() if "warning:" in line]
+    assert "absolute machine path(s) (project root" in warning
+    assert str(root) not in warning                                  # the log names the kind, never the path
+    clean = root / "workSummaries" / "daily" / "clean.md"
+    clean.write_text("- see tmp/by-week/x.plan.md\n")
+    assert hook.absolute_paths_in(clean, root, root / "nowhere") == []
 
 
 def test_detached_entry_returns_at_once_and_prints_nothing(project) -> None:

@@ -37,8 +37,8 @@ durable closure is the WS-B/C requirement that new authorizing rows declare stru
 See :func:`_text_signal`.
 
 **Not a denylist extension.** This is a *separate marker*. Its destructive/governance vocabulary
-is reused, not re-listed: verb scopes go through :func:`management_directives.scope_is_allowed`
-and trust-root paths through :func:`governance_targets.target_is_governance_root` — the latter
+is reused, not re-listed: verb scopes go through :func:`management_directives.scope_names_refused_effect`
+(the denylist half of the directive gate, never its verb allowlist: IM item 05) and trust-root paths through :func:`governance_targets.target_is_governance_root` — the latter
 the single shared source both this classifier and the directive denylist import, so the two
 paths can never drift (audit m5/Q1). It never itself refuses an ordinary action; it only tells
 the caller which class a row is in, so the caller can require the elevated (asymmetric-signed)
@@ -57,7 +57,7 @@ from agentteams.cli.frozen_surfaces import (
     touches_frozen,
 )
 from agentteams.cli.governance_targets import target_is_elevated_constitution, target_is_governance_root
-from agentteams.cli.management_directives import scope_is_allowed
+from agentteams.cli.management_directives import scope_names_refused_effect
 from agentteams.cli.sandbox_effects import (
     GATE_POLICY_WEAKEN,
     MCP_APPROVAL_AUTO,
@@ -284,7 +284,7 @@ def _profile_signal(profile: EffectProfile) -> str:
     for target in profile.write_targets:
         # A governance-root target, OR a target whose text the shared denylist already reads as
         # destructive/governance (reuse — m5), is relaxing.
-        if target_is_governance_root(target) or not scope_is_allowed(target):
+        if target_is_governance_root(target) or scope_names_refused_effect(target):
             return RELAXING
     return NON_RELAXING
 
@@ -329,8 +329,8 @@ def _text_signal(row: dict[str, str], *, kind: str) -> str:
         return INDETERMINATE
     if target_is_governance_root(scope_text):
         return RELAXING
-    # scope_is_allowed==False ⇒ the text names a destructive/governance/bulk/cross-repo effect.
-    return NON_RELAXING if scope_is_allowed(scope_text) else RELAXING
+    # The denylist half of the directive gate, never its verb allowlist: decision rows are free text (IM item 05).
+    return RELAXING if scope_names_refused_effect(scope_text) else NON_RELAXING
 
 
 def _combine(*signals: str) -> str:
