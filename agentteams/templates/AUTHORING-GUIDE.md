@@ -28,7 +28,7 @@ Filled automatically by the rendering engine from the project description and ma
 
 ### Manual-Required: `{MANUAL:UPPER_SNAKE_CASE}`
 
-Cannot be auto-resolved. Collected into `SETUP-REQUIRED.md` for the user to fill in. Use for values that are project-specific and cannot be inferred:
+Cannot be auto-resolved. Collected into `SETUP-REQUIRED.md` for the user to fill in. The checklist is built from the emitted text, so a token written literally in a template is listed too, inline code included. A new name goes in `PLACEHOLDER-CONVENTIONS.md` (or, if it only explains placeholders, in `placeholder_scan.INSTRUCTIONAL_TOKENS`); `tests/test_placeholder_completeness.py` fails until it is in one of the two. Use for values that are project-specific and cannot be inferred:
 
 ```
 {MANUAL:REFERENCE_DB_PATH}     → path to bibliography database

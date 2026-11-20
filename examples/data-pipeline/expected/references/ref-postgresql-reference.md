@@ -24,7 +24,7 @@ SECTION MANIFEST
 
 ## Official Documentation
 
-Consult the official PostgreSQL documentation at: {MANUAL:TOOL_DOCS_URL}
+Consult the official PostgreSQL documentation at: https://www.postgresql.org/docs/current/
 
 Verify SQL dialect features, configuration parameters, and data types against this documentation.
 
