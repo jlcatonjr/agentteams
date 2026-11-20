@@ -354,9 +354,13 @@ def test_usage_errors_exit_64(tmp_path: Path) -> None:
                   _seams=S._Seams(isolated=False)) == S.EXIT_USAGE   # S7: -I is required
 
 
-def test_check_caps_bounds() -> None:
+def test_check_caps_accepts_the_defaults_and_zero_totals() -> None:
     S.check_caps(S.SessionCaps())
     S.check_caps(S.SessionCaps(output_cap=0, input_cap=0))
+    S.check_caps(S.SessionCaps(frame_cap=262_145, idle_timeout_s=10, eof_grace_s=0, stdin_eof="keep"))
+
+
+def test_check_caps_refuses_each_out_of_bound_value() -> None:
     for bad in (S.SessionCaps(frame_cap=65_537), S.SessionCaps(stderr_cap=1), S.SessionCaps(eof_grace_s=61),
                 S.SessionCaps(idle_timeout_s=5), S.SessionCaps(stdin_eof="drop")):  # type: ignore[arg-type]
         with pytest.raises(W.WasmExecError):
