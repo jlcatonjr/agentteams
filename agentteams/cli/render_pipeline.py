@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agentteams import emit, render, vscode_tasks
+from agentteams._archetype_placeholders import ARCHETYPE_PLACEHOLDERS, named_archetype_keys
 from agentteams.placeholder_scan import MANUAL_TOKEN_RE, complete_setup_required
 from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
@@ -30,41 +31,47 @@ def _apply_placeholder_policy(
     manifest: dict,
     *,
     strict_manual_placeholders: bool,
+    description: dict | None = None,
 ) -> None:
     """Apply dual-mode policy for optional governance placeholders.
 
     In strict mode, unresolved {MANUAL:*} tokens are preserved as-is.
     In usability mode, selected optional placeholders are replaced with
-    explicit defaults and removed from SETUP-REQUIRED tracking.
+    explicit defaults and removed from SETUP-REQUIRED tracking, except when the brief names the archetype
+    that needs the value in ``selected_archetypes``: then the token stays, stays in SETUP-REQUIRED, and a
+    warning names it in every mode (#392 item 1). A keyword-selected archetype keeps the default and gets a
+    one-line warning.
     """
+    desc = description if description is not None else (manifest.get("description", {}) or {})
+    auto = manifest.get("auto_resolved_placeholders", {})
+    unresolved = {key for key in ARCHETYPE_PLACEHOLDERS if str(auto.get(key, "")).strip() == f"{{MANUAL:{key}}}"}
+    kept = named_archetype_keys(desc) & unresolved
+    selected = set(manifest.get("selected_archetypes", []) or [])
+    for key in sorted(unresolved):
+        slug, field = ARCHETYPE_PLACEHOLDERS[key]
+        if key in kept:
+            print(f"warning: {slug} is named in selected_archetypes but the brief sets no {field}; "
+                  f"{{MANUAL:{key}}} stays in its files and SETUP-REQUIRED.md", file=sys.stderr)
+        elif slug in selected:
+            advice = ("" if strict_manual_placeholders
+                      else f", or name {slug} in selected_archetypes to keep the placeholder")
+            print(f"warning: {slug} selected without a {field} (set {field}{advice})", file=sys.stderr)
     if strict_manual_placeholders:
         return
 
-    auto = manifest.get("auto_resolved_placeholders", {})
-    ref_key = "REFERENCE_DB_PATH"
-    style_key = "STYLE_REFERENCE_PATH"
-    ref_manual = "{MANUAL:REFERENCE_DB_PATH}"
-    style_manual = "{MANUAL:STYLE_REFERENCE_PATH}"
-
-    if str(auto.get(ref_key, "")).strip() == ref_manual:
-        auto[ref_key] = "N/A - no citation database configured for this project"
-
-    if str(auto.get(style_key, "")).strip() == style_manual:
-        desc = manifest.get("description", {}) or {}
-        style_value = desc.get("style_reference") or desc.get("style_reference_path")
-        auto[style_key] = (
-            str(style_value)
-            if style_value
-            else "N/A - no formal style guide defined for this project"
-        )
+    defaults = {"REFERENCE_DB_PATH": "N/A - no citation database configured for this project",
+                "STYLE_REFERENCE_PATH": "N/A - no formal style guide defined for this project"}
+    for key in unresolved - kept:
+        auto[key] = defaults[key]
 
     manual_items = manifest.get("manual_required_placeholders", [])
     if manual_items:
-        filtered = [
-            item for item in manual_items
-            if item.get("placeholder") not in {ref_key, style_key}
+        dropped = set(ARCHETYPE_PLACEHOLDERS) - kept
+        manifest["manual_required_placeholders"] = [
+            item for item in manual_items if item.get("placeholder") not in dropped
         ]
-        manifest["manual_required_placeholders"] = filtered
+
+
 def _resolve_strict_manual_mode(*, strict_arg: bool | None, self_update: bool) -> bool:
     """Resolve strict/manual policy from CLI args.
 

@@ -802,6 +802,12 @@ Disable strict manual placeholder preservation and apply usability-oriented defa
 - `REFERENCE_DB_PATH` -> `N/A - no citation database configured for this project`
 - `STYLE_REFERENCE_PATH` -> `N/A - no formal style guide defined for this project` (or the configured `style_reference` value)
 
+These defaults do not apply when the brief names the agent that needs the value in `selected_archetypes`:
+`style-guardian` without a `style_reference`, or `reference-manager` without a `reference_db_path`. Then the
+`{MANUAL:*}` token stays in the rendered files and in `SETUP-REQUIRED.md`, and a warning names it, in either
+mode. When the analyzer picked the agent from keywords instead, the default applies and a one-line warning says
+which value is missing.
+
 This mode is the default for non-self runs.
 
 ---
