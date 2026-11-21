@@ -144,11 +144,15 @@ def test_a_halt_in_the_surfaces_own_log_still_binds(tmp_path, stub_ed25519) -> N
     assert gate.authorized_exempt_repos(native, [_REPO], consume=True, now=_T0) == []
     assert "yes" not in log.read_text()                     # refused before anything was consumed
     # The instance too, and after registration: the canonical exception does not override the surface's HALT.
-    other = _native(tmp_path, ".goose/recipes")
+    # (A fresh project: since #597 the .claude/agents family HALT above binds the canonical render as well.)
+    canonical = _canonical(tmp_path / "b")
+    _log(canonical, _row(_ACTION))
+    other = _native(tmp_path / "b", ".goose/recipes")
     assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == [_REPO]
     _log(other, _row(_ACTION, verdict="HALT", stamp="2026-11-04"))
     assert gate.authorized_exempt_repos(other, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
-    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == [_REPO]
+    # #597 (OD8): the surface's HALT now binds every render of the project, the canonical one included.
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
 
 
 def test_the_canonical_dir_is_used_only_when_it_is_real_and_governed(tmp_path, stub_ed25519) -> None:
@@ -236,3 +240,45 @@ def test_authorize_into_redirects_a_native_output_dir(tmp_path, stub_ed25519) ->
     manifest = {"s10_cooldown_exempt_repos": [_REPO]}
     gate.authorize_into(manifest, native, consume=True)   # what generate.py calls with the run's output_dir
     assert manifest["s10_cooldown_exempt_authorized"] == [_REPO]
+
+
+# --- #597 (OD8, 1.3.0): a HALT in any team dir of the project binds a per-repository exemption ---------------------
+
+import os  # noqa: E402
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("surface", [".codex/agents", ".goose/recipes", ".grok/agents", ".agents"])
+def test_a_halt_in_another_team_dir_binds_a_new_exemption(tmp_path, stub_ed25519, surface) -> None:
+    """.goose/recipes and .grok/agents come only from TEAM_DIRS and .agents only from _surface_dirs: the union binds."""
+    canonical, other = _canonical(tmp_path), _native(tmp_path, surface)
+    log = _log(canonical, _row(_ACTION))
+    _log(other, _row(_ACTION, verdict="HALT", stamp="2026-11-02"))
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == []
+    assert "yes" not in log.read_text()                     # refused before anything was consumed
+    native = _native(tmp_path)                              # and from a third surface's render
+    assert gate.authorized_exempt_repos(native, [_REPO], consume=True, now=_T0) == []
+
+
+def test_a_halt_in_another_team_dir_ends_a_registered_carry_over(tmp_path, stub_ed25519) -> None:
+    canonical = _canonical(tmp_path)
+    _log(canonical, _row(_ACTION))
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == [_REPO]   # registered
+    other = _native(tmp_path, ".codex/agents")
+    _log(other, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-04"))              # the family
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
+
+
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="chmod does not bind root")
+def test_a_team_dir_that_cannot_be_stat_d_exempts_nothing(tmp_path, stub_ed25519, capsys) -> None:
+    canonical = _canonical(tmp_path)
+    _log(canonical, _row(_ACTION))
+    _native(tmp_path, ".codex/agents")
+    (tmp_path / ".codex").chmod(0)
+    try:
+        assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == []
+    finally:
+        (tmp_path / ".codex").chmod(0o700)
+    assert "fail-closed" in capsys.readouterr().err
+

@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the bare family HALT and every sibling's HALT at that gate (C-2). Now only a retraction of exactly the gate action
   clears its family's HALTs, as before. Any other retraction clears only the HALT with its own id, and authenticates
   against that id.
+- **A HALT in any team dir binds a per-repository S-10 exemption (#597).** Without a verified toolchain group, the
+  per-repository path read HALTs only from the canonical `.github/agents` and the dir being rendered. A HALT on
+  `s10-cooldown-exempt` (or one repository) recorded in another surface, for example `.codex/agents`, did not stop a
+  new or carried-over exemption when another surface rendered. Now it binds HALTs from every team dir of the project,
+  the same set the toolchain-group path and file clearances use. A team dir that cannot be stat'd exempts nothing.
 - Upgrade note: a HALT that a member retraction had cleared blocks again; retract it by its own id. Two retraction
   shapes no longer clear a family HALT: a descriptive-suffix id (`overwrite-retract` for an `overwrite` HALT) and a
   member id scoped to the family (`scope=x`, id `x:o/b`). A member retraction scoped to its own id now clears its own
