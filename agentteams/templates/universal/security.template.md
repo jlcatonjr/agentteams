@@ -248,7 +248,22 @@ known-vulnerable, malicious, too new to trust, or not the latest stable release.
   https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities —
   `pip-audit`, `cargo audit`). A release with an unresolved known vulnerability routes to
   `@security` before install
-{S10_COOLDOWN_RULE}
+- ✅ **Package-release cooldown — default 14 days, configurable per project, all
+  ecosystems:** if a release is less than 14 days old, wait before installing it. This
+  governs every update and installation through any package manager or installer (npm,
+  PyPI, crates.io, Homebrew, RubyGems, Go modules, container base images, …) — npm is the
+  motivating precedent, not the scope: the 2025–2026 wave of registry supply-chain
+  compromises (maintainer-account takeovers, worm-style credential stealers) showed that
+  malicious releases are typically detected and unpublished within days, so the cooldown
+  lets registry scanners catch them before installation. Check release age before adopting
+  (`npm view <pkg> time`, the PyPI JSON API's `upload_time_iso_8601`, the registry's
+  release page); make the window mechanical where tooling allows
+  (`npm install --before=<date>`, pnpm `minimumReleaseAge`, uv `--exclude-newer <date>`,
+  Renovate/Dependabot cooldown settings). Upgrading an already-installed package through
+  its distribution's own curated security channel (apt/dnf/apk with a DSA/USN/RHSA-backed
+  update) is remediation, not adoption — the cooldown and the latest-stable rule do not
+  apply there (third-party repositories, PPAs, and vendor-added apt/dnf sources are not
+  that channel)
 - ✅ **Latest stable release only:** adopt the newest *stable* release that has cleared the
   cooldown — the registry's stable channel (npm's `latest` dist-tag, a final PyPI release,
   a runtime's supported release line). Never adopt a pre-release (alpha, beta, rc, dev,

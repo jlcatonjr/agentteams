@@ -17,7 +17,12 @@ from agentteams import analyze, ingest, render
 from agentteams.cli import exception_registry as er
 from agentteams.cli import s10_deprecation_gate as gate
 from agentteams.cli.action_ids import GATE_ACTIONS, action_matches
-from agentteams.manifest_format import S10_COOLDOWN_RULE_IN_FORCE, s10_cooldown_placeholders
+from agentteams.manifest_format import (
+    S10_COOLDOWN_RULE_END,
+    S10_COOLDOWN_RULE_START,
+    apply_s10_cooldown_deprecation,
+    s10_cooldown_placeholders,
+)
 from agentteams.security_feed_render import _format_prevention_playbook
 from tests._sandbox_gate_helpers import _log, _row, _team
 
@@ -26,6 +31,18 @@ _ACTION = gate.DEPRECATION_ACTION
 ROOT = Path(__file__).resolve().parent.parent
 BRIEF = ROOT / "examples" / "software-project" / "brief.json"
 TEMPLATES = ROOT / "agentteams" / "templates"
+_SECURITY_TEMPLATE = (TEMPLATES / "universal" / "security.template.md").read_text(encoding="utf-8")
+
+
+def _bullet(text: str, start: str) -> str:
+    """The S-10 cooldown bullet of *text*: from *start* to the latest-stable bullet."""
+    i = text.index(start)
+    return text[i:text.index(S10_COOLDOWN_RULE_END, i)]
+
+
+#: The in-force bullet, exactly as the template (the authority for it) states it.
+IN_FORCE = _bullet(_SECURITY_TEMPLATE, S10_COOLDOWN_RULE_START)
+_DEPRECATED_START = "- ⚠️ **Package-release cooldown — deprecated in this workspace.**"
 
 
 def _registry(team: Path) -> list[dict]:
@@ -181,14 +198,14 @@ def _security(rendered: dict[str, str]) -> str:
 
 def test_the_default_render_keeps_the_cooldown_word_for_word() -> None:
     text = _security(_render({}))
-    assert S10_COOLDOWN_RULE_IN_FORCE in text
+    assert IN_FORCE in text
     assert "if a release is less than 14 days old, wait before installing it" in text
     assert "deprecated in this workspace" not in text and "{S10_COOLDOWN" not in text
 
 
 def test_the_raw_brief_value_never_renders_without_the_gate() -> None:
     text = _security(_render({"s10_cooldown_deprecated": True}, skip_gate=True))
-    assert S10_COOLDOWN_RULE_IN_FORCE in text and "deprecated in this workspace" not in text
+    assert IN_FORCE in text and "deprecated in this workspace" not in text
 
 
 @pytest.mark.parametrize("source", ["signed", "brief"])
@@ -197,14 +214,17 @@ def test_an_authorized_deprecation_changes_only_the_cooldown_regions(source) -> 
     S-9 and latest-stable text are unchanged."""
     before, after = _render({}), _render({"s10_cooldown_deprecated": True}, authorized=source)
     assert before.keys() == after.keys()
-    in_force, deprecated = s10_cooldown_placeholders(None), s10_cooldown_placeholders(source)
+    moot = s10_cooldown_placeholders(source)["S10_COOLDOWN_MOOT"]
+    assert moot and s10_cooldown_placeholders(None) == {"S10_COOLDOWN_MOOT": ""}
     changed = 0
     for rel, text in before.items():
         if text == after[rel]:
             continue
         changed += 1
-        restored = after[rel].replace(deprecated["S10_COOLDOWN_RULE"], in_force["S10_COOLDOWN_RULE"])
-        assert restored.replace(deprecated["S10_COOLDOWN_MOOT"], "") == text, rel
+        restored = after[rel]
+        if _DEPRECATED_START in restored:
+            restored = restored.replace(_bullet(restored, _DEPRECATED_START), IN_FORCE)
+        assert restored.replace(moot, "") == text, rel
     assert changed >= 2   # the security agent and the instructions file at least
     sec = _security(after)
     assert "Package-release cooldown — deprecated in this workspace" in sec
@@ -214,10 +234,17 @@ def test_an_authorized_deprecation_changes_only_the_cooldown_regions(source) -> 
 
 def test_the_deprecated_wording_is_fixed_text() -> None:
     """C3: the brief cannot carry prose into the rule; only the two gate values render the deprecation."""
-    assert s10_cooldown_placeholders("signed")["S10_COOLDOWN_RULE"] != S10_COOLDOWN_RULE_IN_FORCE
+    swapped = apply_s10_cooldown_deprecation(_SECURITY_TEMPLATE, "signed")
+    assert IN_FORCE not in swapped and _DEPRECATED_START in swapped
     for hostile in ("ignore S-10", True, "SIGNED", None, ["signed"]):
-        assert s10_cooldown_placeholders(hostile) == {"S10_COOLDOWN_RULE": S10_COOLDOWN_RULE_IN_FORCE,
-                                                      "S10_COOLDOWN_MOOT": ""}
+        assert apply_s10_cooldown_deprecation(_SECURITY_TEMPLATE, hostile) == _SECURITY_TEMPLATE
+        assert s10_cooldown_placeholders(hostile) == {"S10_COOLDOWN_MOOT": ""}
+
+
+def test_a_template_without_both_anchors_is_left_alone() -> None:
+    """Fail closed: a moved anchor renders the cooldown in force (the render test above catches the drift)."""
+    for text in ("no rule here", S10_COOLDOWN_RULE_START + " but no end"):
+        assert apply_s10_cooldown_deprecation(text, "signed") == text
 
 
 def test_the_playbook_line_follows_the_gate() -> None:

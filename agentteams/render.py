@@ -13,7 +13,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-from agentteams.manifest_format import format_s10_exempt_repos, s10_cooldown_placeholders
+from agentteams.manifest_format import (
+    apply_s10_cooldown_deprecation,
+    format_s10_exempt_repos,
+    s10_cooldown_placeholders,
+)
 from agentteams.tool_version_source import tool_version_placeholders
 
 
@@ -85,6 +89,9 @@ def render_all(
             placeholder_map = _build_placeholder_map_for_file(
                 manifest, component_slug=component_slug, file_spec=file_spec
             )
+            # Rule S-10's cooldown bullet: swapped only when cli/s10_deprecation_gate authorized it (#592).
+            template_text = apply_s10_cooldown_deprecation(
+                template_text, manifest.get("s10_cooldown_deprecated_authorized"))
             content = resolve_placeholders(template_text, placeholder_map)
 
         results.append((output_path, content))
