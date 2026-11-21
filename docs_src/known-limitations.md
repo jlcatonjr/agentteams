@@ -139,8 +139,9 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **What (agentteams < 1.3.0):** a `HALT-RETRACTED` row such as `overwrite-001` cleared every HALT that matched
   the action `overwrite` by prefix, `overwrite-999` and a bare `overwrite` HALT included.
   - A HALT matched only by token (new in 1.0) was retracted only by its exact id.
-- **1.3.0:** only a retraction of exactly the gate action (`overwrite`) clears its family's prefix HALTs. Any other
-  retraction clears only the HALT with its own id. A HALT that a member retraction had cleared blocks again on
+- **1.3.0:** only a retraction of exactly the gate action (`overwrite`) clears its family's prefix HALTs, and only
+  at that gate. At a member gate (for example `s10-cooldown-exempt:o/a`), a member HALT still needs a retraction
+  with its own id. Any other retraction clears only the HALT with its own id. A HALT that a member retraction had cleared blocks again on
   upgrade: retract it by its own id.
 - **Who (before 1.3.0):** teams with more than one open HALT for the same action.
 - **Workaround (before 1.3.0):** before recording a retraction, list the open HALTs (`--verify-integrity` reports

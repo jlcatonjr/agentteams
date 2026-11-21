@@ -77,6 +77,32 @@ def brief_unusable_reason(project_root: Path) -> str | None:
     return f"the brief {path} is {kind}, so it is not this project's brief (and the later candidates are not used)"
 
 
+def brief_problem(project_root: Path) -> str | None:
+    """Why the brief fleet discovery found cannot be used, or None (no brief, or a usable one).
+
+    For callers that apply restrictions from the brief (frozen surfaces, the privilege profile): since #599 an unusable
+    first candidate shadows the later ones, so treating it as "no brief" would silently drop the root brief's
+    restrictions. Such a caller refuses on a reason (IM-da review of #603).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        A short reason (a symlinked or out-of-project brief, or one that cannot be read, parsed or is not a JSON
+        object), or None.
+    """
+    if (reason := brief_unusable_reason(project_root)) is not None:
+        return reason
+    path = brief_candidate(project_root)
+    if path is None:
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return f"the brief {path} cannot be read or parsed ({exc})"
+    return None if isinstance(data, dict) else f"the brief {path} is not a JSON object"
+
+
 def resolve_brief(project_root: Path) -> Path | None:
     """The project's own brief, found as fleet discovery finds it (:func:`agentteams.fleet._resolve_descriptor`).
 
@@ -262,4 +288,4 @@ def extra_files(manifest: dict, project_root: Path) -> list[Path]:
     return out
 
 
-__all__ = ["brief_unusable_reason", "coverage_notices", "extra_files", "index_surfaces", "resolve_brief", "surface_dirs", "surface_framework"]
+__all__ = ["brief_problem", "brief_unusable_reason", "coverage_notices", "extra_files", "index_surfaces", "resolve_brief", "surface_dirs", "surface_framework"]

@@ -35,7 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     and one that is unreadable, unparseable or not a JSON object. Before, it read such a brief as trunk, which
     silently dropped the integration branch's protection in `--branch-cleanup` and retargeted vulnerability-fix
     PRs. No brief at all still means trunk.
-  - Sandbox-sync projection (`multi_sync`) still projects no boundary from such a brief, but warns.
+  - Callers that apply restrictions from the brief refuse a brief they cannot use, instead of reading it as "no
+    restrictions": `--sync-carveouts` and `--verify-carveouts` (frozen surfaces), `--sync-project-rules`, and
+    sandbox-sync projection (`multi_sync`, the privilege profile). That covers a symlinked or out-of-project brief,
+    and one that is unreadable, unparseable or not a JSON object. Before, an unusable `.agentteams/brief.json`
+    shadowing a restrictive root `brief.json` would have written into a frozen surface and projected no sandbox
+    boundary (IM review of #603).
 - **A HALT in any team dir binds a per-repository S-10 exemption (#597).** Without a verified toolchain group, the
   per-repository path read HALTs only from the canonical `.github/agents` and the dir being rendered. A HALT on
   `s10-cooldown-exempt` (or one repository) recorded in another surface, for example `.codex/agents`, did not stop a

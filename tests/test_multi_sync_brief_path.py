@@ -53,20 +53,28 @@ def test_the_agentteams_brief_wins_over_the_root_brief(tmp_path: Path) -> None:
     assert ms._read_brief_privilege(tmp_path) == {}
 
 
-@pytest.mark.parametrize("text", ["{not json", "[1, 2]", json.dumps({"privilege_profile": "cooperative"})])
-def test_an_unreadable_or_cooperative_root_brief_projects_no_boundary(tmp_path: Path, text: str) -> None:
-    (tmp_path / "brief.json").write_text(text, encoding="utf-8")
+def test_a_cooperative_root_brief_projects_no_boundary(tmp_path: Path) -> None:
+    (tmp_path / "brief.json").write_text(json.dumps({"privilege_profile": "cooperative"}), encoding="utf-8")
     assert ms._read_brief_privilege(tmp_path) == {}
 
 
+@pytest.mark.parametrize("text", ["{not json", "[1, 2]"])
+def test_an_unreadable_root_brief_refuses_rather_than_projecting_no_boundary(tmp_path: Path, text: str) -> None:
+    """IM-da review of #603: a brief that is there but unusable never reads as "no boundary"."""
+    (tmp_path / "brief.json").write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="sync stops"):
+        ms._read_brief_privilege(tmp_path)
+
+
 @pytest.mark.parametrize("inside", [False, True])
-def test_a_symlinked_brief_is_ignored(tmp_path: Path, inside: bool) -> None:
+def test_a_symlinked_brief_refuses(tmp_path: Path, inside: bool) -> None:
     repo = tmp_path / "repo"
     real = repo / "docs" / "real.json" if inside else tmp_path / "outside.json"
     _brief(real, {"privilege_profile": "confined"})
     repo.mkdir(exist_ok=True)
     (repo / "brief.json").symlink_to(real)
-    assert ms._read_brief_privilege(repo) == {}
+    with pytest.raises(ValueError, match="sync stops"):
+        ms._read_brief_privilege(repo)
 
 
 def test_projection_never_writes_outside_the_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
