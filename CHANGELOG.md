@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (upgrade note: Python 3.14 and agentteams before 1.3.0)
+
+- **Teams on Python 3.14 running agentteams < 1.3.0 are exposed to a fail-open.** From 3.14, `Path.is_dir()`,
+  `exists()` and `is_symlink()` return `False` on any `OSError`. So a team dir, decisions log or signing switch that
+  cannot be stat'd read as absent, and its HALTs were skipped, in ordinary preflight `check_clearance` runs and in
+  the S-10 gate. 1.3.0 fixes this (#588, #598). Until you upgrade, run on Python 3.13, or check readability first:
+  `test -r` and `test -x` on each team dir, and `test -r` on its decisions log and `agent-privilege.json`. See
+  `docs_src/known-limitations.md`.
+
 ### security (a HALT retraction clears only the HALT it names; #596)
 
 - A `HALT-RETRACTED` row whose id was a member of a gate's family (for example `s10-cooldown-exempt:owner/b` at
