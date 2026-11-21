@@ -45,7 +45,7 @@
     "agentteams/cli/signed_ledger.py": "1f8cca0b62621e5713b6c1527bda3503716e5a95284df40298cec00d4d7c1bad",
     "agentteams/cli/signer_location.py": "a1ef5ce01bf104fe0926f1ec47dfa3e9e73b23eb934e258ac283d1fab74a6a9b",
     "agentteams/cli/toolchain_group.py": "413bb08508aea7b845abfef82e1135dacb45457e6cf31b9ed9a45a57e65057e8",
-    "agentteams/cli/toolchain_group_commands.py": "ea2de22fbb5d24c25469208cf3e245b136d00b39440a7e1407cc5e1403b354e3",
+    "agentteams/cli/toolchain_group_commands.py": "905cf167d84097b7d398b38914dfb33c2463d2b6822eb7f42cca37e1278b337d",
     "agentteams/cli/wasm_agent_commands.py": "564048eeece12d44e0b122193d4e58a8829224588d5e0ee968416929699c1026",
     "agentteams/cli/wasm_commands.py": "731e81bb3a172b35e0f831906226b80eb97dfd893d190fc23f1fcd1cef539b12",
     "agentteams/cli/wasm_sandbox_switch.py": "2c78f957bf4b0cac7da2bd21d9ad2f530205f40ab5dab652f1e374f18bcfb69d",

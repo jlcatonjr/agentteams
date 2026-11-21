@@ -860,3 +860,12 @@ def test_a_governed_workspace_with_a_broken_group_file_refuses(tmp_path, signed_
     lock = tmp_path / "toolchain.lock"
     lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
     assert _run_pin(_pin_args(team, lock, signers, team_id=_TEAM)) == 1
+
+
+def test_the_team_id_lookup_ignores_a_brief_naming_another_project(tmp_path) -> None:
+    """@security re-review of 32a95d09: _team_id keeps resolve_brief's 2026-11-02 guard."""
+    from agentteams.cli.toolchain_group_commands import _team_id
+
+    root, team, _private = _project(tmp_path)
+    (root / "brief.json").write_text(json.dumps({"team_id": "spoofed", "existing_project_path": "../elsewhere"}))
+    assert _team_id(_verb_args(team), root) is None

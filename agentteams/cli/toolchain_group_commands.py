@@ -42,8 +42,21 @@ def _read_brief(args: argparse.Namespace, root: Path) -> tuple[dict | None, str 
 
 
 def _brief(args: argparse.Namespace, root: Path) -> dict | None:
-    """The brief, or None when there is none or it cannot be used (lenient: for the team-id lookup only)."""
-    return _read_brief(args, root)[0]
+    """The brief for the team-id lookup: ``--description``, else :func:`resolve_brief` (strict: a brief that is
+    unreadable, a symlink, outside the project or names another project is not used), else None."""
+    brief = getattr(args, "description", None)
+    if not brief:
+        from agentteams.memory_index_surfaces import resolve_brief
+
+        found = resolve_brief(root)
+        brief = str(found) if found else None
+    if not brief:
+        return None
+    try:
+        description = json.loads(Path(brief).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return description if isinstance(description, dict) else None
 
 
 def _team_id(args: argparse.Namespace, root: Path) -> str | None:
