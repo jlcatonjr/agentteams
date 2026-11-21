@@ -9,64 +9,65 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 
 ## The model in brief
 
-- **`dev`** is where development happens. Every change except an urgent hotfix lands there first: contributors through a
-  pull request into `dev`, Jim by merging locally. `dev` triggers no CI on push.
-- **`main`** advances only at release milestones, through one **release pull request** from `dev` (merged with a
-  merge commit, never squashed). It is the one point where the full cloud CI runs and the docs site deploys. Urgent
-  fixes reach `main` by a hotfix pull request, and `main` is merged back into `dev` straight after. agentteams
-  adopted this **integration-branch model** on 2026-11-04 to cut GitHub Actions cost, which follows the number of
-  CI runs, not their size. The other three repositories have not adopted it yet (see below).
-- **Releases are signed tags,** `v1.1.0`, `v1.1.1`, …, and they are what users install and pin.
-- **`release/1.1`** collects the reviewed fixes for the next patch release (`release/1.0` does the same for 1.0, on
-  request). It changes only when Jim copies in a fix that is already on `dev` or `main` (a *backport*). Between tags its commits are unsigned, so it is not for installing or
-  pinning.
-- **Each tag is cut on its release branch** and signed by Jim. Release branches are not merged back into `main` or `dev`:
-  every fix landed on `dev` (or, for a hotfix, `main`) first and was copied out with `git cherry-pick -x`, so it
-  reaches `main` with the next release.
-- **The next minor version gets its own branch.** `release/1.1` was cut from `main` at its first release
-  candidate.
+- **`dev`** is where development happens, for the next minor version (today `1.3.0.dev0`). Every change except an
+  urgent hotfix lands there first: contributors through a pull request into `dev`, Jim by merging locally. `dev`
+  triggers no CI on push.
+- **`main`** is the latest release. It moves only when a signed release exists: one **main-to-vX.Y.Z pull request**
+  merges the release's tag commit (merge commit, never squashed), after a final release and after each patch release.
+  An urgent fix can also reach `main` by a hotfix pull request, which is merged into `dev` straight after. Since
+  2026-11-20 there are no `dev` → `main` milestone pull requests, so `main` never carries unreleased code, and an
+  editable install or the docs site always shows released behaviour.
+- **Releases are signed tags,** `v1.2.0`, `v1.2.1`, …, and they are what users install and pin.
+- **`release/X.Y`** is a release line. It is cut from `dev` at the minor version's first release candidate, and it
+  then takes only reviewed fixes for that line: each fix lands on `dev` first and is copied over with
+  `git cherry-pick -x` (a *backport*). Its commits are unsigned between tags, so it is not for installing or pinning.
+- **Each tag is cut on its release line** and signed by Jim. After a final or patch release, the line is merged
+  forward twice: into `main` (the main-to-vX.Y.Z pull request) and into `dev` (a forward-merge pull request that
+  keeps `dev`'s own version, as #566 and #582 did for v1.2.1 and v1.2.2).
 
 ## Branches and tags
 
 | Ref | What it is | Who changes it |
 |---|---|---|
 | `dev` | Development, the next minor version | Invited contributors, through a pull request; Jim, by local merge |
-| `main` | The last released state of development; advances at release milestones | Jim only, by the release pull request (`dev` → `main`) or a hotfix pull request |
-| `release/1.0` | Reviewed fixes queued for the next patch release; unsigned between tags; not for pinning | Jim only, by backport (from `dev` or `main`) |
-| `release/1.1` | Reviewed fixes queued for the next 1.1 patch release; unsigned between tags; not for pinning | Jim only, by backport (from `dev` or `main`) |
+| `main` | The latest signed release | Jim only, by a main-to-vX.Y.Z pull request or a hotfix pull request |
+| `release/1.2` | The current release line: reviewed fixes for the next 1.2 patch; unsigned between tags; not for pinning | Jim only, by backport from `dev` (or `main`, for a hotfix) |
+| `release/1.1`, `release/1.0` | Older lines: fixes only on request | Jim only, by backport |
 | `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved; what you install and pin | Jim only |
 | Your work branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`) | One change, deleted after merge | Its author |
 
-`main` is `1.1.0.dev0`. `release/1.1` is tagged `v1.1.3`, and `release/1.0` is tagged `v1.0.7`. `v1.1.0` is the first 1.1 release.
-
-**Older lines:** `release/1.0` (latest `v1.0.7`) takes fixes only on request. Its RCs 1–9 were tags on `main`.
+Today `main` and `release/1.2` are at `v1.2.2`, and `dev` is `1.3.0.dev0`. The older lines' latest tags are `v1.1.4`
+and `v1.0.7`. `release/1.3` will be cut from `dev` at `v1.3.0-rc.1`.
 
 The name `release/<X.Y>` is reserved for maintained lines. Never create a `release/*` branch, locally or on GitHub.
 
 ## Using agentteams
 
-Install the latest signed release tag on the 1.1 line: today `v1.1.3`.
+Install the latest signed release tag: today `v1.2.2`.
 
 ```bash
-pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.1.3"
+pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.2.2"
 ```
 
 **Verified install,** for a governed team, an experiment or a paper. Clone the tag into a directory of its own, check its signature with repository config neutralised, then install from that checkout:
 
 ```bash
-git clone --branch v1.1.3 https://github.com/jlcatonjr/agentteams.git agentteams-v1.1.3
-cd agentteams-v1.1.3
+git clone --branch v1.2.2 https://github.com/jlcatonjr/agentteams.git agentteams-v1.2.2
+cd agentteams-v1.2.2
 git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
     -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
     -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-    tag -v v1.1.3 && pip install .
+    tag -v v1.2.2 && pip install .
 ```
 
 The `&&` stops the install if the signature check fails. The output must also show the release key's full fingerprint, which begins `SHA256:IPdnLwlF`, not just "Good signature"; if it doesn't, stop and uninstall. "Verifying a release" below explains how to set up `allowed_signers` once. For a patch release, repeat this with the new tag in a new directory.
 
 To sign decisions or grants, follow `SECURITY.md` ("Signing from a trusted install"): install with `pipx`, from that verified checkout, outside every agent write root. The [migration guide](migration-guide.md) ("Moving to a release checkout") covers rendering a governed team from a tag checkout.
 
-**Release branches are not install sources.** `release/1.1` and `release/1.0` hold reviewed fixes queued for the next patch release on their line. Those commits are unsigned between tags, so don't install from the branch or pin it.
+**Release candidates** (`vX.Y.Z-rc.N`) are signed tags too. Install one the same way when you are asked to soak it, and
+always from the tag, never from `main` or an editable checkout: `main` stays at the previous release until the final.
+
+**Release branches are not install sources.** `release/*` lines hold reviewed fixes queued for the next patch release. Those commits are unsigned between tags, so don't install from the branch or pin it.
 
 **For development,** work on `dev` in a clone of your fork, and install it with `pip install -e .`. "Contributing a change" below covers setting up the fork.
 
@@ -107,17 +108,17 @@ agentteams is public, and you have read access only. Pull requests are currently
 
 ## Getting a fix into a release
 
-1. **Land the fix on `dev` first,** as above. It reaches `main` with the next release.
-2. **Ask for a backport.** On the merged pull request, add the label `needs-backport-1.1` (or `needs-backport-1.0` for the 1.0 line). If
-   you can't add labels, leave a comment instead: "please backport to 1.1". Either way, say why. Only these qualify:
+1. **Land the fix on `dev` first,** as above. It reaches the next minor release with the rest of `dev`.
+2. **Ask for a backport** if it should ship sooner, in a patch on a release line. On the merged pull request, add the
+   label `needs-backport-1.1` or `needs-backport-1.0` for those lines; for `release/1.2` (and later lines), or if you
+   can't add labels, leave a comment instead: "please backport to 1.2". Either way, say why. Only these qualify:
    - security fixes;
    - correctness fixes;
    - documentation fixes.
 
    New features wait for the next minor release.
-3. **Jim does the rest.** He copies the fix to `release/1.1` (or `release/1.0`) in his own pull request, labelled
-   `backport-1.1` (or `backport-1.0`), using `git cherry-pick -x` and never a squash. When he releases, he signs
-   `v1.1.N` (or `v1.0.N`).
+3. **Jim does the rest.** He copies the fix to the release line in his own pull request, using `git cherry-pick -x`
+   and never a squash. When he releases, he signs `vX.Y.N`, and the line is merged forward into `main` and `dev`.
 4. **Urgent?** Say so in the pull request and message Jim.
 
 ## What only Jim does
@@ -136,29 +137,41 @@ before any of these actions. In your own session, they are asking *you*: answer 
 ## Please don't
 
 - Commit straight to `dev`, `main` or `release/*`. Use a branch and a pull request into `dev`.
-- Open a pull request into `main`. Only the release and hotfix pull requests go there.
+- Open a pull request into `main`. Only the main-to-vX.Y.Z and hotfix pull requests go there.
 - Force-push `main` or `release/*`, or delete or move a tag. A defect is fixed forward, in a new patch release.
 - Put a branch name into `toolchain.lock` or a pinned extra.
 
 ## Enforcement
 
-GitHub enforces the release rules here. Four active rulesets cover them:
+GitHub enforces the release rules here, with five active rulesets:
 
 - only an admin can create `release/*` branches or `v*` tags;
-- `release/*` takes changes only through a pull request, with no force-push and no deletion;
+- `release/*` lines take changes only through a pull request with passing checks, with no force-push and no deletion
+  (the current line, `release/1.2`, has a ruleset of its own with the same rules);
 - `v*` tags can't be moved or deleted.
+
+`main` is also protected: its merges need the required checks to pass, for administrators too.
 
 ## How a release happens
 
 You only need this for context:
 
-1. **Fixes accumulate.** They land on `dev`, and the ones requested for backport are copied to the release branch with `git cherry-pick -x`.
-2. **`dev` is released to `main`** at a milestone, by the release pull request (merge commit).
-3. **Jim releases.** He bumps the version on the release branch in a pull request, signs `vX.Y.Z` from his own terminal, and publishes the GitHub release. The release branch is not merged back into `main` or `dev`.
+1. **Fixes accumulate on `dev`.** The ones requested for a patch are copied to the current release line with
+   `git cherry-pick -x`.
+2. **A patch release.** Jim bumps the version on the release line in a pull request, signs `vX.Y.N` from his own
+   terminal, and publishes the GitHub release. The line is then merged forward into `main` (the main-to-vX.Y.N pull
+   request) and into `dev` (a forward-merge that keeps `dev`'s version).
+3. **A new minor version.** At a freeze, `dev` is gated in full. Jim cuts `release/X.Y` from the frozen `dev` commit,
+   and `dev` moves on to the next development version.
+   - Release candidates `vX.Y.0-rc.N` are tagged on the line, one release-commit pull request each.
+   - Downstream repositories soak each candidate, installed from its tag.
+   - Fixes found in the soak land on `dev` first and are copied to the line.
+   - The final `vX.Y.0` is a version-and-CHANGELOG-only commit on the line, signed like any release. Then the line is
+     merged forward into `main` and `dev`, as for a patch.
+   - Until the final, `main` stays at the previous release.
 4. **Repositories release in order:** agentteams → researchteam → mathAgents → baseAgent. Each one moves its pins only
    after verifying the upstream tag's signature.
-5. **Next minor.** At `1.1`'s first release candidate, Jim cut `release/1.1` from `main`. From then on,
-   `release/1.0` takes fixes only on request. `1.1.0` is final, so installs use the `v1.1.N` tags.
+5. **Older lines** take fixes only on request once the next line has its final release.
 
 ## Verifying a release
 
@@ -174,17 +187,21 @@ copy inside the repository you are checking, or confirm the fingerprint with Jim
    git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
        -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
        -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-       tag -v v1.1.3
+       tag -v v1.2.2
    ```
 
 3. Check that the output shows the full fingerprint from `SECURITY.md`, not just "Good signature".
 
 ## Notes for agentteams
 
-- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version as of the last release milestone (`dev` may be ahead). For a release's documentation, browse the `docs_src/` folder at its tag: the latest `v1.1.N` (today `v1.1.3`), or `v1.0.7` for 1.0.
+- **The docs site follows `main`,** so it describes the latest release. The site at jlcatonjr.github.io/agentteams is
+  built from `main`. For a release candidate's documentation, or `dev`'s, browse the `docs_src/` folder at that tag
+  or branch.
 - **Only agentteams uses `dev` so far.** researchteam, mathAgents and baseAgent still develop on `main`. Each can opt in
   through its brief (`git_workflow.branch_model: "integration"`), which ships the same model to its agent team.
 - **Downstream repositories** (researchteam, mathAgents, baseAgent) pin agentteams in their `toolchain.lock` to the commit of a verified tag, never to a branch. A downstream repository may tighten these rules, never weaken them.
+- **What a release may change** (patch, minor, major, and the security-fix allowance) is set out in `STABILITY.md`,
+  "Release cadence".
 
 ## Questions
 
