@@ -154,6 +154,53 @@ verified operator-signed grant). Deletes are always staged.
 Known limitations of this feature for 1.0 are listed in
 [`docs_src/known-limitations.md`](docs_src/known-limitations.md).
 
+### 7. WASM sandbox core (new in 1.3.0, #568)
+
+The WASM executor that agentteams owns and baseAgent derives from. Supported:
+
+- **`agentteams.wasm_exec`**:
+  - `run`, `prepare`, `materialize`, `assert_grant_shape`;
+  - `Grant`, `Mount`, `Limits`, `LIMIT_BOUNDS`, `DEFAULT_LIMITS`, `COMPUTE_ONLY`;
+  - `Prepared`, `Launch` (with `cleanup()`), `WasmResult`;
+  - the `WasmResolver` protocol and the `OsConfine` values;
+  - `GRANT_SPEC`, `GRANT_SPEC_SHA256`, `WasmExecError`.
+- **`agentteams.wasm_pins`**: `pinned_resolver(...)`, the `WasmResolver` interface it satisfies (with the optional
+  `expected_sha256`), and `WasmPinError`. The concrete `PinnedResolver` class, `resolve_tree`, `runtime_mounts` and
+  `tree_digest` are not covered.
+- **`agentteams/schemas/sandbox-state.schema.json`** (`agentteams-sandbox-state/v1`). See the schema rule below.
+- **`agentteams.cli.sandbox_relaxation_gate.spent_off_decision`** and `SandboxRelaxationError` (#574). The signature,
+  the `<key_id>@<sig16>` return form and the exception type are frozen. Its checks may only tighten. Its message text
+  is not covered.
+- **The stdlib-only property.** `wasm_exec.py` and `wasm_pins.py` import nothing beyond the Python standard library
+  and nothing from agentteams, at import time or call time, so a bundle can exec-load them on their own.
+
+The following rules apply on top of the general ones above:
+
+- **`GRANT_SPEC` content may change in a minor release.** Every change changes `GRANT_SPEC_SHA256` and gets a
+  CHANGELOG entry. Pin the sha and refuse on a mismatch. A structural change (a key removed or renamed, or a type
+  changed) bumps `agentteams-wasm-grant/vN` and is breaking.
+- **`assert_grant_shape`**: its signature and its "raises `WasmExecError`" contract are frozen. **The set of accepted
+  argv is defined by `GRANT_SPEC`, not by SemVer.** Tightening it falls under the security-tightening clause in the
+  release cadence (a CHANGELOG `security` entry). Widening it is a `GRANT_SPEC` content change (a new sha, a CHANGELOG
+  entry) that needs a recorded `@security` clearance; it is never shipped as a security fix.
+- **`profiles=`** (on `run` and `materialize`): the only supported value is `agentteams._sandbox_profiles`, or the
+  bundle's exec-loaded copy. The functions that module provides are internal.
+- **May change in any release:**
+  - refusal lists (`NEST_DENY_READS`, `NEST_PROTECTED_REL`, `REFUSED_COPY_OUT_NAMES`, the credential names) may grow
+    and `MAX_*` limits may shrink, under the security-tightening clause; raising a `MAX_*` limit widens and needs a
+    recorded `@security` clearance;
+  - `trap` and `classify_trap` labels are diagnostic and not covered;
+  - the pins data (`wasm_runtime_pins.json`: versions and hashes) may change, and its structure is internal.
+- **`sandbox-state.schema.json` v1 is closed** (`additionalProperties: false`, and consumers refuse anything but the
+  exact shape). **Any** change to its properties or enums makes it `agentteams-sandbox-state/v2`, even an addition;
+  for this file that overrides §3's "additive is minor". These meanings are frozen:
+  - `on` is a floor, never a ceiling;
+  - `require_enforced` is always true;
+  - the file is unsigned data (C-4) and never authorizes a relaxation;
+  - an absent file means no projection (`sandbox_projection.read_projection` returns `None`), but a consumer that
+    has seen `on` must refuse when the file is then absent (handoff §4.3 item 8).
+- **`agentteams.wasm_session` stays beta** (see the note in §2) until a consumer certification run.
+
 ## What SemVer does NOT cover
 
 The following may change in any release — pin exactly if you depend on them:
@@ -190,7 +237,16 @@ Removal of a deprecated surface always requires a **major** bump.
 ## Release cadence
 
 - **Patch** (1.0.x): bugfixes, doc fixes, security fixes. No new public
-  surface. No behavior change for any documented input.
+  surface. No behavior change for any documented input, except the security
+  tightening below.
+- **Security tightening** (patch or minor; operator ruling 2026-11-20): a security
+  fix may tighten a refusal, so that something previously accepted is now refused.
+  Examples: a new `WasmExecError`, `WasmPinError` or `SandboxRelaxationError` case, a
+  smaller bound, a longer deny list. It must carry a CHANGELOG `security` entry that
+  says what is newly refused and how to migrate. Signatures, return types and
+  exception classes stay fixed. This clause never loosens a refusal and never changes
+  the shape of an output. Like the known-limitation carve-out above, it lets a fix
+  block something that used to pass.
 - **Minor** (1.x.0): new features, new flags, new templates, new schemas,
   additive changes to existing schemas, new deprecation notices.
 - **Major** (x.0.0): removals, contract changes, schema breaking changes,
