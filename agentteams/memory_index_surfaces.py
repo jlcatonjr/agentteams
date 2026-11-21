@@ -52,6 +52,31 @@ def brief_candidate(project_root: Path) -> Path | None:
     return path if path.resolve().is_relative_to(project_root.resolve()) else None
 
 
+def brief_unusable_reason(project_root: Path) -> str | None:
+    """Why the brief fleet discovery found is not this project's, or None (none found, or it is usable).
+
+    Fleet discovery (:func:`agentteams.fleet._resolve_descriptor`) returns the first candidate that is there, so a
+    symlinked (dangling or not) or out-of-project ``.agentteams/brief.json`` shadows a later one. Callers that
+    reject it must say so rather than silently use no brief (@security review of #599).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        A short reason naming the path, or None.
+    """
+    from agentteams.fleet import _resolve_descriptor
+
+    path = _resolve_descriptor(project_root)
+    if path is None or brief_candidate(project_root) is not None:
+        return None
+    try:
+        kind = "a symbolic link" if stat.S_ISLNK(path.lstat().st_mode) else "outside the project"
+    except OSError as exc:
+        kind = f"unreadable ({exc.strerror or exc})"
+    return f"the brief {path} is {kind}, so it is not this project's brief (and the later candidates are not used)"
+
+
 def resolve_brief(project_root: Path) -> Path | None:
     """The project's own brief, found as fleet discovery finds it (:func:`agentteams.fleet._resolve_descriptor`).
 
@@ -237,4 +262,4 @@ def extra_files(manifest: dict, project_root: Path) -> list[Path]:
     return out
 
 
-__all__ = ["coverage_notices", "extra_files", "index_surfaces", "resolve_brief", "surface_dirs", "surface_framework"]
+__all__ = ["brief_unusable_reason", "coverage_notices", "extra_files", "index_surfaces", "resolve_brief", "surface_dirs", "surface_framework"]

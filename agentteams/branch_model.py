@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -232,12 +233,15 @@ def integration_branch_from_project(root: Path) -> str | None:
     Raises:
         ValueError: The brief's ``git_workflow`` block is malformed (see :func:`resolve`).
     """
-    from agentteams.fleet import _resolve_descriptor
+    from agentteams.memory_index_surfaces import brief_candidate, brief_unusable_reason
 
     root = Path(root)
     try:
-        path = _resolve_descriptor(root)
-        if path is None or path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+        if (reason := brief_unusable_reason(root)) is not None:
+            print(f"warning: {reason}; the integration branch is read as trunk.", file=sys.stderr)
+            return None
+        path = brief_candidate(root)
+        if path is None:
             return None
         brief = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):

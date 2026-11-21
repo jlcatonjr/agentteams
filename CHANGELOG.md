@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently fell through to the root `brief.json`. That included `--verify-toolchain-pin`'s brief discovery, where it
   could drop the brief's `s10_cooldown_exempt_repos` from the check. Now the first candidate that is there wins, and
   its reader reports the problem. `--verify-toolchain-pin` exits `1`.
+  A discovered brief that is a symlink, or resolves outside the project, now stops `--verify-toolchain-pin` too.
+  Before, the check ran as if there were no brief. The integration-branch lookup (`branch_model`) and sandbox-sync
+  projection (`multi_sync`) still ignore such a brief, but now print a warning naming it.
 - **A HALT in any team dir binds a per-repository S-10 exemption (#597).** Without a verified toolchain group, the
   per-repository path read HALTs only from the canonical `.github/agents` and the dir being rendered. A HALT on
   `s10-cooldown-exempt` (or one repository) recorded in another surface, for example `.codex/agents`, did not stop a
