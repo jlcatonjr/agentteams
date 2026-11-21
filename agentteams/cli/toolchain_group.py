@@ -63,7 +63,7 @@ HIGH_WATER_KEY = "toolchain_group_sequence"
 _TEAM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _ORIGIN_RE = re.compile(r"^(?:https://(?:[^@/\s]+@)?github\.com/|ssh://git@github\.com/|git@github\.com:)"
-                        r"([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*?)(?:\.git)?/?$")
+                        r"([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*?)(?:\.git)?/?$", re.IGNORECASE)
 _FIELDS = ("version", "scope", "group", "workspaces", "purpose", "sequence", "key_id", "derives_from", "signature")
 #: The file format: version 2 adds the signed ``derives_from`` lineage (v1.1.3). No version-1 file was ever signed.
 FORMAT_VERSION = 2
@@ -563,11 +563,20 @@ def locked_pins(lockfile: Path) -> dict[str, str]:
         OSError: The file cannot be read.
         UnicodeDecodeError: The file is not UTF-8.
     """
-    pins: dict[str, str] = {}
+    return {name: repo for name, (repo, _sha) in _parse_lock(lockfile)[0].items()}
+
+
+def _parse_lock(lockfile: Path) -> tuple[dict[str, tuple[str, str]], dict[str, str]]:
+    """``({NAME: (owner/repo, sha)}, {NAME: tag})`` from *lockfile*; other lines are ignored."""
+    pins: dict[str, tuple[str, str]] = {}
+    tags: dict[str, str] = {}
     for line in lockfile.read_text(encoding="utf-8").splitlines():
-        if (m := _LOCK_PIN_RE.match(line.strip())):
-            pins[m.group(1)] = m.group(2)
-    return pins
+        line = line.strip()
+        if (m := _LOCK_PIN_RE.match(line)):
+            pins[m.group(1)] = (m.group(2), m.group(3))
+        elif (m := _LOCK_TAG_RE.match(line)):
+            tags[m.group(1)] = m.group(2)
+    return pins, tags
 
 
 def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
@@ -585,14 +594,7 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
         Problems, one per failing pin (empty: all pins to group members verify).
     """
     members = {r.lower() for r in group}
-    pins: dict[str, tuple[str, str]] = {}
-    tags: dict[str, str] = {}
-    for line in lockfile.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if (m := _LOCK_PIN_RE.match(line)):
-            pins[m.group(1)] = (m.group(2), m.group(3))
-        elif (m := _LOCK_TAG_RE.match(line)):
-            tags[m.group(1)] = m.group(2)
+    pins, tags = _parse_lock(lockfile)
     problems: list[str] = []
     for name, (repo, sha) in pins.items():
         if repo.lower() not in members:

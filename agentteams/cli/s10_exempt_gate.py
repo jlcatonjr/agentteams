@@ -334,8 +334,8 @@ def drop_halted_members(repos: list[str], halt_dirs: tuple[Path, ...]) -> list[s
     """Return the group members no unretracted ``s10-cooldown-exempt`` HALT covers, reporting each one dropped.
 
     C-2: a HALT on a member's per-repository exemption, or on its family, binds the group too. The HALT matcher
-    over-matches on purpose (``action_ids``), so in practice either HALT drops every member, not only the one named. The render gate and the
-    ``--verify-toolchain-group``/``--verify-toolchain-pin`` verbs share this filter.
+    over-matches on purpose (``action_ids``), so in practice either HALT drops every member, not only the one named. The render gate and
+    ``--verify-toolchain-group`` share this filter. (``--verify-toolchain-pin`` never drops a pin: it only warns, #555.)
 
     Args:
         repos: The verified group.
@@ -346,17 +346,39 @@ def drop_halted_members(repos: list[str], halt_dirs: tuple[Path, ...]) -> list[s
     """
     kept: list[str] = []
     for repo in repos:
-        exempt_action, exempt_family = action_for(repo), S10_EXEMPT_KIND
-        try:
-            for halt_dir in dict.fromkeys(halt_dirs):
-                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
-                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
+        exc = exemption_halt(repo, halt_dirs)
+        if exc is None:
             kept.append(repo)
-        except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
+        else:
             print(f"  ✗  S-10 toolchain group: {repo} is NOT exempted from the cooldown ({exc}).", file=sys.stderr)
             print(f"::error title=S-10 toolchain group HALT::{repo}: {exc}", file=sys.stderr)
     return kept
 
 
+def exemption_halt(repo: str, halt_dirs: tuple[Path, ...]) -> Exception | None:
+    """The error an unretracted HALT on *repo*'s cooldown exemption (or its family) raises in *halt_dirs*, else None.
+
+    Args:
+        repo: ``owner/name``.
+        halt_dirs: Every team dir whose HALTs bind.
+
+    Returns:
+        The first refusal (a HALT, or a log that cannot be read), or None.
+    """
+    exempt_action, exempt_family = action_for(repo), S10_EXEMPT_KIND
+    try:
+        for halt_dir in dict.fromkeys(halt_dirs):
+            security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
+            security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
+    except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
+        return exc
+    return None
+
+
+project_root_of = _project_root_of
+surface_dirs = _surface_dirs
+
+
 __all__ = ["CANONICAL_TEAM_DIR", "S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorize_into",
+           "exemption_halt", "project_root_of", "surface_dirs",
            "authorized_exempt_repos", "governance_team_dir"]

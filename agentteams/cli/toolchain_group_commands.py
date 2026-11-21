@@ -18,22 +18,32 @@ from agentteams.cli import toolchain_group as tg
 from agentteams.cli.commands_output import _resolve_output_dir
 
 
-def _brief(args: argparse.Namespace, root: Path) -> dict | None:
-    """The brief: ``--description``, else the project's own brief as fleet discovery finds it
-    (:func:`agentteams.memory_index_surfaces.resolve_brief`); None when there is none or it is not a JSON object."""
+def _read_brief(args: argparse.Namespace, root: Path) -> tuple[dict | None, str | None]:
+    """``(brief, problem)``: the brief (``--description``, else the project's own brief as fleet discovery finds it,
+    :func:`agentteams.memory_index_surfaces.resolve_brief`), or None when there is none; *problem* says why a brief
+    that was named or found could not be used."""
     brief = getattr(args, "description", None)
     if not brief:
-        from agentteams.memory_index_surfaces import resolve_brief
+        from agentteams.memory_index_surfaces import brief_candidate, resolve_brief
 
         found = resolve_brief(root)
+        if found is None and (candidate := brief_candidate(root)) is not None:
+            found = candidate  # found but unusable: parsed below, so the problem is reported, never skipped
         brief = str(found) if found else None
     if not brief:
-        return None
+        return None, None
     try:
         description = json.loads(Path(brief).read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return None
-    return description if isinstance(description, dict) else None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return None, f"the brief {brief} cannot be read ({exc})"
+    if not isinstance(description, dict):
+        return None, f"the brief {brief} is not a JSON object"
+    return description, None
+
+
+def _brief(args: argparse.Namespace, root: Path) -> dict | None:
+    """The brief, or None when there is none or it cannot be used (lenient: for the team-id lookup only)."""
+    return _read_brief(args, root)[0]
 
 
 def _team_id(args: argparse.Namespace, root: Path) -> str | None:
@@ -89,7 +99,7 @@ def run_toolchain_group(args: argparse.Namespace) -> int:
 
     Returns:
         0 signed / verified; 1 on any failure (fail-closed), including an ungoverned workspace, where a render never
-        applies the group; 2 from ``--verify-toolchain-pin`` when there is no group file.
+        applies the group. ``--verify-toolchain-pin`` runs in every tier and exits 0 or 1 only (#555).
     """
     if getattr(args, "sign_toolchain_group", None):
         return tg.sign_group_file(Path(args.sign_toolchain_group), _resolve_output_dir(args),
@@ -120,8 +130,10 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
     workspace's GitHub owner, the brief's ``s10_cooldown_exempt_repos``, ``--pin-repos``, and the verified group
     when the workspace is governed and has a group file.
     """
+    # _enforce_decision_signing stays private: decision_log.py is at the CH-07 margin (974 lines), and _resolve imports it
+    # the same way.
     from agentteams.cli.decision_log import _enforce_decision_signing
-    from agentteams.cli.s10_exempt_gate import governance_team_dir
+    from agentteams.cli.s10_exempt_gate import governance_team_dir, surface_dirs
 
     repos: set[str] = set()
     problems: list[str] = []
@@ -129,10 +141,17 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
     if own:
         owner = own.split("/", 1)[0].lower()
         repos |= {r.lower() for r in pins.values() if r.split("/", 1)[0].lower() == owner}
-    brief = _brief(args, root) or {}
-    hint = brief.get("s10_cooldown_exempt_repos")
-    if isinstance(hint, list):
-        repos |= {str(r).strip().lower() for r in hint if isinstance(r, str) and r.strip()}
+    brief, problem = _read_brief(args, root)
+    if problem:  # a brief that names repos to check must never silently add nothing (@security, #555)
+        print(f"Error: {problem}, so its s10_cooldown_exempt_repos cannot be read (fail-closed).", file=sys.stderr)
+        return None
+    hint = (brief or {}).get("s10_cooldown_exempt_repos")
+    if hint is not None:
+        if not isinstance(hint, list) or not all(isinstance(r, str) and r.strip() for r in hint):
+            print("Error: the brief's s10_cooldown_exempt_repos must be a list of owner/repo strings (fail-closed).",
+                  file=sys.stderr)
+            return None
+        repos |= {r.strip().lower() for r in hint}
     for repo in filter(None, (r.strip() for r in (getattr(args, "pin_repos", None) or "").split(","))):
         repos.add(repo.lower())
         if repo.lower() not in locked:
@@ -150,9 +169,7 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
                 print("Error: name this workspace's team id with --team-id (or --description <brief>).",
                       file=sys.stderr)
                 return None
-            from agentteams.cli.s10_exempt_gate import _surface_dirs
-
-            result = tg.load_group(root, governance, team_id=team_id, halt_dirs=(team_dir, *_surface_dirs(root)),
+            result = tg.load_group(root, governance, team_id=team_id, halt_dirs=(team_dir, *surface_dirs(root)),
                                    consume=False)
             if result.problem:
                 tg.report(result)
@@ -163,19 +180,20 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
 
 def _warn_on_exemption_halts(repos: set[str], team_dir: Path, root: Path) -> None:
     """Print a ``::warning`` for each checked repo whose cooldown exemption is HALTed; never drops a pin (#555)."""
-    from agentteams.cli import security_gate
-    from agentteams.cli.s10_exempt_gate import S10_EXEMPT_KIND, _surface_dirs, action_for, governance_team_dir
+    from agentteams.cli.s10_exempt_gate import exemption_halt, governance_team_dir, surface_dirs
 
-    dirs = tuple(dict.fromkeys((governance_team_dir(team_dir), team_dir, *_surface_dirs(root))))
+    try:
+        governance: tuple[Path, ...] = (governance_team_dir(team_dir),)
+    except RuntimeError as exc:
+        print(f"::warning title=S-10 HALT state unknown::the governance team dir cannot be resolved ({exc}); its "
+              "HALTs are not reported. The cooldown still applies.", file=sys.stderr)
+        governance = ()
+    dirs = tuple(dict.fromkeys((*governance, team_dir, *surface_dirs(root))))
     for repo in sorted(repos):
-        for halt_dir in dirs:
-            try:
-                security_gate._assert_no_unretracted_halt(halt_dir, action=S10_EXEMPT_KIND)
-                security_gate._assert_no_unretracted_halt(halt_dir, action=action_for(repo))
-            except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
-                print(f"::warning title=S-10 cooldown exemption revoked::{repo}: {exc}. Its pin is still checked "
-                      "here; the 14-day cooldown applies, and exit 0 does not clear it.", file=sys.stderr)
-                break
+        exc = exemption_halt(repo, dirs)
+        if exc is not None:
+            print(f"::warning title=S-10 cooldown exemption revoked::{repo}: {exc}. Its pin is still checked "
+                  "here; the 14-day cooldown applies, and exit 0 does not clear it.", file=sys.stderr)
 
 
 def _verify_pin_command(args: argparse.Namespace) -> int:
@@ -183,10 +201,10 @@ def _verify_pin_command(args: argparse.Namespace) -> int:
 
     Exit 0 only when at least one pin was checked and every checked pin verifies; 1 otherwise. There is no exit 2.
     """
-    from agentteams.cli.s10_exempt_gate import _project_root_of
+    from agentteams.cli.s10_exempt_gate import project_root_of
 
     team_dir = _resolve_output_dir(args)
-    root = _project_root_of(team_dir)
+    root = project_root_of(team_dir)
     if root is None:
         print(f"Error: {team_dir} is not a team dir in a default layout (e.g. --output .github/agents).",
               file=sys.stderr)

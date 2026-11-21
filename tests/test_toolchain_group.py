@@ -807,3 +807,56 @@ def test_the_verb_has_no_exit_2_path() -> None:
     src = (ROOT / "agentteams" / "cli" / "toolchain_group_commands.py").read_text()
     body = src[src.index("def _verify_pin_command"):]
     assert "return 2" not in body
+
+
+# --- @security / @code-hygiene review of 7bbd495a -----------------------------------------------------------------
+
+def test_an_unreadable_named_brief_fails_closed(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers, description=str(tmp_path / "missing.json"))) == 1
+    assert "cannot be read" in capsys.readouterr().err
+
+
+def test_a_discovered_brief_that_is_not_json_fails_closed(t3, tmp_path) -> None:
+    root, team, signers, sha = t3
+    (root / "brief.json").write_text("{not json")
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+
+
+@pytest.mark.parametrize("hint", ["acme/toolkit", ["acme/toolkit", 3], [""]])
+def test_a_malformed_exempt_list_fails_closed(t3, tmp_path, capsys, hint) -> None:
+    root, team, signers, sha = t3
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "s10_cooldown_exempt_repos": hint}))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "must be a list" in capsys.readouterr().err
+
+
+def test_a_mixed_case_github_origin_still_matches_the_owner(tmp_path, signed_remote, monkeypatch) -> None:
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path, governed=False, origin="https://GitHub.com/Acme/Consumer.git")
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n")    # unsigned: must be checked and fail
+    assert tg.workspace_repo(root) == "Acme/Consumer"
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+
+
+def test_a_governed_workspace_with_a_broken_group_file_refuses(tmp_path, signed_remote, monkeypatch) -> None:
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path)
+    (root / tg.GROUP_FILE_REL).parent.mkdir(parents=True, exist_ok=True)
+    (root / tg.GROUP_FILE_REL).write_text("{broken")
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers, team_id=_TEAM)) == 1
