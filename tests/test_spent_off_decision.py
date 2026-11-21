@@ -103,6 +103,28 @@ def test_an_hmac_row_is_refused_publicly(tmp_path: Path, stub_ed25519) -> None:
     team = _team(tmp_path)
     _write(team, _spent(scheme="hmac"))
     _refused(team, "REQUIRES ed25519")
+    # A relaxing row must be Ed25519 to authenticate at all, so the private check refuses it too.
+    assert G._spent_off_decision(team, ACTION) is False
+
+
+@pytest.mark.parametrize("governed", [False, None])
+def test_the_public_check_is_stricter_than_the_private_one(tmp_path: Path, stub_ed25519, governed) -> None:
+    """A spent, signed row in an ungoverned workspace: the private excuse accepts it, the public check refuses it."""
+    team = _team(tmp_path, governed=governed)
+    _write(team, _spent())
+    assert G._spent_off_decision(team, ACTION) is True
+    _refused(team, "not governed")
+
+
+@pytest.mark.parametrize("override", [{"sig_scheme": "hmac"}, {"key_id": ""}, {"signature": " "}])
+def test_a_row_that_is_not_ed25519_shaped_is_refused_even_past_authentication(tmp_path: Path, stub_ed25519,
+                                                                             monkeypatch, override) -> None:
+    """The defence-in-depth check after ``_spent_off_row`` (unreachable today: authenticity already needs Ed25519)."""
+    team = _team(tmp_path)
+    _write(team, _spent())
+    real = G._spent_off_row
+    monkeypatch.setattr(G, "_spent_off_row", lambda d, a: real(d, a) | override)
+    _refused(team, "is not Ed25519-signed")
 
 
 def test_a_newer_unconsumed_row_hides_the_spent_one(tmp_path: Path, stub_ed25519) -> None:
@@ -115,6 +137,15 @@ def test_an_unretracted_halt_refuses(tmp_path: Path, stub_ed25519) -> None:
     team = _team(tmp_path)
     halt = {c: "" for c in FIELDS} | {"timestamp": "2026-11-02", "requesting_agent": "security",
                                       "action_reviewed": "sandbox-wasm-off", "verdict": "HALT"}
+    _write(team, _spent(), halt)
+    _refused(team, "is HALT")
+    assert G._spent_off_decision(team, ACTION) is False
+
+
+def test_an_unretracted_halt_on_the_exact_action_refuses(tmp_path: Path, stub_ed25519) -> None:
+    team = _team(tmp_path)
+    halt = {c: "" for c in FIELDS} | {"timestamp": "2026-11-02", "requesting_agent": "security",
+                                      "action_reviewed": ACTION, "verdict": "HALT"}
     _write(team, _spent(), halt)
     _refused(team, "is HALT")
     assert G._spent_off_decision(team, ACTION) is False
