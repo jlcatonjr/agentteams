@@ -239,7 +239,7 @@ These patterns are not reducible to a deterministic scanner the way Rules S-1/S-
 Applies to any module, package, or program about to be installed, in any ecosystem (npm,
 PyPI, crates.io, Homebrew, …). Rule S-9 governs the *pathway* — source trust and artifact
 identity; this rule governs the *artifact*: whether the specific release being adopted is
-known-vulnerable, malicious, too new to trust, or not the latest stable release.
+known-vulnerable, malicious, too new to trust, or not the latest stable release.{S10_COOLDOWN_MOOT}
 
 - ✅ Before install, search reliable vulnerability sources for known vulnerabilities in the
   exact package name and version being adopted — OSV.dev, the Snyk Vulnerability Database

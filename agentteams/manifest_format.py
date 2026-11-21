@@ -152,10 +152,10 @@ S10_DEPRECATION_TTL_DAYS = 90
 
 #: How the authorized deprecation is described, by where it came from (``cli/s10_deprecation_gate``).
 _S10_DEPRECATION_AUTHORITY = {
-    "signed": "The operator's Ed25519-signed decision `s10-cooldown-deprecated` authorizes this deprecation for this "
-              f"workspace, and it is re-signed at least every {S10_DEPRECATION_TTL_DAYS} days",
-    "brief": "This workspace does not sign its decisions, so the project brief's `s10_cooldown_deprecated` sets this "
-             "deprecation",
+    "signed": "The operator's Ed25519-signed decision `s10-cooldown-deprecated` authorizes this deprecation for\n  "
+              f"this workspace, and it is re-signed at least every {S10_DEPRECATION_TTL_DAYS} days",
+    "brief": "This workspace does not sign its decisions, so the project brief's `s10_cooldown_deprecated`\n  "
+             "sets this deprecation",
 }
 
 #: The note appended to each remaining cooldown clause while the deprecation is authorized.
@@ -183,8 +183,9 @@ def _s10_deprecated_rule(authorized: str) -> str:
     return (
         "- ⚠️ **Package-release cooldown — deprecated in this workspace.** There is no release-age waiting\n"
         "  period in any ecosystem: a release that passes the known-vulnerability search above (no known\n"
-        "  vulnerability, no OSV `MAL-*` entry) and Rule S-9's identity check may be adopted on the day it is\n"
-        "  published, and no cooldown exception or exemption is needed. " + _S10_DEPRECATION_AUTHORITY[authorized]
+        "  vulnerability, no OSV `MAL-*` entry), Rule S-9's identity check and the latest-stable rule may be\n"
+        "  adopted on the day it is published, and no cooldown exception or exemption is needed.\n"
+        "  " + _S10_DEPRECATION_AUTHORITY[authorized]
         + ". Every other\n"
         "  Rule S-10 check stays in force: the vulnerability search, Rule S-9's identity check, and the\n"
         "  latest-stable rule below. The cooldown clauses elsewhere in this file are moot while the deprecation\n"
@@ -193,8 +194,9 @@ def _s10_deprecated_rule(authorized: str) -> str:
         "  runtime pins, `--wasm-pin-update`, and vulnscan's tool pins) keep their built-in 14-day checks; this\n"
         "  deprecation does not change them.\n"
         "  Upgrading an already-installed package through its distribution's own curated security channel\n"
-        "  (apt/dnf/apk with a DSA/USN/RHSA-backed update) is remediation, not adoption (third-party\n"
-        "  repositories, PPAs, and vendor-added apt/dnf sources are not that channel)"
+        "  (apt/dnf/apk with a DSA/USN/RHSA-backed update) is remediation, not adoption — the latest-stable\n"
+        "  rule does not apply there (third-party repositories, PPAs, and vendor-added apt/dnf sources are not\n"
+        "  that channel)"
     )
 
 
