@@ -1433,8 +1433,11 @@ Read-only. It checks the registry and exits `1` on any problem:
 
 Read-only; spends nothing. `--check-clearance SCOPE --clearance-file PATH` exits `0` only when the decisions log under
 `--output` (else the working directory) holds a verified @security PASS for the action `SCOPE:sha256-<hex of PATH>`.
-A HALT on the bare `SCOPE` blocks it, and HALT, author, signature and chain checks all apply. Use the same bytes
-afterwards. It exits `1` otherwise, naming the action id a clearance row
+A HALT on the bare `SCOPE` blocks it, and HALT, author, signature and chain checks all apply. HALTs are also read from
+every generated team dir in the repository (`.claude/agents`, `.github/agents`, and the other frameworks' dirs) and from a `parent_team` the team dir declares,
+so a clearance checked in a separate gates-only dir cannot escape a main-team HALT (see
+[Gates-only team dirs](api-reference/workspace-privilege-scoping.md#gates-only-team-dirs-for-sign-off-rows)). Use the same
+bytes afterwards. It exits `1` otherwise, naming the action id a clearance row
 must use. Operator scripts call it before doing anything, instead of hand-rolling a sha-bound gate.
 
 ### `--audit-exceptions`
