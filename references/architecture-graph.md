@@ -5,7 +5,7 @@
 
 - Modules mapped: **489**
 - Packages: **14**
-- Internal import edges: **1843**
+- Internal import edges: **1848**
 - Distinct external dependencies: **11**
 
 ---
@@ -110,7 +110,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.capability_hints` | `agentteams` | `agentteams.bridge`, `agentteams.cli.commands`, `agentteams.cli.parser`, `agentteams.cli.signed_ledger`, `agentteams.frameworks.goose_docs` |
 | `agentteams.capability_map` | `agentteams.frameworks._grok_tool_scoping`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.adopt_only`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.rank_conformance`, `agentteams.wasm_config` |
 | `agentteams.carveout_checks` | `agentteams.carveouts`, `agentteams.cli.clearance_binding`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry` | `agentteams.carveouts`, `agentteams.cli.carveout_commands`, `agentteams.cli.exception_registry` |
-| `agentteams.carveouts` | `agentteams._utils`, `agentteams.branch_inventory`, `agentteams.carveout_checks`, `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.governance_targets`, `agentteams.cli.signed_ledger`, `agentteams.memory_index_surfaces`, `agentteams.rules_projection`, `agentteams.user_regions` | `agentteams.carveout_checks`, `agentteams.cli.carveout_commands`, `agentteams.cli.exception_registry` |
+| `agentteams.carveouts` | `agentteams._utils`, `agentteams.branch_inventory`, `agentteams.carveout_checks`, `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.governance_targets`, `agentteams.cli.signed_ledger`, `agentteams.memory_index_surfaces`, `agentteams.rules_projection`, `agentteams.user_regions` | `agentteams.carveout_checks`, `agentteams.cli.carveout_commands`, `agentteams.cli.clearance_binding`, `agentteams.cli.exception_registry` |
 | `agentteams.cli` | — | — |
 | `agentteams.cli.action_ids` | `agentteams.cli.decision_log`, `agentteams.cli.sandbox_effects` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.cli.decision_log_migrate` |
 | `agentteams.cli.adopt_merge_gate` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.security_gate` | `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step`, `agentteams.orphan_advisory` |
@@ -122,13 +122,13 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.backup_switch` | `agentteams.emit` | `agentteams.cli.parser` |
 | `agentteams.cli.branch_switch` | `agentteams.branch_cleanup`, `agentteams.branch_inventory` | `agentteams.cli.app`, `agentteams.cli.parser`, `agentteams.cli.parser_validate` |
 | `agentteams.cli.carveout_commands` | `agentteams.carveout_checks`, `agentteams.carveouts`, `agentteams.cli.clearance_binding`, `agentteams.cli.operator_signing`, `agentteams.cli.signed_ledger`, `agentteams.memory_index_surfaces` | `agentteams.cli.app`, `agentteams.cli.post_build` |
-| `agentteams.cli.clearance_binding` | `agentteams.cli.decision_log`, `agentteams.cli.security_gate` | `agentteams.carveout_checks`, `agentteams.cli.carveout_commands` |
+| `agentteams.cli.clearance_binding` | `agentteams.carveouts`, `agentteams.cli.decision_log`, `agentteams.cli.security_gate` | `agentteams.carveout_checks`, `agentteams.cli.carveout_commands`, `agentteams.cli.decision_log`, `agentteams.cli.operator_signing` |
 | `agentteams.cli.code_index_artifacts` | `agentteams.backup`, `agentteams.cli.schema_cache`, `agentteams.code_index`, `agentteams.code_sources`, `agentteams.errors`, `agentteams.memory_index` | `agentteams.cli.artifacts` |
 | `agentteams.cli.commands` | `agentteams.backup`, `agentteams.bridge`, `agentteams.canonical`, `agentteams.capability_hints`, `agentteams.cli.action_ids`, `agentteams.cli.commands_output`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_text`, `agentteams.cli.exception_registry`, `agentteams.cli.grant_commands`, `agentteams.cli.management_directives`, `agentteams.cli.operator_signing`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.convert`, `agentteams.drift`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.frameworks.registry`, `agentteams.governance_logs`, `agentteams.integrity`, `agentteams.interop`, `agentteams.redteam.cycle`, `agentteams.redteam.freshness`, `agentteams.research`, `agentteams.sandbox_projection`, `agentteams.security_refs`, `agentteams.stale_detector`, `agentteams.stale_remediate`, `agentteams.sync_baseline`, `agentteams.sync_classifier` | `agentteams.cli.app`, `agentteams.stale_remediate` |
 | `agentteams.cli.commands_output` | — | `agentteams.cli.commands`, `agentteams.cli.dev_merge_commands`, `agentteams.cli.grant_commands`, `agentteams.cli.toolchain_group_commands` |
 | `agentteams.cli.decision_chain` | `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.cli.operator_signing`, `agentteams.governance_logs`, `agentteams.interop_grant_check` |
 | `agentteams.cli.decision_lineage` | — | `agentteams.cli.decision_log`, `agentteams.cli.toolchain_group` |
-| `agentteams.cli.decision_log` | `agentteams.cli.action_ids`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_lineage`, `agentteams.cli.decision_text`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.governance_logs`, `agentteams.signing_switch` | `agentteams.carveout_checks`, `agentteams.carveouts`, `agentteams.cli.action_ids`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.clearance_binding`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.decision_text`, `agentteams.cli.dev_merge`, `agentteams.cli.grants`, `agentteams.cli.operator_signing`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.security_gate`, `agentteams.cli.toolchain_group`, `agentteams.cli.toolchain_group_commands`, `agentteams.cli.wasm_agent_commands`, `agentteams.governance_logs`, `agentteams.interop_grant_check`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.known_report`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish` |
+| `agentteams.cli.decision_log` | `agentteams.cli.action_ids`, `agentteams.cli.clearance_binding`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_lineage`, `agentteams.cli.decision_text`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.governance_logs`, `agentteams.signing_switch` | `agentteams.carveout_checks`, `agentteams.carveouts`, `agentteams.cli.action_ids`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.clearance_binding`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.decision_text`, `agentteams.cli.dev_merge`, `agentteams.cli.grants`, `agentteams.cli.operator_signing`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.security_gate`, `agentteams.cli.toolchain_group`, `agentteams.cli.toolchain_group_commands`, `agentteams.cli.wasm_agent_commands`, `agentteams.governance_logs`, `agentteams.interop_grant_check`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.known_report`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish` |
 | `agentteams.cli.decision_log_migrate` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.action_ids`, `agentteams.cli.decision_log`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.frameworks.registry`, `agentteams.governance_log_repair`, `agentteams.ingest` | `agentteams.cli.app`, `agentteams.governance_log_repair`, `agentteams.governance_logs` |
 | `agentteams.cli.decision_text` | `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.cli.operator_signing` |
 | `agentteams.cli.dev_merge` | `agentteams.branch_model`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.governance_targets`, `agentteams.cli.operator_signing`, `agentteams.cli.security_gate`, `agentteams.cli.signed_ledger`, `agentteams.cli.toolchain_group`, `agentteams.manifest_format`, `agentteams.update_lock` | `agentteams.cli.dev_merge_commands`, `agentteams.cli.operator_signing` |
@@ -150,7 +150,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.json_mode` | — | `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step`, `agentteams.cli.app`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate` |
 | `agentteams.cli.management_directives` | `agentteams.atomicio`, `agentteams.cli.frozen_surfaces`, `agentteams.cli.governance_targets`, `agentteams.cli.sandbox_effects`, `agentteams.cli.signed_ledger` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.effect_classifier`, `agentteams.cli.generate_helpers`, `agentteams.vulnscan.handoff` |
 | `agentteams.cli.mcp_grant_commands` | `agentteams.atomicio`, `agentteams.cli.operator_signing`, `agentteams.ingest`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy` | `agentteams.cli.app` |
-| `agentteams.cli.operator_signing` | `agentteams`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.cli.decision_text`, `agentteams.cli.dev_merge`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.cli.signer_location`, `agentteams.cli.toolchain_group`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec`, `agentteams.integrity`, `agentteams.mcp_direct_grants` | `agentteams.cli.carveout_commands`, `agentteams.cli.commands`, `agentteams.cli.dev_merge`, `agentteams.cli.grant_commands`, `agentteams.cli.mcp_grant_commands`, `agentteams.cli.toolchain_group`, `agentteams.vulnscan.grant` |
+| `agentteams.cli.operator_signing` | `agentteams`, `agentteams.cli.clearance_binding`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.cli.decision_text`, `agentteams.cli.dev_merge`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.cli.signer_location`, `agentteams.cli.toolchain_group`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec`, `agentteams.integrity`, `agentteams.mcp_direct_grants` | `agentteams.cli.carveout_commands`, `agentteams.cli.commands`, `agentteams.cli.dev_merge`, `agentteams.cli.grant_commands`, `agentteams.cli.mcp_grant_commands`, `agentteams.cli.toolchain_group`, `agentteams.vulnscan.grant` |
 | `agentteams.cli.os_sandbox_switch` | `agentteams._sandbox_profiles`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks.claude`, `agentteams.gate_policy`, `agentteams.host_features`, `agentteams.runner_wasm`, `agentteams.sandbox_state`, `agentteams.signing_switch`, `agentteams.wasm_config`, `agentteams.wasm_enforcement` | `agentteams.cli.artifacts`, `agentteams.multi_sync` |
 | `agentteams.cli.output_target` | `agentteams.backup`, `agentteams.drift` | `agentteams.cli.adopt_only`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate` |
 | `agentteams.cli.package_switch` | `agentteams.cli.security_gate`, `agentteams.security_refs`, `agentteams.team_package` | `agentteams.cli.app`, `agentteams.cli.parser` |
@@ -164,16 +164,16 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.routing_at_risk` | `agentteams.cli.frozen_render`, `agentteams.cli.security_gate`, `agentteams.emit`, `agentteams.update_report`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.generate`, `agentteams.cli.parser_validate`, `agentteams.cli.update_notices` |
 | `agentteams.cli.s10_exempt_gate` | `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.exception_registry`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.security_gate`, `agentteams.cli.toolchain_group`, `agentteams.frameworks._sandbox_emit`, `agentteams.manifest_format`, `agentteams.prompt_roots` | `agentteams.cli.generate`, `agentteams.cli.toolchain_group_commands` |
 | `agentteams.cli.sandbox_effects` | `agentteams.sandbox_tokens` | `agentteams.cli.action_ids`, `agentteams.cli.effect_classifier`, `agentteams.cli.management_directives`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._control_plane_protect`, `agentteams.runner_wasm`, `agentteams.wasm_config`, `agentteams.wasm_policy` |
-| `agentteams.cli.sandbox_relaxation_gate` | `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.exception_registry`, `agentteams.cli.sandbox_effects`, `agentteams.cli.security_gate`, `agentteams.gate_policy`, `agentteams.sandbox_state` | `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.write_root_policy`, `agentteams.multi_sync`, `agentteams.runner_wasm` |
+| `agentteams.cli.sandbox_relaxation_gate` | `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.exception_registry`, `agentteams.cli.sandbox_effects`, `agentteams.cli.security_gate`, `agentteams.frameworks.registry`, `agentteams.gate_policy`, `agentteams.sandbox_state` | `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.write_root_policy`, `agentteams.multi_sync`, `agentteams.runner_wasm` |
 | `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.mcp_servers.recall`, `agentteams.security_refs` |
-| `agentteams.cli.security_gate` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger` | `agentteams._wasm_pin_update`, `agentteams.branch_cleanup`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.clearance_binding`, `agentteams.cli.commands`, `agentteams.cli.dev_merge`, `agentteams.cli.generate`, `agentteams.cli.package_switch`, `agentteams.cli.routing_at_risk`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.toolchain_group`, `agentteams.security_refs`, `agentteams.vulnscan.server_apply` |
+| `agentteams.cli.security_gate` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger` | `agentteams._wasm_pin_update`, `agentteams.branch_cleanup`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.clearance_binding`, `agentteams.cli.commands`, `agentteams.cli.dev_merge`, `agentteams.cli.generate`, `agentteams.cli.package_switch`, `agentteams.cli.routing_at_risk`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.toolchain_group`, `agentteams.cli.toolchain_group_commands`, `agentteams.security_refs`, `agentteams.vulnscan.server_apply` |
 | `agentteams.cli.signed_ledger` | `agentteams.atomicio`, `agentteams.capability_hints`, `agentteams.cli.signer_location` | `agentteams.carveouts`, `agentteams.cli.app`, `agentteams.cli.carveout_commands`, `agentteams.cli.decision_log`, `agentteams.cli.dev_merge`, `agentteams.cli.exception_registry`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.operator_signing`, `agentteams.cli.security_gate`, `agentteams.cli.toolchain_group`, `agentteams.mcp_direct_grants`, `agentteams.proposals`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.known`, `agentteams.vulnscan.publish` |
 | `agentteams.cli.signer_location` | `agentteams`, `agentteams.git_exec` | `agentteams.cli.operator_signing`, `agentteams.cli.signed_ledger` |
 | `agentteams.cli.standalone_modes` | `agentteams.audit_types`, `agentteams.budget`, `agentteams.cli.adopt_only`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.itest_tripwire`, `agentteams.cli.security_gate`, `agentteams.confinement`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.gate_policy`, `agentteams.proposal_policy`, `agentteams.rank_conformance`, `agentteams.runner_mcp`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.scan`, `agentteams.template_pins`, `agentteams.wasm_config`, `agentteams.wasm_enforcement`, `agentteams.write_policy` | `agentteams.cli.generate` |
 | `agentteams.cli.sync_switch` | `agentteams.multi_sync`, `agentteams.sync_hub_refresh` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.term_check` | `agentteams.term_index`, `agentteams.unfenced` | `agentteams.cli.app` |
 | `agentteams.cli.toolchain_group` | `agentteams.cli.decision_lineage`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.governance_targets`, `agentteams.cli.operator_signing`, `agentteams.cli.security_gate`, `agentteams.cli.signed_ledger`, `agentteams.manifest_format` | `agentteams.cli.dev_merge`, `agentteams.cli.operator_signing`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.toolchain_group_commands` |
-| `agentteams.cli.toolchain_group_commands` | `agentteams.analyze`, `agentteams.cli.commands_output`, `agentteams.cli.decision_log`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.toolchain_group`, `agentteams.memory_index_surfaces` | `agentteams.cli.app`, `agentteams.cli.dev_merge_commands` |
+| `agentteams.cli.toolchain_group_commands` | `agentteams.analyze`, `agentteams.cli.commands_output`, `agentteams.cli.decision_log`, `agentteams.cli.s10_exempt_gate`, `agentteams.cli.security_gate`, `agentteams.cli.toolchain_group`, `agentteams.memory_index_surfaces` | `agentteams.cli.app`, `agentteams.cli.dev_merge_commands` |
 | `agentteams.cli.update_notices` | `agentteams.cli.routing_at_risk`, `agentteams.drift`, `agentteams.fence_baseline` | `agentteams.cli.generate` |
 | `agentteams.cli.wasm_agent_commands` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.sandbox_effects`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.sandbox_state`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.team`, `agentteams.wasm_agent.transcript`, `agentteams.wasm_exec`, `agentteams.wasm_runtime` | `agentteams.cli.app` |
 | `agentteams.cli.wasm_commands` | `agentteams.wasm_runtime` | `agentteams.cli.app` |
@@ -264,7 +264,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.goose_recipe_validate` | `agentteams.frameworks.goose_recipe_read` | `agentteams.audit_agent_contract`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks` |
 | `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read` | `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop_grant_check`, `agentteams.proposal_runner`, `agentteams.wasm_enforcement` |
 | `agentteams.frameworks.grok` | `agentteams.capability_map`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._grok_tool_scoping`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.frameworks.registry`, `agentteams.interop` |
-| `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.frameworks.wasm` | `agentteams.analyze`, `agentteams.audit_types`, `agentteams.backup`, `agentteams.cli.adopt_only`, `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate`, `agentteams.cli.grant_commands`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.drift`, `agentteams.enrich._fills`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.manifest_format`, `agentteams.memory_index_surfaces`, `agentteams.multi_sync`, `agentteams.output_plan`, `agentteams.redteam.instantiate`, `agentteams.redteam.sweep`, `agentteams.render`, `agentteams.runner_wasm`, `agentteams.stale_detector`, `agentteams.sync_hub_refresh` |
+| `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.frameworks.wasm` | `agentteams.analyze`, `agentteams.audit_types`, `agentteams.backup`, `agentteams.cli.adopt_only`, `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate`, `agentteams.cli.grant_commands`, `agentteams.cli.parser`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.convert`, `agentteams.drift`, `agentteams.enrich._fills`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.manifest_format`, `agentteams.memory_index_surfaces`, `agentteams.multi_sync`, `agentteams.output_plan`, `agentteams.redteam.instantiate`, `agentteams.redteam.sweep`, `agentteams.render`, `agentteams.runner_wasm`, `agentteams.stale_detector`, `agentteams.sync_hub_refresh` |
 | `agentteams.frameworks.structural_merge` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks`, `agentteams.user_regions` | `agentteams.emit` |
 | `agentteams.frameworks.wasm` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._wasm_team_docs`, `agentteams.frameworks._wasm_tool_scoping`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.model_routing`, `agentteams.sandbox_state`, `agentteams.wasm_agent.team`, `agentteams.wasm_config`, `agentteams.yaml_frontmatter` | `agentteams.cli.generate_helpers`, `agentteams.frameworks.registry` |
 | `agentteams.front_matter_baseline` | `agentteams.drift`, `agentteams.front_matter_merge` | `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.fleet` |
@@ -1566,6 +1566,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/cli/clearance_binding.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.carveouts",
         "agentteams.cli.decision_log",
         "agentteams.cli.security_gate"
       ],
@@ -1659,6 +1660,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.cli.action_ids",
+        "agentteams.cli.clearance_binding",
         "agentteams.cli.decision_chain",
         "agentteams.cli.decision_lineage",
         "agentteams.cli.decision_text",
@@ -1984,6 +1986,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams",
+        "agentteams.cli.clearance_binding",
         "agentteams.cli.decision_chain",
         "agentteams.cli.decision_log",
         "agentteams.cli.decision_text",
@@ -2216,6 +2219,7 @@ digraph "agentteams architecture" {
         "agentteams.cli.exception_registry",
         "agentteams.cli.sandbox_effects",
         "agentteams.cli.security_gate",
+        "agentteams.frameworks.registry",
         "agentteams.gate_policy",
         "agentteams.sandbox_state"
       ],
@@ -2355,6 +2359,7 @@ digraph "agentteams architecture" {
         "agentteams.cli.commands_output",
         "agentteams.cli.decision_log",
         "agentteams.cli.s10_exempt_gate",
+        "agentteams.cli.security_gate",
         "agentteams.cli.toolchain_group",
         "agentteams.memory_index_surfaces"
       ],
@@ -7978,6 +7983,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.clearance_binding",
+      "target": "agentteams.carveouts"
+    },
+    {
+      "source": "agentteams.cli.clearance_binding",
       "target": "agentteams.cli.decision_log"
     },
     {
@@ -8139,6 +8148,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.decision_log",
       "target": "agentteams.cli.action_ids"
+    },
+    {
+      "source": "agentteams.cli.decision_log",
+      "target": "agentteams.cli.clearance_binding"
     },
     {
       "source": "agentteams.cli.decision_log",
@@ -8666,6 +8679,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.operator_signing",
+      "target": "agentteams.cli.clearance_binding"
+    },
+    {
+      "source": "agentteams.cli.operator_signing",
       "target": "agentteams.cli.decision_chain"
     },
     {
@@ -9082,6 +9099,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.sandbox_relaxation_gate",
+      "target": "agentteams.frameworks.registry"
+    },
+    {
+      "source": "agentteams.cli.sandbox_relaxation_gate",
       "target": "agentteams.gate_policy"
     },
     {
@@ -9295,6 +9316,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.toolchain_group_commands",
       "target": "agentteams.cli.s10_exempt_gate"
+    },
+    {
+      "source": "agentteams.cli.toolchain_group_commands",
+      "target": "agentteams.cli.security_gate"
     },
     {
       "source": "agentteams.cli.toolchain_group_commands",

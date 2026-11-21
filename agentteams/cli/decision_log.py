@@ -812,7 +812,8 @@ def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[st
     from agentteams.governance_logs import fcntl as _fcntl
 
     log_path = output_dir / "references" / "security-decisions.log.csv"
-    if not log_path.exists():
+    from agentteams.cli.clearance_binding import lstat_or_none  # not Path.exists(): False on any OSError (3.14, C-2)
+    if lstat_or_none(log_path, "security decisions log") is None:
         return None
     # A shared lock for the whole read, so a `governance_logs repair` (exclusive lock, in-place rewrite) is
     # never observed half-written (@security re-review C2). Appenders take the same exclusive lock.
