@@ -27,6 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/test_wasm_exec.py` now checks the stdlib-only property against `sys.stdlib_module_names` and refuses
   `importlib.import_module`. Requested by baseAgent (its B4) through IM. Scoped by `@security`.
 
+### docs (the release model for 1.3: `main` moves only to signed releases; release lines are cut from `dev`)
+
+- `docs_src/release-and-branching.md` describes the model the operator ruled on 2026-11-20:
+  - `main` moves only to a signed release, by a main-to-vX.Y.Z pull request, or by a hotfix; `dev` → `main` milestone
+    pull requests are retired;
+  - `release/X.Y` is cut from `dev` at the minor version's first release candidate;
+  - after each final or patch release, the line is merged forward into `main` and into `dev`.
+- It also updates the current versions (`v1.2.2`; older lines `v1.1.4` and `v1.0.7`), the install examples, the
+  release-candidate soak (from the signed tag only), backports to `release/1.2`, and the rulesets.
+- `references/git-procedures.md` §G and the install line in `getting-started.md` match.
+
 ### changed (main-team HALTs bind clearances checked in any team dir; gates-only team dirs, #578)
 
 - `check_file_clearance` (`--check-clearance`) now also refuses on an unretracted HALT for the scope, or for the
