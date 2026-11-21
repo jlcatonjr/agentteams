@@ -1,0 +1,19 @@
+{"content": [{"text": "Workflow 1: Produce a Deliverable", "type": "text"}], "role": "assistant"}
+{"content": [{"id": "toolu_0074", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/tmp/by-week/2026-W47/demo.plan.md"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0075", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0076", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__auth_expert"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0077", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__adversarial"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0078", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__primary_producer"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0079", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/src/a.py"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0080", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__auth_expert"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0081", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__quality_auditor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0082", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/src/b.py"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0083", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__conflict_auditor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0084", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__agent_updater"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0085", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__adversarial"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0086", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__conflict_auditor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"text": "Entering Workflow 11 (Final Check).", "type": "text"}], "role": "assistant"}
+{"content": [{"id": "toolu_0087", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__adversarial"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0088", "toolCall": {"status": "success", "value": {"arguments": {}, "name": "subrecipe__conflict_auditor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0089", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/tmp/by-week/2026-W47/demo.steps.csv"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
+{"content": [{"id": "toolu_0090", "toolCall": {"status": "success", "value": {"arguments": {"command": "write", "file_text": "x", "path": "/work/tree/workSummaries/daily/2026-11-20.md"}, "name": "developer__text_editor"}}, "type": "toolRequest"}], "role": "assistant"}
