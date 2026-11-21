@@ -141,6 +141,7 @@ def format_s10_exempt_repos(repos: object) -> str:
         return "none for this project, so the cooldown applies to every release"
     return ", ".join(f"`{r}`" for r in dict.fromkeys(valid))
 
+
 #: Rule S-10's package-release cooldown bullet as it renders when no deprecation is authorized (the default).
 S10_COOLDOWN_RULE_IN_FORCE = (
     '- ✅ **Package-release cooldown — default 14 days, configurable per project, all\n'
@@ -161,10 +162,13 @@ S10_COOLDOWN_RULE_IN_FORCE = (
     '  that channel)'
 )
 
+#: The sunset of a registered cooldown deprecation (Rule 15(d)), in days; ``cli/s10_deprecation_gate`` registers it.
+S10_DEPRECATION_TTL_DAYS = 90
+
 #: How the authorized deprecation is described, by where it came from (``cli/s10_deprecation_gate``).
 _S10_DEPRECATION_AUTHORITY = {
     "signed": "The operator's Ed25519-signed decision `s10-cooldown-deprecated` authorizes this deprecation for this "
-              "workspace, and it is re-signed at least every 90 days",
+              f"workspace, and it is re-signed at least every {S10_DEPRECATION_TTL_DAYS} days",
     "brief": "This workspace does not sign its decisions, so the project brief's `s10_cooldown_deprecated` sets this "
              "deprecation",
 }
@@ -172,6 +176,21 @@ _S10_DEPRECATION_AUTHORITY = {
 #: The note appended to each remaining cooldown clause while the deprecation is authorized.
 _S10_COOLDOWN_MOOT_NOTE = (" *(Rule S-10's package-release cooldown is deprecated in this workspace, so any cooldown "
                            "clause here is moot; it applies again if that deprecation lapses or a HALT removes it.)*")
+
+
+def s10_cooldown_deprecation_authorized(authorized: object) -> bool:
+    """Whether *authorized* is a value ``cli/s10_deprecation_gate`` stores for an authorized deprecation.
+
+    Args:
+        authorized: The manifest's ``s10_cooldown_deprecated_authorized`` value.
+
+    Returns:
+        True only for ``"signed"`` or ``"brief"``.
+
+    Raises:
+        Nothing.
+    """
+    return isinstance(authorized, str) and authorized in _S10_DEPRECATION_AUTHORITY
 
 
 def s10_cooldown_placeholders(authorized: object) -> dict[str, str]:
@@ -190,19 +209,20 @@ def s10_cooldown_placeholders(authorized: object) -> dict[str, str]:
     Raises:
         Nothing.
     """
-    source = _S10_DEPRECATION_AUTHORITY.get(authorized) if isinstance(authorized, str) else None
-    if source is None:
+    if not s10_cooldown_deprecation_authorized(authorized):
         return {"S10_COOLDOWN_RULE": S10_COOLDOWN_RULE_IN_FORCE, "S10_COOLDOWN_MOOT": ""}
     rule = (
         "- ⚠️ **Package-release cooldown — deprecated in this workspace.** There is no release-age waiting\n"
         "  period in any ecosystem: a release that passes the known-vulnerability search above (no known\n"
         "  vulnerability, no OSV `MAL-*` entry) and Rule S-9's identity check may be adopted on the day it is\n"
-        "  published, and no cooldown exception or exemption is needed. " + source + ". Every other\n"
+        "  published, and no cooldown exception or exemption is needed. " + _S10_DEPRECATION_AUTHORITY[authorized]
+        + ". Every other\n"
         "  Rule S-10 check stays in force: the vulnerability search, Rule S-9's identity check, and the\n"
         "  latest-stable rule below. The cooldown clauses elsewhere in this file are moot while the deprecation\n"
         "  holds; if it lapses, or an unretracted HALT on an `s10-cooldown` or `s10-toolchain-group` action\n"
-        "  removes it, the next render restores the 14-day cooldown. agentteams' own wasm runtime pin tool\n"
-        "  (`--wasm-pin-update`) keeps its built-in 14-day check; this deprecation does not change it.\n"
+        "  removes it, the next render restores the 14-day cooldown. agentteams' own pin tools (the wasm\n"
+        "  runtime pins, `--wasm-pin-update`, and vulnscan's tool pins) keep their built-in 14-day checks; this\n"
+        "  deprecation does not change them.\n"
         "  Upgrading an already-installed package through its distribution's own curated security channel\n"
         "  (apt/dnf/apk with a DSA/USN/RHSA-backed update) is remediation, not adoption (third-party\n"
         "  repositories, PPAs, and vendor-added apt/dnf sources are not that channel)"

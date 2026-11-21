@@ -250,7 +250,7 @@ def _run_generate_locked(
         return 1
     _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
     authorize_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # Rule 15: S-10 carve-out
-    authorize_deprecation_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # #592
+    cooldown_deprecated = authorize_deprecation_into(manifest, output_dir, consume=not (args.dry_run or args.check))
 
     print(f"  Output directory: {output_dir}")
 
@@ -317,7 +317,7 @@ def _run_generate_locked(
         max_items=max(1, int(args.security_max_items)),
         tools=_project_tools if _project_tools else None,
         skip_nvd=args.security_no_nvd,
-        cooldown_deprecated=manifest.get("s10_cooldown_deprecated_authorized") in ("signed", "brief"),
+        cooldown_deprecated=cooldown_deprecated,   # Rule S-10's cooldown deprecation, as the gate authorized it (#592)
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
 

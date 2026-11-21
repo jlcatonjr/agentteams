@@ -57,12 +57,13 @@ from agentteams.cli.s10_exempt_gate import (
     governance_team_dir,
 )
 from agentteams.cli.sandbox_relaxation_gate import _decision_binding, _split, _unbound_reason
+from agentteams.manifest_format import S10_DEPRECATION_TTL_DAYS, s10_cooldown_deprecation_authorized
 
 #: The action id, which is also its own family.
 DEPRECATION_ACTION = "s10-cooldown-deprecated"
 
 #: The sunset of a registered deprecation (Rule 15(d)); the operator re-signs it, and a lapse renders the cooldown.
-DEPRECATION_TTL_DAYS = 90
+DEPRECATION_TTL_DAYS = S10_DEPRECATION_TTL_DAYS
 
 #: Every action whose unretracted HALT removes the deprecation. ``s10-cooldown`` matches any ``s10-cooldown-*`` HALT
 #: (an exempt repository, the exempt family, this action); the toolchain group's family is a separate id.
@@ -177,24 +178,25 @@ def authorized_deprecation(team_dir: Path, requested: object, *, consume: bool,
     try:
         own, team_dir = team_dir, governance_team_dir(team_dir)
         governed = _enforce_decision_signing(team_dir)
-    except RuntimeError as exc:
-        print(f"  ✗  S-10 cooldown deprecation NOT applied (the {CANONICAL_TEAM_DIR} signing switch can't be read: "
-              f"{exc}); the cooldown renders in force.", file=sys.stderr)
+        root = _project_root_of(own)
+        halt_dirs = tuple(d for d in (own, *(_surface_dirs(root) if root is not None else ())) if d != team_dir)
+    except (RuntimeError, OSError) as exc:   # a symlink loop, a permission error, an unreadable switch
+        print(f"  ✗  S-10 cooldown deprecation NOT applied (the {CANONICAL_TEAM_DIR} signing switch or the team dirs "
+              f"can't be read: {exc}); the cooldown renders in force.", file=sys.stderr)
         return None
-    root = _project_root_of(own)
-    halt_dirs = tuple(d for d in (own, *(_surface_dirs(root) if root is not None else ())) if d != team_dir)
     if not governed:
         try:
             _assert_no_halt((team_dir, *halt_dirs))
-        except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
-            print(f"  ✗  S-10 cooldown deprecation NOT applied ({exc}); the cooldown renders in force.", file=sys.stderr)
+        except (RuntimeError, OSError, ValueError) as exc:
+            print(f"  ✗  S-10 cooldown deprecation NOT applied ({exc}); the cooldown renders in force.",
+                  file=sys.stderr)
             return None
         print("  !  S-10 COOLDOWN DEPRECATED by the brief alone (this workspace is not governed, so no signed decision "
               "is required).", file=sys.stderr)
         return "brief"
     try:
         _authorize(team_dir, consume=consume, now=now or datetime.now(UTC), halt_dirs=halt_dirs)
-    except (RuntimeError, ExceptionRegistryError, OSError, UnicodeDecodeError, ValueError) as exc:
+    except (RuntimeError, ExceptionRegistryError, OSError, ValueError) as exc:
         print(f"  ✗  S-10 cooldown deprecation NOT applied ({exc}); the cooldown renders in force. To apply it, "
               f"{_shape()}", file=sys.stderr)
         if isinstance(exc, CarryOverError):   # agentteams#476: a dropped registered relaxation is loud in CI
@@ -204,7 +206,7 @@ def authorized_deprecation(team_dir: Path, requested: object, *, consume: bool,
     return "signed"
 
 
-def authorize_deprecation_into(manifest: dict, team_dir: Path, *, consume: bool) -> None:
+def authorize_deprecation_into(manifest: dict, team_dir: Path, *, consume: bool) -> bool:
     """Set ``manifest["s10_cooldown_deprecated_authorized"]`` through the gate; the render reads only that key.
 
     Args:
@@ -213,13 +215,15 @@ def authorize_deprecation_into(manifest: dict, team_dir: Path, *, consume: bool)
         consume: Passed to :func:`authorized_deprecation`.
 
     Returns:
-        None.
+        Whether the deprecation is authorized (the value ``build_security_placeholders`` takes as
+        ``cooldown_deprecated``).
 
     Raises:
         Nothing.
     """
-    manifest["s10_cooldown_deprecated_authorized"] = authorized_deprecation(
-        team_dir, manifest.get("s10_cooldown_deprecated"), consume=consume)
+    value = authorized_deprecation(team_dir, manifest.get("s10_cooldown_deprecated"), consume=consume)
+    manifest["s10_cooldown_deprecated_authorized"] = value
+    return s10_cooldown_deprecation_authorized(value)
 
 
 __all__ = ["DEPRECATION_ACTION", "DEPRECATION_TTL_DAYS", "HALT_ACTIONS", "authorize_deprecation_into",

@@ -227,3 +227,41 @@ def test_the_playbook_line_follows_the_gate() -> None:
     assert "MAL-* entries" in deprecated and "latest stable release" in deprecated
     assert in_force.splitlines()[:5] == deprecated.splitlines()[:5]
     assert len(in_force.splitlines()) == len(deprecated.splitlines())
+
+
+def test_a_registered_deprecation_that_stops_verifying_is_loud(tmp_path, stub_ed25519, capsys) -> None:
+    """agentteams#476 shape: a registry entry no longer bound to its decision renders the cooldown, with ::error."""
+    team = _team(tmp_path)
+    _log(team, _row(_ACTION))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) == "signed"
+    path = team / er.EXCEPTION_REGISTRY_REL
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["exceptions"][0]["decision_sha256"] = "0" * 64
+    path.write_text(json.dumps(data), encoding="utf-8")
+    capsys.readouterr()
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0 + timedelta(days=1)) is None
+    err = capsys.readouterr().err
+    assert "did not carry over" in err and "::error title=S-10 cooldown deprecation carry-over::" in err
+
+
+def test_an_unreadable_canonical_switch_renders_the_cooldown(tmp_path, stub_ed25519, capsys) -> None:
+    canonical, native = _surface(tmp_path, ".github/agents"), _team(tmp_path)
+    _log(canonical, _row(_ACTION))
+    (canonical / "references" / "agent-privilege.json").write_text("{not json")
+    assert gate.authorized_deprecation(native, True, consume=True, now=_T0) is None
+    err = capsys.readouterr().err
+    assert "NOT applied" in err and "can't be read" in err and "not governed" not in err
+
+
+def test_an_unreadable_team_dir_never_stops_the_render(tmp_path, monkeypatch, capsys) -> None:
+    """C6: an OSError while finding the bound team dirs (a permission error, a symlink loop) renders the cooldown."""
+    team = _team(tmp_path, governed=False)
+
+    def _boom(root):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(gate, "_surface_dirs", _boom)
+    manifest = {"s10_cooldown_deprecated": True}
+    gate.authorize_deprecation_into(manifest, team, consume=True)
+    assert manifest["s10_cooldown_deprecated_authorized"] is None
+    assert "can't be read" in capsys.readouterr().err
