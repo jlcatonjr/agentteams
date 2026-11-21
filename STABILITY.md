@@ -186,8 +186,9 @@ The following rules apply on top of the general ones above:
 - **`profiles=`** (on `run` and `materialize`): the only supported value is `agentteams._sandbox_profiles`, or the
   bundle's exec-loaded copy. The functions that module provides are internal.
 - **May change in any release:**
-  - refusal lists and limits (`NEST_DENY_READS`, `NEST_PROTECTED_REL`, `REFUSED_COPY_OUT_NAMES`, the credential names,
-    `MAX_*`) may grow;
+  - refusal lists (`NEST_DENY_READS`, `NEST_PROTECTED_REL`, `REFUSED_COPY_OUT_NAMES`, the credential names) may grow
+    and `MAX_*` limits may shrink, under the security-tightening clause; raising a `MAX_*` limit widens and needs a
+    recorded `@security` clearance;
   - `trap` and `classify_trap` labels are diagnostic and not covered;
   - the pins data (`wasm_runtime_pins.json`: versions and hashes) may change, and its structure is internal.
 - **`sandbox-state.schema.json` v1 is closed** (`additionalProperties: false`, and consumers refuse anything but the
