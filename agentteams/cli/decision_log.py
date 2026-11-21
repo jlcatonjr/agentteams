@@ -27,6 +27,7 @@ from agentteams.cli.decision_lineage import (  # noqa: F401  (re-exported: tests
     _row_lineage,
     _transitive_ancestors,
 )
+from agentteams.cli.clearance_binding import lstat_or_none  # not Path.exists(): False on any OSError (3.14, C-2)
 from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, assert_text_bound, bind_text_digest
 from agentteams.cli.effect_classifier import (
     EffectClassifierError,
@@ -469,10 +470,10 @@ def _enforce_decision_signing(output_dir: Path) -> bool:
         Whether strict enforcement is active.
 
     Raises:
-        RuntimeError: The config file exists but cannot be parsed.
+        RuntimeError: The config file exists but cannot be stat'd, read or parsed.
     """
     config_path = output_dir / "references" / _AGENT_PRIVILEGE_CONFIG
-    if not config_path.exists():
+    if lstat_or_none(config_path, "agent-privilege switch") is None:  # unstat-able refuses (3.14, #555)
         # GV1 fail-closed: a governed workspace (signing-governed.marker, or a git-tracked one since deleted: item 17)
         # must enforce signing; with the config absent, RAISE rather than revert to legacy OFF.
         from agentteams.signing_switch import is_governed  # the one governance predicate
@@ -812,7 +813,6 @@ def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[st
     from agentteams.governance_logs import fcntl as _fcntl
 
     log_path = output_dir / "references" / "security-decisions.log.csv"
-    from agentteams.cli.clearance_binding import lstat_or_none  # not Path.exists(): False on any OSError (3.14, C-2)
     if lstat_or_none(log_path, "security decisions log") is None:
         return None
     # A shared lock for the whole read, so a `governance_logs repair` (exclusive lock, in-place rewrite) is
