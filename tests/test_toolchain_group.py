@@ -1017,3 +1017,51 @@ def test_comments_and_unrelated_lock_lines_are_still_ignored(t3, tmp_path) -> No
     lock = tmp_path / "toolchain.lock"
     lock.write_text(f"# pins\npython=3.11\n\ntk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
     assert _run_pin(_pin_args(team, lock, signers)) == 0
+
+
+# --- @security delta review of 3992fcf0 -------------------------------------------------------------------------
+
+@pytest.mark.parametrize("text", [
+    "tk\t=acme/toolkit@{sha}\ntk.tag=v1.0.0\n",                              # a tab before '='
+    "tk=acme/toolkit@{sha} # pinned for 1.3\ntk.tag=v1.0.0\n",                # a trailing comment
+])
+def test_a_tab_or_trailing_comment_is_refused(t3, tmp_path, capsys, text) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(text.format(sha=sha))
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "looks like a pin or tag but is malformed" in capsys.readouterr().err
+
+
+def test_a_crlf_lockfile_still_verifies(t3, tmp_path) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_bytes(f"tk=acme/toolkit@{sha}\r\ntk.tag=v1.0.0\r\n".encode())
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
+
+
+def test_an_origin_claiming_a_group_member_fails_the_signed_workspace_match(tmp_path, signed_remote, monkeypatch,
+                                                                          capsys) -> None:
+    """The group excludes the workspace's own repo only after the signed workspace match (toolchain_group.load_group):
+    a consumer signed as acme/consumer whose origin claims acme/toolkit gets no group and fails closed."""
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, private = _project(tmp_path, origin="https://github.com/acme/toolkit.git")
+    _write(root, _doc(private))                                          # signed for repo:acme/consumer only
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n")
+    assert _run_pin(_pin_args(team, lock, signers, team_id=_TEAM)) == 1
+    assert "is not listed in the signed" in capsys.readouterr().err
+
+
+def test_a_canonical_dir_that_vanishes_between_stats_refuses(tmp_path, monkeypatch) -> None:
+    root, _team, _private = _project(tmp_path)
+    native = root / ".claude" / "agents"
+    native.mkdir(parents=True)
+    real = gate.lstat_or_none
+    monkeypatch.setattr(gate, "lstat_or_none",
+                        lambda p, what: None if Path(p).name == ".github" else real(p, what))  # the race, simulated
+    with pytest.raises(RuntimeError, match="vanished"):
+        gate.governance_team_dir(native)
