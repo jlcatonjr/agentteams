@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the bare family HALT and every sibling's HALT at that gate (C-2). Now only a retraction of exactly the gate action
   clears its family's HALTs, as before. Any other retraction clears only the HALT with its own id, and authenticates
   against that id.
+- **A brief that is there but unreadable is never skipped (#599).** Fleet discovery (`fleet._resolve_descriptor`) and
+  `memory_index_surfaces.brief_candidate` used `Path.exists()` and `is_symlink()`. These raise on 3.13 and return
+  `False` on any `OSError` from 3.14. So a dangling or unreadable `.agentteams/brief.json` either crashed the caller or
+  silently fell through to the root `brief.json`. That included `--verify-toolchain-pin`'s brief discovery, where it
+  could drop the brief's `s10_cooldown_exempt_repos` from the check. Now the first candidate that is there wins, and
+  its reader reports the problem. `--verify-toolchain-pin` exits `1`.
 - **A HALT in any team dir binds a per-repository S-10 exemption (#597).** Without a verified toolchain group, the
   per-repository path read HALTs only from the canonical `.github/agents` and the dir being rendered. A HALT on
   `s10-cooldown-exempt` (or one repository) recorded in another surface, for example `.codex/agents`, did not stop a

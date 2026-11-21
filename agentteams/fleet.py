@@ -212,14 +212,24 @@ def _is_linked_worktree(path: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 def _resolve_descriptor(ws: Path) -> Path | None:
-    """Stub-trap fix: prefer the rich brief over the thin stub."""
+    """Stub-trap fix: prefer the rich brief over the thin stub.
+
+    The first candidate that is *there* wins: a dangling symlink, or a path that cannot be stat'd, is returned rather
+    than skipped, so whoever reads it reports the problem instead of silently using a later brief. Not
+    ``Path.exists()``: it follows symlinks, raises on 3.13 and returns False on any ``OSError`` from 3.14 (#599).
+    """
     for cand in (
         ws / ".agentteams" / "brief.json",
         ws / "brief.json",
         ws / ".github" / "agents" / "_build-description.json",
     ):
-        if cand.exists():
-            return cand
+        try:
+            cand.lstat()
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError:
+            return cand  # there, but cannot be stat'd: the reader reports it (fail-closed)
+        return cand
     return None
 
 

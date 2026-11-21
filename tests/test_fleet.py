@@ -5,6 +5,7 @@ tests stay fast and deterministic (no network / no full template render).
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -1082,3 +1083,30 @@ def test_no_grant_section_without_warnings(tmp_path, monkeypatch):
     fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True), parser=None)
     _, summary = _report(tmp_path)
     assert "## Shrink grants" not in summary
+
+
+# --- #599: a brief that is there but dangling or unreadable is returned, never skipped for a later one ------------
+
+def test_a_dangling_agentteams_brief_is_not_skipped_for_the_root_brief(tmp_path):
+    from agentteams.fleet import _resolve_descriptor
+
+    (tmp_path / "brief.json").write_text("{}")
+    (tmp_path / ".agentteams").mkdir()
+    (tmp_path / ".agentteams" / "brief.json").symlink_to(tmp_path / "gone.json")
+    assert _resolve_descriptor(tmp_path) == tmp_path / ".agentteams" / "brief.json"
+
+
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="chmod does not bind root")
+def test_an_unstatable_agentteams_brief_is_not_skipped_for_the_root_brief(tmp_path):
+    from agentteams.fleet import _resolve_descriptor
+    from agentteams.memory_index_surfaces import brief_candidate
+
+    (tmp_path / "brief.json").write_text("{}")
+    (tmp_path / ".agentteams").mkdir()
+    (tmp_path / ".agentteams" / "brief.json").write_text("{}")
+    (tmp_path / ".agentteams").chmod(0)
+    try:
+        assert _resolve_descriptor(tmp_path) == tmp_path / ".agentteams" / "brief.json"
+        assert brief_candidate(tmp_path) == tmp_path / ".agentteams" / "brief.json"   # no raise on 3.13
+    finally:
+        (tmp_path / ".agentteams").chmod(0o700)

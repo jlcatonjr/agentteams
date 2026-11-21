@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from pathlib import Path
 
 _INDEX_REL = Path("references") / "memory-index.json"
@@ -41,9 +42,14 @@ def brief_candidate(project_root: Path) -> Path | None:
     from agentteams.fleet import _resolve_descriptor  # the canonical lookup (redteam F-3)
 
     path = _resolve_descriptor(project_root)
-    if path is None or path.is_symlink() or not path.resolve().is_relative_to(project_root.resolve()):
+    if path is None:
         return None
-    return path
+    try:
+        if stat.S_ISLNK(path.lstat().st_mode):
+            return None
+    except OSError:
+        return path  # there, but cannot be stat'd: returned so the reader reports it (not is_symlink(), #599)
+    return path if path.resolve().is_relative_to(project_root.resolve()) else None
 
 
 def resolve_brief(project_root: Path) -> Path | None:
