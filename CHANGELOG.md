@@ -16,7 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - one named by the new `--pin-repos` (each must be pinned);
   - a verified group member.
 
-  The workspace's own repository is excluded and named in the output.
+  The workspace's own repository is excluded and named in the output, but only when the owner match alone selected
+  it. A repository named by the brief, `--pin-repos` or the group is always checked, because `origin` is not signed:
+  a consumer whose `origin` claims to be a named repository cannot skip that pin (IM-da review of #598).
+- **Lockfile lines:** a name pinned or tagged twice, or a line shaped like a pin or tag that does not match the format
+  (uppercase hex, spaces around `=`), now fails the check. Before, the last duplicate won while the bootstrap installs
+  the first, and a malformed line was skipped.
 - **Exit codes:** `0` only when at least one pin was checked and every one verifies; `1` otherwise. Upgrade note: a
   dependency gate that treated exit `2` as "nothing under the rule" now gets `0` or `1`.
 - **HALTs:** an `s10-cooldown-exempt` HALT on a checked repository is a `::warning`. It no longer drops the pin from

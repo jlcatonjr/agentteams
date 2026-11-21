@@ -509,6 +509,12 @@ def verify_group_command(project_root: Path, governance_dir: Path, team_id: str,
 #: Lock lines: ``<name>=<owner/repo>@<40-hex>`` and ``<name>.tag=<tag>``.
 _LOCK_PIN_RE = re.compile(r"^([A-Za-z0-9._-]+)=([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)@([0-9a-f]{40})$")
 _LOCK_TAG_RE = re.compile(r"^([A-Za-z0-9._-]+)\.tag=(v[0-9][0-9A-Za-z.+-]*)$", re.ASCII)
+# Not a comment, and a NAME = owner/repo@... or NAME.tag = ... shape however spaced or cased: it must match exactly.
+_LOCK_PINLIKE_RE = re.compile(r"^[^#\s=][^=]*=\s*[^=\s]*/[^=\s]*@|^[^#\s=][^=]*\.tag\s*=")
+
+
+class ToolchainLockError(ValueError):
+    """A lockfile pin or tag line is duplicated or malformed (fail-closed)."""
 
 
 def _git(*args: str, cwd: Path | None = None, timeout: int = 120) -> subprocess.CompletedProcess[str]:
@@ -585,20 +591,34 @@ def locked_pins(lockfile: Path) -> dict[str, str]:
     Raises:
         OSError: The file cannot be read.
         UnicodeDecodeError: The file is not UTF-8.
+        ToolchainLockError: A duplicated or malformed pin or tag line.
     """
     return {name: repo for name, (repo, _sha) in _parse_lock(lockfile)[0].items()}
 
 
 def _parse_lock(lockfile: Path) -> tuple[dict[str, tuple[str, str]], dict[str, str]]:
-    """``({NAME: (owner/repo, sha)}, {NAME: tag})`` from *lockfile*; other lines are ignored."""
+    """``({NAME: (owner/repo, sha)}, {NAME: tag})`` from *lockfile*; lines that are not pins or tags are ignored.
+
+    Raises:
+        ToolchainLockError: A name is pinned or tagged twice (the bootstrap reads the first line and this check would
+            read another), or a line looks like a pin or tag but does not match the format (IM-da review of #598).
+    """
     pins: dict[str, tuple[str, str]] = {}
     tags: dict[str, str] = {}
-    for line in lockfile.read_text(encoding="utf-8").splitlines():
+    for number, line in enumerate(lockfile.read_text(encoding="utf-8").splitlines(), 1):
         line = line.strip()
         if (m := _LOCK_PIN_RE.match(line)):
-            pins[m.group(1)] = (m.group(2), m.group(3))
+            into, value = pins, (m.group(2), m.group(3))
         elif (m := _LOCK_TAG_RE.match(line)):
-            tags[m.group(1)] = m.group(2)
+            into, value = tags, m.group(2)
+        elif _LOCK_PINLIKE_RE.match(line):
+            raise ToolchainLockError(f"{lockfile}:{number}: looks like a pin or tag but is malformed: {line!r}")
+        else:
+            continue
+        if m.group(1) in into:
+            raise ToolchainLockError(f"{lockfile}:{number}: {m.group(1)!r} is {'tagged' if into is tags else 'pinned'} "
+                                     "twice; one line per name (fail-closed)")
+        into[m.group(1)] = value
     return pins, tags
 
 
@@ -641,4 +661,4 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
 __all__ = ["FAMILY", "GROUP_FILE_REL", "GroupResult", "HIGH_WATER_KEY", "PURPOSE", "SCOPE", "ToolchainGroupError",
            "backend_available", "load_group", "read_document", "report", "sign_group_file", "signed_values",
            "validate", "verify_group_command", "verify_pins", "verify_signature", "verify_tag_pin",
-           "workspace_repo", "locked_pins"]
+           "workspace_repo", "locked_pins", "ToolchainLockError"]
