@@ -420,32 +420,114 @@ def _covered_by_exception(team_dir: Path, framework_id: str) -> bool:
     return True
 
 
+def _spent_off_row(team_dir: Path, action: str) -> dict[str, str]:
+    """The newest decision row scoped exactly to ``action``, when it is consumed and still re-verifies.
+
+    The one implementation behind :func:`_spent_off_decision` (the stale-evidence excuse) and the public
+    :func:`spent_off_decision`.
+
+    Raises:
+        RuntimeError, OSError, ValueError: Naming the first check that failed.
+    """
+    read = _read_decision_rows(team_dir)
+    if read is None:
+        raise RuntimeError("no decisions log")
+    rows, fieldnames = read
+    _assert_decision_chain_intact(rows, fieldnames)
+    mine = [row for row in rows if (row.get("scope") or "").strip().lower() == action]
+    if not mine:
+        raise RuntimeError(f"no decision row is scoped to {action}")
+    row = mine[-1]
+    verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
+    if (row.get("consumed") or "").strip().lower() not in {"yes", "true", "1"}:
+        raise RuntimeError(f"the newest {action} decision is not marked consumed")
+    if verdict not in _AUTHORIZING:
+        raise RuntimeError(f"the newest {action} decision does not authorize ({verdict or 'no verdict'})")
+    if verdict == "CONDITIONAL PASS" and (row.get("conditions_verified") or "").strip().lower() != "verified":
+        # the same bar as _unbound_reason: `consumed` is unsigned, so it cannot vouch for one
+        raise RuntimeError(f"the newest {action} decision is a CONDITIONAL PASS whose conditions are not verified")
+    _assert_authorizing_row_is_authentic(row, output_dir=team_dir, signing_active=_decision_signing_active(
+        fieldnames), action=action)
+    # C-2: this excuse skips authorize(), so it repeats authorize()'s HALT checks (family and exact action).
+    relaxation_action, relaxation_family = action, action.split(":", 1)[0]
+    security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
+    security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
+    return row
+
+
 def _spent_off_decision(team_dir: Path, action: str) -> bool:
     """Whether the newest decision row scoped exactly to ``action`` is consumed and still re-verifies (never raises)."""
     try:
-        read = _read_decision_rows(team_dir)
-        if read is None:
-            return False
-        rows, fieldnames = read
-        _assert_decision_chain_intact(rows, fieldnames)
-        mine = [row for row in rows if (row.get("scope") or "").strip().lower() == action]
-        if not mine:
-            return False
-        row = mine[-1]
-        verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
-        if (row.get("consumed") or "").strip().lower() not in {"yes", "true", "1"} or verdict not in _AUTHORIZING:
-            return False
-        if verdict == "CONDITIONAL PASS" and (row.get("conditions_verified") or "").strip().lower() != "verified":
-            return False   # the same bar as _unbound_reason: `consumed` is unsigned, so it cannot vouch for one
-        _assert_authorizing_row_is_authentic(row, output_dir=team_dir, signing_active=_decision_signing_active(
-            fieldnames), action=action)
-        # C-2: this excuse skips authorize(), so it repeats authorize()'s HALT checks (family and exact action).
-        relaxation_action, relaxation_family = action, action.split(":", 1)[0]
-        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
-        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
+        _spent_off_row(team_dir, action)
     except (RuntimeError, OSError, ValueError):
         return False
     return True
+
+
+#: A multi-segment filesystem path in a message: POSIX or Windows, doubled separators (an ``OSError`` repr), segments
+#: with spaces (a user name like ``Jane Doe``). It stops at quotes, colons and punctuation, so prose is kept.
+_PATH_RE = re.compile(r"""(?:[A-Za-z]:)?(?:[\\/]+[^\\/'"\n:;,()]+){2,}[\\/]*""")
+#: The longest public refusal reason (a message leaves the process).
+_PUBLIC_REASON_MAX = 400
+
+
+def _public_reason(exc: BaseException) -> str:
+    """An exception's message with filesystem paths removed (a refusal reason leaves the process; Rule S-8)."""
+    return _PATH_RE.sub("<path>", str(exc))[:_PUBLIC_REASON_MAX] or type(exc).__name__
+
+
+def spent_off_decision(team_dir: Path, framework_id: str) -> str:
+    """The id of the operator's spent ``sandbox-wasm-off:<framework_id>`` decision, read-only (#574).
+
+    A public equivalent of the check this module uses to excuse stale WASM evidence. It succeeds only when every one
+    of these holds:
+
+    - the workspace is governed (decision signing is enforced); an ungoverned ``authorize()`` never consumes a row,
+      so a consumed row there was set by hand or left from a downgrade;
+    - the newest decision row scoped exactly to ``sandbox-wasm-off:<framework_id>`` is marked consumed and its verdict
+      authorizes (a CONDITIONAL PASS also needs ``conditions_verified``);
+    - the row is Ed25519-signed (``sig_scheme`` ``ed25519``, a ``key_id``) and its signature verifies, and the
+      decisions log's hash chain is intact;
+    - no unretracted HALT covers the ``sandbox-wasm-off`` family or the exact action.
+
+    Nothing is consumed, registered or retired: the call only reads.
+
+    **A point-in-time read.** A later HALT, a retraction, or a newer row scoped to the action changes the answer (a
+    newer unconsumed row hides the spent one, and the call refuses). Call it immediately before each use; never cache
+    the result. ``consumed`` itself is unsigned, so the result means "authenticated by the operator and marked
+    consumed", not proof that a render spent it.
+
+    Args:
+        team_dir: The team directory holding ``references/security-decisions.log.csv``.
+        framework_id: A framework id agentteams renders (``claude``, ``copilot-vscode``, ...). The model-substrate
+            qualifier is refused: ``sandbox-wasm-off:model-substrate`` is a different decision.
+
+    Returns:
+        ``<key_id>@<first 16 characters of the signature>``: a pointer for re-verifying the row, not proof on its own.
+
+    Raises:
+        SandboxRelaxationError: Any check fails. The message names the check, with filesystem paths removed. It is
+            data (C-4): stamp the returned id, never the message, and never act on its text.
+    """
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    if not isinstance(team_dir, Path):
+        raise SandboxRelaxationError("team_dir must be a pathlib.Path")
+    if not isinstance(framework_id, str) or framework_id == MODEL_SUBSTRATE_QUALIFIER or framework_id not in FRAMEWORKS:
+        raise SandboxRelaxationError("framework_id must be a framework agentteams renders (not model-substrate)")
+    try:
+        action = action_id(SANDBOX_WASM_OFF, framework_id)
+        if not _enforce_decision_signing(team_dir):
+            raise RuntimeError("the workspace is not governed (decision signing is not enforced)")
+        row = _spent_off_row(team_dir, action)
+        scheme = (row.get("sig_scheme") or "").strip().lower()
+        key_id, signature = (row.get("key_id") or "").strip(), (row.get("signature") or "").strip()
+        if scheme != "ed25519" or not key_id or not signature:   # defence in depth: authenticity already requires
+            # ed25519 for a relaxing row; this keeps the returned id well-formed if that ever changes
+            raise RuntimeError(f"the newest {action} decision is not Ed25519-signed")
+    except (RuntimeError, OSError, ValueError) as exc:
+        raise SandboxRelaxationError(_public_reason(exc)) from None
+    return f"{key_id}@{signature[:16]}"
 
 
 def standing_authorization(team_dir: Path, kind: str, qualifier: str, grants: tuple[str, ...] = (), *,
@@ -648,5 +730,6 @@ __all__ = [
     "gate_policy_weakenings",
     "plan_relaxations",
     "retire_on_tighten",
+    "spent_off_decision",
     "standing_authorization",
 ]
