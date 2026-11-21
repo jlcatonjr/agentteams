@@ -22,6 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: the gates-only team dir layout for signed sign-off rows, and the process-wide `AGENTTEAMS_DECISION_SIGNING_KEY`
   caveat (`api-reference/workspace-privilege-scoping.md`). New `tests/test_gates_only_team_dir.py`.
 
+### changed (constitution: constraint-relaxing authorizations include bulk actions; operator ruling 2026-11-16)
+
+- **The generated teams' Rule 11 now says what the signing code already enforces.** `effect_classifier.requires_operator_signature`
+  has required the operator's Ed25519 signature and a traceable `derives_from` for a bulk effect (`effect_bulk=yes`)
+  since 1.0.0, but the rule text listed only capability grants, trust-root writes,
+  explicit relaxations and cross-repository reach, and said routine destructive actions keep C-5 clearance.
+  `copilot-instructions.template.md` now adds "or acts in bulk" and says a destructive action on a single target
+  keeps C-5 clearance while a bulk one needs the operator's signature. Nothing about enforcement changes. The rule
+  sits outside every fence, so `--update --merge` does not rewrite it in existing teams; new teams and an
+  `--overwrite` get the new wording.
+
 ### added (beta: `agentteams.term_index` and `--term-check`; #548)
 
 - **A term-index core, ported from researchteam and declared beta.** `agentteams.term_index` validates a term
