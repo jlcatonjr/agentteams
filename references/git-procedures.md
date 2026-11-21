@@ -501,14 +501,15 @@ unrecorded agentteams code.
 
 agentteams uses the **integration-branch model** (brief `git_workflow.branch_model: "integration"`; the generated
 `references/integration-branch.reference.md` is the team-wide procedure). GitHub Actions cost follows the number of
-CI runs, so `main` advances only at **release milestones**. Rationale and numbers:
+CI runs, so `main` advances only to **signed releases** (operator ruling, 2026-11-20). Rationale and numbers:
 `references/plans/ci-cost-branching-strategy.report.md` (local).
 
 | Branch | Advances by | Cloud CI |
 |---|---|---|
 | `feat/*`, `fix/*`, `docs/*`, `chore/*` | your commits | none |
 | `dev` | local `--no-ff` merge after the local gate; invited contributors' fork PRs; automation PRs (vulnscan fixes) | none on push; PR CI for those PRs |
-| `main` | the release PR `dev` → `main` (merge commit), or a hotfix PR | full matrix on the PR; Linux-only re-run and deploy on the merge push |
+| `release/X.Y` | backports (`cherry-pick -x`) and release-commit PRs; cut from `dev` at the minor's rc.1 | full matrix on each PR |
+| `main` | a main-to-vX.Y.Z PR merging a signed release's tag commit (merge commit), or a hotfix PR | full matrix on the PR; Linux-only re-run and deploy on the merge push |
 
 **Local gate** (before every merge into `dev`):
 
@@ -523,24 +524,35 @@ bash scripts/check-durable-tmp-refs.sh
 `git pull --ff-only && git merge --no-ff <branch> && git push origin dev`. Never in the shared checkout, which stays on
 `main` so editable installs render released code.
 
-**Release** (at a milestone): open the PR `dev` → `main` with the first-parent merge list
-(`git log --first-parent --merges --format='- %s' origin/main..origin/dev`). Fix failures on `dev`. If the release renames a CI job that
-`main` requires, switch the required checks first (§I). Merge with a
-**merge commit**, never squash or rebase. Verify CI and the Pages deploy, then `git merge --ff-only origin/main` on `dev`.
+**Release** (operator ruling, 2026-11-20): `main` moves only to a signed release. There are no `dev` → `main`
+milestone PRs, so `main` never carries unreleased code.
+- **Minor release:** at the freeze, gate `dev` in full. The operator cuts `release/X.Y` from the frozen `dev` SHA, and
+  `dev` moves to the next `.dev0`.
+  - Release candidates are release-commit PRs into the line, each signed by the operator.
+  - Soak fixes land on `dev` first and are copied with `git cherry-pick -x`.
+  - The final is a version-and-CHANGELOG-only commit on the line.
+- **After every final or patch tag:**
+  1. Open the main-to-vX.Y.Z PR, with its head at the tag commit. Check that `git merge-tree` is clean and that the
+     merged tree equals the tag's tree (#560, #565, #586). Merge it with a **merge commit**, never squash or rebase.
+  2. Open a forward-merge PR into `dev` (#566, #582). `dev` keeps its own version; the CHANGELOG gains the release's
+     section verbatim and drops the shipped entries from `[Unreleased]`. The non-CHANGELOG diff against `dev` is
+     only `capability_hints.LAST_RELEASE_TAG`.
+  3. Verify CI and the Pages deploy.
+- If a release renames a CI job that `main` requires, switch the required checks first (§I).
 
 `dev` must be a **protected branch** (no deletion, no force push; no required checks or reviews, so local merges
 still push). With `delete_branch_on_merge` on, GitHub deletes a release PR's head branch when it merges, and only
 protection exempts it: release #398 (2026-11-07) deleted an unprotected `dev`, which was recreated at `main`.
 
 **Who does it (operator preference, 2026-11-14):** the agent, using `git`/`gh`. That covers branches, PRs, merges into
-`dev`, release PRs and their merge, the post-release fast-forward of `dev`, and branch cleanup. The operator gets a
+`dev`, the main-to-vX.Y.Z and forward-merge PRs and their merge, and branch cleanup. The operator gets a
 `.sh` file only for steps the sandbox cannot do: removing a worktree under the read-only `.git/worktrees`, or anything
 that needs a private key. The existing clearances all still apply:
 
 - **Branch deletion:** `--branch-cleanup --apply` still needs `@security`'s PASS for `branch-cleanup:<plan sha256>`
   and the operator's one-use waiver (§E). `--branch-post-merge --apply` still needs the operator's `branch-delete`
   grant. An agent without those runs only the dry run.
-- **Merge into `main`** (release or hotfix PR): the operator approves that PR in the live session, using a picker or
+- **Merge into `main` or a `release/*` line** (main-to-vX.Y.Z, release-commit or hotfix PR): the operator approves that PR in the live session, using a picker or
   their own typed reply. The approval names the PR number and head SHA. As in §I step 2, standing, blanket or relayed
   approval does not count (the orchestrator's verbatim pass-down to its subagent is not a relay). If the head moves,
   ask again.
