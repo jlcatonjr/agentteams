@@ -38,7 +38,7 @@
     "agentteams/cli/operator_signing.py": "91e279b7d546e93d59736cb1d6f0970e1a1d4664a16b33ae4a60c0ff3b9ded59",
     "agentteams/cli/os_sandbox_switch.py": "d3606b3b9d1ac1b3db17ff76106dc6ac74d0bc2deb39b0952504db24142323c4",
     "agentteams/cli/proposal_commands.py": "3a759bb63ccb66917650fd316522f23e072b8779e229188e27041447baf574e7",
-    "agentteams/cli/s10_deprecation_gate.py": "99f2d2fcbea24ac9c89d9209a84dd57e4480a4961ab48155c64e36a8f69ed3eb",
+    "agentteams/cli/s10_deprecation_gate.py": "13d6c304824b82d10f44b890ca6695de8a2fca744050b24d84cf12bca683de0b",
     "agentteams/cli/s10_exempt_gate.py": "0eef8559c427ab72d37854e74d6125dbb809c9cdf826eab7896d04cf1776036d",
     "agentteams/cli/sandbox_effects.py": "ed09dc3030153e0bf58773a380e661adf024ced183205aa6d41c3d541c897835",
     "agentteams/cli/sandbox_relaxation_gate.py": "157409f59efd9973924f1ea80be90266c3e5c5ec4f144fe95cd94ad7cba5fee9",

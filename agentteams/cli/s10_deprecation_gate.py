@@ -149,9 +149,18 @@ def _assert_no_halt(halt_dirs: tuple[Path, ...]) -> None:
         _assert_no_open_family_halt(halt_dir)
 
 
+#: How far ahead of now a signed row's date may lie (clock skew): a later date would stretch the Rule 15(d) sunset.
+_FUTURE_SKEW = timedelta(days=1)
+
+
 def _signed_at(row: dict[str, str]) -> datetime:
-    """The signed decision row's own timestamp (UTC), from which the sunset is counted; ValueError if unparseable."""
-    stamp = datetime.fromisoformat((row.get("timestamp") or "").strip().replace("Z", "+00:00"))
+    """The signed date of a decision row (UTC), from which the sunset is counted; ValueError if unparseable.
+
+    The same field the row's signature covers (``decision_log._decision_signature_values``: ``date``, else
+    ``timestamp``), so an unsigned column can't stretch the sunset.
+    """
+    raw = (row.get("date") or row.get("timestamp") or "").strip()
+    stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     return stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC)
 
 
@@ -167,9 +176,12 @@ def _lapse_reason(row: dict[str, str] | None, now: datetime) -> str | None:
     if row is None:
         return "is not bound to a row in the decisions log"
     try:
-        sunset = _signed_at(row) + timedelta(days=DEPRECATION_TTL_DAYS)
+        signed = _signed_at(row)
     except ValueError:
-        return f"is bound to a row with an unreadable timestamp {row.get('timestamp')!r}"
+        return f"is bound to a row with an unreadable date {(row.get('date') or row.get('timestamp'))!r}"
+    if signed > now + _FUTURE_SKEW:
+        return f"is dated {signed.date().isoformat()}, in the future, which would stretch its sunset"
+    sunset = signed + timedelta(days=DEPRECATION_TTL_DAYS)
     if now >= sunset:
         return f"lapsed at {sunset.date().isoformat()} ({DEPRECATION_TTL_DAYS} days after its signed decision)"
     return None

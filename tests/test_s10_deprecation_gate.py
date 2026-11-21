@@ -319,7 +319,7 @@ def test_a_sibling_retraction_does_not_clear_a_family_halt(tmp_path, stub_ed2551
     def build(sub: str) -> Path:
         team = _team(tmp_path / sub)
         _log(team, _row(halt, verdict="HALT", stamp="2026-11-20"), _row(sibling, verdict="HALT", stamp="2026-11-21"),
-             _retraction(sibling, scope=""), _row(_ACTION, stamp="2026-11-24"))   # the signed row comes last
+             _retraction(sibling, scope=""), _row(_ACTION, stamp="2026-11-21"))   # the signed row comes last
         return team
     assert gate.authorized_deprecation(build("fixed"), True, consume=True, now=_T0) is None
     # Negative control: without this gate's exact-id scan, the probe reproduces (the core scan alone passes it).
@@ -407,3 +407,28 @@ def test_the_review_trigger_table_names_the_field() -> None:
     """Finding 5."""
     assert ("| Setting the brief's `s10_cooldown_deprecated` to `true`, or recording an `s10-cooldown-deprecated` "
             "decision | Constraint relaxation") in _SECURITY_TEMPLATE
+
+
+# --- @security re-check of 819d06b1: the signed date field, and no future dates ------------------------------------
+
+
+def test_the_sunset_counts_from_the_signed_date_column() -> None:
+    """The signature covers ``date`` when present, else ``timestamp`` (``decision_log._decision_signature_values``): the
+    sunset reads the same field, so a ``date``-schema log works and an unsigned ``timestamp`` beside it can't stretch it."""
+    both = {"date": "2026-01-01", "timestamp": "2026-11-20"}
+    assert gate._signed_at(both) == datetime(2026, 1, 1, tzinfo=UTC)
+    assert dl._decision_signature_values(both | {"verdict": "PASS"}).count("2026-01-01") == 1
+    assert "lapsed" in (gate._lapse_reason(both, _T0) or "")
+    assert gate._signed_at({"date": "2026-11-20"}) == datetime(2026, 11, 20, tzinfo=UTC)
+    assert gate._signed_at({"timestamp": "2026-11-20T10:00:00Z"}) == datetime(2026, 11, 20, 10, tzinfo=UTC)
+    assert "unreadable date" in (gate._lapse_reason({"date": "yesterday"}, _T0) or "")
+
+
+def test_a_future_dated_row_is_refused(tmp_path, stub_ed25519, capsys) -> None:
+    team = _team(tmp_path)
+    log = _log(team, _row(_ACTION, stamp="2027-11-21"))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) is None
+    assert "in the future" in capsys.readouterr().err and "yes" not in log.read_text()
+    team2 = _team(tmp_path / "b")
+    _log(team2, _row(_ACTION, stamp="2026-11-21T12:00:00+00:00"))   # within the skew allowance
+    assert gate.authorized_deprecation(team2, True, consume=True, now=_T0) == "signed"
