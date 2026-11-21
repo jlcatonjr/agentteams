@@ -1462,7 +1462,18 @@ Read-only. Verify this workspace's `.agentteams/toolchain-group.json` against `-
 
 ### `--verify-toolchain-pin`
 
-Read-only, fail-closed: Rule S-9 for the first-party toolchain group. Every `NAME=owner/repo@SHA` line in the lockfile that pins a member of the verified group (the workspace's own repository excluded) needs a `NAME.tag=TAG` line, and `TAG` must be a `v`-prefixed final-release tag (`vX.Y.Z`, ASCII digits; a pre-release needs a recorded `@security` clearance, which this check does not read) and an annotated tag whose object names `TAG`, ends in exactly one SSH signature block (a PGP-signed tag is refused) that verifies against `--allowed-signers` (git runs with a private, empty `HOME` and `GNUPGHOME`), and peels to `SHA`. Uses `--output` and `--team-id` as `--verify-toolchain-group` does. Nothing runs it for you; a project's dependency gate should. **Exit code:** `0` when at least one group pin was checked and all verify; `1` on any failure, or when the lockfile pins no group member; `2` when the workspace has no group file (nothing is under the rule; reported before any team-id lookup).
+Read-only, fail-closed in every tier: Rule S-9's signed-tag check. It checks every `NAME=owner/repo@SHA` line in the lockfile that pins a first-party repository. Each of these sources **adds** repositories, and none removes one:
+
+- a repository owned by this workspace's GitHub owner (from its git `origin`);
+- one listed in the brief's `s10_cooldown_exempt_repos`;
+- one named by `--pin-repos` (each must be pinned in the lockfile);
+- in a governed workspace with a `.agentteams/toolchain-group.json`, a verified group member.
+
+The workspace's own repository (an exact, case-insensitive match of its `origin`) is excluded and named in the output, but only when the owner match alone selected it. A repository named by the brief, `--pin-repos` or the group is always checked, because `origin` is not signed. The owner match itself also comes from `origin`, so it is a convenience, not a guarantee: name a repository in the brief's `s10_cooldown_exempt_repos` or in `--pin-repos` to be sure its pin is checked. With no GitHub `origin`, nothing is excluded and no owner match is made. A name pinned or tagged twice in the lockfile, or a line shaped like a pin or tag that does not match `NAME=owner/repo@<40 lowercase hex>` / `NAME.tag=TAG` exactly, fails the check. Each checked pin needs a `NAME.tag=TAG` line, and `TAG` must be a `v`-prefixed final-release tag (`vX.Y.Z`, ASCII digits; a pre-release needs a recorded `@security` clearance, which this check does not read) and an annotated tag whose object names `TAG`, ends in exactly one SSH signature block (a PGP-signed tag is refused) that verifies against `--allowed-signers` (git runs with a private, empty `HOME` and `GNUPGHOME`), and peels to `SHA`. An unretracted `s10-cooldown-exempt` HALT on a checked repository is reported as a `::warning`: the pin is still checked, and the 14-day cooldown applies. This verb checks signed tags, not release age, so it never clears the cooldown. Nothing runs it for you; a project's dependency gate should. **Exit code:** `0` when at least one pin was checked and every checked pin verifies; `1` on any failure, or when nothing first-party is pinned. There is no exit `2` (before 1.3.0, a workspace without a group file exited `2` and checked nothing).
+
+### `--pin-repos`
+
+With `--verify-toolchain-pin`: a comma-separated list of `owner/repo` whose pins must also be checked. A listed repository that the lockfile does not pin fails the run.
 
 ### `--allowed-signers`
 

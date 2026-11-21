@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`--verify-toolchain-pin` checks signed tags in every tier; there is no exit 2; #555)
+
+- Rule S-9's check now runs in a workspace without decision signing (T3), and in a governed one with no
+  toolchain-group file. Before, both checked nothing: T3 was refused as ungoverned, and a missing group file exited `2`.
+- **Which pins:** every pin to a first-party repository. Sources only add repositories:
+  - one owned by this workspace's GitHub owner;
+  - one in the brief's `s10_cooldown_exempt_repos`;
+  - one named by the new `--pin-repos` (each must be pinned);
+  - a verified group member.
+
+  The workspace's own repository is excluded and named in the output, but only when the owner match alone selected
+  it. A repository named by the brief, `--pin-repos` or the group is always checked, because `origin` is not signed:
+  a consumer whose `origin` claims to be a named repository cannot skip that pin (IM-da review of #598).
+- **Lockfile lines:** a name pinned or tagged twice, or a line shaped like a pin or tag that does not match the format
+  (uppercase hex, spaces around `=`), now fails the check. Before, the last duplicate won while the bootstrap installs
+  the first, and a malformed line was skipped.
+- **Exit codes:** `0` only when at least one pin was checked and every one verifies; `1` otherwise. Upgrade note: a
+  dependency gate that treated exit `2` as "nothing under the rule" now gets `0` or `1`.
+- **HALTs:** an `s10-cooldown-exempt` HALT on a checked repository is a `::warning`. It no longer drops the pin from
+  the check, and the cooldown still applies.
+- The rendered S-9 wording says the check fails closed in every tier and never clears the cooldown
+  (@security ruling, 2026-11-20).
+- **Unreadable dirs refuse (Python 3.14):** `Path.is_dir()` and `exists()` return `False` on any `OSError` from 3.14,
+  so a team dir that could not be stat'd read as absent and its HALTs were skipped (IM-da review of #593). The S-10
+  gate's surface and canonical team dirs, the signing switch, and the toolchain-group file now use `lstat` and refuse
+  instead: a render applies no group, and `--verify-toolchain-pin` and `--verify-toolchain-group` exit `1`. A dangling
+  team-dir symlink, or one whose target cannot be stat'd, refuses the same way.
+
 ### changed (STABILITY: the WASM sandbox core is supported; a security-tightening clause, #568)
 
 - **STABILITY.md §7, "WASM sandbox core"**, puts these under SemVer from 1.3.0:

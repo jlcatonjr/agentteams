@@ -9,7 +9,9 @@ sequence. None of those fails the render; each prints a notice and an ``::error:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -545,7 +547,10 @@ def test_only_a_v_prefixed_ascii_final_tag_is_accepted(tmp_path, signed_remote, 
     base, signers, sha = signed_remote
     lockfile = tmp_path / "toolchain.lock"
     lockfile.write_text(f"tk=acme/toolkit@{sha}\ntk.tag={tag}\n", encoding="utf-8")
-    problems = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
+    try:  # a malformed tag line is refused outright since the #598 review; a well-formed non-final one is a problem
+        problems = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
+    except tg.ToolchainLockError:
+        return
     assert problems and ("not a final release tag" in problems[0] or "no tk.tag line" in problems[0])
 
 
@@ -646,11 +651,15 @@ def _verb_args(team, **kw):
     return argparse.Namespace(**{**base, **kw})
 
 
-def test_no_group_file_is_exit_2_without_a_team_id(tmp_path) -> None:
+def test_no_group_file_falls_back_and_never_exits_2(tmp_path, capsys) -> None:
+    """#555: with no group file the check still runs; a lockfile pinning nothing first-party fails closed (1)."""
     from agentteams.cli.toolchain_group_commands import run_toolchain_group
 
     _root, team, _private = _project(tmp_path)
-    assert run_toolchain_group(_verb_args(team, verify_toolchain_pin=str(tmp_path / "lock"))) == 2
+    lock = tmp_path / "lock"
+    lock.write_text(f"x=other/thing@{'0' * 40}\n")
+    assert run_toolchain_group(_verb_args(team, verify_toolchain_pin=str(lock))) == 1
+    assert "nothing was verified" in capsys.readouterr().err
 
 
 def test_the_team_id_comes_from_the_projects_own_brief(tmp_path, capsys) -> None:
@@ -682,3 +691,377 @@ def test_the_verify_verb_exits_1_when_every_member_is_halted(tmp_path, capsys) -
     _log(team, _row("s10-cooldown-exempt:acme/toolkit", verdict="HALT", stamp="2026-11-14"))
     assert run_toolchain_group(_verb_args(team, verify_toolchain_group=True, team_id=_TEAM)) == 1
     assert "every group member is HALTed" in capsys.readouterr().err
+
+
+# --- #555: Rule S-9's signed-tag check runs in every tier (@security ruling, 2026-11-20) --------------------------
+
+@pytest.fixture
+def t3(tmp_path, signed_remote, monkeypatch):
+    """An ungoverned (T3) workspace owned by acme, with --verify-toolchain-pin reading tags from the local remotes."""
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path, governed=False)
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    return root, team, signers, sha
+
+
+def _pin_args(team, lock, signers, **kw):
+    return _verb_args(team, verify_toolchain_pin=str(lock), allowed_signers=str(signers), **kw)
+
+
+def _run_pin(args) -> int:
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    return run_toolchain_group(args)
+
+
+def test_t3_a_verified_same_owner_pin_passes(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
+    assert "never clears the cooldown" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("tag", "why"), [("v1.0.1", "not SSH-signed"), ("v1.0.3", "does not verify"),
+                                          ("v1.0.0-rc.1", "not a final release tag"), (None, "no tk.tag line")])
+def test_t3_a_bad_tag_fails(t3, tmp_path, capsys, tag, why) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\n" + (f"tk.tag={tag}\n" if tag else ""))
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert why in capsys.readouterr().err
+
+
+def test_t3_no_first_party_pin_fails_closed(t3, tmp_path) -> None:
+    root, team, signers, _sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"x=elsewhere/thing@{'0' * 40}\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+
+
+def test_t3_a_brief_that_omits_a_same_owner_pin_still_checks_it(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "s10_cooldown_exempt_repos": []}))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n")     # unsigned: must still be checked and fail
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+
+
+def test_t3_the_brief_adds_another_owners_repo(t3, tmp_path) -> None:
+    root, team, signers, _sha = t3
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer",
+                                                 "s10_cooldown_exempt_repos": ["other/lib"]}))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"lib=other/lib@{'1' * 40}\nlib.tag=v1.0.0\n")   # other/lib is not in the remotes: fails
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+
+
+def test_t3_pin_repos_not_locked_fails(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers, pin_repos="acme/toolkit,acme/missing")) == 1
+    assert "does not pin" in capsys.readouterr().err
+
+
+def test_t3_the_workspaces_own_repo_is_excluded_and_named(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"self=acme/consumer@{'2' * 40}\ntk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
+    assert "self=acme/consumer: this workspace's own repository, not checked" in capsys.readouterr().out
+
+
+def test_t3_no_origin_excludes_nothing(tmp_path, signed_remote, monkeypatch) -> None:
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path, governed=False, origin="https://example.invalid/x/y.git")
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    # no GitHub origin: no owner match, nothing excluded; an explicit --pin-repos is still checked
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert _run_pin(_pin_args(team, lock, signers, pin_repos="acme/toolkit")) == 0
+
+
+def test_a_halted_exemption_warns_but_the_pin_is_still_checked(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    _log(team, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-20"))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
+    err = capsys.readouterr().err
+    assert "::warning title=S-10 cooldown exemption revoked::acme/toolkit" in err and "does not clear it" in err
+
+
+def test_governed_without_a_group_file_falls_back(tmp_path, signed_remote, monkeypatch) -> None:
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path)          # governed, no group file
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
+
+
+def test_the_verb_has_no_exit_2_path() -> None:
+    src = (ROOT / "agentteams" / "cli" / "toolchain_group_commands.py").read_text()
+    body = src[src.index("def _verify_pin_command"):]
+    assert "return 2" not in body
+
+
+# --- @security / @code-hygiene review of 7bbd495a -----------------------------------------------------------------
+
+def test_an_unreadable_named_brief_fails_closed(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers, description=str(tmp_path / "missing.json"))) == 1
+    assert "cannot be read" in capsys.readouterr().err
+
+
+def test_a_discovered_brief_that_is_not_json_fails_closed(t3, tmp_path) -> None:
+    root, team, signers, sha = t3
+    (root / "brief.json").write_text("{not json")
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+
+
+@pytest.mark.parametrize("hint", ["acme/toolkit", ["acme/toolkit", 3], [""]])
+def test_a_malformed_exempt_list_fails_closed(t3, tmp_path, capsys, hint) -> None:
+    root, team, signers, sha = t3
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "s10_cooldown_exempt_repos": hint}))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "must be a list" in capsys.readouterr().err
+
+
+def test_a_mixed_case_github_origin_still_matches_the_owner(tmp_path, signed_remote, monkeypatch) -> None:
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path, governed=False, origin="https://GitHub.com/Acme/Consumer.git")
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n")    # unsigned: must be checked and fail
+    assert tg.workspace_repo(root) == "Acme/Consumer"
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+
+
+def test_a_governed_workspace_with_a_broken_group_file_refuses(tmp_path, signed_remote, monkeypatch) -> None:
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path)
+    (root / tg.GROUP_FILE_REL).parent.mkdir(parents=True, exist_ok=True)
+    (root / tg.GROUP_FILE_REL).write_text("{broken")
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers, team_id=_TEAM)) == 1
+
+
+def test_the_team_id_lookup_ignores_a_brief_naming_another_project(tmp_path) -> None:
+    """@security re-review of 32a95d09: _team_id keeps resolve_brief's 2026-11-02 guard."""
+    from agentteams.cli.toolchain_group_commands import _team_id
+
+    root, team, _private = _project(tmp_path)
+    (root / "brief.json").write_text(json.dumps({"team_id": "spoofed", "existing_project_path": "../elsewhere"}))
+    assert _team_id(_verb_args(team), root) is None
+
+
+# --- IM-da review of #593 (the #588 class): a dir that cannot be stat'd refuses; real chmod (3.14 never raises) ---
+
+_needs_real_chmod = pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="chmod does not bind root")
+
+
+@contextlib.contextmanager
+def _locked(*paths: Path):
+    """chmod 000 each path for the block, then restore it so tmp_path can be removed."""
+    modes = [(p, p.stat().st_mode) for p in paths]
+    try:
+        for p, _mode in modes:
+            p.chmod(0)
+        yield
+    finally:
+        for p, mode in reversed(modes):
+            p.chmod(mode)
+
+
+def _surface_case(tmp_path: Path, root: Path, case: str) -> tuple[Path, ...]:
+    """Set up .claude/agents for *case* (a HALT on the group family inside, where it can hold one); return the
+    paths to lock."""
+    claude = root / ".claude"
+    claude.mkdir()
+    if case in ("parent_000", "surface_000"):
+        surface = claude / "agents"
+        (surface / "references").mkdir(parents=True)
+        _log(surface, _row(tg.FAMILY, verdict="HALT", stamp="2026-11-21"))
+        return (claude,) if case == "parent_000" else (surface,)
+    if case == "dangling":
+        (claude / "agents").symlink_to(tmp_path / "gone", target_is_directory=True)
+        return ()
+    locked = tmp_path / "locked"
+    (locked / "agents" / "references").mkdir(parents=True)
+    _log(locked / "agents", _row(tg.FAMILY, verdict="HALT", stamp="2026-11-21"))
+    (claude / "agents").symlink_to(locked / "agents", target_is_directory=True)
+    return (locked,)
+
+
+_SURFACE_CASES = ["parent_000", "surface_000", "dangling", "link_to_unstatable"]
+
+
+@_needs_real_chmod
+@pytest.mark.parametrize("case", _SURFACE_CASES)
+def test_an_unstatable_surface_renders_no_group(tmp_path, capsys, case) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    with _locked(*_surface_case(tmp_path, root, case)):
+        assert _authorize(team) == []
+    assert "fail-closed" in capsys.readouterr().err
+
+
+@_needs_real_chmod
+@pytest.mark.parametrize("case", _SURFACE_CASES)
+def test_an_unstatable_surface_fails_the_pin_check(t3, tmp_path, capsys, case) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    with _locked(*_surface_case(tmp_path, root, case)):
+        assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "fail-closed" in capsys.readouterr().err
+
+
+@_needs_real_chmod
+@pytest.mark.parametrize("lock_rel", [".github", ".github/agents"])
+def test_an_unstatable_canonical_dir_never_falls_back_to_the_brief(tmp_path, capsys, lock_rel) -> None:
+    """Before: is_dir()/exists() read False, governance fell back to the run's ungoverned .claude/agents, and the
+    brief alone exempted acme/toolkit."""
+    root, _team, _private = _project(tmp_path)
+    native = root / ".claude" / "agents"
+    native.mkdir(parents=True)
+    with _locked(root / lock_rel):
+        assert _authorize(native, hint=["acme/toolkit"]) == []
+
+
+@_needs_real_chmod
+def test_an_unstatable_group_file_fails_the_pin_check(tmp_path, signed_remote, monkeypatch, capsys) -> None:
+    """Before: exists() read False, the group was skipped, and its members' pins went unchecked."""
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    with _locked((root / tg.GROUP_FILE_REL).parent):
+        assert _run_pin(_pin_args(team, lock, signers, team_id=_TEAM)) == 1
+        assert _run_verify_group(team) == 1
+    assert "cannot be read" in capsys.readouterr().err
+
+
+def _run_verify_group(team: Path) -> int:
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    return run_toolchain_group(_verb_args(team, verify_toolchain_group=True, team_id=_TEAM))
+
+
+# --- IM-da review of #598 (part A) ---------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("named_by", ["brief", "pin_repos"])
+def test_an_origin_claiming_a_named_repo_never_excludes_its_pin(tmp_path, signed_remote, monkeypatch, named_by) -> None:
+    """A consumer whose (unsigned) origin claims to be acme/toolkit must still verify a toolkit pin it names."""
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path, governed=False, origin="https://github.com/acme/toolkit.git")
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    kw = {}
+    if named_by == "brief":
+        (root / "brief.json").write_text(json.dumps({"project_name": "Consumer",
+                                                     "s10_cooldown_exempt_repos": ["acme/toolkit"]}))
+    else:
+        kw["pin_repos"] = "acme/toolkit"
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n")      # unsigned: must be checked and fail
+    assert _run_pin(_pin_args(team, lock, signers, **kw)) == 1
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers, **kw)) == 0
+
+
+@pytest.mark.parametrize("text", [
+    "tk=acme/toolkit@{bad}\ntk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n",          # an unreleased pin first: bootstrap installs it
+    "tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\ntk.tag=v1.0.0\n",                  # a duplicated tag
+    "tk=acme/toolkit@{upper}\ntk.tag=v1.0.0\n",                               # uppercase hex
+    "tk = acme/toolkit@{sha}\ntk.tag=v1.0.0\n",                               # spaces around '='
+    "tk=acme/toolkit@{sha}\ntk.tag = v1.0.0\n",
+])
+def test_a_duplicated_or_malformed_lock_line_fails_closed(t3, tmp_path, capsys, text) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(text.format(sha=sha, bad="1" * 40, upper=sha.upper()))
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    err = capsys.readouterr().err   # not a bare "malformed": the tmp path carries this test's name
+    assert "twice; one line per name" in err or "looks like a pin or tag but is malformed" in err
+
+
+def test_comments_and_unrelated_lock_lines_are_still_ignored(t3, tmp_path) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"# pins\npython=3.11\n\ntk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
+
+
+# --- @security delta review of 3992fcf0 -------------------------------------------------------------------------
+
+@pytest.mark.parametrize("text", [
+    "tk\t=acme/toolkit@{sha}\ntk.tag=v1.0.0\n",                              # a tab before '='
+    "tk=acme/toolkit@{sha} # pinned for 1.3\ntk.tag=v1.0.0\n",                # a trailing comment
+])
+def test_a_tab_or_trailing_comment_is_refused(t3, tmp_path, capsys, text) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(text.format(sha=sha))
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "looks like a pin or tag but is malformed" in capsys.readouterr().err
+
+
+def test_a_crlf_lockfile_still_verifies(t3, tmp_path) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_bytes(f"tk=acme/toolkit@{sha}\r\ntk.tag=v1.0.0\r\n".encode())
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
+
+
+def test_an_origin_claiming_a_group_member_fails_the_signed_workspace_match(tmp_path, signed_remote, monkeypatch,
+                                                                          capsys) -> None:
+    """The group excludes the workspace's own repo only after the signed workspace match (toolchain_group.load_group):
+    a consumer signed as acme/consumer whose origin claims acme/toolkit gets no group and fails closed."""
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, private = _project(tmp_path, origin="https://github.com/acme/toolkit.git")
+    _write(root, _doc(private))                                          # signed for repo:acme/consumer only
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n")
+    assert _run_pin(_pin_args(team, lock, signers, team_id=_TEAM)) == 1
+    assert "is not listed in the signed" in capsys.readouterr().err
+
+
+def test_a_canonical_dir_that_vanishes_between_stats_refuses(tmp_path, monkeypatch) -> None:
+    root, _team, _private = _project(tmp_path)
+    native = root / ".claude" / "agents"
+    native.mkdir(parents=True)
+    real = gate.lstat_or_none
+    monkeypatch.setattr(gate, "lstat_or_none",
+                        lambda p, what: None if Path(p).name == ".github" else real(p, what))  # the race, simulated
+    with pytest.raises(RuntimeError, match="vanished"):
+        gate.governance_team_dir(native)

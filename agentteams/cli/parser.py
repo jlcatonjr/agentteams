@@ -1718,14 +1718,22 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LOCKFILE",
         help=(
-            "Read-only, fail-closed (Rule S-9 for the toolchain group): every NAME=owner/repo@SHA pin in LOCKFILE to "
-            "a verified group member needs a NAME.tag=TAG line, and TAG must be an annotated tag that verifies "
-            "against --allowed-signers, names itself, and peels to SHA. Exit 0 when at least one such pin was checked and "
-            "every one verifies; 1 on any failure or when no pin to a group member was found; 2 when the workspace "
-            "has no toolchain-group file (nothing is under the rule)."
+            "Read-only, fail-closed in every tier (Rule S-9): every NAME=owner/repo@SHA pin in LOCKFILE to a first-party "
+            "repository (one owned by this workspace's GitHub owner, one in the brief's s10_cooldown_exempt_repos, one "
+            "named by --pin-repos, or a verified toolchain-group member; the workspace's own repository excluded) needs a "
+            "NAME.tag=TAG line, and TAG must be an annotated tag that verifies against --allowed-signers, names itself, "
+            "and peels to SHA. Sources only add pins. Exit 0 when at least one pin was checked and every one verifies; "
+            "1 otherwise. It checks signed tags, not release age, so it never clears the cooldown."
         ),
     )
     add_dev_merge_arguments(parser)
+    parser.add_argument(
+        "--pin-repos",
+        dest="pin_repos",
+        default=None,
+        metavar="OWNER/REPO[,...]",
+        help="With --verify-toolchain-pin: more repositories whose pins must be checked; each must be pinned in LOCKFILE.",
+    )
     parser.add_argument(
         "--allowed-signers",
         dest="allowed_signers",

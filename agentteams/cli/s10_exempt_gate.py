@@ -44,11 +44,14 @@ Stdlib only.
 
 from __future__ import annotations
 
+import os
+import stat
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agentteams.cli import security_gate, toolchain_group
+from agentteams.cli.clearance_binding import lstat_or_none
 from agentteams.cli.decision_log import _enforce_decision_signing
 from agentteams.cli.effect_classifier import EffectClassifierError, requires_operator_signature
 from agentteams.cli.exception_registry import (
@@ -104,15 +107,18 @@ def governance_team_dir(team_dir: Path) -> Path:
         The canonical team dir, or *team_dir* itself (non-default layout, the canonical dir, or no governed one).
 
     Raises:
-        RuntimeError: The canonical dir's signing switch can't be read (fail-closed).
+        RuntimeError: The canonical dir, or its signing switch, can't be read (fail-closed).
     """
     root = _project_root_of(team_dir)
     if root is None:
         return team_dir
     canonical = root / CANONICAL_TEAM_DIR
-    if canonical.resolve() == team_dir.resolve() or not canonical.is_dir():
+    if canonical.resolve() == team_dir.resolve() or not _is_dir_strict(canonical, "canonical team dir"):
         return team_dir
-    if any(p.is_symlink() for p in (root / ".github", canonical)) or not canonical.resolve().is_relative_to(root):
+    links = [lstat_or_none(p, "team dir") for p in (root / ".github", canonical)]
+    if None in links:  # removed between the two stats
+        raise RuntimeError(f"canonical team dir '{canonical}' vanished while it was checked; refusing (fail-closed)")
+    if any(stat.S_ISLNK(st.st_mode) for st in links) or not canonical.resolve().is_relative_to(root):
         return team_dir
     return canonical if _enforce_decision_signing(canonical) else team_dir
 
@@ -295,11 +301,37 @@ def authorize_into(manifest: dict, team_dir: Path, *, consume: bool) -> None:
     manifest["s10_cooldown_exempt_authorized"] = list(merged.values())
 
 
+def _is_dir_strict(path: Path, what: str) -> bool:
+    """Whether *path* is a dir, a symlink to one counting; False only when nothing is there.
+
+    Not ``Path.is_dir()``: from Python 3.14 it returns False on *any* OSError, so a team dir that cannot be stat'd
+    would read as absent and its HALTs would vanish (IM-da review of #593, the #588 class).
+
+    Raises:
+        RuntimeError: *path* exists but cannot be stat'd, or is a symlink whose target is missing or cannot be
+            stat'd (its HALTs could not be read, C-2).
+    """
+    st = lstat_or_none(path, what)
+    if st is None:
+        return False
+    if stat.S_ISLNK(st.st_mode):
+        try:
+            st = os.stat(path)
+        except OSError as exc:
+            raise RuntimeError(f"{what} '{path}' is a symbolic link whose target cannot be read "
+                               f"({exc.strerror or exc}); refusing (fail-closed)") from exc
+    return stat.S_ISDIR(st.st_mode)
+
+
 def _surface_dirs(root: Path) -> tuple[Path, ...]:
     """Every team dir of the project at *root* that exists, symlinked ones included (each one's HALTs bind the
-    group, C-2: following a symlink can only add HALTs, never remove one)."""
+    group, C-2: following a symlink can only add HALTs, never remove one).
+
+    Raises:
+        RuntimeError: A team dir, or a symlinked one's target, cannot be stat'd (see :func:`_is_dir_strict`).
+    """
     rels = (*TEAM_AGENT_GLOBS, *_OTHER_TEAM_DIRS)
-    return tuple(root / rel for rel in rels if (root / rel).is_dir())
+    return tuple(root / rel for rel in rels if _is_dir_strict(root / rel, "team dir"))
 
 
 def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str] | None:
@@ -317,9 +349,11 @@ def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str]
             return None
     except RuntimeError:
         return None  # authorized_exempt_repos reports an unreadable switch
+    surfaces: tuple[Path, ...] = ()
     try:
+        surfaces = _surface_dirs(root)
         result = toolchain_group.load_group(root, governance, team_id=str(manifest.get("team_id") or ""),
-                                            halt_dirs=(team_dir, *_surface_dirs(root)), consume=consume)
+                                            halt_dirs=(team_dir, *surfaces), consume=consume)
     except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:   # never fatal for the render
         result = toolchain_group.GroupResult(present=True, problem=f"it could not be checked ({exc})")
     if result.problem is not None:
@@ -327,15 +361,15 @@ def _signed_group(manifest: dict, team_dir: Path, *, consume: bool) -> list[str]
         return None
     if not result.present:
         return None
-    return drop_halted_members(result.repos, (governance, team_dir, *_surface_dirs(root)))
+    return drop_halted_members(result.repos, (governance, team_dir, *surfaces))
 
 
 def drop_halted_members(repos: list[str], halt_dirs: tuple[Path, ...]) -> list[str]:
     """Return the group members no unretracted ``s10-cooldown-exempt`` HALT covers, reporting each one dropped.
 
     C-2: a HALT on a member's per-repository exemption, or on its family, binds the group too. The HALT matcher
-    over-matches on purpose (``action_ids``), so in practice either HALT drops every member, not only the one named. The render gate and the
-    ``--verify-toolchain-group``/``--verify-toolchain-pin`` verbs share this filter.
+    over-matches on purpose (``action_ids``), so in practice either HALT drops every member, not only the one named. The render gate and
+    ``--verify-toolchain-group`` share this filter. (``--verify-toolchain-pin`` never drops a pin: it only warns, #555.)
 
     Args:
         repos: The verified group.
@@ -346,17 +380,39 @@ def drop_halted_members(repos: list[str], halt_dirs: tuple[Path, ...]) -> list[s
     """
     kept: list[str] = []
     for repo in repos:
-        exempt_action, exempt_family = action_for(repo), S10_EXEMPT_KIND
-        try:
-            for halt_dir in dict.fromkeys(halt_dirs):
-                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
-                security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
+        exc = exemption_halt(repo, halt_dirs)
+        if exc is None:
             kept.append(repo)
-        except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
+        else:
             print(f"  ✗  S-10 toolchain group: {repo} is NOT exempted from the cooldown ({exc}).", file=sys.stderr)
             print(f"::error title=S-10 toolchain group HALT::{repo}: {exc}", file=sys.stderr)
     return kept
 
 
+def exemption_halt(repo: str, halt_dirs: tuple[Path, ...]) -> Exception | None:
+    """The error an unretracted HALT on *repo*'s cooldown exemption (or its family) raises in *halt_dirs*, else None.
+
+    Args:
+        repo: ``owner/name``.
+        halt_dirs: Every team dir whose HALTs bind.
+
+    Returns:
+        The first refusal (a HALT, or a log that cannot be read), or None.
+    """
+    exempt_action, exempt_family = action_for(repo), S10_EXEMPT_KIND
+    try:
+        for halt_dir in dict.fromkeys(halt_dirs):
+            security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_family)
+            security_gate._assert_no_unretracted_halt(halt_dir, action=exempt_action)
+    except (RuntimeError, OSError, UnicodeDecodeError, ValueError) as exc:
+        return exc
+    return None
+
+
+project_root_of = _project_root_of
+surface_dirs = _surface_dirs
+
+
 __all__ = ["CANONICAL_TEAM_DIR", "S10_EXEMPT_KIND", "S10_EXEMPT_TTL_DAYS", "action_for", "authorize_into",
+           "exemption_halt", "project_root_of", "surface_dirs",
            "authorized_exempt_repos", "governance_team_dir"]

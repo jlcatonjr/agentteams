@@ -27,6 +27,25 @@ _INDEX_REL = Path("references") / "memory-index.json"
 _DELIVERABLE_DIRS: tuple[str, ...] = ("Projects", "docs")
 
 
+def brief_candidate(project_root: Path) -> Path | None:
+    """The file fleet discovery would take as *project_root*'s brief, before it is parsed: None when there is none, or
+    when it is a symlink or resolves outside *project_root*. :func:`resolve_brief` adds the parse and the
+    ``existing_project_path`` check; a caller that must fail closed on an unreadable brief uses this instead.
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        The candidate path, or ``None``.
+    """
+    from agentteams.fleet import _resolve_descriptor  # the canonical lookup (redteam F-3)
+
+    path = _resolve_descriptor(project_root)
+    if path is None or path.is_symlink() or not path.resolve().is_relative_to(project_root.resolve()):
+        return None
+    return path
+
+
 def resolve_brief(project_root: Path) -> Path | None:
     """The project's own brief, found as fleet discovery finds it (:func:`agentteams.fleet._resolve_descriptor`).
 
@@ -42,11 +61,9 @@ def resolve_brief(project_root: Path) -> Path | None:
     Raises:
         Nothing.
     """
-    from agentteams.fleet import _resolve_descriptor  # the canonical lookup (redteam F-3)
-
     root = project_root.resolve()
-    path = _resolve_descriptor(project_root)
-    if path is None or path.is_symlink() or not path.resolve().is_relative_to(root):
+    path = brief_candidate(project_root)
+    if path is None:
         return None
     try:
         brief = json.loads(path.read_text(encoding="utf-8"))

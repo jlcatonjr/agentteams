@@ -299,7 +299,8 @@ known-vulnerable, malicious, too new to trust, or not the latest stable release.
   review and **no per-release operator decision row**. Nothing else is lifted: the release must
   still pass the vulnerability search above and Rule S-9's identity check (an annotated tag that
   verifies against the operator's release key and peels to the locked commit; check it with
-  `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>`, which fails closed), and the
+  `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>`, which fails closed in every
+  tier and never clears the cooldown), and the
   latest-stable rule still applies, so adopting a release candidate still needs a recorded
   `@security` clearance. Every other repository and package stays under the cooldown
 - ✅ Pin exact versions with a lockfile so these checks are enforceable and reproducible
