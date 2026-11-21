@@ -36,8 +36,12 @@ def _decisions(team: Path, rows: list[tuple[str, str]]) -> None:
         writer.writeheader()
         for action, verdict in rows:
             writer.writerow({"timestamp": "2026-11-20T00:00:00Z", "requesting_agent": "security",
-                             "action_reviewed": action, "verdict": verdict, "conditions": "",
+                             "action_reviewed": action, "verdict": verdict,
+                             "conditions": "settled" if verdict == "HALT-RETRACTED" else "",
                              "conditions_verified": ""})
+
+
+_ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 
 @pytest.fixture()
@@ -157,7 +161,7 @@ def test_a_symlinked_canonical_dir_refuses(repo: Path, script: Path, tmp_path: P
     assert ok is False and "symbolic link" in reason
 
 
-def test_an_unreadable_canonical_log_refuses(repo: Path, script: Path) -> None:
+def test_a_malformed_canonical_log_refuses(repo: Path, script: Path) -> None:
     main = _team(repo / ".github" / "agents", build_log=True)
     (main / "references" / "security-decisions.log.csv").write_text(
         ",".join(_COLS) + "\n2026-11-20,security,survey-s5,\"HALT\n")  # an open quote can hide a HALT
@@ -253,3 +257,62 @@ def test_is_team_dir_is_the_one_signing_uses(tmp_path: Path) -> None:
     _team(plain)
     assert cb.is_team_dir(plain) is True
     assert operator_signing.sign_decision_team_refusal(plain) is None
+
+
+# --- IM-da review of #588 (2026-11-20) -------------------------------------------------------------------------------
+
+@pytest.mark.skipif(_ROOT_USER, reason="root ignores permission bits")
+def test_an_unreadable_canonical_dir_parent_refuses(repo: Path, script: Path) -> None:
+    """Python 3.14's Path.is_dir() returns False on EACCES; the HALT must not vanish with it."""
+    main = _team(repo / ".claude" / "agents", build_log=True)
+    _decisions(main, [("survey-s5", "HALT")])
+    gates = _gates(repo, script)
+    os.chmod(repo / ".claude", 0)
+    try:
+        ok, reason = cb.check_file_clearance(gates, "survey-s5", script)
+    finally:
+        os.chmod(repo / ".claude", 0o755)
+    assert ok is False and "cannot be read" in reason
+
+
+@pytest.mark.skipif(_ROOT_USER, reason="root ignores permission bits")
+def test_an_unreadable_log_directory_refuses(repo: Path, script: Path) -> None:
+    main = _team(repo / ".github" / "agents", build_log=True)
+    _decisions(main, [("survey-s5", "HALT")])
+    gates = _gates(repo, script)
+    os.chmod(main / "references", 0)
+    try:
+        assert cb.check_file_clearance(gates, "survey-s5", script)[0] is False
+    finally:
+        os.chmod(main / "references", 0o755)
+
+
+def test_a_retraction_in_one_log_does_not_clear_a_halt_in_another(repo: Path, script: Path) -> None:
+    claude = _team(repo / ".claude" / "agents", build_log=True)
+    github = _team(repo / ".github" / "agents", build_log=True)
+    _decisions(claude, [("survey-s5", "HALT"), ("survey-s5", "HALT-RETRACTED")])
+    _decisions(github, [("survey-s5", "HALT")])
+    gates = _gates(repo, script)
+    assert cb.check_file_clearance(gates, "survey-s5", script)[0] is False
+    _decisions(github, [("survey-s5", "HALT"), ("survey-s5", "HALT-RETRACTED")])
+    assert cb.check_file_clearance(gates, "survey-s5", script) == (True, "")  # each log retracts its own
+
+
+@pytest.mark.parametrize("variant", ["SURVEY-S5", "Survey-S5"])
+def test_a_case_variant_of_the_scope_in_another_log_binds(repo: Path, script: Path, variant: str) -> None:
+    main = _team(repo / ".github" / "agents", build_log=True)
+    _decisions(main, [(variant, "HALT")])
+    gates = _gates(repo, script)
+    assert cb.check_file_clearance(gates, "survey-s5", script)[0] is False
+
+
+def test_a_gates_dir_linked_into_another_repo_sees_both_repos(repo: Path, script: Path, tmp_path: Path) -> None:
+    other = tmp_path / "other-repo"
+    (other / ".git").mkdir(parents=True)
+    other_main = _team(other / ".github" / "agents", build_log=True)
+    _decisions(other_main, [("survey-s5", "HALT")])
+    real_gates = _team(other / "gates")
+    _decisions(real_gates, [(cb.clearance_action("survey-s5", script), "PASS")])
+    os.symlink(real_gates, repo / "gates")
+    # given path is in repo (no HALT there), resolved path is in other-repo (HALT): both roots are scanned
+    assert cb.check_file_clearance(repo / "gates", "survey-s5", script)[0] is False

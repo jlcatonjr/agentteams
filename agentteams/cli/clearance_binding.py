@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 from pathlib import Path
 
 _SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
@@ -61,9 +62,34 @@ def _git_roots(team_dir: Path) -> list[Path]:
     roots: list[Path] = []
     for start in (Path(os.path.abspath(team_dir)), team_dir.resolve()):
         for candidate in (start, *start.parents):
-            if (candidate / ".git").exists() and candidate not in roots:
+            if lstat_or_none(candidate / ".git", "git marker") is not None and candidate not in roots:
                 roots.append(candidate)
     return roots
+
+
+def lstat_or_none(path: Path, what: str) -> os.stat_result | None:
+    """``os.lstat(path)``, or None when *path* is absent; any other error refuses.
+
+    ``Path.is_dir()``, ``is_symlink()`` and ``exists()`` return False on *any* OSError from Python 3.14 (3.13 raised
+    ``PermissionError``), so a team dir whose parent cannot be read would read as absent and its HALTs would vanish
+    (IM-da review of #588). Only "not there" (``FileNotFoundError``, ``NotADirectoryError``) counts as absent.
+
+    Args:
+        path: The path to stat (a symbolic link is not followed).
+        what: What *path* is, for the refusal message.
+
+    Returns:
+        The stat result, or None when *path* does not exist.
+
+    Raises:
+        RuntimeError: *path* exists but cannot be stat'd (permission denied, I/O error, ...).
+    """
+    try:
+        return os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    except OSError as exc:
+        raise RuntimeError(f"{what} '{path}' cannot be read ({exc.strerror or exc}); refusing (fail-closed)") from exc
 
 
 def _declared_parent(team_dir: Path) -> str | None:
@@ -95,14 +121,16 @@ def _no_symlink_below(top: Path, rel_parts: tuple[str, ...], what: str) -> Path:
     current = top
     for part in rel_parts:
         current = current / part
-        if current.is_symlink():
+        st = lstat_or_none(current, what)
+        if st is not None and stat.S_ISLNK(st.st_mode):
             raise RuntimeError(f"{what} '{current}' is a symbolic link; refusing (fail-closed)")
     return current
 
 
 def _log_not_linked(team: Path) -> None:
     for part in (team / "references", team / "references" / "security-decisions.log.csv"):
-        if part.is_symlink():
+        st = lstat_or_none(part, "HALT log path")
+        if st is not None and stat.S_ISLNK(st.st_mode):
             raise RuntimeError(f"'{part}' is a symbolic link; a HALT log is never read through one (fail-closed)")
 
 
@@ -140,7 +168,8 @@ def halt_scan_dirs(team_dir: Path) -> list[Path]:
     for root in roots:
         for rel in canonical_team_dirs():
             canonical = _no_symlink_below(root, Path(rel).parts, "canonical team dir")
-            if canonical.is_dir() and canonical.resolve() not in seen:
+            st = lstat_or_none(canonical, "canonical team dir")
+            if st is not None and stat.S_ISDIR(st.st_mode) and canonical.resolve() not in seen:
                 _log_not_linked(canonical)
                 seen.add(canonical.resolve())
                 dirs.append(canonical)

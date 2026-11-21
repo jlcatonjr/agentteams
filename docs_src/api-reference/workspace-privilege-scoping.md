@@ -741,11 +741,17 @@ the scope, or on the file-bound action, in any of these logs refuses it (C-2):
 Each log is read under its own rules: an unsigned HALT binds, and a retraction counts only if it is valid in its own
 log. The check is fail-closed. It refuses when:
 
-- a scanned log cannot be read or parsed;
-- a scanned team dir, its `references/` or its log is, or sits under, a symbolic link;
+- a scanned log, or a directory on its path, cannot be read or parsed (permission denied counts: it is never
+  treated as absent);
+- a team dir added to the scan (a generated team dir or the `parent_team`), its `references/` or its log is, or sits
+  under, a symbolic link. The team dir you pass yourself may be a link: its resolved location is scanned too;
 - the `parent_team` path is absolute, uses `..`, has a symbolic-link component, is not a team dir, names the gates dir
   itself, or declares a `parent_team` of its own (one level only);
-- a `parent_team` is declared outside any git repository. Outside a repository, only the team dir's own log is read.
+- a `parent_team` is declared outside any git repository.
+
+**Outside a git repository, only the team dir's own log is read.** A gates dir kept outside the repository (or an
+`--output` pointing outside it) therefore does not see the repository's main-team HALTs. Keep gates dirs inside the
+repository they govern.
 
 A governing team kept outside the generated locations binds only through a declared `parent_team`. Leaving the link
 out drops that team's HALTs, so keep governing teams in a generated team location.
