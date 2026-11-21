@@ -147,6 +147,10 @@
         "type": "string"
       }
     },
+    "s10_cooldown_deprecated": {
+      "type": "boolean",
+      "description": "The brief's s10_cooldown_deprecated, strictly true or false (agentteams#592). A request only: cli/s10_deprecation_gate decides whether the render shows Rule S-10's cooldown as deprecated."
+    },
     "memory_index_exclude": {
       "type": "array",
       "description": "Project-relative paths/globs to exclude from the memory index, even when the built-in defaults or memory_index_extra_dirs would otherwise include them. Empty when none were declared.",

@@ -961,7 +961,7 @@ scanner (`python -m agentteams.vulnscan`) under its signed grant.
    versions changed.
 2. Check out the branch and run the project's tests and build. `@security` checks the new versions
    against Rule S-10's known-vulnerability search and Rule S-9's identity check. They fix vulnerabilities the scan detected, so S-10's
-   remediation carve-out applies: the release cooldown and the latest-stable rule do not hold them.
+   remediation carve-out applies: the release cooldown and the latest-stable rule do not hold them.{S10_COOLDOWN_MOOT}
 3. Merge or close it under this project's normal PR rules. vulnscan never merges its own PRs. Close a
    failing or wrong fix with a comment; any follow-up fix goes in an ordinary PR of the project's own.
 4. Project agents never get remediation tools and never call the scanner's executor. Coverage and

@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from agentteams.manifest_format import format_s10_exempt_repos
+from agentteams.manifest_format import format_s10_exempt_repos, s10_cooldown_placeholders
 from agentteams.tool_version_source import tool_version_placeholders
 
 
@@ -254,6 +254,10 @@ def _build_placeholder_map_for_file(
     # first-party toolchain group (the constitution's First-party toolchain group section).
     mapping.setdefault("S10_TOOLCHAIN_GROUP",
                        format_s10_exempt_repos(manifest.get("s10_cooldown_exempt_authorized")))
+    # Rule S-10's release cooldown: deprecated only when cli/s10_deprecation_gate authorized it (agentteams#592), never
+    # from the raw brief value, so a path that skips the gate renders the cooldown in force.
+    # Assigned, not setdefault: no other source may supply this text (C-4).
+    mapping.update(s10_cooldown_placeholders(manifest.get("s10_cooldown_deprecated_authorized")))
 
     # Add component-specific overrides for workstream expert files
     if component_slug:

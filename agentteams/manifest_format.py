@@ -141,6 +141,75 @@ def format_s10_exempt_repos(repos: object) -> str:
         return "none for this project, so the cooldown applies to every release"
     return ", ".join(f"`{r}`" for r in dict.fromkeys(valid))
 
+#: Rule S-10's package-release cooldown bullet as it renders when no deprecation is authorized (the default).
+S10_COOLDOWN_RULE_IN_FORCE = (
+    '- ✅ **Package-release cooldown — default 14 days, configurable per project, all\n'
+    '  ecosystems:** if a release is less than 14 days old, wait before installing it. This\n'
+    '  governs every update and installation through any package manager or installer (npm,\n'
+    '  PyPI, crates.io, Homebrew, RubyGems, Go modules, container base images, …) — npm is the\n'
+    '  motivating precedent, not the scope: the 2025–2026 wave of registry supply-chain\n'
+    '  compromises (maintainer-account takeovers, worm-style credential stealers) showed that\n'
+    '  malicious releases are typically detected and unpublished within days, so the cooldown\n'
+    '  lets registry scanners catch them before installation. Check release age before adopting\n'
+    "  (`npm view <pkg> time`, the PyPI JSON API's `upload_time_iso_8601`, the registry's\n"
+    '  release page); make the window mechanical where tooling allows\n'
+    '  (`npm install --before=<date>`, pnpm `minimumReleaseAge`, uv `--exclude-newer <date>`,\n'
+    '  Renovate/Dependabot cooldown settings). Upgrading an already-installed package through\n'
+    "  its distribution's own curated security channel (apt/dnf/apk with a DSA/USN/RHSA-backed\n"
+    '  update) is remediation, not adoption — the cooldown and the latest-stable rule do not\n'
+    '  apply there (third-party repositories, PPAs, and vendor-added apt/dnf sources are not\n'
+    '  that channel)'
+)
+
+#: How the authorized deprecation is described, by where it came from (``cli/s10_deprecation_gate``).
+_S10_DEPRECATION_AUTHORITY = {
+    "signed": "The operator's Ed25519-signed decision `s10-cooldown-deprecated` authorizes this deprecation for this "
+              "workspace, and it is re-signed at least every 90 days",
+    "brief": "This workspace does not sign its decisions, so the project brief's `s10_cooldown_deprecated` sets this "
+             "deprecation",
+}
+
+#: The note appended to each remaining cooldown clause while the deprecation is authorized.
+_S10_COOLDOWN_MOOT_NOTE = (" *(Rule S-10's package-release cooldown is deprecated in this workspace, so any cooldown "
+                           "clause here is moot; it applies again if that deprecation lapses or a HALT removes it.)*")
+
+
+def s10_cooldown_placeholders(authorized: object) -> dict[str, str]:
+    """The ``{S10_COOLDOWN_RULE}`` and ``{S10_COOLDOWN_MOOT}`` values for Rule S-10's release cooldown.
+
+    Only the value ``cli/s10_deprecation_gate`` stored (``"signed"`` or ``"brief"``) renders the deprecation; anything
+    else, including a missing key on a path that skips the gate, renders the cooldown in force (fail-closed). The
+    deprecated wording is fixed text: nothing from the brief reaches it (C-4).
+
+    Args:
+        authorized: The manifest's ``s10_cooldown_deprecated_authorized`` value.
+
+    Returns:
+        The two placeholder values.
+
+    Raises:
+        Nothing.
+    """
+    source = _S10_DEPRECATION_AUTHORITY.get(authorized) if isinstance(authorized, str) else None
+    if source is None:
+        return {"S10_COOLDOWN_RULE": S10_COOLDOWN_RULE_IN_FORCE, "S10_COOLDOWN_MOOT": ""}
+    rule = (
+        "- ⚠️ **Package-release cooldown — deprecated in this workspace.** There is no release-age waiting\n"
+        "  period in any ecosystem: a release that passes the known-vulnerability search above (no known\n"
+        "  vulnerability, no OSV `MAL-*` entry) and Rule S-9's identity check may be adopted on the day it is\n"
+        "  published, and no cooldown exception or exemption is needed. " + source + ". Every other\n"
+        "  Rule S-10 check stays in force: the vulnerability search, Rule S-9's identity check, and the\n"
+        "  latest-stable rule below. The cooldown clauses elsewhere in this file are moot while the deprecation\n"
+        "  holds; if it lapses, or an unretracted HALT on an `s10-cooldown` or `s10-toolchain-group` action\n"
+        "  removes it, the next render restores the 14-day cooldown. agentteams' own wasm runtime pin tool\n"
+        "  (`--wasm-pin-update`) keeps its built-in 14-day check; this deprecation does not change it.\n"
+        "  Upgrading an already-installed package through its distribution's own curated security channel\n"
+        "  (apt/dnf/apk with a DSA/USN/RHSA-backed update) is remediation, not adoption (third-party\n"
+        "  repositories, PPAs, and vendor-added apt/dnf sources are not that channel)"
+    )
+    return {"S10_COOLDOWN_RULE": rule, "S10_COOLDOWN_MOOT": _S10_COOLDOWN_MOOT_NOTE}
+
+
 def _format_authority_hierarchy(hierarchy: list[dict[str, Any]]) -> str:
     if not hierarchy:
         return "1. **Project source files** — ground truth for all technical claims"

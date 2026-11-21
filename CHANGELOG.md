@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (Rule S-10: a signed brief field that renders the release cooldown as deprecated, #592)
+
+- New brief field `s10_cooldown_deprecated` (boolean). When authorized, the render shows Rule S-10's 14-day
+  package-release cooldown as deprecated in:
+  - the security agent;
+  - the vulnerability-watch reference's prevention playbook;
+  - the instructions files.
+- The known-vulnerability search (OSV `MAL-*` included), Rule S-9's identity check, the latest-stable rule and the
+  vulnerability-scan remediation carve-out are unchanged. The remaining cooldown clauses stay, each marked moot, so a
+  lapse or a HALT restores them.
+- New gate, `cli/s10_deprecation_gate` (Rule 15), for the action `s10-cooldown-deprecated`:
+  - **Governed workspace:** the brief value alone deprecates nothing. It renders only with the operator's
+    Ed25519-signed decision (`scope` and `effect_relaxes` equal to the action, no `effect_grants`), registered under
+    the aggregate cap with a 90-day sunset that the operator re-signs.
+  - **HALTs:** an unretracted HALT on any `s10-cooldown` or `s10-toolchain-group` action, in the canonical
+    `.github/agents` or any surface's log, removes it. That includes a HALT on a single exempt repository.
+  - **Ungoverned workspace:** the brief value applies, with a notice (operator ruling T3, extended to this field
+    2026-11-21).
+  - **Refusals:** a refusal, a lapse or an unreadable signing switch renders the cooldown in force. It never stops
+    the render.
+- Unchanged: agentteams' own wasm runtime pin tool (`--wasm-pin-update`) keeps its built-in 14-day check, and the
+  vulnscan and server-kit code is not touched.
+- `s10-cooldown-deprecated` joins `GATE_ACTIONS`. The bare `s10-cooldown` is a HALT family only, never a clearable
+  action.
+
 ### docs (the release model for 1.3: `main` moves only to signed releases; release lines are cut from `dev`)
 
 - `docs_src/release-and-branching.md` describes the model the operator ruled on 2026-11-20:

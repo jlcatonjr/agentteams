@@ -46,6 +46,7 @@ from agentteams.cli.exit_codes import _finalize_exit_code
 from agentteams.cli.json_mode import run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
 from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
+from agentteams.cli.s10_deprecation_gate import authorize_deprecation_into
 from agentteams.cli.s10_exempt_gate import authorize_into
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
@@ -249,6 +250,7 @@ def _run_generate_locked(
         return 1
     _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
     authorize_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # Rule 15: S-10 carve-out
+    authorize_deprecation_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # #592
 
     print(f"  Output directory: {output_dir}")
 
@@ -315,6 +317,7 @@ def _run_generate_locked(
         max_items=max(1, int(args.security_max_items)),
         tools=_project_tools if _project_tools else None,
         skip_nvd=args.security_no_nvd,
+        cooldown_deprecated=manifest.get("s10_cooldown_deprecated_authorized") in ("signed", "brief"),
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
 

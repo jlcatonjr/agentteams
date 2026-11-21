@@ -318,7 +318,7 @@ def test_every_gate_call_site_is_listed():
     repo = _P(__file__).resolve().parents[1]
     files = [*(repo / "agentteams").rglob("*.py"), repo / "build_team.py"]
     sources = {f: f.read_text(encoding="utf-8") for f in files}
-    constants = dict(_re.findall(r'^([A-Z_]+)\s*=\s*"([a-z][a-z-]*)"', "\n".join(sources.values()), _re.M))
+    constants = dict(_re.findall(r'^([A-Z_]+)\s*=\s*"([a-z][a-z0-9-]*)"', "\n".join(sources.values()), _re.M))
     call = _re.compile(r"(?:_assert_destructive_action_allowed|check_clearance|_assert_no_unretracted_halt)"
                        r"\([^)]*?action=(\"[^\"]+\"|[A-Za-z_]+)")
     dynamic = []
@@ -359,6 +359,14 @@ def test_every_gate_call_site_is_listed():
                 assert text.index("action = clearance_action(scope, path)") < text.index("action=scope)")
             elif arg in {"exempt_action", "exempt_family"} and path.name == "s10_exempt_gate.py":
                 s10_sites.append(arg)  # s10-cooldown-exempt:<owner/name> and the bare family, checked below
+            elif arg == "halt_action" and path.name == "s10_deprecation_gate.py":
+                # agentteams#592: HALT scans only, over HALT_ACTIONS. Bare s10-cooldown is a HALT family and never a
+                # clearable action (every s10-cooldown-* row would match it as a prefix), so it is not in GATE_ACTIONS.
+                from agentteams.cli.s10_deprecation_gate import HALT_ACTIONS
+
+                assert "for halt_action in HALT_ACTIONS:" in text
+                assert set(HALT_ACTIONS) - {"s10-cooldown"} <= set(GATE_ACTIONS)
+                assert "s10-cooldown" not in GATE_ACTIONS
             elif arg == "halt_family" and path.name == "dev_merge.py":
                 # The integration-branch merge authorization's two HALT families, both listed.
                 assert "for halt_family in (FAMILY, ACTION_FAMILY):" in text

@@ -787,6 +787,10 @@
       "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"},
       "description": "Rule S-10 first-party toolchain group hint (owner/name only): repositories whose releases may be adopted inside the 14-day package-release cooldown. In a governed workspace this list alone exempts nothing: the operator-signed .agentteams/toolchain-group.json (the constitution's First-party toolchain group section) or a legacy signed per-repository decision does, and a notice names any listed repository the signed group lacks. In an ungoverned workspace the list applies as written. Lifts the cooldown only: the vulnerability search, Rule S-9's signed-tag identity check and the latest-stable rule still apply. [] or absent exempts nothing."
     },
+    "s10_cooldown_deprecated": {
+      "type": "boolean",
+      "description": "Rule S-10 cooldown deprecation (agentteams#592): true renders the 14-day package-release cooldown as deprecated in the security agent, the vulnerability-watch reference and the instructions files. In a governed workspace this value alone deprecates nothing: an operator Ed25519-signed decision for the action s10-cooldown-deprecated (scope and effect_relaxes equal to it, a 90-day sunset the operator re-signs) does, and an unretracted HALT on any s10-cooldown or s10-toolchain-group action removes it. In an ungoverned workspace true applies as written, with a notice. Lifts the cooldown only: the vulnerability search, Rule S-9's identity check, the latest-stable rule and the remediation carve-out still apply. Absent or false renders the cooldown in force."
+    },
     "researchteam_notes": {
       "type": "object",
       "additionalProperties": true,

@@ -210,7 +210,7 @@ rule stands on its own, whatever number the project's constraint-relaxing rule c
 - **What it lifts.** Only Rule S-10's 14-day cooldown and a pin move's per-release operator decision row,
   for releases of group members. It never lifts the vulnerability search, Rule S-9's signed-tag check
   (`agentteams --verify-toolchain-pin` checks it and fails closed; the project's dependency gate should run
-  it), the latest-stable rule, a `@security` review, or any other rule.
+  it), the latest-stable rule, a `@security` review, or any other rule.{S10_COOLDOWN_MOOT}
 
 agentteams ships and restores this section on every `--update --merge`; a project's own rules stay where
 they are.
