@@ -51,7 +51,7 @@ report R6).
 
 ## Observed Upstream Tokens — `agents_md` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-09-11` from `https://agents.md`.
+Recorded by the daily pipeline on `2026-09-24` from `https://agents.md`.
 
 - Upstream tokens observed: —
 - Upstream locations observed: AGENTS.md

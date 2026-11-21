@@ -69,8 +69,8 @@ agent — `target: vscode` warranted where used.
 
 ## Observed Upstream Tokens — `copilot_vscode` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-09-11` from `https://code.visualstudio.com/docs/copilot/customization/custom-agents`.
+Recorded by the daily pipeline on `2026-09-24` from `https://code.visualstudio.com/docs/copilot/customization/custom-agents`.
 
-- Upstream tokens observed: —
+- Upstream tokens observed: description
 - Upstream locations observed: .github/agents
 - Fetch status: `ok`

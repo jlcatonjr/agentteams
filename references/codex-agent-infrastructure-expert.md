@@ -118,7 +118,7 @@ subagents and build-skills twins together.
 
 ## Observed Upstream Tokens — `codex` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-09-11` from `https://learn.chatgpt.com/docs/agent-configuration/agents-md`.
+Recorded by the daily pipeline on `2026-09-24` from `https://learn.chatgpt.com/docs/agent-configuration/agents-md`.
 
 - Upstream tokens observed: —
 - Upstream locations observed: .codex, AGENTS.md
