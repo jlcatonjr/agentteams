@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (a public, read-only check for a spent `sandbox-wasm-off` decision, #574)
+
+- **`agentteams.cli.sandbox_relaxation_gate.spent_off_decision(team_dir, framework_id)`** returns
+  `<key_id>@<sig16>` for the operator's spent, Ed25519-signed `sandbox-wasm-off:<framework_id>` decision in a governed
+  workspace, or raises `SandboxRelaxationError` naming the failed check (paths removed). It reads only. It is
+  stricter than the gate's internal check, which also accepts such a row in an ungoverned workspace; this one refuses
+  it there.
+- It is a point-in-time read, so call it before each use and never cache the result.
+- Documented in `docs_src/api-reference/cli.md` ("Supported API"). It is the one `agentteams.cli` symbol meant for the
+  supported surface, listed in STABILITY.md by #568. Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
+
 ### added (workflow-conformance test, Phase A: spec, scorer, controls, day markers; IM request 2026-W47)
 
 - **A deterministic check that a recorded run followed its workflow.** `agentteams.redteam.workflow_spec` reads
