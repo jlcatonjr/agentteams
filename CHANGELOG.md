@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (STABILITY: the WASM sandbox core is supported; a security-tightening clause, #568)
+
+- **STABILITY.md §7, "WASM sandbox core"**, puts these under SemVer from 1.3.0:
+  - the `agentteams.wasm_exec` executor surface (`run`, `prepare`, `materialize`, `assert_grant_shape`, `Grant`,
+    `GRANT_SPEC`, `GRANT_SPEC_SHA256`, `WasmExecError` and its data types);
+  - `agentteams.wasm_pins.pinned_resolver`;
+  - `sandbox-state.schema.json` v1;
+  - `spent_off_decision` from #574;
+  - the stdlib-only property of `wasm_exec` and `wasm_pins`.
+- **§7's own rules:**
+  - `GRANT_SPEC` content may change in a minor release, with a new sha and a CHANGELOG entry;
+  - the argv `assert_grant_shape` accepts is defined by `GRANT_SPEC`, not by SemVer;
+  - `sandbox-state` v1 is closed, so any change makes it v2;
+  - refusal lists may grow and limits may shrink (raising a limit needs a recorded `@security` clearance);
+  - `agentteams.wasm_session` stays beta.
+- **Release cadence: security tightening** (operator ruling, 2026-11-20). A security fix in a patch or minor release
+  may refuse something it used to accept. It needs a CHANGELOG `security` entry saying what is newly refused and how
+  to migrate. It never loosens a refusal or changes an output's shape. The Patch line now names this exception.
+- `tests/test_wasm_exec.py` now checks the stdlib-only property against `sys.stdlib_module_names` and refuses
+  `importlib.import_module`. Requested by baseAgent (its B4) through IM. Scoped by `@security`.
+
 ### docs (the release model for 1.3: `main` moves only to signed releases; release lines are cut from `dev`)
 
 - `docs_src/release-and-branching.md` describes the model the operator ruled on 2026-11-20:
