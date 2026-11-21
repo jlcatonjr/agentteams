@@ -145,8 +145,8 @@ def run_toolchain_group(args: argparse.Namespace) -> int:
 
 
 def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dict[str, str],
-                 own: str | None) -> tuple[set[str], list[str]] | None:
-    """The repos whose locked pins S-9 checks, and the problems found collecting them; None after a printed refusal.
+                 own: str | None) -> tuple[set[str], set[str], list[str]] | None:
+    """``(repos S-9 checks, those named explicitly, problems)``; None after a printed refusal.
 
     @security ruling on #555 (2026-11-20): sources only ever add repos, never remove one. They are pins owned by this
     workspace's GitHub owner, the brief's ``s10_cooldown_exempt_repos``, ``--pin-repos``, and the verified group
@@ -158,6 +158,7 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
     from agentteams.cli.s10_exempt_gate import governance_team_dir, surface_dirs
 
     repos: set[str] = set()
+    named: set[str] = set()  # named by the brief, --pin-repos or the group: never excluded as the own repo
     problems: list[str] = []
     locked = {r.lower() for r in pins.values()}
     if own:
@@ -173,9 +174,9 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
             print("Error: the brief's s10_cooldown_exempt_repos must be a list of owner/repo strings (fail-closed).",
                   file=sys.stderr)
             return None
-        repos |= {r.strip().lower() for r in hint}
+        named |= {r.strip().lower() for r in hint}
     for repo in filter(None, (r.strip() for r in (getattr(args, "pin_repos", None) or "").split(","))):
-        repos.add(repo.lower())
+        named.add(repo.lower())
         if repo.lower() not in locked:
             problems.append(f"--pin-repos names {repo}, which {args.verify_toolchain_pin} does not pin")
     try:
@@ -198,8 +199,8 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
             if result.problem:
                 tg.report(result)
                 return None
-            repos |= {r.lower() for r in result.repos}
-    return repos, problems
+            named |= {r.lower() for r in result.repos}
+    return repos | named, named, problems
 
 
 def _warn_on_exemption_halts(repos: set[str], team_dir: Path, root: Path) -> bool:
@@ -245,15 +246,17 @@ def _verify_pin_command(args: argparse.Namespace) -> int:
     lockfile = Path(args.verify_toolchain_pin)
     try:
         pins = tg.locked_pins(lockfile)
-    except (OSError, UnicodeDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, tg.ToolchainLockError) as exc:
         print(f"Error: cannot read {lockfile}: {exc}", file=sys.stderr)
         return 1
     own = tg.workspace_repo(root)
     collected = _pin_sources(args, team_dir, root, pins, own)
     if collected is None:
         return 1
-    repos, problems = collected
-    if own and own.lower() in repos:
+    repos, named, problems = collected
+    # Only an owner-derived pin is excluded as the own repo: origin is not signed, so a consumer whose origin claims
+    # to be a named repository must still verify that pin (IM-da review of #598).
+    if own and own.lower() in repos and own.lower() not in named:
         repos.discard(own.lower())
         for name in (n for n, r in pins.items() if r.lower() == own.lower()):
             print(f"  -  {name}={own}: this workspace's own repository, not checked.")
@@ -262,7 +265,7 @@ def _verify_pin_command(args: argparse.Namespace) -> int:
     checked: list[str] = []
     try:
         problems += tg.verify_pins(lockfile, sorted(repos), Path(args.allowed_signers), checked=checked)
-    except (OSError, UnicodeDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, tg.ToolchainLockError) as exc:
         print(f"Error: cannot read {lockfile}: {exc}", file=sys.stderr)
         return 1
     for problem in problems:

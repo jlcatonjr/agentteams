@@ -115,8 +115,10 @@ def governance_team_dir(team_dir: Path) -> Path:
     canonical = root / CANONICAL_TEAM_DIR
     if canonical.resolve() == team_dir.resolve() or not _is_dir_strict(canonical, "canonical team dir"):
         return team_dir
-    if any(stat.S_ISLNK(lstat_or_none(p, "team dir").st_mode) for p in (root / ".github", canonical)) \
-            or not canonical.resolve().is_relative_to(root):
+    links = [lstat_or_none(p, "team dir") for p in (root / ".github", canonical)]
+    if None in links:  # removed between the two stats
+        raise RuntimeError(f"canonical team dir '{canonical}' vanished while it was checked; refusing (fail-closed)")
+    if any(stat.S_ISLNK(st.st_mode) for st in links) or not canonical.resolve().is_relative_to(root):
         return team_dir
     return canonical if _enforce_decision_signing(canonical) else team_dir
 

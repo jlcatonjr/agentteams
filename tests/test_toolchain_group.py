@@ -547,7 +547,10 @@ def test_only_a_v_prefixed_ascii_final_tag_is_accepted(tmp_path, signed_remote, 
     base, signers, sha = signed_remote
     lockfile = tmp_path / "toolchain.lock"
     lockfile.write_text(f"tk=acme/toolkit@{sha}\ntk.tag={tag}\n", encoding="utf-8")
-    problems = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
+    try:  # a malformed tag line is refused outright since the #598 review; a well-formed non-final one is a problem
+        problems = tg.verify_pins(lockfile, ["acme/toolkit"], signers, remote_base=str(base))
+    except tg.ToolchainLockError:
+        return
     assert problems and ("not a final release tag" in problems[0] or "no tk.tag line" in problems[0])
 
 
@@ -968,3 +971,49 @@ def _run_verify_group(team: Path) -> int:
     from agentteams.cli.toolchain_group_commands import run_toolchain_group
 
     return run_toolchain_group(_verb_args(team, verify_toolchain_group=True, team_id=_TEAM))
+
+
+# --- IM-da review of #598 (part A) ---------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("named_by", ["brief", "pin_repos"])
+def test_an_origin_claiming_a_named_repo_never_excludes_its_pin(tmp_path, signed_remote, monkeypatch, named_by) -> None:
+    """A consumer whose (unsigned) origin claims to be acme/toolkit must still verify a toolkit pin it names."""
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, _private = _project(tmp_path, governed=False, origin="https://github.com/acme/toolkit.git")
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    kw = {}
+    if named_by == "brief":
+        (root / "brief.json").write_text(json.dumps({"project_name": "Consumer",
+                                                     "s10_cooldown_exempt_repos": ["acme/toolkit"]}))
+    else:
+        kw["pin_repos"] = "acme/toolkit"
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\n")      # unsigned: must be checked and fail
+    assert _run_pin(_pin_args(team, lock, signers, **kw)) == 1
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers, **kw)) == 0
+
+
+@pytest.mark.parametrize("text", [
+    "tk=acme/toolkit@{bad}\ntk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n",          # an unreleased pin first: bootstrap installs it
+    "tk=acme/toolkit@{sha}\ntk.tag=v1.0.1\ntk.tag=v1.0.0\n",                  # a duplicated tag
+    "tk=acme/toolkit@{upper}\ntk.tag=v1.0.0\n",                               # uppercase hex
+    "tk = acme/toolkit@{sha}\ntk.tag=v1.0.0\n",                               # spaces around '='
+    "tk=acme/toolkit@{sha}\ntk.tag = v1.0.0\n",
+])
+def test_a_duplicated_or_malformed_lock_line_fails_closed(t3, tmp_path, capsys, text) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(text.format(sha=sha, bad="1" * 40, upper=sha.upper()))
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    err = capsys.readouterr().err   # not a bare "malformed": the tmp path carries this test's name
+    assert "twice; one line per name" in err or "looks like a pin or tag but is malformed" in err
+
+
+def test_comments_and_unrelated_lock_lines_are_still_ignored(t3, tmp_path) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"# pins\npython=3.11\n\ntk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 0
