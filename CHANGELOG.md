@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (workflow-conformance test, Phase A: spec, scorer, controls, day markers; IM request 2026-W47)
+
+- **A deterministic check that a recorded run followed its workflow.** `agentteams.redteam.workflow_spec` reads
+  every `### Workflow` section of `orchestrator.template.md` and derives the ordered agent invocations a conforming
+  run makes, resolving *(If `@x` in team)* steps against the team's `agent_slug_list`; runtime-conditional steps
+  are optional. `eval_suite.build_workflow_suite` emits them as two new neutral scenario kinds, `workflow-sequence`
+  and `rule-order` (category `workflow`, added to `eval-suite.schema.json`). They are not added to the emitted
+  `references/eval-suite.json`, whose structural adapters would score an unknown kind as a failure.
+- **Coverage is derived from the template (AC3).** All 21 Workflow headings carry a class: 19 `live` (some with the
+  seed their fresh tree needs) and 2 `replay-only` with the reason a live run is unsafe (9: writes outside the
+  fresh tree; 14: needs the management signing key). A new or removed heading fails a test.
+- **Normaliser, scorer and controls (AC2).** `workflow_trace` turns Claude Code `stream-json`, a goose session
+  JSONL, the gate's `AGENTTEAMS_GATE_LOG` (a denied action is not executed) and the final steps CSVs into an
+  `agent_session_trajectory` plus ordered events. `workflow_score.check_workflow_conformance` scores the ordered
+  invocations (first deviating step) and Rule 9, C-5, Rule 8, Workflow 11 terminal and Rule 10, with no LLM judge.
+  `python -m agentteams.redteam.workflow_score --controls` replays planted and clean fixtures from
+  `tests/fixtures/workflow_conformance/` and exits 2 (VOID), writing a status file, if any control misbehaves.
+- **Day markers and a commit-bound report.** `stage_markers.run_stage_once` writes one marker per stage per day on
+  every exit code, so a stage that exited 2 is not paid for again that day. `conformance_report` fixes the shape a
+  release check verifies: the RC commit, threshold, panel pins, per-workflow results and a SHA-256 of the body.
+- **`live-behavior-watch.yml` shows a missing key as skipped.** The key check is its own job, and the live job runs
+  only on its output, so a run with no key no longer reports a green success.
+
 ### changed (constitution: constraint-relaxing authorizations include bulk actions; operator ruling 2026-11-16)
 
 - **The generated teams' Rule 11 now says what the signing code already enforces.** `effect_classifier.requires_operator_signature`
