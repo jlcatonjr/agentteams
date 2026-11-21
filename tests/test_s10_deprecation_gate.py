@@ -24,10 +24,12 @@ from agentteams.manifest_format import (
     s10_cooldown_placeholders,
 )
 from agentteams.security_feed_render import _format_prevention_playbook
-from tests._sandbox_gate_helpers import _log, _row, _team
+from agentteams.cli import decision_log as dl
+from tests._sandbox_gate_helpers import _log, _row, _stub_sig, _team
 
 _T0 = datetime(2026, 11, 21, tzinfo=UTC)
 _ACTION = gate.DEPRECATION_ACTION
+_SIGNED = datetime(2026, 10, 31, tzinfo=UTC)   # tests._sandbox_gate_helpers._row's default timestamp
 ROOT = Path(__file__).resolve().parent.parent
 BRIEF = ROOT / "examples" / "software-project" / "brief.json"
 TEMPLATES = ROOT / "agentteams" / "templates"
@@ -112,7 +114,8 @@ def test_a_signed_decision_registers_a_bounded_exception(tmp_path, stub_ed25519)
     assert "yes" in log.read_text()  # consumed
     [entry] = _registry(team)
     assert entry["action"] == _ACTION and entry["relaxing"] is True and entry["status"] == "active"
-    assert datetime.fromisoformat(entry["expires"]) == _T0 + timedelta(days=gate.DEPRECATION_TTL_DAYS)
+    # The sunset counts from the signed row's own timestamp (the helper's default stamp), not from registration.
+    assert datetime.fromisoformat(entry["expires"]) == _SIGNED + timedelta(days=gate.DEPRECATION_TTL_DAYS)
     assert gate.authorized_deprecation(team, True, consume=True, now=_T0 + timedelta(days=30)) == "signed"
 
 
@@ -292,3 +295,115 @@ def test_an_unreadable_team_dir_never_stops_the_render(tmp_path, monkeypatch, ca
     gate.authorize_deprecation_into(manifest, team, consume=True)
     assert manifest["s10_cooldown_deprecated_authorized"] is None
     assert "can't be read" in capsys.readouterr().err
+
+
+# --- IM-da's #593 review (2026-11-21) ---------------------------------------------------------------------------------
+
+
+def _retraction(halt_id: str, *, stamp: str = "2026-11-23", scope: str | None = None) -> dict[str, str]:
+    """An authentic, evidenced HALT-RETRACTED row for exactly *halt_id* (signed with the test stub)."""
+    row = _row(halt_id, verdict="HALT-RETRACTED", relaxes="", stamp=stamp, scope=scope) | {"conditions": "settled: reviewed"}
+    row["signature"] = _stub_sig(dl._decision_signature_values(row))
+    return row
+
+
+@pytest.mark.parametrize(("halt", "sibling"), [
+    ("s10-cooldown-exempt:o/a", "s10-cooldown-exempt:o/b"),
+    ("s10-cooldown-foo", _ACTION),
+    ("s10-cooldown", _ACTION),
+    ("s10-cooldown-exempt", "s10-cooldown-exempt:o/b"),
+])
+def test_a_sibling_retraction_does_not_clear_a_family_halt(tmp_path, stub_ed25519, monkeypatch, halt, sibling) -> None:
+    """Blocker 1 (IM-da's probe): one authentic, unscoped retraction of a sibling clears the whole family in the core
+    scan; only a retraction naming a HALT's exact id clears it for this gate."""
+    def build(sub: str) -> Path:
+        team = _team(tmp_path / sub)
+        _log(team, _row(halt, verdict="HALT", stamp="2026-11-20"), _row(sibling, verdict="HALT", stamp="2026-11-21"),
+             _retraction(sibling, scope=""), _row(_ACTION, stamp="2026-11-24"))   # the signed row comes last
+        return team
+    assert gate.authorized_deprecation(build("fixed"), True, consume=True, now=_T0) is None
+    # Negative control: without this gate's exact-id scan, the probe reproduces (the core scan alone passes it).
+    monkeypatch.setattr(gate, "_assert_no_open_family_halt", lambda halt_dir: None)
+    assert gate.authorized_deprecation(build("core-only"), True, consume=True, now=_T0) == "signed"
+
+
+def test_an_exact_retraction_clears_its_halt(tmp_path, stub_ed25519) -> None:
+    """The core family scan authenticates a retraction against each family it scans, so a scoped retraction must list
+    them all (or carry no scope); this gate's own scan then needs the retraction's id to be the HALT's exact id."""
+    halt = "s10-cooldown-exempt:o/a"
+    for i, scope in enumerate(("", f"{halt};s10-cooldown-exempt;s10-cooldown")):
+        team = _team(tmp_path / str(i))
+        _log(team, _row(_ACTION), _row(halt, verdict="HALT", stamp="2026-11-20"), _retraction(halt, scope=scope))
+        assert gate.authorized_deprecation(team, True, consume=True, now=_T0) == "signed", scope
+
+
+def test_an_unsigned_or_unevidenced_retraction_clears_nothing(tmp_path, stub_ed25519) -> None:
+    for i, mutate in enumerate((lambda r: r | {"signature": "stub" + "0" * 64}, lambda r: r | {"conditions": ""})):
+        team = _team(tmp_path / str(i))
+        _log(team, _row(_ACTION), _row("s10-toolchain-group", verdict="HALT", stamp="2026-11-20"),
+             mutate(_retraction("s10-toolchain-group")))
+        assert gate.authorized_deprecation(team, True, consume=True, now=_T0) is None
+
+
+def test_a_bad_signature_is_refused(tmp_path, stub_ed25519, capsys) -> None:
+    team = _team(tmp_path)
+    _log(team, _row(_ACTION, sign=lambda values: "stub" + "f" * 64))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) is None
+    assert "NOT applied" in capsys.readouterr().err
+
+
+def test_missing_lineage_is_refused(tmp_path, stub_ed25519) -> None:
+    team = _team(tmp_path)
+    _log(team, _row(_ACTION, derives=""))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) is None
+    team2 = _team(tmp_path / "b")
+    _log(team2, _row(_ACTION, derives="no-such-decision"))
+    assert gate.authorized_deprecation(team2, True, consume=True, now=_T0) is None
+
+
+def test_a_full_aggregate_cap_is_refused(tmp_path, stub_ed25519) -> None:
+    team = _team(tmp_path)
+    log = _log(team, _row(_ACTION))
+    (team / er.EXCEPTION_REGISTRY_REL).write_text(json.dumps({"cap": {"max_active_relaxing": 0}, "exceptions": []}))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) is None
+    assert "yes" not in log.read_text()
+
+
+def test_a_malformed_decisions_log_is_refused(tmp_path, stub_ed25519) -> None:
+    for i, governed in enumerate((True, False)):
+        team = _team(tmp_path / str(i), governed=governed)
+        (team / "references" / "security-decisions.log.csv").write_bytes(b"timestamp,verdict\n\xff\xfe\x00broken\n")
+        assert gate.authorized_deprecation(team, True, consume=True, now=_T0) is None
+
+
+def test_an_edited_registry_expiry_does_not_extend_the_sunset(tmp_path, stub_ed25519) -> None:
+    """Finding 4: carry-over counts the sunset from the signed row, never from the registry's unsigned expires."""
+    team = _team(tmp_path)
+    _log(team, _row(_ACTION))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) == "signed"
+    path = team / er.EXCEPTION_REGISTRY_REL
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["exceptions"][0]["expires"] = "2099-01-01T00:00:00+00:00"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0 + timedelta(days=400)) is None
+
+
+def test_a_stale_signed_row_is_not_consumed(tmp_path, stub_ed25519) -> None:
+    team = _team(tmp_path)
+    log = _log(team, _row(_ACTION, stamp="2026-01-01"))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) is None
+    assert "yes" not in log.read_text()
+
+
+def test_the_ttl_lives_in_the_pinned_gate() -> None:
+    """Finding 3: the sunset is defined in the integrity-pinned gate module only."""
+    from agentteams import integrity, manifest_format
+
+    assert gate.DEPRECATION_TTL_DAYS == 90 and not hasattr(manifest_format, "S10_DEPRECATION_TTL_DAYS")
+    assert "agentteams/cli/s10_deprecation_gate.py" in Path(integrity.__file__).read_text(encoding="utf-8")
+
+
+def test_the_review_trigger_table_names_the_field() -> None:
+    """Finding 5."""
+    assert ("| Setting the brief's `s10_cooldown_deprecated` to `true`, or recording an `s10-cooldown-deprecated` "
+            "decision | Constraint relaxation") in _SECURITY_TEMPLATE

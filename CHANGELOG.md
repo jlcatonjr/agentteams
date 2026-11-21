@@ -19,9 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New gate, `cli/s10_deprecation_gate` (Rule 15), for the action `s10-cooldown-deprecated`:
   - **Governed workspace:** the brief value alone deprecates nothing. It renders only with the operator's
     Ed25519-signed decision (`scope` and `effect_relaxes` equal to the action, no `effect_grants`), registered under
-    the aggregate cap with a 90-day sunset that the operator re-signs.
+    the aggregate cap. Its 90-day sunset counts from the signed row's own timestamp, never from the registry's
+    unsigned `expires`, and the operator re-signs it.
   - **HALTs:** an unretracted HALT on any `s10-cooldown` or `s10-toolchain-group` action, in the canonical
-    `.github/agents` or any surface's log, removes it. That includes a HALT on a single exempt repository.
+    `.github/agents` or any surface's log, removes it. That includes a HALT on a single exempt repository. A
+    retraction clears only the HALT whose exact id it names, never a sibling's.
   - **Ungoverned workspace:** the brief value applies, with a notice (operator ruling T3, extended to this field
     2026-11-21).
   - **Refusals:** a refusal, a lapse or an unreadable signing switch renders the cooldown in force. It never stops

@@ -39,7 +39,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agentteams.cli import security_gate, toolchain_group
-from agentteams.cli.decision_log import _enforce_decision_signing
+from agentteams.cli.action_ids import halt_names_action
+from agentteams.cli.decision_log import (
+    _HALT_RETRACTION_VERDICT,
+    _assert_authorizing_row_is_authentic,
+    _decision_signing_active,
+    _enforce_decision_signing,
+    _read_decision_rows,
+)
 from agentteams.cli.effect_classifier import EffectClassifierError, requires_operator_signature
 from agentteams.cli.exception_registry import (
     ExceptionRegistryError,
@@ -57,13 +64,14 @@ from agentteams.cli.s10_exempt_gate import (
     governance_team_dir,
 )
 from agentteams.cli.sandbox_relaxation_gate import _decision_binding, _split, _unbound_reason
-from agentteams.manifest_format import S10_DEPRECATION_TTL_DAYS, s10_cooldown_deprecation_authorized
+from agentteams.manifest_format import s10_cooldown_deprecation_authorized
 
 #: The action id, which is also its own family.
 DEPRECATION_ACTION = "s10-cooldown-deprecated"
 
-#: The sunset of a registered deprecation (Rule 15(d)); the operator re-signs it, and a lapse renders the cooldown.
-DEPRECATION_TTL_DAYS = S10_DEPRECATION_TTL_DAYS
+#: The sunset of a deprecation (Rule 15(d)), counted from the signed decision row's own timestamp (never from the
+#: registry's unsigned ``expires``); the operator re-signs it, and a lapse renders the cooldown. Pinned with this module.
+DEPRECATION_TTL_DAYS = 90
 
 #: Every action whose unretracted HALT removes the deprecation. ``s10-cooldown`` matches any ``s10-cooldown-*`` HALT
 #: (an exempt repository, the exempt family, this action); the toolchain group's family is a separate id.
@@ -84,11 +92,87 @@ class CarryOverError(RuntimeError):
         self.env = env
 
 
+def _row_id(row: dict[str, str]) -> str:
+    return (row.get("action_reviewed") or row.get("decision") or "").strip()
+
+
+def _verdict(row: dict[str, str]) -> str:
+    return (row.get("verdict") or row.get("status") or "").strip().upper()
+
+
+def _retracts_exactly(row: dict[str, str], halt_id: str, *, halt_dir: Path, signing_active: bool) -> bool:
+    """Whether *row* is an authentic, evidenced HALT-RETRACTED row for exactly *halt_id* (never a sibling's)."""
+    if _verdict(row) != _HALT_RETRACTION_VERDICT or _row_id(row).lower() != halt_id.lower():
+        return False
+    if not (row.get("evidence") or row.get("conditions") or "").strip():
+        return False
+    try:
+        _assert_authorizing_row_is_authentic(row, output_dir=halt_dir, signing_active=signing_active,
+                                             action=halt_id)
+    except RuntimeError:
+        return False
+    return True
+
+
+def _assert_no_open_family_halt(halt_dir: Path) -> None:
+    """Raise RuntimeError when any HALT naming an S-10 cooldown action in *halt_dir* is open (#593 review, blocker 1).
+
+    The core scan clears a family's HALTs with one retraction for any member of that family, so a retraction of
+    ``s10-cooldown-exempt:o/b`` would also clear a HALT on ``s10-cooldown-exempt:o/a`` for this gate. Here every HALT
+    whose id names one of :data:`HALT_ACTIONS` (by :func:`~agentteams.cli.action_ids.halt_names_action`) stays open
+    until a later authentic, evidenced retraction names exactly its own id.
+    """
+    read = _read_decision_rows(halt_dir)   # raises on an unreadable log (fail-closed)
+    if not read:
+        return
+    rows, fieldnames = read
+    signing_active = _decision_signing_active(fieldnames)
+    for index, row in enumerate(rows):
+        halt_id = _row_id(row)
+        if _verdict(row) != "HALT" or not any(halt_names_action(halt_id, a) for a in HALT_ACTIONS):
+            continue
+        if not any(_retracts_exactly(later, halt_id, halt_dir=halt_dir, signing_active=signing_active)
+                   for later in rows[index + 1:]):
+            raise RuntimeError(f"decisions-log row {index + 1} is an unretracted HALT on '{halt_id}', which removes "
+                               "the S-10 cooldown deprecation (C-2)")
+
+
 def _assert_no_halt(halt_dirs: tuple[Path, ...]) -> None:
-    """Raise RuntimeError when an unretracted HALT on any of :data:`HALT_ACTIONS` is in any of *halt_dirs*."""
+    """Raise RuntimeError when an unretracted HALT on any of :data:`HALT_ACTIONS` is in any of *halt_dirs*.
+
+    Two scans, each only able to block: the core one (chain integrity, lineage ancestors) per family, and
+    :func:`_assert_no_open_family_halt`, which honours a retraction only for its exact HALT id.
+    """
     for halt_dir in dict.fromkeys(halt_dirs):
         for halt_action in HALT_ACTIONS:
             security_gate._assert_no_unretracted_halt(halt_dir, action=halt_action)
+        _assert_no_open_family_halt(halt_dir)
+
+
+def _signed_at(row: dict[str, str]) -> datetime:
+    """The signed decision row's own timestamp (UTC), from which the sunset is counted; ValueError if unparseable."""
+    stamp = datetime.fromisoformat((row.get("timestamp") or "").strip().replace("Z", "+00:00"))
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC)
+
+
+def _bound_row(team_dir: Path, entry: dict) -> dict[str, str] | None:
+    """The decisions-log row a registry *entry* is bound to (by its signed binding), or None."""
+    read = _read_decision_rows(team_dir)
+    want = str(entry.get("decision_sha256") or "")
+    return next((r for r in (read[0] if read else []) if want and _decision_binding(r) == want), None)
+
+
+def _lapse_reason(row: dict[str, str] | None, now: datetime) -> str | None:
+    """Why the deprecation *row* signed is past its sunset at *now* (or unbound/undated), or None while it holds."""
+    if row is None:
+        return "is not bound to a row in the decisions log"
+    try:
+        sunset = _signed_at(row) + timedelta(days=DEPRECATION_TTL_DAYS)
+    except ValueError:
+        return f"is bound to a row with an unreadable timestamp {row.get('timestamp')!r}"
+    if now >= sunset:
+        return f"lapsed at {sunset.date().isoformat()} ({DEPRECATION_TTL_DAYS} days after its signed decision)"
+    return None
 
 
 def _check_new(team_dir: Path) -> dict[str, str]:
@@ -124,7 +208,7 @@ def _authorize(team_dir: Path, *, consume: bool, now: datetime, halt_dirs: tuple
     entries = entries_for(team_dir, action)
     reasons: list[str] = []
     for entry in active_relaxing_exceptions({"exceptions": entries}, now=now):
-        reason = _unbound_reason(team_dir, entry)
+        reason = _unbound_reason(team_dir, entry) or _lapse_reason(_bound_row(team_dir, entry), now)
         if reason is None:
             return
         reasons.append(f"registered deprecation {entry.get('id')} did not carry over: it {reason}")
@@ -136,6 +220,9 @@ def _authorize(team_dir: Path, *, consume: bool, now: datetime, halt_dirs: tuple
             raise
         raise CarryOverError("; ".join(reasons) + f" (and no new row: {exc})",
                              env=any("'signing' extra" in r for r in reasons)) from exc
+    stale = _lapse_reason(row, now)
+    if stale is not None:
+        raise RuntimeError(f"the newest decision {stale}; the operator re-signs it")
     assert_within_aggregate_cap(team_dir, adding=1, now=now, retiring=lapsed)
     if not consume:
         return
@@ -148,7 +235,7 @@ def _authorize(team_dir: Path, *, consume: bool, now: datetime, halt_dirs: tuple
         "effect": {"relaxes": [action]},
         "lineage": sorted(_split(row.get("derives_from") or "")),
         "issued": now.isoformat(),
-        "expires": (now + timedelta(days=DEPRECATION_TTL_DAYS)).isoformat(),
+        "expires": (_signed_at(row) + timedelta(days=DEPRECATION_TTL_DAYS)).isoformat(),
         "decision_key_id": (row.get("key_id") or "").strip(),
         "decision_sha256": _decision_binding(row),
     }, now=now)

@@ -147,13 +147,10 @@ def format_s10_exempt_repos(repos: object) -> str:
 S10_COOLDOWN_RULE_START = "- ✅ **Package-release cooldown — default 14 days"
 S10_COOLDOWN_RULE_END = "\n- ✅ **Latest stable release only:**"
 
-#: The sunset of a registered cooldown deprecation (Rule 15(d)), in days; ``cli/s10_deprecation_gate`` registers it.
-S10_DEPRECATION_TTL_DAYS = 90
-
 #: How the authorized deprecation is described, by where it came from (``cli/s10_deprecation_gate``).
 _S10_DEPRECATION_AUTHORITY = {
     "signed": "The operator's Ed25519-signed decision `s10-cooldown-deprecated` authorizes this deprecation for\n  "
-              f"this workspace, and it is re-signed at least every {S10_DEPRECATION_TTL_DAYS} days",
+              "this workspace, and the operator re-signs it before its sunset",
     "brief": "This workspace does not sign its decisions, so the project brief's `s10_cooldown_deprecated`\n  "
              "sets this deprecation",
 }
