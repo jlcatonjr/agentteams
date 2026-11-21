@@ -88,8 +88,8 @@ def brief_problem(project_root: Path) -> str | None:
         project_root: The project root.
 
     Returns:
-        A short reason (a symlinked or out-of-project brief, or one that cannot be read, parsed or is not a JSON
-        object), or None.
+        A short reason (a symlinked or out-of-project brief, one that cannot be read, parsed or is not a JSON
+        object, or one whose ``existing_project_path`` names another project), or None.
     """
     if (reason := brief_unusable_reason(project_root)) is not None:
         return reason
@@ -100,7 +100,12 @@ def brief_problem(project_root: Path) -> str | None:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return f"the brief {path} cannot be read or parsed ({exc})"
-    return None if isinstance(data, dict) else f"the brief {path} is not a JSON object"
+    if not isinstance(data, dict):
+        return f"the brief {path} is not a JSON object"
+    other = data.get("existing_project_path")
+    if isinstance(other, str) and other and (project_root / other).resolve() != project_root.resolve():
+        return f"the brief {path} names another project ({other!r}), so it is not this project's brief"
+    return None
 
 
 def resolve_brief(project_root: Path) -> Path | None:

@@ -104,3 +104,46 @@ def test_sync_init_projects_the_boundary_from_a_root_brief(tmp_path: Path) -> No
     assert (tmp_path / ".goose" / "sandbox.sb").is_file()
     team = json.loads((tmp_path / ".agentteams" / "canonical" / "team.cai.json").read_text())
     assert team.get("privilege", {}).get("privilege_profile") == "confined"
+
+
+# --- @security review of 93de1c7f: an unusable shadowing brief stops sync before anything is written ------------
+
+def _team(root: Path) -> None:
+    ad = root / ".claude" / "agents"
+    ad.mkdir(parents=True)
+    (ad / "orchestrator.md").write_text(
+        "---\nname: orchestrator\ndescription: The orchestrator.\n---\n\n# Orchestrator\n\nBody.\n", encoding="utf-8")
+
+
+def _snapshot(root: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(root)): (p.read_bytes() if p.is_file() else b"")
+            for p in sorted(root.rglob("*")) if not p.is_symlink()}
+
+
+@pytest.mark.parametrize("shadow", ["dangling", "foreign"])
+def test_sync_init_refuses_an_unusable_shadowing_brief_and_writes_nothing(tmp_path: Path, shadow: str) -> None:
+    _team(tmp_path)
+    _brief(tmp_path / "brief.json", {"project_name": "T", "privilege_profile": "confined"})
+    (tmp_path / ".agentteams").mkdir()
+    if shadow == "dangling":
+        (tmp_path / ".agentteams" / "brief.json").symlink_to(tmp_path / "gone.json")
+    else:
+        _brief(tmp_path / ".agentteams" / "brief.json", {"project_name": "X", "existing_project_path": "../elsewhere"})
+    before = _snapshot(tmp_path)
+    with pytest.raises(ValueError, match="sync stops"):
+        ms.sync_init(tmp_path, pin="claude", frameworks=["claude", "goose"])
+    assert _snapshot(tmp_path) == before          # no canonical dir, no pin, no .goose projection
+
+
+def test_run_sync_refuses_an_unusable_shadowing_brief_and_writes_nothing(tmp_path: Path) -> None:
+    _team(tmp_path)
+    _brief(tmp_path / "brief.json", {"project_name": "T", "privilege_profile": "confined"})
+    ms.sync_init(tmp_path, pin="claude", frameworks=["claude", "goose"])
+    (tmp_path / ".claude" / "agents" / "orchestrator.md").write_text(
+        "---\nname: orchestrator\ndescription: Changed.\n---\n\n# Orchestrator\n\nNew body.\n", encoding="utf-8")
+    (tmp_path / ".agentteams" / "brief.json").symlink_to(tmp_path / "gone.json")
+    before = _snapshot(tmp_path)
+    with pytest.raises(ValueError, match="sync stops"):
+        ms.run_sync(tmp_path)
+    assert _snapshot(tmp_path) == before
+
