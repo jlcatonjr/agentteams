@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the check, and the cooldown still applies.
 - The rendered S-9 wording says the check fails closed in every tier and never clears the cooldown
   (@security ruling, 2026-11-20).
+- **Unreadable dirs refuse (Python 3.14):** `Path.is_dir()` and `exists()` return `False` on any `OSError` from 3.14,
+  so a team dir that could not be stat'd read as absent and its HALTs were skipped (IM-da review of #593). The S-10
+  gate's surface and canonical team dirs, the signing switch, and the toolchain-group file now use `lstat` and refuse
+  instead: a render applies no group, and `--verify-toolchain-pin` and `--verify-toolchain-group` exit `1`. A dangling
+  team-dir symlink, or one whose target cannot be stat'd, refuses the same way.
 
 ### changed (STABILITY: the WASM sandbox core is supported; a security-tightening clause, #568)
 

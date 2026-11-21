@@ -9,7 +9,9 @@ sequence. None of those fails the render; each prints a notice and an ``::error:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -869,3 +871,100 @@ def test_the_team_id_lookup_ignores_a_brief_naming_another_project(tmp_path) -> 
     root, team, _private = _project(tmp_path)
     (root / "brief.json").write_text(json.dumps({"team_id": "spoofed", "existing_project_path": "../elsewhere"}))
     assert _team_id(_verb_args(team), root) is None
+
+
+# --- IM-da review of #593 (the #588 class): a dir that cannot be stat'd refuses; real chmod (3.14 never raises) ---
+
+_needs_real_chmod = pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="chmod does not bind root")
+
+
+@contextlib.contextmanager
+def _locked(*paths: Path):
+    """chmod 000 each path for the block, then restore it so tmp_path can be removed."""
+    modes = [(p, p.stat().st_mode) for p in paths]
+    try:
+        for p, _mode in modes:
+            p.chmod(0)
+        yield
+    finally:
+        for p, mode in reversed(modes):
+            p.chmod(mode)
+
+
+def _surface_case(tmp_path: Path, root: Path, case: str) -> tuple[Path, ...]:
+    """Set up .claude/agents for *case* (a HALT on the group family inside, where it can hold one); return the
+    paths to lock."""
+    claude = root / ".claude"
+    claude.mkdir()
+    if case in ("parent_000", "surface_000"):
+        surface = claude / "agents"
+        (surface / "references").mkdir(parents=True)
+        _log(surface, _row(tg.FAMILY, verdict="HALT", stamp="2026-11-21"))
+        return (claude,) if case == "parent_000" else (surface,)
+    if case == "dangling":
+        (claude / "agents").symlink_to(tmp_path / "gone", target_is_directory=True)
+        return ()
+    locked = tmp_path / "locked"
+    (locked / "agents" / "references").mkdir(parents=True)
+    _log(locked / "agents", _row(tg.FAMILY, verdict="HALT", stamp="2026-11-21"))
+    (claude / "agents").symlink_to(locked / "agents", target_is_directory=True)
+    return (locked,)
+
+
+_SURFACE_CASES = ["parent_000", "surface_000", "dangling", "link_to_unstatable"]
+
+
+@_needs_real_chmod
+@pytest.mark.parametrize("case", _SURFACE_CASES)
+def test_an_unstatable_surface_renders_no_group(tmp_path, capsys, case) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    with _locked(*_surface_case(tmp_path, root, case)):
+        assert _authorize(team) == []
+    assert "fail-closed" in capsys.readouterr().err
+
+
+@_needs_real_chmod
+@pytest.mark.parametrize("case", _SURFACE_CASES)
+def test_an_unstatable_surface_fails_the_pin_check(t3, tmp_path, capsys, case) -> None:
+    root, team, signers, sha = t3
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    with _locked(*_surface_case(tmp_path, root, case)):
+        assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "fail-closed" in capsys.readouterr().err
+
+
+@_needs_real_chmod
+@pytest.mark.parametrize("lock_rel", [".github", ".github/agents"])
+def test_an_unstatable_canonical_dir_never_falls_back_to_the_brief(tmp_path, capsys, lock_rel) -> None:
+    """Before: is_dir()/exists() read False, governance fell back to the run's ungoverned .claude/agents, and the
+    brief alone exempted acme/toolkit."""
+    root, _team, _private = _project(tmp_path)
+    native = root / ".claude" / "agents"
+    native.mkdir(parents=True)
+    with _locked(root / lock_rel):
+        assert _authorize(native, hint=["acme/toolkit"]) == []
+
+
+@_needs_real_chmod
+def test_an_unstatable_group_file_fails_the_pin_check(tmp_path, signed_remote, monkeypatch, capsys) -> None:
+    """Before: exists() read False, the group was skipped, and its members' pins went unchecked."""
+    import functools
+
+    base, signers, sha = signed_remote
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    monkeypatch.setattr(tg, "verify_pins", functools.partial(tg.verify_pins, remote_base=str(base)))
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    with _locked((root / tg.GROUP_FILE_REL).parent):
+        assert _run_pin(_pin_args(team, lock, signers, team_id=_TEAM)) == 1
+        assert _run_verify_group(team) == 1
+    assert "cannot be read" in capsys.readouterr().err
+
+
+def _run_verify_group(team: Path) -> int:
+    from agentteams.cli.toolchain_group_commands import run_toolchain_group
+
+    return run_toolchain_group(_verb_args(team, verify_toolchain_group=True, team_id=_TEAM))

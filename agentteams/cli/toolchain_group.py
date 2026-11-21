@@ -40,13 +40,16 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams.cli.clearance_binding import lstat_or_none
 from agentteams.manifest_format import _REPO_ID_RE
 
 #: Where the signed file lives, relative to the project root.
@@ -190,15 +193,35 @@ def read_document(project_root: Path, *, signed: bool = True) -> dict | None:
         ToolchainGroupError: Unreadable, a symlink, not JSON, or malformed.
     """
     path = project_root / GROUP_FILE_REL
-    if not path.exists() and not path.is_symlink():
+    if not group_file_present(project_root):
         return None
-    if path.is_symlink() or not path.is_file():
+    if not stat.S_ISREG(os.lstat(path).st_mode):  # a symlink, a dir, ...
         raise ToolchainGroupError(f"{GROUP_FILE_REL} is not a regular file")
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ToolchainGroupError(f"{GROUP_FILE_REL} cannot be read: {exc}") from exc
     return validate(doc, signed=signed)
+
+
+def group_file_present(project_root: Path) -> bool:
+    """Whether anything (a symlink included) sits at ``<project_root>/.agentteams/toolchain-group.json``.
+
+    Not ``Path.exists()``, which from Python 3.14 returns False on any OSError (#555).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        False only when nothing is there.
+
+    Raises:
+        ToolchainGroupError: The path exists but cannot be stat'd (fail-closed).
+    """
+    try:
+        return lstat_or_none(project_root / GROUP_FILE_REL, "toolchain group file") is not None
+    except RuntimeError as exc:
+        raise ToolchainGroupError(str(exc)) from exc
 
 
 def backend_available() -> bool:

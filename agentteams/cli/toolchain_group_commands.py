@@ -94,7 +94,11 @@ def _resolve(args: argparse.Namespace, ungoverned: str | None = None) -> tuple[P
               + (ungoverned or "a render never applies a toolchain group here; the brief's s10_cooldown_exempt_repos "
                  "applies instead."), file=sys.stderr)
         return None
-    return team_dir, root, governance, (team_dir, *_surface_dirs(root))
+    try:
+        return team_dir, root, governance, (team_dir, *_surface_dirs(root))
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return None
 
 
 def _member_filter(governance: Path, halt_dirs: tuple[Path, ...]):
@@ -124,7 +128,12 @@ def run_toolchain_group(args: argparse.Namespace) -> int:
     if resolved is None:
         return 1
     _team_dir, root, governance, halt_dirs = resolved
-    if not (root / tg.GROUP_FILE_REL).exists() and not (root / tg.GROUP_FILE_REL).is_symlink():
+    try:
+        present = tg.group_file_present(root)
+    except tg.ToolchainGroupError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if not present:
         print(f"No {tg.GROUP_FILE_REL} in {root}: no toolchain group (the cooldown applies to every release).")
         return 1
     team_id = _team_id(args, root)
@@ -169,21 +178,23 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
         repos.add(repo.lower())
         if repo.lower() not in locked:
             problems.append(f"--pin-repos names {repo}, which {args.verify_toolchain_pin} does not pin")
-    if (root / tg.GROUP_FILE_REL).exists() or (root / tg.GROUP_FILE_REL).is_symlink():
-        try:
+    try:
+        present = tg.group_file_present(root)
+        if present:
             governance = governance_team_dir(team_dir)
             governed = _enforce_decision_signing(governance)
-        except RuntimeError as exc:
-            print(f"Error: the signing switch cannot be read: {exc}", file=sys.stderr)
-            return None
+            halt_dirs = (team_dir, *surface_dirs(root)) if governed else ()
+    except RuntimeError as exc:  # ToolchainGroupError included: an unreadable group file, team dir or switch
+        print(f"Error: {exc} (fail-closed)", file=sys.stderr)
+        return None
+    if present:
         if governed:
             team_id = _team_id(args, root)
             if not team_id:
                 print("Error: name this workspace's team id with --team-id (or --description <brief>).",
                       file=sys.stderr)
                 return None
-            result = tg.load_group(root, governance, team_id=team_id, halt_dirs=(team_dir, *surface_dirs(root)),
-                                   consume=False)
+            result = tg.load_group(root, governance, team_id=team_id, halt_dirs=halt_dirs, consume=False)
             if result.problem:
                 tg.report(result)
                 return None
@@ -191,22 +202,28 @@ def _pin_sources(args: argparse.Namespace, team_dir: Path, root: Path, pins: dic
     return repos, problems
 
 
-def _warn_on_exemption_halts(repos: set[str], team_dir: Path, root: Path) -> None:
-    """Print a ``::warning`` for each checked repo whose cooldown exemption is HALTed; never drops a pin (#555)."""
+def _warn_on_exemption_halts(repos: set[str], team_dir: Path, root: Path) -> bool:
+    """Print a ``::warning`` for each checked repo whose cooldown exemption is HALTed; never drops a pin (#555).
+
+    Returns False after a printed refusal: a team dir or decisions log that cannot be read could hide a HALT, and
+    :func:`exemption_halt` reports that the same way as a HALT (3.14, fail-closed).
+    """
+    from agentteams.cli.decision_log import _read_decision_rows  # raises when the log is there but unreadable
     from agentteams.cli.s10_exempt_gate import exemption_halt, governance_team_dir, surface_dirs
 
     try:
-        governance: tuple[Path, ...] = (governance_team_dir(team_dir),)
+        dirs = tuple(dict.fromkeys((governance_team_dir(team_dir), team_dir, *surface_dirs(root))))
+        for halt_dir in dirs:
+            _read_decision_rows(halt_dir)
     except RuntimeError as exc:
-        print(f"::warning title=S-10 HALT state unknown::the governance team dir cannot be resolved ({exc}); its "
-              "HALTs are not reported. The cooldown still applies.", file=sys.stderr)
-        governance = ()
-    dirs = tuple(dict.fromkeys((*governance, team_dir, *surface_dirs(root))))
+        print(f"Error: {exc}, so its HALTs cannot be read (fail-closed).", file=sys.stderr)
+        return False
     for repo in sorted(repos):
         exc = exemption_halt(repo, dirs)
         if exc is not None:
             print(f"::warning title=S-10 cooldown exemption revoked::{repo}: {exc}. Its pin is still checked "
                   "here; the 14-day cooldown applies, and exit 0 does not clear it.", file=sys.stderr)
+    return True
 
 
 def _verify_pin_command(args: argparse.Namespace) -> int:
@@ -240,7 +257,8 @@ def _verify_pin_command(args: argparse.Namespace) -> int:
         repos.discard(own.lower())
         for name in (n for n, r in pins.items() if r.lower() == own.lower()):
             print(f"  -  {name}={own}: this workspace's own repository, not checked.")
-    _warn_on_exemption_halts(repos, team_dir, root)
+    if not _warn_on_exemption_halts(repos, team_dir, root):
+        return 1
     checked: list[str] = []
     try:
         problems += tg.verify_pins(lockfile, sorted(repos), Path(args.allowed_signers), checked=checked)
