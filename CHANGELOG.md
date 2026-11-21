@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (a HALT retraction clears only the HALT it names; #596)
+
+- A `HALT-RETRACTED` row whose id was a member of a gate's family (for example `s10-cooldown-exempt:owner/b` at
+  the `s10-cooldown-exempt` gate) was treated as a retraction of the whole family. Once authenticated, it cleared
+  the bare family HALT and every sibling's HALT at that gate (C-2). Now only a retraction of exactly the gate action
+  clears its family's HALTs, as before. Any other retraction clears only the HALT with its own id, and authenticates
+  against that id.
+- Upgrade note: a family HALT that a member retraction had cleared blocks again. Retract it by its own id.
+
 ### changed (`--verify-toolchain-pin` checks signed tags in every tier; there is no exit 2; #555)
 
 - Rule S-9's check now runs in a workspace without decision signing (T3), and in a governed one with no
