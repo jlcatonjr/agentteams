@@ -251,7 +251,8 @@ import pytest  # noqa: E402
 
 @pytest.mark.parametrize("surface", [".codex/agents", ".goose/recipes", ".grok/agents", ".agents"])
 def test_a_halt_in_another_team_dir_binds_a_new_exemption(tmp_path, stub_ed25519, surface) -> None:
-    """.goose/recipes and .grok/agents come only from TEAM_DIRS and .agents only from _surface_dirs: the union binds."""
+    """Every surface binds: the TEAM_AGENT_GLOBS dirs, and .agents, which only _surface_dirs adds (TEAM_DIRS is unioned
+    in too, so a future team dir listed only there also binds)."""
     canonical, other = _canonical(tmp_path), _native(tmp_path, surface)
     log = _log(canonical, _row(_ACTION))
     _log(other, _row(_ACTION, verdict="HALT", stamp="2026-11-02"))
@@ -281,4 +282,15 @@ def test_a_team_dir_that_cannot_be_stat_d_exempts_nothing(tmp_path, stub_ed25519
     finally:
         (tmp_path / ".codex").chmod(0o700)
     assert "fail-closed" in capsys.readouterr().err
+
+
+def test_a_halt_behind_a_symlinked_surface_outside_the_project_binds(tmp_path, stub_ed25519) -> None:
+    """@security review of ea12167a: following a symlinked surface can only add HALTs (C-2)."""
+    canonical = _canonical(tmp_path / "proj")
+    _log(canonical, _row(_ACTION))
+    elsewhere = _native(tmp_path / "outside", ".codex/agents")
+    _log(elsewhere, _row(_ACTION, verdict="HALT", stamp="2026-11-02"))
+    (tmp_path / "proj" / ".codex").mkdir()
+    (tmp_path / "proj" / ".codex" / "agents").symlink_to(elsewhere, target_is_directory=True)
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == []
 
