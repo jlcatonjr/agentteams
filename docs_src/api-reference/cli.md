@@ -260,8 +260,8 @@ without the flag it modifies.
 
 ## Supported API: `sandbox_relaxation_gate.spent_off_decision`
 
-**New in 1.3.0 (#574).** This is the one `agentteams.cli` function in the supported surface (STABILITY.md); the rest
-of the package stays internal. Signature: `spent_off_decision(team_dir: Path, framework_id: str) -> str`.
+**New in 1.3.0 (#574).** It is the one `agentteams.cli` function meant for the supported surface. STABILITY.md lists it from #568, also 1.3.0;
+the rest of the package stays internal. Signature: `spent_off_decision(team_dir: Path, framework_id: str) -> str`.
 
 Read-only: is the operator's `sandbox-wasm-off:<framework_id>` decision spent? An outside tool (baseAgent's `--wasm`
 path, #574) can check that before acting on WASM being off.
