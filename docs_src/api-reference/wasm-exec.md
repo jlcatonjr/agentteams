@@ -10,6 +10,12 @@ The `profiles` module supplies `available`, `seatbelt_profile`, `bwrap_argv`, `s
 
 ## Public Surface
 
+STABILITY.md §7 (from 1.3.0) covers these, and only these: `run`, `prepare`, `materialize`, `assert_grant_shape`,
+`Grant`, `Mount`, `Limits`, `LIMIT_BOUNDS`, `DEFAULT_LIMITS`, `COMPUTE_ONLY`, `Prepared`, `Launch` (with `cleanup()`),
+`WasmResult`, `WasmResolver`, the `OsConfine` values, `GRANT_SPEC`, `GRANT_SPEC_SHA256` and `WasmExecError`. Everything
+else below is documented but internal: `build_argv`, `execute_launch`, `classify_trap` and `trap` labels,
+`copy_out_refused`, `probe`, `ProbeReport`, `available`, the refusal lists and the `MAX_*` limits.
+
 - `GRANT_SPEC`, `GRANT_SPEC_SHA256`: the canonical grant (shared with baseAgent). `python -m agentteams.wasm_exec
   --print-spec` prints it as canonical JSON.
 - `Limits(fuel, max_memory_bytes, timeout_s)`, `DEFAULT_LIMITS`, `LIMIT_BOUNDS`.
