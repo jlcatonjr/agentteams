@@ -349,6 +349,30 @@ def test_a_scoped_member_retraction_behaves_like_an_unscoped_one(tmp_path, scope
     _write_scoped(tmp_path, [{**_row(f"{_FAM}:o/b", "HALT"), "scope": ""}, {**_retract(f"{_FAM}:o/b"), "scope": scope}])
     dl._assert_no_unretracted_halt(tmp_path, action=f"{_FAM}:o/b")  # its own HALT is retracted either way
 
+
+def test_a_member_retraction_scoped_to_its_own_id_clears_its_halt_at_the_family_gate(tmp_path):
+    """@security review of 1cd73b9b: before #596 the family-gate scope check refused this named retraction."""
+    _write_scoped(tmp_path, [{**_row(f"{_FAM}:o/b", "HALT"), "scope": ""},
+                             {**_retract(f"{_FAM}:o/b"), "scope": f"{_FAM}:o/b"}])
+    dl._assert_no_unretracted_halt(tmp_path, action=_FAM)  # must not raise
+
+
+@pytest.mark.parametrize(("halt", "retraction", "scope"), [
+    ("overwrite", "overwrite-retract", ""),           # a descriptive suffix is a member id, not the family
+    (f"{_FAM}:o/b", f"{_FAM}:o/b", _FAM),             # a member id scoped to the family: its scope does not permit it
+    (f"{_FAM}:o/a", f"{_FAM.upper()}:O/B", ""),       # case never turns a member into the family
+])
+def test_a_retraction_that_does_not_name_the_halt_leaves_it_open(tmp_path, halt, retraction, scope):
+    gate = halt.split(":")[0]
+    _write_scoped(tmp_path, [{**_row(halt, "HALT"), "scope": ""}, {**_retract(retraction), "scope": scope}])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=gate)
+
+
+def test_an_exact_family_retraction_ignores_case_and_whitespace(tmp_path):
+    _write_decisions_log(tmp_path, [_row(f"{_FAM}:o/a", "HALT"), _retract(f" {_FAM.upper()} ")])
+    dl._assert_no_unretracted_halt(tmp_path, action=_FAM)  # must not raise
+
 def test_the_pre_upgrade_report_names_newly_blocking_halts(tmp_path):
     from agentteams.cli.action_ids import describe_newly_blocking_halts, newly_blocking_halts
 
