@@ -211,7 +211,7 @@ rule stands on its own, whatever number the project's constraint-relaxing rule c
   for releases of group members. It never lifts the vulnerability search, Rule S-9's signed-tag check
   (`agentteams --verify-toolchain-pin` checks it and fails closed in every tier: exit 0 only if at least one
   pin was checked and every checked pin verifies; it checks signed tags, not release age, so it never clears
-  the cooldown; the project's dependency gate should run it), the latest-stable rule, a `@security` review, or any other rule.
+  the cooldown; the project's dependency gate should run it), the latest-stable rule, a `@security` review, or any other rule.{S10_COOLDOWN_MOOT}
 
 agentteams ships and restores this section on every `--update --merge`; a project's own rules stay where
 they are.

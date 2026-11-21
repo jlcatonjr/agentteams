@@ -141,6 +141,105 @@ def format_s10_exempt_repos(repos: object) -> str:
         return "none for this project, so the cooldown applies to every release"
     return ", ".join(f"`{r}`" for r in dict.fromkeys(valid))
 
+
+#: Where Rule S-10's package-release cooldown bullet starts and ends in the security template. The template stays the
+#: authority for the in-force wording; :func:`apply_s10_cooldown_deprecation` swaps the whole bullet when authorized.
+S10_COOLDOWN_RULE_START = "- ✅ **Package-release cooldown — default 14 days"
+S10_COOLDOWN_RULE_END = "\n- ✅ **Latest stable release only:**"
+
+#: How the authorized deprecation is described, by where it came from (``cli/s10_deprecation_gate``).
+_S10_DEPRECATION_AUTHORITY = {
+    "signed": "The operator's Ed25519-signed decision `s10-cooldown-deprecated` authorizes this deprecation for\n  "
+              "this workspace, and the operator re-signs it before its sunset",
+    "brief": "This workspace does not sign its decisions, so the project brief's `s10_cooldown_deprecated`\n  "
+             "sets this deprecation",
+}
+
+#: The note appended to each remaining cooldown clause while the deprecation is authorized.
+_S10_COOLDOWN_MOOT_NOTE = (" *(Rule S-10's package-release cooldown is deprecated in this workspace, so any cooldown "
+                           "clause here is moot; it applies again if that deprecation lapses or a HALT removes it.)*")
+
+
+def s10_cooldown_deprecation_authorized(authorized: object) -> bool:
+    """Whether *authorized* is a value ``cli/s10_deprecation_gate`` stores for an authorized deprecation.
+
+    Args:
+        authorized: The manifest's ``s10_cooldown_deprecated_authorized`` value.
+
+    Returns:
+        True only for ``"signed"`` or ``"brief"``.
+
+    Raises:
+        Nothing.
+    """
+    return isinstance(authorized, str) and authorized in _S10_DEPRECATION_AUTHORITY
+
+
+def _s10_deprecated_rule(authorized: str) -> str:
+    """The fixed deprecated wording of Rule S-10's cooldown bullet for an authorized *authorized* source."""
+    return (
+        "- ⚠️ **Package-release cooldown — deprecated in this workspace.** There is no release-age waiting\n"
+        "  period in any ecosystem: a release that passes the known-vulnerability search above (no known\n"
+        "  vulnerability, no OSV `MAL-*` entry), Rule S-9's identity check and the latest-stable rule may be\n"
+        "  adopted on the day it is published, and no cooldown exception or exemption is needed.\n"
+        "  " + _S10_DEPRECATION_AUTHORITY[authorized]
+        + ". Every other\n"
+        "  Rule S-10 check stays in force: the vulnerability search, Rule S-9's identity check, and the\n"
+        "  latest-stable rule below. The cooldown clauses elsewhere in this file are moot while the deprecation\n"
+        "  holds; if it lapses, or an unretracted HALT on an `s10-cooldown` or `s10-toolchain-group` action\n"
+        "  removes it, the next render restores the 14-day cooldown. agentteams' own pin tools (the wasm\n"
+        "  runtime pins, `--wasm-pin-update`, and vulnscan's tool pins) keep their built-in 14-day checks; this\n"
+        "  deprecation does not change them.\n"
+        "  Upgrading an already-installed package through its distribution's own curated security channel\n"
+        "  (apt/dnf/apk with a DSA/USN/RHSA-backed update) is remediation, not adoption — the latest-stable\n"
+        "  rule does not apply there (third-party repositories, PPAs, and vendor-added apt/dnf sources are not\n"
+        "  that channel)"
+    )
+
+
+def apply_s10_cooldown_deprecation(template_text: str, authorized: object) -> str:
+    """Swap Rule S-10's cooldown bullet in *template_text* for the deprecated wording, when authorized.
+
+    Only a value ``cli/s10_deprecation_gate`` stored (``"signed"`` or ``"brief"``) swaps it; anything else, a missing
+    key on a path that skips the gate, or a template without both anchors returns *template_text* unchanged, so the
+    cooldown renders in force (fail-closed). The deprecated wording is fixed text: nothing from the brief reaches it
+    (C-4).
+
+    Args:
+        template_text: A template's text, before placeholder resolution.
+        authorized: The manifest's ``s10_cooldown_deprecated_authorized`` value.
+
+    Returns:
+        The text with the bullet swapped, or *template_text* as given.
+
+    Raises:
+        Nothing.
+    """
+    if not s10_cooldown_deprecation_authorized(authorized):
+        return template_text
+    start = template_text.find(S10_COOLDOWN_RULE_START)
+    end = template_text.find(S10_COOLDOWN_RULE_END, start) if start >= 0 else -1
+    if end < 0:
+        return template_text
+    return template_text[:start] + _s10_deprecated_rule(authorized) + template_text[end:]
+
+
+def s10_cooldown_placeholders(authorized: object) -> dict[str, str]:
+    """The ``{S10_COOLDOWN_MOOT}`` value: a note on each remaining cooldown clause while the deprecation holds.
+
+    Args:
+        authorized: The manifest's ``s10_cooldown_deprecated_authorized`` value.
+
+    Returns:
+        ``{"S10_COOLDOWN_MOOT": ...}``: the fixed note when authorized, otherwise ``""``.
+
+    Raises:
+        Nothing.
+    """
+    moot = _S10_COOLDOWN_MOOT_NOTE if s10_cooldown_deprecation_authorized(authorized) else ""
+    return {"S10_COOLDOWN_MOOT": moot}
+
+
 def _format_authority_hierarchy(hierarchy: list[dict[str, Any]]) -> str:
     if not hierarchy:
         return "1. **Project source files** — ground truth for all technical claims"

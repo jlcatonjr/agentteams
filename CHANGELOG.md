@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (Rule S-10: a signed brief field that renders the release cooldown as deprecated, #592)
+
+- New brief field `s10_cooldown_deprecated` (boolean). When authorized, the render shows Rule S-10's 14-day
+  package-release cooldown as deprecated in:
+  - the security agent;
+  - the vulnerability-watch reference's prevention playbook;
+  - the instructions files.
+- The known-vulnerability search (OSV `MAL-*` included), Rule S-9's identity check, the latest-stable rule and the
+  vulnerability-scan remediation carve-out are unchanged. The remaining cooldown clauses stay, each marked moot, so a
+  lapse or a HALT restores them.
+- New gate, `cli/s10_deprecation_gate` (Rule 15), for the action `s10-cooldown-deprecated`:
+  - **Governed workspace:** the brief value alone deprecates nothing. It renders only with the operator's
+    Ed25519-signed decision (`scope` and `effect_relaxes` equal to the action, no `effect_grants`), registered under
+    the aggregate cap. Its 90-day sunset counts from the signed row's own timestamp, never from the registry's
+    unsigned `expires`, and the operator re-signs it.
+  - **HALTs:** an unretracted HALT on any `s10-cooldown` or `s10-toolchain-group` action, in the canonical
+    `.github/agents` or any surface's log, removes it. That includes a HALT on a single exempt repository. A
+    retraction clears only the HALT whose exact id it names, never a sibling's.
+  - **Ungoverned workspace:** the brief value applies, with a notice (operator ruling T3, extended to this field
+    2026-11-21).
+  - **Refusals:** a refusal, a lapse or an unreadable signing switch renders the cooldown in force. It never stops
+    the render.
+- Unchanged: agentteams' own wasm runtime pin tool (`--wasm-pin-update`) keeps its built-in 14-day check, and the
+  vulnscan and server-kit code is not touched.
+- `s10-cooldown-deprecated` joins `GATE_ACTIONS`. The bare `s10-cooldown` is a HALT family only, never a clearable
+  action.
+
 ### changed (`--verify-toolchain-pin` checks signed tags in every tier; there is no exit 2; #555)
 
 - Rule S-9's check now runs in a workspace without decision signing (T3), and in a governed one with no
