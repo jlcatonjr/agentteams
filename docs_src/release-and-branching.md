@@ -4,26 +4,28 @@ New here? This page explains which branch changes go to and which tag to install
 see [Contribute to agentteams](contribute/index.md) first.
 
 **For:** collaborators: Kevin Vallier (`@selfreferencing`), John Schuler (`@jsschuler`) and anyone else contributing.
-The binding rules are in the shared release policy of the four repositories, which this page summarizes for agentteams. Signing and verification details are in `SECURITY.md`. Each downstream repository restates the policy in its own `docs/release-policy.md`; this guide explains how to work within them. agentteams, researchteam, mathAgents
-and baseAgent all follow the same model, so what you learn here applies to all four.
+agentteams, researchteam, mathAgents and baseAgent share one release policy, and this page summarizes it for
+agentteams. Each of the other three restates it in its own `docs/release-policy.md`. Signing and verification
+details are in `SECURITY.md`.
 
 ## The model in brief
 
 - **`dev`** is where development happens, for the next minor version (today `1.3.0.dev0`). Every change except an
   urgent hotfix lands there first: contributors through a pull request into `dev`, Jim by merging locally. `dev`
   triggers no CI on push.
-- **`main`** is the latest release. It moves only when a signed release exists: one **main-to-vX.Y.Z pull request**
-  merges the release's tag commit (merge commit, never squashed), after a final release and after each patch release.
-  An urgent fix can also reach `main` by a hotfix pull request, which is merged into `dev` straight after. Since
-  2026-11-20 there are no `dev` → `main` milestone pull requests, so `main` never carries unreleased code, and an
-  editable install or the docs site always shows released behaviour.
+- **`main`** is the latest release. After each release, one **main-to-vX.Y.Z pull request** brings `main` up to that
+  release's tag commit (a merge commit, never squashed). `dev` is never merged into `main` directly.
+- **A hotfix** is the one exception. An urgent fix can reach `main` by a hotfix pull request, and `main` is then merged
+  into `dev`. Apart from a hotfix, `main` carries only released code, so a local install of `main` (for example
+  `pip install -e .`) and the docs site show released behaviour.
 - **Releases are signed tags,** `v1.2.0`, `v1.2.1`, …, and they are what users install and pin.
 - **`release/X.Y`** is a release line. It is cut from `dev` at the minor version's first release candidate, and it
   then takes only reviewed fixes for that line: each fix lands on `dev` first and is copied over with
   `git cherry-pick -x` (a *backport*). Its commits are unsigned between tags, so it is not for installing or pinning.
-- **Each tag is cut on its release line** and signed by Jim. After a final or patch release, the line is merged
-  forward twice: into `main` (the main-to-vX.Y.Z pull request) and into `dev` (a forward-merge pull request that
-  keeps `dev`'s own version, as #566 and #582 did for v1.2.1 and v1.2.2).
+- **Each tag is cut on its release line** and signed by Jim.
+- **After a final or patch release, the line is merged forward** twice: into `main` (the main-to-vX.Y.Z pull request),
+  and into `dev`, so `dev` contains everything released. That second merge is a *forward-merge* pull request, which
+  keeps `dev`'s own version number, as #566 and #582 did for v1.2.1 and v1.2.2.
 
 ## Branches and tags
 
@@ -64,8 +66,8 @@ The `&&` stops the install if the signature check fails. The output must also sh
 
 To sign decisions or grants, follow `SECURITY.md` ("Signing from a trusted install"): install with `pipx`, from that verified checkout, outside every agent write root. The [migration guide](migration-guide.md) ("Moving to a release checkout") covers rendering a governed team from a tag checkout.
 
-**Release candidates** (`vX.Y.Z-rc.N`) are signed tags too. Install one the same way when you are asked to soak it, and
-always from the tag, never from `main` or an editable checkout: `main` stays at the previous release until the final.
+**Release candidates** (`vX.Y.Z-rc.N`) are signed tags too. When you are asked to trial one, install it the same way,
+from the tag. Don't install it from `main`, which stays at the previous release until the final.
 
 **Release branches are not install sources.** `release/*` lines hold reviewed fixes queued for the next patch release. Those commits are unsigned between tags, so don't install from the branch or pin it.
 
@@ -109,17 +111,20 @@ agentteams is public, and you have read access only. Pull requests are currently
 ## Getting a fix into a release
 
 1. **Land the fix on `dev` first,** as above. It reaches the next minor release with the rest of `dev`.
-2. **Ask for a backport** if it should ship sooner, in a patch on a release line. On the merged pull request, add the
-   label `needs-backport-1.1` or `needs-backport-1.0` for those lines; for `release/1.2` (and later lines), or if you
-   can't add labels, leave a comment instead: "please backport to 1.2". Either way, say why. Only these qualify:
+2. **Ask for a backport** if it should ship sooner, in a patch on a release line. Comment on the merged pull request,
+   naming the line and the reason, for example "please backport to 1.2: fixes a refused install". Jim adds the
+   label (`needs-backport-1.1` or `needs-backport-1.0`, where the line has one). Only these qualify:
    - security fixes;
    - correctness fixes;
    - documentation fixes.
 
    New features wait for the next minor release.
 3. **Jim does the rest.** He copies the fix to the release line in his own pull request, using `git cherry-pick -x`
-   and never a squash. When he releases, he signs `vX.Y.N`, and the line is merged forward into `main` and `dev`.
-4. **Urgent?** Say so in the pull request and message Jim.
+   and never a squash. When he releases, he signs `vX.Y.Z`, and the line is merged forward into `main` and `dev`.
+4. **A fix that applies only to a release line** (the code is already gone from `dev`): open an issue describing it,
+   and Jim fixes it on the line directly.
+5. **Urgent, for example a security fix?** Say so in the pull request and message Jim. He decides whether it ships as a
+   patch or a hotfix.
 
 ## What only Jim does
 
@@ -143,12 +148,13 @@ before any of these actions. In your own session, they are asking *you*: answer 
 
 ## Enforcement
 
-GitHub enforces the release rules here, with five active rulesets:
+GitHub enforces the release rules with five active rulesets:
 
-- only an admin can create `release/*` branches or `v*` tags;
-- `release/*` lines take changes only through a pull request with passing checks, with no force-push and no deletion
-  (the current line, `release/1.2`, has a ruleset of its own with the same rules);
-- `v*` tags can't be moved or deleted.
+1. only an admin can create `release/*` branches;
+2. `release/*` lines take changes only through a pull request with passing checks, with no force-push and no deletion;
+3. `release/1.2`, the current line, has its own copy of rule 2;
+4. only an admin can create `v*` tags;
+5. `v*` tags can't be moved or deleted.
 
 `main` is also protected: its merges need the required checks to pass, for administrators too.
 
@@ -158,17 +164,16 @@ You only need this for context:
 
 1. **Fixes accumulate on `dev`.** The ones requested for a patch are copied to the current release line with
    `git cherry-pick -x`.
-2. **A patch release.** Jim bumps the version on the release line in a pull request, signs `vX.Y.N` from his own
-   terminal, and publishes the GitHub release. The line is then merged forward into `main` (the main-to-vX.Y.N pull
-   request) and into `dev` (a forward-merge that keeps `dev`'s version).
-3. **A new minor version.** At a freeze, `dev` is gated in full. Jim cuts `release/X.Y` from the frozen `dev` commit,
-   and `dev` moves on to the next development version.
-   - Release candidates `vX.Y.0-rc.N` are tagged on the line, one release-commit pull request each.
-   - Downstream repositories soak each candidate, installed from its tag.
-   - Fixes found in the soak land on `dev` first and are copied to the line.
-   - The final `vX.Y.0` is a version-and-CHANGELOG-only commit on the line, signed like any release. Then the line is
+2. **A patch release.** Jim bumps the version on the release line in a pull request, signs `vX.Y.Z` from his own
+   terminal, and publishes the GitHub release. The line is then merged forward into `main` and `dev`.
+3. **A new minor version:**
+   - **Freeze.** New features stop landing for that version, and `dev` passes the full test and docs checks.
+   - **Cut.** Jim creates `release/X.Y` from that `dev` commit, and `dev` moves on to the next development version.
+   - **Release candidates.** Each `vX.Y.0-rc.N` is tagged on the line through its own release-commit pull request.
+   - **Soak.** Downstream repositories trial each candidate, installed from its signed tag. Fixes found there land
+     on `dev` first and are copied to the line.
+   - **Final.** `vX.Y.0` is a version-and-CHANGELOG-only commit on the line, signed like any release. Then the line is
      merged forward into `main` and `dev`, as for a patch.
-   - Until the final, `main` stays at the previous release.
 4. **Repositories release in order:** agentteams → researchteam → mathAgents → baseAgent. Each one moves its pins only
    after verifying the upstream tag's signature.
 5. **Older lines** take fixes only on request once the next line has its final release.
