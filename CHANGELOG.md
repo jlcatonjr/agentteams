@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **STABILITY.md §7, "WASM sandbox core"**, puts these under SemVer from 1.3.0:
   - the `agentteams.wasm_exec` executor surface (`run`, `prepare`, `materialize`, `assert_grant_shape`, `Grant`,
     `GRANT_SPEC`, `GRANT_SPEC_SHA256`, `WasmExecError` and its data types);
-  - `agentteams.wasm_pins.pinned_resolver`;
+  - `agentteams.wasm_pins.pinned_resolver` and `WasmPinError`;
   - `sandbox-state.schema.json` v1;
-  - `spent_off_decision` from #574;
+  - `spent_off_decision` and `SandboxRelaxationError` from #574;
   - the stdlib-only property of `wasm_exec` and `wasm_pins`.
 - **§7's own rules:**
   - `GRANT_SPEC` content may change in a minor release, with a new sha and a CHANGELOG entry;
@@ -66,8 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stricter than the gate's internal check, which also accepts such a row in an ungoverned workspace; this one refuses
   it there.
 - It is a point-in-time read, so call it before each use and never cache the result.
-- Documented in `docs_src/api-reference/cli.md` ("Supported API"). It is the one `agentteams.cli` symbol meant for the
-  supported surface, listed in STABILITY.md by #568. Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
+- Documented in `docs_src/api-reference/cli.md` ("Supported API"). With `SandboxRelaxationError`, it is the only
+  `agentteams.cli` surface STABILITY.md covers (§7, #568). Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
 
 ### added (workflow-conformance test, Phase A: spec, scorer, controls, day markers; IM request 2026-W47)
 
