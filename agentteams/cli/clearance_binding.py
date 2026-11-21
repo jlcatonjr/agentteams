@@ -100,8 +100,11 @@ def _declared_parent(team_dir: Path) -> str | None:
             non-empty string.
     """
     priv = team_dir / "references" / "agent-privilege.json"
-    if not priv.is_file():
+    st = lstat_or_none(priv, "agent-privilege.json")
+    if st is None:
         return None
+    if not stat.S_ISREG(st.st_mode):  # a link (even a looping one) or a non-file would hide a declared parent
+        raise RuntimeError(f"{priv} is not a regular file, so its {PARENT_TEAM_KEY} is unknown; refusing (fail-closed)")
     try:
         data = json.loads(priv.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:

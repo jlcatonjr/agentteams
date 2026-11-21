@@ -316,3 +316,19 @@ def test_a_gates_dir_linked_into_another_repo_sees_both_repos(repo: Path, script
     os.symlink(real_gates, repo / "gates")
     # given path is in repo (no HALT there), resolved path is in other-repo (HALT): both roots are scanned
     assert cb.check_file_clearance(repo / "gates", "survey-s5", script)[0] is False
+
+
+@pytest.mark.parametrize("kind", ["loop", "link"])
+def test_a_linked_privilege_file_refuses(repo: Path, script: Path, tmp_path: Path, kind: str) -> None:
+    """@security review of 5b354126: is_file() hid a looping symlink, and with it a declared parent."""
+    gates = _gates(repo, script)
+    priv = gates / "references" / "agent-privilege.json"
+    priv.unlink()
+    if kind == "loop":
+        os.symlink(priv, priv)
+    else:
+        target = tmp_path / "priv.json"
+        target.write_text(json.dumps({"parent_team": "governance/team"}))
+        os.symlink(target, priv)
+    ok, reason = cb.check_file_clearance(gates, "survey-s5", script)
+    assert ok is False and "not a regular file" in reason
