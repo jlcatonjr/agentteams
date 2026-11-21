@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `GRANT_SPEC`, `GRANT_SPEC_SHA256`, `WasmExecError` and its data types);
   - `agentteams.wasm_pins.pinned_resolver`;
   - `sandbox-state.schema.json` v1;
-  - #574's `spent_off_decision`;
+  - `spent_off_decision` from #574;
   - the stdlib-only property of `wasm_exec` and `wasm_pins`.
 - **§7's own rules:**
   - `GRANT_SPEC` content may change in a minor release, with a new sha and a CHANGELOG entry;
