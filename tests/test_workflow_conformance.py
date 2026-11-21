@@ -444,3 +444,18 @@ def test_a_plan_completed_by_an_unseen_write_still_needs_a_summary() -> None:
     scenarios = workflow_spec.build_workflow_scenarios(TEMPLATE, {"agent_slug_list": sorted(CORE)})
     res = workflow_score.check_workflow_conformance(trace, scenarios, "11")
     assert res["rules"]["rule10-summary-after-plan"]["verdict"] == "fail"
+
+
+def test_a_one_model_panel_is_accepted_and_every_draw_deviations_are_flagged() -> None:
+    """Phase B ruling: a panel of one is valid; a step deviating in every draw is flagged for a person."""
+    panel = [{"model": "glm", "provider": "pinned"}]
+    results = [{"workflow": w, "model": "glm", "draws": 5, "conforming": 5, "first_deviations": []} for w in _live()]
+    results[0] = {**results[0], "conforming": 0, "first_deviations": [{"step": "3"}] * 5}
+    report = conformance_report.build_conformance_report(RC, {"draws": 5, "min_conforming": 4}, panel, results)
+    assert report["flagged_for_review"] == [{"workflow": results[0]["workflow"], "model": "glm",
+                                             "deviation": {"step": "3"}}]
+    mixed = [{**results[0], "first_deviations": [{"step": "3"}] * 4 + [{"step": "4"}]}]
+    assert conformance_report.flag_every_draw_deviations(mixed) == []
+    ok = [{**r, "conforming": 5, "first_deviations": []} for r in results]
+    clean = conformance_report.build_conformance_report(RC, {"draws": 5, "min_conforming": 4}, panel, ok)
+    assert conformance_report.check_conformance_report(clean, RC, TEMPLATE) == []

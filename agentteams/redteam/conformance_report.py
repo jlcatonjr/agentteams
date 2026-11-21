@@ -6,6 +6,9 @@ fixes the report's shape so a tag check can verify it without trusting the run:
 * the report names the **RC commit**, the **threshold**, the **model and provider pins** of every draw's model, the
   **coverage** classes at that commit, and **per-workflow, per-model** draw counts;
 * ``report_sha256`` is the SHA-256 of the canonical JSON of everything else, so an edited report no longer verifies;
+* ``flagged_for_review`` lists any step a model deviated at in **every** draw. With a one-model panel (the
+  operator's 2026-11-20 Phase B ruling: GLM 5.3 on OpenRouter) cross-model agreement cannot tell a model failure
+  from a workflow defect, so such a step goes to a person rather than being scored silently;
 * :func:`check_conformance_report` re-derives the live-class workflows from the template at the RC commit and fails
   unless every one is present for every panel model and meets the threshold.
 
@@ -27,6 +30,31 @@ REPORT_VERSION = "1"
 def _body_sha256(body: dict[str, Any]) -> str:
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
+def flag_every_draw_deviations(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the steps where every draw of a model deviated at the same place, for human review.
+
+    With a one-model panel, cross-model agreement cannot separate a model's failure from a workflow defect
+    (OUR-DEFECT). A step that deviates in every draw is therefore listed for a person to judge, never scored silently
+    as either (operator ruling 2026-11-20).
+
+    Args:
+        results: Per-workflow, per-model results, each with ``draws`` and a ``first_deviations`` list (one entry per
+            non-conforming draw, e.g. ``{"step": "3"}`` or ``{"rule": "c5-security-first"}``).
+
+    Returns:
+        ``[{"workflow", "model", "deviation"}]``, sorted.
+    """
+    flagged = []
+    for r in results:
+        devs = r.get("first_deviations") or []
+        draws = r.get("draws")
+        if isinstance(draws, int) and draws > 0 and len(devs) == draws:
+            keys = {json.dumps(d, sort_keys=True) for d in devs}
+            if len(keys) == 1:
+                flagged.append({"workflow": r["workflow"], "model": r["model"], "deviation": devs[0]})
+    return sorted(flagged, key=lambda f: (f["workflow"], f["model"]))
 
 
 def build_conformance_report(rc_commit: str, threshold: dict[str, int], panel: list[dict[str, str]],
@@ -59,6 +87,7 @@ def build_conformance_report(rc_commit: str, threshold: dict[str, int], panel: l
         "panel": sorted(panel, key=lambda p: (p["model"], p["provider"])),
         "coverage": {w: c for w, (c, _r) in sorted(workflow_spec.COVERAGE.items())},
         "results": sorted(results, key=lambda r: (r["workflow"], r["model"])),
+        "flagged_for_review": flag_every_draw_deviations(results),
     }
     return {**body, "report_sha256": _body_sha256(body)}
 
@@ -109,4 +138,5 @@ def check_conformance_report(report: dict[str, Any], rc_commit: str, template_te
     return problems
 
 
-__all__ = ["REPORT_TYPE", "REPORT_VERSION", "build_conformance_report", "check_conformance_report"]
+__all__ = ["REPORT_TYPE", "REPORT_VERSION", "build_conformance_report", "check_conformance_report",
+           "flag_every_draw_deviations"]
