@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -216,13 +215,14 @@ def rows(branch: str) -> dict[str, str]:
 
 
 def integration_branch_from_project(root: Path) -> str | None:
-    """Return the integration branch the project's brief names, or None (trunk, no brief, or unreadable).
+    """Return the integration branch the project's brief names, or None (trunk, or no brief at all).
 
     Finds the brief as fleet discovery does (``.agentteams/brief.json``, the root ``brief.json``, then the
-    generated ``_build-description.json``). A brief that is a symlink or resolves outside ``root`` is ignored,
-    and so is one that cannot be read or parsed (None). A readable brief whose ``git_workflow`` block is
-    *malformed* raises: treating it as trunk would silently drop the integration branch's protection and
-    retarget vulnerability-fix PRs.
+    generated ``_build-description.json``). A brief that is found but cannot be used raises, as a *malformed*
+    ``git_workflow`` block does: reading trunk would silently drop the integration branch's protection (rule I1
+    in ``--branch-cleanup``) and retarget vulnerability-fix PRs. That covers a brief that is a symlink or
+    resolves outside ``root``, and one that cannot be read, parsed or is not a JSON object (@security review of
+    #599).
 
     Args:
         root: The repository root.
@@ -231,29 +231,28 @@ def integration_branch_from_project(root: Path) -> str | None:
         The integration branch name, or None.
 
     Raises:
-        ValueError: The brief's ``git_workflow`` block is malformed (see :func:`resolve`).
+        ValueError: The brief is unusable, unreadable or not a JSON object, or its ``git_workflow`` block is
+            malformed (see :func:`resolve`).
     """
     from agentteams.memory_index_surfaces import brief_candidate, brief_unusable_reason
 
     root = Path(root)
+    if (reason := brief_unusable_reason(root)) is not None:
+        raise ValueError(reason)
+    path = brief_candidate(root)
+    if path is None:
+        return None
     try:
-        if (reason := brief_unusable_reason(root)) is not None:
-            print(f"warning: {reason}; the integration branch is read as trunk.", file=sys.stderr)
-            return None
-        path = brief_candidate(root)
-        if path is None:
-            return None
         brief = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"the brief {path} cannot be read or parsed ({exc})") from exc
     if not isinstance(brief, dict):
-        return None
+        raise ValueError(f"the brief {path} is not a JSON object")
     try:
         record = resolve(brief)
     except ValueError as exc:
         raise ValueError(f"{path}: {exc}") from exc
     return record["integration_branch"] if record else None
-
 
 __all__ = [
     "CADENCES",

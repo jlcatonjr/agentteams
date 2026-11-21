@@ -464,7 +464,7 @@ def brief_base_ref(repo: Path) -> str | None:
         try:
             branch = branch_model.integration_branch_from_project(repo)
         except ValueError as exc:
-            raise _exec_error(f"the brief's git_workflow block is malformed ({exc}); refusing") from exc
+            raise _exec_error(f"the brief cannot give the integration branch ({exc}); refusing") from exc
     if not branch:
         return None
     proc = executor.git_proc(repo, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}^{{commit}}",
