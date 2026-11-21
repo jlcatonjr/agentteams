@@ -550,6 +550,26 @@ def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> st
     return None
 
 
+def locked_pins(lockfile: Path) -> dict[str, str]:
+    """Every ``NAME=owner/repo@SHA`` pin in *lockfile*, as ``{NAME: owner/repo}``.
+
+    Args:
+        lockfile: A ``toolchain.lock``-style file.
+
+    Returns:
+        The pins, in file order.
+
+    Raises:
+        OSError: The file cannot be read.
+        UnicodeDecodeError: The file is not UTF-8.
+    """
+    pins: dict[str, str] = {}
+    for line in lockfile.read_text(encoding="utf-8").splitlines():
+        if (m := _LOCK_PIN_RE.match(line.strip())):
+            pins[m.group(1)] = m.group(2)
+    return pins
+
+
 def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
                 remote_base: str = "https://github.com/", *, checked: list[str] | None = None) -> list[str]:
     """Check every lock pin to a group member: a tag line, a release-key signature, and the locked commit.
@@ -596,4 +616,4 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
 __all__ = ["FAMILY", "GROUP_FILE_REL", "GroupResult", "HIGH_WATER_KEY", "PURPOSE", "SCOPE", "ToolchainGroupError",
            "backend_available", "load_group", "read_document", "report", "sign_group_file", "signed_values",
            "validate", "verify_group_command", "verify_pins", "verify_signature", "verify_tag_pin",
-           "workspace_repo"]
+           "workspace_repo", "locked_pins"]

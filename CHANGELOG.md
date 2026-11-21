@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`--verify-toolchain-pin` checks signed tags in every tier; there is no exit 2; #555)
+
+- Rule S-9's check now runs in a workspace without decision signing (T3), and in a governed one with no
+  toolchain-group file. Before, both checked nothing: T3 was refused as ungoverned, and a missing group file exited `2`.
+- **Which pins:** every pin to a first-party repository. Sources only add repositories:
+  - one owned by this workspace's GitHub owner;
+  - one in the brief's `s10_cooldown_exempt_repos`;
+  - one named by the new `--pin-repos` (each must be pinned);
+  - a verified group member.
+
+  The workspace's own repository is excluded and named in the output.
+- **Exit codes:** `0` only when at least one pin was checked and every one verifies; `1` otherwise. Upgrade note: a
+  dependency gate that treated exit `2` as "nothing under the rule" now gets `0` or `1`.
+- **HALTs:** an `s10-cooldown-exempt` HALT on a checked repository is a `::warning`. It no longer drops the pin from
+  the check, and the cooldown still applies.
+- The rendered S-9 wording says the check fails closed in every tier and never clears the cooldown
+  (@security ruling, 2026-11-20).
+
 ### added (workflow-conformance test, Phase A: spec, scorer, controls, day markers; IM request 2026-W47)
 
 - **A deterministic check that a recorded run followed its workflow.** `agentteams.redteam.workflow_spec` reads

@@ -209,8 +209,9 @@ rule stands on its own, whatever number the project's constraint-relaxing rule c
   cap and sunset, a project's own clauses included.
 - **What it lifts.** Only Rule S-10's 14-day cooldown and a pin move's per-release operator decision row,
   for releases of group members. It never lifts the vulnerability search, Rule S-9's signed-tag check
-  (`agentteams --verify-toolchain-pin` checks it and fails closed; the project's dependency gate should run
-  it), the latest-stable rule, a `@security` review, or any other rule.
+  (`agentteams --verify-toolchain-pin` checks it and fails closed in every tier: exit 0 only if at least one
+  pin was checked and every checked pin verifies; it checks signed tags, not release age, so it never clears
+  the cooldown; the project's dependency gate should run it), the latest-stable rule, a `@security` review, or any other rule.
 
 agentteams ships and restores this section on every `--update --merge`; a project's own rules stay where
 they are.
