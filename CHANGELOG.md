@@ -27,6 +27,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/test_wasm_exec.py` now checks the stdlib-only property against `sys.stdlib_module_names` and refuses
   `importlib.import_module`. Requested by baseAgent (its B4) through IM. Scoped by `@security`.
 
+### changed (main-team HALTs bind clearances checked in any team dir; gates-only team dirs, #578)
+
+- `check_file_clearance` (`--check-clearance`) now also refuses on an unretracted HALT for the scope, or for the
+  file-bound action, in every generated team dir (`.claude/agents`, `.github/agents`, `.codex/agents`,
+  `.goose/recipes`, `.grok/agents`) under each enclosing git root, and in a `parent_team` the team dir declares in
+  `references/agent-privilege.json`. Before, it read only the team dir it was
+  given, so a clearance checked in a separate dir escaped a main-team HALT (C-2).
+- The link is fail-closed. It refuses on an unreadable log or log directory (checked with `os.lstat`: from Python
+  3.14, `Path.is_dir()`/`exists()` return False on a permission error, which would have hidden a HALT), a symlinked canonical dir, or a `parent_team` that is
+  absolute, uses `..`, has a symbolic-link component, is not a team dir, names itself or chains. Outside a git
+  repository only the team dir's own log is read, and a declared `parent_team` refuses.
+- Upgrade note: a clearance that passed in 1.2 now fails if a generated team dir's log in the same repository holds
+  an unretracted HALT on its scope, or is malformed or reached through a symbolic link, or if the team dir's own
+  `agent-privilege.json` is not a JSON object.
+- **Python 3.14 fail-open fixed in every gate:** the decisions-log reader (`decision_log._read_decision_rows`) used
+  `Path.exists()`, which from Python 3.14 returns False on any OSError, so a log whose directory could not be read
+  read as absent and its HALTs were skipped. It now treats only a missing path as absent and refuses on any other error.
+- Docs: the gates-only team dir layout for signed sign-off rows, and the process-wide `AGENTTEAMS_DECISION_SIGNING_KEY`
+  caveat (`api-reference/workspace-privilege-scoping.md`). New `tests/test_gates_only_team_dir.py`.
+
 ### added (a public, read-only check for a spent `sandbox-wasm-off` decision, #574)
 
 - **`agentteams.cli.sandbox_relaxation_gate.spent_off_decision(team_dir, framework_id)`** returns

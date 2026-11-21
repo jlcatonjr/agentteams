@@ -501,8 +501,9 @@ def sign_decision_team_refusal(output_dir: Path) -> str | None:
     Returns:
         The refusal sentence, or None when ``output_dir`` is a team dir.
     """
-    refs = output_dir / "references"
-    if (refs / "agent-privilege.json").is_file() or (refs / "build-log.json").is_file():
+    from agentteams.cli.clearance_binding import is_team_dir
+
+    if is_team_dir(output_dir):
         return None
     return (f"{output_dir} is not an agentteams team dir (no references/agent-privilege.json or "
             "references/build-log.json). The gate reads the decisions log and the verify-key store "
