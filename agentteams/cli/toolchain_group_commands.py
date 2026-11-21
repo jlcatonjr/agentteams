@@ -24,11 +24,13 @@ def _read_brief(args: argparse.Namespace, root: Path) -> tuple[dict | None, str 
     that was named or found could not be used."""
     brief = getattr(args, "description", None)
     if not brief:
-        from agentteams.memory_index_surfaces import brief_candidate, resolve_brief
+        from agentteams.memory_index_surfaces import brief_candidate, brief_unusable_reason, resolve_brief
 
         found = resolve_brief(root)
         if found is None and (candidate := brief_candidate(root)) is not None:
             found = candidate  # found but unusable: parsed below, so the problem is reported, never skipped
+        if found is None and (reason := brief_unusable_reason(root)):
+            return None, reason  # a symlinked or out-of-project brief: never run as if there were none (#599)
         brief = str(found) if found else None
     if not brief:
         return None, None

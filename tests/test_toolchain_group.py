@@ -1065,3 +1065,64 @@ def test_a_canonical_dir_that_vanishes_between_stats_refuses(tmp_path, monkeypat
                         lambda p, what: None if Path(p).name == ".github" else real(p, what))  # the race, simulated
     with pytest.raises(RuntimeError, match="vanished"):
         gate.governance_team_dir(native)
+
+
+# --- @security review of #599 (76433d7e): an unusable discovered brief stops the pin check ------------------------
+
+@pytest.mark.parametrize("case", ["dangling", "symlink", "unstatable"])
+def test_an_unusable_agentteams_brief_beside_a_root_brief_fails_the_pin_check(t3, tmp_path, capsys, case) -> None:
+    root, team, signers, sha = t3
+    if case == "unstatable" and (os.name != "posix" or os.geteuid() == 0):
+        pytest.skip("chmod does not bind root")
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "s10_cooldown_exempt_repos": []}))
+    (root / ".agentteams").mkdir(exist_ok=True)
+    brief = root / ".agentteams" / "brief.json"
+    if case == "dangling":
+        brief.symlink_to(tmp_path / "gone.json")
+    elif case == "symlink":
+        (tmp_path / "real.json").write_text(json.dumps({"s10_cooldown_exempt_repos": []}))
+        brief.symlink_to(tmp_path / "real.json")
+    else:
+        brief.write_text("{}")
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")      # verifies: only the brief can fail the run
+    with (_locked(root / ".agentteams") if case == "unstatable" else contextlib.nullcontext()):
+        assert _run_pin(_pin_args(team, lock, signers)) == 1
+    err = capsys.readouterr().err
+    assert ("is not this project's brief" in err) if case != "unstatable" else ("cannot be read" in err)
+
+
+def test_branch_model_refuses_and_multi_sync_warns_on_an_unusable_brief(tmp_path, capsys) -> None:
+    """branch_model raises (reading trunk would drop the integration branch's protection); multi_sync warns."""
+    from agentteams import branch_model, multi_sync
+
+    (tmp_path / "brief.json").write_text(json.dumps({"project_name": "x", "privilege_profile": "confined"}))
+    (tmp_path / ".agentteams").mkdir()
+    (tmp_path / ".agentteams" / "brief.json").symlink_to(tmp_path / "gone.json")
+    with pytest.raises(ValueError, match="is not this project's brief"):
+        branch_model.integration_branch_from_project(tmp_path)
+    assert multi_sync._read_brief_privilege(tmp_path) == {}
+    assert "is not this project's brief" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("content", ["{broken", "[]"])
+def test_branch_model_refuses_an_unparseable_brief(tmp_path, content) -> None:
+    from agentteams import branch_model
+
+    (tmp_path / "brief.json").write_text(content)
+    with pytest.raises(ValueError, match="brief"):
+        branch_model.integration_branch_from_project(tmp_path)
+    (tmp_path / "empty").mkdir()
+    assert branch_model.integration_branch_from_project(tmp_path / "empty") is None   # no brief at all: trunk
+
+
+def test_a_brief_reached_through_a_symlinked_dir_outside_the_project_fails_the_pin_check(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "brief.json").write_text(json.dumps({"s10_cooldown_exempt_repos": []}))
+    (root / ".agentteams").symlink_to(outside, target_is_directory=True)
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "outside the project" in capsys.readouterr().err

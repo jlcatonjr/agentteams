@@ -187,6 +187,24 @@ carries no marker; a signed marker is planned for the next grant schema version.
 
 ## Advisories
 
+### 2026-11-21 — Python 3.14: an unreadable team dir, decisions log or signing switch hides HALTs (agentteams < 1.3.0)
+
+**Affected:** agentteams before 1.3.0 running on **Python 3.14**. That includes 1.2.x. **Severity:** high: a
+security check fails open.
+
+From Python 3.14, `Path.is_dir()`, `exists()` and `is_symlink()` return `False` on *any* `OSError` (3.13 raised
+`PermissionError`). So a team dir, `references/security-decisions.log.csv` or `references/agent-privilege.json` that
+can't be stat'd reads as absent. Examples are a dir under `chmod 000`, or a parent without search permission. Its
+HALTs are then skipped in ordinary preflight `check_clearance` runs and in the S-10 cooldown-exemption gate, and an
+unreadable signing switch reads as "not governed".
+
+**agentteams' response:** 1.3.0 uses `lstat`, and treats only "not there" (`FileNotFoundError`,
+`NotADirectoryError`) as absent. Anything else refuses (#588, #598).
+
+**Action:** upgrade to 1.3.0. Until then, run agentteams on Python 3.13. Or, before every preflight or signing
+check, run `test -r DIR && test -x DIR` on each team dir and `test -r` on its decisions log and
+`agent-privilege.json`, and stop if any test fails. Details: `docs_src/known-limitations.md`.
+
 ### 2026-10-01 — Claude Code sandbox.excludedCommands is not a safe boundary (2.1.251)
 
 **Affected:** any project whose live `.claude/settings.json` sets `sandbox.excludedCommands`,

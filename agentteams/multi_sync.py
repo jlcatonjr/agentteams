@@ -197,11 +197,14 @@ def _read_brief_privilege(root: Path) -> dict[str, Any]:
     SEV-3#1). Returns ``{}`` when there is no brief, the profile is cooperative/absent, or the
     file is unreadable (projection then emits no boundary, exactly as before — fail safe).
     """
-    from agentteams.fleet import _resolve_descriptor
+    from agentteams.memory_index_surfaces import brief_candidate, brief_unusable_reason
 
     root = Path(root)
-    path = _resolve_descriptor(root)
-    if path is None or path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+    if (reason := brief_unusable_reason(root)) is not None:
+        print(f"warning: {reason}; no sandbox boundary is projected from it.", file=sys.stderr)
+        return {}
+    path = brief_candidate(root)
+    if path is None:
         return {}
     try:
         brief = json.loads(path.read_text(encoding="utf-8"))

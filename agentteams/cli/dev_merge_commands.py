@@ -19,13 +19,13 @@ from agentteams.cli.toolchain_group_commands import _resolve, _team_id
 
 
 def _integration_branch(root: Path) -> str | None:
-    """The brief's integration branch, or None (trunk, no brief, or a malformed block: refused, never guessed)."""
+    """The brief's integration branch, or None (trunk, or no brief; an unusable brief or malformed block is refused, never guessed)."""
     from agentteams.branch_model import integration_branch_from_project
 
     try:
         return integration_branch_from_project(root)
     except ValueError as exc:
-        print(f"Error: the brief's git_workflow block is malformed ({exc}).", file=sys.stderr)
+        print(f"Error: the brief cannot give the integration branch ({exc}); refusing.", file=sys.stderr)
         return None
 
 
