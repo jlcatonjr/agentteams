@@ -223,14 +223,20 @@ def _resolve_descriptor(ws: Path) -> Path | None:
         ws / "brief.json",
         ws / ".github" / "agents" / "_build-description.json",
     ):
-        try:
-            cand.lstat()
-        except (FileNotFoundError, NotADirectoryError):
-            continue
-        except OSError:
-            return cand  # there, but cannot be stat'd: the reader reports it (fail-closed)
-        return cand
+        if _is_there(cand):
+            return cand
     return None
+
+
+def _is_there(path: Path) -> bool:
+    """True unless *path* is absent (``lstat``: a dangling symlink, or one that cannot be stat'd, is there)."""
+    try:
+        path.lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError:
+        return True  # there, but cannot be stat'd: the reader reports it (fail-closed)
+    return True
 
 
 def _claude_kind(ws: Path) -> str:
