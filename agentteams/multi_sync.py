@@ -196,7 +196,8 @@ def _read_brief_privilege(root: Path) -> dict[str, Any]:
     SEV-3#1). Returns ``{}`` when there is no brief or the profile is cooperative/absent.
 
     Raises:
-        ValueError: A brief is there but cannot be used (a symlink, outside ``root``, unreadable or not JSON):
+        ValueError: A brief is there but cannot be used (a symlink, outside ``root``, unreadable, not a JSON object,
+            or naming another project in ``existing_project_path``):
             projecting no boundary would silently drop a later brief's profile (IM-da review of #603).
     """
     from agentteams.memory_index_surfaces import brief_candidate, brief_problem
@@ -207,9 +208,7 @@ def _read_brief_privilege(root: Path) -> dict[str, Any]:
     path = brief_candidate(root)
     if path is None:
         return {}
-    brief = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(brief, dict):
-        return {}
+    brief = json.loads(path.read_text(encoding="utf-8"))  # brief_problem has already refused a non-object
     if "privilege_profile" not in brief and path != root / ".agentteams" / "brief.json":
         return {}
     # Normalize through the SAME default as generation (a missing key → confined as of
