@@ -6,6 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (`wasm_session` no longer accepts a run id or commit id with a trailing newline)
+
+- **What is newly refused:** two name checks in `agentteams.wasm_session` used `^...$` with `re.match`. In Python, `$`
+  also matches just before a final newline, so each check accepted one trailing `\n`. Both now use `fullmatch`:
+  - The run-directory reaper (`reap_stale_runs`) only removes a directory whose whole name is 16 lowercase hex
+    characters. Before, a directory named that way plus a newline could also be removed, if it was old enough and its
+    owner was gone.
+  - `agentteams_commit()` returns `None` for a recorded `commit_id` (PEP 610 `direct_url.json`, or the git-file
+    fallback) that is not exactly 40 lowercase hex characters. Before, a trailing newline was kept in the value it
+    returned.
+- **Migration:** none. `secrets.token_hex(8)` never makes such a directory name, and git never writes such a commit
+  id. Output shapes are unchanged. `wasm_session` is still beta; this follows STABILITY's security-tightening clause.
+
+### feat (Rule S-10: a signed brief field that renders the release cooldown as deprecated, #592)
+
+- New brief field `s10_cooldown_deprecated` (boolean). When authorized, the render shows Rule S-10's 14-day
+  package-release cooldown as deprecated in:
+  - the security agent;
+  - the vulnerability-watch reference's prevention playbook;
+  - the instructions files.
+- The known-vulnerability search (OSV `MAL-*` included), Rule S-9's identity check, the latest-stable rule and the
+  vulnerability-scan remediation carve-out are unchanged. The remaining cooldown clauses stay, each marked moot, so a
+  lapse or a HALT restores them.
+- New gate, `cli/s10_deprecation_gate` (Rule 15), for the action `s10-cooldown-deprecated`:
+  - **Governed workspace:** the brief value alone deprecates nothing. It renders only with the operator's
+    Ed25519-signed decision (`scope` and `effect_relaxes` equal to the action, no `effect_grants`), registered under
+    the aggregate cap. Its 90-day sunset counts from the signed row's own timestamp, never from the registry's
+    unsigned `expires`, and the operator re-signs it.
+  - **HALTs:** an unretracted HALT on any `s10-cooldown` or `s10-toolchain-group` action, in the canonical
+    `.github/agents` or any surface's log, removes it. That includes a HALT on a single exempt repository. A
+    retraction clears only the HALT whose exact id it names, never a sibling's.
+  - **Ungoverned workspace:** the brief value applies, with a notice (operator ruling T3, extended to this field
+    2026-11-21).
+  - **Refusals:** a refusal, a lapse or an unreadable signing switch renders the cooldown in force. It never stops
+    the render.
+- Unchanged: agentteams' own wasm runtime pin tool (`--wasm-pin-update`) keeps its built-in 14-day check, and the
+  vulnscan and server-kit code is not touched.
+- `s10-cooldown-deprecated` joins `GATE_ACTIONS`. The bare `s10-cooldown` is a HALT family only, never a clearable
+  action.
+
 ### security (upgrade note: Python 3.14 and agentteams before 1.3.0)
 
 - **Teams on Python 3.14 running agentteams < 1.3.0 are exposed to a fail-open.** From 3.14, `Path.is_dir()`,
