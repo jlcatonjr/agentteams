@@ -271,7 +271,7 @@
     "agentteams/wasm_pins.py": "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df",
     "agentteams/wasm_policy.py": "9c38b8c804824f11acc873d817712aa02b707a3faab70499d84b494eaa5a4d73",
     "agentteams/wasm_runtime.py": "40a40f12ec89a93aa8bf5ef3161be548adac3f15eb3f48a930fde5c22c436cce",
-    "agentteams/wasm_session.py": "8b7187646f6878f06cd21bdab6f318ccfcd758dad8b7ce91a9f2506531a6c613",
+    "agentteams/wasm_session.py": "cb5fac017c410be4349ab316c761de214c0f8debbba87713c23102e296a1fd2d",
     "agentteams/whole_body_migration.py": "b5cfa8668f3b80d23db42849e8c13132822f50057470f80f6ecf2dc6918a3cc9",
     "agentteams/write_policy.py": "18f8807cb5cf714c175149f5a7dddfd9ca63ebc5986bb818537096f1c37a58c6"
   },
