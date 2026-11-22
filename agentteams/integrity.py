@@ -367,6 +367,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out
+    "agentteams/cli/s10_deprecation_gate.py",    # Rule 15: the Ed25519 gate for the S-10 cooldown deprecation (#592)
     "agentteams/cli/toolchain_group.py",         # First-party toolchain group: the signed first-party toolchain group (S-10)
     "agentteams/cli/dev_merge.py",               # the signed integration-branch merge authorization and --merge-pr
     "agentteams/cli/dev_merge_commands.py",      # resolves the governance dir (verify-key store) for --merge-pr

@@ -650,6 +650,9 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "output_files": output_files,
         **{key: description.get(key) or [] for key in _LIST_PASSTHROUGH_KEYS},  # read directly, as given
         "project_rules_source": description.get("project_rules_source") or "",  # rules_projection's source
+        # Rule S-10 cooldown deprecation request (agentteams#592): strictly the boolean True, anything else is False.
+        # Only cli/s10_deprecation_gate turns it into s10_cooldown_deprecated_authorized, which the render reads.
+        "s10_cooldown_deprecated": description.get("s10_cooldown_deprecated") is True,
     }
     # MCP-suitability detection (report §5). Advisory only — populated solely
     # when the description declares mcp_hints, so manifests for projects without
