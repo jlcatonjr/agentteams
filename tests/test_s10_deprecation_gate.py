@@ -314,17 +314,25 @@ def _retraction(halt_id: str, *, stamp: str = "2026-11-23", scope: str | None = 
     ("s10-cooldown-exempt", "s10-cooldown-exempt:o/b"),
 ])
 def test_a_sibling_retraction_does_not_clear_a_family_halt(tmp_path, stub_ed25519, monkeypatch, halt, sibling) -> None:
-    """Blocker 1 (IM-da's probe): one authentic, unscoped retraction of a sibling clears the whole family in the core
-    scan; only a retraction naming a HALT's exact id clears it for this gate."""
+    """Blocker 1 (IM-da's probe): one authentic, unscoped retraction of a sibling must not clear the family. Since
+    #596 the core scan refuses it too; this gate keeps its own exact-id scan as defence in depth (OD7), so each layer
+    is checked here with the other switched off."""
     def build(sub: str) -> Path:
         team = _team(tmp_path / sub)
         _log(team, _row(halt, verdict="HALT", stamp="2026-11-20"), _row(sibling, verdict="HALT", stamp="2026-11-21"),
              _retraction(sibling, scope=""), _row(_ACTION, stamp="2026-11-21"))   # the signed row comes last
         return team
-    assert gate.authorized_deprecation(build("fixed"), True, consume=True, now=_T0) is None
-    # Negative control: without this gate's exact-id scan, the probe reproduces (the core scan alone passes it).
+    assert gate.authorized_deprecation(build("both"), True, consume=True, now=_T0) is None
+    with monkeypatch.context() as m:   # the gate's exact-id scan alone
+        m.setattr(gate.security_gate, "_assert_no_unretracted_halt", lambda halt_dir, action: None)
+        assert gate.authorized_deprecation(build("gate-only"), True, consume=True, now=_T0) is None
+    with monkeypatch.context() as m:   # the core scan alone (#596)
+        m.setattr(gate, "_assert_no_open_family_halt", lambda halt_dir: None)
+        assert gate.authorized_deprecation(build("core-only"), True, consume=True, now=_T0) is None
+    # Positive control: with both layers off, the same log authorizes, so the refusals above come from the scans.
+    monkeypatch.setattr(gate.security_gate, "_assert_no_unretracted_halt", lambda halt_dir, action: None)
     monkeypatch.setattr(gate, "_assert_no_open_family_halt", lambda halt_dir: None)
-    assert gate.authorized_deprecation(build("core-only"), True, consume=True, now=_T0) == "signed"
+    assert gate.authorized_deprecation(build("neither"), True, consume=True, now=_T0) == "signed"
 
 
 def test_an_exact_retraction_clears_its_halt(tmp_path, stub_ed25519) -> None:
