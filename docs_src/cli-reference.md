@@ -947,9 +947,9 @@ written to `<backup>/<rel_path>.lost.<sid>.md.agentteams-bak` (the backup is tak
 automatically before the merge) and the shrink Notice is annotated
 with `— recovery: <sidecar-path>` so the operator can recover
 dropped hand-edits without diffing the whole-file backup. The fence
-allowlist `_LIVE_DATA_FENCES` (`threat_intelligence`, `threat_data`)
+allowlist `_LIVE_DATA_FENCES` (`threat_intelligence`, `threat_data`, `framework_data`)
 is exempt — those fences are filled each run from live CISA KEV /
-NVD / OSV feeds; CVE rotation is expected.
+NVD / OSV feeds or the framework-research snapshot; their rotation is expected.
 
 ### `--target-host-features TOKENS`
 
