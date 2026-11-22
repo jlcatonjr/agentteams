@@ -59,7 +59,7 @@ STDERR_TAIL = 4096
 _CHUNK = 1 << 16
 #: The reaper: run-directory names ``secrets.token_hex(8)`` makes, the age floor (longer than any session can
 #: live: 3600 s engine + 120 s grace + 60 s EOF grace + slack) and the most directories removed per start.
-_RUN_ID_RE = re.compile(r"^[0-9a-f]{16}$", re.ASCII)
+_RUN_ID_RE = re.compile(r"[0-9a-f]{16}", re.ASCII)   # fullmatch only: "$" would admit a trailing newline
 REAP_MIN_AGE_S, REAP_MAX = 3840, 16
 OWNER_FILE = "owner"
 
@@ -619,7 +619,7 @@ def reap_stale_runs(project_root: str | Path, profiles: ModuleType) -> list[str]
             st = os.lstat(path)
         except OSError:
             st = None
-        if not _RUN_ID_RE.match(name) or st is None or not stat.S_ISDIR(st.st_mode):
+        if not _RUN_ID_RE.fullmatch(name) or st is None or not stat.S_ISDIR(st.st_mode):
             continue
         if now - st.st_mtime < REAP_MIN_AGE_S or not _owner_dead(path):
             continue
@@ -843,12 +843,12 @@ def agentteams_commit() -> str | None:
         commit = json.loads(raw).get("vcs_info", {}).get("commit_id") if raw else None
     except (ValueError, AttributeError):
         commit = None
-    if not (isinstance(commit, str) and _SHA_RE.match(commit)):
+    if not (isinstance(commit, str) and _SHA_RE.fullmatch(commit)):
         commit = update_lock.agentteams_commit()
-    return commit if _SHA_RE.match(commit) else None
+    return commit if isinstance(commit, str) and _SHA_RE.fullmatch(commit) else None
 
 
-_SHA_RE = re.compile(r"^[0-9a-f]{40}$", re.ASCII)
+_SHA_RE = re.compile(r"[0-9a-f]{40}", re.ASCII)   # fullmatch only, as _RUN_ID_RE
 
 
 def _version() -> str:

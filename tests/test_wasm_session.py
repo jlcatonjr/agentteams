@@ -445,6 +445,31 @@ def test_the_commit_is_a_full_sha_or_none() -> None:
     assert commit is None or (len(commit) == 40 and all(c in "0123456789abcdef" for c in commit))
 
 
+class _Dist:
+    def __init__(self, commit: str) -> None:
+        self._raw = json.dumps({"url": "https://example.invalid/x", "vcs_info": {"vcs": "git", "commit_id": commit}})
+
+    def read_text(self, name: str) -> str | None:
+        return self._raw if name == "direct_url.json" else None
+
+
+@pytest.mark.parametrize("fallback", ["", "f" * 40 + "\n", "F" * 40])
+def test_a_malformed_commit_id_is_refused_from_either_source(monkeypatch: pytest.MonkeyPatch, fallback: str) -> None:
+    """``^...$`` with ``match`` admitted ``<40 hex>\\n``; ``fullmatch`` refuses it, from either source."""
+    from importlib import metadata
+
+    from agentteams import update_lock
+    monkeypatch.setattr(metadata, "distribution", lambda name: _Dist("a" * 40 + "\n"))
+    monkeypatch.setattr(update_lock, "agentteams_commit", lambda: fallback)
+    assert S.agentteams_commit() is None
+
+
+def test_a_well_formed_recorded_commit_is_returned(monkeypatch: pytest.MonkeyPatch) -> None:
+    from importlib import metadata
+    monkeypatch.setattr(metadata, "distribution", lambda name: _Dist("a" * 40))
+    assert S.agentteams_commit() == "a" * 40
+
+
 # --- the reaper (S5) ---------------------------------------------------------------------------------------------
 
 def _run_dir(base: Path, name: str, *, age: float, owner: str | None) -> Path:
@@ -502,6 +527,18 @@ def test_a_symlinked_owner_file_is_not_followed(tmp_path: Path) -> None:
     old = time.time() - 5000
     os.utime(d, (old, old))
     assert S.reap_stale_runs(root, SP) == [str(d)] and pidfile.exists()
+
+
+@pytest.mark.parametrize("name", ["a" * 16 + "\n", "A" * 16, "a" * 17, "a" * 15])
+def test_the_reaper_needs_the_whole_name_to_be_a_run_id(tmp_path: Path, name: str) -> None:
+    """``^...$`` with ``match`` admitted ``<16 hex>\\n``; the reaper now leaves every near-miss alone."""
+    root = project(tmp_path)
+    base = root / ".agentteams" / "wasm" / "exec"
+    try:
+        d = _run_dir(base, name, age=5000, owner="999999999\n")
+    except OSError:
+        pytest.skip("this filesystem refuses the name")
+    assert S.reap_stale_runs(root, SP) == [] and d.exists()
 
 
 # --- live (dev wasmtime) -----------------------------------------------------------------------------------------

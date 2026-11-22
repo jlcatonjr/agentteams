@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (`wasm_session` no longer accepts a run id or commit id with a trailing newline)
+
+- **What is newly refused:** two name checks in `agentteams.wasm_session` used `^...$` with `re.match`. In Python, `$`
+  also matches just before a final newline, so each check accepted one trailing `\n`. Both now use `fullmatch`:
+  - The run-directory reaper (`reap_stale_runs`) only removes a directory whose whole name is 16 lowercase hex
+    characters. Before, a directory named that way plus a newline could also be removed, if it was old enough and its
+    owner was gone.
+  - `agentteams_commit()` returns `None` for a recorded `commit_id` (PEP 610 `direct_url.json`, or the git-file
+    fallback) that is not exactly 40 lowercase hex characters. Before, a trailing newline was kept in the value it
+    returned.
+- **Migration:** none. `secrets.token_hex(8)` never makes such a directory name, and git never writes such a commit
+  id. Output shapes are unchanged. `wasm_session` is still beta; this follows STABILITY's security-tightening clause.
+
 ### feat (Rule S-10: a signed brief field that renders the release cooldown as deprecated, #592)
 
 - New brief field `s10_cooldown_deprecated` (boolean). When authorized, the render shows Rule S-10's 14-day
