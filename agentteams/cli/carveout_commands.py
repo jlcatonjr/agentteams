@@ -21,15 +21,21 @@ from agentteams.cli.clearance_binding import check_file_clearance, clearance_act
 
 
 def _frozen(root: Path) -> object:
-    from agentteams.memory_index_surfaces import resolve_brief
+    """The brief's ``frozen_surfaces``, or None when there is no brief.
 
+    Raises:
+        ValueError: A brief is there but cannot be used: reading it as "nothing frozen" would write into a frozen
+            surface (IM-da review of #603).
+    """
+    from agentteams.memory_index_surfaces import brief_problem, resolve_brief
+
+    if (problem := brief_problem(root)) is not None:
+        raise ValueError(f"{problem}; its frozen_surfaces cannot be read (fail-closed)")
     found = resolve_brief(root)
     if found is None:
         return None
-    try:
-        return json.loads(found.read_text(encoding="utf-8")).get("frozen_surfaces")
-    except (OSError, ValueError):
-        return None
+    data = json.loads(found.read_text(encoding="utf-8"))
+    return data.get("frozen_surfaces") if isinstance(data, dict) else None
 
 
 def _print_report(report, *, dry_run: bool) -> bool:
@@ -102,7 +108,12 @@ def run_verify_carveouts(project_dir: str | None) -> int:
         0 when everything is in order; 1 otherwise.
     """
     root = Path(project_dir or ".").resolve()
-    result = verify(root, frozen=_frozen(root))
+    try:
+        frozen = _frozen(root)
+    except (OSError, ValueError) as exc:
+        print(f"  ✗  carve-outs not verified: {exc}", file=sys.stderr)
+        return 1
+    result = verify(root, frozen=frozen)
     print(f"  workspace ids: {', '.join(sorted(result.workspace_ids)) or 'none derivable'}")
     try:
         registry = load_registry(root)

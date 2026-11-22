@@ -140,11 +140,14 @@ def run_sync_project_rules(project: str | None, *, dry_run: bool = False) -> int
     """
     import json
 
-    from agentteams.memory_index_surfaces import resolve_brief
+    from agentteams.memory_index_surfaces import brief_problem, resolve_brief
 
     root = Path(project or ".").resolve()
     if root != Path.cwd().resolve():
         print(f"  ✗  --sync-project-rules writes only the project it runs in; run it from {root}.", file=sys.stderr)
+        return 1
+    if (problem := brief_problem(root)) is not None:  # never "nothing frozen" for an unusable brief (#603 review)
+        print(f"  ✗  {problem}; its frozen_surfaces cannot be read, so nothing is written.", file=sys.stderr)
         return 1
     brief: dict = {}
     found = resolve_brief(root)

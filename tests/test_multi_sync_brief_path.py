@@ -53,20 +53,28 @@ def test_the_agentteams_brief_wins_over_the_root_brief(tmp_path: Path) -> None:
     assert ms._read_brief_privilege(tmp_path) == {}
 
 
-@pytest.mark.parametrize("text", ["{not json", "[1, 2]", json.dumps({"privilege_profile": "cooperative"})])
-def test_an_unreadable_or_cooperative_root_brief_projects_no_boundary(tmp_path: Path, text: str) -> None:
-    (tmp_path / "brief.json").write_text(text, encoding="utf-8")
+def test_a_cooperative_root_brief_projects_no_boundary(tmp_path: Path) -> None:
+    (tmp_path / "brief.json").write_text(json.dumps({"privilege_profile": "cooperative"}), encoding="utf-8")
     assert ms._read_brief_privilege(tmp_path) == {}
 
 
+@pytest.mark.parametrize("text", ["{not json", "[1, 2]"])
+def test_an_unreadable_root_brief_refuses_rather_than_projecting_no_boundary(tmp_path: Path, text: str) -> None:
+    """IM-da review of #603: a brief that is there but unusable never reads as "no boundary"."""
+    (tmp_path / "brief.json").write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="sync stops"):
+        ms._read_brief_privilege(tmp_path)
+
+
 @pytest.mark.parametrize("inside", [False, True])
-def test_a_symlinked_brief_is_ignored(tmp_path: Path, inside: bool) -> None:
+def test_a_symlinked_brief_refuses(tmp_path: Path, inside: bool) -> None:
     repo = tmp_path / "repo"
     real = repo / "docs" / "real.json" if inside else tmp_path / "outside.json"
     _brief(real, {"privilege_profile": "confined"})
     repo.mkdir(exist_ok=True)
     (repo / "brief.json").symlink_to(real)
-    assert ms._read_brief_privilege(repo) == {}
+    with pytest.raises(ValueError, match="sync stops"):
+        ms._read_brief_privilege(repo)
 
 
 def test_projection_never_writes_outside_the_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,3 +104,46 @@ def test_sync_init_projects_the_boundary_from_a_root_brief(tmp_path: Path) -> No
     assert (tmp_path / ".goose" / "sandbox.sb").is_file()
     team = json.loads((tmp_path / ".agentteams" / "canonical" / "team.cai.json").read_text())
     assert team.get("privilege", {}).get("privilege_profile") == "confined"
+
+
+# --- @security review of 93de1c7f: an unusable shadowing brief stops sync before anything is written ------------
+
+def _team(root: Path) -> None:
+    ad = root / ".claude" / "agents"
+    ad.mkdir(parents=True)
+    (ad / "orchestrator.md").write_text(
+        "---\nname: orchestrator\ndescription: The orchestrator.\n---\n\n# Orchestrator\n\nBody.\n", encoding="utf-8")
+
+
+def _snapshot(root: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(root)): (p.read_bytes() if p.is_file() else b"")
+            for p in sorted(root.rglob("*")) if not p.is_symlink()}
+
+
+@pytest.mark.parametrize("shadow", ["dangling", "foreign"])
+def test_sync_init_refuses_an_unusable_shadowing_brief_and_writes_nothing(tmp_path: Path, shadow: str) -> None:
+    _team(tmp_path)
+    _brief(tmp_path / "brief.json", {"project_name": "T", "privilege_profile": "confined"})
+    (tmp_path / ".agentteams").mkdir()
+    if shadow == "dangling":
+        (tmp_path / ".agentteams" / "brief.json").symlink_to(tmp_path / "gone.json")
+    else:
+        _brief(tmp_path / ".agentteams" / "brief.json", {"project_name": "X", "existing_project_path": "../elsewhere"})
+    before = _snapshot(tmp_path)
+    with pytest.raises(ValueError, match="sync stops"):
+        ms.sync_init(tmp_path, pin="claude", frameworks=["claude", "goose"])
+    assert _snapshot(tmp_path) == before          # no canonical dir, no pin, no .goose projection
+
+
+def test_run_sync_refuses_an_unusable_shadowing_brief_and_writes_nothing(tmp_path: Path) -> None:
+    _team(tmp_path)
+    _brief(tmp_path / "brief.json", {"project_name": "T", "privilege_profile": "confined"})
+    ms.sync_init(tmp_path, pin="claude", frameworks=["claude", "goose"])
+    (tmp_path / ".claude" / "agents" / "orchestrator.md").write_text(
+        "---\nname: orchestrator\ndescription: Changed.\n---\n\n# Orchestrator\n\nNew body.\n", encoding="utf-8")
+    (tmp_path / ".agentteams" / "brief.json").symlink_to(tmp_path / "gone.json")
+    before = _snapshot(tmp_path)
+    with pytest.raises(ValueError, match="sync stops"):
+        ms.run_sync(tmp_path)
+    assert _snapshot(tmp_path) == before
+

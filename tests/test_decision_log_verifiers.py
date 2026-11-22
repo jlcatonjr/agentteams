@@ -293,6 +293,86 @@ def test_a_scoped_exact_id_retraction_clears_its_halt(tmp_path):
     dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
 
 
+
+# --- #596 (OD7, 1.3.0): only a retraction of exactly the gate action clears its family; any other, its own id ----
+
+_FAM = "s10-cooldown-exempt"
+
+
+def _write_scoped(root: Path, rows: list[dict[str, str]]) -> None:
+    cols = _LEGACY_COLUMNS + ["scope"]
+    refs = root / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    with (refs / "security-decisions.log.csv").open("w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        for row in rows:
+            w.writerow({col: row.get(col, "") for col in cols})
+
+
+def _retract(action: str, **over: str) -> dict[str, str]:
+    return _row(action, "HALT-RETRACTED", conditions="no longer applies", timestamp="2026-02-01T00:00:00Z", **over)
+
+
+def test_a_member_retraction_leaves_the_family_halt_open(tmp_path):
+    _write_decisions_log(tmp_path, [_row(_FAM, "HALT"), _retract(f"{_FAM}:o/b")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_FAM)
+
+
+def test_a_member_retraction_leaves_a_sibling_halt_open(tmp_path):
+    _write_decisions_log(tmp_path, [_row(f"{_FAM}:o/a", "HALT"), _row(f"{_FAM}:o/b", "HALT"),
+                                    _retract(f"{_FAM}:o/b")])
+    for gate in (_FAM, f"{_FAM}:o/a"):
+        with pytest.raises(RuntimeError, match="HALT"):
+            dl._assert_no_unretracted_halt(tmp_path, action=gate)
+    dl._assert_no_unretracted_halt(tmp_path, action=f"{_FAM}:o/b")  # its own HALT is retracted
+
+
+def test_a_member_retraction_clears_its_own_halt_at_the_family_gate(tmp_path):
+    _write_decisions_log(tmp_path, [_row(f"{_FAM}:o/b", "HALT"), _retract(f"{_FAM}:o/b")])
+    dl._assert_no_unretracted_halt(tmp_path, action=_FAM)  # must not raise
+
+
+def test_a_member_retraction_never_clears_a_token_only_family_halt(tmp_path):
+    _write_decisions_log(tmp_path, [_row("m6-overwrite-render-x", "HALT"), _retract("overwrite-002")])
+    with pytest.raises(RuntimeError, match="never been retracted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+@pytest.mark.parametrize("scope", ["", f"{_FAM}:o/b"])
+def test_a_scoped_member_retraction_behaves_like_an_unscoped_one(tmp_path, scope):
+    _write_scoped(tmp_path, [{**_row(_FAM, "HALT"), "scope": ""}, {**_row(f"{_FAM}:o/b", "HALT"), "scope": ""},
+                             {**_retract(f"{_FAM}:o/b"), "scope": scope}])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_FAM)       # the family HALT stays open
+    _write_scoped(tmp_path, [{**_row(f"{_FAM}:o/b", "HALT"), "scope": ""}, {**_retract(f"{_FAM}:o/b"), "scope": scope}])
+    dl._assert_no_unretracted_halt(tmp_path, action=f"{_FAM}:o/b")  # its own HALT is retracted either way
+
+
+def test_a_member_retraction_scoped_to_its_own_id_clears_its_halt_at_the_family_gate(tmp_path):
+    """@security review of 1cd73b9b: before #596 the family-gate scope check refused this named retraction."""
+    _write_scoped(tmp_path, [{**_row(f"{_FAM}:o/b", "HALT"), "scope": ""},
+                             {**_retract(f"{_FAM}:o/b"), "scope": f"{_FAM}:o/b"}])
+    dl._assert_no_unretracted_halt(tmp_path, action=_FAM)  # must not raise
+
+
+@pytest.mark.parametrize(("halt", "retraction", "scope"), [
+    ("overwrite", "overwrite-retract", ""),           # a descriptive suffix is a member id, not the family
+    (f"{_FAM}:o/b", f"{_FAM}:o/b", _FAM),             # a member id scoped to the family: its scope does not permit it
+    (f"{_FAM}:o/a", f"{_FAM.upper()}:O/B", ""),       # case never turns a member into the family
+])
+def test_a_retraction_that_does_not_name_the_halt_leaves_it_open(tmp_path, halt, retraction, scope):
+    gate = halt.split(":")[0]
+    _write_scoped(tmp_path, [{**_row(halt, "HALT"), "scope": ""}, {**_retract(retraction), "scope": scope}])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=gate)
+
+
+def test_an_exact_family_retraction_ignores_case_and_whitespace(tmp_path):
+    _write_decisions_log(tmp_path, [_row(f"{_FAM}:o/a", "HALT"), _retract(f" {_FAM.upper()} ")])
+    dl._assert_no_unretracted_halt(tmp_path, action=_FAM)  # must not raise
+
 def test_the_pre_upgrade_report_names_newly_blocking_halts(tmp_path):
     from agentteams.cli.action_ids import describe_newly_blocking_halts, newly_blocking_halts
 

@@ -51,7 +51,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agentteams.cli import security_gate, toolchain_group
-from agentteams.cli.clearance_binding import lstat_or_none
+from agentteams.cli.clearance_binding import canonical_team_dirs, lstat_or_none
 from agentteams.cli.decision_log import _enforce_decision_signing
 from agentteams.cli.effect_classifier import EffectClassifierError, requires_operator_signature
 from agentteams.cli.exception_registry import (
@@ -251,11 +251,15 @@ def authorized_exempt_repos(team_dir: Path, repos: object, *, consume: bool,
         print(f"  ✗  S-10 carve-out: {', '.join(valid)} NOT exempted from the cooldown (the canonical "
               f"{CANONICAL_TEAM_DIR} signing switch can't be read: {exc}).", file=sys.stderr)
         return []
-    halt_dirs = (own,) if team_dir != own else ()
     if not _enforce_decision_signing(team_dir):
         print(f"  !  S-10 COOLDOWN CARVE-OUT: {', '.join(valid)} exempted from the release cooldown by the brief alone "
               "(this workspace is not governed, so no signed decision is required).", file=sys.stderr)
         return valid
+    try:
+        halt_dirs = _per_repo_halt_dirs(own, team_dir)
+    except RuntimeError as exc:  # a team dir that can't be stat'd could hide a HALT (C-2): not exempted
+        print(f"  ✗  S-10 carve-out: {', '.join(valid)} NOT exempted from the cooldown ({exc}).", file=sys.stderr)
+        return []
     when = now or datetime.now(UTC)
     kept: list[str] = []
     for repo in valid:
@@ -321,6 +325,29 @@ def _is_dir_strict(path: Path, what: str) -> bool:
             raise RuntimeError(f"{what} '{path}' is a symbolic link whose target cannot be read "
                                f"({exc.strerror or exc}); refusing (fail-closed)") from exc
     return stat.S_ISDIR(st.st_mode)
+
+
+def _per_repo_halt_dirs(own: Path, canonical: Path) -> tuple[Path, ...]:
+    """The team dirs besides *canonical* whose HALTs bind a per-repository exemption (#597, OD8).
+
+    *own* (the rendered dir) plus every team dir of the project: the union of :func:`_surface_dirs` and
+    :func:`~agentteams.cli.clearance_binding.canonical_team_dirs`, deduplicated and without *canonical*, as the
+    toolchain-group path and file clearances already bind them (scanning more dirs only adds HALTs).
+
+    Raises:
+        RuntimeError: A team dir, or a symlinked one's target, cannot be stat'd (see :func:`_is_dir_strict`).
+    """
+    root = _project_root_of(own)
+    found = [own] if root is None else [own, *_surface_dirs(root),
+                                        *(root / rel for rel in canonical_team_dirs()
+                                          if _is_dir_strict(root / rel, "team dir"))]
+    seen = {canonical.resolve()}
+    dirs: list[Path] = []
+    for path in found:
+        if path.resolve() not in seen:
+            seen.add(path.resolve())
+            dirs.append(path)
+    return tuple(dirs)
 
 
 def _surface_dirs(root: Path) -> tuple[Path, ...]:
