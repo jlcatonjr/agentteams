@@ -580,6 +580,7 @@ def build_security_placeholders(
     tools: list[str] | None = None,
     skip_nvd: bool = False,
     osv_ecosystem: str = "PyPI",
+    cooldown_deprecated: bool = False,
 ) -> dict[str, str]:
     """Build placeholders used by security templates.
 
@@ -590,6 +591,8 @@ def build_security_placeholders(
         tools: Optional list of project tool/package names for OSV lookup.
         skip_nvd: If True, skip NVD CVSS enrichment (saves ~35 s for 5 CVEs).
         osv_ecosystem: Package ecosystem for OSV.dev queries (default "PyPI").
+        cooldown_deprecated: True only when ``cli/s10_deprecation_gate`` authorized Rule S-10's cooldown
+            deprecation (agentteams#592); the playbook then renders it deprecated. Every other caller keeps it in force.
 
     Returns:
         Mapping of placeholder key -> rendered string values.
@@ -692,7 +695,7 @@ def build_security_placeholders(
 
     source_registry = _format_source_registry(sources)
     threat_summary = _format_threat_summary(vulnerabilities)
-    prevention = _format_prevention_playbook(vulnerabilities)
+    prevention = _format_prevention_playbook(vulnerabilities, cooldown_deprecated=cooldown_deprecated)
     llm_threats = _format_llm_threats(include_references=True)
     osv_summary = _format_osv_summary(osv_findings)
     control_evidence = _format_control_evidence_matrix(_CONTROL_EVIDENCE_ROWS)

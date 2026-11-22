@@ -97,9 +97,31 @@ def _format_threat_summary(vulns: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _format_prevention_playbook(vulns: list[dict]) -> str:
+#: Rule S-10's release-cooldown line of the prevention playbook, in force (the default) and deprecated.
+_S10_COOLDOWN_PLAYBOOK_LINE = (
+    "- Apply a package-release cooldown (default 14 days) before adopting a newly published release — every "
+    "ecosystem and installer, not only npm — so registry scanners can catch malicious releases first, and adopt only "
+    "the latest stable release that has cleared it (no pre-releases, yanked or older releases)."
+)
+_S10_REMEDIATION_PLAYBOOK_LINE = (
+    "- {rules} remediating a vulnerability the vulnerability scan detected: its fix release may be adopted at once, "
+    "and need not be the latest, once it passes the known-vulnerability search (OSV, including MAL-* entries) and its "
+    "identity checks out."
+)
+_S10_DEPRECATED_PLAYBOOK_LINE = (
+    "- The package-release cooldown is deprecated in this workspace (Rule S-10): adopt only the latest stable release "
+    "(no pre-releases, yanked or older releases), as soon as its exact name@version passes the known-vulnerability "
+    "search (OSV, including MAL-* entries) and its identity checks out."
+)
+
+
+def _format_prevention_playbook(vulns: list[dict], *, cooldown_deprecated: bool = False) -> str:
     """Render the prevention playbook from canonical-shape vulnerability records (see
-    _format_threat_summary's docstring for why these are canonical, not live-API, shape)."""
+    _format_threat_summary's docstring for why these are canonical, not live-API, shape).
+
+    *cooldown_deprecated* (True only when ``cli/s10_deprecation_gate`` authorized it, agentteams#592) replaces the
+    release-cooldown line with fixed deprecation text and drops the cooldown from the remediation line; the
+    vulnerability search and latest-stable wording are unchanged."""
     actions: list[str] = []
     for vuln in vulns:
         # Vendor/CISA-authored free text, rendered into the security agent's own file.
@@ -116,8 +138,9 @@ def _format_prevention_playbook(vulns: list[dict]) -> str:
         "- When patching is blocked, define compensating controls (WAF rules, ACL tightening, feature disablement).",
         "- Add detections for exploitation attempts and verify telemetry coverage for affected assets.",
         "- Before any package/module install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD, GitHub Advisories, `npm audit`/`pip-audit`) for known vulnerabilities in the exact name and version being adopted.",
-        "- Apply a package-release cooldown (default 14 days) before adopting a newly published release — every ecosystem and installer, not only npm — so registry scanners can catch malicious releases first, and adopt only the latest stable release that has cleared it (no pre-releases, yanked or older releases).",
-        "- Neither the cooldown nor the latest-stable rule ever blocks remediating a vulnerability the vulnerability scan detected: its fix release may be adopted at once, and need not be the latest, once it passes the known-vulnerability search (OSV, including MAL-* entries) and its identity checks out.",
+        _S10_DEPRECATED_PLAYBOOK_LINE if cooldown_deprecated else _S10_COOLDOWN_PLAYBOOK_LINE,
+        _S10_REMEDIATION_PLAYBOOK_LINE.format(rules="The latest-stable rule never blocks" if cooldown_deprecated
+                                              else "Neither the cooldown nor the latest-stable rule ever blocks"),
     ]
     if actions:
         base.append("- Vendor/CISA required actions:")
