@@ -454,7 +454,7 @@ class _Dist:
 
 
 @pytest.mark.parametrize("fallback", ["", "f" * 40 + "\n", "F" * 40])
-def test_a_commit_id_with_a_trailing_newline_is_refused(monkeypatch: pytest.MonkeyPatch, fallback: str) -> None:
+def test_a_malformed_commit_id_is_refused_from_either_source(monkeypatch: pytest.MonkeyPatch, fallback: str) -> None:
     """``^...$`` with ``match`` admitted ``<40 hex>\\n``; ``fullmatch`` refuses it, from either source."""
     from importlib import metadata
 
