@@ -190,23 +190,24 @@ def _read_brief_privilege(root: Path) -> dict[str, Any]:
     else the repository-root ``brief.json``, else the generated ``_build-description.json``). Reading only the
     first left every team whose brief is at the root without its sandbox/ on sync. A brief other than
     ``.agentteams/brief.json`` counts only when it sets ``privilege_profile`` itself: a stub or a foreign
-    ``brief.json`` that merely inherits the default never starts a sandbox rollout on sync. A brief that is a
-    symlink, or resolves outside ``root``, is ignored. Returns only the privilege fields, with
-    ``privilege_profile_explicit`` derived from whether the brief set the field (so the fail
+    ``brief.json`` that merely inherits the default never starts a sandbox rollout on sync. Returns only the
+    privilege fields, with ``privilege_profile_explicit`` derived from whether the brief set the field (so the fail
     -closed gate flip's explicit-opt-in contract is preserved across projection — audit
-    SEV-3#1). Returns ``{}`` when there is no brief, the profile is cooperative/absent, or the
-    file is unreadable (projection then emits no boundary, exactly as before — fail safe).
+    SEV-3#1). Returns ``{}`` when there is no brief or the profile is cooperative/absent.
+
+    Raises:
+        ValueError: A brief is there but cannot be used (a symlink, outside ``root``, unreadable or not JSON):
+            projecting no boundary would silently drop a later brief's profile (IM-da review of #603).
     """
-    from agentteams.fleet import _resolve_descriptor
+    from agentteams.memory_index_surfaces import brief_candidate, brief_problem
 
     root = Path(root)
-    path = _resolve_descriptor(root)
-    if path is None or path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+    if (problem := brief_problem(root)) is not None:  # no boundary would be projected: refuse (#603 review)
+        raise ValueError(f"{problem}; its privilege profile cannot be read, so the sync stops (fail-closed)")
+    path = brief_candidate(root)
+    if path is None:
         return {}
-    try:
-        brief = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+    brief = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(brief, dict):
         return {}
     if "privilege_profile" not in brief and path != root / ".agentteams" / "brief.json":
@@ -885,6 +886,7 @@ def run_sync(
             (see ``sync_hub_refresh.refuse_unsafe_pin_instructions``).
     """
     root = Path(root)
+    _read_brief_privilege(root)  # an unusable brief refuses before anything is written (#603 review)
     pin_doc = read_pin(root)
     if pin_doc is None:
         raise ValueError("project is not pinned — run sync_init first")

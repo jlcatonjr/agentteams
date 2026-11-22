@@ -191,19 +191,22 @@ def test_malformed_block_raises_and_the_inventory_refuses(repo):
         inventory(repo)
 
 
-def test_symlinked_or_outside_brief_is_ignored(tmp_path):
+def test_a_symlinked_or_outside_brief_is_refused_not_read_as_trunk(tmp_path):
+    """@security review of #599: reading trunk would drop the integration branch's protection silently."""
     outside = tmp_path / "outside.json"
     outside.write_text(json.dumps({"git_workflow": {"branch_model": "integration"}}))
     root = tmp_path / "proj"
     root.mkdir()
     (root / "brief.json").symlink_to(outside)
-    assert bm.integration_branch_from_project(root) is None
+    with pytest.raises(ValueError, match="is not this project's brief"):
+        bm.integration_branch_from_project(root)
 
 
-def test_unreadable_or_trunk_brief_names_no_integration_branch(tmp_path):
+def test_no_brief_or_a_trunk_brief_names_no_integration_branch_and_an_unparseable_one_refuses(tmp_path):
     assert bm.integration_branch_from_project(tmp_path) is None
     (tmp_path / "brief.json").write_text("{not json")
-    assert bm.integration_branch_from_project(tmp_path) is None
+    with pytest.raises(ValueError, match="cannot be read or parsed"):
+        bm.integration_branch_from_project(tmp_path)
     (tmp_path / "brief.json").write_text(json.dumps({"git_workflow": {"branch_model": "trunk"}}))
     assert bm.integration_branch_from_project(tmp_path) is None
 
