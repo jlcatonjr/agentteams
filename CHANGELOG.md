@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### chore (the integrity manifest pins the reinstalled constitutional-gate hooks)
+
+- `references/enforcement-integrity.json` pins `.claude/hooks/constitutional-gate.py` and
+  `.github/hooks/constitutional-gate.py` at `4ac32257…`, the template's own pin, after the operator reinstalled both
+  from the template. No code changes.
+
 ### security (`wasm_session` no longer accepts a run id or commit id with a trailing newline)
 
 - **What is newly refused:** two name checks in `agentteams.wasm_session` used `^...$` with `re.match`. In Python, `$`
