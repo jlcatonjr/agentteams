@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test -r` and `test -x` on each team dir, and `test -r` on its decisions log and `agent-privilege.json`. See
   `docs_src/known-limitations.md`.
 
-### security (a HALT retraction clears only the HALT it names; #596)
+### security (HALT retraction by exact id, HALTs from every team dir, fail-closed brief discovery; #596, #597, #599)
 
 - A `HALT-RETRACTED` row whose id was a member of a gate's family (for example `s10-cooldown-exempt:owner/b` at
   the `s10-cooldown-exempt` gate) was treated as a retraction of the whole family. Once authenticated, it cleared
@@ -38,9 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Callers that apply restrictions from the brief refuse a brief they cannot use, instead of reading it as "no
     restrictions": `--sync-carveouts` and `--verify-carveouts` (frozen surfaces), `--sync-project-rules`, and
     sandbox-sync projection (`multi_sync`, the privilege profile). That covers a symlinked or out-of-project brief,
-    and one that is unreadable, unparseable or not a JSON object. Before, an unusable `.agentteams/brief.json`
+    one that is unreadable, unparseable or not a JSON object, and one whose `existing_project_path` names another
+    project. Before, an unusable `.agentteams/brief.json`
     shadowing a restrictive root `brief.json` would have written into a frozen surface and projected no sandbox
-    boundary (IM review of #603).
+    boundary (IM-da review of #603).
 - **A HALT in any team dir binds a per-repository S-10 exemption (#597).** Without a verified toolchain group, the
   per-repository path read HALTs only from the canonical `.github/agents` and the dir being rendered. A HALT on
   `s10-cooldown-exempt` (or one repository) recorded in another surface, for example `.codex/agents`, did not stop a

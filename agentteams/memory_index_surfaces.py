@@ -31,7 +31,8 @@ _DELIVERABLE_DIRS: tuple[str, ...] = ("Projects", "docs")
 def brief_candidate(project_root: Path) -> Path | None:
     """The file fleet discovery would take as *project_root*'s brief, before it is parsed: None when there is none, or
     when it is a symlink or resolves outside *project_root*. :func:`resolve_brief` adds the parse and the
-    ``existing_project_path`` check; a caller that must fail closed on an unreadable brief uses this instead.
+    ``existing_project_path`` check. It returns None for a symlinked or out-of-project brief, so a caller that must
+    fail closed on a brief that is there but unusable uses :func:`brief_problem` (or :func:`brief_unusable_reason`).
 
     Args:
         project_root: The project root.

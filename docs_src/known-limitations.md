@@ -148,7 +148,7 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   them), and retract by the exact HALT id.
 - **Tracking:** #596; CHANGELOG 1.3.0.
 
-## Python 3.14: an unreadable team dir, decisions log or signing switch hid HALTs (agentteams < 1.3.0)
+### Python 3.14: an unreadable team dir, decisions log or signing switch hid HALTs (agentteams < 1.3.0)
 
 - **What:** from Python 3.14, `Path.is_dir()`, `exists()` and `is_symlink()` return `False` on *any* `OSError`
   (3.13 raised `PermissionError`). In agentteams before 1.3.0, a team dir, decisions log or
