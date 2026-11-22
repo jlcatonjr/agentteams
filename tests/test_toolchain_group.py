@@ -1065,3 +1065,104 @@ def test_a_canonical_dir_that_vanishes_between_stats_refuses(tmp_path, monkeypat
                         lambda p, what: None if Path(p).name == ".github" else real(p, what))  # the race, simulated
     with pytest.raises(RuntimeError, match="vanished"):
         gate.governance_team_dir(native)
+
+
+# --- @security review of #599 (76433d7e): an unusable discovered brief stops the pin check ------------------------
+
+@pytest.mark.parametrize("case", ["dangling", "symlink", "unstatable"])
+def test_an_unusable_agentteams_brief_beside_a_root_brief_fails_the_pin_check(t3, tmp_path, capsys, case) -> None:
+    root, team, signers, sha = t3
+    if case == "unstatable" and (os.name != "posix" or os.geteuid() == 0):
+        pytest.skip("chmod does not bind root")
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "s10_cooldown_exempt_repos": []}))
+    (root / ".agentteams").mkdir(exist_ok=True)
+    brief = root / ".agentteams" / "brief.json"
+    if case == "dangling":
+        brief.symlink_to(tmp_path / "gone.json")
+    elif case == "symlink":
+        (tmp_path / "real.json").write_text(json.dumps({"s10_cooldown_exempt_repos": []}))
+        brief.symlink_to(tmp_path / "real.json")
+    else:
+        brief.write_text("{}")
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")      # verifies: only the brief can fail the run
+    with (_locked(root / ".agentteams") if case == "unstatable" else contextlib.nullcontext()):
+        assert _run_pin(_pin_args(team, lock, signers)) == 1
+    err = capsys.readouterr().err
+    assert ("is not this project's brief" in err) if case != "unstatable" else ("cannot be read" in err)
+
+
+def test_branch_model_and_multi_sync_refuse_an_unusable_brief(tmp_path, capsys) -> None:
+    """branch_model raises (reading trunk would drop rule I1); multi_sync raises (no boundary would be projected)."""
+    from agentteams import branch_model, multi_sync
+
+    (tmp_path / "brief.json").write_text(json.dumps({"project_name": "x", "privilege_profile": "confined"}))
+    (tmp_path / ".agentteams").mkdir()
+    (tmp_path / ".agentteams" / "brief.json").symlink_to(tmp_path / "gone.json")
+    with pytest.raises(ValueError, match="is not this project's brief"):
+        branch_model.integration_branch_from_project(tmp_path)
+    with pytest.raises(ValueError, match="sync stops"):           # IM-da review of #603: refuse, not {}
+        multi_sync._read_brief_privilege(tmp_path)
+
+
+@pytest.mark.parametrize("content", ["{broken", "[]"])
+def test_branch_model_refuses_an_unparseable_brief(tmp_path, content) -> None:
+    from agentteams import branch_model
+
+    (tmp_path / "brief.json").write_text(content)
+    with pytest.raises(ValueError, match="brief"):
+        branch_model.integration_branch_from_project(tmp_path)
+    (tmp_path / "empty").mkdir()
+    assert branch_model.integration_branch_from_project(tmp_path / "empty") is None   # no brief at all: trunk
+
+
+def test_a_brief_reached_through_a_symlinked_dir_outside_the_project_fails_the_pin_check(t3, tmp_path, capsys) -> None:
+    root, team, signers, sha = t3
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "brief.json").write_text(json.dumps({"s10_cooldown_exempt_repos": []}))
+    (root / ".agentteams").symlink_to(outside, target_is_directory=True)
+    lock = tmp_path / "toolchain.lock"
+    lock.write_text(f"tk=acme/toolkit@{sha}\ntk.tag=v1.0.0\n")
+    assert _run_pin(_pin_args(team, lock, signers)) == 1
+    assert "outside the project" in capsys.readouterr().err
+
+
+# --- IM-da review of #603: restriction-bearing callers refuse an unusable brief, never read "no restrictions" -------
+
+def _shadowed_root_brief(root: Path, tmp_path: Path, case: str) -> contextlib.AbstractContextManager:
+    """A restrictive root brief.json shadowed by an unusable .agentteams/brief.json; returns the context to run in."""
+    (root / "brief.json").write_text(json.dumps({"project_name": "Consumer", "frozen_surfaces": [".claude"],
+                                                 "privilege_profile": "confined"}))
+    (root / ".agentteams").mkdir(exist_ok=True)
+    brief = root / ".agentteams" / "brief.json"
+    if case == "dangling":
+        brief.symlink_to(tmp_path / "gone.json")
+        return contextlib.nullcontext()
+    if case == "unparseable":
+        brief.write_text("{broken")
+        return contextlib.nullcontext()
+    if os.name != "posix" or os.geteuid() == 0:
+        pytest.skip("chmod does not bind root")
+    brief.write_text("{}")
+    return _locked(root / ".agentteams")
+
+
+@pytest.mark.parametrize("case", ["dangling", "unparseable", "unstatable"])
+def test_restriction_bearing_callers_refuse_a_shadowing_unusable_brief(tmp_path, monkeypatch, capsys, case) -> None:
+    from agentteams import multi_sync
+    from agentteams.cli.carveout_commands import _frozen, run_verify_carveouts
+    from agentteams.cli.post_build import run_sync_project_rules
+
+    root = tmp_path / "proj"
+    root.mkdir()
+    with _shadowed_root_brief(root, tmp_path, case):
+        with pytest.raises(ValueError, match="fail-closed"):
+            _frozen(root)                                         # never None ("nothing frozen")
+        assert run_verify_carveouts(str(root)) == 1
+        with pytest.raises(ValueError, match="sync stops"):
+            multi_sync._read_brief_privilege(root)                # never {} ("no boundary")
+        monkeypatch.chdir(root)
+        assert run_sync_project_rules(str(root)) == 1             # writes nothing
+    assert "frozen_surfaces cannot be read" in capsys.readouterr().err
+

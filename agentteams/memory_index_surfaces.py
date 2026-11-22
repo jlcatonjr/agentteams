@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from pathlib import Path
 
 _INDEX_REL = Path("references") / "memory-index.json"
@@ -41,9 +42,70 @@ def brief_candidate(project_root: Path) -> Path | None:
     from agentteams.fleet import _resolve_descriptor  # the canonical lookup (redteam F-3)
 
     path = _resolve_descriptor(project_root)
-    if path is None or path.is_symlink() or not path.resolve().is_relative_to(project_root.resolve()):
+    if path is None:
         return None
-    return path
+    try:
+        if stat.S_ISLNK(path.lstat().st_mode):
+            return None
+    except OSError:
+        return path  # there, but cannot be stat'd: returned so the reader reports it (not is_symlink(), #599)
+    return path if path.resolve().is_relative_to(project_root.resolve()) else None
+
+
+def brief_unusable_reason(project_root: Path) -> str | None:
+    """Why the brief fleet discovery found is not this project's, or None (none found, or it is usable).
+
+    Fleet discovery (:func:`agentteams.fleet._resolve_descriptor`) returns the first candidate that is there, so a
+    symlinked (dangling or not) or out-of-project ``.agentteams/brief.json`` shadows a later one. Callers that
+    reject it must say so rather than silently use no brief (@security review of #599).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        A short reason naming the path, or None.
+    """
+    from agentteams.fleet import _resolve_descriptor
+
+    path = _resolve_descriptor(project_root)
+    if path is None or brief_candidate(project_root) is not None:
+        return None
+    try:
+        kind = "a symbolic link" if stat.S_ISLNK(path.lstat().st_mode) else "outside the project"
+    except OSError as exc:
+        kind = f"unreadable ({exc.strerror or exc})"
+    return f"the brief {path} is {kind}, so it is not this project's brief (and the later candidates are not used)"
+
+
+def brief_problem(project_root: Path) -> str | None:
+    """Why the brief fleet discovery found cannot be used, or None (no brief, or a usable one).
+
+    For callers that apply restrictions from the brief (frozen surfaces, the privilege profile): since #599 an unusable
+    first candidate shadows the later ones, so treating it as "no brief" would silently drop the root brief's
+    restrictions. Such a caller refuses on a reason (IM-da review of #603).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        A short reason (a symlinked or out-of-project brief, one that cannot be read, parsed or is not a JSON
+        object, or one whose ``existing_project_path`` names another project), or None.
+    """
+    if (reason := brief_unusable_reason(project_root)) is not None:
+        return reason
+    path = brief_candidate(project_root)
+    if path is None:
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return f"the brief {path} cannot be read or parsed ({exc})"
+    if not isinstance(data, dict):
+        return f"the brief {path} is not a JSON object"
+    other = data.get("existing_project_path")
+    if isinstance(other, str) and other and (project_root / other).resolve() != project_root.resolve():
+        return f"the brief {path} names another project ({other!r}), so it is not this project's brief"
+    return None
 
 
 def resolve_brief(project_root: Path) -> Path | None:
@@ -231,4 +293,4 @@ def extra_files(manifest: dict, project_root: Path) -> list[Path]:
     return out
 
 
-__all__ = ["coverage_notices", "extra_files", "index_surfaces", "resolve_brief", "surface_dirs", "surface_framework"]
+__all__ = ["brief_problem", "brief_unusable_reason", "coverage_notices", "extra_files", "index_surfaces", "resolve_brief", "surface_dirs", "surface_framework"]

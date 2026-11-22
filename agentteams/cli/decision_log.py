@@ -877,17 +877,17 @@ def _open_halt_for(
     for index, row in enumerate(rows):
         reviewed = (row.get("action_reviewed") or row.get("decision") or "").strip()
         verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
-        family = action_matches(reviewed, target)
+        family, whole = action_matches(reviewed, target), reviewed.lower() == target.strip().lower()
         if verdict == "HALT" and (family or halt_names_action(reviewed, target)):
             open_halts.append((index, row, reviewed.lower(), not family))
         elif verdict == _HALT_RETRACTION_VERDICT and (
-            family or any(norm == reviewed.lower() for _, _, norm, _ in open_halts)
+            whole or any(norm == reviewed.lower() for _, _, norm, _ in open_halts)
         ):
-            # A family retraction is scoped to the gate action; an exact-id one to the HALT it names.
+            # Only a retraction of exactly the gate action clears its family; any other clears its own id (#596).
             try:
                 _assert_authorizing_row_is_authentic(
                     row, output_dir=output_dir, signing_active=signing_active,
-                    action=target if family else reviewed,
+                    action=target if whole else reviewed,
                 )
                 if not (row.get("evidence") or row.get("conditions") or "").strip():
                     raise RuntimeError(
@@ -899,7 +899,7 @@ def _open_halt_for(
                     skipped.append(f"row {index + 1} not accepted: {exc}")
                 continue
             open_halts = [h for h in open_halts
-                          if not ((family and not h[3]) or h[2] == reviewed.lower())]
+                          if not ((whole and not h[3]) or h[2] == reviewed.lower())]
     return (open_halts[0][0], open_halts[0][1]) if open_halts else None
 
 

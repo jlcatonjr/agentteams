@@ -6,6 +6,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (upgrade note: Python 3.14 and agentteams before 1.3.0)
+
+- **Teams on Python 3.14 running agentteams < 1.3.0 are exposed to a fail-open.** From 3.14, `Path.is_dir()`,
+  `exists()` and `is_symlink()` return `False` on any `OSError`. So a team dir, decisions log or signing switch that
+  cannot be stat'd read as absent, and its HALTs were skipped, in ordinary preflight `check_clearance` runs and in
+  the S-10 gate. 1.3.0 fixes this (#588, #598). Until you upgrade, run on Python 3.13, or check readability first:
+  `test -r` and `test -x` on each team dir, and `test -r` on its decisions log and `agent-privilege.json`. See
+  `docs_src/known-limitations.md`.
+
+### security (a HALT retraction clears only the HALT it names; #596)
+
+- A `HALT-RETRACTED` row whose id was a member of a gate's family (for example `s10-cooldown-exempt:owner/b` at
+  the `s10-cooldown-exempt` gate) was treated as a retraction of the whole family. Once authenticated, it cleared
+  the bare family HALT and every sibling's HALT at that gate (C-2). Now only a retraction of exactly the gate action
+  clears its family's HALTs, as before. Any other retraction clears only the HALT with its own id, and authenticates
+  against that id.
+- **A brief that is there but unreadable is never skipped (#599).** Fleet discovery (`fleet._resolve_descriptor`) and
+  `memory_index_surfaces.brief_candidate` used `Path.exists()` and `is_symlink()`. These raise on 3.13 and return
+  `False` on any `OSError` from 3.14. So a dangling or unreadable `.agentteams/brief.json` either crashed the caller or
+  silently fell through to the root `brief.json`. That included `--verify-toolchain-pin`'s brief discovery, where it
+  could drop the brief's `s10_cooldown_exempt_repos` from the check. Now the first candidate that is there wins, and
+  its reader reports the problem. `--verify-toolchain-pin` exits `1`.
+  A discovered brief that is a symlink, or resolves outside the project, now stops `--verify-toolchain-pin` too.
+  Before, the check ran as if there were no brief.
+  - The integration-branch lookup (`branch_model.integration_branch_from_project`) now refuses a brief it cannot
+    use, as it already did for a malformed `git_workflow` block. That covers a symlinked or out-of-project brief,
+    and one that is unreadable, unparseable or not a JSON object. Before, it read such a brief as trunk, which
+    silently dropped the integration branch's protection in `--branch-cleanup` and retargeted vulnerability-fix
+    PRs. No brief at all still means trunk.
+  - Callers that apply restrictions from the brief refuse a brief they cannot use, instead of reading it as "no
+    restrictions": `--sync-carveouts` and `--verify-carveouts` (frozen surfaces), `--sync-project-rules`, and
+    sandbox-sync projection (`multi_sync`, the privilege profile). That covers a symlinked or out-of-project brief,
+    and one that is unreadable, unparseable or not a JSON object. Before, an unusable `.agentteams/brief.json`
+    shadowing a restrictive root `brief.json` would have written into a frozen surface and projected no sandbox
+    boundary (IM review of #603).
+- **A HALT in any team dir binds a per-repository S-10 exemption (#597).** Without a verified toolchain group, the
+  per-repository path read HALTs only from the canonical `.github/agents` and the dir being rendered. A HALT on
+  `s10-cooldown-exempt` (or one repository) recorded in another surface, for example `.codex/agents`, did not stop a
+  new or carried-over exemption when another surface rendered. Now it binds HALTs from every team dir of the project,
+  the same set the toolchain-group path and file clearances use. A team dir that cannot be stat'd exempts nothing.
+- Upgrade note: a HALT that a member retraction had cleared blocks again; retract it by its own id. Two retraction
+  shapes no longer clear a family HALT: a descriptive-suffix id (`overwrite-retract` for an `overwrite` HALT) and a
+  member id scoped to the family (`scope=x`, id `x:o/b`). A member retraction scoped to its own id now clears its own
+  HALT at the family gate; before, that gate's scope check refused it.
+
 ### changed (`--verify-toolchain-pin` checks signed tags in every tier; there is no exit 2; #555)
 
 - Rule S-9's check now runs in a workspace without decision signing (T3), and in a governed one with no
