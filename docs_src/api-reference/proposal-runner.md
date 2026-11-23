@@ -12,9 +12,12 @@ and serves the orchestrator's queued requests.
 
 Live probes on macOS (2026-10-06) found two things:
 
-- **Environment keys leak.** A sandboxed child reads a same-user parent's exec-time environment through
-  `KERN_PROCARGS2`, and no Seatbelt rule stops it. So a key in an environment variable can't be protected,
-  while a key in a file whose directory the sandbox denies can.
+- **Environment keys leak.** On macOS, any same-user process that isn't an Apple platform binary exposes its
+  exec-time argv and environment through `KERN_PROCARGS2` to every same-user reader, sandboxed or not. This
+  isn't limited to a parent's environment, and no Seatbelt rule stops it: neither a `process-info*` deny nor a
+  blanket `sysctl-read` deny does (re-measured on Darwin 25.5, 2026-11-23). Platform binaries such as `/bin/zsh`
+  are hidden. So a key in an environment variable can't be protected, while a key in a file whose directory the
+  sandbox denies can.
 - **Sandboxes don't nest.** `sandbox-exec` can't apply a profile from inside an already-sandboxed process,
   so an orchestrator inside its session sandbox can't confine the commands it runs.
 
@@ -89,11 +92,19 @@ The runner refuses to start when:
   queue might be masked rather than refused, so `--check-wiring` refuses Linux until it is measured.
 - **Queue contents.** Under the emitted Claude settings, no agent in the session can read `.agentteams-queue/`
   (including the orchestrator). Without those settings, requests (and their reply keys) are readable.
+- **Codex: sealed results are not confidential.** The Codex launcher (`.codex/confined-run.example.sh`) protects
+  `.agentteams` and `.agentteams-status` but not `.agentteams-queue/`, because the orchestrator's CLI writes requests
+  there from inside the session. So any agent in a Codex session can read each request's `reply_key` and open the
+  sealed result. Integrity still holds: the status channel is read-only, so no agent can forge a result. A fix is
+  open (@security, 2026-11-23).
 - **Acks aren't bound to their requester.** Another agent can acknowledge a result early, which deletes it.
   That is a denial of service, not a forgery.
 - **POSIX only.** The runner needs `fcntl` and `O_NOFOLLOW`.
-- **Claude and goose only.** The switch is refused on frameworks whose session sandbox doesn't deny the key
-  directory (copilot, codex, agents-md).
+- **Claude, and Codex through its launcher.** Codex is allowed only when launched through
+  `.codex/confined-run.example.sh`. The switch is refused on Goose, because Goose 1.37 delegates inherit the
+  orchestrator's extensions (finding G1); `AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1` lifts that for one process, and
+  the policy is then not enforced. It is also refused on frameworks whose session sandbox doesn't deny the key
+  directory (copilot, agents-md).
 
 ## Sealed results
 
