@@ -2263,9 +2263,10 @@ python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note T
 ```
 
 - `--check` validates against the Rule 9 contract. It exits 1 on an error; warnings do not change the exit code.
-- `--set` marks one step. The status must be `pending`, `in_progress`, `done` or `blocked`. Every other cell is
-  kept. It exits 1, and writes nothing, when the status is outside that set, the step id names no row or more
-  than one, or the table has no `status` or `notes` column.
+- `--set` marks one step. The status must be `pending`, `in_progress`, `done` or `blocked`. Only that row is
+  rewritten; every other byte of the file is kept. It exits 1, and writes nothing, when the status is outside
+  that set, the step id names no row or more than one, the step's row has more cells than the header, or the
+  table lacks the column being set.
 - Use `--set` instead of writing a script to edit the CSV.
 - API: [`plan_steps`](api-reference/plan_steps.md).
 

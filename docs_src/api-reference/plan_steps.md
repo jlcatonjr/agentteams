@@ -54,17 +54,19 @@ for finding in findings:
 
 ### `set_step(path, step, *, status, note, append_note)`
 
-Sets one step's status, its notes, or both, and returns the updated row. It writes through `update_step`, so
-every other cell is kept and commas stay quoted. Use it, or the `--set` command below, instead of a one-off
-script that edits the CSV.
+Sets one step's status, its notes, or both, and returns the updated row. It rewrites that row only: every other
+byte of the file is kept, including line endings, blank lines, and other rows that are themselves malformed.
+(`update_step` rewrites the whole table.) The result is checked before anything is written, and the write is a
+rename. Use it, or the `--set` command below, instead of a one-off script that edits the CSV.
 
 It refuses, and leaves the file unchanged, when:
 
 - the status is not one of `pending`, `in_progress`, `done`, `blocked` (compared case-insensitively; the legacy
   `completed` is read by the tools but is not written);
-- the step id names no row (`KeyError`) or more than one row;
-- nothing is given to set, or both `note` and `append_note` are given;
-- the table has no `status` or `notes` column.
+- the step id names no row (`KeyError`) or more than one row (ids are compared with surrounding spaces ignored);
+- the step's row has more cells than the header, which is what an unquoted comma produces;
+- nothing is given to set, both `note` and `append_note` are given, or the appended note is empty;
+- the header repeats a column, or lacks the column being set (`status`, or `notes` for a note).
 
 `note` replaces the step's notes. `append_note` adds to them after `"; "`.
 
@@ -90,7 +92,8 @@ error. Workflow 11 Part A runs it on the session's steps CSVs.
 
 `python -m agentteams.plan_steps --set STEPS.csv STEP [--status S] [--note TEXT | --append-note TEXT]` updates one
 step through `set_step`. It prints `OK <file>: step <id> status=<status>` and exits 0, or prints an `ERROR` line and
-exits 1 when the update is refused. `--check` and `--set` cannot be combined.
+exits 1 when the update is refused. `--check` and `--set` cannot be combined. A step id that begins with `-`
+followed by a letter cannot be given on the command line on every Python version; call `set_step` for those.
 
 ### `runnable(steps)`
 

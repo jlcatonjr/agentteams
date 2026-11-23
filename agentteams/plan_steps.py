@@ -11,7 +11,9 @@ from __future__ import annotations
 import csv
 import dataclasses
 import io
+import os
 import re
+import shutil
 import warnings
 from collections.abc import Sequence
 from pathlib import Path
@@ -109,54 +111,113 @@ HOLDING_STATUSES: frozenset[str] = frozenset({"blocked", "in_progress"})
 DEPENDS_SPLIT_RE = re.compile(r"[\s,;]+")
 
 
+def _records(text: str) -> tuple[list[str], list[tuple[int, int, list[str]]]]:
+    """Physical lines of *text* (endings kept) and its CSV records as ``(first_line, end_line, cells)``."""
+    lines = list(io.StringIO(text, newline=""))
+    reader = csv.reader(iter(lines))
+    records: list[tuple[int, int, list[str]]] = []
+    prev = 0
+    for cells in reader:
+        records.append((prev, reader.line_num, cells))
+        prev = reader.line_num
+    return lines, records
+
+
 def set_step(path: Path | str, step: str, *, status: str | None = None, note: str | None = None,
              append_note: str | None = None) -> dict[str, str]:
-    """Set one step's status and/or notes, refusing anything that would leave the table ambiguous.
+    """Set one step's status and/or notes by rewriting that row only.
 
-    The command-line form of :func:`update_step`: it exists so that a session marks a step with one
-    command instead of writing its own CSV-editing script.
+    The command-line form of a step update: it exists so that a session marks a step with one
+    command instead of writing its own CSV-editing script. Unlike :func:`update_step`, which
+    rewrites the whole table, this replaces the physical lines of the one row and leaves every
+    other byte of the file as it was: line endings, blank lines, quoting, and rows that are
+    themselves malformed. The new text is checked before anything is written, and the write is
+    a rename, so a refusal or a failure leaves the file untouched.
 
     Args:
         path: The ``.steps.csv`` path.
-        step: The ``step`` id to update. It must name exactly one row.
+        step: The ``step`` id to update, compared with surrounding spaces ignored. It must name
+            exactly one row.
         status: New status. Must be one of :data:`STATUSES`; the legacy ``completed`` is not written.
         note: Text that replaces the step's ``notes``.
-        append_note: Text added after the step's existing ``notes``, separated by ``"; "``.
+        append_note: Non-empty text added after the step's existing ``notes``, separated by ``"; "``.
 
     Returns:
-        The updated row.
+        The updated row, keyed by header column.
 
     Raises:
         KeyError: ``step`` is not in the file.
-        ValueError: Nothing to set, both ``note`` and ``append_note`` given, a status outside the
-            vocabulary, a duplicated ``step`` id, a missing ``status``/``notes`` column, or a
-            read-back that differs.
+        ValueError: Nothing to set, both ``note`` and ``append_note`` given, an empty appended
+            note, a status outside the vocabulary, a duplicated ``step`` id, a header with a
+            repeated or missing column, a target row wider than the header, or a result that
+            does not read back as intended.
         OSError: The file cannot be read or written.
     """
     if status is None and note is None and append_note is None:
         raise ValueError("nothing to set: give a status, a note, or both")
     if note is not None and append_note is not None:
         raise ValueError("give either a replacement note or an appended note, not both")
-    fields: dict[str, str] = {}
+    if append_note is not None and not append_note.strip():
+        raise ValueError("the appended note is empty")
+    changes: dict[str, str] = {}
     if status is not None:
         value = status.strip().lower()
         if value not in STATUSES:
             hint = " (write 'done'; 'completed' is read as a legacy synonym only)" if value == "completed" else ""
             raise ValueError(f"status {status!r} is not one of {sorted(STATUSES)}{hint}")
-        fields["status"] = value
-    rows = [r for r in read_steps(path) if r["step"] == str(step)]
-    if not rows:
+        changes["status"] = value
+
+    target = Path(path)
+    with target.open(encoding="utf-8", newline="") as fh:
+        text = fh.read()
+    lines, records = _records(text)
+    if not records:
+        raise ValueError("the file is empty")
+    header = [c.strip() for c in records[0][2]]
+    if len(set(header)) != len(header):
+        raise ValueError("the header repeats a column")
+    wanted = ["step", *changes, *(["notes"] if (note is not None or append_note is not None) else [])]
+    missing = [c for c in wanted if c not in header]
+    if missing:
+        raise ValueError(f"the table has no {' or '.join(repr(m) for m in missing)} column")
+    step_at = header.index("step")
+    key = str(step).strip()
+    hits = [r for r in records[1:] if len(r[2]) > step_at and r[2][step_at].strip() == key]
+    if not hits:
         raise KeyError(step)
-    if len(rows) > 1:
-        raise ValueError(f"step {step!r} names {len(rows)} rows; fix the duplicate id first")
+    if len(hits) > 1:
+        raise ValueError(f"step {step!r} names {len(hits)} rows; fix the duplicate id first")
+    first, last, cells = hits[0]
+    if len(cells) > len(header):
+        raise ValueError(f"step {step!r} has more cells than the header (an unquoted comma?); fix the row first")
+    cells = cells + [""] * (len(header) - len(cells))
     if note is not None:
-        fields["notes"] = note
+        changes["notes"] = note
     elif append_note is not None:
-        existing = (rows[0].get("notes") or "").strip()
-        fields["notes"] = f"{existing}; {append_note}" if existing else append_note
-    update_step(path, step, **fields)
-    (updated,) = [r for r in read_steps(path) if r["step"] == str(step)]
-    return updated
+        existing = cells[header.index("notes")].strip()
+        changes["notes"] = f"{existing}; {append_note}" if existing else append_note
+    for column, value in changes.items():
+        cells[header.index(column)] = value
+
+    ending = lines[last - 1][len(lines[last - 1].rstrip("\r\n")):]
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="").writerow(cells)
+    new_text = "".join(lines[:first]) + buf.getvalue() + ending + "".join(lines[last:])
+
+    _, after = _records(new_text)
+    expected = [list(r[2]) for r in records]
+    expected[records.index(hits[0])] = cells
+    if [r[2] for r in after] != expected:
+        raise ValueError("the updated table does not read back as intended; nothing was written")
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8", newline="") as fh:
+            fh.write(new_text)
+        shutil.copymode(target, tmp)
+        os.replace(tmp, target)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return dict(zip(header, cells))
 
 
 def validate(path: Path | str) -> tuple[list[str], list[str]]:
@@ -296,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"OK {path}: step {step} status={row.get('status', '')}")
         return 0
-    if args.status or args.note is not None or args.append_note is not None:
+    if args.status is not None or args.note is not None or args.append_note is not None:
         parser.error("--status, --note and --append-note apply to --set only")
     rc = 0
     for path in args.check:

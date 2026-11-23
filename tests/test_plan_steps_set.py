@@ -106,3 +106,69 @@ def test_cli_modes_do_not_mix(tmp_path: Path) -> None:
             ps.main(argv)
         assert exc.value.code == 2
     assert ps.main(["--check", str(p)]) == 0
+
+
+def test_the_workflow_tracer_sees_a_step_table_written_by_the_command() -> None:
+    from agentteams.redteam import workflow_trace
+
+    command = "python -m agentteams.plan_steps --set tmp/by-week/2026-W48/p.steps.csv 3 --status done"
+    events = workflow_trace._shell_events(command, "/repo", None)
+    assert events, "a --set on a steps CSV must reach workflow conformance scoring"
+    assert workflow_trace._shell_events("python -m agentteams.plan_steps --check tmp/by-week/2026-W48/p.steps.csv",
+                                        "/repo", None) == []
+
+
+# --- only the one row changes -------------------------------------------------
+
+_MESSY = (
+    b"step,agent,action,inputs,outputs,status,notes\r\n"
+    b"1,@a,\"first, with a comma\",in,out,pending,\r\n"
+    b"\r\n"
+    b"2,@b,unquoted, comma shifts a column,in,out,pending,wide row\r\n"
+    b"3,@c,\"two\r\nlines\",in,out,pending,\"said \"\"hi\"\"\"\r\n"
+    b"4,@d,last,in,out,pending,no newline at end"
+)
+
+
+def test_every_byte_outside_the_row_is_kept(tmp_path: Path) -> None:
+    p = tmp_path / "messy.steps.csv"
+    p.write_bytes(_MESSY)
+    ps.set_step(p, "3", status="done", note="ok")
+    after = p.read_bytes()
+    head, tail = _MESSY.split(b"3,@c,")[0], b"4,@d,last,in,out,pending,no newline at end"
+    assert after.startswith(head) and after.endswith(b"\r\n" + tail)
+    assert after[len(head):-len(tail)] == b"3,@c,\"two\r\nlines\",in,out,done,ok\r\n"
+    ps.set_step(p, "4", status="blocked")
+    assert p.read_bytes().endswith(b"4,@d,last,in,out,blocked,no newline at end")
+    assert not [x for x in tmp_path.iterdir() if x.name != "messy.steps.csv"]
+
+
+def test_a_row_wider_than_the_header_is_refused_not_trimmed(tmp_path: Path) -> None:
+    p = tmp_path / "messy.steps.csv"
+    p.write_bytes(_MESSY)
+    with pytest.raises(ValueError, match="more cells than the header"):
+        ps.set_step(p, "2", status="done")
+    assert p.read_bytes() == _MESSY
+
+
+def test_ids_match_with_spaces_ignored_and_short_rows_are_padded(tmp_path: Path) -> None:
+    p = tmp_path / "x.steps.csv"
+    p.write_text("step,agent,action,inputs,outputs,status,notes\n 1 ,@a,do\n", encoding="utf-8")
+    row = ps.set_step(p, "1", status="in_progress", append_note="started")
+    assert row["status"] == "in_progress" and row["notes"] == "started"
+    assert p.read_text(encoding="utf-8").splitlines()[1] == " 1 ,@a,do,,,in_progress,started"
+
+
+def test_header_and_note_refusals(tmp_path: Path) -> None:
+    p = tmp_path / "x.steps.csv"
+    p.write_text("step,status,notes,notes\n1,pending,a,b\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="repeats a column"):
+        ps.set_step(p, "1", status="done")
+    q = tmp_path / "y.steps.csv"
+    q.write_text("step,status\n1,pending\n", encoding="utf-8")
+    assert ps.set_step(q, "1", status="done") == {"step": "1", "status": "done"}
+    with pytest.raises(ValueError, match="no 'notes' column"):
+        ps.set_step(q, "1", note="x")
+    with pytest.raises(ValueError, match="empty"):
+        ps.set_step(q, "1", append_note="  ")
+    assert q.read_text(encoding="utf-8") == "step,status\n1,done\n"
