@@ -33,9 +33,9 @@ stays at v1.2.2 until 1.3.0 is released. The entries below it are everything tha
   `--update --overwrite`, or delete the quoted lines by hand.
 - **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568). **Beta:**
   `agentteams.term_index` and `--term-check` (#548), and the WASM streaming session mode (#567).
-- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect when
-  that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat rows
-  newer than the HALT as void and record a fresh PASS.
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
 
 Release-candidate soak: v1.3.0 follows once infrastructureManagement reports that every consumer repository rendered
 this candidate, installed from its signed tag, cleanly.
