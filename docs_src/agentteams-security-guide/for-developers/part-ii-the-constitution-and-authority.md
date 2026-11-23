@@ -132,17 +132,8 @@ hook** (S19). Collapsing them is a fact error.
 code-enforced and fail-closed; what they cannot cover is the key-holder threat
 and the runtime tool calls that live on the hook's surface.
 
-**Source.** `agentteams/cli/security_gate.py:120-169,430-477`;
-`agentteams/cli/signed_ledger.py:9-92`;
-`agentteams/front_matter_merge.py:368-408`;
-`agentteams/audit_agent_contract.py:202-243`.
+--8<-- "docs_src/assets/snippets/security-guide-part-ii-source-agentteams-cli-security-gate-py.md"
 
 ---
 
-**Sources for Part II.** `.claude/CLAUDE.md`;
-`agentteams/templates/universal/orchestrator.template.md`;
-`agentteams/templates/universal/instruction-authority.reference.template.md`;
-`agentteams/audit_agent_contract.py`;
-`agentteams/templates/universal/security.template.md`; `agentteams/scan.py`;
-`agentteams/cli/security_gate.py`; `agentteams/cli/signed_ledger.py`;
-`agentteams/front_matter_merge.py`.
+--8<-- "docs_src/assets/snippets/security-guide-part-ii-sources.md"

@@ -17,16 +17,7 @@ project builds** — not for the agent build process — cross-cut by a
 `design → build → baseline → tune → operate → respond → review` lifecycle
 (`agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70`).
 
-| Layer | Concern |
-|---|---|
-| **L0** | Governance |
-| **L1** | Identity |
-| **L2** | Crypto / secrets |
-| **L3** | **Host & workload hardening** — where OS confinement lives |
-| **L4** | Network |
-| **L5** | Application & supply chain |
-| **L6** | Detection / logging |
-| **L7** | Resilience / backup / IR |
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-table-layer-concern.md"
 
 It draws an explicit boundary — **"infrastructure security ≠ agent security"**:
 this model governs the *deployed system*; `@security` governs the *build process*
@@ -111,11 +102,7 @@ profile emits the sandbox + `denyWrite`/`denyRead` example, but it enforces noth
 unmerged, and the hook stays fail-open until an explicit `confined`/`exclusive`
 flips it. Governance layers are always active; OS confinement enforcement is opt-in.
 
-**Source.** `agentteams/host_features.py:134-261`;
-`agentteams/frameworks/_sandbox_emit.py:25-208`;
-`agentteams/frameworks/_goose_sandbox_emit.py:1-222`;
-`references/agentteams-remediation-log.csv` (D-3);
-`agentteams/cli/artifacts.py:321-411`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-source-agentteams-host-features-py.md"
 
 ## The constitutional-gate hook  ✅ *(fail-closed under confined/exclusive; **fail-open by default**)* {#S19}
 
@@ -165,11 +152,4 @@ a missing line means no evidence, not a pass.
 
 ---
 
-**Sources for Part VI.**
-`agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70,119-130`;
-`agentteams/host_features.py:134-261`;
-`agentteams/frameworks/_sandbox_emit.py:25-208`;
-`agentteams/frameworks/_goose_sandbox_emit.py:1-222`;
-`references/agentteams-remediation-log.csv` (D-3);
-`agentteams/cli/artifacts.py:321-411`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-sources.md"

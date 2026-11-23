@@ -3,7 +3,7 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **490**
+- Modules mapped: **491**
 - Packages: **14**
 - Internal import edges: **1859**
 - Distinct external dependencies: **11**
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 210 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.redteam`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 211 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.redteam`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 69 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -200,6 +200,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.data.wasm_agent_guest` | — | — |
 | `agentteams.data.wasm_probes.probe` | — | — |
 | `agentteams.descriptor_union` | — | `agentteams.cli.generate` |
+| `agentteams.doc_overlap` | — | — |
 | `agentteams.doctor` | `agentteams.backup`, `agentteams.copilot_body_limit`, `agentteams.hygiene_rules`, `agentteams.memory_index_surfaces`, `agentteams.prompt_roots`, `agentteams.rules_projection`, `agentteams.signing_switch`, `agentteams.source_provenance`, `agentteams.surface_matrix` | `agentteams.cli.app` |
 | `agentteams.drift` | `agentteams.emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams._emit_build_state`, `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.cli.update_notices`, `agentteams.fence_baseline`, `agentteams.framework_freshness`, `agentteams.front_matter_baseline`, `agentteams.signing_switch`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams._emit_build_state`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.fence_baseline`, `agentteams.fence_inject`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.structural_merge`, `agentteams.front_matter_baseline`, `agentteams.front_matter_merge`, `agentteams.hygiene_rules`, `agentteams.learned_blocks`, `agentteams.placeholder_scan`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.routing_at_risk`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
@@ -2652,6 +2653,14 @@ digraph "agentteams architecture" {
     "agentteams.descriptor_union": {
       "package": "agentteams",
       "path": "agentteams/descriptor_union.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.doc_overlap": {
+      "package": "agentteams",
+      "path": "agentteams/doc_overlap.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],

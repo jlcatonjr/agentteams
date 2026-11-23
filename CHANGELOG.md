@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (a helper that finds repeated passages in Markdown docs and moves them to one snippet)
+
+- **New:** `python -m agentteams.doc_overlap PATH…` reports passages of 20 words or more that repeat across Markdown
+  files: exact repeats, near repeats to review, and overlap declared as intended. Rendered example output and backups
+  are not scanned.
+- **Reduce:** `--extract NAME PAGE…` moves the longest run of lines shared by the named docs-site pages into
+  `docs_src/assets/snippets/NAME.md` and includes it in each page. It is a dry run until `--yes`, takes whole
+  passages only, and refuses unless every page expands to its original text.
+- **Hold:** `--check --baseline FILE` exits 1 when a repeated passage is not in the baseline. A test runs it over
+  `docs_src` with `references/doc-overlap-baseline.json` and `references/doc-overlap-declared.json`.
+- **First use:** 19 tables and source lists that the security guide's editions shared are now snippets. 20 pages
+  changed and each expands to its previous text; repeated words in the guide fell from 1,588 to 507.
+- **Limits:** it finds copied text, not reworded text, and it does not change templates or what an agent loads.
+  The site build was not run where this was developed; CI's strict build is the check on the includes.
+
 ### fixed (the shrink guard no longer freezes the framework-watch snapshot)
 
 - **What was wrong:** the `framework_data` fence in `framework-watch.reference.md` is re-rendered from the
