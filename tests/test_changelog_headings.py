@@ -9,7 +9,9 @@ into an ``<h1>`` (probed with markdown 3.10.3 and the site's extensions):
 
 A continuation line indented under a list item (``  #367, #381 ...``) stays text, and so does ``#`` inside a fenced
 code block or after the first character. The two rules below are stdlib-only, so they run in every test job, well
-before docs-build. The last test checks them against the real renderer where ``markdown`` is installed.
+before docs-build. The last test checks them against the real renderer where ``markdown`` is installed; it is also
+the only check for a setext heading (a text line underlined with ``---`` or ``===``), so that shape is caught only
+where ``markdown`` is installed.
 """
 
 from __future__ import annotations
@@ -25,7 +27,8 @@ CHANGELOG = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
 _LIST_ITEM_HASH = re.compile(r"[ \t]*(?:[-*+]|[0-9]+[.)])[ \t]+#")
 #: An intended heading: one to four "#", a space, then text. CHANGELOG uses levels 1 to 4.
 _HEADING = re.compile(r"#{1,4} \S.*")
-_FENCE = re.compile(r"[ \t]*(```|~~~)")
+#: A fence line: its marker run, then an info string on an opener (a closer has none).
+_FENCE = re.compile(r"[ \t]*(`{3,}|~{3,})(.*)")
 
 
 def _lines_outside_fences(text: str) -> list[tuple[int, str]]:
@@ -33,8 +36,11 @@ def _lines_outside_fences(text: str) -> list[tuple[int, str]]:
     fence: str | None = None
     for number, line in enumerate(text.splitlines(), 1):
         m = _FENCE.match(line)
-        if m:
-            fence = None if fence == m.group(1) else (fence or m.group(1))
+        if m and fence is None:
+            fence = m.group(1)
+            continue
+        if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not m.group(2).strip():
+            fence = None   # a closer: the same character, at least as long, nothing after it
             continue
         if fence is None:
             out.append((number, line))
@@ -54,6 +60,8 @@ def heading_problems(text: str) -> list[str]:
     for number, line in _lines_outside_fences(text):
         if _LIST_ITEM_HASH.match(line):
             problems.append(f"line {number}: a list item starts with '#' (renders as <h1>): {line.strip()[:60]}")
+        elif line.startswith("#####"):
+            problems.append(f"line {number}: a heading deeper than level 4 (CHANGELOG uses 1 to 4): {line[:60]}")
         elif line.startswith("#") and not _HEADING.fullmatch(line):
             problems.append(f"line {number}: starts with '#' but is not a heading (renders as one): {line[:60]}")
     return problems
@@ -73,6 +81,7 @@ def test_the_changelog_has_no_line_that_renders_as_an_unintended_heading() -> No
     "first line\n#574 continues\n",
     "#574\n",
     "##[1.3.0]\n",
+    "##### too deep\n",
 ])
 def test_each_unintended_heading_shape_is_caught(source: str) -> None:
     assert heading_problems(source)
@@ -84,6 +93,8 @@ def test_each_unintended_heading_shape_is_caught(source: str) -> None:
     "- see #574 here\n",
     "```\n#574\n```\n",
     "~~~\n- #574\n~~~\n",
+    "````\n```\n#574\n````\n",
+    "```python\n#ok\n```python\n#574\n```\n",   # a line with an info string never closes a fence
 ])
 def test_intended_headings_and_safe_hashes_pass(source: str) -> None:
     assert heading_problems(source) == []
@@ -93,6 +104,7 @@ def test_the_rules_match_the_real_renderer() -> None:
     """Every heading the docs renderer makes from CHANGELOG.md comes from an intended heading line."""
     markdown = pytest.importorskip("markdown")
     pytest.importorskip("pymdownx")
+    # From mkdocs.yml markdown_extensions; those left out (highlight, inlinehilite, tilde, snippets) make no headings.
     md = markdown.Markdown(extensions=["attr_list", "md_in_html", "pymdownx.superfences", "admonition", "tables",
                                        "toc", "pymdownx.tabbed"])
     text = CHANGELOG.read_text(encoding="utf-8")
