@@ -506,6 +506,25 @@ def _render_table(snapshot: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+#: Fetch statuses that mean nothing was observed upstream (an offline run or a network error).
+_UNFETCHED_STATUSES = frozenset({"skipped", "failed"})
+
+
+def _nothing_fetched(snapshot: dict[str, Any]) -> bool:
+    """Whether no framework doc was fetched for *snapshot* (every status skipped or failed).
+
+    An offline render with no earlier snapshot writes a fresh one dated today, so its age alone
+    would make it look current (R29, @security condition 1). Snapshots without the per-framework
+    map (schema before 1.2) fall back to the top-level ``fetch_status``.
+    """
+    frameworks = snapshot.get("frameworks")
+    if isinstance(frameworks, dict) and frameworks:
+        statuses = [str((v or {}).get("fetch_status", "")) if isinstance(v, dict) else "" for v in frameworks.values()]
+    else:
+        statuses = [str(snapshot.get("fetch_status", ""))]
+    return all(s in _UNFETCHED_STATUSES for s in statuses)
+
+
 def _staleness_banner(snapshot: dict[str, Any]) -> str:
     age = _snapshot_age_hours(snapshot)
     if age is None:
@@ -515,6 +534,9 @@ def _staleness_banner(snapshot: dict[str, Any]) -> str:
             f"> ⚠️ **STALE DATA** — snapshot is {age / 24:.1f} days old "
             f"(threshold {STALE_DAYS} days). Run the daily research stage online."
         )
+    if _nothing_fetched(snapshot):
+        return ("> ⚠️ **UNVERIFIED DATA** — no framework doc was fetched for this snapshot (every fetch was "
+                "skipped or failed). Run the daily research stage online.")
     return ""
 
 

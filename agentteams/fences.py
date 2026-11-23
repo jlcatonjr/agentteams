@@ -236,9 +236,17 @@ _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
 # heuristic so structural --update runs don't emit alarming false positives.
 # The canonical history for these feeds is the cache JSON, not the embedded
 # snapshot. Real user content sits in adjacent operator-managed fences.
+#
+# `framework_data` (framework-watch.reference.md) is the third: every line of
+# its body is a placeholder filled from the framework-research snapshot, and
+# its template's manifest marks it "Live". Left out until 1.3.0 (R29), rule (c)
+# read each refresh's new date and diff tokens as lost concrete refs, so
+# --shrink-policy preserve kept a months-old snapshot, STALE banner and all.
+# tests/test_live_data_fences.py keeps this set equal to the manifests' Live rows.
 _LIVE_DATA_FENCES: frozenset[str] = frozenset([
     "threat_intelligence",
     "threat_data",
+    "framework_data",
 ])
 
 

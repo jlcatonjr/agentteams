@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the shrink guard no longer freezes the framework-watch snapshot)
+
+- **What was wrong:** the `framework_data` fence in `framework-watch.reference.md` is re-rendered from the
+  framework-research snapshot on every `--update --merge`, and its template marks it Live. It was not in
+  `fences._LIVE_DATA_FENCES`, so the shrink guard read each refresh's new date and diff tokens as lost concrete
+  references. Under `--shrink-policy preserve` the old snapshot was kept indefinitely, its STALE banner included.
+- **Now:** `framework_data` is a live-data fence, like `threat_intelligence` and `threat_data`. A merge always
+  replaces it, with no shrink notice and no `.lost` sidecar. A snapshot in which no framework doc was fetched (every
+  fetch skipped or failed) now carries an UNVERIFIED DATA banner, even when it is dated today. A new test keeps the
+  live set equal to the template manifests' Live rows.
+- **Expect churn:** the first merge render after upgrading replaces `framework_data` in every governed repository
+  that had a frozen body. That diff is expected.
+- **Known limitation:** the snapshot is read from the rendering agentteams install's own tree, not from the project,
+  so the same repository can show a different body depending on which install rendered it.
+- **Not an agentteams defect:** moving a downstream tool's frozen-fences state file aside before a render never
+  changed what agentteams writes. That file only records when each frozen section was first seen, and `--overwrite`
+  never runs the shrink guard.
+
 ### chore (the integrity manifest pins the reinstalled constitutional-gate hooks)
 
 - `references/enforcement-integrity.json` pins `.claude/hooks/constitutional-gate.py` and
