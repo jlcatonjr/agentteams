@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`ref_branch`: read the default branch and say how stale the view is)
+
+- **New:** `python -m agentteams.ref_branch [REPO]` names the default-branch ref (`origin/HEAD`, else `origin/main` or
+  `origin/master`, else a local `main` or `master`) and prints how many commits the checkout is behind it and how long
+  ago the last fetch was. `--show PATH` reads a file from that ref without touching the working tree.
+  `--max-fetch-age HOURS` exits 1 when the fetch is older than that.
+- **Why:** an audit that reads a stale checkout reports tools as missing that exist on the default branch. A
+  coverage verdict should carry the ref it was read from and that ref's age.
+- **Safety:** it never fetches or writes, never guesses a default branch, removes inherited `GIT_*` variables, and
+  reads content with `cat-file blob` so no filter driver runs.
+- **One resolver fewer:** `api_impact` now uses it. The resolvers in `branch_inventory`, `release_required_checks`
+  and the vulnerability-scan modules are unchanged.
+
 ### security (a carried-over exception never outlives its signed decision's sunset; #595)
 
 - **What was wrong:** a standing exception in `references/exception-registry.json` carries a sandbox relaxation or an

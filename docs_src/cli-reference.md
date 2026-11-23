@@ -2253,6 +2253,21 @@ python -m agentteams.plan_priority PLAN.steps.csv [MORE ...] [--json] [--require
     2 on a validation error or a cycle.
   - API: [`plan_priority`](api-reference/plan-priority.md).
 
+## Reference Branch Helper
+
+A read-only module CLI for audits that judge coverage. It names the repository's default-branch ref, says how
+stale that view may be, and reads a file from it without touching the working tree.
+
+```
+python -m agentteams.ref_branch [REPO] [--json] [--max-fetch-age HOURS]
+python -m agentteams.ref_branch [REPO] --show PATH
+```
+
+- Print the line it gives beside any verdict read from the default branch.
+- It never fetches. `--max-fetch-age HOURS` exits 1 when the last fetch is older than that.
+- Exit status: 0 normally, 1 stale or path absent, 2 when no default ref can be resolved.
+- API: [`ref_branch`](api-reference/ref-branch.md).
+
 ## Exit Codes
 
 | Code | Meaning |
