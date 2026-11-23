@@ -179,6 +179,15 @@ Three fence ids are exempt from the shrink heuristic and never produce sidecars:
 
 **Fix:** Run `--migrate` to add pre-fencing snapshots and prepare the file for fence-based updates. See the [Migration Guide](migration-guide.md).
 
+**A second cause, in a fenced file:** an older render wrote a line *outside* the fences that the current template no
+longer emits. A merge keeps every unfenced line, because unfenced text belongs to the project, so the old line stays
+next to the corrected fenced text. Since 1.3.0, a merge prints a notice when such a line names another surface's agents
+directory (for example a Codex file naming `.github/agents/references/conflict-log.csv`): "unfenced line(s) name
+another surface's agents directory and the new render no longer has them".
+
+**Fix:** re-render that surface with `--update --overwrite`, which keeps the Project-Specific Notes and Rules regions,
+or delete the quoted lines by hand. The notice only reports; it never changes the file.
+
 ### "WARN: fenced section found in template but absent from output file"
 
 **Cause:** The template was updated to add a new fenced section, but the output file predates that section.

@@ -16,7 +16,7 @@ handoffs:
     send: false
   - label: Resolve Conflicts
     agent: conflict-resolution
-    prompt: "Conflicts have been identified; the orchestrator has appended their rows to the conflict log. Make ACCEPT/REJECT/REVISE decisions on the open rows."
+    prompt: "Conflicts have been identified; the orchestrator has appended their rows to the conflict log. Decide each open row: REJECT/ACCEPT/REVISE, or NO-CONFLICT when the claims do not contradict."
     send: false
   - label: Verify Source Drift
     agent: technical-validator

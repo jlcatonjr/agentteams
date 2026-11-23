@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (conflict-resolution handoffs name NO-CONFLICT; a merge reports stale cross-surface lines; F10)
+
+- **NO-CONFLICT in the handoffs:** Workflow 11's closeout exception and the two `@conflict-resolution` handoff prompts
+  (the orchestrator's and `@conflict-auditor`'s) listed only ACCEPT/REJECT/REVISE. They now give the full set,
+  "REJECT/ACCEPT/REVISE, or NO-CONFLICT", as `@conflict-resolution`'s own table does.
+- **Stale cross-surface lines:** a `--update --merge` keeps every unfenced line, so a line an older render wrote outside
+  the fences survives later merges. Renders before the per-surface conflict-log path fix wrote
+  `.github/agents/references/conflict-log.csv` into other surfaces' teams this way. A merge, and its dry run, now
+  print a notice when an unfenced line outside the Project-Specific Notes and Rules regions names another surface's
+  agents directory and the new render no longer has it (`agentteams/stale_surface_paths.py`). The notice changes
+  nothing.
+- **Action for existing teams:** a 1.3.0 merge render does not remove such lines. Where the notice appears, re-render
+  that surface with `--update --overwrite` (it keeps the Notes and Rules regions) or delete the quoted lines by hand.
+
 ### fixed (the shrink guard no longer freezes the framework-watch snapshot)
 
 - **What was wrong:** the `framework_data` fence in `framework-watch.reference.md` is re-rendered from the
