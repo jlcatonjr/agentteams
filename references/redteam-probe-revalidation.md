@@ -5,6 +5,20 @@ was last accepted. `agentteams --redteam --redteam-probes tests.constitutional_r
 (operator only) re-records every digest and writes `note: ""` for every probe, so the review behind each accept is kept
 here, newest first, and committed with the baseline change it justifies.
 
+## 2026-11-22 — 1.3.0 pre-cut: E4 covers 275 modules (pending the operator's accept)
+
+Audit run on dev d5e33d65 (read-only, `--redteam-report` to a temporary directory): 40 probes, 0 measured exploits,
+live tree pristine, and one F-5 finding, on E4. No other probe's outcome or evidence changed.
+
+| Probe | Claim | Current evidence | Still attacks what it claims? | Why the evidence changed |
+|---|---|---|---|---|
+| E4 (C-1) | the enforcement code carries an integrity manifest that detects edits | "manifest present=True; mismatches=[]; modules covered=275" | Yes: DEFENDED, and the anti-vacuity check still requires a digest for every present module | `integrity.ENFORCEMENT_MODULES` grew by exactly three entries since the 2026-11-17 accept (dd30da6b), with none removed: `agentteams/cli/s10_deprecation_gate.py` (#592, 5782f886), and `agentteams/wasm_session.py` and `agentteams/_wasm_session_bench.py` (#567, 2420a2a7). Same mechanism, larger population |
+
+**To accept (operator only):** @security cleared an operator-run accept of E4 only on this tip (CONDITIONAL PASS,
+2026-11-22). The accept script refuses unless `--verify-integrity` passes, the run shows 0 exploits and F-5 for E4
+only, E4's new evidence is the string above with `note: ""` and DEFENDED, and every other baseline entry is
+byte-identical.
+
 ## 2026-11-15 — #478 E1 measures a rendered team (pending the operator's accept)
 
 E1 no longer reads the gitignored `.claude/agents/`. It renders Claude teams in memory from every tracked
