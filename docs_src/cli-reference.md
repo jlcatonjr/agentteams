@@ -2253,6 +2253,22 @@ python -m agentteams.plan_priority PLAN.steps.csv [MORE ...] [--json] [--require
     2 on a validation error or a cycle.
   - API: [`plan_priority`](api-reference/plan-priority.md).
 
+## Plan Step Helper
+
+A module CLI that checks a plan's `.steps.csv`, or updates one step of it.
+
+```
+python -m agentteams.plan_steps --check PLAN.steps.csv [MORE ...]
+python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]
+```
+
+- `--check` validates against the Rule 9 contract. It exits 1 on an error; warnings do not change the exit code.
+- `--set` marks one step. The status must be `pending`, `in_progress`, `done` or `blocked`. Every other cell is
+  kept. It exits 1, and writes nothing, when the status is outside that set, the step id names no row or more
+  than one, or the table has no `status` or `notes` column.
+- Use `--set` instead of writing a script to edit the CSV.
+- API: [`plan_steps`](api-reference/plan_steps.md).
+
 ## Exit Codes
 
 | Code | Meaning |

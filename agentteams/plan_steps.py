@@ -109,6 +109,56 @@ HOLDING_STATUSES: frozenset[str] = frozenset({"blocked", "in_progress"})
 DEPENDS_SPLIT_RE = re.compile(r"[\s,;]+")
 
 
+def set_step(path: Path | str, step: str, *, status: str | None = None, note: str | None = None,
+             append_note: str | None = None) -> dict[str, str]:
+    """Set one step's status and/or notes, refusing anything that would leave the table ambiguous.
+
+    The command-line form of :func:`update_step`: it exists so that a session marks a step with one
+    command instead of writing its own CSV-editing script.
+
+    Args:
+        path: The ``.steps.csv`` path.
+        step: The ``step`` id to update. It must name exactly one row.
+        status: New status. Must be one of :data:`STATUSES`; the legacy ``completed`` is not written.
+        note: Text that replaces the step's ``notes``.
+        append_note: Text added after the step's existing ``notes``, separated by ``"; "``.
+
+    Returns:
+        The updated row.
+
+    Raises:
+        KeyError: ``step`` is not in the file.
+        ValueError: Nothing to set, both ``note`` and ``append_note`` given, a status outside the
+            vocabulary, a duplicated ``step`` id, a missing ``status``/``notes`` column, or a
+            read-back that differs.
+        OSError: The file cannot be read or written.
+    """
+    if status is None and note is None and append_note is None:
+        raise ValueError("nothing to set: give a status, a note, or both")
+    if note is not None and append_note is not None:
+        raise ValueError("give either a replacement note or an appended note, not both")
+    fields: dict[str, str] = {}
+    if status is not None:
+        value = status.strip().lower()
+        if value not in STATUSES:
+            hint = " (write 'done'; 'completed' is read as a legacy synonym only)" if value == "completed" else ""
+            raise ValueError(f"status {status!r} is not one of {sorted(STATUSES)}{hint}")
+        fields["status"] = value
+    rows = [r for r in read_steps(path) if r["step"] == str(step)]
+    if not rows:
+        raise KeyError(step)
+    if len(rows) > 1:
+        raise ValueError(f"step {step!r} names {len(rows)} rows; fix the duplicate id first")
+    if note is not None:
+        fields["notes"] = note
+    elif append_note is not None:
+        existing = (rows[0].get("notes") or "").strip()
+        fields["notes"] = f"{existing}; {append_note}" if existing else append_note
+    update_step(path, step, **fields)
+    (updated,) = [r for r in read_steps(path) if r["step"] == str(step)]
+    return updated
+
+
 def validate(path: Path | str) -> tuple[list[str], list[str]]:
     """Check a steps CSV against the Rule 9 contract.
 
@@ -207,13 +257,14 @@ def runnable(steps: Sequence[Any]) -> tuple[list[Any], dict[str, str], list[str]
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: ``python -m agentteams.plan_steps --check STEPS.csv [...]``.
+    """CLI: ``--check STEPS.csv [...]`` validates; ``--set STEPS.csv STEP`` updates one step.
 
     Args:
         argv: Arguments (defaults to ``sys.argv[1:]``).
 
     Returns:
-        int: 1 when any file has an error (or cannot be read), else 0; warnings never change the exit code.
+        int: With ``--check``, 1 when any file has an error (or cannot be read), else 0; warnings never
+        change the exit code. With ``--set``, 0 when the step was updated and 1 when it was refused.
 
     Raises:
         None.
@@ -221,10 +272,32 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(prog="python -m agentteams.plan_steps",
-                                     description="Validate plan steps CSVs against the Rule 9 contract.")
-    parser.add_argument("--check", nargs="+", metavar="STEPS_CSV", required=True, help="Steps CSVs to validate.")
+    parser = argparse.ArgumentParser(
+        prog="python -m agentteams.plan_steps",
+        description="Validate plan steps CSVs against the Rule 9 contract, or update one step.")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--check", nargs="+", metavar="STEPS_CSV", help="Steps CSVs to validate.")
+    mode.add_argument("--set", nargs=2, metavar=("STEPS_CSV", "STEP"), dest="set_step",
+                      help="Update one step of a steps CSV (use with --status, --note or --append-note).")
+    parser.add_argument("--status", help=f"With --set: the new status, one of {', '.join(sorted(STATUSES))}.")
+    notes = parser.add_mutually_exclusive_group()
+    notes.add_argument("--note", help="With --set: replace the step's notes.")
+    notes.add_argument("--append-note", dest="append_note", help="With --set: add to the step's notes.")
     args = parser.parse_args(argv)
+    if args.set_step:
+        path, step = args.set_step
+        try:
+            row = set_step(path, step, status=args.status, note=args.note, append_note=args.append_note)
+        except KeyError:
+            print(f"ERROR {path}: no step {step!r}")
+            return 1
+        except (ValueError, OSError) as exc:
+            print(f"ERROR {path}: {exc}")
+            return 1
+        print(f"OK {path}: step {step} status={row.get('status', '')}")
+        return 0
+    if args.status or args.note is not None or args.append_note is not None:
+        parser.error("--status, --note and --append-note apply to --set only")
     rc = 0
     for path in args.check:
         try:
@@ -243,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 __all__ = ["DEPENDS_SPLIT_RE", "DONE_STATUSES", "HOLDING_STATUSES", "KNOWN_STATUSES", "RUNTIME_COLUMNS", "STATUSES",
-           "main", "read_steps", "runnable", "update_step", "validate", "write_steps"]
+           "main", "read_steps", "runnable", "set_step", "update_step", "validate", "write_steps"]
 
 
 if __name__ == "__main__":

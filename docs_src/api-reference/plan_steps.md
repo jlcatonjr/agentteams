@@ -52,6 +52,24 @@ for finding in findings:
 
 ---
 
+### `set_step(path, step, *, status, note, append_note)`
+
+Sets one step's status, its notes, or both, and returns the updated row. It writes through `update_step`, so
+every other cell is kept and commas stay quoted. Use it, or the `--set` command below, instead of a one-off
+script that edits the CSV.
+
+It refuses, and leaves the file unchanged, when:
+
+- the status is not one of `pending`, `in_progress`, `done`, `blocked` (compared case-insensitively; the legacy
+  `completed` is read by the tools but is not written);
+- the step id names no row (`KeyError`) or more than one row;
+- nothing is given to set, or both `note` and `append_note` are given;
+- the table has no `status` or `notes` column.
+
+`note` replaces the step's notes. `append_note` adds to them after `"; "`.
+
+---
+
 ### `validate(path)`
 
 Checks a steps CSV against the Rule 9 contract and returns `(errors, warnings)`.
@@ -69,6 +87,10 @@ Checks a steps CSV against the Rule 9 contract and returns `(errors, warnings)`.
 
 CLI (`main(argv)`): `python -m agentteams.plan_steps --check STEPS.csv [...]` prints `ERROR`/`WARNING` lines and exits 1 only on an
 error. Workflow 11 Part A runs it on the session's steps CSVs.
+
+`python -m agentteams.plan_steps --set STEPS.csv STEP [--status S] [--note TEXT | --append-note TEXT]` updates one
+step through `set_step`. It prints `OK <file>: step <id> status=<status>` and exits 0, or prints an `ERROR` line and
+exits 1 when the update is refused. `--check` and `--set` cannot be combined.
 
 ### `runnable(steps)`
 

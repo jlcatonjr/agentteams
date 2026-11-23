@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`plan_steps --set` marks a plan step with one command)
+
+- **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`
+  updates one step through the existing validating writer, so every other cell is kept and commas stay quoted.
+  `set_step()` is the same thing as a function.
+- **Why:** the CLI offered only `--check`, so sessions wrote their own scripts to edit a steps CSV. Tables ended up
+  with statuses outside the vocabulary and, in places, shifted columns.
+- **Refused, with nothing written:** a status other than `pending`, `in_progress`, `done` or `blocked` (the legacy
+  `completed` is still read, but not written); a step id that names no row or more than one; a table with no
+  `status` or `notes` column.
+- **Not changed:** the agent templates do not mention the command yet.
+
 ### fixed (conflict-resolution handoffs name NO-CONFLICT; a merge reports stale cross-surface lines; F10)
 
 - **NO-CONFLICT in the handoffs:** Workflow 11's closeout exception and the two `@conflict-resolution` handoff prompts
