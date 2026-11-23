@@ -66,6 +66,7 @@ from agentteams.placeholder_scan import open_count
 from agentteams._emit_build_state import _unmodified_since_build  # noqa: F401  (tests use emit.*)
 from agentteams.fence_baseline import block_digests as _fence_digests, for_run as _fence_baseline_for_run
 from agentteams.fence_twins import persist_dropped as _persist_twins
+from agentteams.stale_surface_paths import notice as _stale_surface_notice, own_surface as _own_surface_of
 from agentteams.front_matter_baseline import (
     keep_disk_front_matter, load_for as _front_matter_baseline, restore_dropped_handoffs)
 from agentteams.front_matter_merge import _front_matter_keys
@@ -333,6 +334,7 @@ def emit_all(
     _unmodified = _unmodified_since_build(output_dir)
     _fm_baseline = _front_matter_baseline(output_dir)
     _fence_bl = _fence_baseline_for_run(output_dir, merge=merge, dry_run=dry_run, twin_drop=twin_drop, backup_path=backup_path)
+    _own_surface = _own_surface_of(output_dir) if merge else None  # F10: stale cross-surface path notice
 
     # Write files
     for rel_path, content in rendered_files:
@@ -408,6 +410,9 @@ def emit_all(
                     entry.action = "MERGE-OVERWRITE-FENCED"
                     entry.delta_bytes = len(normalized_content) - len(existing_text)
             elif merge and existing_text is not None:
+                _stale = _stale_surface_notice(rel_path, existing_text, normalized_content, _own_surface)
+                if _stale:
+                    result.notices.append(_stale)
                 mr = _merge_fenced_content(
                     normalized_content,
                     existing_text,
@@ -608,6 +613,9 @@ def emit_all(
                     f"{rel_path}: the template render has no AGENTTEAMS fence, so the on-disk fenced sections are "
                     "kept as they are (a full replace would discard them); re-render it with --overwrite after "
                     "review to adopt the template")
+            _stale = _stale_surface_notice(rel_path, existing_text, normalized_content, _own_surface)
+            if _stale:
+                result.notices.append(_stale)
             merge_result = _merge_fenced_content(
                 normalized_content,
                 existing_text,

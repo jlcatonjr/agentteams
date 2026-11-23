@@ -206,6 +206,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`copilot_body_limit`](copilot-body-limit.md) | `--check`'s guard for operator notes past Copilot's 30,000-character agent-body limit |
 | [`bridge_refresh`](bridge-refresh.md) | What `--bridge-refresh` writes for `.goosehints`: the bridge fence, keeping project text around it |
 | [`shrink_allow`](shrink-allow.md) | `--shrink-allow`: operator-reviewed per-section overrides of the shrink guard (template retirements vs enrichment) |
+| [`stale_surface_paths`](stale-surface-paths.md) | `--update --merge` notice: unfenced lines left by an older render that name another surface's agents directory (advisory; F10) |
 | [`branch_cleanup`](branch-cleanup.md) | `--branch-cleanup` / `--branch-post-merge`: guarded deletion under a plan-bound `@security` clearance or an operator Ed25519 `branch-delete` grant; hash-chained deletion ledger |
 
 ## Standalone modules
