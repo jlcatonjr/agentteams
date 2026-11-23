@@ -375,6 +375,7 @@ nav:
               - copilot-body-limit: api-reference/copilot-body-limit.md
               - bridge-refresh: api-reference/bridge-refresh.md
               - shrink-allow: api-reference/shrink-allow.md
+              - stale-surface-paths: api-reference/stale-surface-paths.md
               - branch-cleanup: api-reference/branch-cleanup.md
           - Standalone modules:
               - pr-management: api-reference/pr-management.md
