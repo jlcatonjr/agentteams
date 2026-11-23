@@ -225,7 +225,7 @@ def test_os_off_happy_path_registers_and_continues_then_lapses(tmp_path, stub_ed
     [entry] = _registry(team)
     assert entry["action"] == "sandbox-os-off:claude" and entry["status"] == "active"
     assert entry["lineage"] == ["approved-baseline"] and entry["effect"] == {"relaxes": ["sandbox-os-off:claude"]}
-    assert datetime.fromisoformat(entry["expires"]) == _T0 + timedelta(days=90)
+    assert datetime.fromisoformat(entry["expires"]) == datetime(2026, 10, 31, tzinfo=UTC) + timedelta(days=90)  # signed + TTL (#595)
 
     later = gate.plan_relaxations(_st(os=False), _st(os=False), framework_id="claude", profile_would_emit=True)
     [cont] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=30))

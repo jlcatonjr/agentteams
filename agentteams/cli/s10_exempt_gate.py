@@ -47,7 +47,7 @@ from __future__ import annotations
 import os
 import stat
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from agentteams.cli import security_gate, toolchain_group
@@ -62,7 +62,13 @@ from agentteams.cli.exception_registry import (
     register_exception,
     retire_exception,
 )
-from agentteams.cli.sandbox_relaxation_gate import _decision_binding, _split, _unbound_reason
+from agentteams.cli.sandbox_relaxation_gate import (
+    _decision_binding,
+    _signed_lapse_reason,
+    _signed_sunset,
+    _split,
+    _unbound_reason,
+)
 from agentteams.frameworks._sandbox_emit import team_agents_dir
 from agentteams.manifest_format import _REPO_ID_RE
 from agentteams.prompt_roots import TEAM_AGENT_GLOBS, team_project_root
@@ -184,7 +190,7 @@ def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime,
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
     reasons: list[str] = []
     for entry in active:
-        reason = _unbound_reason(team_dir, entry)
+        reason = _unbound_reason(team_dir, entry, now=now, ttl_days=S10_EXEMPT_TTL_DAYS)
         if reason is None:
             return
         reasons.append(f"registered exemption {entry.get('id')} did not carry over: it {reason}")
@@ -198,6 +204,9 @@ def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime,
             raise
         env = any("'signing' extra" in r for r in reasons)
         raise CarryOverError("; ".join(reasons) + f" (and no new row: {exc})", env=env) from exc
+    stale = _signed_lapse_reason(row, now, S10_EXEMPT_TTL_DAYS)   # no fresh sunset for a stale row (#595)
+    if stale is not None:
+        raise RuntimeError(f"the newest decision {stale}; the operator re-signs it")
     assert_within_aggregate_cap(team_dir, adding=1, now=now, retiring=lapsed)
     if not consume:
         return
@@ -210,7 +219,7 @@ def _authorize_one(team_dir: Path, repo: str, *, consume: bool, now: datetime,
         "effect": {"relaxes": [action]},
         "lineage": sorted(_split(row.get("derives_from") or "")),
         "issued": now.isoformat(),
-        "expires": (now + timedelta(days=S10_EXEMPT_TTL_DAYS)).isoformat(),
+        "expires": _signed_sunset(row, S10_EXEMPT_TTL_DAYS).isoformat(),
         "decision_key_id": (row.get("key_id") or "").strip(),
         "decision_sha256": _decision_binding(row),
     }, now=now)
