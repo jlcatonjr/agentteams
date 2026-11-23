@@ -61,7 +61,7 @@ def test_a_signed_decision_registers_a_bounded_exception_that_later_renders_reus
     assert "yes" in log.read_text()  # consumed
     [entry] = _registry(team)
     assert entry["action"] == _ACTION and entry["status"] == "active" and entry["relaxing"] is True
-    assert datetime.fromisoformat(entry["expires"]) == _T0 + timedelta(days=gate.S10_EXEMPT_TTL_DAYS)
+    assert datetime.fromisoformat(entry["expires"]) == datetime(2026, 10, 31, tzinfo=UTC) + timedelta(days=gate.S10_EXEMPT_TTL_DAYS)  # #595
     # A later render: the row is spent, the registry entry carries it.
     assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0 + timedelta(days=30)) == [_REPO]
     # After the sunset it lapses: the cooldown applies again until a fresh decision is signed.

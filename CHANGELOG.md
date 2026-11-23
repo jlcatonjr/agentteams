@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (a carried-over exception never outlives its signed decision's sunset; #595)
+
+- **What was wrong:** a standing exception in `references/exception-registry.json` carries a sandbox relaxation or an
+  S-10 cooldown exemption over from one render to the next. Its lapse came from the entry's own `expires`, which is
+  not signed. Anyone who could write the registry could move `expires` forward and keep the relaxation alive past its
+  Rule 15(d) sunset, without a signing key. The bound decision row was re-verified, but its date was not used.
+- **Now:** a carry-over lapses 90 days after the bound decision row's signed `date` (midnight UTC for a date with no
+  time), or at the registry `expires`, whichever comes first. This applies in the sandbox-relaxation, S-10
+  cooldown-exemption and S-10 cooldown-deprecation gates, which share one check.
+  - A new registration records `expires` as signed date + 90 days, not registration time + 90 days.
+  - A decision row already past its sunset is refused at registration. It no longer gets 90 fresh days.
+  - An entry is refused when its decision row has a missing or unreadable date, a date in the future, or an `issued`
+    time before the row was signed.
+- **Upgrade note (STABILITY security tightening):** an exception registered some days after its decision was signed
+  now lapses that many days sooner. To renew one, sign a new decision row as before; the clock counts from that
+  row's date once a render consumes it and re-registers the entry. Re-signing a row does not move an existing
+  entry's clock, because the entry stays bound to the row it was registered from.
+
 ### fixed (conflict-resolution handoffs name NO-CONFLICT; a merge reports stale cross-surface lines; F10)
 
 - **NO-CONFLICT in the handoffs:** Workflow 11's closeout exception and the two `@conflict-resolution` handoff prompts

@@ -109,7 +109,8 @@ anything is consumed.
 standing:
 each is registered in the exception registry with a 90-day sunset (`SANDBOX_EXCEPTION_TTL_DAYS`) and bound
 to the decision row that cleared it. A later render carries it over only while that row still verifies;
-otherwise it lapses and a fresh signed decision is needed. They share the registry's aggregate cap
+otherwise it lapses and a fresh signed decision is needed. The sunset counts from the row's signed `date`. The
+registry's `expires` is not signed, so it can only shorten the sunset, never extend it (since 1.3.0, #595). They share the registry's aggregate cap
 (default one active relaxing exception), so a workspace that needs, say, an OS-off and a grant widening at
 once must raise the cap in the registry (a visible, git-tracked decision). `sandbox-wasm-off` is not
 standing. Whether auto-approval is on is recorded in the build-log's `sandbox_exceptions` (`mcp_approval_auto: "on"`,

@@ -16,6 +16,7 @@ import pytest
 from agentteams import analyze, ingest, render
 from agentteams.cli import exception_registry as er
 from agentteams.cli import s10_deprecation_gate as gate
+from agentteams.cli.sandbox_relaxation_gate import _signed_at
 from agentteams.cli.action_ids import GATE_ACTIONS, action_matches
 from agentteams.manifest_format import (
     S10_COOLDOWN_RULE_END,
@@ -424,11 +425,11 @@ def test_the_sunset_counts_from_the_signed_date_column() -> None:
     """The signature covers ``date`` when present, else ``timestamp`` (``decision_log._decision_signature_values``): the
     sunset reads the same field, so a ``date``-schema log works and an unsigned ``timestamp`` beside it can't stretch it."""
     both = {"date": "2026-01-01", "timestamp": "2026-11-20"}
-    assert gate._signed_at(both) == datetime(2026, 1, 1, tzinfo=UTC)
+    assert _signed_at(both) == datetime(2026, 1, 1, tzinfo=UTC)
     assert dl._decision_signature_values(both | {"verdict": "PASS"}).count("2026-01-01") == 1
     assert "lapsed" in (gate._lapse_reason(both, _T0) or "")
-    assert gate._signed_at({"date": "2026-11-20"}) == datetime(2026, 11, 20, tzinfo=UTC)
-    assert gate._signed_at({"timestamp": "2026-11-20T10:00:00Z"}) == datetime(2026, 11, 20, 10, tzinfo=UTC)
+    assert _signed_at({"date": "2026-11-20"}) == datetime(2026, 11, 20, tzinfo=UTC)
+    assert _signed_at({"timestamp": "2026-11-20T10:00:00Z"}) == datetime(2026, 11, 20, 10, tzinfo=UTC)
     assert "unreadable date" in (gate._lapse_reason({"date": "yesterday"}, _T0) or "")
 
 
