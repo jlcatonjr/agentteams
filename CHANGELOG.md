@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (every team receives a script-consolidation reference)
+
+- **New reference:** `references/script-consolidation.reference.md` gives the procedure for reviewing one-off
+  scripts and planning which recurring ones become maintained tools: the phases, the brief each reviewer works
+  to, an accuracy audit and a design audit. `@code-hygiene` points to it for CH-08 and CH-27.
+- **Reference branch on every verdict:** a statement that a tool exists, is missing or only partly covers a need
+  carries the line `python -m agentteams.ref_branch` prints, so a stale checkout cannot pass as the truth.
+- **Placement Decision Rule:** a USER-EDITABLE section for the project's own answer to where each kind of tool
+  lives. `--update` keeps it.
+- **What it is not:** a conformance check. CH-08 and CH-27 remain judgment rules, and their text is unchanged.
+  The orchestrator gains no lines.
+- **Expect on update:** one new file under `references/`, and nine added lines in the code-hygiene agent.
+
 ### added (`ref_branch`: read the default branch and say how stale the view is)
 
 - **New:** `python -m agentteams.ref_branch [REPO]` names the default-branch ref (`origin/HEAD`, else `origin/main` or

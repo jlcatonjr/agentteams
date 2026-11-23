@@ -223,6 +223,23 @@ it before wiring this one. Otherwise both launch.
 
 ---
 
+## Reviewing One-Off Scripts
+
+Sessions leave scripts behind: a query written for one question, a driver copied and adjusted each week. Ask
+`@code-hygiene` or `@orchestrator` for a script review when the same logic keeps being written again.
+
+The team follows `references/script-consolidation.reference.md`. It lists the phases, the brief each reviewer
+works to, and two audits of the result. Two things in it are worth knowing as the operator:
+
+- **Every coverage verdict names the branch it was read from.** A checkout can lag the default branch, so a tool
+  reported as missing may already exist. The team runs `python -m agentteams.ref_branch <repository>` and puts
+  its line beside each verdict. If the last fetch is old, fetch and ask again.
+- **Where a promoted tool should live is yours to decide.** The reference ends with a `Placement Decision Rule`
+  section that `--update` never overwrites. Record there which kind of tool goes to which repository and how
+  it reaches the places that run it.
+
+The review gathers evidence and proposes a plan. It does not decide whether a script breaks a rule.
+
 ## When to Invoke Governance Agents Directly
 
 For most work, you should let the orchestrator route to governance agents automatically. However, you can invoke them directly when needed:
