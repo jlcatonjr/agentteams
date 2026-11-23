@@ -227,7 +227,8 @@ def test_signed_row_allows_registers_continues_lapses_and_retires(tmp_path, stub
     assert entry["action"] == _ACTION and entry["kind"] == MCP_APPROVAL_AUTO and entry["status"] == "active"
     assert entry["effect"] == {"relaxes": [_ACTION]} and entry["lineage"] == ["approved-baseline"]
     assert len(entry["decision_sha256"]) == 64
-    assert datetime.fromisoformat(entry["expires"]) == _T0 + timedelta(days=gate.SANDBOX_EXCEPTION_TTL_DAYS)
+    assert datetime.fromisoformat(entry["expires"]) == datetime(2026, 10, 31, tzinfo=UTC) + timedelta(
+        days=gate.SANDBOX_EXCEPTION_TTL_DAYS)  # signed date + TTL (#595)
 
     later = _plan(_exc(True), _exc(True))
     [cont] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=30))
