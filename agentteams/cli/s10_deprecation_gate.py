@@ -35,7 +35,7 @@ Stdlib only.
 from __future__ import annotations
 
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from agentteams.cli import security_gate, toolchain_group
@@ -63,7 +63,13 @@ from agentteams.cli.s10_exempt_gate import (
     _surface_dirs,
     governance_team_dir,
 )
-from agentteams.cli.sandbox_relaxation_gate import _decision_binding, _split, _unbound_reason
+from agentteams.cli.sandbox_relaxation_gate import (
+    _decision_binding,
+    _signed_lapse_reason,
+    _signed_sunset,
+    _split,
+    _unbound_reason,
+)
 from agentteams.manifest_format import s10_cooldown_deprecation_authorized
 
 #: The action id, which is also its own family.
@@ -149,42 +155,11 @@ def _assert_no_halt(halt_dirs: tuple[Path, ...]) -> None:
         _assert_no_open_family_halt(halt_dir)
 
 
-#: How far ahead of now a signed row's date may lie (clock skew): a later date would stretch the Rule 15(d) sunset.
-_FUTURE_SKEW = timedelta(days=1)
-
-
-def _signed_at(row: dict[str, str]) -> datetime:
-    """The signed date of a decision row (UTC), from which the sunset is counted; ValueError if unparseable.
-
-    The same field the row's signature covers (``decision_log._decision_signature_values``: ``date``, else
-    ``timestamp``), so an unsigned column can't stretch the sunset.
-    """
-    raw = (row.get("date") or row.get("timestamp") or "").strip()
-    stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    return stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC)
-
-
-def _bound_row(team_dir: Path, entry: dict) -> dict[str, str] | None:
-    """The decisions-log row a registry *entry* is bound to (by its signed binding), or None."""
-    read = _read_decision_rows(team_dir)
-    want = str(entry.get("decision_sha256") or "")
-    return next((r for r in (read[0] if read else []) if want and _decision_binding(r) == want), None)
-
-
 def _lapse_reason(row: dict[str, str] | None, now: datetime) -> str | None:
     """Why the deprecation *row* signed is past its sunset at *now* (or unbound/undated), or None while it holds."""
     if row is None:
         return "is not bound to a row in the decisions log"
-    try:
-        signed = _signed_at(row)
-    except ValueError:
-        return f"is bound to a row with an unreadable date {(row.get('date') or row.get('timestamp'))!r}"
-    if signed > now + _FUTURE_SKEW:
-        return f"is dated {signed.date().isoformat()}, in the future, which would stretch its sunset"
-    sunset = signed + timedelta(days=DEPRECATION_TTL_DAYS)
-    if now >= sunset:
-        return f"lapsed at {sunset.date().isoformat()} ({DEPRECATION_TTL_DAYS} days after its signed decision)"
-    return None
+    return _signed_lapse_reason(row, now, DEPRECATION_TTL_DAYS)
 
 
 def _check_new(team_dir: Path) -> dict[str, str]:
@@ -220,7 +195,7 @@ def _authorize(team_dir: Path, *, consume: bool, now: datetime, halt_dirs: tuple
     entries = entries_for(team_dir, action)
     reasons: list[str] = []
     for entry in active_relaxing_exceptions({"exceptions": entries}, now=now):
-        reason = _unbound_reason(team_dir, entry) or _lapse_reason(_bound_row(team_dir, entry), now)
+        reason = _unbound_reason(team_dir, entry, now=now, ttl_days=DEPRECATION_TTL_DAYS)
         if reason is None:
             return
         reasons.append(f"registered deprecation {entry.get('id')} did not carry over: it {reason}")
@@ -247,7 +222,7 @@ def _authorize(team_dir: Path, *, consume: bool, now: datetime, halt_dirs: tuple
         "effect": {"relaxes": [action]},
         "lineage": sorted(_split(row.get("derives_from") or "")),
         "issued": now.isoformat(),
-        "expires": (_signed_at(row) + timedelta(days=DEPRECATION_TTL_DAYS)).isoformat(),
+        "expires": _signed_sunset(row, DEPRECATION_TTL_DAYS).isoformat(),
         "decision_key_id": (row.get("key_id") or "").strip(),
         "decision_sha256": _decision_binding(row),
     }, now=now)

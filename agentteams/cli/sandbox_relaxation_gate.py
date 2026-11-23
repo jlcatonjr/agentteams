@@ -93,6 +93,44 @@ _ACTIVE = "active"
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _AUTHORIZING = frozenset({"PASS", "CONDITIONAL PASS"})
 
+#: How far ahead of now a signed row's date may lie (clock skew): a later date would stretch the Rule 15(d) sunset.
+_FUTURE_SKEW = timedelta(days=1)
+
+
+def _signed_at(row: dict[str, str]) -> datetime:
+    """The signed date of a decision row (UTC), from which a sunset is counted; ValueError if unparseable.
+
+    The same field the row's signature covers (``decision_log._decision_signature_values``: ``date``, else
+    ``timestamp``), so an unsigned column can't stretch the sunset. A date alone is midnight UTC; a datetime without
+    an offset is UTC.
+    """
+    raw = (row.get("date") or row.get("timestamp") or "").strip()
+    stamp = datetime.fromisoformat(raw)
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC)
+
+
+def _signed_sunset(row: dict[str, str], ttl_days: int) -> datetime:
+    """When *row*'s standing exception lapses: its signed date plus *ttl_days* (agentteams#595); ValueError if undated."""
+    return _signed_at(row) + timedelta(days=ttl_days)
+
+
+def _signed_lapse_reason(row: dict[str, str], now: datetime, ttl_days: int) -> str | None:
+    """Why *row* is past its signed sunset (signed date + *ttl_days*) at *now*, or undated / future-dated; else None.
+
+    The registry's own ``expires`` is unsigned (agentteams#595), so a standing exception is bounded by this too: it
+    lapses at the earlier of the two.
+    """
+    try:
+        signed = _signed_at(row)
+    except ValueError:
+        return f"is bound to a row with an unreadable date {(row.get('date') or row.get('timestamp'))!r}"
+    if signed > now + _FUTURE_SKEW:
+        return f"is dated {signed.date().isoformat()}, in the future, which would stretch its sunset"
+    sunset = _signed_sunset(row, ttl_days)
+    if now >= sunset:
+        return f"lapsed at {sunset.date().isoformat()} ({ttl_days} days after its signed decision)"
+    return None
+
 
 class SandboxRelaxationError(RuntimeError):
     """A sandbox relaxation is refused (fail-closed); the message names what to record or change."""
@@ -292,14 +330,27 @@ def _decision_binding(row: dict[str, str]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _unbound_reason(team_dir: Path, entry: dict) -> str | None:
+def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int) -> str | None:
     """Why an active registry entry may NOT carry its relaxation over (S1), or None when it may.
 
     It may only when its ``expires`` is present (an expiry-less entry never lapses, so it is refused) and its
     ``decision_sha256`` names a row still in the decisions log that re-verifies now through
     :func:`~agentteams.cli.decision_log._assert_authorizing_row_is_authentic` (approved author, the operator's
-    Ed25519 signature, traceable lineage) with the log's hash chain intact. Raises when the log is unreadable or its
-    chain is broken (fail-closed).
+    Ed25519 signature, traceable lineage) with the log's hash chain intact. That row's signed date also bounds it
+    (agentteams#595): it lapses *ttl_days* after it, whatever the unsigned ``expires`` says, and an entry ``issued``
+    before the row was signed is refused. Raises when the log is unreadable or its chain is broken (fail-closed).
+
+    Args:
+        team_dir: The governed team directory.
+        entry: The registry entry.
+        now: Reference time (UTC).
+        ttl_days: The calling gate's sunset, counted from the bound row's signed date.
+
+    Returns:
+        The reason, or None when the entry carries over.
+
+    Raises:
+        RuntimeError: The decisions log is unreadable or its chain is broken.
     """
     if not str(entry.get("expires") or "").strip():
         return "records no expiry"
@@ -325,6 +376,18 @@ def _unbound_reason(team_dir: Path, entry: dict) -> str | None:
             fieldnames), action=str(entry.get("action") or ""))
     except RuntimeError as exc:
         return f"is bound to a decision row that no longer verifies ({exc})"
+    lapse = _signed_lapse_reason(row, now, ttl_days)
+    if lapse is not None:
+        return lapse
+    issued = str(entry.get("issued") or "").strip()
+    if issued:
+        try:
+            stamp = datetime.fromisoformat(issued)
+        except ValueError:
+            return f"records an unreadable issued time {issued!r}"
+        stamp = stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC)
+        if stamp < _signed_at(row) - _FUTURE_SKEW:
+            return f"records being issued at {issued}, before its decision row was signed"
     return None
 
 
@@ -338,7 +401,7 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
     unbound = {}
     for e in active:
-        why = _unbound_reason(team_dir, e)
+        why = _unbound_reason(team_dir, e, now=now, ttl_days=SANDBOX_EXCEPTION_TTL_DAYS)
         if why is not None:
             unbound[e.get("id")] = why
             print(f"  !  sandbox exception {e.get('id')} for {r.action} {why}; it cannot carry the relaxation over",
@@ -627,6 +690,10 @@ def _authorize(team_dir: Path, relaxations: list[Relaxation], *, consume: bool,
                 raise SandboxRelaxationError(f"{message}. {_shape(r)}")
             fresh.append((i, r, list(lapsed)))  # a freshly signed decision replaces the lapsed exception
     rows = {i: _check_new(team_dir, r) for i, r, _ in fresh}
+    for i, r, _ in fresh:   # a stale new row would otherwise get a fresh sunset (agentteams#595)
+        stale = _signed_lapse_reason(rows[i], now, SANDBOX_EXCEPTION_TTL_DAYS) if r.standing else None
+        if stale is not None:
+            raise SandboxRelaxationError(f"the newest decision for {r.action} {stale}; the operator re-signs it")
     standing = [(i, r, lapsed) for i, r, lapsed in fresh if r.standing]
     retiring = [x for _, _, lapsed in standing for x in lapsed]
     if standing:
@@ -645,7 +712,7 @@ def _authorize(team_dir: Path, relaxations: list[Relaxation], *, consume: bool,
                     "effect": {"grants": list(r.grants)} if r.grants else {"relaxes": [r.action]},
                     "lineage": sorted(_split(row.get("derives_from") or "")),
                     "issued": now.isoformat(),
-                    "expires": (now + timedelta(days=SANDBOX_EXCEPTION_TTL_DAYS)).isoformat(),
+                    "expires": _signed_sunset(row, SANDBOX_EXCEPTION_TTL_DAYS).isoformat(),
                     "decision_key_id": (row.get("key_id") or "").strip(),
                     "decision_sha256": _decision_binding(row),
                 }, now=now)
