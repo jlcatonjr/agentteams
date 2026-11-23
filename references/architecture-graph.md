@@ -5,7 +5,7 @@
 
 - Modules mapped: **491**
 - Packages: **14**
-- Internal import edges: **1861**
+- Internal import edges: **1863**
 - Distinct external dependencies: **11**
 
 ---
@@ -400,7 +400,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.source_provenance` | `agentteams`, `agentteams.git_exec` | `agentteams.cli.parser`, `agentteams.doctor` |
 | `agentteams.stale_detector` | `agentteams.backup`, `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet`, `agentteams.frameworks.registry`, `agentteams.multi_sync`, `agentteams.sync_pin` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.backup`, `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
-| `agentteams.stale_surface_paths` | `agentteams.frameworks.registry` | `agentteams.emit` |
+| `agentteams.stale_surface_paths` | `agentteams.frameworks.registry`, `agentteams.unfenced`, `agentteams.user_regions` | `agentteams.emit` |
 | `agentteams.surface_matrix` | `agentteams.confinement`, `agentteams.user_regions` | `agentteams.cli.post_build`, `agentteams.doctor` |
 | `agentteams.svg_render` | — | `agentteams.architecture`, `agentteams.graph` |
 | `agentteams.sync_baseline` | `agentteams.atomicio` | `agentteams.cli.commands`, `agentteams.multi_sync` |
@@ -415,10 +415,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.toml_write` | — | `agentteams.codex_mcp_emit`, `agentteams.grok_config_emit` |
 | `agentteams.tool_metadata_catalog` | — | `agentteams.analyze`, `agentteams.analyze_tools`, `agentteams.enrich._audit`, `agentteams.enrich._notebooks`, `agentteams.enrich._tools` |
 | `agentteams.tool_version_source` | — | `agentteams.ingest`, `agentteams.render` |
-| `agentteams.unfenced` | `agentteams.front_matter_merge` | `agentteams.cli.term_check`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.learned_blocks`, `agentteams.whole_body_migration` |
+| `agentteams.unfenced` | `agentteams.front_matter_merge` | `agentteams.cli.term_check`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.learned_blocks`, `agentteams.stale_surface_paths`, `agentteams.whole_body_migration` |
 | `agentteams.update_lock` | `agentteams.atomicio`, `agentteams.cli.parser`, `agentteams.gitdirs` | `agentteams.cli.dev_merge`, `agentteams.cli.generate`, `agentteams.wasm_session` |
 | `agentteams.update_report` | — | `agentteams.cli.generate`, `agentteams.cli.routing_at_risk` |
-| `agentteams.user_regions` | — | `agentteams._fleet_report`, `agentteams.carveouts`, `agentteams.cli.render_pipeline`, `agentteams.cli.routing_at_risk`, `agentteams.copilot_body_limit`, `agentteams.emit`, `agentteams.fence_twins`, `agentteams.frameworks.structural_merge`, `agentteams.project_notes`, `agentteams.rules_projection`, `agentteams.surface_matrix`, `agentteams.whole_body_migration` |
+| `agentteams.user_regions` | — | `agentteams._fleet_report`, `agentteams.carveouts`, `agentteams.cli.render_pipeline`, `agentteams.cli.routing_at_risk`, `agentteams.copilot_body_limit`, `agentteams.emit`, `agentteams.fence_twins`, `agentteams.frameworks.structural_merge`, `agentteams.project_notes`, `agentteams.rules_projection`, `agentteams.stale_surface_paths`, `agentteams.surface_matrix`, `agentteams.whole_body_migration` |
 | `agentteams.vscode_tasks` | `agentteams._makefile_screen` | `agentteams.cli.render_pipeline` |
 | `agentteams.vulnscan` | — | `agentteams.vulnscan.report` |
 | `agentteams.vulnscan.__main__` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.docker_readiness`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.handoff`, `agentteams.vulnscan.host_change`, `agentteams.vulnscan.known_cli`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.ops`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.remediation_report`, `agentteams.vulnscan.report`, `agentteams.vulnscan.review`, `agentteams.vulnscan.schedule`, `agentteams.vulnscan.tools_image`, `agentteams.vulnscan.verify` | — |
@@ -5038,7 +5038,9 @@ digraph "agentteams architecture" {
       "path": "agentteams/stale_surface_paths.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams.frameworks.registry"
+        "agentteams.frameworks.registry",
+        "agentteams.unfenced",
+        "agentteams.user_regions"
       ],
       "external": [],
       "repo_local": []
@@ -12013,6 +12015,14 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.stale_surface_paths",
       "target": "agentteams.frameworks.registry"
+    },
+    {
+      "source": "agentteams.stale_surface_paths",
+      "target": "agentteams.unfenced"
+    },
+    {
+      "source": "agentteams.stale_surface_paths",
+      "target": "agentteams.user_regions"
     },
     {
       "source": "agentteams.surface_matrix",

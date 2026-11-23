@@ -16,23 +16,28 @@ Stdlib only.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
+
+from agentteams.unfenced import _FENCE_BEGIN_RE, _FENCE_END_RE
+from agentteams.user_regions import HEADINGS, find_region
 
 #: How many stale lines one notice quotes; the rest are counted.
 MAX_QUOTED = 3
 #: How much of each quoted line a notice shows.
 MAX_LINE_CHARS = 120
 
-_FENCE_RE = re.compile(r"<!--\s*AGENTTEAMS:BEGIN\s+(\S+)\s+v=\d+\s*-->.*?<!--\s*AGENTTEAMS:END\s+\1\s*-->", re.DOTALL)
-_USER_HEADING_RE = re.compile(r"^#{2,3}\s+Project-Specific (?:Notes|Rules)\b")
-_HEADING_RE = re.compile(r"^#{1,3}\s+\S")
 
 
+@lru_cache(maxsize=1)
 def surface_dirs() -> tuple[str, ...]:
     """Every registered framework's agents directory, project-relative and POSIX (e.g. ``.codex/agents``).
 
     Returns:
         The distinct directories, longest first (so ``.agentteams-wasm/agents`` is matched before a shorter one).
+
+    Raises:
+        Nothing.
     """
     from agentteams.frameworks.registry import FRAMEWORK_IDS, agents_dir_for
 
@@ -49,6 +54,9 @@ def own_surface(output_dir: Path) -> str | None:
 
     Returns:
         The matching entry of :func:`surface_dirs`, or None (then :func:`stale_lines` reports nothing).
+
+    Raises:
+        Nothing.
     """
     parts = PurePosixPath(Path(output_dir).as_posix())
     for d in surface_dirs():
@@ -58,19 +66,28 @@ def own_surface(output_dir: Path) -> str | None:
     return None
 
 
+def _masked_spans(text: str) -> list[tuple[int, int]]:
+    """Character spans of every fenced block (``unfenced``'s markers) and every user region (``user_regions``)."""
+    spans: list[tuple[int, int]] = []
+    for begin in _FENCE_BEGIN_RE.finditer(text):
+        end = next((e for e in _FENCE_END_RE.finditer(text, begin.end()) if e.group("sid") == begin.group("sid")), None)
+        spans.append((begin.start(), end.end() if end else len(text)))   # an unclosed fence masks to the end
+    for heading in HEADINGS:
+        region = find_region(text, heading)
+        if region:
+            spans.append((region[0], region[1]))
+    return spans
+
+
 def _project_owned_lines(text: str) -> list[tuple[int, str]]:
     """``(line number, line)`` for each line outside every fence and every user-editable region."""
-    masked = _FENCE_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    spans = _masked_spans(text)
     out: list[tuple[int, str]] = []
-    in_user = False
-    for number, line in enumerate(masked.splitlines(), start=1):
-        if _USER_HEADING_RE.match(line):
-            in_user = True
-            continue
-        if in_user and _HEADING_RE.match(line):
-            in_user = False
-        if not in_user:
-            out.append((number, line))
+    offset = 0
+    for number, line in enumerate(text.splitlines(keepends=True), start=1):
+        if not any(start <= offset < end for start, end in spans):
+            out.append((number, line.rstrip("\r\n")))
+        offset += len(line)
     return out
 
 
@@ -84,6 +101,9 @@ def stale_lines(existing: str, fresh: str, own: str | None) -> list[tuple[int, s
 
     Returns:
         ``(line number, other surface dir, line)`` for each stale line, in file order.
+
+    Raises:
+        Nothing.
     """
     if not own:
         return []
@@ -94,7 +114,8 @@ def stale_lines(existing: str, fresh: str, own: str | None) -> list[tuple[int, s
         stripped = line.strip()
         if not stripped or stripped in fresh_lines:
             continue
-        hit = next((d for d in others if re.search(rf"(?<![\w./-]){re.escape(d)}(?:/|`|\b)", line)), None)
+        hit = next((d for d in others if re.search(rf"(?<![\w-])(?:\./)?{re.escape(d)}(?=[/`\s),;:]|\.(?:\s|$)|$)", line)),
+                   None)
         if hit:
             found.append((number, hit, stripped))
     return found
@@ -111,6 +132,9 @@ def notice(rel_path: str, existing: str, fresh: str, own: str | None) -> str | N
 
     Returns:
         The notice text, or None when there is nothing stale.
+
+    Raises:
+        Nothing.
     """
     found = stale_lines(existing, fresh, own)
     if not found:

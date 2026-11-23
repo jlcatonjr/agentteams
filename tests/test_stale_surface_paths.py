@@ -106,3 +106,18 @@ def test_quoting_is_capped(tmp_path):
         f"See `.claude/agents/x{i}.md`.\n" for i in range(5)))
     text = ssp.notice("x.toml", many, FRESH, ".codex/agents")
     assert text and "7 unfenced line(s)" in text and "(+4 more)" in text
+
+
+def test_path_edges():
+    fresh = "x\n"
+    lines = lambda text: [d for _n, d, _l in ssp.stale_lines(text, fresh, ".codex/agents")]  # noqa: E731
+    assert lines("See `.agents-md` and file.agents.bak.\n") == []           # not the agents-md dir
+    assert lines("See ./.github/agents/x.md.\n") == [".github/agents"]      # a ./ prefix still names it
+    assert lines("Read .claude/agents.\n") == [".claude/agents"]            # sentence end
+    assert lines("Use my.github/agents now\n") == []                         # part of another name
+
+
+def test_a_user_region_with_its_own_subheading_stays_unflagged():
+    text = FRESH.replace("## Project-Specific Notes\n",
+                         "## Project-Specific Notes\n\n### Our mirror\n\nWe copy to `.github/agents/references/x.csv`.\n")
+    assert ssp.stale_lines(text, FRESH, ".codex/agents") == []
