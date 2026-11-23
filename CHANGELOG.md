@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0-rc.1] - 2026-11-23
+
+### release notes
+
+agentteams 1.3.0-rc.1 is the first release candidate of the 1.3 line. It is the first line cut from `dev` rather than
+`main` (at `62d745ed`, onto `release/1.3`), under the release model in `docs_src/release-and-branching.md`; `main`
+stays at v1.2.2 until 1.3.0 is released. The entries below it are everything that landed on `dev` after the 1.2 cut.
+
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** When the build would
+  not keep agents the orchestrator routes to, the run stops with `[ROUTING-LOSS] blocked` before any write. A
+  scripted overwrite that drops them on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`; otherwise
+  keep them with `--adopt-orphans`, the brief, or `--update --merge`.
+- **Security tightening: a carried-over exception lapses at its signed decision's sunset (#595).** The registry's
+  unsigned `expires` can no longer extend a sandbox relaxation or S-10 exemption. An exception registered some days
+  after its decision was signed lapses that many days sooner than before, and a decision row already past its 90
+  days is refused at registration: the operator re-signs it.
+- **Security tightening: HALTs.** A HALT in any generated team dir of the repository now binds a file clearance
+  checked in another (#578) and a per-repository S-10 exemption rendered from another (#597). A retraction clears
+  only its own id, or the whole family only when it names the gate action exactly (#596). Unreadable team dirs, logs
+  and briefs fail closed, including under Python 3.14's `Path` changes (#588, #598, #599). Teams on Python 3.14 with
+  agentteams before 1.3.0 should read that upgrade note below.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Action for existing teams (F10).** A `--update --merge` now prints a notice for unfenced lines an older render
+  left naming another surface's agents directory. It removes nothing: re-render that surface with
+  `--update --overwrite`, or delete the quoted lines by hand.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568). **Beta:**
+  `agentteams.term_index` and `--term-check` (#548), and the WASM streaming session mode (#567).
+- **Known issue (#616), fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect when
+  that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat rows
+  newer than the HALT as void and record a fresh PASS.
+
+Release-candidate soak: v1.3.0 follows once infrastructureManagement reports that every consumer repository rendered
+this candidate, installed from its signed tag, cleanly.
+
 ### security (a carried-over exception never outlives its signed decision's sunset; #595)
 
 - **What was wrong:** a standing exception in `references/exception-registry.json` carries a sandbox relaxation or an
