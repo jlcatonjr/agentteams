@@ -316,6 +316,11 @@ _TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
     # list in each .codex/agents/*.toml. A shorter render is a removed hand-off/tool, never lost
     # enrichment, so the template body always wins (no --shrink-policy=allow needed).
     "codex_translation",
+    # #622: the shipped infrastructure-security layer model. Projects record their choices in the
+    # same file's USER-EDITABLE `project_infra_security_notes` section, never in this fence, so a
+    # template retirement here (a source line the template no longer cites) must reach every team
+    # rather than be pinned by preserve-on-shrink.
+    "infra_security_model",
 ])
 
 
@@ -528,7 +533,14 @@ def _detect_fence_shrink(sid: str, existing_block: str, new_block: str) -> str |
     ex_paths = set(_PATH_RE.findall(existing)) | set(_BACKTICK_IDENT_RE.findall(existing))
     new_paths = set(_PATH_RE.findall(new)) | set(_BACKTICK_IDENT_RE.findall(new))
     lost = ex_paths - new_paths
-    if lost:
+    if lost and sid in _TEMPLATE_AUTHORITATIVE_FENCES:
+        # #622: the template owns this body, so a lost token is either one the template retired or
+        # one appended on disk. Naming it would copy it into update.report.md, a durable file in
+        # the team directory, even when the template retired it precisely so that it stops being
+        # published. The count keeps the signal; the old body is in the .lost sidecar.
+        reasons.append(f"lost concrete refs: {len(lost)} (not listed for a template-owned fence; "
+                       f"the old body is in the .lost.{sid}.md.agentteams-bak sidecar)")
+    elif lost:
         sample = sorted(lost)[:3]
         more = f" (+{len(lost) - 3} more)" if len(lost) > 3 else ""
         reasons.append(f"lost concrete refs: {', '.join(sample)}{more}")
