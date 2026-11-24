@@ -91,7 +91,7 @@
     "agentteams/frameworks/_codex_sandbox_emit.py": "da26c9a74ba088962c8959b9af0c140124a109b95985412e0ae29b8f94d6ea5d",
     "agentteams/frameworks/_codex_wasm_gate.py": "4037f388af8541a79cca27178df8199247820f4fd3632a42e8472d9572b0babd",
     "agentteams/frameworks/_control_plane_protect.py": "3cd0c2ff1ce419b5d2fdd1684a4d1c8552973262f2ebe5ff8e61f4a809b3cd0a",
-    "agentteams/frameworks/_goose_sandbox_emit.py": "c2fe6adcd571d5a02833c463da2bc63040440952fc4ccb86004fc90e71f17032",
+    "agentteams/frameworks/_goose_sandbox_emit.py": "fe855a0d293125d1d166f4f293fbd0e03929dc850a6eb6b86e6c834d419b3e2c",
     "agentteams/frameworks/_grok_sandbox_emit.py": "e1f0305086450f66173eb94263043235c1686986d73dd349c36dacd8dcd4e62d",
     "agentteams/frameworks/_grok_tool_scoping.py": "b3c33f04107801b85dd587b7046676f41ba7400cfc843262ca74e93df857481a",
     "agentteams/frameworks/_linux_sandbox_emit.py": "324a8162d50ce8e2aec28807c6ee70bfa584c93207452485c4e1453ab0da53bb",

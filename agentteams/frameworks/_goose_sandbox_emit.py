@@ -37,9 +37,11 @@ source of truth shared with the Claude path.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -195,18 +197,20 @@ def _seatbelt_ancestor_rename_rules(ancestors: tuple[str, ...]) -> list[str]:
 
 #: Ollama's default API port. Its ``/api/pull`` of a model named ``host/ns/x`` makes Ollama connect to ``host``
 #: (measured 2026-11-23), so an agent that can reach the API has a channel off the machine.
-OLLAMA_DEFAULT_PORT = "11434"
+OLLAMA_DEFAULT_PORT = 11434   # the same port as the "ollama" preset in model_providers/_config.py
 
 
 def _ollama_ports() -> set[int]:
-    """Ollama's default port, plus the port in ``OLLAMA_HOST`` (``host:port``, ``scheme://host:port``) when set."""
-    import os
-
-    ports = {int(OLLAMA_DEFAULT_PORT)}
-    host = os.environ.get("OLLAMA_HOST", "").strip().rstrip("/")
-    tail = host.rpartition("//")[2].rpartition(":")[2]
-    if tail.isdigit():
-        ports.add(int(tail))
+    """Ollama's default port, plus the port in ``OLLAMA_HOST`` (``host:port``, ``scheme://host:port/path``,
+    ``[::1]:port``) when it names one. A value that doesn't parse adds nothing; the default is always kept."""
+    ports = {OLLAMA_DEFAULT_PORT}
+    value = os.environ.get("OLLAMA_HOST", "").strip()
+    try:
+        port = urllib.parse.urlsplit(value if "://" in value else "//" + value).port
+    except ValueError:   # e.g. a bare "::1" or "host:abc"
+        port = None
+    if port:
+        ports.add(port)
     return ports
 
 
@@ -217,12 +221,18 @@ def ollama_egress_warning(endpoint: str | None) -> str | None:
         endpoint: The validated loopback egress (``localhost``, ``localhost:PORT``, ``*`` or ``*:PORT``), or None.
 
     Returns:
-        A one-line warning when the endpoint names an Ollama port or has no port (every loopback port, Ollama's
-        included); otherwise None.
+        A one-line warning when the endpoint names an Ollama port or has no port (every port, Ollama's included);
+        otherwise None, including for an endpoint that isn't a valid egress (callers pass
+        :func:`_seatbelt_egress_rule`'s result).
+
+    Raises:
+        Nothing.
     """
     if not endpoint:
         return None
     host, sep, port = endpoint.partition(":")
+    if sep and not port.isdigit():
+        return None
     if sep and int(port) not in _ollama_ports():   # int(): "011434" is port 11434 too
         return None
     where = "every host" if host == "*" else "loopback"
