@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (dev is 1.4.0.dev0 after the 1.3 cut; a dev build's install hint points at v1.3.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.4.0.dev0`, so builds from `dev` cannot be mistaken for 1.3.x. `release/1.3` carries
+  the 1.3 line: it was cut from `dev` at `62d745ed`, and v1.3.0-rc.1 was signed on it on 2026-11-23.
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from `v1.2.2` to the
+  newest published tag, `v1.3.0-rc.1`.
+
 ### security (a carried-over exception never outlives its signed decision's sunset; #595)
 
 - **What was wrong:** a standing exception in `references/exception-registry.json` carries a sandbox relaxation or an
