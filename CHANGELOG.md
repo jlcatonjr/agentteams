@@ -32,6 +32,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One resolver fewer:** `api_impact` now uses it. The resolvers in `branch_inventory`, `release_required_checks`
   and the vulnerability-scan modules are unchanged.
 
+### security (two warnings: Codex sealed results, and a Goose exclusive egress that reaches Ollama)
+
+- **Codex:** with `write_policy: "orchestrator-only"`, a Codex render now warns that sealed results are not
+  confidential there. The Codex launcher leaves `.agentteams-queue/` readable, because the in-session CLI writes
+  requests to it, so any agent in the session can read each request's `reply_key`. Integrity still holds. The fix is
+  1.4 scope. Nothing is refused, so no migration is needed.
+- **Goose `exclusive`:** the macOS render now warns when `goose_egress_proxy` can reach Ollama. That covers Ollama's
+  port (`11434`, or the port in `OLLAMA_HOST`) and an egress with no port, which re-allows every loopback port.
+  Ollama's `/api/pull` connects to any registry host, so the profile is then not network-isolated. Point the egress at
+  a loopback filter that allows only the inference routes. Nothing is refused yet; the filter, and refusing an
+  unfiltered Ollama egress, are 1.4 scope.
+- A new test fails any Seatbelt regex in the package that uses a bounded count such as `{32}`. In a `#"..."` regex,
+  Seatbelt silently matches nothing for one, so a deny rule fails open. No rule shipped today uses one.
+
 ### security (a carried-over exception never outlives its signed decision's sunset; #595)
 
 - **What was wrong:** a standing exception in `references/exception-registry.json` carries a sandbox relaxation or an
