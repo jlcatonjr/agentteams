@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Limits:** it finds copied text, not reworded text, and it does not change templates or what an agent loads.
   The strict site build passes and the guide's rendered pages are unchanged.
 
+### changed (dev is 1.4.0.dev0 after the 1.3 cut; a dev build's install hint points at v1.3.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.4.0.dev0`, so builds from `dev` cannot be mistaken for 1.3.x. `release/1.3` carries
+  the 1.3 line: it was cut from `dev` at `62d745ed`, and v1.3.0-rc.1 was signed on it on 2026-11-23.
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from `v1.2.2` to the
+  newest published tag, `v1.3.0-rc.1`.
+
 ### security (two warnings: Codex sealed results, and a Goose exclusive egress that reaches Ollama)
 
 - **Codex:** with `write_policy: "orchestrator-only"`, a Codex render now warns that sealed results are not
