@@ -49,9 +49,9 @@ These were measured with `sandbox-exec` on Darwin 25.5 (2026-11-23), using `(all
 rule at a time. Anyone writing or reviewing an emitted profile should know them, because most of them fail
 silently:
 
-- **Bounded counts match nothing.** In a `#"..."` regex, `{32}` or `{2,4}` silently matches nothing, so a
-  deny rule that uses one fails open, and an allow rule never allows. Backslash escapes (`\.`) and
-  character classes (`[.]`, `[0-9a-f]`) work. `tests/test_seatbelt_regex_dialect.py` fails any `(regex`
+- **Bounded counts match nothing.** In a `#"..."` regex, a bounded count such as `{32}` silently matches
+  nothing, so a deny rule that uses one fails open, and an allow rule never allows. Backslash escapes
+  (`\.`), the class `[.]` and `+` work. `tests/test_seatbelt_regex_dialect.py` fails any `(regex`
   literal under `agentteams/` that uses a count.
 - **Long strings don't load.** A string literal longer than about 900 to 1,100 characters makes the
   profile fail to load, with "Error reading string". Split a long path list into several rules.
@@ -59,7 +59,10 @@ silently:
 - **Paths are case-sensitive, APFS isn't.** A protected name needs a two-case class, as the nested-`.git`
   rule does (`[gG][iI][tT]`).
 - **Hard links.** Seatbelt checks a hard link's source path.
-- **No DNS, no names.** A process can't resolve another host when no DNS socket is allowed.
+- **No DNS, no names.** A process can't resolve a host name when no DNS socket is allowed, and that
+  includes `localhost`. A client inside the profile should connect to `127.0.0.1`. The profile's own
+  `(remote ip "localhost:PORT")` rule still names `localhost`, which is the only host form Seatbelt accepts
+  there.
 - **Ollama relays.** Ollama's `/api/pull` of a model named `host/ns/x` connects to `host`, so a profile
   that lets an agent reach Ollama directly has a channel off the machine. The render warns when an
   `exclusive` egress can reach Ollama (`agentteams/frameworks/_goose_egress.py`; see
@@ -68,7 +71,7 @@ silently:
 The first failing rule was blamed on the backslash. It also used `{32}`, and the count turned out to be the
 real cause.
 
-*Source:* a measurement run on the maintainer's machine (2026-11-23), recorded privately; `@security`
+*Source:* measured by the operator's management team, 2026-11-23, Darwin 25.5; `@security`
 SEC-2026-11-23-im-sealed-mail-B and -C.
 
 ## SB12 — Mechanism C: the framework-neutral launcher (Linux `bwrap` + macOS `sandbox-exec`)  ✅/⚙
