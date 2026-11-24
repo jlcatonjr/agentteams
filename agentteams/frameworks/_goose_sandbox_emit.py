@@ -46,6 +46,7 @@ from typing import Any
 from agentteams.host_features import is_sandbox_capable
 from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
 from agentteams.frameworks._control_plane_protect import substrate_protect_paths  # P20 D5
+from agentteams.frameworks._goose_egress import ollama_egress_warning  # SEC-2026-11-23-im-sealed-mail-B/C
 from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
 from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
@@ -403,6 +404,9 @@ def _build_seatbelt_profile(
                 ";; exfiltration THROUGH it; bound it with the proxy's own content/rate controls.",
                 f'(allow network* (remote ip "{egress_expr}"))',
             ]
+            ollama = ollama_egress_warning(egress_expr)
+            if ollama:   # SEC-2026-11-23-im-sealed-mail-C: the warning must survive the render
+                lines += [f";; WARNING (Ollama relay): {ollama}"]
         else:
             lines += [
                 ";; No sanctioned egress proxy (goose_egress_proxy unset, or a non-loopback value",
@@ -637,6 +641,10 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     # Network isolation is an EXCLUSIVE-only property (operator decision 2026-W39): the
     # default confined profile leaves egress open so a goose team can reach its LLM.
     deny_network = manifest.get("privilege_profile") == "exclusive"
+    if deny_network:
+        warning = ollama_egress_warning(_seatbelt_egress_rule(egress_endpoint))
+        if warning:
+            print(f"  \u26a0  {warning}", file=sys.stderr)
     from agentteams.frameworks._sandbox_emit import SIBLING_DENY_DIRS, sibling_deny_dirs
 
     profile_text = _build_seatbelt_profile(

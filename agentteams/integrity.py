@@ -119,6 +119,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # one sibling emitter left unpinned, so a silent edit dropping a control-plane entry weakened
     # every emitted goose/macOS boundary without tripping --verify-integrity or E4.
     "agentteams/frameworks/_goose_sandbox_emit.py",
+    "agentteams/frameworks/_goose_egress.py",
     # The Codex runner emitter (Phase 1a/1b, 2026-10-08): builds .codex/confined-run.example.sh (the launcher
     # flags, CODEX_HOME placement, the in-launcher self-probe) and pins the role gate's hash. A silent edit
     # dropping a --protect, the self-probe or the gate's pin check weakens every emitted Codex boundary.
