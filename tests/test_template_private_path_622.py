@@ -90,3 +90,37 @@ def test_no_template_names_a_private_checkout():
         if pat.search(path.read_text(encoding="utf-8", errors="replace"))
     ]
     assert not offenders, offenders
+
+
+def test_an_update_in_a_git_repository_leaves_no_addable_file_with_the_retired_line(tmp_path):
+    """IM-da review of #624: the old body survives only in the run's backup, which git ignores.
+
+    The merge sets the old body aside in a `.lost` sidecar, and the backup also holds the whole old file. Both sit in
+    `.agentteams-backups/`, which carries its own `*` `.gitignore`, so a routine `git add -A` publishes neither.
+    """
+    import subprocess
+
+    from agentteams.backup import backup_output_dir
+    from agentteams.fences import _write_lost_fence_sidecars
+
+    repo = tmp_path / "repo"
+    team = repo / ".github" / "agents"
+    rel = "references/security-infrastructure-layers.reference.md"
+    (team / "references").mkdir(parents=True)
+    (team / rel).write_text(_OLD, encoding="utf-8")
+    git = ["git", "-C", str(repo), "-c", "core.hooksPath=/dev/null"]
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+
+    result = backup_output_dir(team, files_to_backup=[rel], reason="test")
+    assert result.backup_path is not None
+    mr = _merge_fenced_content(_NEW, _OLD, preserve_on_shrink=True, rel_path=rel)
+    (team / rel).write_text(mr.merged_content, encoding="utf-8")
+    written = _write_lost_fence_sidecars(Path(result.backup_path), rel, {_SID: _OLD})
+    assert written, "the sidecar was not written"
+
+    on_disk = [p for p in team.rglob("*") if p.is_file() and "private-checkout" in p.read_text(errors="replace")]
+    assert on_disk and all(".agentteams-backups" in p.parts for p in on_disk)   # only the backup keeps it
+    addable = subprocess.run([*git, "ls-files", "--others", "--exclude-standard"], check=True,
+                             capture_output=True, text=True).stdout.split()
+    assert addable == [".github/agents/" + rel]                                    # the live file, now clean
+    assert "private-checkout" not in (team / rel).read_text(encoding="utf-8")
