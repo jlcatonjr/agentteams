@@ -193,6 +193,45 @@ def _seatbelt_ancestor_rename_rules(ancestors: tuple[str, ...]) -> list[str]:
     ]
 
 
+#: Ollama's default API port. Its ``/api/pull`` of a model named ``host/ns/x`` makes Ollama connect to ``host``
+#: (measured 2026-11-23), so an agent that can reach the API has a channel off the machine.
+OLLAMA_DEFAULT_PORT = "11434"
+
+
+def _ollama_ports() -> set[int]:
+    """Ollama's default port, plus the port in ``OLLAMA_HOST`` (``host:port``, ``scheme://host:port``) when set."""
+    import os
+
+    ports = {int(OLLAMA_DEFAULT_PORT)}
+    host = os.environ.get("OLLAMA_HOST", "").strip().rstrip("/")
+    tail = host.rpartition("//")[2].rpartition(":")[2]
+    if tail.isdigit():
+        ports.add(int(tail))
+    return ports
+
+
+def ollama_egress_warning(endpoint: str | None) -> str | None:
+    """The render-time warning when an exclusive profile's sanctioned egress can reach Ollama (@security, 2026-11-23).
+
+    Args:
+        endpoint: The validated loopback egress (``localhost``, ``localhost:PORT``, ``*`` or ``*:PORT``), or None.
+
+    Returns:
+        A one-line warning when the endpoint names an Ollama port or has no port (every loopback port, Ollama's
+        included); otherwise None.
+    """
+    if not endpoint:
+        return None
+    host, sep, port = endpoint.partition(":")
+    if sep and int(port) not in _ollama_ports():   # int(): "011434" is port 11434 too
+        return None
+    where = "every host" if host == "*" else "loopback"
+    reach = f"Ollama's port {int(port)} on {where}" if sep else f"every port on {where}, Ollama's included"
+    return (f"goose_egress_proxy {endpoint!r} re-allows {reach}: Ollama's /api/pull connects to any registry host, so "
+            "the exclusive profile is not network-isolated. Put a loopback filter that allows only the inference routes "
+            "in front of Ollama and point goose_egress_proxy at it (see goose-privileges.md).")
+
+
 def _seatbelt_egress_rule(endpoint: str | None) -> str | None:
     """Validate a sanctioned-egress endpoint for a Seatbelt ``remote ip`` rule.
 
@@ -403,6 +442,9 @@ def _build_seatbelt_profile(
                 ";; exfiltration THROUGH it; bound it with the proxy's own content/rate controls.",
                 f'(allow network* (remote ip "{egress_expr}"))',
             ]
+            ollama = ollama_egress_warning(egress_expr)
+            if ollama:   # SEC-2026-11-23-im-sealed-mail-C: the warning must survive the render
+                lines += [f";; WARNING (Ollama relay): {ollama}"]
         else:
             lines += [
                 ";; No sanctioned egress proxy (goose_egress_proxy unset, or a non-loopback value",
@@ -637,6 +679,10 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     # Network isolation is an EXCLUSIVE-only property (operator decision 2026-W39): the
     # default confined profile leaves egress open so a goose team can reach its LLM.
     deny_network = manifest.get("privilege_profile") == "exclusive"
+    if deny_network:
+        warning = ollama_egress_warning(_seatbelt_egress_rule(egress_endpoint))
+        if warning:
+            print(f"  \u26a0  {warning}", file=sys.stderr)
     from agentteams.frameworks._sandbox_emit import SIBLING_DENY_DIRS, sibling_deny_dirs
 
     profile_text = _build_seatbelt_profile(
