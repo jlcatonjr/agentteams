@@ -13,14 +13,7 @@ constrained by an exact-match HTTPS **host allowlist**, per-host response **size
 bounds**, and IDNA normalization, so a redirect or a compromised look-alike
 subdomain cannot slip content past the boundary.
 
-| Source | Kind | Notes |
-|---|---|---|
-| **CISA KEV** (Known Exploited Vulnerabilities) | live | `www.cisa.gov` |
-| **FIRST EPSS** (exploit-prediction scores) | live | `api.first.org` |
-| **MITRE CVE** | live | `cveawg.mitre.org` |
-| **NVD CVSS** | live, **optional, rate-limited** | `services.nvd.nist.gov` |
-| **OSV.dev** | live, **package-level** — only when `tools` are given | `api.osv.dev` |
-| **OWASP LLM Top 10 (2025)** | **static** (source-versioned) | + a static source registry |
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-table-source-kind-notes.md"
 
 The allowlist is checked against the **effective, post-redirect URL host**, not
 the URL originally requested — a control stated in-module as intentionally
@@ -94,11 +87,7 @@ audit — is what distinguishes this from a test suite**
 **Attacker tiers.** A control is meaningful only against a stated tier; a claim
 with no tier is not a measurement.
 
-| Tier | The attacker |
-|---|---|
-| **T0** | supplies content the agent *reads* (injected text) |
-| **T1** | an in-repo agent with **write + execute** |
-| **T2** | the operator's own shell |
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-table-tier-the-attacker.md"
 
 **Five outcome classes.** Each probe resolves to exactly one of: **DEFENDED**,
 **PARTIAL**, **EXPLOITED**, **DOCUMENTED-LIMIT**, or **OUT-OF-TIER**. An unknown
@@ -122,14 +111,7 @@ machinery refuses to emit a bare count.
 self-audit checks six failure modes of the auditing machinery itself
 (`agentteams/redteam/selfaudit.py:33-101`):
 
-| ID | Failure mode it catches |
-|---|---|
-| **F-1** | a verifier that always passes — every verifier needs a sensitivity test and a negative control |
-| **F-2** | a fix wired to one of two call sites — every fix must reach every call path |
-| **F-3** | hand-rolling what the tool provides — no hand-rolled target, descriptor, or VCS resolution |
-| **F-4** | a coverage claim with an unexamined denominator — every count carries the population it was computed over |
-| **F-5** | a probe that got blinder, not better — every probe whose behaviour changed is re-validated for intent |
-| **F-6** | accepting a weakness with no ledger diff — every accepted weakness has a named reason |
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-table-id-failure-mode-it-catches.md"
 
 **CLI and the exit-code hierarchy.** `--redteam` runs the audit;
 `--redteam-freshness-check` checks the standing run's currency;
@@ -146,16 +128,8 @@ are named failure modes, not a proof of their own absence — and the byte-ident
 assertion tells you what happened to the copy, not that every future attack
 leaves the tree untouched.
 
-**Source.**
-`agentteams/templates/universal/redteam-methodology.reference.template.md:22-239`;
-`agentteams/redteam/registry.py:36-55`; `agentteams/redteam/runner.py:39-79`;
-`agentteams/redteam/selfaudit.py:33-101`; `agentteams/redteam/cycle.py:1-215`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-source.md"
 
 ---
 
-**Sources for Part VII.** `agentteams/security_refs.py`;
-`agentteams/security_feed_render.py`;
-`agentteams/templates/universal/security-vulnerability-watch.reference.template.md`;
-`agentteams/templates/universal/redteam-methodology.reference.template.md`;
-`agentteams/redteam/registry.py`; `agentteams/redteam/runner.py`;
-`agentteams/redteam/selfaudit.py`; `agentteams/redteam/cycle.py`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-sources.md"

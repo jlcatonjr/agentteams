@@ -158,7 +158,4 @@ was intended.
 
 ---
 
-**Sources for Part VIII.** `agentteams/integrity.py`;
-`agentteams/cli/commands.py`; `agentteams/provenance.py`;
-`agentteams/backup.py`; `agentteams/baseline.py`;
-`agentteams/cli/backup_switch.py`; `agentteams/cli/app.py`.
+--8<-- "docs_src/assets/snippets/security-guide-part-viii-sources.md"

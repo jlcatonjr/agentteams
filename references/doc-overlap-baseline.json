@@ -1,0 +1,16 @@
+{
+  "clusters": {
+    "48e1347e5073": {
+      "copies": 4,
+      "first": "docs_src/api-reference/interop-write-policy.md",
+      "words": 52
+    },
+    "f6bbc3e609c9": {
+      "copies": 2,
+      "first": "docs_src/api-reference/drift.md",
+      "words": 26
+    }
+  },
+  "min_words": 20,
+  "version": 1
+}
