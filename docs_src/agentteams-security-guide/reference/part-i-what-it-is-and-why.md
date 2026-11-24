@@ -89,10 +89,7 @@ code-enforced (S2), and the strongest OS locks are off unless armed.
 
 **Two distinct security surfaces must never be collapsed.**
 
-| Surface | What it governs | `@security`'s role |
-|---|---|---|
-| **Agentic-build security** | the agents and the build process itself — the constitution, the sentinel, the gates | **governs** it |
-| **Deployed-system security** | the defense-in-depth of the software a project *ships* (Part VI's L0–L7 model, S17) | only **reviews against** it |
+--8<-- "docs_src/assets/snippets/security-guide-part-i-table-surface-what-it-governs-security-s-role.md"
 
 The sentinel owns the first surface. For the second, it is a reviewer against a
 reference model — it does not deploy, harden, or run inside the shipped system.
@@ -136,9 +133,4 @@ These ceilings are facts, not caveats — they ship in every edition unsoftened.
 
 ---
 
-**Sources for Part I.** `SECURITY.md`; `.claude/CLAUDE.md`;
-`agentteams/templates/universal/security.template.md`;
-`agentteams/host_features.py`;
-`agentteams/templates/universal/hooks/constitutional-gate.py`;
-`agentteams/cli/security_gate.py`;
-`agentteams/templates/universal/security-infrastructure-layers.reference.template.md`.
+--8<-- "docs_src/assets/snippets/security-guide-part-i-sources.md"

@@ -32,16 +32,7 @@ deployed system a project builds** — *not* for the agent build process — cro
 by a `design → build → baseline → tune → operate → respond → review` lifecycle,
 so each layer is considered at each stage:
 
-| Layer | Concern |
-|---|---|
-| **L0** | Governance |
-| **L1** | Identity |
-| **L2** | Crypto / secrets |
-| **L3** | **Host & workload hardening** — where OS confinement lives |
-| **L4** | Network |
-| **L5** | Application & supply chain |
-| **L6** | Detection / logging |
-| **L7** | Resilience / backup / IR |
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-table-layer-concern.md"
 
 **The boundary it draws.** This L0–L7 model governs the *deployed system*; the
 `@security` sentinel governs the *build process*. The two must not be
@@ -68,11 +59,7 @@ Full treatment: Edition R, S17.
 outside its scope, or reading a credential directory — to escalate. The control
 is a requested OS sandbox selected by a **privilege profile**:
 
-| Profile | OS boundary | Emits |
-|---|---|---|
-| **`cooperative`** | None (`os_sandbox: "off"` is the dedicated off switch) | No sandbox request |
-| **`confined`** | Requested — **today's default** | A sandbox request token |
-| **`exclusive`** | Requested + read-exclusion | A sandbox request token **and** `denyRead` |
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-table-profile-os-boundary-emits.md"
 
 An **unknown** profile **fails closed** — it raises rather than silently
 downgrading. `denyWrite` of exact control-plane paths (`agent-privilege.json`,
@@ -118,11 +105,7 @@ stays dormant out of the box until it is wired in** — even under the default
 `confined` profile, which emits the boundary but cannot enforce it unmerged.
 Full profile mechanics and line numbers: Edition R, S18.
 
-**Source.** `agentteams/host_features.py:134-261`;
-`agentteams/frameworks/_sandbox_emit.py:25-208`;
-`agentteams/frameworks/_goose_sandbox_emit.py:1-222`;
-`references/agentteams-remediation-log.csv` (D-3);
-`agentteams/cli/artifacts.py:321-411`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-source-agentteams-host-features-py.md"
 
 ## The constitutional-gate hook  ✅ *(fail-closed under confined/exclusive; **fail-open by default**)* {#S19}
 

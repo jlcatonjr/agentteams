@@ -2253,6 +2253,24 @@ python -m agentteams.plan_priority PLAN.steps.csv [MORE ...] [--json] [--require
     2 on a validation error or a cycle.
   - API: [`plan_priority`](api-reference/plan-priority.md).
 
+## Documentation Overlap Helper
+
+A module CLI that finds passages repeated across Markdown files. It is read-only unless `--yes` or
+`--write-baseline` is given, and its exit codes are its own.
+
+```
+python -m agentteams.doc_overlap PATH [PATH ...] [--json] [--declared FILE] [--check --baseline FILE]
+python -m agentteams.doc_overlap --extract NAME PAGE [PAGE ...] [--yes]
+```
+
+- A scan reports exact repeats, near repeats to review, and overlap declared as intended.
+- `--check --baseline FILE` exits 1 when a repeated passage is not in the baseline.
+- `--extract` moves the longest run of lines shared by the named docs-site pages into one snippet
+  file and includes it in each page. It is a dry run until `--yes`, and it refuses unless every page
+  expands to its original text.
+- Exit status: 0 clean, 1 new repetition under `--check`, 2 a refused or invalid request.
+- API and the rules for a refusal: [`doc_overlap`](api-reference/doc-overlap.md).
+
 ## Exit Codes
 
 | Code | Meaning |
