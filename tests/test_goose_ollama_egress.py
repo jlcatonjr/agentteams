@@ -49,22 +49,24 @@ def test_another_port_or_no_egress_does_not_warn(endpoint: str | None) -> None:
 
 
 @pytest.mark.parametrize("value", ["127.0.0.1:9999", "http://localhost:9999", "http://localhost:9999/", ":9999",
-                                   "http://h:9999/path", "[::1]:9999"])
+                                   "http://h:9999/path", "[::1]:9999", "http://u:p@h:9999", "h:9999?x=1",
+                                   "h:9999#frag"])
 def test_the_port_in_ollama_host_counts_too(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     monkeypatch.setenv("OLLAMA_HOST", value)
     assert E.ollama_egress_warning("localhost:9999")
     assert E.ollama_egress_warning("localhost:11434")
 
 
-@pytest.mark.parametrize("value", ["localhost", "::1", "host:abc", ""])
+@pytest.mark.parametrize("value", ["localhost", "::1", "host:abc", "", "host:\u00b2", "host:99999", "host:0"])
 def test_an_ollama_host_without_a_usable_port_adds_nothing(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     monkeypatch.setenv("OLLAMA_HOST", value)
     assert E.ollama_egress_warning("localhost:8080") is None
     assert E.ollama_egress_warning("localhost:11434")
 
 
-def test_an_invalid_port_returns_none_rather_than_raising() -> None:
-    assert E.ollama_egress_warning("localhost:abc") is None
+@pytest.mark.parametrize("endpoint", ["localhost:abc", "localhost:\u00b2", "localhost:99999"])
+def test_an_invalid_port_returns_none_rather_than_raising(endpoint: str) -> None:
+    assert E.ollama_egress_warning(endpoint) is None
 
 
 def _render(profile: str, egress: str, capsys: pytest.CaptureFixture[str]) -> str:
