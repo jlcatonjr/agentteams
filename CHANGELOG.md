@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A test refuses any template that names a root directory `.gitignore` marks as private.
 - **Upgrade note:** the next `--update --merge` replaces a hand edit inside `infra_security_model`, with a shrink
   notice and the sidecar. Under `--shrink-policy=halt` that notice still stops the run: review it, then re-run with
-  `--shrink-policy=allow`. Generated repositories keep the old line in their git history; this fixes the tree only.
+  `--shrink-policy=allow`. The old body then exists only in that run's backup under `.agentteams-backups/`, which
+  carries its own `*` `.gitignore`; if you removed that file to commit backups, delete those backups instead.
+  Generated repositories keep the old line in their git history; this fixes the tree only.
 
 ## [1.3.0-rc.1] - 2026-11-23
 
