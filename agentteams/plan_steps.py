@@ -167,7 +167,7 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
             raise ValueError(f"status {status!r} is not one of {sorted(STATUSES)}{hint}")
         changes["status"] = value
 
-    target = Path(path)
+    target = Path(path).resolve()  # a symlinked table stays a link: the rename replaces what it points to
     with target.open(encoding="utf-8", newline="") as fh:
         text = fh.read()
     lines, records = _records(text)

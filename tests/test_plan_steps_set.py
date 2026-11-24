@@ -172,3 +172,14 @@ def test_header_and_note_refusals(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="empty"):
         ps.set_step(q, "1", append_note="  ")
     assert q.read_text(encoding="utf-8") == "step,status\n1,done\n"
+
+
+def test_a_symlinked_table_stays_a_symlink(tmp_path: Path) -> None:
+    real = tmp_path / "real.steps.csv"
+    real.write_text("step,status\n1,pending\n", encoding="utf-8")
+    link = tmp_path / "link.steps.csv"
+    link.symlink_to(real)
+    ps.set_step(link, "1", status="done")
+    assert link.is_symlink()
+    assert real.read_text(encoding="utf-8") == "step,status\n1,done\n"
+    assert sorted(f.name for f in tmp_path.iterdir()) == ["link.steps.csv", "real.steps.csv"]

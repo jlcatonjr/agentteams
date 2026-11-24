@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Checked on real tables:** run over copies of 812 step tables from this repository, 794 changed in the one row
   only and 18 were refused with the file untouched. The whole-table writer (`update_step`) is unchanged; on the
   same tables it converts CRLF line endings and drops cells from rows wider than the header.
+- **Symlinks:** a steps file reached through a symlink stays a symlink; the file it points to is updated.
 - **Tracing:** the workflow tracer counts a `--set` on a steps CSV as a write to it.
 - **Not changed:** the agent templates do not mention the command yet.
 
