@@ -22,6 +22,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tracing:** the workflow tracer counts a `--set` on a steps CSV as a write to it.
 - **Not changed:** the agent templates do not mention the command yet.
 
+### security (a template's retired source line reaches existing teams; #622)
+
+- **What was wrong:** the universal `security-infrastructure-layers` reference cited a private checkout's directory
+  in its `infra_security_model` fence, so every generated team published it. Deleting the line from the template
+  was not enough: on `--update --merge`, the shrink guard read the removed path as "lost concrete refs", and the
+  default `--shrink-policy=preserve` kept each team's old body.
+- **Now:**
+  - The line reads "Full source grounding: the standards named above."
+  - `infra_security_model` is a template-owned fence: projects record their choices in the file's USER-EDITABLE
+    `project_infra_security_notes` section, so a merge always takes the template's body. A team whose body still
+    matches a recorded render already got template updates through the fence baseline; this reaches the rest.
+  - A shrink notice for a template-owned fence gives the number of lost references, not the references, so the
+    retired text is not copied into `update.report.md`. The old body is still in the `.lost.<fence>.md.agentteams-bak`
+    sidecar in the run's backup directory.
+  - A test refuses any template that names a root directory `.gitignore` marks as private.
+- **Upgrade note:** the next `--update --merge` replaces a hand edit inside `infra_security_model`, with a shrink
+  notice and the sidecar. Under `--shrink-policy=halt` that notice still stops the run: review it, then re-run with
+  `--shrink-policy=allow`. The old body then exists only in that run's backup under `.agentteams-backups/`, which
+  carries its own `*` `.gitignore`; if you removed that file to commit backups, delete those backups instead.
+  Generated repositories keep the old line in their git history; this fixes the tree only.
+
 ### changed (dev is 1.4.0.dev0 after the 1.3 cut; a dev build's install hint points at v1.3.0-rc.1)
 
 - `pyproject.toml` on `dev` is `1.4.0.dev0`, so builds from `dev` cannot be mistaken for 1.3.x. `release/1.3` carries
