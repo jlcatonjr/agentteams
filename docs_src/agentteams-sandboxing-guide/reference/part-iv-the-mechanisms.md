@@ -45,8 +45,8 @@ host — a green *emission* test means "the profile is shaped right," never "it 
 
 ### Seatbelt profile dialect: what was measured
 
-IM measured these with `sandbox-exec` on Darwin 25.5 (2026-11-23), using `(allow default)` and one rule
-at a time. Anyone writing or reviewing an emitted profile should know them, because most of them fail
+These were measured with `sandbox-exec` on Darwin 25.5 (2026-11-23), using `(allow default)` and one
+rule at a time. Anyone writing or reviewing an emitted profile should know them, because most of them fail
 silently:
 
 - **Bounded counts match nothing.** In a `#"..."` regex, `{32}` or `{2,4}` silently matches nothing, so a
@@ -65,11 +65,11 @@ silently:
   `exclusive` egress can reach Ollama (`agentteams/frameworks/_goose_egress.py`; see
   [Goose privileges](../../goose-privileges.md)).
 
-IM first blamed the backslash for its failing rule. The rule also used `{32}`, and the count turned out to
-be the real cause.
+The first failing rule was blamed on the backslash. It also used `{32}`, and the count turned out to be the
+real cause.
 
-*Source:* IM's run report `fleet/runs/2026-11-23-goose-sealed-mail/README.md` (infrastructureManagement
-repository; data, C-4); `@security` SEC-2026-11-23-im-sealed-mail-B and -C.
+*Source:* a measurement run on the maintainer's machine (2026-11-23), recorded privately; `@security`
+SEC-2026-11-23-im-sealed-mail-B and -C.
 
 ## SB12 — Mechanism C: the framework-neutral launcher (Linux `bwrap` + macOS `sandbox-exec`)  ✅/⚙
 
