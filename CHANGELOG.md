@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new test fails any Seatbelt regex in the package that uses a bounded count such as `{32}`. In a `#"..."` regex,
   Seatbelt silently matches nothing for one, so a deny rule fails open. No rule shipped today uses one.
 
+### fixed (the `--sign-decision` prompt names the class it derived)
+
+- The confirmation prompt's first line read "About to sign a constraint-relaxing security decision:" for every row,
+  including one whose derived class, printed four lines below, was `non-relaxing`. It now reads "non-relaxing" for
+  such a row. An indeterminate row still reads "constraint-relaxing", because every gate treats it as relaxing.
+- Nothing about what is signed, refused or confirmed changes.
+
 ### security (a carried-over exception never outlives its signed decision's sunset; #595)
 
 - **What was wrong:** a standing exception in `references/exception-registry.json` carries a sandbox relaxation or an
