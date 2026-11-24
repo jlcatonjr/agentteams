@@ -298,6 +298,11 @@ def resolve(description: dict[str, Any], framework: str) -> str | None:
             print("  \u2139  write_policy on codex holds only via .codex/confined-run.example.sh (not verifiable here): "
                   "the launcher masks the key; a generated role gate limits spawned agents to read-only tools.",
                   file=sys.stderr)
+            # @security SEC-2026-11-23-im-sealed-mail-A: the launcher leaves .agentteams-queue readable (the in-session
+            # CLI writes it), so any agent can read a request's reply_key. The real fix is 1.4 (sealed-mail design).
+            print("  \u26a0  write_policy on codex: sealed results are not confidential. Every agent in the session can "
+                  "read .agentteams-queue/ and each request's reply_key; integrity still holds. See proposal-runner.md.",
+                  file=sys.stderr)
     return write_policy
 
 

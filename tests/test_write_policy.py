@@ -255,6 +255,15 @@ def test_switch_allowed_on_codex_with_its_sandbox_token_and_says_it_cannot_verif
     assert analyze.build_manifest(desc, framework="codex")["write_policy"] == "orchestrator-only"
     err = capsys.readouterr().err
     assert ".codex/confined-run.example.sh" in err and "not verifiable here" in err and "role gate" in err
+    # SEC-2026-11-23-im-sealed-mail-A: the queue (and each reply_key) is readable in a Codex session.
+    assert "sealed results are not confidential" in err and "reply_key" in err
+
+
+def test_the_confidentiality_warning_is_codex_only(capsys):
+    desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
+            "write_policy": "orchestrator-only", "privilege_profile": "confined"}
+    assert analyze.build_manifest(desc, framework="claude")["write_policy"] == "orchestrator-only"
+    assert "not confidential" not in capsys.readouterr().err
 
 
 def test_switch_on_codex_needs_an_explicit_profile():
