@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0-rc.2] - DATE-AT-MERGE
+
+### release notes
+
+agentteams 1.3.0-rc.2 is the second release candidate of the 1.3 line, on `release/1.3` after v1.3.0-rc.1. It
+carries the must-fix findings from the rc.1 soak and pre-soak reviews; the full 1.3 notes are under
+[1.3.0-rc.1] below.
+
+- **A retired template source line reaches existing teams (#622).** The universal `security-infrastructure-layers`
+  reference no longer cites a private checkout's directory, and its `infra_security_model` fence is now
+  template-owned, so `--update --merge` replaces the old line instead of keeping it. A template-owned fence's shrink
+  notice gives a count, not the lost text. **Action for existing teams:** run `--update --merge`; under
+  `--shrink-policy=halt`, review the notice and re-run with `--shrink-policy=allow`.
+
+Release-candidate soak: the operator picks which rc.1 soaks repeat on this candidate; v1.3.0 follows once they report
+clean.
+
 ### security (a template's retired source line reaches existing teams; #622)
 
 - **What was wrong:** the universal `security-infrastructure-layers` reference cited a private checkout's directory
