@@ -108,6 +108,7 @@ SECURITY_RELEVANT: dict[str, str] = {
     "agentteams/grok_config_emit.py": "P11",
     "agentteams/frameworks/_sandbox_emit.py": "P00",
     "agentteams/frameworks/_goose_sandbox_emit.py": "P00",
+    "agentteams/frameworks/_goose_egress.py": "W48: the Ollama egress warning (SEC-2026-11-23-im-sealed-mail-B/C)",
     "agentteams/frameworks/_codex_sandbox_emit.py": "P00",
     "agentteams/frameworks/_linux_sandbox_emit.py": "P00",
     "agentteams/frameworks/_grok_sandbox_emit.py": "P00",

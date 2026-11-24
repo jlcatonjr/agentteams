@@ -347,6 +347,12 @@ use path 1.
   **bidirectional** channel — agentteams cannot close data exfiltration *through* it; bound
   it with the proxy's own content/rate controls. Do not read the allow as "exfiltration
   closed".
+- **Never point the egress at Ollama directly.** If `goose_egress_proxy` is Ollama's port
+  (`localhost:11434`, or the port in `OLLAMA_HOST`), the agent can call `/api/pull` with a
+  model named `host/ns/x`, and Ollama then connects to `host` (measured 2026-11-23). That is
+  a channel off the machine, not just to a local model. Put a loopback filter in front of
+  Ollama that allows only the inference routes and a pinned model; Seatbelt can't filter
+  by URL path. A render-time warning for this case is planned (@security, 2026-11-23).
 - **Denies files, not env vars.** A secret already exported into the agent's environment is
   not covered by a filesystem read-deny.
 
