@@ -69,8 +69,7 @@ untested backup is a hypothesis, not a control.**
 | L6 | Detection, logging & SIEM | SP 800-92; SP 800-137; MITRE ATT&CK; base-rate discipline |
 | L7 | Resilience, backup & incident response | SP 800-34; SP 800-61; RFC 3227; 3-2-1 backups |
 
-Full source grounding: the backing research at
-`agentteams-research/security-infrastructure/` (where present) and the standards named above.
+Full source grounding: the standards named above.
 <!-- AGENTTEAMS:END infra_security_model -->
 
 <!-- AGENTTEAMS:BEGIN infra_security_layers v=1 -->
