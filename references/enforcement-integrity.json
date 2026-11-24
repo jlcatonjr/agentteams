@@ -85,7 +85,7 @@
     "agentteams/fence_baseline.py": "c8d4026b4026e1ed853236d50bf4d0907e74071176ddbab345f98bb8238f2ab0",
     "agentteams/fence_twin_acks.py": "19c0dabc77f0ef4a0db77362818939fe47527dffdb1bd8e5810eb7f94cc9880a",
     "agentteams/fence_twins.py": "764a7c3ef0e0f57f87f43b1c7883e8f737a9490a7e6a6ffc0bfca5c9243bfde1",
-    "agentteams/fences.py": "699e33c81ffdd1fd3ff7f1b8951a55fb389c4ad8d537c8d473fc57883e0d8d3c",
+    "agentteams/fences.py": "f30d828e30264a3d53529c383ba761903f738d2f10f52190c8091d23b42d3793",
     "agentteams/frameworks/_agents_md_ownership.py": "33e190a34e8f61fff8b0672dc734af219a3441d6916a164502c7dab02045ce0d",
     "agentteams/frameworks/_codex_role_gate_emit.py": "39c7a0cce760482be246b928f619ad274549f30bbbe23d00fb05d90a35f51e5d",
     "agentteams/frameworks/_codex_sandbox_emit.py": "da26c9a74ba088962c8959b9af0c140124a109b95985412e0ae29b8f94d6ea5d",
