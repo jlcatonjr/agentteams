@@ -898,7 +898,7 @@ def _handle_check(
         e.get("_reason") in drift._MANIFEST_PROMOTION_REASONS
         for e in sdreport.drifted_files
     ):
-        check_final = _build_final_rendered(manifest, adapter, project_name)
+        check_final = _build_final_rendered(manifest, adapter, project_name, filled_from=output_dir)
         drift.refine_manifest_promotion(
             sdreport,
             _make_content_matches(output_dir, dict(check_final), live_refresh_files),

@@ -13,7 +13,7 @@ Fetches curated vulnerability feeds from CISA KEV, FIRST EPSS, MITRE CVE, NVD, a
 
 ## Functions
 
-### `build_security_placeholders(*, output_dir, offline=False, max_items=15, tools=None, skip_nvd=False, osv_ecosystem="PyPI")`
+### `build_security_placeholders(*, output_dir, offline=False, max_items=15, tools=None, skip_nvd=False, osv_ecosystem="PyPI", cooldown_deprecated=False)`
 
 > *Source: `agentteams/security_refs.py`*
 
@@ -27,6 +27,7 @@ Build security intelligence placeholders for rendering into agent/reference temp
 - `tools` (`list[str] | None`, keyword-only) — Optional list of project tool/package names for OSV.dev lookup. If `None`, the OSV source is skipped. Default: `None`.
 - `skip_nvd` (`bool`, keyword-only) — If `True`, skip NVD CVSS enrichment (saves ~35 s for 5 CVEs). Default: `False`.
 - `osv_ecosystem` (`str`, keyword-only) — Package ecosystem for OSV.dev queries. Default: `"PyPI"`.
+- `cooldown_deprecated` (`bool`, keyword-only) — `True` only when `cli/s10_deprecation_gate` authorized Rule S-10's cooldown deprecation (agentteams#592). The playbook then renders the cooldown as deprecated and drops it from the remediation line. The main build passes the gate's result, and every other caller keeps the default, so the cooldown renders in force there. Default: `False`.
 
 **Returns:** `dict[str, str]` — Mapping of placeholder key → rendered string value, with keys:
 - `SECURITY_DATA_GENERATED_AT`: ISO-8601 timestamp the data was generated.

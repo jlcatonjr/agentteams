@@ -357,7 +357,7 @@ Core; `agentteams/templates/universal/security.template.md`;
 
 ### S16 — Live-data redaction and feed sanitization  ✅
 **Canonical facts.**
-1. `fences.redact_live_data` blanks the body of every `threat_intelligence`/`threat_data` fence and the
+1. `fences.redact_live_data` blanks the body of every `threat_intelligence`/`threat_data`/`framework_data` fence and the
    `Generated at:` stamp, so **golden-snapshot comparison stays deterministic** and no live feed content
    is committed as a golden — narrowing the exclusion from the whole highest-privilege agent file to
    only its volatile regions.

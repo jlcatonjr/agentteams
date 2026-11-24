@@ -9,6 +9,16 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ---
 
+## Project-description schema: warn only (IM item 13a)
+
+A JSON description is checked against `schemas/project-description.schema.json` when it is loaded, and a mismatch is a `[WARN]`, not a refusal. Census on 2026-11-15: with the schema brought in line with the code, 23 of 155 descriptors in the workspace still fail it: project names with spaces (the schema documents `project_name` as slug-safe; the code tolerates spaces), a `pip_package_name` that isn't one, extra root keys, capabilities the code doesn't read, and a few type errors. `instance_maintenance`, which the code reads, is now in the schema. Refusing comes in a later release, once that census is clean.
+
+An archetype in `selected_archetypes` with no agentteams template is reported as `[INFO]` and is not rendered; another layer (researchteam) may provide it. In a fleet run the warning is in the report's `schema_warnings`, on the first target of each workspace (it prints once per description per process).
+
+**Tracked:** IM self-evaluation item 13 follow-up (the refusal step), logged on IM's side.
+
+---
+
 ## Orchestrator-only writes (`write_policy`) and the runner
 
 ### Turning `write_policy` off is not a clean rollback
@@ -124,16 +134,36 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
-### A family retraction clears every prefix-matched HALT of its action
+### Before 1.3.0: a member retraction cleared every prefix-matched HALT of its action (fixed in 1.3.0, #596)
 
-- **What:** a `HALT-RETRACTED` row such as `overwrite-001` clears every HALT that matches the action `overwrite`
-  by prefix, `overwrite-999` included.
-  - This is unchanged from rc.9, and disclosed.
-  - A HALT matched only by token (new in 1.0) is retracted only by its exact id.
-- **Who:** teams with more than one open HALT for the same action.
-- **Workaround:** before recording a retraction, list the open HALTs (`--verify-integrity` reports them).
-  Retract by the exact HALT id where a family retraction would clear more than you mean to.
-- **Tracking:** the same CHANGELOG entry, "Disclosed, unchanged".
+- **What (agentteams < 1.3.0):** a `HALT-RETRACTED` row such as `overwrite-001` cleared every HALT that matched
+  the action `overwrite` by prefix, `overwrite-999` and a bare `overwrite` HALT included.
+  - A HALT matched only by token (new in 1.0) was retracted only by its exact id.
+- **1.3.0:** only a retraction of exactly the gate action (`overwrite`) clears its family's prefix HALTs, and only
+  at that gate. At a member gate (for example `s10-cooldown-exempt:o/a`), a member HALT still needs a retraction
+  with its own id. Any other retraction clears only the HALT with its own id. A HALT that a member retraction had cleared blocks again on
+  upgrade: retract it by its own id.
+- **Who (before 1.3.0):** teams with more than one open HALT for the same action.
+- **Workaround (before 1.3.0):** before recording a retraction, list the open HALTs (`--verify-integrity` reports
+  them), and retract by the exact HALT id.
+- **Tracking:** #596; CHANGELOG 1.3.0.
+
+### Python 3.14: an unreadable team dir, decisions log or signing switch hid HALTs (agentteams < 1.3.0)
+
+- **What:** from Python 3.14, `Path.is_dir()`, `exists()` and `is_symlink()` return `False` on *any* `OSError`
+  (3.13 raised `PermissionError`). In agentteams before 1.3.0, a team dir, decisions log or
+  `agent-privilege.json` that could not be stat'd (for example after `chmod 000`, or a parent without search
+  permission) therefore read as absent:
+  - its HALTs were skipped in an ordinary preflight `check_clearance` and in the S-10 cooldown-exemption gate;
+  - an unreadable signing switch read as "not governed".
+  The check failed open, not closed.
+- **Who:** every team running agentteams **< 1.3.0 on Python 3.14**.
+- **Fix:** 1.3.0 uses `lstat` and treats only "not there" as absent; anything else refuses (#588, #598).
+- **Workaround until you upgrade:** run agentteams on Python 3.13, or, before every preflight or signing check,
+  confirm in the shell that each team dir is readable and searchable (`test -r DIR && test -x DIR`), and that its
+  `references/security-decisions.log.csv` and `references/agent-privilege.json` are readable (`test -r`). Stop if
+  any test fails.
+- **Tracking:** #588, #598; CHANGELOG 1.3.0.
 
 ### Logs signed before 1.0 may verify through a legacy prefix
 

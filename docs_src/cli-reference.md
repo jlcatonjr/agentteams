@@ -296,10 +296,50 @@ With `--dry-run`: emit the per-file action plan as a single JSON document on std
 
 Overwrite existing agent files without prompting. Default behavior: prompt for each existing file.
 
+**`--overwrite` refuses to drop an orchestrator's routing** (#392 item 12; new in 1.3). This applies to `--overwrite`,
+`--update --overwrite`, and the `--overwrite` that `--migrate` runs.
+
+An agent counts as routed if the current orchestrator names it in any of these forms:
+- a backticked `` `@slug` `` in its body;
+- a front-matter `agents:` item or `handoffs:` target;
+- a bare `@slug` with an agent file on disk.
+
+If a routed agent is neither emitted nor adopted by this build, nor still named by the new orchestrator, the run
+lists it on stderr and refuses with `[ROUTING-LOSS] blocked`. The refusal comes before the overwrite clearance is
+spent and before any backup or write. `--yes` does not get past it.
+
+An orchestrator that exists but can't be read also refuses. Routing in the Project-Specific Notes region is carried
+over, so it isn't counted unless you pass `--discard-user-regions`.
+
+To clear the refusal, keep the agents, or name exactly the ones you are dropping:
+- `--adopt-orphans`, for agents with a file (this adopts every orphan agent file);
+- add them to the brief;
+- `--update --merge`, which keeps the orchestrator's body;
+- `--accept-routing-loss SLUG[,SLUG...]`, naming exactly the at-risk set.
+
+`--dry-run --json` never refuses. It lists the agents under `at_risk_routed_agents`, and puts `would_refuse` and the
+clearing options under `routing_loss`.
+
+### `--accept-routing-loss SLUG[,SLUG...]`
+
+Let an `--overwrite` (or `--migrate`) drop the routing to exactly these agents. The list must equal the at-risk set
+that the refusal or `routing_loss` names: no wildcard, superset or subset, or the run refuses again. The accepted
+slugs and the orchestrator's sha256 are printed on stderr. Requires `--overwrite` or `--migrate`.
+
 ### `--merge`
 
 Update only template-fenced regions in existing agent files, preserving all user-authored content outside fence markers. The one exception is generated: the `PROJECTED-RULES` and `PROJECT-RULES-POINTER` blocks inside the user regions, which every generate and `--update` regenerates in every provider's files (see `--sync-project-rules`). Skips legacy files (no fence markers) with a warning. This is the default behavior for `--update`; pass `--merge` explicitly if you want to make this intent clear in scripts or CI. Use `--overwrite` only when intentional full-file regeneration is needed (requires security clearance).
 
+
+A team with no generation baseline (its `references/build-log.json` records no fence digests; every team generated
+by 1.1.x or earlier) gets one notice before any file is written: a merge cannot tell an older template's text from
+an edit, so each changed fence keeps its on-disk body and prints a shrink notice. To take the current templates,
+preview `--update --overwrite --dry-run --json`, review its plan and `at_risk_routed_agents`, then run it;
+`--overwrite` replaces hand enrichment inside fences (the backup keeps it) and carries the Project-Specific Notes
+and Rules. A merge records the baseline for each fence it writes as the template renders it, so the notice stops
+after one merge, but the fences it preserved stay unrecorded and keep their shrink notices. A missing or malformed
+build log gets its own notice; an interop projection and a run with nothing to write get none.
+`--capture-baseline` records an emission snapshot, not this baseline.
 ### `--yes` / `-y`
 
 Non-interactive mode: answer yes to all prompts automatically.
@@ -341,6 +381,22 @@ merge, no manifest or build-log write. It is a standalone mode (`agentteams/cli/
 exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
 `--self` or `--description`, `--framework`, `--output`, `--dry-run`, `--json` and `--no-backup`.
 
+- **It needs a brief.** Pass `--description PATH` (the project's brief) or `--self`. Without either, it uses the
+  project's own brief under `--project` (else the working directory), found as the retrieval modes find it
+  (`.agentteams/brief.json`, then `brief.json`; a symlink, a brief outside the project, or one naming another
+  project is not used). It does so only when the agents directory the run writes to is inside that same
+  project, and no project nested between the two has a brief of its own; otherwise it refuses and asks for
+  `--description`. It never uses the `--self` brief (`.github/agents/_build-description.json`) without `--self`.
+  A `--description` you name is never replaced, even if the file is missing. With no brief at all the run stops with "--description is required (or use --self for
+  self-maintenance)".
+- **`--output` is the agents directory**, the one that holds the orchestrator file: `.github/agents/` (Copilot),
+  `.claude/agents/` (Claude), and so on, as listed under `--output DIR`. On copilot-vscode, copilot-cli, claude
+  and agents-md the path is used as given, so a project-root `--output` refuses with
+  "no regular orchestrator file at …"; goose, codex, grok and wasm append their agents directory to a project
+  root. Leave `--output` out to
+  use the framework's agents directory under the brief's `existing_project_path`, or else the current directory
+  (with `--self`, this repository's own agents directory).
+
 - **Validation.** Each slug must be an adoptable orphan in the target agent directory: its file is there, this
   build doesn't emit it, and it isn't a tool agent. Any other slug refuses the whole run (`[ADOPT-ONLY] refused`)
   and is named.
@@ -369,6 +425,9 @@ exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orpha
   wider: `['read', 'search']` is read-only, `['read', 'web']` is not.
 
 Example: `agentteams --self --framework claude --adopt-only injection-test-designer --dry-run --json`.
+
+For another project: `agentteams --description path/to/brief.json --framework copilot-vscode --output
+path/to/project/.github/agents --adopt-only my-agent --dry-run --json`.
 
 ### `--migrate-decision-log`
 
@@ -795,6 +854,12 @@ Disable strict manual placeholder preservation and apply usability-oriented defa
 - `REFERENCE_DB_PATH` -> `N/A - no citation database configured for this project`
 - `STYLE_REFERENCE_PATH` -> `N/A - no formal style guide defined for this project` (or the configured `style_reference` value)
 
+These defaults do not apply when the brief names the agent that needs the value in `selected_archetypes`:
+`style-guardian` without a `style_reference`, or `reference-manager` without a `reference_db_path`. Then the
+`{MANUAL:*}` token stays in the rendered files and in `SETUP-REQUIRED.md`, and a warning names it, in either
+mode. When the analyzer picked the agent from keywords instead, the default applies and a one-line warning says
+which value is missing.
+
 This mode is the default for non-self runs.
 
 ---
@@ -882,9 +947,9 @@ written to `<backup>/<rel_path>.lost.<sid>.md.agentteams-bak` (the backup is tak
 automatically before the merge) and the shrink Notice is annotated
 with `— recovery: <sidecar-path>` so the operator can recover
 dropped hand-edits without diffing the whole-file backup. The fence
-allowlist `_LIVE_DATA_FENCES` (`threat_intelligence`, `threat_data`)
+allowlist `_LIVE_DATA_FENCES` (`threat_intelligence`, `threat_data`, `framework_data`)
 is exempt — those fences are filled each run from live CISA KEV /
-NVD / OSV feeds; CVE rotation is expected.
+NVD / OSV feeds or the framework-research snapshot; their rotation is expected.
 
 ### `--target-host-features TOKENS`
 
@@ -1368,8 +1433,11 @@ Read-only. It checks the registry and exits `1` on any problem:
 
 Read-only; spends nothing. `--check-clearance SCOPE --clearance-file PATH` exits `0` only when the decisions log under
 `--output` (else the working directory) holds a verified @security PASS for the action `SCOPE:sha256-<hex of PATH>`.
-A HALT on the bare `SCOPE` blocks it, and HALT, author, signature and chain checks all apply. Use the same bytes
-afterwards. It exits `1` otherwise, naming the action id a clearance row
+A HALT on the bare `SCOPE` blocks it, and HALT, author, signature and chain checks all apply. HALTs are also read from
+every generated team dir in the repository (`.claude/agents`, `.github/agents`, and the other frameworks' dirs) and from a `parent_team` the team dir declares,
+so a clearance checked in a separate gates-only dir cannot escape a main-team HALT (see
+[Gates-only team dirs](api-reference/workspace-privilege-scoping.md#gates-only-team-dirs-for-sign-off-rows)). Use the same
+bytes afterwards. It exits `1` otherwise, naming the action id a clearance row
 must use. Operator scripts call it before doing anything, instead of hand-rolling a sha-bound gate.
 
 ### `--audit-exceptions`
@@ -1394,7 +1462,18 @@ Read-only. Verify this workspace's `.agentteams/toolchain-group.json` against `-
 
 ### `--verify-toolchain-pin`
 
-Read-only, fail-closed: Rule S-9 for the first-party toolchain group. Every `NAME=owner/repo@SHA` line in the lockfile that pins a member of the verified group (the workspace's own repository excluded) needs a `NAME.tag=TAG` line, and `TAG` must be a `v`-prefixed final-release tag (`vX.Y.Z`, ASCII digits; a pre-release needs a recorded `@security` clearance, which this check does not read) and an annotated tag whose object names `TAG`, ends in exactly one SSH signature block (a PGP-signed tag is refused) that verifies against `--allowed-signers` (git runs with a private, empty `HOME` and `GNUPGHOME`), and peels to `SHA`. Uses `--output` and `--team-id` as `--verify-toolchain-group` does. Nothing runs it for you; a project's dependency gate should. **Exit code:** `0` when at least one group pin was checked and all verify; `1` on any failure, or when the lockfile pins no group member; `2` when the workspace has no group file (nothing is under the rule; reported before any team-id lookup).
+Read-only, fail-closed in every tier: Rule S-9's signed-tag check. It checks every `NAME=owner/repo@SHA` line in the lockfile that pins a first-party repository. Each of these sources **adds** repositories, and none removes one:
+
+- a repository owned by this workspace's GitHub owner (from its git `origin`);
+- one listed in the brief's `s10_cooldown_exempt_repos`;
+- one named by `--pin-repos` (each must be pinned in the lockfile);
+- in a governed workspace with a `.agentteams/toolchain-group.json`, a verified group member.
+
+The workspace's own repository (an exact, case-insensitive match of its `origin`) is excluded and named in the output, but only when the owner match alone selected it. A repository named by the brief, `--pin-repos` or the group is always checked, because `origin` is not signed. The owner match itself also comes from `origin`, so it is a convenience, not a guarantee: name a repository in the brief's `s10_cooldown_exempt_repos` or in `--pin-repos` to be sure its pin is checked. With no GitHub `origin`, nothing is excluded and no owner match is made. A discovered brief that is there but cannot be used (a symlink, outside the project, unreadable, not a JSON object, or naming another project) fails the check, rather than running as if there were no brief. A name pinned or tagged twice in the lockfile, or a line shaped like a pin or tag that does not match `NAME=owner/repo@<40 lowercase hex>` / `NAME.tag=TAG` exactly, fails the check. Each checked pin needs a `NAME.tag=TAG` line, and `TAG` must be a `v`-prefixed final-release tag (`vX.Y.Z`, ASCII digits; a pre-release needs a recorded `@security` clearance, which this check does not read) and an annotated tag whose object names `TAG`, ends in exactly one SSH signature block (a PGP-signed tag is refused) that verifies against `--allowed-signers` (git runs with a private, empty `HOME` and `GNUPGHOME`), and peels to `SHA`. An unretracted `s10-cooldown-exempt` HALT on a checked repository is reported as a `::warning`: the pin is still checked, and the 14-day cooldown applies. This verb checks signed tags, not release age, so it never clears the cooldown. Nothing runs it for you; a project's dependency gate should. **Exit code:** `0` when at least one pin was checked and every checked pin verifies; `1` on any failure, or when nothing first-party is pinned. There is no exit `2` (before 1.3.0, a workspace without a group file exited `2` and checked nothing).
+
+### `--pin-repos`
+
+With `--verify-toolchain-pin`: a comma-separated list of `owner/repo` whose pins must also be checked. A listed repository that the lockfile does not pin fails the run.
 
 ### `--allowed-signers`
 
@@ -1555,6 +1634,10 @@ Read-only: scan `--output`/`--project` (else CWD) for **all** provider renders (
 ### `--stale-check`
 
 Read-only: scan `--output`/`--project` (else CWD) for stale agent docs and code/scripts (VCS conflict markers, broken references, git-recency divergence, provenance-gated generated-file integrity). Exits non-zero on any Tier-1 (blocking) finding. Never edits files.
+
+### `--term-check [AGENTS_DIR]` **(beta)**
+
+Read-only: check a team's term register (`<AGENTS_DIR>/terminology/terms.json`; default the working directory) against the text inside well-formed `AGENTTEAMS` fences only, so user-editable sections are never flagged. A file whose fences are unclosed, nested or mismatched is not scanned at all: a `FENCE` defect in a file that also holds a complete fence (a generated file), an advisory `FENCE` review otherwise. The check is live; a committed term index is not compared. Blocking codes: `SCHEMA`, `AMBIG`, `SCOPE`, `DISC`, `ORPHAN`, `FENCE`, `NOREG` (a named directory with no register). Exits `1` on a defect and `2` on an I/O error. With no register in the working directory, it prints `NOTHING CHECKED` and exits `0`. Standalone: it refuses every other option except `--term-check-advisory`. `--term-check-advisory` (which requires `--term-check`) reports defects but exits `0`. Matching finds forms, not meanings. See [`term_index`](api-reference/term-index.md).
 
 ### `--stale-remediate`
 

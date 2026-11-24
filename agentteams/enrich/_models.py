@@ -35,9 +35,6 @@ class DefaultFinding:
     """pending | auto_filled | ai_filled | skipped"""
 
 
-#: Matches any {MANUAL:TOKEN} token
-_MANUAL_RE = re.compile(r"\{MANUAL:([A-Z][A-Z0-9_]*)\}")
-
 #: Matches a markdown ## section heading
 _SECTION_RE = re.compile(r"^#{1,3}\s+(.+)", re.MULTILINE)
 

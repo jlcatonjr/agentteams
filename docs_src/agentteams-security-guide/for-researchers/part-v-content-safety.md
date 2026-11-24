@@ -70,7 +70,7 @@ adversary:** a hostile or malformed upstream feed whose content tries to break
 out of the region it is rendered into.
 
 **Redaction keeps golden comparison deterministic.** `redact_live_data` blanks
-the body of every `threat_intelligence`/`threat_data` fence and the
+the body of every `threat_intelligence`/`threat_data`/`framework_data` fence and the
 `Generated at:` stamp, so golden-snapshot comparison does not churn every run on
 feed rotation and **no live feed content is ever committed as a golden.** This
 narrows the exclusion surgically — from excluding the *entire* highest-privilege

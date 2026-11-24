@@ -207,8 +207,22 @@ def _build_parser() -> argparse.ArgumentParser:
              "workspace, Ed25519-signed decision with effect_grants exactly agents:<slug>). "
              "--dry-run --json reports the row diff, the agents: additions and each slug's tools: "
              "line, flagged when wider than read-only (Read/Grep/Glob, read/search; any other or "
-             "unknown tool counts as wider). Mutually exclusive with --update, "
-             "--overwrite, --migrate, --prune and --adopt-orphans.",
+             "unknown tool counts as wider). Needs --description, --self, or the project's own brief "
+             "(found under --project or the working directory when the agents directory is in that "
+             "project); --output, when given, is "
+             "the agents directory that holds the orchestrator (copilot and claude take it as given, "
+             "so a project root refuses). Mutually exclusive with --update, --overwrite, --migrate, "
+             "--prune and --adopt-orphans.",
+    )
+    parser.add_argument(
+        "--accept-routing-loss",
+        metavar="SLUG[,SLUG...]",
+        dest="accept_routing_loss",
+        default=None,
+        help="Let an --overwrite (or --migrate) replace an orchestrator that routes to agents this build "
+             "does not keep (#392 item 12). Without it such a run refuses before any write and names them. "
+             "The list must equal exactly the slugs the refusal (or --dry-run --json's routing_loss) names: "
+             "no wildcard, superset or subset. --yes never acknowledges the loss.",
     )
     parser.add_argument(
         "--migrate-decision-log",
@@ -524,6 +538,26 @@ def _build_parser() -> argparse.ArgumentParser:
         "these is not live (warns only when no confinement was requested). Also "
         "checks that the constitutional gate's interpreter pin (<hooks>/agentteams-python) or "
         "plain python3 can import agentteams, and fails with the fix when neither can.",
+    )
+    parser.add_argument(
+        "--term-check",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="AGENTS_DIR",
+        dest="term_check",
+        help="Beta (#548): check a team's term register (<AGENTS_DIR>/terminology/terms.json, default the "
+        "working directory) against the text inside well-formed AGENTTEAMS fences only, never user-editable "
+        "sections; a file with broken fences is not scanned and is a FENCE defect. Live check: blocking codes "
+        "SCHEMA AMBIG SCOPE DISC ORPHAN NOREG FENCE (NOREG for a named directory with no register). Read-only "
+        "and standalone; exits 1 on a defect, 2 on an I/O error, and 0 with NOTHING CHECKED when the working "
+        "directory has no register. Matching finds forms, not meanings.",
+    )
+    parser.add_argument(
+        "--term-check-advisory",
+        action="store_true",
+        dest="term_check_advisory",
+        help="With --term-check: report defects but exit 0 (for the opt-in hook).",
     )
     parser.add_argument(
         "--wasm-install",
@@ -1684,14 +1718,22 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LOCKFILE",
         help=(
-            "Read-only, fail-closed (Rule S-9 for the toolchain group): every NAME=owner/repo@SHA pin in LOCKFILE to "
-            "a verified group member needs a NAME.tag=TAG line, and TAG must be an annotated tag that verifies "
-            "against --allowed-signers, names itself, and peels to SHA. Exit 0 when at least one such pin was checked and "
-            "every one verifies; 1 on any failure or when no pin to a group member was found; 2 when the workspace "
-            "has no toolchain-group file (nothing is under the rule)."
+            "Read-only, fail-closed in every tier (Rule S-9): every NAME=owner/repo@SHA pin in LOCKFILE to a first-party "
+            "repository (one owned by this workspace's GitHub owner, one in the brief's s10_cooldown_exempt_repos, one "
+            "named by --pin-repos, or a verified toolchain-group member; the workspace's own repository excluded) needs a "
+            "NAME.tag=TAG line, and TAG must be an annotated tag that verifies against --allowed-signers, names itself, "
+            "and peels to SHA. Sources only add pins. Exit 0 when at least one pin was checked and every one verifies; "
+            "1 otherwise. It checks signed tags, not release age, so it never clears the cooldown."
         ),
     )
     add_dev_merge_arguments(parser)
+    parser.add_argument(
+        "--pin-repos",
+        dest="pin_repos",
+        default=None,
+        metavar="OWNER/REPO[,...]",
+        help="With --verify-toolchain-pin: more repositories whose pins must be checked; each must be pinned in LOCKFILE.",
+    )
     parser.add_argument(
         "--allowed-signers",
         dest="allowed_signers",

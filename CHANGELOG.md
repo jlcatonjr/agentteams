@@ -6,6 +6,597 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-24
+
+### release notes
+
+agentteams 1.3.0 is the first release of the 1.3 line. It is v1.3.0-rc.2 with no further change. The line was cut
+from `dev` rather than `main`. The operator skipped the rc.1 soaks across the consumer repositories and none ran on
+rc.2, so the candidates were checked by CI and review only. The full changes are in the [1.3.0-rc.2] and
+[1.3.0-rc.1] sections below; the highlights:
+
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** A scripted overwrite
+  that drops routed agents on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`.
+- **Security tightening: carried-over exceptions lapse at their signed decision's sunset (#595)**, and HALTs bind
+  across a repository's team dirs, retract by exact id and fail closed on unreadable dirs, logs and briefs
+  (issues #578, #596, #597, #588, #598 and #599). Teams on Python 3.14 with agentteams before 1.3.0 should upgrade.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Templates (#622):** a retired template source line now reaches existing teams on `--update --merge`.
+- **Action for existing teams:** run `--update --merge`. It replaces any hand edit inside the
+  `infra_security_model` fence (#622); under `--shrink-policy=halt`, review that notice and re-run with
+  `--shrink-policy=allow`. Where a merge prints a stale cross-surface notice (F10), re-render that surface with
+  `--update --overwrite` or delete the quoted lines.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568).
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
+
+Install it from its signed tag, and verify the tag before installing.
+
+## [1.3.0-rc.2] - 2026-11-24
+
+### release notes
+
+agentteams 1.3.0-rc.2 is the second release candidate of the 1.3 line, on `release/1.3` after v1.3.0-rc.1. It
+carries the must-fix finding from the rc.1 pre-soak review (the rc.1 soaks were skipped); the full 1.3 notes are
+under [1.3.0-rc.1] below.
+
+- **A retired template source line reaches existing teams (#622).** The universal `security-infrastructure-layers`
+  reference no longer cites a private checkout's directory, and its `infra_security_model` fence is now
+  template-owned, so `--update --merge` replaces the old line instead of keeping it. A template-owned fence's shrink
+  notice gives a count, not the lost text. **Action for existing teams:** run `--update --merge`; under
+  `--shrink-policy=halt`, review the notice and re-run with `--shrink-policy=allow`.
+
+v1.3.0 follows this candidate. Install it from its signed tag, and verify the tag before installing.
+
+### security (a template's retired source line reaches existing teams; #622)
+
+- **What was wrong:** the universal `security-infrastructure-layers` reference cited a private checkout's directory
+  in its `infra_security_model` fence, so every generated team published it. Deleting the line from the template
+  was not enough: on `--update --merge`, the shrink guard read the removed path as "lost concrete refs", and the
+  default `--shrink-policy=preserve` kept each team's old body.
+- **Now:**
+  - The line reads "Full source grounding: the standards named above."
+  - `infra_security_model` is a template-owned fence: projects record their choices in the file's USER-EDITABLE
+    `project_infra_security_notes` section, so a merge always takes the template's body. A team whose body still
+    matches a recorded render already got template updates through the fence baseline; this reaches the rest.
+  - A shrink notice for a template-owned fence gives the number of lost references, not the references, so the
+    retired text is not copied into `update.report.md`. The old body is still in the `.lost.<fence>.md.agentteams-bak`
+    sidecar in the run's backup directory.
+  - A test refuses any template that names a root directory `.gitignore` marks as private.
+- **Upgrade note:** the next `--update --merge` replaces a hand edit inside `infra_security_model`, with a shrink
+  notice and the sidecar. Under `--shrink-policy=halt` that notice still stops the run: review it, then re-run with
+  `--shrink-policy=allow`. The old body then exists only in that run's backup under `.agentteams-backups/`, which
+  carries its own `*` `.gitignore`; if you removed that file to commit backups, delete those backups instead.
+  Generated repositories keep the old line in their git history; this fixes the tree only.
+
+## [1.3.0-rc.1] - 2026-11-23
+
+### release notes
+
+agentteams 1.3.0-rc.1 is the first release candidate of the 1.3 line. It is the first line cut from `dev` rather than
+`main` (at `62d745ed`, onto `release/1.3`), under the release model in `docs_src/release-and-branching.md`; `main`
+stays at v1.2.2 until 1.3.0 is released. The entries below it are everything that landed on `dev` after the 1.2 cut.
+
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** When the build would
+  not keep agents the orchestrator routes to, the run stops with `[ROUTING-LOSS] blocked` before any write. A
+  scripted overwrite that drops them on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`; otherwise
+  keep them with `--adopt-orphans`, the brief, or `--update --merge`.
+- **Security tightening: a carried-over exception lapses at its signed decision's sunset (#595).** The registry's
+  unsigned `expires` can no longer extend a sandbox relaxation or S-10 exemption. An exception registered some days
+  after its decision was signed lapses that many days sooner than before, and a decision row already past its 90
+  days is refused at registration: the operator re-signs it.
+- **Security tightening: HALTs.** A HALT in any generated team dir of the repository now binds a file clearance
+  checked in another (#578) and a per-repository S-10 exemption rendered from another (#597). A retraction clears
+  only its own id, or the whole family only when it names the gate action exactly (#596). Unreadable team dirs, logs
+  and briefs fail closed, including under Python 3.14's `Path` changes (#588, #598, #599). Teams on Python 3.14 with
+  agentteams before 1.3.0 should read that upgrade note below.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Action for existing teams (F10).** A `--update --merge` now prints a notice for unfenced lines an older render
+  left naming another surface's agents directory. It removes nothing: re-render that surface with
+  `--update --overwrite`, or delete the quoted lines by hand.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568). **Beta:**
+  `agentteams.term_index` and `--term-check` (#548), and the WASM streaming session mode (#567).
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
+
+Release-candidate soak: v1.3.0 follows once infrastructureManagement reports that every consumer repository rendered
+this candidate, installed from its signed tag, cleanly.
+
+### security (a carried-over exception never outlives its signed decision's sunset; #595)
+
+- **What was wrong:** a standing exception in `references/exception-registry.json` carries a sandbox relaxation or an
+  S-10 cooldown exemption over from one render to the next. Its lapse came from the entry's own `expires`, which is
+  not signed. Anyone who could write the registry could move `expires` forward and keep the relaxation alive past its
+  Rule 15(d) sunset, without a signing key. The bound decision row was re-verified, but its date was not used.
+- **Now:** a carry-over lapses 90 days after the bound decision row's signed `date` (midnight UTC for a date with no
+  time), or at the registry `expires`, whichever comes first. This applies in the sandbox-relaxation, S-10
+  cooldown-exemption and S-10 cooldown-deprecation gates, which share one check.
+  - A new registration records `expires` as signed date + 90 days, not registration time + 90 days.
+  - A decision row already past its sunset is refused at registration. It no longer gets 90 fresh days.
+  - An entry is refused when its decision row has a missing or unreadable date, a date in the future, or an `issued`
+    time before the row was signed.
+- **Upgrade note (STABILITY security tightening):** an exception registered some days after its decision was signed
+  now lapses that many days sooner. To renew one, sign a new decision row as before; the clock counts from that
+  row's date once a render consumes it and re-registers the entry. Re-signing a row does not move an existing
+  entry's clock, because the entry stays bound to the row it was registered from.
+
+### fixed (conflict-resolution handoffs name NO-CONFLICT; a merge reports stale cross-surface lines; F10)
+
+- **NO-CONFLICT in the handoffs:** Workflow 11's closeout exception and the two `@conflict-resolution` handoff prompts
+  (the orchestrator's and `@conflict-auditor`'s) listed only ACCEPT/REJECT/REVISE. They now give the full set,
+  "REJECT/ACCEPT/REVISE, or NO-CONFLICT", as `@conflict-resolution`'s own table does.
+- **Stale cross-surface lines:** a `--update --merge` keeps every unfenced line, so a line an older render wrote outside
+  the fences survives later merges. Renders before the per-surface conflict-log path fix wrote
+  `.github/agents/references/conflict-log.csv` into other surfaces' teams this way. A merge, and its dry run, now
+  print a notice when an unfenced line outside the Project-Specific Notes and Rules regions names another surface's
+  agents directory and the new render no longer has it (`agentteams/stale_surface_paths.py`). The notice changes
+  nothing.
+- **Action for existing teams:** a 1.3.0 merge render does not remove such lines. Where the notice appears, re-render
+  that surface with `--update --overwrite` (it keeps the Notes and Rules regions) or delete the quoted lines by hand.
+
+### fixed (the shrink guard no longer freezes the framework-watch snapshot)
+
+- **What was wrong:** the `framework_data` fence in `framework-watch.reference.md` is re-rendered from the
+  framework-research snapshot on every `--update --merge`, and its template marks it Live. It was not in
+  `fences._LIVE_DATA_FENCES`, so the shrink guard read each refresh's new date and diff tokens as lost concrete
+  references. Under `--shrink-policy preserve` the old snapshot was kept indefinitely, its STALE banner included.
+- **Now:** `framework_data` is a live-data fence, like `threat_intelligence` and `threat_data`. A merge always
+  replaces it, with no shrink notice and no `.lost` sidecar. A snapshot in which no framework doc was fetched (every
+  fetch skipped or failed) now carries an UNVERIFIED DATA banner, even when it is dated today. A new test keeps the
+  live set equal to the template manifests' Live rows.
+- **Expect churn:** the first merge render after upgrading replaces `framework_data` in every governed repository
+  that had a frozen body. That diff is expected.
+- **Known limitation:** the snapshot is read from the rendering agentteams install's own tree, not from the project,
+  so the same repository can show a different body depending on which install rendered it.
+- **Not an agentteams defect:** moving a downstream tool's frozen-fences state file aside before a render never
+  changed what agentteams writes. That file only records when each frozen section was first seen, and `--overwrite`
+  never runs the shrink guard.
+
+### chore (the integrity manifest pins the reinstalled constitutional-gate hooks)
+
+- `references/enforcement-integrity.json` pins `.claude/hooks/constitutional-gate.py` and
+  `.github/hooks/constitutional-gate.py` at `4ac32257…`, the template's own pin, after the operator reinstalled both
+  from the template. No code changes.
+
+### security (`wasm_session` no longer accepts a run id or commit id with a trailing newline)
+
+- **What is newly refused:** two name checks in `agentteams.wasm_session` used `^...$` with `re.match`. In Python, `$`
+  also matches just before a final newline, so each check accepted one trailing `\n`. Both now use `fullmatch`:
+  - The run-directory reaper (`reap_stale_runs`) only removes a directory whose whole name is 16 lowercase hex
+    characters. Before, a directory named that way plus a newline could also be removed, if it was old enough and its
+    owner was gone.
+  - `agentteams_commit()` returns `None` for a recorded `commit_id` (PEP 610 `direct_url.json`, or the git-file
+    fallback) that is not exactly 40 lowercase hex characters. Before, a trailing newline was kept in the value it
+    returned.
+- **Migration:** none. `secrets.token_hex(8)` never makes such a directory name, and git never writes such a commit
+  id. Output shapes are unchanged. `wasm_session` is still beta; this follows STABILITY's security-tightening clause.
+
+### feat (Rule S-10: a signed brief field that renders the release cooldown as deprecated, #592)
+
+- New brief field `s10_cooldown_deprecated` (boolean). When authorized, the render shows Rule S-10's 14-day
+  package-release cooldown as deprecated in:
+  - the security agent;
+  - the vulnerability-watch reference's prevention playbook;
+  - the instructions files.
+- The known-vulnerability search (OSV `MAL-*` included), Rule S-9's identity check, the latest-stable rule and the
+  vulnerability-scan remediation carve-out are unchanged. The remaining cooldown clauses stay, each marked moot, so a
+  lapse or a HALT restores them.
+- New gate, `cli/s10_deprecation_gate` (Rule 15), for the action `s10-cooldown-deprecated`:
+  - **Governed workspace:** the brief value alone deprecates nothing. It renders only with the operator's
+    Ed25519-signed decision (`scope` and `effect_relaxes` equal to the action, no `effect_grants`), registered under
+    the aggregate cap. Its 90-day sunset counts from the signed row's own timestamp, never from the registry's
+    unsigned `expires`, and the operator re-signs it.
+  - **HALTs:** an unretracted HALT on any `s10-cooldown` or `s10-toolchain-group` action, in the canonical
+    `.github/agents` or any surface's log, removes it. That includes a HALT on a single exempt repository. A
+    retraction clears only the HALT whose exact id it names, never a sibling's.
+  - **Ungoverned workspace:** the brief value applies, with a notice (operator ruling T3, extended to this field
+    2026-11-21).
+  - **Refusals:** a refusal, a lapse or an unreadable signing switch renders the cooldown in force. It never stops
+    the render.
+- Unchanged: agentteams' own wasm runtime pin tool (`--wasm-pin-update`) keeps its built-in 14-day check, and the
+  vulnscan and server-kit code is not touched.
+- `s10-cooldown-deprecated` joins `GATE_ACTIONS`. The bare `s10-cooldown` is a HALT family only, never a clearable
+  action.
+
+### security (upgrade note: Python 3.14 and agentteams before 1.3.0)
+
+- **Teams on Python 3.14 running agentteams < 1.3.0 are exposed to a fail-open.** From 3.14, `Path.is_dir()`,
+  `exists()` and `is_symlink()` return `False` on any `OSError`. So a team dir, decisions log or signing switch that
+  cannot be stat'd read as absent, and its HALTs were skipped, in ordinary preflight `check_clearance` runs and in
+  the S-10 gate. 1.3.0 fixes this (#588, #598). Until you upgrade, run on Python 3.13, or check readability first:
+  `test -r` and `test -x` on each team dir, and `test -r` on its decisions log and `agent-privilege.json`. See
+  `docs_src/known-limitations.md`.
+
+### security (HALT retraction by exact id, HALTs from every team dir, fail-closed brief discovery; #596, #597, #599)
+
+- A `HALT-RETRACTED` row whose id was a member of a gate's family (for example `s10-cooldown-exempt:owner/b` at
+  the `s10-cooldown-exempt` gate) was treated as a retraction of the whole family. Once authenticated, it cleared
+  the bare family HALT and every sibling's HALT at that gate (C-2). Now only a retraction of exactly the gate action
+  clears its family's HALTs, as before. Any other retraction clears only the HALT with its own id, and authenticates
+  against that id.
+- **A brief that is there but unreadable is never skipped (#599).** Fleet discovery (`fleet._resolve_descriptor`) and
+  `memory_index_surfaces.brief_candidate` used `Path.exists()` and `is_symlink()`. These raise on 3.13 and return
+  `False` on any `OSError` from 3.14. So a dangling or unreadable `.agentteams/brief.json` either crashed the caller or
+  silently fell through to the root `brief.json`. That included `--verify-toolchain-pin`'s brief discovery, where it
+  could drop the brief's `s10_cooldown_exempt_repos` from the check. Now the first candidate that is there wins, and
+  its reader reports the problem. `--verify-toolchain-pin` exits `1`.
+  A discovered brief that is a symlink, or resolves outside the project, now stops `--verify-toolchain-pin` too.
+  Before, the check ran as if there were no brief.
+  - The integration-branch lookup (`branch_model.integration_branch_from_project`) now refuses a brief it cannot
+    use, as it already did for a malformed `git_workflow` block. That covers a symlinked or out-of-project brief,
+    and one that is unreadable, unparseable or not a JSON object. Before, it read such a brief as trunk, which
+    silently dropped the integration branch's protection in `--branch-cleanup` and retargeted vulnerability-fix
+    PRs. No brief at all still means trunk.
+  - Callers that apply restrictions from the brief refuse a brief they cannot use, instead of reading it as "no
+    restrictions": `--sync-carveouts` and `--verify-carveouts` (frozen surfaces), `--sync-project-rules`, and
+    sandbox-sync projection (`multi_sync`, the privilege profile). That covers a symlinked or out-of-project brief,
+    one that is unreadable, unparseable or not a JSON object, and one whose `existing_project_path` names another
+    project. Before, an unusable `.agentteams/brief.json`
+    shadowing a restrictive root `brief.json` would have written into a frozen surface and projected no sandbox
+    boundary (IM-da review of #603).
+- **A HALT in any team dir binds a per-repository S-10 exemption (#597).** Without a verified toolchain group, the
+  per-repository path read HALTs only from the canonical `.github/agents` and the dir being rendered. A HALT on
+  `s10-cooldown-exempt` (or one repository) recorded in another surface, for example `.codex/agents`, did not stop a
+  new or carried-over exemption when another surface rendered. Now it binds HALTs from every team dir of the project,
+  the same set the toolchain-group path and file clearances use. A team dir that cannot be stat'd exempts nothing.
+- Upgrade note: a HALT that a member retraction had cleared blocks again; retract it by its own id. Two retraction
+  shapes no longer clear a family HALT: a descriptive-suffix id (`overwrite-retract` for an `overwrite` HALT) and a
+  member id scoped to the family (`scope=x`, id `x:o/b`). A member retraction scoped to its own id now clears its own
+  HALT at the family gate; before, that gate's scope check refused it.
+
+### changed (`--verify-toolchain-pin` checks signed tags in every tier; there is no exit 2; #555)
+
+- Rule S-9's check now runs in a workspace without decision signing (T3), and in a governed one with no
+  toolchain-group file. Before, both checked nothing: T3 was refused as ungoverned, and a missing group file exited `2`.
+- **Which pins:** every pin to a first-party repository. Sources only add repositories:
+  - one owned by this workspace's GitHub owner;
+  - one in the brief's `s10_cooldown_exempt_repos`;
+  - one named by the new `--pin-repos` (each must be pinned);
+  - a verified group member.
+
+  The workspace's own repository is excluded and named in the output, but only when the owner match alone selected
+  it. A repository named by the brief, `--pin-repos` or the group is always checked, because `origin` is not signed:
+  a consumer whose `origin` claims to be a named repository cannot skip that pin (IM-da review of #598).
+- **Lockfile lines:** a name pinned or tagged twice, or a line shaped like a pin or tag that does not match the format
+  (uppercase hex, spaces around `=`), now fails the check. Before, the last duplicate won while the bootstrap installs
+  the first, and a malformed line was skipped.
+- **Exit codes:** `0` only when at least one pin was checked and every one verifies; `1` otherwise. Upgrade note: a
+  dependency gate that treated exit `2` as "nothing under the rule" now gets `0` or `1`.
+- **HALTs:** an `s10-cooldown-exempt` HALT on a checked repository is a `::warning`. It no longer drops the pin from
+  the check, and the cooldown still applies.
+- The rendered S-9 wording says the check fails closed in every tier and never clears the cooldown
+  (@security ruling, 2026-11-20).
+- **Unreadable dirs refuse (Python 3.14):** `Path.is_dir()` and `exists()` return `False` on any `OSError` from 3.14,
+  so a team dir that could not be stat'd read as absent and its HALTs were skipped (IM-da review of #593). The S-10
+  gate's surface and canonical team dirs, the signing switch, and the toolchain-group file now use `lstat` and refuse
+  instead: a render applies no group, and `--verify-toolchain-pin` and `--verify-toolchain-group` exit `1`. A dangling
+  team-dir symlink, or one whose target cannot be stat'd, refuses the same way.
+
+### changed (STABILITY: the WASM sandbox core is supported; a security-tightening clause, #568)
+
+- **STABILITY.md §7, "WASM sandbox core"**, puts these under SemVer from 1.3.0:
+  - the `agentteams.wasm_exec` executor surface (`run`, `prepare`, `materialize`, `assert_grant_shape`, `Grant`,
+    `GRANT_SPEC`, `GRANT_SPEC_SHA256`, `WasmExecError` and its data types);
+  - `agentteams.wasm_pins.pinned_resolver` and `WasmPinError`;
+  - `sandbox-state.schema.json` v1;
+  - `spent_off_decision` and `SandboxRelaxationError` from #574;
+  - the stdlib-only property of `wasm_exec` and `wasm_pins`.
+- **§7's own rules:**
+  - `GRANT_SPEC` content may change in a minor release, with a new sha and a CHANGELOG entry;
+  - the argv `assert_grant_shape` accepts is defined by `GRANT_SPEC`, not by SemVer;
+  - `sandbox-state` v1 is closed, so any change makes it v2;
+  - refusal lists may grow and limits may shrink (raising a limit needs a recorded `@security` clearance);
+  - `agentteams.wasm_session` stays beta.
+- **Release cadence: security tightening** (operator ruling, 2026-11-20). A security fix in a patch or minor release
+  may refuse something it used to accept. It needs a CHANGELOG `security` entry saying what is newly refused and how
+  to migrate. It never loosens a refusal or changes an output's shape. The Patch line now names this exception.
+- `tests/test_wasm_exec.py` now checks the stdlib-only property against `sys.stdlib_module_names` and refuses
+  `importlib.import_module`. Requested by baseAgent (its B4) through IM. Scoped by `@security`.
+
+### docs (the release model for 1.3: `main` moves only to signed releases; release lines are cut from `dev`)
+
+- `docs_src/release-and-branching.md` describes the model the operator ruled on 2026-11-20:
+  - `main` moves only to a signed release, by a main-to-vX.Y.Z pull request, or by a hotfix; `dev` → `main` milestone
+    pull requests are retired;
+  - `release/X.Y` is cut from `dev` at the minor version's first release candidate;
+  - after each final or patch release, the line is merged forward into `main` and into `dev`.
+- It also updates the current versions (`v1.2.2`; older lines `v1.1.4` and `v1.0.7`), the install examples, the
+  release-candidate soak (from the signed tag only), backports to `release/1.2`, and the rulesets.
+- `references/git-procedures.md` §G and the install line in `getting-started.md` match.
+
+### changed (main-team HALTs bind clearances checked in any team dir; gates-only team dirs, #578)
+
+- `check_file_clearance` (`--check-clearance`) now also refuses on an unretracted HALT for the scope, or for the
+  file-bound action, in every generated team dir (`.claude/agents`, `.github/agents`, `.codex/agents`,
+  `.goose/recipes`, `.grok/agents`) under each enclosing git root, and in a `parent_team` the team dir declares in
+  `references/agent-privilege.json`. Before, it read only the team dir it was
+  given, so a clearance checked in a separate dir escaped a main-team HALT (C-2).
+- The link is fail-closed. It refuses on an unreadable log or log directory (checked with `os.lstat`: from Python
+  3.14, `Path.is_dir()`/`exists()` return False on a permission error, which would have hidden a HALT), a symlinked canonical dir, or a `parent_team` that is
+  absolute, uses `..`, has a symbolic-link component, is not a team dir, names itself or chains. Outside a git
+  repository only the team dir's own log is read, and a declared `parent_team` refuses.
+- Upgrade note: a clearance that passed in 1.2 now fails if a generated team dir's log in the same repository holds
+  an unretracted HALT on its scope, or is malformed or reached through a symbolic link, or if the team dir's own
+  `agent-privilege.json` is not a JSON object.
+- **Python 3.14 fail-open fixed in every gate:** the decisions-log reader (`decision_log._read_decision_rows`) used
+  `Path.exists()`, which from Python 3.14 returns False on any OSError, so a log whose directory could not be read
+  read as absent and its HALTs were skipped. It now treats only a missing path as absent and refuses on any other error.
+- Docs: the gates-only team dir layout for signed sign-off rows, and the process-wide `AGENTTEAMS_DECISION_SIGNING_KEY`
+  caveat (`api-reference/workspace-privilege-scoping.md`). New `tests/test_gates_only_team_dir.py`.
+
+### added (a public, read-only check for a spent `sandbox-wasm-off` decision, #574)
+
+- **`agentteams.cli.sandbox_relaxation_gate.spent_off_decision(team_dir, framework_id)`** returns
+  `<key_id>@<sig16>` for the operator's spent, Ed25519-signed `sandbox-wasm-off:<framework_id>` decision in a governed
+  workspace, or raises `SandboxRelaxationError` naming the failed check (paths removed). It reads only. It is
+  stricter than the gate's internal check, which also accepts such a row in an ungoverned workspace; this one refuses
+  it there.
+- It is a point-in-time read, so call it before each use and never cache the result.
+- Documented in `docs_src/api-reference/cli.md` ("Supported API"). With `SandboxRelaxationError`, it is the only
+  `agentteams.cli` surface STABILITY.md covers (§7, #568). Requested by baseAgent (its `@security` condition C2) through IM. `@security` design conditions 1–10.
+
+### added (workflow-conformance test, Phase A: spec, scorer, controls, day markers; IM request 2026-W47)
+
+- **A deterministic check that a recorded run followed its workflow.** `agentteams.redteam.workflow_spec` reads
+  every `### Workflow` section of `orchestrator.template.md` and derives the ordered agent invocations a conforming
+  run makes, resolving *(If `@x` in team)* steps against the team's `agent_slug_list`; runtime-conditional steps
+  are optional. `eval_suite.build_workflow_suite` emits them as two new neutral scenario kinds, `workflow-sequence`
+  and `rule-order` (category `workflow`, added to `eval-suite.schema.json`). They are not added to the emitted
+  `references/eval-suite.json`, whose structural adapters would score an unknown kind as a failure.
+- **Coverage is derived from the template (AC3).** All 21 Workflow headings carry a class: 19 `live` (some with the
+  seed their fresh tree needs) and 2 `replay-only` with the reason a live run is unsafe (9: writes outside the
+  fresh tree; 14: needs the management signing key). A new or removed heading fails a test.
+- **Normaliser, scorer and controls (AC2).** `workflow_trace` turns Claude Code `stream-json`, a goose session
+  JSONL, the gate's `AGENTTEAMS_GATE_LOG` (a denied action is not executed) and the final steps CSVs into an
+  `agent_session_trajectory` plus ordered events. `workflow_score.check_workflow_conformance` scores the ordered
+  invocations (first deviating step) and Rule 9, C-5, Rule 8, Workflow 11 terminal and Rule 10, with no LLM judge.
+  `python -m agentteams.redteam.workflow_score --controls` replays planted and clean fixtures from
+  `tests/fixtures/workflow_conformance/` and exits 2 (VOID), writing a status file, if any control misbehaves.
+- **Day markers and a commit-bound report.** `stage_markers.run_stage_once` writes one marker per stage per day on
+  every exit code, so a stage that exited 2 is not paid for again that day. `conformance_report` fixes the shape a
+  release check verifies: the RC commit, threshold, panel pins, per-workflow results and a SHA-256 of the body.
+- **`live-behavior-watch.yml` shows a missing key as skipped.** The key check is its own job, and the live job runs
+  only on its output, so a run with no key no longer reports a green success.
+
+### changed (constitution: constraint-relaxing authorizations include bulk actions; operator ruling 2026-11-16)
+
+- **The generated teams' Rule 11 now says what the signing code already enforces.** `effect_classifier.requires_operator_signature`
+  has required the operator's Ed25519 signature and a traceable `derives_from` for a bulk effect (`effect_bulk=yes`)
+  since 1.0.0, but the rule text listed only capability grants, trust-root writes,
+  explicit relaxations and cross-repository reach, and said routine destructive actions keep C-5 clearance.
+  `copilot-instructions.template.md` now adds "or acts in bulk" and says a destructive action on a single target
+  keeps C-5 clearance while a bulk one needs the operator's signature. Nothing about enforcement changes. The rule
+  sits outside every fence, so `--update --merge` does not rewrite it in existing teams; new teams and an
+  `--overwrite` get the new wording.
+
+### added (beta: `agentteams.term_index` and `--term-check`; #548)
+
+- **A term-index core, ported from researchteam and declared beta.** `agentteams.term_index` validates a term
+  register, finds every registered form in a document set, and checks the register and any committed index:
+  `SCHEMA AMBIG SRC SCOPE STALE DISC ORPHAN NOREG` block, `REBUILD NOSRC UNUSED QUOTED` advise. The points that
+  were research-specific are `TermIndexConfig` parameters: register directory, skipped sections, source validator,
+  scanned region and generated-file names. It reads both `agentteams-term-register` and
+  `researchteam-term-register`. With researchteam's parameters, its output matches researchteam's engine byte for
+  byte, checked against a golden fixture. Standard library only, and it writes nothing. Matching finds forms, not
+  meanings.
+- **Input limits (researchteam #193).** At most 16 words per form, 32 forms per first word and 64 patterns in each
+  of `include` and `exclude`; a register over 1 MB, a document over 5 MB and a generated file over 20 MB are not read.
+  Every read goes through `read_capped`: no symbolic link is followed at any path component (opened relative to its
+  parent with `O_NOFOLLOW`), and nothing past the cap is read, so a file swapped or grown after a check is refused.
+  `--term-check` reports an environment error by its type only, so no absolute path reaches the hook log.
+- **`agentteams --term-check [AGENTS_DIR]`** checks a team's `terminology/terms.json`, live, against the text inside
+  well-formed `AGENTTEAMS` fences only, never user-editable sections. A file with broken fences is not scanned and
+  is a `FENCE` defect. `--term-check-advisory` reports defects but exits 0.
+- **An opt-in hook.** With `bridge:copilot-vscode-to-claude:hooks` selected and a register in the canonical agents
+  directory, the example hooks block gains an advisory `PostToolUse` term check that logs to
+  `.claude/hook-notices/term-check.log`. A team without a register gets no new hook.
+
+### changed (`--overwrite` refuses to drop an orchestrator's routing; #392 item 12)
+
+- **An `--overwrite` now refuses to replace an orchestrator that routes to agents the build doesn't keep.** This
+  covers `--overwrite`, `--update --overwrite`, and the `--overwrite` that `--migrate` runs. The refusal is
+  `[ROUTING-LOSS] blocked`, and it comes before the overwrite clearance is spent and before any backup or write.
+  - Routed means a backticked `` `@slug` ``, a front-matter `agents:`/`handoffs:` target, or a bare `@slug` with an
+    agent file on disk.
+  - `--yes` doesn't acknowledge the loss, and an unreadable orchestrator refuses.
+  - In 1.2, #526 only reported the loss and the run proceeded.
+- **Migration.** A scripted `--overwrite` that drops bespoke routing on purpose now needs
+  `--accept-routing-loss SLUG[,SLUG...]`, naming exactly the at-risk set (shown in the refusal or in
+  `--dry-run --json`'s new `routing_loss.clear_with`). Alternatively, keep the agents with `--adopt-orphans`, the
+  brief, or `--update --merge`.
+- `@security` design conditions 1–10 (2026-11-19). The tests are in `tests/test_overwrite_at_risk_routing.py`.
+
+### changed (`--adopt-only` finds the project's brief when none is named, #392 item 13)
+
+- With no `--description` and no `--self`, `--adopt-only` now uses the project's own brief under `--project`
+  (else the working directory), found as the retrieval modes find it: a symlinked brief, one outside the project,
+  or one naming another project in `existing_project_path` is not used. It does so only when the agents
+  directory the run writes to is inside that project and no nested project between them has its own brief;
+  otherwise the run refuses and asks for `--description`. The `--self` brief is never used without `--self`, and a
+  brief that is not a JSON object refuses.
+- A `--description` that is named is never replaced, even when the file is missing. Adoption still goes through
+  the `adopt-orphans-merge` gate, so finding the brief widens nothing by itself.
+- New `tests/test_adopt_only_brief_discovery.py`.
+
+### docs (`--adopt-only` needs a brief, and `--output` is the agents directory, #392 item 13)
+
+- The CLI reference and `--adopt-only`'s help (and so the man page) now say that `--adopt-only` needs
+  `--description` or `--self`, and that `--output`, when given, is the agents directory that holds the
+  orchestrator. On Copilot, Claude and agents-md, which take the path as given, a project-root `--output` refuses
+  with "no regular orchestrator file"; goose, codex, grok and wasm append their agents directory. Finding
+  `.agentteams/brief.json` automatically is a separate change.
+- New check in `tests/test_adopt_only_docs.py`.
+
+### added (one up-front notice when a merge finds no generation baseline, #392 item 15)
+
+- `--update --merge` on a team whose `build-log.json` records no fence baseline (every team generated by 1.1.x or
+  earlier) now prints one notice before any file is written. It explains why each changed fence keeps its on-disk
+  body, and names the path that brings the current templates: preview `--update --overwrite --dry-run --json`,
+  review the plan and `at_risk_routed_agents` (#392 item 12), then run it. It says that `--overwrite` replaces
+  hand enrichment inside fences (the backup keeps it). A merge records the baseline for each fence it writes as
+  rendered, so the notice stops after one merge; the fences it preserved stay unrecorded and keep their shrink
+  notices. A missing or malformed build log gets its own wording; an interop projection, `--overwrite` and a run
+  with nothing to write get no notice. A `--no-backup` merge, which uses no baseline even when one exists, is not
+  told.
+- `--capture-baseline` is not that path (it records an emission snapshot), and the notice says so. The per-fence
+  shrink notices and the "deleted rule … preserved-forever" notices are unchanged.
+- New `agentteams/cli/update_notices.py` (it also runs item 12's report) and `tests/test_update_no_baseline_notice.py`.
+
+### added (`--update --overwrite` reports the routed agents it would orphan, #392 item 12)
+
+- `--update --overwrite` replaces the orchestrator. It now lists, on stderr and before any file is written, every
+  agent the current orchestrator routes to by `` `@slug` `` that the build neither emits nor still routes to,
+  whether or not the agent has a file. Before, only the "adopted by merge" advisory named such agents, and only
+  those with a file. `--dry-run --json` reports them under `at_risk_routed_agents` (`{"slug", "has_file"}`).
+- It compares against what the run would write: the new orchestrator plus the user-editable regions `--overwrite`
+  carries, so routing kept in Project-Specific Notes is not listed (unless `--discard-user-regions`). A run that
+  does not rewrite the orchestrator (no drift, or a frozen surface) lists nothing.
+- The run still proceeds. Refusing without an acknowledgement is a separate change, after `@security` reviews it.
+  A plain `--overwrite` without `--update`, and `--migrate`, are not covered yet.
+- New `agentteams/cli/routing_at_risk.py` and `tests/test_overwrite_at_risk_routing.py`.
+
+### added (beta: the WASM streaming session mode and its entry point, #567)
+
+- **New `agentteams/wasm_session.py`** runs one WASM guest as a long-lived session:
+  `python -I -m agentteams.wasm_session run --project-root DIR [options] -- MODULE [guest args]`. It keeps the guest's
+  stdin open across turns and relays stdio byte for byte, a complete line at a time. Host status records (JSON Lines,
+  schema `agentteams-wasm-session/1`) go to `--status-fd` (default 3), which the guest never holds. Pre-start refusals
+  and host-set outcomes therefore can't be forged from guest output, and the guest's exit code stays separate from
+  the entry point's.
+- The guest runs with `wasm_exec`'s grant, limits, empty environment, verified copies and OS nesting, unchanged, and
+  no new wasmtime flag.
+- Caps:
+  - per-frame cap of 1 MiB by default, minimum 262,145 B;
+  - total caps of 256 MiB for output and 64 MiB for input;
+  - stderr is truncated, never fatal;
+  - the idle timeout is opt-in;
+  - a guest is killed when its parent closes stdin or goes away;
+  - a reaper removes stale run directories, without following symlinks.
+- A `bench` subcommand reports per-request relay overhead. At 3×10⁵ requests on macOS arm64 the relay added about
+  70 µs per request over a bare wasmtime spawn.
+- Contract: [#567](https://github.com/jlcatonjr/agentteams/issues/567#issuecomment-7026367447). `@security` design
+  conditions S1–S12.
+- **Beta:** see STABILITY.md. New tests are in `tests/test_wasm_session.py`, and the test guest is
+  `tests/fixtures/wasm/session_echo.{wat,wasm}`.
+
+### docs (the canonical wasmtime argv tail, #570)
+
+- `docs_src/api-reference/wasm-exec.md` names `--argv0 <name> -- <absolute module> [guest args]` as the canonical
+  tail for core modules, and records the `@security` ruling on component guests (#569: allowed under conditions
+  C1-C9, still refused until they land). No code changes; `GRANT_SPEC_SHA256` and the shared corpus sha256 are unchanged.
+
+### fix (no silent N/A for archetypes a brief names, #392 item 1)
+
+- When a brief names `style-guardian` in `selected_archetypes` and sets no `style_reference`,
+  `{MANUAL:STYLE_REFERENCE_PATH}` now stays in the rendered files and in `SETUP-REQUIRED.md`, and a warning names
+  it, in every mode. Before, a normal (non-strict) run replaced it with "N/A - no formal style guide defined for
+  this project", and `--enrich` wrote an em-dash variant. The same now holds for `reference-manager` without a
+  `reference_db_path`.
+- **Existing teams:** a team whose brief already names either agent in `selected_archetypes` without that value
+  will see the `{MANUAL:*}` token, and a `SETUP-REQUIRED.md` entry, on its next `--update`. Set the value to
+  clear it.
+- When the analyzer picks either agent from keywords ("paper", "research", "reference" and others), output is
+  unchanged, and a one-line warning says which value is missing (the warning half of #392 item 8).
+- Detecting a `*.bib` file as `reference_db_path` is not part of this change; it moves to 1.3 with item 2.
+- New `tests/test_archetype_placeholders_not_silenced.py`; the shared rule is in `agentteams/_archetype_placeholders.py`.
+
+### fixed (`SETUP-REQUIRED.md` lists every `{MANUAL:}` token the team emits; IM item 13b, G-17-3)
+
+- **For every team, on generate, `--update` and `--check`.** The checklist was built only from the brief-derived
+  `manual_required_placeholders`, so tokens written literally in templates were never listed. On dev, every example
+  emitted `{MANUAL:PROJECT_REDTEAM_NOTES}`, `{MANUAL:ADJACENT_REPO_PATH}` and `{MANUAL:ADJACENT_REPO_AGENTS_PATH}`
+  without listing them. The new `placeholder_scan` builds the list from the emitted text, and the emit summary counts
+  them. A token the operator has filled in leaves the list on the next `--update`. The scanned entries are kept under
+  the manifest's `_scanned_manual_placeholders`, which the drift fingerprint skips, so `--check` does not report
+  manifest drift.
+- **One rule for every scanner.** The `--post-audit` check and `--enrich`'s `scan_defaults` skipped tokens in inline
+  code, and the adjacent-repos placeholders are written in inline code. Now the only names skipped are the
+  instructional `TOKEN`, `UPPER_SNAKE_CASE` and `PLACEHOLDER_NAME`. A test pins where those may appear, and every
+  other name a template writes must be listed in `PLACEHOLDER-CONVENTIONS.md`.
+- **Official docs URLs for well-known tools.** Reference docs for git, gh, PostgreSQL, Python, Docker, Terraform and
+  GNU make no longer ship `{MANUAL:TOOL_DOCS_URL}`. These are vendor or project pages, applied only to tools a brief
+  names, never matched by Python import name.
+- **Unchanged:** how `SETUP-REQUIRED.md` is written. `--check` stays read-only; on `--update` an appended operator
+  note survives, and an edit inside the generated list is replaced, as before. Nothing is refused for open
+  placeholders.
+
+### fixed (the project-description schema matches the code and is checked on load, warn only; IM item 13a)
+
+- **G-17-2.** `ingest.validate` checked three fields and `schemas/project-description.schema.json` was never run on
+  a brief. It had also drifted: 96 of 155 descriptors in the workspace failed it.
+  - **The schema matches the code.** `selected_archetypes` takes any lowercase slug, so archetypes another layer
+    provides are no longer schema errors. `x-agentteams-known-archetypes` lists the 21 agentteams renders, and a
+    test keeps it equal to the domain templates, so it can't drift again. The old enum lacked `agentteams-updater`,
+    `tool-doc-researcher`, `vuln-remediation`, `work-summarizer`, `pr-manager`, `pr-notifier` and `content-enricher`,
+    and listed `tool-specific`, which has no template. `tools[].category` accepts `build` and `infrastructure`
+    (both passive, as the code already treated them).
+  - **Checked on load, warn only.** `ingest.load` runs the schema on every JSON description and prints one `[WARN]`
+    per file per run (the count and the first five issues). It never refuses and never changes the exit code,
+    `--check` included.
+  - **Archetypes agentteams doesn't render.** A `selected_archetypes` slug with no domain template gets one `[INFO]`
+    line instead of being dropped silently; another layer (researchteam's `interpretation-advisor`) may provide it.
+  - **The team-manifest schema matches too** (@conflict-auditor): its `selected_archetypes` enum is now the same slug
+    pattern, and its two `tool_category` enums accept `build` and `infrastructure`, which `analyze_tools` copies in.
+  - **The capability the code reads** (`instance_maintenance`) is in the schema's `capabilities` enum (@adversarial).
+  - **The fleet shows the warning** (@adversarial): it captures each render's output, so a printed WARN never reached
+    the operator. The fleet report's `schema_warnings` carries it, on the first target of each workspace.
+  - **The check never fails a load:** an error while checking is a `[WARN]` too, and each listed issue is clipped to
+    160 characters, so a `oneOf` message can't echo a whole brief value. The validator registers the sibling
+    schemas by `$id`, so `mcp_servers` items resolve against `mcp-server.schema.json`.
+  - **Census for the later refusal:** 96 of 155 descriptors failing before the schema fix, 23 after (unchanged by the
+    `instance_maintenance` addition, which no failing brief used). The 23 include project names with spaces, which
+    the schema documents as slug-safe and the code tolerates.
+
+### changed (internal: fleet.py and emit.py carved below the CH-07 crowding mark)
+
+- Moved fleet's fence/USER-EDITABLE line maps and fence-pairing gate (`_fence_and_useredit_lines`,
+  `_fence_imbalances` and their marker regexes) to `agentteams/_fleet_fences.py`, and emit's
+  `_unmodified_since_build` to `agentteams/_emit_build_state.py`. Both remain importable from `fleet` and `emit`;
+  behaviour is unchanged. fleet.py 974 → 894 lines, emit.py 974 → 949, so the pending #521 and #524 fit.
+
+### fixed (red-team probe E1 measures a rendered team; #478)
+
+- Probe E1 (C-3) read the gitignored `.claude/agents/`. In a clean checkout, a worktree or the weekly
+  `redteam-audit.yml` run, it therefore counted `0/0` and reported DEFENDED having checked nothing. It now renders
+  Claude teams in memory from every tracked `examples/*/brief.json`, plus a `write_policy: orchestrator-only` variant,
+  and checks the emitted front matter. Each of these is EXPLOITED:
+  - an `allowed-tools:` key;
+  - any agent with no `tools:`/`disallowedTools:`;
+  - a read-only agent emitted with Write, Edit or bare Bash, which is what the adapter's blanket default produces for
+    a tool list it cannot parse.
+
+  Read-only means the template grants no write or command capability. An empty render raises.
+- Sensitivity and anti-vacuity tests are in `tests/test_constitutional_redteam.py`.
+- The probe baseline is re-accepted by the operator after merge; the review is in
+  `references/redteam-probe-revalidation.md`.
+
+### fixed (slug checks refuse a trailing newline; #473)
+
+- The slug checks used `re.match` with a pattern ending in `$`, which also matches just before a final newline, so
+  `"agent\n"` passed. Every `*SLUG*_RE` check in the package now uses `re.fullmatch`:
+  - `cli/adopt_merge_gate.py` (#473; the strict `xfail` that pinned the bug is now an ordinary test);
+  - `cli/adopt_only.py`;
+  - `sandbox_handoff.py` (the handoff slug, which becomes a script path);
+  - `sandbox_state.py` (agent and profile names);
+  - `sandbox_tokens.py`;
+  - `wasm_config.py`;
+  - `wasm_agent/team.py`;
+  - `interop_helpers.py`;
+  - `update_lock.py` (slug-valued arguments).
+- `tests/test_slug_trailing_newline.py` adds a guard that no `*SLUG*_RE.match(` call remains in the package. The same
+  `$`-with-`match` pattern on non-slug values (`carveouts.py`, `fence_inject.py`, `surface_matrix.py`, `vulnscan/`)
+  and the 13 duplicated slug regexes (CH-08) are follow-ups (#514).
+  Integrity pins are re-recorded.
+
+### changed (dev is 1.3.0.dev0 after the 1.2 cut; a dev build's install hint points at v1.2.0-rc.1)
+
+- `pyproject.toml` on `dev` is `1.3.0.dev0`, so builds from `dev` cannot be mistaken for 1.2.x (operator ruling,
+  2026-11-15). `release/1.2` carries the 1.2 line (v1.2.0-rc.1, signed 2026-11-16).
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from the stale
+  `v1.0.1` to the newest published tag, `v1.2.0-rc.1`.
+
 ## [1.2.2] - 2026-11-19
 
 ### release notes

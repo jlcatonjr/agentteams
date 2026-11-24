@@ -81,6 +81,64 @@ class AdoptOnlyError(RuntimeError):
     """``--adopt-only`` is refused; the message names what to fix."""
 
 
+def resolve_adopt_only_brief(args: argparse.Namespace) -> str | None:
+    """Find the project's brief for ``--adopt-only`` when none is named (issue #392 item 13); mutates *args*.
+
+    With no ``--description`` (and no ``--self``), the brief under ``--project`` (else the working directory) is
+    used, found as the retrieval modes find it (:func:`agentteams.memory_index_surfaces.resolve_brief`: a symlink,
+    a brief outside the project, or one naming another project in ``existing_project_path`` is not used). It is
+    used only when the agents directory this run would write to lies inside that same project, so a brief is
+    never applied to another project's team. A ``--description`` that is named is never replaced, even when the
+    file does not exist. Adoption still goes through the ``adopt-orphans-merge`` gate, so the lookup widens
+    nothing by itself.
+
+    Args:
+        args: Parsed CLI arguments (``adopt_only``, ``description``, ``self_update``, ``project``, ``output``,
+            ``framework``).
+
+    Returns:
+        ``None`` when nothing needed doing or the brief was found (``args.description`` is then set); otherwise
+        a refusal message for the caller to report.
+
+    Raises:
+        Nothing.
+    """
+    if not getattr(args, "adopt_only", None) or args.description or getattr(args, "self_update", False):
+        return None
+    from agentteams.memory_index_surfaces import resolve_brief
+
+    from agentteams.fleet import _resolve_descriptor
+
+    root = Path(getattr(args, "project", None) or ".").resolve()
+    found = resolve_brief(root)
+    if found is None:
+        return None  # the caller's "--description is required" error stands
+    if found.name == "_build-description.json":  # the --self brief: never used without --self's own checks
+        return f"--adopt-only: the only brief under {root} is the --self brief {found}; pass --self or --description"
+    try:
+        description = json.loads(found.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        description = None
+    if not isinstance(description, dict):
+        return f"--adopt-only: the brief {found} is not a readable JSON object; pass --description"
+    adapter_cls = FRAMEWORKS.get(args.framework)
+    if adapter_cls is None:
+        return None  # not an agent framework; the caller's own error stands
+    _project, output_dir = resolve_output_dir(args, adapter_cls(), description)
+    target = output_dir.resolve()
+    if not target.is_relative_to(root):
+        return (f"--adopt-only: found this project's brief at {found}, but the agents directory {output_dir} is "
+                f"outside {root}; pass --description for that team's own brief, or --project for its project")
+    nested = next((d for d in [target, *target.parents] if d != root and d.is_relative_to(root)
+                   and _resolve_descriptor(d) is not None), None)
+    if nested is not None:  # a nested project's team takes its own brief, never the parent's
+        return (f"--adopt-only: {nested} has its own brief, so {found} is not this team's; pass --description "
+                f"or --project {nested}")
+    print(f"  ℹ  --adopt-only: using this project's brief {found}", file=sys.stderr)
+    args.description = str(found)
+    return None
+
+
 def parse_slugs(raw: str) -> list[str]:
     """Split the ``--adopt-only`` value into sorted, de-duplicated slugs.
 
@@ -96,7 +154,7 @@ def parse_slugs(raw: str) -> list[str]:
     slugs = sorted({s.strip() for s in (raw or "").split(",") if s.strip()})
     if not slugs:
         raise AdoptOnlyError("--adopt-only needs at least one agent slug")
-    bad = [s for s in slugs if not _SLUG_RE.match(s)]
+    bad = [s for s in slugs if not _SLUG_RE.fullmatch(s)]
     if bad:
         raise AdoptOnlyError(f"malformed agent slug(s): {', '.join(bad)}")
     return slugs

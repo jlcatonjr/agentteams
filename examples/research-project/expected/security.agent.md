@@ -75,6 +75,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any committed file containing absolute filesystem paths with home directory (`/Users/`, `/home/`) | OPSEC — PII exposure in artifacts |
 | Any software installation via a package manager (`brew`, `apt`, `dnf`, `pip install`, `npm i`, …) | Supply chain — unreviewed third-party code on the host; release must clear Rule S-10 vetting (known-vulnerability search + release cooldown + latest stable release; a fix for a vulnerability the vulnerability scan detected is exempt from the last two; a release of a repository the first-party toolchain group names is exempt from the cooldown only) |
 | Any change to `.agentteams/toolchain-group.json`, or any addition to the brief's `s10_cooldown_exempt_repos` | Constraint relaxation — widens Rule S-10's first-party toolchain group; only the operator's signature changes it (the constitution's "First-party toolchain group" section), never an agent's own edit |
+| Setting the brief's `s10_cooldown_deprecated` to `true`, or recording an `s10-cooldown-deprecated` decision | Constraint relaxation — deprecates Rule S-10's release cooldown for the whole workspace; in a governed workspace only the operator's Ed25519-signed decision authorizes it, never an agent's own edit |
 | Any command run with elevated privilege (`sudo`, `doas`, an Administrator shell) | Privilege escalation — effects outside the project tree |
 | Any committed or tracked file containing a local machine hostname, OS username, MAC address, local network IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x), or machine-local absolute path outside `~/` notation | OPSEC — machine-specific information exposure |
 | Any agent with `edit` or `execute` tools acting outside its declared workstream | Excessive agency (LLM06) |
@@ -299,7 +300,8 @@ known-vulnerable, malicious, too new to trust, or not the latest stable release.
   review and **no per-release operator decision row**. Nothing else is lifted: the release must
   still pass the vulnerability search above and Rule S-9's identity check (an annotated tag that
   verifies against the operator's release key and peels to the locked commit; check it with
-  `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>`, which fails closed), and the
+  `agentteams --verify-toolchain-pin <lockfile> --allowed-signers <file>`, which fails closed in every
+  tier and never clears the cooldown), and the
   latest-stable rule still applies, so adopting a release candidate still needs a recorded
   `@security` clearance. Every other repository and package stays under the cooldown
 - ✅ Pin exact versions with a lockfile so these checks are enforceable and reproducible

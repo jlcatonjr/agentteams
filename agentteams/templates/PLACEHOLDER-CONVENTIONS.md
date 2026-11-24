@@ -15,6 +15,7 @@ These are filled automatically by the rendering engine from the project descript
 - `{PRIMARY_OUTPUT_DIR}` — Path to the primary output directory. It is a directory (or literal glob text) inside the project; the repository itself is `{PROJECT_NAME}`.
 - `{AGENT_SLUG_LIST}` — Multi-line YAML list of all agent slugs
 - `{S10_TOOLCHAIN_GROUP}` — Rule S-10's first-party toolchain group as inline code, comma-separated: the repositories `cli/s10_exempt_gate` authorized (the operator-signed `.agentteams/toolchain-group.json`, the constitution's "First-party toolchain group", plus any legacy signed per-repository row; the brief's `s10_cooldown_exempt_repos` only in an ungoverned workspace); when none are authorized, a phrase saying the cooldown applies to every release. Only plain repository identifiers are rendered (`manifest_format.format_s10_exempt_repos`)
+- `{S10_COOLDOWN_MOOT}` — `""` by default. When `cli/s10_deprecation_gate` authorized `s10_cooldown_deprecated` (agentteams#592), a fixed note from `manifest_format.s10_cooldown_placeholders` that the cooldown clause it ends is moot while the deprecation holds. It ends each remaining cooldown clause: S-9's install line, the latest-stable rule, the remediation and toolchain-group carve-outs, the review-table rows, the supply-chain bullet, Rule S-VM, the instructions file's toolchain-group section and the orchestrator's vulnscan PR step. The cooldown bullet itself stays literal in `security.template.md`; `manifest_format.apply_s10_cooldown_deprecation` swaps it for fixed deprecated wording at render time, on the same authorization.
 - `{ADOPTED_AGENT_ROUTING_ROWS}` — Orchestrator routing-table rows for `--adopt-orphans` agents, one `\n`-prefixed row each, sorted by slug; `""` when nothing is adopted. Sits at the end of the last fixed row (not on its own line) so a team without adopted agents renders byte-identically
 - `{WASM_ROUTING_ROWS}` — Orchestrator routing-table rows for the WASM sandbox (run code through the requesting agent's `run_wasm`; grant changes to `@security`), `\n`-prefixed; `""` unless WASM is on. Sits right after `{ADOPTED_AGENT_ROUTING_ROWS}` at the end of the last fixed row. Set by `agentteams/wasm_policy.populate_placeholders` once the switch is resolved (default `""` in `analyze`)
 - `{WASM_SECURITY_TRIGGER_ROWS}` — `@security` *Mandatory Review Triggers* rows for the WASM sandbox (grant widening, `native_exec`/`native_exec_keep`, WASM off, `sandbox: wasm` to `os`, the server bundle, laundering), `\n`-prefixed; `""` unless WASM is on. Sits at the end of the table's last fixed row, so a WASM-off team renders byte-identically. Set as `{WASM_ROUTING_ROWS}` is
@@ -52,6 +53,9 @@ the first two tiers:
 2. **Unified static catalog** (`agentteams/tool_metadata_catalog.py`, zero network) —
    known-package metadata for common tools (numpy, pandas, boto3, requests,
    sqlalchemy, pytest, and others). Consulted via `analyze._merge_known_tool_metadata`.
+   For tools a brief names, `WELL_KNOWN_TOOL_DOCS` in the same module also supplies the
+   official `docs_url` of git, gh, PostgreSQL, Python, Docker, Terraform and GNU make. It is
+   not looked up by Python import name: `import git` is GitPython, not git.
 3. **Network fetch** (`agentteams/enrich/_tools.py::build_tool_catalog`, PyPI then npm)
    — opt-in via `--enrich` (or `--post-audit`, which implies it). Not run by default,
    since it makes outbound network calls.
@@ -82,6 +86,10 @@ These cannot be inferred from the project description and require human completi
 - `{MANUAL:TOOL_DOCS_URL}` — Documentation URL when none of the resolution tiers above found one
 - `{MANUAL:TOOL_API_SURFACE}` — Key API surface when none of the resolution tiers above found one
 - `{MANUAL:TOOL_COMMON_PATTERNS}` — Common patterns when none of the resolution tiers above found one
+- `{MANUAL:ADJACENT_REPO_PATH}` / `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` — Local path, and agent-infrastructure path, of an adjacent repository (`adjacent-repos.reference.template.md`)
+- `{MANUAL:PROJECT_REDTEAM_NOTES}` — Project-specific red-team notes (`redteam-methodology.reference.template.md`)
+
+**How the checklist is built (IM item 13b).** `SETUP-REQUIRED.md` lists the brief-derived items from `analyze` *and* every `{MANUAL:X}` left in the emitted text (`agentteams/placeholder_scan.py`), so a token written literally in a template is listed too. A token the operator has filled in leaves the list on the next `--update`. Inline code is not a hiding place: `` `{MANUAL:X}` `` in a table is still a placeholder. The names left off the list are the instructional ones in `placeholder_scan.INSTRUCTIONAL_TOKENS` (`TOKEN`, `UPPER_SNAKE_CASE`, `PLACEHOLDER_NAME`), which this guide and the content-enricher use to *explain* placeholders. When a template writes a new `{MANUAL:X}` name, list it here, or add it to `INSTRUCTIONAL_TOKENS` if it only explains; `tests/test_placeholder_completeness.py` fails until one of the two is done.
 
 ### Post-Production-Auditor Specific Placeholders
 

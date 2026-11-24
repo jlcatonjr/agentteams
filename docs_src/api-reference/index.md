@@ -11,11 +11,13 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`ingest`](ingest.md) | Load and normalize project description files |
+| [`brief_schema`](brief-schema.md) | The project-description schema, checked on load (warn only); the archetypes agentteams renders |
 | [`analyze`](analyze.md) | Classify project type, select archetypes (including contextual post-production selection), build team manifest |
 | [`analyze_tools`](analyze-tools.md) | Tool importance classification + tool/reference-doc detection (carved from analyze) |
 | [`tool_version_source`](tool-version-source.md) | Tool versions read from the target project's pin file (`tools[].version_source`) |
 | [`manifest_format`](manifest-format.md) | Manifest field derivation/formatting helpers (_format_*/_default_*/_collect_*) — carved from analyze |
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
+| [`placeholder_scan`](placeholder-scan.md) | `SETUP-REQUIRED.md` lists every `{MANUAL:}` token in the emitted text; one rule for every scanner |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
 | [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
 | [`fence_baseline`](fence-baseline.md) | Per-fence digests of what agentteams authored, so a fence unedited since generation takes a shrinking template update instead of being preserved |
@@ -139,6 +141,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`confinement`](confinement.md) | Orchestrator-only-writes pilot (P4b): run the runner's commands and gates in a Seatbelt/bwrap sandbox built from `confined_programs` |
 | [`wasm_runtime`](wasm-runtime.md) | WASM sandbox: pinned download, safe extraction and verify-on-use for wasmtime and the guest interpreters (`--wasm-install`) |
 | [`wasm_exec`](wasm-exec.md) | The wasmtime executor: pinned compute-only grant, exact-shape argv check, OS nesting, capability probe (WASM P02) |
+| [`wasm_session`](wasm-session.md) | Streaming session mode: one long-lived guest, stdio relayed frame by frame, host status records on a separate fd (beta, #567) |
 | [`wasm_pins`](wasm-pins.md) | Pure re-hash of an installed WASM runtime against its pins; `TODO-PIN` fails closed |
 | [`wasm_guests`](wasm-guests.md) | Python / JavaScript / core-module guests on the pinned grant, with per-language deny probes (WASM P04) |
 | [`sandbox_projection`](sandbox-projection.md) | The model-substrate WASM switch projected to `.agentteams/sandbox-state.json` for consumers that run model code (WASM P20) |
@@ -166,6 +169,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`orphan_advisory`](orphan-advisory.md) | `--update` orphan-agent-file advisory: orphaned / bespoke-keep / bridge-managed-keep buckets |
 | [`bridge_subagents_goose`](bridge-subagents-goose.md) | Per-agent Goose stub-recipe emitter (bridge:`<src>`-to-goose:subagents) |
 | [`bridge_sources`](bridge-sources.md) | Source-team inventory, file collection, hashing + bridge-freshness check (framework-aware) |
+| [`term_index`](term-index.md) | **Beta.** Term register, occurrence index and checks (`--term-check`; researchteam-compatible) |
 | [`hooks_emit`](hooks-emit.md) | Claude hooks settings + recursion-bounded guard emitter (bridge:copilot-vscode-to-claude:hooks) |
 | [`instructions_split`](instructions-split.md) | Cache-aware CLAUDE.md layout: preamble + boundary + dynamic stanza (bridge:copilot-vscode-to-claude:cache-split) |
 | [`schedule_emit`](schedule-emit.md) | `/schedule` routine spec emitter (bridge:copilot-vscode-to-claude:schedule) |
@@ -201,6 +205,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`copilot_body_limit`](copilot-body-limit.md) | `--check`'s guard for operator notes past Copilot's 30,000-character agent-body limit |
 | [`bridge_refresh`](bridge-refresh.md) | What `--bridge-refresh` writes for `.goosehints`: the bridge fence, keeping project text around it |
 | [`shrink_allow`](shrink-allow.md) | `--shrink-allow`: operator-reviewed per-section overrides of the shrink guard (template retirements vs enrichment) |
+| [`stale_surface_paths`](stale-surface-paths.md) | `--update --merge` notice: unfenced lines left by an older render that name another surface's agents directory (advisory; F10) |
 | [`branch_cleanup`](branch-cleanup.md) | `--branch-cleanup` / `--branch-post-merge`: guarded deletion under a plan-bound `@security` clearance or an operator Ed25519 `branch-delete` grant; hash-chained deletion ledger |
 
 ## Standalone modules

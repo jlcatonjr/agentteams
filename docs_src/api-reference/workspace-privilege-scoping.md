@@ -711,6 +711,55 @@ author name. It applies to both authorization paths (PASS and HALT-RETRACTED).
 > raises the bar (author-name-only → signature-required) and makes tampering a recorded,
 > git-visible act, but it is not a boundary an in-sandbox agent cannot cross.
 
+## Gates-only team dirs for sign-off rows
+
+A project can keep signed sign-off rows (study gates, release gates) in a **gates-only team dir**, apart from its main
+team's decisions log, so the main log need not become signing-active. `--sign-decision --output <dir>` writes there,
+and `--check-clearance SCOPE --clearance-file PATH --output <dir>` (or `clearance_binding.check_file_clearance`) reads
+the PASS there.
+
+**Minimum contents** (for example `<repo>/.github/survey-gates/`):
+
+```
+references/
+  agent-privilege.json            # makes the dir a team dir; may declare "parent_team"
+  security-decisions.log.csv      # with signature columns, so every authorizing row must be signed
+  authorized-verify-keys/         # the operator's <key_id>.pub.pem
+  security-approvers.txt
+```
+
+**A gates-only dir has no separate HALT authority.** When a clearance is checked in any team dir, an unretracted HALT on
+the scope, or on the file-bound action, in any of these logs refuses it (C-2):
+
+- the team dir's own log;
+- inside a git repository, every generated team dir (`.claude/agents`, `.github/agents`, `.codex/agents`,
+  `.goose/recipes`, `.grok/agents`) under each enclosing git root, whether or not the gates dir names them. Every
+  enclosing `.git` counts, so a planted marker or a symlinked gates dir adds roots rather than hiding one;
+- the team dir named by `"parent_team"` in the gates dir's `references/agent-privilege.json`: a path relative to the
+  repository root.
+
+Each log is read under its own rules: an unsigned HALT binds, and a retraction counts only if it is valid in its own
+log. The check is fail-closed. It refuses when:
+
+- a scanned log, or a directory on its path, cannot be read or parsed (permission denied counts: it is never
+  treated as absent);
+- a team dir added to the scan (a generated team dir or the `parent_team`), its `references/` or its log is, or sits
+  under, a symbolic link. The team dir you pass yourself may be a link: its resolved location is scanned too;
+- the `parent_team` path is absolute, uses `..`, has a symbolic-link component, is not a team dir, names the gates dir
+  itself, or declares a `parent_team` of its own (one level only);
+- a `parent_team` is declared outside any git repository.
+
+**Outside a git repository, only the team dir's own log is read.** A gates dir kept outside the repository (or an
+`--output` pointing outside it) therefore does not see the repository's main-team HALTs. Keep gates dirs inside the
+repository they govern.
+
+A governing team kept outside the generated locations binds only through a declared `parent_team`. Leaving the link
+out drops that team's HALTs, so keep governing teams in a generated team location.
+
+**`AGENTTEAMS_DECISION_SIGNING_KEY` applies to the whole process.** If it is exported in a shell, every decisions log
+that process touches becomes signing-active, including the main team's. Set it only for the sign-off command itself,
+or rely on the gates log's `signature` column alone.
+
 ## Limits (be honest about these)
 
 - **Inert until merged.** agentteams never writes `settings.json` directly

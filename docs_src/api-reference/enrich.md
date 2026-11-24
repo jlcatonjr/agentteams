@@ -41,7 +41,7 @@ A single default-value (underdeveloped template) finding.
 
 Scan generated agent files for unresolved default template elements.
 
-Detects: `{MANUAL:TOKEN}` placeholders, tool reference files with incomplete metadata, underdeveloped sections (comment-only bodies, generic boilerplate), and packages imported in project source with no reference file.
+Detects: `{MANUAL:TOKEN}` placeholders (every name except the instructional ones in [`placeholder_scan`](placeholder-scan.md), inline code and fenced blocks included), tool reference files with incomplete metadata, underdeveloped sections (comment-only bodies, generic boilerplate), and packages imported in project source with no reference file.
 
 **Args:**
 

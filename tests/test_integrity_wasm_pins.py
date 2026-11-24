@@ -43,6 +43,8 @@ SECURITY_RELEVANT: dict[str, str] = {
     "agentteams/frameworks/_sandbox_drift.py": "P00: --check-wiring drift checks",
     # The executor and its bundle (P02, P03, P04).
     "agentteams/wasm_exec.py": "P02: the one place wasmtime starts; GRANT_SPEC",
+    "agentteams/wasm_session.py": "#567: streaming session mode; spawns wasm_exec's argv, owns the status fd",
+    "agentteams/_wasm_session_bench.py": "#567: bench; spawns wasmtime (an opt-in unconfined comparison leg)",
     "agentteams/_sandbox_profiles.py": "P02: Seatbelt/bwrap builders (bundle file)",
     "agentteams/data/wasm_deny_probe.wasm": "P02 (P16 pin): the core-module deny probe",
     "agentteams/wasm_pins.py": "P03/R10: the one hash check every resolve goes through",

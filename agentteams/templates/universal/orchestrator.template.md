@@ -64,7 +64,7 @@ handoffs:
     send: false
   - label: Resolve Conflicts
     agent: conflict-resolution
-    prompt: "Make ACCEPT/REJECT/REVISE decisions on flagged conflicts."
+    prompt: "Decide each flagged conflict: REJECT/ACCEPT/REVISE, or NO-CONFLICT when the claims do not contradict."
     send: false
   - label: Clean Up Artifacts
     agent: cleanup
@@ -777,7 +777,7 @@ carry an appended handoff:
    - `tmp/by-week/` and legacy `tmp/` → any `.steps.csv` files with rows not `done` (`pending`, `in_progress`, `blocked`, or a value outside that vocabulary, listed as `not a Rule 9 status`; excluding the current plan)
    - `git status --short` in the current repo → untracked files in `tmp/` or modified files outside the current plan's known output set; present as repo-relative paths only (never absolute filesystem paths)
    - `{CONFLICT_LOG_PATH}` → any row with `status=open` lacking a `resolution` — handled separately by step 2 below, not part of `scan_repo_issues`
-2. For each at-large issue found: write a one-paragraph summary — what it is, why it matters, which files or commits are involved. **Exception:** for issues found via `{CONFLICT_LOG_PATH}`, invoke `@conflict-resolution`'s ACCEPT/REJECT/REVISE decision instead — unlike the other three sources (summarized and presented only), "was it actually fixed already?" has a concrete, checkable answer available at closeout time
+2. For each at-large issue found: write a one-paragraph summary — what it is, why it matters, which files or commits are involved. **Exception:** for issues found via `{CONFLICT_LOG_PATH}`, invoke `@conflict-resolution`'s decision instead (REJECT/ACCEPT/REVISE, or NO-CONFLICT) — unlike the other three sources (summarized and presented only), "was it actually fixed already?" has a concrete, checkable answer available at closeout time
 3. Invoke `@adversarial` → audit the summaries and conflict-log decisions for false assumptions (e.g., "this is truly unresolved", "this git status entry is not legitimately in-progress work", "this conflict-log row was genuinely fixed on disk")
 4. Invoke `@conflict-auditor` → verify summaries and conflict-log decisions do not contradict authority sources — append the rows it returns (`governance_logs append`, see **Rows returned by read-only agents**) before acting on them
 5. Present audited summaries as a numbered list to the user
@@ -961,7 +961,7 @@ scanner (`python -m agentteams.vulnscan`) under its signed grant.
    versions changed.
 2. Check out the branch and run the project's tests and build. `@security` checks the new versions
    against Rule S-10's known-vulnerability search and Rule S-9's identity check. They fix vulnerabilities the scan detected, so S-10's
-   remediation carve-out applies: the release cooldown and the latest-stable rule do not hold them.
+   remediation carve-out applies: the release cooldown and the latest-stable rule do not hold them.{S10_COOLDOWN_MOOT}
 3. Merge or close it under this project's normal PR rules. vulnscan never merges its own PRs. Close a
    failing or wrong fix with a comment; any follow-up fix goes in an ordinary PR of the project's own.
 4. Project agents never get remediation tools and never call the scanner's executor. Coverage and

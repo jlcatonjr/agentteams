@@ -21,7 +21,10 @@ from typing import Any
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams import descriptor_union, github_management, update_lock
 from agentteams import write_policy as _write_policy
-from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
+from agentteams.cli.adopt_step import finish_dry_run, run_adopt_step
+from agentteams.cli.routing_at_risk import (assess_routing_loss, guard_update_overwrite, record_accepted_loss,
+                                            refuse_routing_loss)
+from agentteams.cli.update_notices import report_before_write
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
@@ -40,9 +43,10 @@ from agentteams.cli.artifacts import (
 )
 from agentteams.cli import standalone_modes
 from agentteams.cli.exit_codes import _finalize_exit_code
-from agentteams.cli.json_mode import json_stdout, run_with_json_stdout
+from agentteams.cli.json_mode import run_with_json_stdout
 from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_target, resolve_output_dir
 from agentteams.cli.frozen_render import drop_frozen, prunable, refuse_if_frozen
+from agentteams.cli.s10_deprecation_gate import authorize_deprecation_into
 from agentteams.cli.s10_exempt_gate import authorize_into
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
@@ -173,7 +177,7 @@ def _run_generate_inner(
         # fails closed with a clean message rather than a traceback.
         print(f"Error building manifest: {exc}", file=sys.stderr)
         return 1
-    _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders)
+    _apply_placeholder_policy(manifest, strict_manual_placeholders=strict_manual_placeholders, description=description)
     manifest["no_vscode_tasks"] = bool(getattr(args, "no_vscode_tasks", False))
 
     project_name = manifest["project_name"]
@@ -246,6 +250,7 @@ def _run_generate_locked(
         return 1
     _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
     authorize_into(manifest, output_dir, consume=not (args.dry_run or args.check))  # Rule 15: S-10 carve-out
+    cooldown_deprecated = authorize_deprecation_into(manifest, output_dir, consume=not (args.dry_run or args.check))
 
     print(f"  Output directory: {output_dir}")
 
@@ -312,6 +317,7 @@ def _run_generate_locked(
         max_items=max(1, int(args.security_max_items)),
         tools=_project_tools if _project_tools else None,
         skip_nvd=args.security_no_nvd,
+        cooldown_deprecated=cooldown_deprecated,   # Rule S-10's cooldown deprecation, as the gate authorized it (#592)
     )
     manifest["auto_resolved_placeholders"].update(security_placeholders)
 
@@ -363,9 +369,9 @@ def _run_generate_locked(
     # Compute template hashes for drift detection
     template_hashes = render.compute_template_hashes(manifest, templates_dir=TEMPLATES_DIR)
 
-    # Apply framework-specific post-processing; runtime-handoffs and pipeline
-    # graph (Step 5c) are appended by _build_final_rendered.
-    final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir)
+    # Framework post-processing; runtime-handoffs and the pipeline graph (Step 5c) are appended by it.
+    final_rendered = _build_final_rendered(manifest, adapter, project_name, output_dir=output_dir,
+                                           filled_from=output_dir if args.update else None)
 
     # --reconcile-front-matter: needs the render, and nothing after it. Policy and rationale
     # live in `front_matter_reconcile`, not here.
@@ -404,8 +410,8 @@ def _run_generate_locked(
         # drift report or create a spurious backup. compute_structural_diff
         # above is read-only, so evaluating the gate here is safe.
         if not args.dry_run and args.overwrite:
-            try:
-                security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
+            try:  # checked here, spent by guard_update_overwrite once the routing-loss refusal passes (#392 item 12)
+                security_gate._assert_destructive_action_allowed(output_dir, action="overwrite", consume=False)
             except RuntimeError as exc:
                 print(
                     f"[SEC-GATE/DESTRUCTIVE:overwrite-update] blocked: {exc}\n"
@@ -536,6 +542,9 @@ def _run_generate_locked(
             if not _sc_disk.exists() or _sc_disk.read_text(encoding="utf-8") != _sc_content:
                 update_rendered.append((_sc_path, _sc_content))
 
+        _at_risk = report_before_write(output_dir, manifest, adapter, update_rendered, args)  # #392 items 12, 15
+        if (rc := guard_update_overwrite(output_dir, manifest, adapter, update_rendered, args)) is not None:
+            return rc  # refuse on routing loss in exactly what this update writes, then spend the clearance
         # Migrate away legacy tool-*.agent.md files: tools are now emitted as
         # reference/skill documents, never agents. Runs before the converged
         # early-exit (and before the orphan advisory) so migration happens even
@@ -627,10 +636,8 @@ def _run_generate_locked(
 
         # Orphan advisories (in build_team.py, CH-07): files on disk the team no longer emits, which
         # `--prune` (build-log removals only) misses. Then the unanswered scan-level notice (prints only).
-        build_team._report_orphan_agent_files(
-            final_rendered, output_dir, manifest,
-            agent_ext=adapter.get_file_extension("agent"),
-        )
+        build_team._report_orphan_agent_files(final_rendered, output_dir, manifest,
+                                              agent_ext=adapter.get_file_extension("agent"))
         build_team._report_orphan_reference_docs(final_rendered, output_dir)
         from agentteams.vulnscan.project_policy import report_unanswered
         report_unanswered(description)
@@ -675,19 +682,14 @@ def _run_generate_locked(
             shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
+        record_accepted_loss(result, args, output_dir, backup_path)  # #392 item 12: the durable record
         if not args.dry_run and not args.overwrite and result.success:  # merge kept on-disk front matter
             git_hooks.redraw_graph_after_merge(output_dir)
         if framework_id == "goose" and manifest.get("goose_tool_scoping") == "grant" and not args.overwrite:
             goose_grant_merge_notice(output_dir)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
         _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
-        attach_dry_run_plan(_adopt_plan, result)
-        if args.dry_run and result.dry_run_report is not None:
-            emit.print_dry_run_report(
-                result, manifest,
-                fmt="json" if args.json else "text",
-                stream=json_stdout() if args.json else None,
-            )
+        finish_dry_run(result, manifest, args, merge_plan=_adopt_plan, routing_loss=_at_risk)
 
         # ------------------------------------------------------------------
         # Post-generation audit (--update path)
@@ -852,6 +854,8 @@ def _run_generate_locked(
     # pre-fencing-snapshot git tag + --revert-migration). The exemption arrives as an
     # explicit PARAMETER from _run_migrate, not as module state — see the removal note in
     # security_gate.py. A caller that does not pass it cannot enable it.
+    if (rc := refuse_routing_loss(output_dir, manifest, adapter, final_rendered, args)) is not None:
+        return rc  # #392 item 12: every --overwrite (and --migrate's), before the clearance or any backup
     if not args.dry_run and args.overwrite and not migrate_exemption:
         try:
             security_gate._assert_destructive_action_allowed(output_dir, action="overwrite")
@@ -908,14 +912,10 @@ def _run_generate_locked(
     # Durable record of this run's decisions; silent when nothing to attribute.
     if not args.dry_run:
         from agentteams import update_report as _ur
-        _ur.report_run(result, output_dir, backup_path)
+        _ur.report_run(result, output_dir, backup_path, routing_loss_accepted=getattr(args, "routing_loss_accepted", None))
 
-    if args.dry_run and result.dry_run_report is not None:
-        emit.print_dry_run_report(
-            result, manifest,
-            fmt="json" if args.json else "text",
-            stream=json_stdout() if args.json else None,
-        )
+    finish_dry_run(result, manifest, args,
+                   routing_loss=lambda: assess_routing_loss(output_dir, manifest, adapter, final_rendered, args))
 
     # -----------------------------------------------------------------------
     # Step 8.5: Post-generation audit (if --post-audit)

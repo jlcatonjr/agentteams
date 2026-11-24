@@ -1,7 +1,7 @@
 <!-- AGENTTEAMS:BEGIN content v=1 -->
 # SETUP-REQUIRED.md
 
-The following **8 placeholder(s)** could not be automatically resolved
+The following **11 placeholder(s)** could not be automatically resolved
 for project **ResearchPaperProject** and require manual attention.
 
 ---
@@ -82,6 +82,36 @@ agent files and replace with the correct value.
 **Context:** The reference file for 'BibTeX' is missing a tool-specific usage patterns and pitfalls. Add it to the tools[] entry in the project brief or extend the built-in tool metadata catalog.
 
 **Action required:** Search for `{MANUAL:TOOL_COMMON_PATTERNS}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 9. `{ADJACENT_REPO_AGENTS_PATH}`
+
+**Found in:** `references/adjacent-repos.md`
+**Context:** Written in the template (line 33): | **Agent infra path** | `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` |
+
+**Action required:** Search for `{MANUAL:ADJACENT_REPO_AGENTS_PATH}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 10. `{ADJACENT_REPO_PATH}`
+
+**Found in:** `references/adjacent-repos.md`
+**Context:** Written in the template (line 32): | **Local path**       | `{MANUAL:ADJACENT_REPO_PATH}` (use `~/` notation, not an absolute home path) |
+
+**Action required:** Search for `{MANUAL:ADJACENT_REPO_PATH}` across all generated
+agent files and replace with the correct value.
+
+---
+
+## 11. `{PROJECT_REDTEAM_NOTES}`
+
+**Found in:** `references/redteam-methodology.reference.md`
+**Context:** Written in the template (line 237): {MANUAL:PROJECT_REDTEAM_NOTES}
+
+**Action required:** Search for `{MANUAL:PROJECT_REDTEAM_NOTES}` across all generated
 agent files and replace with the correct value.
 
 ---

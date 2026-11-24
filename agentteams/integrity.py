@@ -367,6 +367,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/sandbox_tokens.py",             # Rule 15/D7: the grant-token spelling sandbox_effects re-exports
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/s10_exempt_gate.py",         # Rule 15: the Ed25519 gate for the S-10 local-repository carve-out
+    "agentteams/cli/s10_deprecation_gate.py",    # Rule 15: the Ed25519 gate for the S-10 cooldown deprecation (#592)
     "agentteams/cli/toolchain_group.py",         # First-party toolchain group: the signed first-party toolchain group (S-10)
     "agentteams/cli/dev_merge.py",               # the signed integration-branch merge authorization and --merge-pr
     "agentteams/cli/dev_merge_commands.py",      # resolves the governance dir (verify-key store) for --merge-pr
@@ -397,6 +398,13 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # cli/wasm_commands the only caller of install/pin_update. A silent edit to any of them runs an unverified
     # wasmtime or interpreter, or widens what a guest may touch, without tripping --verify-integrity.
     "agentteams/wasm_exec.py",
+    # wasm_session (#567) is the second place wasmtime starts: it spawns wasm_exec's materialized argv for a
+    # streaming session and owns the host status channel, the relay caps and the run-directory reaper. A silent edit
+    # lets a guest reach the status fd, lifts a cap, or turns the reaper into a deletion primitive.
+    "agentteams/wasm_session.py",
+    # Its bench (#567, @security R1) spawns wasmtime too, with os_confine="off" for the comparison leg: an edit could
+    # drop the --unconfined-baseline opt-in or leave an unconfined guest running.
+    "agentteams/_wasm_session_bench.py",
     "agentteams/wasm_pins.py",
     "agentteams/wasm_runtime.py",
     "agentteams/_wasm_archive.py",

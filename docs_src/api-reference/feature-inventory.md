@@ -5,7 +5,7 @@ description: Comprehensive enumeration of all AgentTeams capabilities, organized
 
 # AgentTeams — Feature Inventory
 
-**Version baseline:** 1.2.2 · **counts last reconciled by hand:** 2026-07-29
+**Version baseline:** 1.3.0 · **counts last reconciled by hand:** 2026-07-29
 
 Features below are grouped by capability area. This inventory may include capabilities currently present on
 `main` that are not yet part of a tagged release. Release-specific availability should be verified against
@@ -67,7 +67,7 @@ Use this matrix when deciding which module/artifact to rely on for a specific op
 3. **Project Description Ingestion** — Load project briefs from `.json` or `.md` format
 4. **Project Directory Scanning** — Scan an existing project directory to supplement missing brief fields
 5. **Project Type Classification** — Infer the deliverable type from the project goal
-6. **Agent Archetype Selection** — Select the appropriate archetype set from the schema-supported archetype catalog, including contextual post-production auto-selection
+6. **Agent Archetype Selection** — Select the appropriate archetype set from the archetypes agentteams has templates for (`brief_schema.known_archetypes`), including contextual post-production auto-selection
 7. **Team Manifest Generation** — Build complete team composition metadata
 8. **Template Placeholder Resolution** — Resolve `{AUTO:token}` and `{MANUAL:token}` placeholders
 

@@ -10,6 +10,12 @@ The `profiles` module supplies `available`, `seatbelt_profile`, `bwrap_argv`, `s
 
 ## Public Surface
 
+STABILITY.md §7 (from 1.3.0) covers these, and only these: `run`, `prepare`, `materialize`, `assert_grant_shape`,
+`Grant`, `Mount`, `Limits`, `LIMIT_BOUNDS`, `DEFAULT_LIMITS`, `COMPUTE_ONLY`, `Prepared`, `Launch` (with `cleanup()`),
+`WasmResult`, `WasmResolver`, the `OsConfine` values, `GRANT_SPEC`, `GRANT_SPEC_SHA256` and `WasmExecError`. Everything
+else below is documented but internal: `build_argv`, `execute_launch`, `classify_trap` and `trap` labels,
+`copy_out_refused`, `probe`, `ProbeReport`, `available`, the refusal lists and the `MAX_*` limits.
+
 - `GRANT_SPEC`, `GRANT_SPEC_SHA256`: the canonical grant (shared with baseAgent). `python -m agentteams.wasm_exec
   --print-spec` prints it as canonical JSON.
 - `Limits(fuel, max_memory_bytes, timeout_s)`, `DEFAULT_LIMITS`, `LIMIT_BOUNDS`.
@@ -30,6 +36,32 @@ The `profiles` module supplies `available`, `seatbelt_profile`, `bwrap_argv`, `s
 - `probe(...) -> ProbeReport` and `available(...) -> str | None`: a real deny run, a control run, the fuel and memory
   traps, and a read-only write attempt. They never answer just "a binary exists".
 - `WasmResolver` (protocol), `WasmExecError`.
+
+## Canonical argv tail
+
+For a core module, the canonical wasmtime command line ends with
+`--argv0 <name> -- <absolute module> [guest args...]` (#570):
+
+```
+[wasmtime, "run", "-C", <C>, "-W", <W>, "-S", <S>, ("--dir", <host>::<guest>)*, "--argv0", <name>, "--", <abs module>, <guest args>...]
+```
+
+- `--` ends wasmtime's option parsing, so no guest argument can be read as a wasmtime flag under any wasmtime
+  version's parser.
+- The module path must be absolute, so it never depends on the working directory.
+- `<name>` must match `[A-Za-z0-9_.-]`, at most 64 characters (`_argv0` falls back to `guest`).
+- Guest arguments are capped by `MAX_ARGS` and `MAX_ARGS_BYTES`.
+
+`build_argv` emits this form, and `assert_grant_shape` refuses any other, in grant mode and in parity mode alike.
+baseAgent's `--argv0 <name> <module>` (no `--`) is the one recorded difference (`INTENTIONAL_DIFFERENCES["argv-tail"]`
+in `tests/test_wasm_grant_spec.py`). `GRANT_SPEC` and the shared corpus did not change for this, so their sha256 values
+are unchanged. Once baseAgent runs on this executor, the executor builds the argv and the difference goes away.
+
+Component guests are refused in grant mode. agentteams' `@security` ruled on 2026-11-19 (#569) to allow them under
+nine conditions, C1–C9, which have not landed yet. Among them: each memory's limit is halved so that two memories fit
+in one grant, the table size is limited, imports are checked against an allowlist before launch, and the host builds
+`--invoke` from a closed grammar. The component tail will be
+`--invoke <wave> -- <absolute component>`, with no `--argv0`.
 
 ## Notes
 

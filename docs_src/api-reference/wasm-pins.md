@@ -7,14 +7,22 @@ the same file.
 
 ## Public Surface
 
-- `pinned_resolver(install_dir, pins, *, platform=None) -> PinnedResolver`. It satisfies
-  [`wasm_exec`](wasm-exec.md)`.WasmResolver`.
-- `PinnedResolver.resolve(component) -> Path` returns `<install_dir>/<component>/<version>/<entry>`, re-hashed.
-- `PinnedResolver.pinned_version(component)` and `.expected_sha256(component)`.
-- `PinnedResolver.resolve_tree(component) -> Path` re-hashes a pinned tree (for example, a CPython stdlib).
-- `PinnedResolver.runtime_mounts(component) -> tuple[(host, guest), ...]` returns the pinned read-only interpreter
-  mounts.
-- `tree_digest(top) -> (sha256, count)` is sha256 over the sorted `"<relpath>\0<sha256>\n"` lines of every regular
-  file.
-- `host_platform() -> str` returns a key such as `darwin-arm64`.
+Supported (STABILITY.md §7, from 1.3.0):
+
+- `pinned_resolver(install_dir, pins, *, platform=None)`. It returns an object that satisfies
+  [`wasm_exec`](wasm-exec.md)`.WasmResolver`. Only that interface is covered, not the concrete class it returns.
+- The `WasmResolver` methods on that object:
+  - `resolve(component) -> Path` returns `<install_dir>/<component>/<version>/<entry>`, re-hashed;
+  - `pinned_version(component)`;
+  - the optional `expected_sha256(component)`.
 - `WasmPinError` (a `RuntimeError`).
+
+Documented but internal (not covered by SemVer; STABILITY.md §7):
+
+- the concrete `PinnedResolver` class;
+- `PinnedResolver.resolve_tree(component) -> Path` re-hashes a pinned tree (for example, a CPython stdlib);
+- `PinnedResolver.runtime_mounts(component) -> tuple[(host, guest), ...]` returns the pinned read-only interpreter
+  mounts;
+- `tree_digest(top) -> (sha256, count)` is sha256 over the sorted `"<relpath>\0<sha256>\n"` lines of every regular
+  file;
+- `host_platform() -> str` returns a key such as `darwin-arm64`.

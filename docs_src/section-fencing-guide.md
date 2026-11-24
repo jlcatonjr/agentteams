@@ -171,13 +171,22 @@ No CLI flags are required for fencing to work — it is always active when `--me
 
 **Recovery (W22 data-loss safety net):** The **default policy is `--shrink-policy=preserve`**: a fence whose new render is materially smaller than the existing body is **not** rewritten — the enriched body is kept, the shrink is suppressed, and a Notice is emitted. Nothing is lost and no sidecar is produced (non-shrinking fences in the same file still update normally). Under `--shrink-policy=warn` the smaller body **is** written, and as a safety net the full pre-merge body of every fence that triggered a shrink notice is persisted to a sidecar at `<output_dir>/.agentteams-backups/<ts>/<rel_path>.lost.<sid>.md.agentteams-bak`, with the Notice annotated `— recovery: <sidecar-path>`; to recover, copy the lost text from the sidecar into the USER-EDITABLE gap below the fence, then re-run. (`halt` aborts on a shrink; `allow` writes the smaller body silently with no sidecar.)
 
-Two fence ids are exempt from the shrink heuristic and never produce sidecars: `threat_intelligence` and `threat_data`. Those are refreshed each run from live CISA KEV / NVD / OSV feeds; CVE rotation is expected. The canonical history for live-feed fences is the cache JSON (`references/security-vulnerability-watch.json`).
+Three fence ids are exempt from the shrink heuristic and never produce sidecars: `threat_intelligence` and `threat_data`, refreshed each run from live CISA KEV / NVD / OSV feeds, where CVE rotation is expected, and `framework_data` (framework-watch.reference.md), the framework-research snapshot, whose every line is filled from that snapshot. The canonical history for live-feed fences is the cache JSON (`references/security-vulnerability-watch.json`, and the framework-research snapshot for `framework_data`). Before 1.3.0 `framework_data` was not exempt, so a merge under `--shrink-policy preserve` kept an old snapshot, its STALE banner included.
 
 ### Merge left stale generated content
 
 **Cause:** The output file was created before fence markers were introduced (pre-fencing era file). It has no markers to match.
 
 **Fix:** Run `--migrate` to add pre-fencing snapshots and prepare the file for fence-based updates. See the [Migration Guide](migration-guide.md).
+
+**A second cause, in a fenced file:** an older render wrote a line *outside* the fences that the current template no
+longer emits. A merge keeps every unfenced line, because unfenced text belongs to the project, so the old line stays
+next to the corrected fenced text. Since 1.3.0, a merge prints a notice when such a line names another surface's agents
+directory (for example a Codex file naming `.github/agents/references/conflict-log.csv`): "unfenced line(s) name
+another surface's agents directory and the new render no longer has them".
+
+**Fix:** re-render that surface with `--update --overwrite`, which keeps the Project-Specific Notes and Rules regions,
+or delete the quoted lines by hand. The notice only reports; it never changes the file.
 
 ### "WARN: fenced section found in template but absent from output file"
 

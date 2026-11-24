@@ -40,13 +40,16 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams.cli.clearance_binding import lstat_or_none
 from agentteams.manifest_format import _REPO_ID_RE
 
 #: Where the signed file lives, relative to the project root.
@@ -63,7 +66,7 @@ HIGH_WATER_KEY = "toolchain_group_sequence"
 _TEAM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _ORIGIN_RE = re.compile(r"^(?:https://(?:[^@/\s]+@)?github\.com/|ssh://git@github\.com/|git@github\.com:)"
-                        r"([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*?)(?:\.git)?/?$")
+                        r"([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*?)(?:\.git)?/?$", re.IGNORECASE)
 _FIELDS = ("version", "scope", "group", "workspaces", "purpose", "sequence", "key_id", "derives_from", "signature")
 #: The file format: version 2 adds the signed ``derives_from`` lineage (v1.1.3). No version-1 file was ever signed.
 FORMAT_VERSION = 2
@@ -190,15 +193,35 @@ def read_document(project_root: Path, *, signed: bool = True) -> dict | None:
         ToolchainGroupError: Unreadable, a symlink, not JSON, or malformed.
     """
     path = project_root / GROUP_FILE_REL
-    if not path.exists() and not path.is_symlink():
+    if not group_file_present(project_root):
         return None
-    if path.is_symlink() or not path.is_file():
+    if not stat.S_ISREG(os.lstat(path).st_mode):  # a symlink, a dir, ...
         raise ToolchainGroupError(f"{GROUP_FILE_REL} is not a regular file")
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ToolchainGroupError(f"{GROUP_FILE_REL} cannot be read: {exc}") from exc
     return validate(doc, signed=signed)
+
+
+def group_file_present(project_root: Path) -> bool:
+    """Whether anything (a symlink included) sits at ``<project_root>/.agentteams/toolchain-group.json``.
+
+    Not ``Path.exists()``, which from Python 3.14 returns False on any OSError (#555).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        False only when nothing is there.
+
+    Raises:
+        ToolchainGroupError: The path exists but cannot be stat'd (fail-closed).
+    """
+    try:
+        return lstat_or_none(project_root / GROUP_FILE_REL, "toolchain group file") is not None
+    except RuntimeError as exc:
+        raise ToolchainGroupError(str(exc)) from exc
 
 
 def backend_available() -> bool:
@@ -486,6 +509,12 @@ def verify_group_command(project_root: Path, governance_dir: Path, team_id: str,
 #: Lock lines: ``<name>=<owner/repo>@<40-hex>`` and ``<name>.tag=<tag>``.
 _LOCK_PIN_RE = re.compile(r"^([A-Za-z0-9._-]+)=([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)@([0-9a-f]{40})$")
 _LOCK_TAG_RE = re.compile(r"^([A-Za-z0-9._-]+)\.tag=(v[0-9][0-9A-Za-z.+-]*)$", re.ASCII)
+# Not a comment, and a NAME = owner/repo@... or NAME.tag = ... shape however spaced or cased: it must match exactly.
+_LOCK_PINLIKE_RE = re.compile(r"^[^#\s=][^=]*=\s*[^=\s]*/[^=\s]*@|^[^#\s=][^=]*\.tag\s*=")
+
+
+class ToolchainLockError(ValueError):
+    """A lockfile pin or tag line is duplicated or malformed (fail-closed)."""
 
 
 def _git(*args: str, cwd: Path | None = None, timeout: int = 120) -> subprocess.CompletedProcess[str]:
@@ -550,6 +579,49 @@ def verify_tag_pin(remote: str, tag: str, sha: str, allowed_signers: Path) -> st
     return None
 
 
+def locked_pins(lockfile: Path) -> dict[str, str]:
+    """Every ``NAME=owner/repo@SHA`` pin in *lockfile*, as ``{NAME: owner/repo}``.
+
+    Args:
+        lockfile: A ``toolchain.lock``-style file.
+
+    Returns:
+        The pins, in file order.
+
+    Raises:
+        OSError: The file cannot be read.
+        UnicodeDecodeError: The file is not UTF-8.
+        ToolchainLockError: A duplicated or malformed pin or tag line.
+    """
+    return {name: repo for name, (repo, _sha) in _parse_lock(lockfile)[0].items()}
+
+
+def _parse_lock(lockfile: Path) -> tuple[dict[str, tuple[str, str]], dict[str, str]]:
+    """``({NAME: (owner/repo, sha)}, {NAME: tag})`` from *lockfile*; lines that are not pins or tags are ignored.
+
+    Raises:
+        ToolchainLockError: A name is pinned or tagged twice (the bootstrap reads the first line and this check would
+            read another), or a line looks like a pin or tag but does not match the format (IM-da review of #598).
+    """
+    pins: dict[str, tuple[str, str]] = {}
+    tags: dict[str, str] = {}
+    for number, line in enumerate(lockfile.read_text(encoding="utf-8").splitlines(), 1):
+        line = line.strip()
+        if (m := _LOCK_PIN_RE.match(line)):
+            into, value = pins, (m.group(2), m.group(3))
+        elif (m := _LOCK_TAG_RE.match(line)):
+            into, value = tags, m.group(2)
+        elif _LOCK_PINLIKE_RE.match(line):
+            raise ToolchainLockError(f"{lockfile}:{number}: looks like a pin or tag but is malformed: {line!r}")
+        else:
+            continue
+        if m.group(1) in into:
+            raise ToolchainLockError(f"{lockfile}:{number}: {m.group(1)!r} is {'tagged' if into is tags else 'pinned'} "
+                                     "twice; one line per name (fail-closed)")
+        into[m.group(1)] = value
+    return pins, tags
+
+
 def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
                 remote_base: str = "https://github.com/", *, checked: list[str] | None = None) -> list[str]:
     """Check every lock pin to a group member: a tag line, a release-key signature, and the locked commit.
@@ -565,14 +637,7 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
         Problems, one per failing pin (empty: all pins to group members verify).
     """
     members = {r.lower() for r in group}
-    pins: dict[str, tuple[str, str]] = {}
-    tags: dict[str, str] = {}
-    for line in lockfile.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if (m := _LOCK_PIN_RE.match(line)):
-            pins[m.group(1)] = (m.group(2), m.group(3))
-        elif (m := _LOCK_TAG_RE.match(line)):
-            tags[m.group(1)] = m.group(2)
+    pins, tags = _parse_lock(lockfile)
     problems: list[str] = []
     for name, (repo, sha) in pins.items():
         if repo.lower() not in members:
@@ -596,4 +661,4 @@ def verify_pins(lockfile: Path, group: list[str], allowed_signers: Path,
 __all__ = ["FAMILY", "GROUP_FILE_REL", "GroupResult", "HIGH_WATER_KEY", "PURPOSE", "SCOPE", "ToolchainGroupError",
            "backend_available", "load_group", "read_document", "report", "sign_group_file", "signed_values",
            "validate", "verify_group_command", "verify_pins", "verify_signature", "verify_tag_pin",
-           "workspace_repo"]
+           "workspace_repo", "locked_pins", "ToolchainLockError"]
