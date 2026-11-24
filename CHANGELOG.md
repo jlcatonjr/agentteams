@@ -21,6 +21,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Limits:** it finds copied text, not reworded text, and it does not change templates or what an agent loads.
   The strict site build passes and the guide's rendered pages are unchanged.
 
+### changed (dev is 1.4.0.dev0 after the 1.3 cut; a dev build's install hint points at v1.3.0)
+
+- `pyproject.toml` on `dev` is `1.4.0.dev0`, so builds from `dev` cannot be mistaken for 1.3.x. `release/1.3` carries
+  the 1.3 line: it was cut from `dev` at `62d745ed`, and v1.3.0-rc.1 was signed on it on 2026-11-23.
+- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from `v1.2.2` to the
+  newest published tag: `v1.3.0-rc.1` at the cut, then `v1.3.0` when the release was merged forward into `dev`.
+
+### security (two warnings: Codex sealed results, and a Goose exclusive egress that reaches Ollama)
+
+- **Codex:** with `write_policy: "orchestrator-only"`, a Codex render now warns that sealed results are not
+  confidential there. The Codex launcher leaves `.agentteams-queue/` readable, because the in-session CLI writes
+  requests to it, so any agent in the session can read each request's `reply_key`. Integrity still holds. The fix is
+  1.4 scope. Nothing is refused, so no migration is needed.
+- **Goose `exclusive`:** the macOS render now warns when `goose_egress_proxy` can reach Ollama. That covers Ollama's
+  port (`11434`, or the port in `OLLAMA_HOST`) and an egress with no port, which re-allows every loopback port.
+  Ollama's `/api/pull` connects to any registry host, so the profile is then not network-isolated. Point the egress at
+  a loopback filter that allows only the inference routes. Nothing is refused yet; the filter, and refusing an
+  unfiltered Ollama egress, are 1.4 scope.
+- A new test fails any Seatbelt regex in the package that uses a bounded count such as `{32}`. In a `#"..."` regex,
+  Seatbelt silently matches nothing for one, so a deny rule fails open. No rule shipped today uses one.
+
+## [1.3.0] - 2026-11-24
+
+### release notes
+
+agentteams 1.3.0 is the first release of the 1.3 line. It is v1.3.0-rc.2 with no further change. The line was cut
+from `dev` rather than `main`. The operator skipped the rc.1 soaks across the consumer repositories and none ran on
+rc.2, so the candidates were checked by CI and review only. The full changes are in the [1.3.0-rc.2] and
+[1.3.0-rc.1] sections below; the highlights:
+
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** A scripted overwrite
+  that drops routed agents on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`.
+- **Security tightening: carried-over exceptions lapse at their signed decision's sunset (#595)**, and HALTs bind
+  across a repository's team dirs, retract by exact id and fail closed on unreadable dirs, logs and briefs
+  (issues #578, #596, #597, #588, #598 and #599). Teams on Python 3.14 with agentteams before 1.3.0 should upgrade.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Templates (#622):** a retired template source line now reaches existing teams on `--update --merge`.
+- **Action for existing teams:** run `--update --merge`. It replaces any hand edit inside the
+  `infra_security_model` fence (#622); under `--shrink-policy=halt`, review that notice and re-run with
+  `--shrink-policy=allow`. Where a merge prints a stale cross-surface notice (F10), re-render that surface with
+  `--update --overwrite` or delete the quoted lines.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568).
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
+
+Install it from its signed tag, and verify the tag before installing.
+
+## [1.3.0-rc.2] - 2026-11-24
+
+### release notes
+
+agentteams 1.3.0-rc.2 is the second release candidate of the 1.3 line, on `release/1.3` after v1.3.0-rc.1. It
+carries the must-fix finding from the rc.1 pre-soak review (the rc.1 soaks were skipped); the full 1.3 notes are
+under [1.3.0-rc.1] below.
+
+- **A retired template source line reaches existing teams (#622).** The universal `security-infrastructure-layers`
+  reference no longer cites a private checkout's directory, and its `infra_security_model` fence is now
+  template-owned, so `--update --merge` replaces the old line instead of keeping it. A template-owned fence's shrink
+  notice gives a count, not the lost text. **Action for existing teams:** run `--update --merge`; under
+  `--shrink-policy=halt`, review the notice and re-run with `--shrink-policy=allow`.
+
+v1.3.0 follows this candidate. Install it from its signed tag, and verify the tag before installing.
+
 ### security (a template's retired source line reaches existing teams; #622)
 
 - **What was wrong:** the universal `security-infrastructure-layers` reference cited a private checkout's directory
@@ -42,26 +106,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries its own `*` `.gitignore`; if you removed that file to commit backups, delete those backups instead.
   Generated repositories keep the old line in their git history; this fixes the tree only.
 
-### changed (dev is 1.4.0.dev0 after the 1.3 cut; a dev build's install hint points at v1.3.0-rc.1)
+## [1.3.0-rc.1] - 2026-11-23
 
-- `pyproject.toml` on `dev` is `1.4.0.dev0`, so builds from `dev` cannot be mistaken for 1.3.x. `release/1.3` carries
-  the 1.3 line: it was cut from `dev` at `62d745ed`, and v1.3.0-rc.1 was signed on it on 2026-11-23.
-- `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from `v1.2.2` to the
-  newest published tag, `v1.3.0-rc.1`.
+### release notes
 
-### security (two warnings: Codex sealed results, and a Goose exclusive egress that reaches Ollama)
+agentteams 1.3.0-rc.1 is the first release candidate of the 1.3 line. It is the first line cut from `dev` rather than
+`main` (at `62d745ed`, onto `release/1.3`), under the release model in `docs_src/release-and-branching.md`; `main`
+stays at v1.2.2 until 1.3.0 is released. The entries below it are everything that landed on `dev` after the 1.2 cut.
 
-- **Codex:** with `write_policy: "orchestrator-only"`, a Codex render now warns that sealed results are not
-  confidential there. The Codex launcher leaves `.agentteams-queue/` readable, because the in-session CLI writes
-  requests to it, so any agent in the session can read each request's `reply_key`. Integrity still holds. The fix is
-  1.4 scope. Nothing is refused, so no migration is needed.
-- **Goose `exclusive`:** the macOS render now warns when `goose_egress_proxy` can reach Ollama. That covers Ollama's
-  port (`11434`, or the port in `OLLAMA_HOST`) and an egress with no port, which re-allows every loopback port.
-  Ollama's `/api/pull` connects to any registry host, so the profile is then not network-isolated. Point the egress at
-  a loopback filter that allows only the inference routes. Nothing is refused yet; the filter, and refusing an
-  unfiltered Ollama egress, are 1.4 scope.
-- A new test fails any Seatbelt regex in the package that uses a bounded count such as `{32}`. In a `#"..."` regex,
-  Seatbelt silently matches nothing for one, so a deny rule fails open. No rule shipped today uses one.
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** When the build would
+  not keep agents the orchestrator routes to, the run stops with `[ROUTING-LOSS] blocked` before any write. A
+  scripted overwrite that drops them on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`; otherwise
+  keep them with `--adopt-orphans`, the brief, or `--update --merge`.
+- **Security tightening: a carried-over exception lapses at its signed decision's sunset (#595).** The registry's
+  unsigned `expires` can no longer extend a sandbox relaxation or S-10 exemption. An exception registered some days
+  after its decision was signed lapses that many days sooner than before, and a decision row already past its 90
+  days is refused at registration: the operator re-signs it.
+- **Security tightening: HALTs.** A HALT in any generated team dir of the repository now binds a file clearance
+  checked in another (#578) and a per-repository S-10 exemption rendered from another (#597). A retraction clears
+  only its own id, or the whole family only when it names the gate action exactly (#596). Unreadable team dirs, logs
+  and briefs fail closed, including under Python 3.14's `Path` changes (#588, #598, #599). Teams on Python 3.14 with
+  agentteams before 1.3.0 should read that upgrade note below.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Action for existing teams (F10).** A `--update --merge` now prints a notice for unfenced lines an older render
+  left naming another surface's agents directory. It removes nothing: re-render that surface with
+  `--update --overwrite`, or delete the quoted lines by hand.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568). **Beta:**
+  `agentteams.term_index` and `--term-check` (#548), and the WASM streaming session mode (#567).
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
+
+Release-candidate soak: v1.3.0 follows once infrastructureManagement reports that every consumer repository rendered
+this candidate, installed from its signed tag, cleanly.
 
 ### security (a carried-over exception never outlives its signed decision's sunset; #595)
 
