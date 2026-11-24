@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-24
+
+### release notes
+
+agentteams 1.3.0 is the first release of the 1.3 line. It is v1.3.0-rc.2 with no further change. The line was cut
+from `dev` rather than `main`; the operator skipped the release-candidate soaks across the consumer repositories,
+so the candidates were checked by CI and review only. The full changes are in the [1.3.0-rc.2] and [1.3.0-rc.1]
+sections below; the highlights:
+
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** A scripted overwrite
+  that drops routed agents on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`.
+- **Security tightening: carried-over exceptions lapse at their signed decision's sunset (#595)**, and HALTs bind
+  across a repository's team dirs, retract by exact id and fail closed on unreadable dirs, logs and briefs
+  (issues #578, #596, #597, #588, #598 and #599). Teams on Python 3.14 with agentteams before 1.3.0 should upgrade.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Templates (#622):** a retired template source line now reaches existing teams on `--update --merge`.
+- **Action for existing teams:** run `--update --merge`. Where a merge prints a stale cross-surface notice (F10),
+  re-render that surface with `--update --overwrite` or delete the quoted lines.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568).
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
+
+Install it from its signed tag, and verify the tag before installing.
+
 ## [1.3.0-rc.2] - 2026-11-24
 
 ### release notes
