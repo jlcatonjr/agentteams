@@ -169,6 +169,26 @@ def test_halts_through_main_with_a_real_halt_row(env: dict, capsys: pytest.Captu
     assert f"--output {env['gov'].resolve()}" in out
 
 
+def test_halts_prints_the_row_handle_for_a_halt_with_no_usable_id(env: dict, capsys: pytest.CaptureFixture) -> None:
+    """A HALT written without an id blocks both actions; the printed retraction names its row handle, not the action."""
+    from agentteams.cli import decision_log
+    from agentteams.cli.action_ids import halt_row_handle
+
+    cfg = env["tmp"] / "home" / ".config" / "agentteams" / "vulnscan.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps({"governance_dir": str(env["gov"])}))
+    with (env["gov"] / "references" / "security-decisions.log.csv").open("a") as fh:
+        fh.write("2026-10-22,vulnscan,s1,,HALT,,,suspected compromise,security\n")
+    rows = decision_log._read_decision_rows(env["gov"])[0]
+    handle = halt_row_handle(len(rows), rows[-1])
+    capsys.readouterr()
+    assert cli.main(["halts"]) == 1
+    out = capsys.readouterr().out
+    assert "vulnscan-remediation blocked: " in out and "vulnscan-publish blocked: " in out
+    specs = [json.loads(block[block.index("{"):block.index("}") + 1]) for block in out.split("blocked: ")[1:]]
+    assert [spec["action_reviewed"] for spec in specs] == [handle, handle]
+
+
 # ---------------------------------------------------------------- item 19: empty ids from failed gh lookups
 
 @pytest.mark.parametrize(("flag", "value", "want"), [

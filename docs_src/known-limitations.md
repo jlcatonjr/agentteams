@@ -134,6 +134,20 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
+### Before 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.0)
+
+- **What (agentteams < 1.3.0, release candidates included):** a HALT row whose `action_reviewed` was empty, blank or punctuation only matched no
+  action, so a later PASS cleared the action it was meant to stop.
+- **Now:** such a HALT blocks every gated action until a `HALT-RETRACTED` row whose `action_reviewed` is exactly
+  its row handle, `halt-row:<N>:<digest>`, retracts it, with evidence, authenticated like any retraction.
+  `--verify-integrity` and `--migrate-decision-log --dry-run` list these rows, each with its handle.
+- **Limit:** a HALT whose own id is literally that handle is retracted by the same row. Do not name a HALT
+  `halt-row:…`.
+- **Who:** teams whose decisions log holds a HALT written without an action id. Expect gated actions to be refused
+  on upgrade until each such row is reviewed and either retracted or left in force.
+- **Not changed:** a free-text HALT still blocks only the actions whose id appears in it as a whole token. Write a
+  HALT with the id of the action it stops.
+
 ### Before 1.3.0: a member retraction cleared every prefix-matched HALT of its action (fixed in 1.3.0, #596)
 
 - **What (agentteams < 1.3.0):** a `HALT-RETRACTED` row such as `overwrite-001` cleared every HALT that matched

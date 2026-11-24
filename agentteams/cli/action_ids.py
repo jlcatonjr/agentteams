@@ -9,6 +9,10 @@ Two rules, deliberately different, because a false match means opposite things o
   action whose id appears as a token run in the HALT's own id, so a HALT recorded as
   ``m6-overwrite-render-1a2fad6`` blocks ``overwrite`` (C-2: a HALT is not evaded by spelling). A
   false positive only blocks, so this side errs wide (1.0 must-fix, mathAgents M6 finding).
+
+A HALT whose id has no letter or digit names nothing, so neither rule can attribute it. It blocks
+**every** action (:func:`halt_has_no_id`), and is retracted by the row handle
+:func:`halt_row_handle` gives it: a HALT the gate reads but cannot attribute must block, never vanish.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from agentteams.cli.decision_chain import row_chain_digest
 from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_KINDS
 
 #: Token boundaries for the HALT-side match: any non-alphanumeric run, after camelCase and
@@ -92,6 +97,101 @@ def halt_names_action(halt_reviewed: str, action: str) -> bool:
     return bool(wanted) and any(have[i:i + len(wanted)] == wanted for i in range(len(have) - len(wanted) + 1))
 
 
+def halt_has_no_id(halt_reviewed: str) -> bool:
+    """Return True when a HALT row's id has no letter or digit (empty, blank or punctuation only).
+
+    Such a HALT names no action, so it blocks every one. Before 1.3.0 it matched none, and a later
+    PASS cleared the action (C-2 fail-open).
+
+    Args:
+        halt_reviewed: The HALT row's ``action_reviewed`` (or ``decision``) id.
+
+    Returns:
+        Whether the id is unusable as a name.
+    """
+    return not _tokens(halt_reviewed)
+
+
+def halt_blocks(halt_reviewed: str, action: str) -> bool:
+    """Return True when a HALT row blocks *action*: its id names it, or it has no usable id at all.
+
+    Args:
+        halt_reviewed: The HALT row's ``action_reviewed`` (or ``decision``) id.
+        action: The gate action being checked.
+
+    Returns:
+        Whether the HALT blocks *action*.
+    """
+    return halt_has_no_id(halt_reviewed) or halt_names_action(halt_reviewed, action)
+
+
+def halt_retraction_id(halt_reviewed: str, row_number: int, row: dict[str, str]) -> str:
+    """Return the normalized id a ``HALT-RETRACTED`` row must carry to retract one HALT by exact id.
+
+    Args:
+        halt_reviewed: The HALT row's ``action_reviewed`` (or ``decision``) id.
+        row_number: The HALT's 1-based row number in the log (the header is not counted).
+        row: The HALT row.
+
+    Returns:
+        The HALT's own id, lower-cased; for a HALT with no usable id, its row handle.
+    """
+    return halt_row_handle(row_number, row) if halt_has_no_id(halt_reviewed) else halt_reviewed.strip().lower()
+
+
+def idless_halt_note(halt_reviewed: str, row_number: int, row: dict[str, str]) -> str:
+    """Return the sentence a refusal adds for a HALT with no usable id (empty for any other HALT).
+
+    Args:
+        halt_reviewed: The HALT row's ``action_reviewed`` (or ``decision``) id.
+        row_number: The HALT's 1-based row number in the log.
+        row: The HALT row.
+
+    Returns:
+        A sentence naming the row handle that retracts it, with a leading space; or ``""``.
+    """
+    if not halt_has_no_id(halt_reviewed):
+        return ""
+    return (" This HALT has no usable action id, so it names no action and blocks every one; it is retracted only "
+            f"by a row whose action_reviewed is exactly '{halt_row_handle(row_number, row)}'.")
+
+
+def halt_display_id(halt_reviewed: str, row_number: int, row: dict[str, str]) -> str:
+    """Return the id a refusal names for a HALT: the id a retraction of it must carry.
+
+    Tools that read the refusal (``vulnscan halts``) build the retraction from this id, so for a HALT with
+    no usable id it must be the row handle, never the gate action.
+
+    Args:
+        halt_reviewed: The HALT row's ``action_reviewed`` (or ``decision``) id.
+        row_number: The HALT's 1-based row number in the log.
+        row: The HALT row.
+
+    Returns:
+        The HALT's own id as written; for a HALT with no usable id, its row handle.
+    """
+    return halt_row_handle(row_number, row) if halt_has_no_id(halt_reviewed) else halt_reviewed.strip()
+
+
+def halt_row_handle(row_number: int, row: dict[str, str]) -> str:
+    """Return the id that retracts the id-less HALT on a given row: ``halt-row:<N>:<digest>``.
+
+    The handle binds the row's position **and** its signed fields (16 hex digits of its chain digest; free-text
+    ``conditions``/``evidence`` only through ``text_digest``). A row
+    number alone is not sound: rows in a signed log's unchained legacy prefix can be removed or added
+    without breaking the chain, which would move a retraction onto a different HALT. With the digest, a
+    shifted or edited row no longer matches its retraction and blocks again.
+
+    Args:
+        row_number: The HALT's 1-based row number in the log (the header is not counted).
+        row: The HALT row.
+
+    Returns:
+        The ``action_reviewed`` a ``HALT-RETRACTED`` row must carry, exactly, to retract that row.
+    """
+    return f"halt-row:{row_number}:{row_chain_digest(row)[:16]}"
+
+
 def newly_blocking_halts(rows: list[dict[str, str]]) -> list[tuple[int, str, str]]:
     """List unretracted HALTs that block a gate action only through the token match.
 
@@ -123,7 +223,8 @@ def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
         team_dir: The team root (the log is ``references/security-decisions.log.csv``).
 
     Returns:
-        Human-readable lines, each naming the row, the gate action it blocks and the retraction id.
+        Human-readable lines, each naming the row, the gate action it blocks and the retraction id. HALT rows
+        with no usable id come first, each with the row handle that retracts it.
     """
     # Local import: decision_log imports this module, so a top-level import would be a cycle.
     from agentteams.cli.decision_log import _read_decision_rows
@@ -135,8 +236,14 @@ def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
     rows = read[0] if read else []
     hits = newly_blocking_halts(rows)
     named = {n for n, _, _ in hits}
-    others = [(i + 1, rid) for i, rid in enumerate(_unretracted_halt_ids(rows)) if rid and i + 1 not in named]
+    others = [(i + 1, rid) for i, rid in enumerate(_unretracted_halt_ids(rows))
+              if rid and not halt_has_no_id(rid) and i + 1 not in named]
     lines: list[str] = []
+    idless = idless_open_halts(rows)
+    if idless:
+        lines.append(f"HALT rows with no usable id ({len(idless)}): each blocks EVERY gated action:")
+        lines += [f"  row {n}: if it no longer applies, retract it with a HALT-RETRACTED row whose "
+                  f"action_reviewed is exactly '{handle}'" for n, handle in idless]
     if hits:
         lines.append(f"HALT rows that newly block an agentteams gate action under the 1.0 token rule ({len(hits)}):")
         lines += [f"  row {n}: '{rid}' blocks '{act}'; if it no longer applies, retract it with a "
@@ -148,18 +255,45 @@ def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
     return lines
 
 
+def idless_open_halts(rows: list[dict[str, str]]) -> list[tuple[int, str]]:
+    """List HALT rows with no usable id that no later row retracts by handle.
+
+    Args:
+        rows: The decisions-log rows, in file order.
+
+    Returns:
+        ``(1-based row number, row handle)`` in row order. Whether a retraction is authentic is the gate's
+        check, not this report's.
+    """
+    found: list[tuple[int, str]] = []
+    for index, row in enumerate(rows):
+        reviewed = (row.get("action_reviewed") or row.get("decision") or "").strip()
+        if (row.get("verdict") or row.get("status") or "").strip().upper() != "HALT" or not halt_has_no_id(reviewed):
+            continue
+        handle = halt_row_handle(index + 1, row)
+        if not _retracted_later(rows, index, handle):
+            found.append((index + 1, handle))
+    return found
+
+
+def _retracted_later(rows: list[dict[str, str]], index: int, retraction_id: str) -> bool:
+    """Whether a row after *index* is a ``HALT-RETRACTED`` whose id is exactly *retraction_id* (case-insensitive)."""
+    return any((later.get("verdict") or later.get("status") or "").strip().upper() == "HALT-RETRACTED"
+               and (later.get("action_reviewed") or later.get("decision") or "").strip().lower()
+               == retraction_id.lower() for later in rows[index + 1:])
+
+
 def _unretracted_halt_ids(rows: list[dict[str, str]]) -> list[str]:
     """Per row: the HALT id when the row is an unretracted HALT (by exact id), else ``""``."""
     out: list[str] = []
     for index, row in enumerate(rows):
         reviewed = (row.get("action_reviewed") or row.get("decision") or "").strip()
         is_halt = (row.get("verdict") or row.get("status") or "").strip().upper() == "HALT"
-        retracted = any((later.get("verdict") or later.get("status") or "").strip().upper() == "HALT-RETRACTED"
-                        and (later.get("action_reviewed") or later.get("decision") or "").strip().lower()
-                        == reviewed.lower() for later in rows[index + 1:])
-        out.append(reviewed if is_halt and not retracted else "")
+        out.append(reviewed if is_halt and not _retracted_later(rows, index, reviewed) else "")
     return out
 
 
-__all__ = ["GATE_ACTIONS", "action_matches", "describe_newly_blocking_halts", "halt_names_action",
+__all__ = ["GATE_ACTIONS", "action_matches", "describe_newly_blocking_halts", "halt_blocks", "halt_display_id",
+           "halt_has_no_id",
+           "halt_names_action", "halt_retraction_id", "halt_row_handle", "idless_halt_note", "idless_open_halts",
            "newly_blocking_halts"]
