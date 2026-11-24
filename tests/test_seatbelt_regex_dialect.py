@@ -20,10 +20,7 @@ _BOUNDED_COUNT = re.compile(r"\{[0-9]+(,[0-9]*)?\}")
 def _seatbelt_regexes() -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
     for path in sorted(p for p in PACKAGE.rglob("*") if p.is_file() and "__pycache__" not in p.parts):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:   # a binary file holds no profile text
-            continue
+        text = path.read_bytes().decode("utf-8", "replace")   # a binary file just yields no match
         for number, line in enumerate(text.splitlines(), 1):
             for m in _REGEX_LITERAL.finditer(line):
                 found.append((f"{path.relative_to(PACKAGE.parent)}:{number}", m.group("body")))

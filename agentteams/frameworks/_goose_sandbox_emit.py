@@ -37,17 +37,16 @@ source of truth shared with the Claude path.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
-import urllib.parse
 from pathlib import Path
 from typing import Any
 
 from agentteams.host_features import is_sandbox_capable
 from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
 from agentteams.frameworks._control_plane_protect import substrate_protect_paths  # P20 D5
+from agentteams.frameworks._goose_egress import ollama_egress_warning  # SEC-2026-11-23-im-sealed-mail-B/C
 from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
 from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
@@ -193,53 +192,6 @@ def _seatbelt_ancestor_rename_rules(ancestors: tuple[str, ...]) -> list[str]:
         *[f"    {e}" for e in literals],
         ")",
     ]
-
-
-#: Ollama's default API port. Its ``/api/pull`` of a model named ``host/ns/x`` makes Ollama connect to ``host``
-#: (measured 2026-11-23), so an agent that can reach the API has a channel off the machine.
-OLLAMA_DEFAULT_PORT = 11434   # the same port as the "ollama" preset in model_providers/_config.py
-
-
-def _ollama_ports() -> set[int]:
-    """Ollama's default port, plus the port in ``OLLAMA_HOST`` (``host:port``, ``scheme://host:port/path``,
-    ``[::1]:port``) when it names one. A value that doesn't parse adds nothing; the default is always kept."""
-    ports = {OLLAMA_DEFAULT_PORT}
-    value = os.environ.get("OLLAMA_HOST", "").strip()
-    try:
-        port = urllib.parse.urlsplit(value if "://" in value else "//" + value).port
-    except ValueError:   # e.g. a bare "::1" or "host:abc"
-        port = None
-    if port:
-        ports.add(port)
-    return ports
-
-
-def ollama_egress_warning(endpoint: str | None) -> str | None:
-    """The render-time warning when an exclusive profile's sanctioned egress can reach Ollama (@security, 2026-11-23).
-
-    Args:
-        endpoint: The validated loopback egress (``localhost``, ``localhost:PORT``, ``*`` or ``*:PORT``), or None.
-
-    Returns:
-        A one-line warning when the endpoint names an Ollama port or has no port (every port, Ollama's included);
-        otherwise None, including for an endpoint that isn't a valid egress (callers pass
-        :func:`_seatbelt_egress_rule`'s result).
-
-    Raises:
-        Nothing.
-    """
-    if not endpoint:
-        return None
-    host, sep, port = endpoint.partition(":")
-    if sep and not port.isdigit():
-        return None
-    if sep and int(port) not in _ollama_ports():   # int(): "011434" is port 11434 too
-        return None
-    where = "every host" if host == "*" else "loopback"
-    reach = f"Ollama's port {int(port)} on {where}" if sep else f"every port on {where}, Ollama's included"
-    return (f"goose_egress_proxy {endpoint!r} re-allows {reach}: Ollama's /api/pull connects to any registry host, so "
-            "the exclusive profile is not network-isolated. Put a loopback filter that allows only the inference routes "
-            "in front of Ollama and point goose_egress_proxy at it (see goose-privileges.md).")
 
 
 def _seatbelt_egress_rule(endpoint: str | None) -> str | None:
