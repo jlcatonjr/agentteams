@@ -18,7 +18,7 @@ import os
 import re
 from pathlib import Path
 
-from agentteams.cli.action_ids import action_matches, halt_names_action
+from agentteams.cli.action_ids import action_matches, halt_blocks, halt_display_id, halt_retraction_id, idless_halt_note
 from agentteams.cli.decision_chain import chain_tip, is_chained, verify_chain
 from agentteams.cli.decision_lineage import (  # noqa: F401  (re-exported: tests and callers)
     _DERIVES_FROM_FIELD,
@@ -863,7 +863,7 @@ def _open_halt_for(
     rows: list[dict[str, str]], target: str, *, output_dir: Path, signing_active: bool,
     skipped: list[str] | None = None,
 ) -> tuple[int, dict[str, str]] | None:
-    """Return the first unretracted HALT for exactly *target*, or None.
+    """Return the first unretracted HALT that blocks *target* (one with no usable id blocks every target), or None.
 
     Encapsulates the whole-log scan-and-clear for one action id (the pre-lineage behaviour),
     so the lineage-aware caller can run it for the requested action AND each ancestor without
@@ -871,15 +871,15 @@ def _open_halt_for(
     authentication or has no evidence retracts nothing and is skipped, its reason appended to *skipped*:
     one unsigned historical row in an append-only signed log must not wedge the scan (rc.12 fix).
     """
-    # (index, row, normalized id, matched by token only). A HALT blocks every action named in its id
-    # (halt_names_action); one matched only by token is retracted only by a row with its exact id.
+    # (index, row, retraction id, not matched as family). A HALT blocks every action named in its id, and every
+    # action when it has no usable id (halt_blocks); unless matched as family it is retracted only by its exact id.
     open_halts: list[tuple[int, dict[str, str], str, bool]] = []
     for index, row in enumerate(rows):
         reviewed = (row.get("action_reviewed") or row.get("decision") or "").strip()
         verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
         family, whole = action_matches(reviewed, target), reviewed.lower() == target.strip().lower()
-        if verdict == "HALT" and (family or halt_names_action(reviewed, target)):
-            open_halts.append((index, row, reviewed.lower(), not family))
+        if verdict == "HALT" and (family or halt_blocks(reviewed, target)):
+            open_halts.append((index, row, halt_retraction_id(reviewed, index + 1, row), not family))
         elif verdict == _HALT_RETRACTION_VERDICT and (
             whole or any(norm == reviewed.lower() for _, _, norm, _ in open_halts)
         ):
@@ -911,8 +911,8 @@ def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
     let a later PASS silently supersede a HALT (probe A1), and let the `consumed` flag erase
     one (probe A3).
 
-    A HALT is cleared only by a later :data:`_HALT_RETRACTION_VERDICT` row for the same
-    action, carrying evidence, authenticated like any other authorizing row. `consumed` is
+    A HALT is cleared only by a later :data:`_HALT_RETRACTION_VERDICT` row for the same action (for a HALT
+    with no usable id: its row handle), with evidence, authenticated like any authorizing row. `consumed` is
     ignored here entirely: anti-replay and retraction are different operations and sharing a
     flag between them is what made A3 work.
 
@@ -964,11 +964,11 @@ def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
             f" '{action}' derives from '{target}', which is under an unretracted HALT — "
         )
         raise RuntimeError(
-            f"{via}latest decision for action '{reviewed or target}' is HALT "
+            f"{via}latest decision for action '{halt_display_id(reviewed, index + 1, row)}' is HALT "
             f"(row {index + 1}, dated {(row.get('date') or row.get('timestamp') or '?').strip()}) "
             f"and has never been retracted. C-2: a HALT is cleared only by a "
             f"{_HALT_RETRACTION_VERDICT} row recording why it no longer applies — not by a "
             f"later PASS, not by the `consumed` flag, and not by renaming the action: a HALT blocks "
             f"every action named in its id, and one recorded for an instance id is retracted by that id."
-            + "".join(f" Retraction {why}." for why in skipped)
+            + idless_halt_note(reviewed, index + 1, row) + "".join(f" Retraction {why}." for why in skipped)
         )
