@@ -155,8 +155,9 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   that is older than it (#616), because rows in two logs share no order and their timestamps are written by
   agents. So once such a HALT is retracted in the other directory, this log's older clearance, or a standing
   exception bound to it, applies again.
-- **Workaround:** record the retraction in the canonical governance log as well, or re-sign the clearance after
-  the retraction.
+- **Workaround:** record both the HALT and its retraction in the canonical governance log, the HALT first, or
+  re-sign the clearance after the retraction. A `HALT-RETRACTED` row alone there voids nothing: a retraction only
+  counts when it clears a HALT open in the same log.
 - **Decision:** the design is decided after 1.3.1. A test pins the current behaviour, so a change is deliberate.
 
 ### Through 1.3.0: a clearance recorded before a HALT's retraction took effect after it (fixed in 1.3.1, #616)

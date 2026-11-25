@@ -335,3 +335,23 @@ def test_a_retraction_in_another_team_dir_does_not_void_this_logs_older_clearanc
     _log(other, _retraction("s10-cooldown-exempt", stamp="2026-11-05"))
     # The canonical exception, registered before that retraction, carries over again.
     assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0 + timedelta(days=2)) == [_REPO]
+
+
+def test_the_workaround_needs_the_halt_and_its_retraction_in_the_canonical_log(tmp_path, stub_ed25519) -> None:
+    """known-limitations workaround for a retraction made in another team dir: a lone HALT-RETRACTED row in the
+    canonical log voids nothing (it clears no HALT open there); the HALT and then its retraction there do."""
+    def setup(sub: str):
+        canonical = _canonical(tmp_path / sub)
+        _log(canonical, _row(_ACTION))
+        assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == [_REPO]
+        other = _native(tmp_path / sub, ".codex/agents")
+        _log(other, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-04"),
+             _retraction("s10-cooldown-exempt", stamp="2026-11-05"))
+        return canonical
+    lone = setup("lone")
+    _log(lone, _retraction("s10-cooldown-exempt", stamp="2026-11-05"))
+    assert gate.authorized_exempt_repos(lone, [_REPO], consume=True, now=_T0 + timedelta(days=2)) == [_REPO]
+    both = setup("both")
+    _log(both, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-04"),
+         _retraction("s10-cooldown-exempt", stamp="2026-11-05"))
+    assert gate.authorized_exempt_repos(both, [_REPO], consume=True, now=_T0 + timedelta(days=2)) == []
