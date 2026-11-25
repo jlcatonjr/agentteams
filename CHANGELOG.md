@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (the generated fleet VS Code task is labelled a preview and passes `--dry-run`)
+
+- The task was labelled `agentteams: fleet update (all)` but never applied anything: without `--yes`, fleet mode
+  only previews. It is now `agentteams: fleet preview (all, dry-run)` and its command passes `--dry-run` explicitly,
+  so a change to fleet's default can never turn it into a bulk write. A test keeps every generated task free of
+  `--yes`, `--overwrite`, `--prune`, `--bridge-refresh` and `--fleet-ignore-locks`.
+- On the next merge an existing `tasks.json` loses the old task and gains the new one. A user task with the old
+  label but without `"detail": "AGENTTEAMS"` is kept.
+- Fixed with it: when the merge removed the only task in a commented `tasks.json`, the tasks it then added began
+  with a comma and the file no longer parsed.
+
 ### fixed (a commented `.vscode/tasks.json` with a URL in any task merges again)
 
 - The JSONC comment stripper removed every `//` to the end of the line, including the one in `https://` inside a

@@ -436,9 +436,10 @@ AGENTTEAMS_META_TASKS: list[dict[str, Any]] = [
         "detail": "AGENTTEAMS",
     },
     {
-        "label": "agentteams: fleet update (all)",
+        # A preview only: --dry-run is explicit so a change to fleet's default can never make this a bulk write.
+        "label": "agentteams: fleet preview (all, dry-run)",
         "type": "shell",
-        "command": "agentteams --fleet . --fleet-frameworks all --update --merge",
+        "command": "agentteams --fleet . --fleet-frameworks all --update --merge --dry-run",
         "group": "none",
         "presentation": {"reveal": "always", "panel": "shared"},
         "problemMatcher": [],
@@ -802,7 +803,8 @@ def _merge_jsonc(existing: dict[str, Any], raw: str, new_content: str) -> str:
         indented = "\n".join("    " + line for line in task_str.splitlines())
         chunks.append(indented)
 
-    insertion = ",\n\n" + ",\n\n".join(chunks)
+    # No leading comma when the array holds no task (the refresh may have removed the only one).
+    insertion = (",\n\n" if _task_object_spans(raw) else "") + ",\n\n".join(chunks)
 
     # Splice before the structural ] that closes the tasks array.
     # _find_tasks_close_bracket scans forward with full string and comment

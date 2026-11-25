@@ -992,3 +992,59 @@ class TestJsoncStringAwareStrip:
         existing.write_text('{\n  // c\n  "u": "https://x",\n  "tasks": [,]\n}', encoding="utf-8")
         with pytest.raises(ValueError, match="JSONC but could not be parsed"):
             sentinel_merge(existing, render_tasks_json([]))
+
+
+# ---------------------------------------------------------------------------
+# bl48-19: the generated meta tasks never apply anything in bulk
+# ---------------------------------------------------------------------------
+
+_APPLYING_FLAGS = ("--yes", "--overwrite", "--prune", "--bridge-refresh", "--fleet-ignore-locks")
+_OLD_FLEET_TASK = {"label": "agentteams: fleet update (all)", "type": "shell",
+                   "command": "agentteams --fleet . --fleet-frameworks all --update --merge",
+                   "group": "none", "presentation": {"reveal": "always", "panel": "shared"},
+                   "problemMatcher": [], "detail": "AGENTTEAMS"}
+
+
+class TestMetaTasksNeverApply:
+    def test_meta_tasks_never_apply(self):
+        for task in AGENTTEAMS_META_TASKS:
+            words = task["command"].split()
+            assert not set(words) & set(_APPLYING_FLAGS), task["label"]
+        fleet = [t for t in AGENTTEAMS_META_TASKS if "--fleet" in t["command"].split()]
+        assert len(fleet) == 1 and "--dry-run" in fleet[0]["command"].split()
+        assert fleet[0]["label"] == "agentteams: fleet preview (all, dry-run)"
+
+    def test_fleet_task_command_passes_option_validation(self):
+        from agentteams.cli.parser import _build_parser
+        from agentteams.cli.parser_validate import _validate_option_combinations
+
+        fleet = next(t for t in AGENTTEAMS_META_TASKS if "--fleet" in t["command"].split())
+        parser = _build_parser()
+        args = parser.parse_args(fleet["command"].split()[1:])
+        _validate_option_combinations(parser, args)
+        assert args.dry_run and not getattr(args, "yes", False)
+
+    def test_old_fleet_label_is_replaced_on_merge_json(self, tmp_path):
+        existing = tmp_path / "tasks.json"
+        existing.write_text(json.dumps({"version": "2.0.0", "tasks": [_OLD_FLEET_TASK]}), encoding="utf-8")
+        labels = [t["label"] for t in json.loads(sentinel_merge(existing, render_tasks_json([])))["tasks"]]
+        assert "agentteams: fleet update (all)" not in labels
+        assert "agentteams: fleet preview (all, dry-run)" in labels
+
+    def test_old_fleet_label_is_replaced_on_merge_jsonc(self, tmp_path):
+        existing = tmp_path / "tasks.json"
+        body = "\n".join("    " + l for l in json.dumps(_OLD_FLEET_TASK, indent=2).splitlines())
+        existing.write_text('{\n  "version": "2.0.0",\n  "tasks": [\n    // mine\n' + body + '\n  ]\n}',
+                            encoding="utf-8")
+        result = sentinel_merge(existing, render_tasks_json([]))
+        labels = [t["label"] for t in json.loads(_strip_jsonc_comments(result))["tasks"]]
+        assert "agentteams: fleet update (all)" not in labels
+        assert labels.count("agentteams: fleet preview (all, dry-run)") == 1 and "// mine" in result
+
+    def test_user_task_with_the_old_label_survives(self, tmp_path):
+        # Negative control: without the AGENTTEAMS detail tag the task is the user's and is kept.
+        user = {k: v for k, v in _OLD_FLEET_TASK.items() if k != "detail"}
+        existing = tmp_path / "tasks.json"
+        existing.write_text(json.dumps({"version": "2.0.0", "tasks": [user]}), encoding="utf-8")
+        tasks = json.loads(sentinel_merge(existing, render_tasks_json([])))["tasks"]
+        assert user in tasks
