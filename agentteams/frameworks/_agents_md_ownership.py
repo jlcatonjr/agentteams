@@ -361,7 +361,6 @@ def goose_agents_md_decision(target: Path, rendered: str, *, repo_root: Path) ->
     return _carry_fences(rendered, carried), notice
 
 
-
 def _co_owner_fences(text: str) -> list[tuple[int, str, str]]:
     """Return ``(offset, fence_id, block)`` for each co-owner fence in *text*, in on-disk order.
 
@@ -380,7 +379,7 @@ def _carry_fences(rendered: str, carried: list[tuple[int, str, str]]) -> str:
 
 
 def agents_md_decision(target: Path, rendered: str, *, repo_root: Path) -> tuple[str | None, str | None]:
-    """Decide what ``--framework agents-md`` may write to the repo-root ``AGENTS.md`` at *target* (bl48-28).
+    """Decide what ``--framework agents-md`` may write to the repo-root ``AGENTS.md`` at *target*.
 
     * absent or agents-md generated: *rendered*, carrying over every co-owner fence (:data:`CO_OWNER_FENCE_IDS`)
       as :func:`goose_agents_md_decision` does;

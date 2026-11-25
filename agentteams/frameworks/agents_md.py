@@ -208,7 +208,7 @@ class AgentsMdAdapter(FrameworkAdapter):
         """Apply the agents-md repo-root AGENTS.md rule (:func:`._agents_md_ownership.agents_md_decision`).
 
         agents-md writes only an AGENTS.md that is absent or its own; one generated for Codex, Grok or Goose, or
-        written by hand, is left untouched with a notice (bl48-28). The ``.agents/*.md`` files are always kept.
+        written by hand, is left untouched with a notice. The ``.agents/*.md`` files are always kept.
 
         Args:
             rendered_files: ``(rel_path, content)`` pairs relative to *output_dir*.
