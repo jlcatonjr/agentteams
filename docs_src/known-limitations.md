@@ -134,6 +134,18 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
+### Governance reads check for symlinks by path, so a directory swapped mid-read is a race
+
+- **What:** the decision gate refuses a symlinked `references/` directory or a symlinked switch or decisions log
+  (`signing_switch.refuse_symlinked_component`): it checks each path component with `lstat`, then opens the file by
+  path, `O_NOFOLLOW` on the last component only. A directory replaced by a link between that check and the open
+  is not caught. The decisions log is also re-read by path for its format check and its rows.
+- **Writes are not affected:** they open `references/` once with `O_DIRECTORY|O_NOFOLLOW` and work relative to that
+  descriptor.
+- **Who:** only a process that can rewrite the team dir while a gate runs; such a process can already edit the
+  files themselves. Reading every governance file through one directory descriptor would close it; it needs the
+  log's format check to read from that descriptor too, so it is not in 1.3.1.
+
 ### Through 1.3.0: a clearance recorded before a HALT's retraction took effect after it (fixed in 1.3.1, #616)
 
 - **What (agentteams ≤ 1.3.0):** a PASS recorded while a HALT on the action was open (or, for a family HALT, before

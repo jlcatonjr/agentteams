@@ -122,7 +122,10 @@ Mints and appends one Ed25519-signed constraint-relaxing decision row under the 
 1. team-dir refusal;
 2. spec load and shape check, then the display-spoofing refusal; the chain link (`prev_digest`) and, when the
    log has the column, `text_digest` (binding `conditions` and `evidence`) are computed, never taken from the spec;
-3. eligibility and effect classification, then the PR-E grant-purpose refusal;
+3. eligibility and effect classification, then the PR-E grant-purpose refusal and the toolchain-group and
+   dev-merge purpose refusals; then, for an authorizing row, the author-roster refusal (the author the log will
+   store is off the approver roster), and for a PASS or CONDITIONAL PASS the open-HALT refusal (an id the row
+   names, or a `derives_from` parent, is under an open HALT, #616);
 4. preflight: env, integrity, install location, key-file existence. With `allow_checkout`, an overridden
    location refusal is recorded in the signed `conditions_verified`;
 5. the display, with the review digest;
