@@ -16,6 +16,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from agentteams.backup import BACKUP_DIR_NAME
 from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS
 from agentteams.yaml_frontmatter import (
     FRONT_MATTER_MODEL_LINE_RE,
@@ -126,14 +127,16 @@ def capture_references(source_dir: Path) -> list[dict[str, Any]]:
 
     Each file becomes ``{"rel_path": str, "content": str}`` — the same shape
     ``canonical.materialize_canonical`` writes and ``load_canonical`` reads back.
-    Returns an empty list when no ``references/`` directory exists.
+    Returns an empty list when no ``references/`` directory exists. Backup trees
+    (``.agentteams-backups/``, where a governance-log repair keeps its copy of a
+    private log) are left out, so they never reach the hub or a peer.
     """
     refs_dir = source_dir / "references"
     if not refs_dir.is_dir():
         return []
     refs: list[dict[str, Any]] = []
     for p in sorted(refs_dir.rglob("*")):
-        if not p.is_file():
+        if not p.is_file() or BACKUP_DIR_NAME in p.relative_to(refs_dir).parts:
             continue
         rel_path = str(p.relative_to(source_dir))
         try:

@@ -36,8 +36,9 @@ This module fixes such rows under three rules the operator set on 2026-11-11.
   - A backup `LOG.bak-<UTC timestamp>` is written first (exclusive create, fsync), to
     `.agentteams-backups/governance-log-repair/` beside the log (directories mode `0700`). The backup root gets a
     `.gitignore` holding `*`, so the copy of a private log stays local whatever the project's `.gitignore` says.
-    If either directory is a symlink or not a directory, the repair is refused and nothing is written. Remove the
-    backup once the log has been checked.
+    If either directory is a symlink or not a directory, the repair is refused and nothing is written. A CAI
+    export (`--interop-from`, `--sync`) and a hub load leave every `.agentteams-backups/` tree under `references/`
+    out, so the copy never reaches the hub or a peer. Remove the backup once the log has been checked.
   - The log is rewritten in place through the locked descriptor, writing first and truncating after, with a full
     flush (`F_FULLFSYNC` on macOS). An `append_row` waiting on the lock appends to the repaired file, and the
     gate's reader takes a shared lock, so it never sees a half-written log. A write error restores the original

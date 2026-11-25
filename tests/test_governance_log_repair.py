@@ -300,7 +300,7 @@ def test_the_guarantee_decision_cells_identical_and_conditions_verified_keeps_it
         assert item.fixed[cv].split()[0].rstrip(":") == item.original[cv].split()[0].rstrip(":")
 
 
-# --- bl48-39: the backup goes to a self-ignoring backup root -----------------------------------------
+# --- the backup goes to a self-ignoring backup root and never travels -----------------------------------------
 
 
 def test_backup_goes_to_the_ignored_backup_root(tmp_path):
@@ -332,3 +332,35 @@ def test_symlinked_backup_dir_is_refused_and_log_untouched(tmp_path, which):
     with pytest.raises(ValueError, match="is a symlink or not a directory; nothing written"):
         apply_repair(log, plan_repair(log).digest, confirm=_yes)
     assert log.read_bytes() == before and not list(elsewhere.iterdir())
+
+
+def test_a_repair_backup_never_reaches_a_cai_export(tmp_path):
+    from agentteams.interop_helpers import capture_references
+    agents = tmp_path / ".claude" / "agents"
+    refs = agents / "references"
+    refs.mkdir(parents=True)
+    (agents / "orchestrator.md").write_text("---\nname: o\ndescription: d\n---\n\n# o\n", encoding="utf-8")
+    (refs / "notes.md").write_text("ordinary reference\n", encoding="utf-8")
+    log = _log(refs, GOOD, SPLIT)
+    backup = apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    assert backup.is_relative_to(refs)
+    exported = {r["rel_path"] for r in capture_references(agents)}
+    # The ordinary reference and the log itself are exported (negative control); the backup is not.
+    assert {"references/notes.md", "references/security-decisions.log.csv"} <= exported
+    assert not any(".agentteams-backups" in p for p in exported)
+
+
+def test_a_repair_backup_in_a_hub_is_not_loaded(tmp_path):
+    pytest.importorskip("jsonschema")
+    from agentteams.canonical import load_canonical, materialize_canonical
+    from agentteams.interop import export_to_cai
+    agents = tmp_path / ".claude" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (agents / "orchestrator.md").write_text("---\nname: o\ndescription: d\n---\n\n# o\n", encoding="utf-8")
+    (agents / "references" / "notes.md").write_text("ordinary reference\n", encoding="utf-8")
+    hub = tmp_path / "hub"
+    materialize_canonical(export_to_cai(agents, "claude"), hub)
+    log = _log(hub / "references", GOOD, SPLIT)
+    apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    loaded = {r["rel_path"] for r in load_canonical(hub)["references"]}
+    assert "references/notes.md" in loaded and not any(".agentteams-backups" in p for p in loaded)

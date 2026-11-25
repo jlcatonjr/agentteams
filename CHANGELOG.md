@@ -93,8 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/security-decisions.log.csv`. The backup now goes to `.agentteams-backups/governance-log-repair/`
   beside the log; that backup root carries a `*` `.gitignore`, as every other backup root does.
 - **Newly refused:** a repair whose backup directory is a symlink or not a directory; nothing is written.
+- **Never copied:** a CAI export (`capture_references`) and a hub load (`load_canonical`) now skip any
+  `.agentteams-backups/` tree under `references/`, so a repair backup of a team's log does not reach the sync hub or
+  its peers.
 - **Cleanup:** backups made by earlier releases stay where they were. `git status` lists them as untracked; delete
-  them once the repaired log has been checked. This repository's `.gitignore` now ignores `references/*.log.csv.bak-*`.
+  them once the repaired log has been checked. This repository's `.gitignore` now ignores `*.csv.bak-*` in
+  `references/`, `.github/agents/references/` and `.claude/agents/references/` (every directory the repair reads
+  logs from).
 
 ### fixed (brief ingestion no longer reads dependency manifests from `tmp/` or backup trees)
 
