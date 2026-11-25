@@ -656,3 +656,29 @@ cannot read branch protection (no admin rights): hand that step to the operator.
 `--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary. Writes to a
 branch-protection or ruleset endpoint, and `--apply`, prompt through the constitutional gate where hooks run.
 
+
+---
+
+## J. Workflow Action Pins (2026-11-25)
+
+Every `uses:` in `.github/workflows/*.yml` names a full commit SHA with the exact release tag as a comment
+(`uses: actions/checkout@<40-hex sha>   # v7.0.1`), never a tag or branch. A tag can be moved by the action's owner;
+a commit cannot. The pins are recorded under `github_actions` in `references/dependency-pins.json`, and
+`tests/test_workflow_action_pins.py` refuses a tag ref, a SHA without its tag comment, and any ref that differs from
+that record.
+
+**To add or bump an action:**
+
+1. Resolve the tag: `git ls-remote https://github.com/<owner>/<repo> 'refs/tags/v<major>*'`. For an annotated tag,
+   take the peeled `^{}` line (the tag object's SHA does not work as a `uses:` ref). The floating major and the
+   newest `vX.Y.Z` must name the same commit.
+2. Vet it (Rule S-10): the release is at least 14 days old
+   (`gh api repos/<owner>/<repo>/releases/tags/<tag> --jq .published_at`), it is the newest release of its major,
+   and the GitHub advisory database has no advisory for it
+   (`gh api "advisories?ecosystem=actions&affects=<owner>/<repo>"`).
+3. In one PR, change the `github_actions` entry (`sha`, `tag`, `commit_date`, `release_date`, `verified_on`,
+   `vuln_search`) and every workflow line that uses the action. `@security` re-resolves the SHA itself before it
+   clears the PR.
+
+When GitHub announces an advisory for a pinned action, the fix arrives only through this procedure. Pushing a change
+to a workflow file needs a token with the `workflow` scope; if the session's token lacks it, the operator pushes.

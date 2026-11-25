@@ -45,6 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from `v1.2.2` to the
   newest published tag: `v1.3.0-rc.1` at the cut, then `v1.3.0` when the release was merged forward into `dev`.
 
+### security (every GitHub Action in the workflows is pinned by commit SHA)
+
+- The 51 `uses:` references in `.github/workflows/` named a moving tag such as `actions/checkout@v7`, so the action's
+  owner could change the code CI runs with the job's token. Each now names the full commit SHA of the release the
+  tag pointed at, with the exact tag as a comment: `actions/checkout@3d3c42e5…   # v7.0.1`. What the workflows do is
+  unchanged.
+- Six actions: `checkout` v7.0.1, `setup-python` v7.1.0, `upload-artifact` v7.0.2, `github-script` v9.0.0 (the
+  commit its annotated tag points at), `upload-pages-artifact` v5.0.0 and `deploy-pages` v5.0.1. Each release is
+  more than 14 days old, the newest of its major, and had no GitHub advisory on 2026-11-25 (Rule S-10).
+- The pins are recorded under `github_actions` in `references/dependency-pins.json`. A new test refuses a tag or
+  branch ref and checks every workflow ref against that record.
+- **Bumping an action** now takes a reviewed PR: `references/git-procedures.md` section J.
+
 ### security (a HALT with no usable id blocks every gated action; it used to block none)
 
 - A HALT row whose `action_reviewed` is empty, blank or punctuation only names no action, so no gate attributed it and

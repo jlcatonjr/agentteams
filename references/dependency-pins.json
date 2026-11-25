@@ -1,5 +1,5 @@
 {
-  "_comment": "Supply-chain pins for the disclosed non-stdlib dependencies. Each entry pins an EXACT version and the sha256 of that release's source distribution (sdist) from PyPI. tests/test_supply_chain_pins.py asserts (a) the pyproject.toml extra pins the same exact version, and (b) when the library is importable, its reported __version__ matches. The sdist sha256 is the provenance anchor recorded here; full per-wheel hash-pinning belongs in a deployment requirements lockfile (documented residual). Feed adoption_date into the Rule S-10 dependency-vetting cooldown before relying on a pin in enforcement.",
+  "_comment": "Supply-chain pins for the disclosed non-stdlib dependencies. Each entry pins an EXACT version and the sha256 of that release's source distribution (sdist) from PyPI. tests/test_supply_chain_pins.py asserts (a) the pyproject.toml extra pins the same exact version, and (b) when the library is importable, its reported __version__ matches. The sdist sha256 is the provenance anchor recorded here; full per-wheel hash-pinning belongs in a deployment requirements lockfile (documented residual). Feed adoption_date into the Rule S-10 dependency-vetting cooldown before relying on a pin in enforcement. github_actions pins every GitHub Action used in .github/workflows/*.yml to the full commit SHA of an exact release tag; tests/test_workflow_action_pins.py refuses a tag or branch ref and checks each workflow ref against this list. To bump one: resolve the tag with git ls-remote (the peeled ^{} commit for an annotated tag), confirm the release is at least 14 days old, the newest of its major and free of known advisories (Rule S-10), then change this entry and every workflow ref in one reviewed PR (references/git-procedures.md section J).",
   "pins": [
     {
       "name": "cryptography",
@@ -10,6 +10,62 @@
       "sha256_source": "pypi.org sdist, downloaded from files.pythonhosted.org and sha256 verified locally 2026-11-14",
       "adoption_date": "2026-11-14",
       "purpose": "Ed25519 asymmetric signing for constraint-relaxing authorizations (exception-governance Workstream B); bumped from 49.0.0 to remediate CVE-2026-69247 / GHSA-g6cj-pr64-35w5 (PKCS#7 EnvelopedData Bleichenbacher oracle, first patched 50.0.0). agentteams uses only the Ed25519 path, not PKCS#7 — remediated for supply-chain hygiene. Bumped 50.0.0 -> 50.0.2 in 1.1.3 (latest stable, released 2026-09-30, OSV none on 2026-11-14) so consumers vetting the latest stable can install the extra."
+    }
+  ],
+  "github_actions": [
+    {
+      "action": "actions/checkout",
+      "tag": "v7.0.1",
+      "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "commit_date": "2026-07-17",
+      "release_date": "2026-07-20",
+      "verified_on": "2026-11-25",
+      "vuln_search": "GitHub advisory database (ecosystem actions), no advisory on 2026-11-25"
+    },
+    {
+      "action": "actions/setup-python",
+      "tag": "v7.1.0",
+      "sha": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+      "commit_date": "2026-10-22",
+      "release_date": "2026-10-22",
+      "verified_on": "2026-11-25",
+      "vuln_search": "GitHub advisory database (ecosystem actions), no advisory on 2026-11-25"
+    },
+    {
+      "action": "actions/upload-artifact",
+      "tag": "v7.0.2",
+      "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+      "commit_date": "2026-10-07",
+      "release_date": "2026-10-07",
+      "verified_on": "2026-11-25",
+      "vuln_search": "GitHub advisory database (ecosystem actions), no advisory on 2026-11-25"
+    },
+    {
+      "action": "actions/github-script",
+      "tag": "v9.0.0",
+      "sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3",
+      "commit_date": "2026-04-09",
+      "release_date": "2026-04-09",
+      "verified_on": "2026-11-25",
+      "vuln_search": "GitHub advisory database (ecosystem actions), no advisory on 2026-11-25"
+    },
+    {
+      "action": "actions/upload-pages-artifact",
+      "tag": "v5.0.0",
+      "sha": "fc324d3547104276b827a68afc52ff2a11cc49c9",
+      "commit_date": "2026-04-08",
+      "release_date": "2026-04-10",
+      "verified_on": "2026-11-25",
+      "vuln_search": "GitHub advisory database (ecosystem actions), no advisory on 2026-11-25"
+    },
+    {
+      "action": "actions/deploy-pages",
+      "tag": "v5.0.1",
+      "sha": "368f82528645a54fb793d4d04e342629a3f51346",
+      "commit_date": "2026-09-01",
+      "release_date": "2026-09-01",
+      "verified_on": "2026-11-25",
+      "vuln_search": "GitHub advisory database (ecosystem actions), no advisory on 2026-11-25"
     }
   ]
 }
