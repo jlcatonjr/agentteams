@@ -66,10 +66,10 @@ the refusal, and the next sync brings the pin up to it. Stale values at the same
 
 ### `refuse_unsafe_pin_instructions`
 
-`refuse_unsafe_pin_instructions(root, pin_doc, hub, canonical_dir=None) -> None`
+`refuse_unsafe_pin_instructions(root, pin_doc, hub, *, existing_hub_dir=None) -> None`
 
 Raises `ValueError` carrying `pin_instruction_problem`'s text. `run_sync` and `sync_init` call it first.
-`sync_init` passes `canonical_dir`: when a hub already exists there it is checked as well as the seed, so a
+`sync_init` passes `existing_hub_dir`: when a hub already exists there it is checked as well as the seed, so a
 re-init whose pin instruction file is missing is refused instead of emptying the hub's instruction content.
 
 ### `agent_team_roster_mismatch`

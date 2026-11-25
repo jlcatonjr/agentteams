@@ -305,7 +305,7 @@ def test_codex_s_own_import_keeps_its_write_policy_fence(tmp_path: Path) -> None
     assert "Codex policy." in text and text.count("AGENTTEAMS:BEGIN codex_write_policy ") == 1
 
 
-# --- bl48-29c rows 664 and 665 ---------------------------------------------------------------------------------
+# --- the agent_team roster check, and a re-init that would empty the hub ---------------------------------------
 
 
 def _agent_team(*slugs: str) -> str:

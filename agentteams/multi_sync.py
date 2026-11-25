@@ -815,7 +815,7 @@ def sync_init(
     pin_dir = framework_agents_dir(root, pin)
     refuse_missing_pin(pin_dir, pin)
     seed = export_to_cai(pin_dir, pin)
-    refuse_unsafe_pin_instructions(root, {"pinned_framework": pin, "frameworks": fws}, seed, canonical_dir)
+    refuse_unsafe_pin_instructions(root, {"pinned_framework": pin, "frameworks": fws}, seed, existing_hub_dir=canonical_dir)
     # C2: capture the pin's brief privilege posture into the team-level canonical block so it
     # persists in team.cai.json and projection re-emits each framework's OS boundary.
     priv = _read_brief_privilege(root)

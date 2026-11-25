@@ -93,7 +93,7 @@ def test_frameworks_flag_ignores_blank_entries_and_whitespace(tmp_path, capsys):
     assert "projected to: copilot-vscode, claude" in out
 
 
-# --- bl48-29c row 600: a dry run lists its conflicts and claims no log write --------------------------------
+# --- a dry run lists its conflicts and claims no log write ---------------------------------------------------
 
 
 def _team_with_a_removed_agent(root: Path) -> None:

@@ -240,24 +240,24 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
     return result
 
 
-def refuse_unsafe_pin_instructions(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any],
-                                   canonical_dir: Path | None = None) -> None:
+def refuse_unsafe_pin_instructions(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], *,
+                                   existing_hub_dir: Path | None = None) -> None:
     """Refuse a sync whose pin instruction file would spread bad content, before anything is written.
 
     Args:
         root: The pinned project root.
         pin_doc: The parsed pin (``pinned_framework`` and ``frameworks``).
         hub: The canonical team about to be projected.
-        canonical_dir: ``--sync-init``'s hub directory. When a hub is already there it is checked too: *hub* is
-            then the seed exported from the pin, which has no instruction content when the pin's file is missing,
-            and materializing it would empty the existing hub's (row 665).
+        existing_hub_dir: ``--sync-init``'s hub directory. When a hub is already there it is checked too: *hub*
+            is then the seed exported from the pin, which has no instruction content when the pin's file is
+            missing, and materializing it would empty the existing hub's instruction content.
 
     Raises:
         ValueError: :func:`pin_instruction_problem` found a problem.
     """
     hubs = [hub]
-    if canonical_dir is not None and (Path(canonical_dir) / TEAM_FILE_NAME).is_file():
-        hubs.append(load_canonical(canonical_dir))
+    if existing_hub_dir is not None and (Path(existing_hub_dir) / TEAM_FILE_NAME).is_file():
+        hubs.append(load_canonical(existing_hub_dir))
     for candidate in hubs:
         problem = pin_instruction_problem(root, pin_doc, candidate)
         if problem:
@@ -265,7 +265,7 @@ def refuse_unsafe_pin_instructions(root: Path, pin_doc: dict[str, Any], hub: dic
 
 
 def agent_team_roster_mismatch(content: str, hub: dict[str, Any]) -> str:
-    """Compare the ``agent_team`` fence's `` `@slug` `` handles with the hub's agents (row 664).
+    """Compare the ``agent_team`` fence's `` `@slug` `` handles with the hub's agents.
 
     The fence is moved verbatim from the pin, so it can name agents the roster lacks or omit ones it has. This
     only reports; the fence is not rewritten.

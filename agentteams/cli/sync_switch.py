@@ -174,7 +174,7 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         print(f"  changed:   {', '.join(result.changed_frameworks)}")
         print(f"  projected: {', '.join(result.projected_frameworks)}")
     if result.conflicts and result.dry_run:
-        # A dry run writes no log (row 600), so the conflicts are listed here for review before they apply.
+        # A dry run writes no conflict log, so the conflicts are listed here for review before they apply.
         print(f"  {len(result.conflicts)} conflict(s) would be resolved to the pin (a dry run logs nothing); "
               f"first {_DRY_RUN_CONFLICTS_SHOWN}:")
         for c in result.conflicts[:_DRY_RUN_CONFLICTS_SHOWN]:
