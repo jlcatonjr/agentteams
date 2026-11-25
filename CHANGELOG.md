@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`scanner-unverified`), and a gate log inside the project but outside the working directory is not written.
   Every root checked before is still checked.
 
-### security (the gate asks on git config that runs a program or hands over the push credential; bl48-08)
+### security (the gate asks on git config that runs a program or hands over the push credential)
 
 - **Fixed:** the constitutional gate's `git-alias-config` class now also asks on `credential.*`, `core.hooksPath`,
   `core.sshCommand`, `core.askPass` and `core.fsmonitor`, set through `git config`, `git -c` or `git --config-env`.

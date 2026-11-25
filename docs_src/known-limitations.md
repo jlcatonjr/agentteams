@@ -338,10 +338,11 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   - `include.path` through `git -c` (`git config include.path` asks, as `publication-channel`);
   - `GIT_CONFIG_COUNT` and its key/value variables ask (`publication-channel`), but the reason shown names a
     publication channel, not code execution;
-  - direct edits of `.git/config`: a Write or Edit, or a shell copy, `sed -i` or redirect into it, asks; an edit made
-    by an interpreter (`python3 -c "open('.git/config', 'a')…"`) does not.
-  - Also not covered: `git push --no-verify`, and the `GIT_SSH_COMMAND`, `GIT_SSH`, `GIT_ASKPASS`, `SSH_ASKPASS` and
-    `GIT_EXEC_PATH` environment variables.
+  - direct edits of the config file: a Write or Edit of `.git/config`, or a shell copy, `sed -i` or redirect into it,
+    asks; `git config -e` (or `git config edit`), which opens it in an editor, does not, and nor does an edit made
+    by an interpreter (`python3 -c "open('.git/config', 'a')…"`).
+- **Also not covered:** `git push --no-verify`, and the `GIT_SSH_COMMAND`, `GIT_SSH`, `GIT_ASKPASS`, `SSH_ASKPASS` and
+  `GIT_EXEC_PATH` environment variables.
 - **Who:** all Claude teams with the gate hook installed.
 - **Mitigation:** the gate is a review prompt, not a boundary. Run with the Claude sandbox on, and review
   `.git/config` changes before a push.
