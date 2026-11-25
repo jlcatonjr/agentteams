@@ -20,6 +20,7 @@ _USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<ref>\S+)(?P<rest>.*)$")
 _PINNED = re.compile(r"^(?P<action>[\w.-]+/[\w.-]+(?:/[\w./-]+)?)@(?P<sha>[0-9a-f]{40})$")
 _TAG_COMMENT = re.compile(r"^\s+#\s+(?P<tag>v\d+\.\d+\.\d+)\s*$")
 _HOW = "pin it by commit SHA with '# vX.Y.Z' (references/git-procedures.md section J)"
+_CHECKOUT = ("actions/checkout", "3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1")
 
 
 def _scan(name: str, text: str) -> tuple[list[tuple[str, str, str]], list[str]]:
@@ -41,12 +42,22 @@ def _scan(name: str, text: str) -> tuple[list[tuple[str, str, str]], list[str]]:
     return pins, problems
 
 
-def _workflow_pins() -> list[tuple[str, str, str]]:
+def _scan_workflows() -> tuple[list[tuple[str, str, str]], list[str]]:
+    """Scan every workflow file once; return all pins and all unpinned-ref problems."""
+    paths = sorted(_WORKFLOWS.glob("*.y*ml"))
+    assert paths, "no workflows found"
     pins: list[tuple[str, str, str]] = []
-    for path in sorted(_WORKFLOWS.glob("*.y*ml")):
-        found, _ = _scan(path.name, path.read_text(encoding="utf-8"))
+    problems: list[str] = []
+    for path in paths:
+        found, bad = _scan(path.name, path.read_text(encoding="utf-8"))
         pins.extend(found)
-    return pins
+        problems.extend(bad)
+    return pins, problems
+
+
+def _recorded() -> list[dict]:
+    """Return the ``github_actions`` entries of ``references/dependency-pins.json``."""
+    return json.loads(_PINS.read_text(encoding="utf-8"))["github_actions"]
 
 
 def _pin_mismatches(pins: list[tuple[str, str, str]], recorded: list[dict]) -> list[str]:
@@ -65,13 +76,9 @@ def _pin_mismatches(pins: list[tuple[str, str, str]], recorded: list[dict]) -> l
 
 
 def test_every_workflow_action_is_pinned_by_commit_sha() -> None:
-    problems: list[str] = []
-    paths = sorted(_WORKFLOWS.glob("*.y*ml"))
-    assert paths, "no workflows found"
-    for path in paths:
-        problems.extend(_scan(path.name, path.read_text(encoding="utf-8"))[1])
+    pins, problems = _scan_workflows()
     assert not problems, "\n".join(problems)
-    assert _workflow_pins(), "no action references found"
+    assert pins, "no action references found"
 
 
 def test_the_checker_refuses_a_tag_ref_and_a_sha_without_its_tag() -> None:
@@ -81,28 +88,32 @@ def test_the_checker_refuses_a_tag_ref_and_a_sha_without_its_tag() -> None:
         "  - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0\n"
         "  - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0   # v7\n"
         "  - uses: ./.github/actions/local\n"
-        "  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1\n"
+        f"  - uses: {_CHECKOUT[0]}@{_CHECKOUT[1]}   # {_CHECKOUT[2]}\n"
     )
     pins, problems = _scan("inline.yml", text)
     assert [p.split(":")[1] for p in problems] == ["2", "3", "4"]
-    assert pins == [("actions/checkout", "3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1")]
+    assert pins == [_CHECKOUT]
 
 
 def test_workflow_pins_match_the_pins_file() -> None:
-    recorded = json.loads(_PINS.read_text(encoding="utf-8"))["github_actions"]
+    recorded = _recorded()
     for row in recorded:
         assert re.fullmatch(r"[0-9a-f]{40}", row["sha"]) and re.fullmatch(r"v\d+\.\d+\.\d+", row["tag"])
-        assert row["commit_date"] and row["verified_on"] and row["vuln_search"]
-    pins = _workflow_pins()
-    assert not _pin_mismatches(pins, recorded)
+        assert row["commit_date"] and row["release_date"] and row["verified_on"] and row["vuln_search"], row
+    pins, _ = _scan_workflows()
+    mismatches = _pin_mismatches(pins, recorded)
+    assert not mismatches, "\n".join(mismatches)
     assert {a for a, _, _ in pins} == {r["action"] for r in recorded}, "a recorded pin is no longer used"
 
 
 def test_the_cross_check_refuses_a_missing_or_divergent_pin() -> None:
-    recorded = json.loads(_PINS.read_text(encoding="utf-8"))["github_actions"]
-    pins = _workflow_pins()
-    missing = [r for r in recorded if r["action"] != "actions/checkout"]
-    assert any("actions/checkout" in p for p in _pin_mismatches(pins, missing))
-    other = "0" * 40
-    split = pins + [("actions/checkout", other, "v7.0.0")]
+    recorded = [{"action": _CHECKOUT[0], "sha": _CHECKOUT[1], "tag": _CHECKOUT[2]}]
+    assert not _pin_mismatches([_CHECKOUT], recorded)
+    assert any("is not recorded" in p for p in _pin_mismatches([_CHECKOUT], []))
+    other_sha = [(_CHECKOUT[0], "0" * 40, _CHECKOUT[2])] * 2
+    assert [p for p in _pin_mismatches(other_sha, recorded) if "differs from the recorded" in p]
+    assert not [p for p in _pin_mismatches(other_sha, recorded) if "more than one commit" in p]
+    other_tag = [(_CHECKOUT[0], _CHECKOUT[1], "v7.0.0")]
+    assert any("differs from the recorded" in p for p in _pin_mismatches(other_tag, recorded))
+    split = [_CHECKOUT, (_CHECKOUT[0], "0" * 40, "v7.0.0")]
     assert any("more than one commit" in p for p in _pin_mismatches(split, recorded))

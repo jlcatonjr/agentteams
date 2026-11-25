@@ -53,10 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged.
 - Six actions: `checkout` v7.0.1, `setup-python` v7.1.0, `upload-artifact` v7.0.2, `github-script` v9.0.0 (the
   commit its annotated tag points at), `upload-pages-artifact` v5.0.0 and `deploy-pages` v5.0.1. Each release is
-  more than 14 days old, the newest of its major, and had no GitHub advisory on 2026-11-25 (Rule S-10).
+  more than 14 days old, the action's latest stable release, and had no GitHub advisory on 2026-11-25 (Rule S-10).
 - The pins are recorded under `github_actions` in `references/dependency-pins.json`. A new test refuses a tag or
   branch ref and checks every workflow ref against that record.
-- **Bumping an action** now takes a reviewed PR: `references/git-procedures.md` section J.
+- **Bumping an action** now takes a reviewed PR: `references/git-procedures.md` section J. Dependabot's weekly
+  action PR now waits 14 days after a release (`cooldown`), and is completed by updating the pins file in the same PR.
 
 ### security (a HALT with no usable id blocks every gated action; it used to block none)
 
