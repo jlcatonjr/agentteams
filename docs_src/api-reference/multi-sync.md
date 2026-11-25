@@ -52,7 +52,8 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
 ## Public constants
 
 - `CONFLICT_LOG_SUBPATH` (`".agentteams/sync-conflicts.log.csv"`): the durable, append-only,
-  human-reviewable conflict log.
+  human-reviewable conflict log. A dry run writes nothing to it; `--sync --dry-run` instead prints the first 50
+  conflicts it would resolve (`framework agent field: classification -> resolution`) and how many more.
 
 ## Public types
 
@@ -90,7 +91,8 @@ dry `--sync` keeps the hub in memory between frameworks, so it reports what a re
 Bootstrap the pinned sync: export the pin framework to canonical, materialize the hub, project
 to every framework in the set, and record all baselines plus the change-detection anchor.
 Writes `.agentteams/pin.json`. Raises `ValueError` for an unregistered pin or a pin outside the
-sync set.
+sync set, and, when a hub already exists, for a pin whose instruction file is missing while the hub has fences
+(a re-init would otherwise empty the hub's instruction content).
 
 ### `run_sync`
 

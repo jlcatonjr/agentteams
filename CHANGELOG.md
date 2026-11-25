@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (pinned sync: a dry run lists its conflicts; a re-init keeps the hub; `agent_team` roster check)
+
+- **Dry run:** `--sync --dry-run` printed `N conflict(s) resolved to the pin — logged to
+  .agentteams/sync-conflicts.log.csv`, but a dry run writes no log. It now prints `N conflict(s) would be resolved
+  to the pin (a dry run logs nothing)` and lists the first 50, one per line, so they can be reviewed before they
+  apply.
+- **Re-init:** `--sync-init` over an existing hub, with the pin's instruction file missing, emptied the hub's
+  instruction content. It is now refused with the existing "the pin (…) has no deployed instruction file;
+  restore it …" message, and nothing is written. A first `--sync-init` with no instruction file still works.
+- **Roster check:** a sync pass reports when the hub's `agent_team` fence lists agents the roster lacks or omits
+  ones it has (`sync_hub_refresh.agent_team_roster_mismatch`). It only reports; the fence is not rewritten.
+
 ### fixed (`--sync` keeps a pointer instruction file a pointer; #461)
 
 - **Fixed:** a deliberately short instruction file (for example a root `AGENTS.md` holding only a goose bridge fence)

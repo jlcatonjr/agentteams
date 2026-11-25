@@ -26,6 +26,9 @@ import argparse
 import sys
 from pathlib import Path
 
+#: How many conflicts a dry ``--sync`` prints (it writes no conflict log).
+_DRY_RUN_CONFLICTS_SHOWN = 50
+
 
 def add_sync_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the multi-framework pinned-sync flags on the main parser.
@@ -170,7 +173,15 @@ def run_sync_cli(args: argparse.Namespace) -> int:
     if result.changed_frameworks:
         print(f"  changed:   {', '.join(result.changed_frameworks)}")
         print(f"  projected: {', '.join(result.projected_frameworks)}")
-    if result.conflicts:
+    if result.conflicts and result.dry_run:
+        # A dry run writes no log (row 600), so the conflicts are listed here for review before they apply.
+        print(f"  {len(result.conflicts)} conflict(s) would be resolved to the pin (a dry run logs nothing); "
+              f"first {_DRY_RUN_CONFLICTS_SHOWN}:")
+        for c in result.conflicts[:_DRY_RUN_CONFLICTS_SHOWN]:
+            print(f"    {c.framework} {c.agent} {c.field_name}: {c.classification} -> {c.resolution}")
+        if len(result.conflicts) > _DRY_RUN_CONFLICTS_SHOWN:
+            print(f"    … and {len(result.conflicts) - _DRY_RUN_CONFLICTS_SHOWN} more")
+    elif result.conflicts:
         print(
             f"  {len(result.conflicts)} conflict(s) resolved to the pin — "
             f"logged to {CONFLICT_LOG_SUBPATH} for review."

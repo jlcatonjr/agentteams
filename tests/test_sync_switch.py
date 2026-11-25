@@ -91,3 +91,27 @@ def test_frameworks_flag_ignores_blank_entries_and_whitespace(tmp_path, capsys):
     out = capsys.readouterr().out
     assert code == 0
     assert "projected to: copilot-vscode, claude" in out
+
+
+# --- bl48-29c row 600: a dry run lists its conflicts and claims no log write --------------------------------
+
+
+def _team_with_a_removed_agent(root: Path) -> None:
+    from tests.test_sync_low_severity import _PIN, _commit, _team
+    _team(root, ("orchestrator", "helper", "writer"))
+    (root / _PIN / "writer.agent.md").unlink()
+    _commit(root)
+
+
+def test_dry_run_lists_conflicts_and_claims_no_log(tmp_path, capsys):
+    from agentteams.multi_sync import CONFLICT_LOG_SUBPATH
+    _team_with_a_removed_agent(tmp_path)
+    assert main(["--sync", "--dry-run", "--project", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "logged to" not in out and not (tmp_path / CONFLICT_LOG_SUBPATH).exists()
+    assert "conflict(s) would be resolved to the pin (a dry run logs nothing); first 50:" in out
+    assert "    claude writer __agent__: " in out and "-> removed (the pin removed this agent)" in out
+    # Negative control: the real run writes the log and says so.
+    assert main(["--sync", "--project", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert f"logged to {CONFLICT_LOG_SUBPATH}" in out and (tmp_path / CONFLICT_LOG_SUBPATH).exists()

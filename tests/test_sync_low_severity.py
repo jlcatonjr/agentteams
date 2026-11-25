@@ -303,3 +303,44 @@ def test_codex_s_own_import_keeps_its_write_policy_fence(tmp_path: Path) -> None
     _quiet(import_from_cai, cai, "codex", tmp_path / ".codex" / "agents", overwrite=True)
     text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "Codex policy." in text and text.count("AGENTTEAMS:BEGIN codex_write_policy ") == 1
+
+
+# --- bl48-29c rows 664 and 665 ---------------------------------------------------------------------------------
+
+
+def _agent_team(*slugs: str) -> str:
+    return _fence("agent_team", 1, "## Agent Team\n" + "".join(f"- `@{s}` — does {s} work\n" for s in slugs))
+
+
+def test_agent_team_fence_mismatch_is_reported(tmp_path: Path) -> None:
+    from agentteams.sync_hub_refresh import agent_team_roster_mismatch
+    hub = {"agents": [{"slug": "orchestrator"}, {"slug": "helper"}]}
+    assert agent_team_roster_mismatch("# T\n" + _agent_team("orchestrator", "ghost"), hub) == (
+        "agent_team fence lists agents the roster lacks (ghost) and omits roster agents (helper); regenerate the "
+        "pin natively (--update --merge)")
+    # Negative controls: a matching roster, and a file with no agent_team fence, say nothing.
+    assert agent_team_roster_mismatch("# T\n" + _agent_team("helper", "orchestrator"), hub) == ""
+    assert agent_team_roster_mismatch("# T\n", hub) == ""
+    # End to end: a sync pass whose pin lists an agent it does not have reports it.
+    _team(tmp_path, instructions="# Team\n\n" + _agent_team("orchestrator", "helper"))
+    (tmp_path / _PIN_INSTR).write_text("# Team\n\n" + _agent_team("orchestrator", "helper", "ghost"), encoding="utf-8")
+    _change_pin(tmp_path)
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert any("roster lacks (ghost)" in n for n in result.notices), result.notices
+
+
+def test_reinit_with_missing_pin_instructions_is_refused_and_keeps_the_hub(tmp_path: Path) -> None:
+    _team(tmp_path, instructions="# Team\n\n" + _fence("project_notes", 1, "Pin notes."))
+    team_file = tmp_path / _HUB / "team.cai.json"
+    before = team_file.read_bytes()
+    assert b"Pin notes." in before
+    (tmp_path / _PIN_INSTR).unlink()
+    with pytest.raises(ValueError, match=r"the pin \(copilot-vscode\) has no deployed instruction file; restore it"):
+        sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "claude"])
+    assert team_file.read_bytes() == before
+
+
+def test_first_init_without_pin_instructions_still_succeeds(tmp_path: Path) -> None:
+    _team(tmp_path)  # negative control: no hub yet, no pin instruction file
+    assert (tmp_path / _HUB / "team.cai.json").is_file()
