@@ -17,9 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.codex/agents/agent-updater.toml` on Codex). Copilot renders are unchanged.
 - **On upgrade:** `update_compatibility_source_pack` is now template-owned, so `--update --merge` replaces the old
   Copilot list under the default `preserve` policy instead of keeping it because paths disappeared. A hand edit
-  inside that fence is replaced too, with a shrink notice and the `.lost` sidecar. On a non-Copilot team the path
-  change itself raises that notice, so under `--shrink-policy=halt` the run stops once: review it, then re-run with
-  `--shrink-policy=allow`. The fence version is unchanged. Re-pins `agentteams/fences.py` in `references/enforcement-integrity.json`.
+  inside that fence is replaced too. Only an edit that trips a shrink criterion (a lost path or backticked token,
+  three or more lost list items, or a body cut by more than half) gets a shrink notice and a `.lost` sidecar; an
+  edit that drops none of those is replaced with no notice and no sidecar. On a non-Copilot team the path change
+  itself raises that notice, so under `--shrink-policy=halt` the run stops once: review it, then re-run with
+  `--shrink-policy=allow`. The fence version is unchanged. Re-pins `agentteams/fences.py` in
+  `references/enforcement-integrity.json`.
 - **Test:** `tests/test_canonical_files_per_framework.py` renders a team on every registered framework and checks
   that each listed file exists in it.
 
