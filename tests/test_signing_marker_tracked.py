@@ -449,3 +449,13 @@ def test_outside_git_stays_silent(tmp_path, capsys):
     (agents / "references" / "security-approvers.txt").write_text("security\n")
     assert not signing_switch.is_governed(agents)   # no .git anywhere: not a refusal
     assert capsys.readouterr().err == ""
+
+
+@needs_git
+def test_an_unreadable_decisions_log_counts_as_governance_evidence(tmp_path, capsys):
+    agents = _refused_repo(tmp_path)
+    (agents / "references" / "security-decisions.log.csv").write_text(   # a row wider than its header
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        "2026-11-01,security,prune,PASS,,,extra,cells\n")
+    assert signing_switch.is_governed(agents)
+    assert "fail-closed" in capsys.readouterr().err

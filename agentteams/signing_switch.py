@@ -302,9 +302,11 @@ def _project_root(agents_dir: Path) -> Path:
 
 
 def _has_governance_evidence(agents_dir: Path) -> bool:
-    """Whether ``agents_dir`` holds a security-approvers roster or a signed decision row (ruling R-19).
+    """Whether ``agents_dir`` holds a security-approvers roster or a signed decision row.
 
-    An unreadable or malformed decisions log counts as evidence (fail closed).
+    An unreadable or malformed decisions log counts as evidence (fail closed). ``_read_decision_rows`` reports
+    those as RuntimeError; an OSError from its shared lock is caught too, because an escape would reach
+    :func:`_marker_tracked`'s ``except OSError`` and read as "not governed".
     """
     from agentteams.cli.decision_log import _read_decision_rows
 
@@ -312,14 +314,14 @@ def _has_governance_evidence(agents_dir: Path) -> bool:
         return True
     try:
         read = _read_decision_rows(agents_dir)
-    except (RuntimeError, OSError, ValueError):
+    except (RuntimeError, OSError):
         return True
     return read is not None and any((row.get("signature") or "").strip() for row in read[0])
 
 
 def _git_refused(agents_dir: Path, stderr: str) -> bool:
     """The answer when ``git rev-parse`` failed: True (fail closed) only where git refused a repository that is there
-    (a ``.git`` entry at the project root or above) and the team holds governance evidence (ruling R-19).
+    (a ``.git`` entry at the project root or above) and the team holds governance evidence.
 
     A refusal without evidence keeps the existence test alone, with a warning; no ``.git`` at all is silent.
     """
