@@ -42,8 +42,10 @@ elif mode == "exit7":
 elif mode == "flood":
     while True:
         out.write(b"x" * 99 + b"\\n")
-elif mode == "bigline":
+elif mode == "bigline":  # then block: only the host's frame-cap kill may end it (issue #611)
     out.write(b"y" * 300000 + b"\\n"); out.flush()
+    while True:
+        time.sleep(0.05)
 elif mode == "spin":
     while True:
         time.sleep(0.05)
@@ -187,6 +189,7 @@ def test_echo_round_trip_and_the_start_record(tmp_path: Path) -> None:
 def test_the_guest_exit_code_is_not_the_entry_points(tmp_path: Path) -> None:
     s = Session(tmp_path, ["exit7"])
     assert s.code == S.EXIT_OK and s.end["outcome"] == "exit" and s.end["guest_exit_code"] == 7
+    assert s.end["guest_signal"] is None   # a guest that ends itself is never reported as killed
 
 
 def test_trailing_args_reach_the_guest_unchanged(tmp_path: Path) -> None:

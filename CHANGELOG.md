@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runner.heartbeat.tmp` name without the runner's lock. The runner never writes that name; a snapshot could catch
   the simulator mid-beat (#502). A new test shows a planted `runner.heartbeat.tmp` is still an undeclared write: the
   exemption is the exact heartbeat path. No product change.
+- The over-cap frame test's fake guest blocks after its oversized line, so only the session's frame-cap kill can end
+  it; it used to exit by itself and sometimes beat the kill (#611). The exit-code test now also asserts that a guest
+  which ends itself carries no signal. No product change.
 
 ### added (`plan_steps --set` marks a plan step with one command)
 
