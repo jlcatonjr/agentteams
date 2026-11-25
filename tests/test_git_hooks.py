@@ -469,8 +469,17 @@ def test_auto_install_skips_global_hookspath(tmp_path, monkeypatch, capsys):
 # End-to-end: the installed hook fires on a real commit
 # ---------------------------------------------------------------------------
 
+def _no_agent_markers(monkeypatch) -> None:
+    """Commit as a terminal would: the suite itself may run inside an agent host that sets these (bl48-35)."""
+    from agentteams.update_lock import INVOKER_ENV_MARKERS
+
+    for name, _ in INVOKER_ENV_MARKERS:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.mark.skipif(not _has_git(), reason="git not available")
-def test_installed_hook_refreshes_and_stages_on_commit(tmp_path):
+def test_installed_hook_refreshes_and_stages_on_commit(tmp_path, monkeypatch):
+    _no_agent_markers(monkeypatch)
     repo = _make_repo(tmp_path)
     gh.install_pre_commit_hook(
         repo, agentteams_path=str(Path(_graph.__file__).resolve().parent.parent)
@@ -589,3 +598,72 @@ def test_env_guard_catches_non_ascii_path(tmp_path):
     _git(repo, "config", "core.quotePath", "true")
     result = _commit(repo, "café/.env")
     assert result.returncode != 0 and "refusing to commit env file" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# bl48-35: an agent session's commit does not sweep working-tree maps into it
+# ---------------------------------------------------------------------------
+
+def _agent_pkg_repo(tmp_path: Path, monkeypatch) -> Path:
+    _no_agent_markers(monkeypatch)
+    repo = _make_pkg_repo(tmp_path)
+    _git(repo, "config", "user.email", "t@t.co")
+    _git(repo, "config", "user.name", "t")
+    gh.install_pre_commit_hook(repo, agentteams_path=str(Path(gh.__file__).resolve().parent.parent))
+    return repo
+
+
+def _commit_py(repo: Path) -> subprocess.CompletedProcess:
+    _git(repo, "add", "mypkg")
+    return _git(repo, "commit", "-q", "-m", "add pkg")
+
+
+_MAP = "references/architecture-graph.md"
+_SKIP_LINE = "map refresh skipped in an agent session (claude-code)"
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_hook_skips_map_staging_under_an_agent_marker(tmp_path, monkeypatch):
+    repo = _agent_pkg_repo(tmp_path, monkeypatch)
+    monkeypatch.setenv("CLAUDECODE", "1")
+    result = _commit_py(repo)
+    assert result.returncode == 0, result.stderr
+    assert _SKIP_LINE in result.stderr
+    assert _git(repo, "ls-files", _MAP).stdout.strip() == ""
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_hook_stages_maps_without_a_marker(tmp_path, monkeypatch):
+    # Negative control: a terminal commit still stages the map (the behaviour before bl48-35).
+    repo = _agent_pkg_repo(tmp_path, monkeypatch)
+    result = _commit_py(repo)
+    assert result.returncode == 0, result.stderr
+    assert "map refresh skipped" not in result.stderr
+    assert _git(repo, "ls-files", _MAP).stdout.strip() == _MAP
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_hook_agent_refresh_opt_in(tmp_path, monkeypatch):
+    repo = _agent_pkg_repo(tmp_path, monkeypatch)
+    _git(repo, "config", "agentteams.hookAgentRefresh", "true")
+    monkeypatch.setenv("GOOSE_SESSION_ID", "x")
+    result = _commit_py(repo)
+    assert result.returncode == 0, result.stderr
+    assert "map refresh skipped" not in result.stderr
+    assert _git(repo, "ls-files", _MAP).stdout.strip() == _MAP
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_env_guard_still_blocks_in_an_agent_session(tmp_path, monkeypatch):
+    repo, _ = _guarded_repo(tmp_path)
+    monkeypatch.setenv("CLAUDECODE", "1")
+    result = _commit(repo, ".env")
+    assert result.returncode != 0 and "refusing to commit env file" in result.stderr
+
+
+def test_marker_list_matches_update_lock():
+    from agentteams.update_lock import INVOKER_ENV_MARKERS
+
+    block = gh._render_hook_block("/x")
+    for name, invoker in INVOKER_ENV_MARKERS:
+        assert f'"${{{name}:-}}"' in block and f"_at_agent={invoker}" in block, name

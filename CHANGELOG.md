@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (the pre-commit hook no longer stages working-tree maps into an agent session's commit)
+
+- The hook rebuilt `references/pipeline-graph.*` and `references/architecture-graph.*` from the working tree and
+  staged them, so an agent's one-file commit also carried map changes caused by other sessions' uncommitted edits.
+- When one of the agent-host variables in `update_lock.INVOKER_ENV_MARKERS` is set (`CLAUDECODE`,
+  `CLAUDE_CODE_ENTRYPOINT`, `GOOSE_SESSION_ID`, `GOOSE_TERMINAL`, `CODEX_SANDBOX`, `CODEX_SANDBOX_NETWORK_DISABLED`),
+  the hook now skips both map refreshes and prints one line saying how to refresh them. `git config
+  agentteams.hookAgentRefresh true` keeps the old behaviour. The env-file guard, the code-index warm-up and the API
+  impact check, strict mode included, are unchanged.
+- The markers are advisory: a shell that exports one also skips the refresh, which loses a convenience, not a gate.
+- Existing hooks change only when reinstalled (`agentteams --install-git-hooks`, or an `--update` that reinstalls).
+
 ### security (a git hook installed into a tracked hooks dir no longer carries this machine's paths)
 
 - The pre-commit and pre-push hooks had the agentteams checkout path and the installing interpreter written into

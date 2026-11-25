@@ -419,6 +419,10 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
     A refresh failure never aborts a commit. The only way the block fails one is the API-impact
     step's strict mode (``git config agentteams.apiDocsStrict true``).
 
+    In an agent session (a variable in ``update_lock.INVOKER_ENV_MARKERS`` is set) the two map refreshes are skipped
+    with one stderr line unless ``git config agentteams.hookAgentRefresh`` is true: they are built from the working
+    tree and would carry other sessions' uncommitted edits into the commit (bl48-35).
+
     The interpreter is resolved by :func:`agentteams._hook_python.render_resolver` (#447 a, c): the locked
     installation in a release-locked repository, else ``recorded_python`` or a 3.11+ ``python3.x`` on PATH. When none
     qualifies, every step is skipped and the skip is appended to a marker in the git directory, which
@@ -427,8 +431,14 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
     config at run time instead.
     """
     from agentteams._hook_python import render_resolver
+    from agentteams.update_lock import INVOKER_ENV_MARKERS
 
     run = "_at_run"
+    agent_re = "(^|/)\\.(github|claude)/agents/[^/]*\\.agent\\.md$"
+    # The agent-host markers, from the one list update_lock keeps (advisory: an environment can be forged).
+    agent_check = '        _at_agent=""\n' + "".join(
+        f'        {"if" if i == 0 else "elif"} [ -n "${{{name}:-}}" ]; then _at_agent={invoker}\n'
+        for i, (name, invoker) in enumerate(INVOKER_ENV_MARKERS)) + "        fi\n"
     code_index_clause = ""
     if code_index_hook:
         code_index_clause = (
@@ -464,18 +474,27 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
         '            if [ -n "$_at_mark" ]; then printf \'%s\\t%s\\n\' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$_at_why" >> "$_at_mark" 2>/dev/null || true; fi\n'
         '        fi\n'
         '    elif [ -n "$_at_root" ]; then\n'
-        "        if printf '%s\\n' \"$_staged\" | grep -qE '(^|/)\\.(github|claude)/agents/[^/]*\\.agent\\.md$'; then\n"
-        f'            if {run} -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1; then\n'
-        '                git -C "$_at_root" add references/pipeline-graph.md references/pipeline-graph.svg references/pipeline-handoffs.svg >/dev/null 2>&1 || true\n'
-        "            else\n"
-        '                echo "agentteams: pipeline-graph refresh failed; references/pipeline-graph.md may be stale (run: agentteams --refresh-graph)" >&2\n'
+        "        # bl48-35: in an agent session the maps, built from the working tree, would carry other sessions'\n"
+        "        # uncommitted edits into this commit; skip them unless git config agentteams.hookAgentRefresh is true.\n"
+        f"{agent_check}"
+        '        if [ -n "$_at_agent" ] && [ "$(git config --bool agentteams.hookAgentRefresh 2>/dev/null)" != true ]; then\n'
+        f"            if printf '%s\\n' \"$_staged\" | grep -qE '{agent_re}|\\.py$'; then\n"
+        '                echo "agentteams: map refresh skipped in an agent session ($_at_agent); run agentteams --refresh-graph / --refresh-architecture, or set git config agentteams.hookAgentRefresh true" >&2\n'
         "            fi\n"
-        "        fi\n"
-        "        if printf '%s\\n' \"$_staged\" | grep -qE '\\.py$'; then\n"
-        f'            if {run} -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1; then\n'
-        '                git -C "$_at_root" add references/architecture-graph.md references/architecture-graph.svg references/architecture-modules.svg >/dev/null 2>&1 || true\n'
-        "            else\n"
-        '                echo "agentteams: architecture-graph refresh failed; references/architecture-graph.md may be stale (run: agentteams --refresh-architecture)" >&2\n'
+        "        else\n"
+        f"            if printf '%s\\n' \"$_staged\" | grep -qE '{agent_re}'; then\n"
+        f'                if {run} -m agentteams.git_hooks --refresh --repo "$_at_root" >/dev/null 2>&1; then\n'
+        '                    git -C "$_at_root" add references/pipeline-graph.md references/pipeline-graph.svg references/pipeline-handoffs.svg >/dev/null 2>&1 || true\n'
+        "                else\n"
+        '                    echo "agentteams: pipeline-graph refresh failed; references/pipeline-graph.md may be stale (run: agentteams --refresh-graph)" >&2\n'
+        "                fi\n"
+        "            fi\n"
+        "            if printf '%s\\n' \"$_staged\" | grep -qE '\\.py$'; then\n"
+        f'                if {run} -m agentteams.git_hooks --refresh-architecture --repo "$_at_root" >/dev/null 2>&1; then\n'
+        '                    git -C "$_at_root" add references/architecture-graph.md references/architecture-graph.svg references/architecture-modules.svg >/dev/null 2>&1 || true\n'
+        "                else\n"
+        '                    echo "agentteams: architecture-graph refresh failed; references/architecture-graph.md may be stale (run: agentteams --refresh-architecture)" >&2\n'
+        "                fi\n"
         "            fi\n"
         "        fi\n"
         f"{code_index_clause}"

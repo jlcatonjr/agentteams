@@ -19,6 +19,11 @@ Two maps are refreshed, each under its own guard, plus an optional cache warm-up
 - (opt-in via `--code-index-hook`) script/dependency files staged → warm the [code & API index cache](code-index.md) (`references/code-index/`, gitignored — never staged) via `refresh_code_index()`
 - anything staged (deletions included) → `python -m agentteams.api_impact --pre-commit --strict-capable` ([`api-impact`](api-impact.md)): a one-line summary of the staged API impact, a line for each module whose API page needs attention, and in the agentteams repository with `git config agentteams.regenerateMan true` a regenerated, staged `agentteams.1`. The hook captures the step's exit code (`|| _at_api=$?`, safe under `set -e`). Exit 3 fails the commit, which happens only when the operator has opted in with `git config agentteams.apiDocsStrict true` ([strict mode](api-impact.md#strict-mode)); any other non-zero exit is ignored.
 
+In an agent session (a variable in `update_lock.INVOKER_ENV_MARKERS` is set) the two map refreshes are skipped with
+one stderr line, unless `git config --bool agentteams.hookAgentRefresh` is `true`: the maps are built from the working
+tree, so other sessions' uncommitted edits would land in the commit. The env guard, the warm-up and the API-impact
+step run as usual. The markers are advisory (an environment can be forged); skipping loses a convenience, not a gate.
+
 **Interpreter.** The block resolves its own Python (`agentteams._hook_python`, #447):
 
 - **Release-locked repository** (the root `toolchain.lock` has an `agentteams=` or `agentteams.tag=` key; failing closed like [`fleet`](fleet.md) release locks, also a `toolchain.lock` that is not a readable regular file or has a line without `=`): the locked installation, `<root>/.venv/bin/python`, run with `-I`. It must import `agentteams` on Python 3.11+, and `.venv` must be untracked. Otherwise the hook skips; it never falls back to the agentteams checkout, which would run unreleased code in a repository that pins a release.

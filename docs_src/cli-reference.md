@@ -668,6 +668,12 @@ Standalone: install (or sentinel-merge) the pre-commit hook that refreshes
 Idempotent, and it preserves any pre-existing hook body outside its sentinel markers. Target
 repo resolved from `--output` / `--project`, defaulting to the current directory.
 
+In an agent session (one of the agent-host variables `update_lock.INVOKER_ENV_MARKERS` names, such as `CLAUDECODE`
+or `GOOSE_SESSION_ID`, is set) the hook does not refresh or stage the two maps, because they are built from the
+working tree and would carry other sessions' uncommitted edits into the commit. It prints one line instead. Set
+`git config agentteams.hookAgentRefresh true` to keep the refresh there. The env-file guard and the API impact check
+run as usual. Hooks installed earlier change only when reinstalled.
+
 ### `--no-git-hooks`
 
 Opt **out** of the default behaviour where a successful generate or update auto-installs that
