@@ -795,7 +795,7 @@ def test_scan_does_not_set_primary_output_dir_to_src(tmp_path):
     assert result.get("primary_output_dir") is None
 
 
-# --- bl48-31: scratch and backup trees are not read ---------------------------------------------------
+# --- scratch and backup trees are not read ---------------------------------------------------
 
 
 def test_manifests_under_tmp_and_backups_are_not_read(tmp_path):
