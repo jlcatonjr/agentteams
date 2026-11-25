@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (known limitation: convert and interop emit no OS sandbox boundary)
+
+- `docs_src/known-limitations.md` now says that `--convert-from` and `--interop-from` convert agent files only, so
+  a team's OS sandbox launcher, session sandbox settings and protected-path rules do not reach the target. Render
+  on the target from the brief, or use multi-sync, which carries the brief's privilege settings in
+  `team.cai.json`.
+
 ### docs (drift sweep: `sign_decision` steps, a duplicate heading, the probe-baseline note, the stdlib rule, the signing-migration hint)
 
 - `docs_src/api-reference/cli.md`: the `sign_decision` step list now matches the code's order, including the

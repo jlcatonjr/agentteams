@@ -566,6 +566,21 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
 - **Workaround:** re-render on the target framework from the brief (`--description … --framework <fw>`).
 - **Tracking:** WASM sandbox plan P13 (open items).
 
+### Convert and interop emit no OS sandbox boundary
+
+- **What:** `--convert-from` and `--interop-from` convert agent files only. They build the target from a stub
+  manifest (the project name and the files written), so the brief's OS boundary does not reach it: no OS sandbox
+  launcher (`sandbox/confine-run.sh`), no session sandbox settings, no protected-path or egress rules.
+  (`--interop-from --description` carries only `privilege_profile`, and only to codex, for its role-gate
+  instructions.) A team that had an OS boundary on its source framework has none on the target until it is
+  rendered there.
+- **Who:** teams with `privilege_profile`, `os_sandbox` or `workspace_write_roots` set that move between
+  frameworks with a one-shot conversion.
+- **Workaround:** render on the target framework from the brief (`--description … --framework <fw>`), or use
+  multi-sync, which carries the brief's privilege settings in `team.cai.json` (`privilege`) and re-emits the
+  sandbox files on each projection.
+- **Tracking:** remediation log row 266 (the multi-sync path is fixed; this one-shot path is by design).
+
 ### Several standing sandbox exceptions can hit the aggregate cap
 
 - **What:** each standing relaxation (OS off, a grant widening, a native-exec keep, a runner switch) is one active
