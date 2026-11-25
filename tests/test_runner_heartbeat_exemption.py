@@ -20,6 +20,7 @@ import pytest
 from agentteams import confinement as C
 from agentteams import proposal_runner
 from agentteams import proposals as P
+from agentteams import runner_mcp
 
 PY = sys.executable
 PY_DIRS = sorted({os.path.dirname(os.path.dirname(os.path.realpath(PY))), os.path.dirname(PY)})
@@ -65,10 +66,11 @@ def _beating(root):
     could catch it mid-beat and report it (issue #502).
     """
     (root / ".agentteams").mkdir(exist_ok=True)
-    # A rendered team ships this ignore file (runner_mcp.install_files), so the status beat stays out of `git status`.
-    status = root / proposal_runner.STATUS_REL
-    status.mkdir(exist_ok=True)
-    (status / ".gitignore").write_text("*\n!.gitignore\n")
+    # A rendered team ships the status tree's ignore file, so the status beat stays out of `git status`.
+    for rel, content in runner_mcp.install_files({"write_policy": "orchestrator-only"}):
+        dest = root / rel.removeprefix("../../")
+        dest.parent.mkdir(exist_ok=True)
+        dest.write_text(content)
     runner = proposal_runner.Runner.__new__(proposal_runner.Runner)
     runner.root = root
     runner._heartbeat()
