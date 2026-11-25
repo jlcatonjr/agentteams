@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--sync` sees instruction-file edits; it says when the pin's text outside fences does not travel; #462)
+
+- **Fixed:** `--sync` decided what changed from the agents directories only, so a commit that edited or deleted a
+  peer's instruction file (`.claude/CLAUDE.md`, `.github/copilot-instructions.md`, a root `AGENTS.md`) was "no
+  framework changed since last sync" and sat unreconciled. A change to a framework's instruction file now counts
+  for that framework; a root `AGENTS.md` counts for every framework that writes it, and a deleted one is rebuilt.
+- **New notice:** the hub keeps its own text outside fences (from `--sync-init`), and a missing peer instruction
+  file is rebuilt with it. When the pin's outside-fence text differs from the hub's, a sync pass now says so.
+  Nothing is moved: Project-Specific Rules travel by rules projection.
+- **Internal:** the instruction-file name and placement rule moved from `interop` to
+  `interop_helpers.instructions_path` / `instructions_target_name`, so import and change detection share it.
+
 ### fixed (pinned sync: a dry run lists its conflicts; a re-init keeps the hub; `agent_team` roster check)
 
 - **Dry run:** `--sync --dry-run` printed `N conflict(s) resolved to the pin — logged to

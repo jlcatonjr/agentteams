@@ -44,6 +44,8 @@ __all__ = [
 
 #: Reads the fence id and both versions back out of a ``keep_newer_fences`` "kept" notice.
 _KEPT_RE = re.compile(r"'(?P<sid>[a-z][a-z0-9_]*)' at v=(?P<peer>\d+) \(incoming v=(?P<pin>\d+)")
+#: A whole fenced region, for comparing the text outside fences.
+_FENCED_BLOCK_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN (?P<sid>\S+)[^>]*-->.*?<!-- AGENTTEAMS:END (?P=sid) -->", re.DOTALL)
 #: An agent handle in the ``agent_team`` fence: `` `@slug` ``.
 _HANDLE_RE = re.compile(r"`@([A-Za-z0-9][A-Za-z0-9_.-]*)`")
 
@@ -314,8 +316,13 @@ def refresh_hub_for_projection(root: Path, pin_doc: dict[str, Any], hub: dict[st
         return
     notices.extend(result.notices)
     notices.extend(_peer_fences_replaced(root, pin_doc, hub))
-    if mismatch := agent_team_roster_mismatch(str(hub.get("instructions_binding", {}).get("content", "")), hub):
+    hub_text = str(hub.get("instructions_binding", {}).get("content", ""))
+    if mismatch := agent_team_roster_mismatch(hub_text, hub):
         notices.append(mismatch)
+    if _outside_fences(_deployed_instructions(root, pin_doc["pinned_framework"])) != _outside_fences(hub_text):
+        notices.append("the pin's text outside AGENTTEAMS fences differs from the hub's; a peer instruction file "
+                       "that is missing gets the hub's (from --sync-init), not the pin's. Copy Project-Specific "
+                       "Rules across with rules projection, or re-run --sync-init")
     if not result.changed:
         return
     moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
@@ -347,6 +354,11 @@ def _peer_fences_replaced(root: Path, pin_doc: dict[str, Any], hub: dict[str, An
             out.append(f"{fw}: instruction fences {', '.join(differ)} differ from the pin's and get the pin's text "
                        f"(the projection backup keeps {fw}'s copy)")
     return out
+
+
+def _outside_fences(text: str) -> str:
+    """*text* without its fenced regions, whitespace collapsed (so blank-line drift is not a difference)."""
+    return " ".join(_FENCED_BLOCK_RE.sub(" ", text).split())
 
 
 def _deployed_instructions(root: Path, framework: str) -> str:

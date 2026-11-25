@@ -344,3 +344,65 @@ def test_reinit_with_missing_pin_instructions_is_refused_and_keeps_the_hub(tmp_p
 def test_first_init_without_pin_instructions_still_succeeds(tmp_path: Path) -> None:
     _team(tmp_path)  # negative control: no hub yet, no pin instruction file
     assert (tmp_path / _HUB / "team.cai.json").is_file()
+
+
+# --- bl48-29b: instruction-file edits count as changes; pin text outside fences ------------------------------
+
+
+def _synced_team_with_instructions(root: Path) -> None:
+    _team(root, instructions="# Team\n\nPin preamble.\n\n" + _fence("project_notes", 1, "Pin notes."))
+    assert (root / _PEER_INSTR).is_file()
+
+
+def test_peer_instruction_edit_counts_as_a_change(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    peer = tmp_path / _PEER_INSTR
+    peer.write_text(peer.read_text(encoding="utf-8").replace("Pin notes.", "Peer edit."), encoding="utf-8")
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert "claude" in result.changed_frameworks
+    assert "Pin notes." in peer.read_text(encoding="utf-8")
+
+
+def test_peer_instruction_deletion_counts_as_a_change(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    (tmp_path / _PEER_INSTR).unlink()
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert "claude" in result.changed_frameworks
+    assert "Pin notes." in (tmp_path / _PEER_INSTR).read_text(encoding="utf-8")
+
+
+def test_an_unrelated_commit_is_still_no_change(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    (tmp_path / "README.md").write_text("readme\n", encoding="utf-8")
+    _commit(tmp_path)
+    assert _quiet(run_sync, tmp_path).note == "no framework changed since last sync"
+
+
+def test_rebuilt_peer_warns_when_pin_text_outside_fences_differs(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    pin = tmp_path / _PIN_INSTR
+    pin.write_text(pin.read_text(encoding="utf-8").replace("Pin preamble.", "A newer pin preamble."),
+                   encoding="utf-8")
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert any("the pin's text outside AGENTTEAMS fences differs from the hub's" in n for n in result.notices)
+    # Negative control: identical outside-fence text gives no such notice.
+    _change_pin(tmp_path)
+    pin.write_text(pin.read_text(encoding="utf-8").replace("A newer pin preamble.", "Pin preamble."),
+                   encoding="utf-8")
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert not any("outside AGENTTEAMS fences differs" in n for n in result.notices), result.notices
+
+
+def test_instructions_path_matches_import_placement(tmp_path: Path) -> None:
+    from agentteams.frameworks.registry import FRAMEWORK_IDS, agents_dir_for
+    from agentteams.interop_helpers import instructions_path
+    expected = {"copilot-vscode": ".github/copilot-instructions.md", "copilot-cli": ".github/copilot-instructions.md",
+                "claude": ".claude/CLAUDE.md", "goose": "AGENTS.md", "agents-md": "AGENTS.md", "codex": "AGENTS.md",
+                "grok": "AGENTS.md", "wasm": ".agentteams-wasm/copilot-instructions.md"}
+    assert set(expected) == set(FRAMEWORK_IDS)
+    for fw in FRAMEWORK_IDS:
+        assert instructions_path(agents_dir_for(fw, tmp_path), fw) == tmp_path / expected[fw], fw

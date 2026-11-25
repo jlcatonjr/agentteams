@@ -44,7 +44,9 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
   sandbox files are written only after every framework's team marker exists, so each framework's
   sibling denies include a team created in the same pass.
 - **Change detection is commit-to-commit** (operator decision): a framework is "changed" when a
-  path under its agents directory moved between the last synced commit and HEAD. A framework's
+  path under its agents directory, or its instruction file (`interop_helpers.instructions_path`: edited, added or
+  deleted; a shared root `AGENTS.md` marks every framework that writes it), moved between the last synced commit
+  and HEAD (#462). A framework's
   own projected-but-uncommitted output therefore never re-triggers a sync.
 
 ---

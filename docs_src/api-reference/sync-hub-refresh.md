@@ -12,6 +12,12 @@ a projection lowering a fence, but cannot catch stale same-version values (`src/
 `run_sync` therefore calls `refresh_hub_binding` before every projection, and
 `--sync-refresh-instructions` runs the same refresh on its own.
 
+Only fences move into the hub: the hub keeps its own text outside fences, which dates from `--sync-init`, and a
+peer instruction file that is missing is rebuilt with that text, not the pin's. When the pin's outside-fence text
+differs from the hub's (fenced regions removed, whitespace collapsed), `refresh_hub_for_projection` says so in a
+notice. Project-Specific Rules travel by [`rules_projection`](rules-projection.md); re-running `--sync-init`
+re-seeds the rest.
+
 ## Public types
 
 - `HubRefreshResult`: `pin`, `refreshed` (fences replaced from the pin), `added` (fences only the

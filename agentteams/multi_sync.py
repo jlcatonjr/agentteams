@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import shlex
 import sys
 import tempfile
@@ -51,6 +52,7 @@ from agentteams.frameworks._sandbox_emit import (
 from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS, agents_dir_for
 from agentteams.interop import export_to_cai, import_from_cai
+from agentteams.interop_helpers import instructions_path
 from agentteams.interop_grant_check import ProjectionPolicy
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
@@ -483,30 +485,22 @@ def _changed_paths_since(root: Path, since: str) -> list[str] | None:
 def _detect_changed_frameworks(
     root: Path, frameworks: list[str], since: str
 ) -> list[str]:
-    """Map changed paths to the frameworks whose agents directories moved."""
+    """Map changed paths to the frameworks whose agents directory or instruction file moved (#462)."""
     changed_paths = _changed_paths_since(root, since)
     if changed_paths is None:
         return list(frameworks)  # conservative: can't tell → sync all
     root = Path(root)
-    rels: dict[str, str] = {}
-    for fw in frameworks:
-        try:
-            rel = framework_agents_dir(root, fw).resolve().relative_to(root.resolve())
-            rels[fw] = str(rel)
-        except (ValueError, OSError):
-            rels[fw] = ""
     hit: list[str] = []
     for fw in frameworks:
-        rel = rels[fw]
-        prefix = "" if rel in ("", ".") else rel + "/"
-        for p in changed_paths:
-            if prefix and p.startswith(prefix):
-                hit.append(fw)
-                break
-            if not prefix:  # root-level agents dir: match top-level files
-                if "/" not in p:
-                    hit.append(fw)
-                    break
+        agents = framework_agents_dir(root, fw)
+        try:
+            rel = str(agents.resolve().relative_to(root.resolve()))
+        except (ValueError, OSError):
+            rel = ""
+        prefix = "" if rel in ("", ".") else rel + "/"  # "": a root-level agents dir matches top-level files
+        inst = os.path.relpath(instructions_path(agents, fw), root).replace(os.sep, "/")  # edit, add or delete
+        if any(p == inst or (p.startswith(prefix) if prefix else "/" not in p) for p in changed_paths):
+            hit.append(fw)
     return hit
 
 

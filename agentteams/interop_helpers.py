@@ -569,6 +569,41 @@ def keep_newer_fences(rendered: str, existing: str) -> tuple[str, list[str]]:
     return rendered, notices
 
 
+def instructions_target_name(target_framework: str) -> str:
+    """Instructions filename a framework owns (F.2; moved from ``interop``).
+
+    Args:
+        target_framework: A registered framework id.
+
+    Returns:
+        ``CLAUDE.md`` for claude, ``AGENTS.md`` for agents-md, goose, codex and grok, else
+        ``copilot-instructions.md``.
+    """
+    if target_framework == "claude":
+        return "CLAUDE.md"
+    if target_framework in ("agents-md", "goose", "codex", "grok"):
+        return "AGENTS.md"
+    return "copilot-instructions.md"
+
+
+def instructions_path(agents_dir: Path, framework: str) -> Path:
+    """Where *framework* keeps its instruction file, given its agents directory (F.2).
+
+    goose, codex and grok keep ``AGENTS.md`` at the project root, two levels above their agents dir (e.g.
+    ``.goose/recipes``); every other framework keeps its file beside the agents dir. ``import_from_cai`` writes
+    there and ``multi_sync`` watches it for changes.
+
+    Args:
+        agents_dir: The framework's agents directory.
+        framework: A registered framework id.
+
+    Returns:
+        The instruction file's path.
+    """
+    base = agents_dir.parent.parent if framework in ("goose", "codex", "grok") else agents_dir.parent
+    return base / instructions_target_name(framework)
+
+
 def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, str]:
     """Fence-merge a projected instruction file into the one already on disk.
 
