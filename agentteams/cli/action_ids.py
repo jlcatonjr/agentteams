@@ -8,7 +8,9 @@ Two rules, deliberately different, because a false match means opposite things o
 * :func:`halt_names_action` decides which HALT rows **block** an action. A HALT also blocks every
   action whose id appears as a token run in the HALT's own id, so a HALT recorded as
   ``m6-overwrite-render-1a2fad6`` blocks ``overwrite`` (C-2: a HALT is not evaded by spelling). A
-  false positive only blocks, so this side errs wide (1.0 must-fix, mathAgents M6 finding).
+  false positive only blocks, so this side errs wide (1.0 must-fix, mathAgents M6 finding). A HALT on a family
+  id also blocks every id under it after a colon (``server-apply`` blocks ``server-apply:remove-path:...``;
+  #636). ``-``, ``_`` and ``.`` do not make a family here: ``branch`` does not block ``branch-delete``.
 
 A HALT whose id has no letter or digit names nothing, so neither rule can attribute it. It blocks
 **every** action (:func:`halt_has_no_id`), and is retracted by the row handle
@@ -81,8 +83,21 @@ def _tokens(text: str) -> list[str]:
     return [t for t in _TOKEN_SPLIT.split(_CAMEL.sub(" ", text.strip()).lower()) if t]
 
 
+def _colon_parent(halt_reviewed: str, action: str) -> bool:
+    """Whether *action* is the HALT's id plus ``:`` and more: a family HALT blocks its instances (#636).
+
+    Trailing colons on the HALT's id are ignored (``server-apply:`` is the ``server-apply`` family).
+    """
+    halt_norm = halt_reviewed.strip().lower().rstrip(":")
+    return bool(halt_norm) and action.strip().lower().startswith(halt_norm + ":")
+
+
 def halt_names_action(halt_reviewed: str, action: str) -> bool:
-    """Return True when a HALT row's id names *action*: a strict match, or *action* as a token run.
+    """Return True when a HALT row's id names *action*.
+
+    A strict match (:func:`action_matches`), *action* as a token run in the HALT's id, or *action* under the HALT's
+    id after a colon (``server-apply`` names ``server-apply:remove-path:<host>:<path>``; #636; no other
+    delimiter makes a family on this side).
 
     Args:
         halt_reviewed: The HALT row's ``action_reviewed`` (or ``decision``) id.
@@ -91,7 +106,7 @@ def halt_names_action(halt_reviewed: str, action: str) -> bool:
     Returns:
         Whether the HALT blocks *action*.
     """
-    if action_matches(halt_reviewed, action):
+    if action_matches(halt_reviewed, action) or _colon_parent(halt_reviewed, action):
         return True
     wanted, have = _tokens(action), _tokens(halt_reviewed)
     return bool(wanted) and any(have[i:i + len(wanted)] == wanted for i in range(len(have) - len(wanted) + 1))
@@ -216,6 +231,27 @@ def newly_blocking_halts(rows: list[dict[str, str]]) -> list[tuple[int, str, str
     return found
 
 
+def family_halts(rows: list[dict[str, str]]) -> list[tuple[int, str, str]]:
+    """List unretracted HALTs with a usable id: since 1.3.1 each also blocks every id under it after a colon (#636).
+
+    Consumer-defined ids are listed too: a HALT on ``deploy`` now blocks a consumer gate's ``deploy:prod``.
+
+    Args:
+        rows: The decisions-log rows, in file order.
+
+    Returns:
+        ``(1-based row number, HALT id, agentteams gate family or "")`` in row order; the family is the
+        :data:`GATE_ACTIONS` id the HALT's id equals or extends after a colon.
+    """
+    found: list[tuple[int, str, str]] = []
+    for index, reviewed in enumerate(_unretracted_halt_ids(rows)):
+        if reviewed and not halt_has_no_id(reviewed):
+            norm = reviewed.lower().rstrip(":")
+            family = next((g for g in GATE_ACTIONS if norm == g or norm.startswith(g + ":")), "")
+            found.append((index + 1, reviewed, family))
+    return found
+
+
 def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
     """Report lines for :func:`newly_blocking_halts` on a team's decisions log (empty when none).
 
@@ -224,7 +260,8 @@ def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
 
     Returns:
         Human-readable lines, each naming the row, the gate action it blocks and the retraction id. HALT rows
-        with no usable id come first, each with the row handle that retracts it.
+        with no usable id come first, each with the row handle that retracts it; then the token-rule rows; then
+        every unretracted HALT that now also blocks the ids under it after a colon (:func:`family_halts`).
     """
     # Local import: decision_log imports this module, so a top-level import would be a cycle.
     from agentteams.cli.decision_log import _read_decision_rows
@@ -236,8 +273,6 @@ def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
     rows = read[0] if read else []
     hits = newly_blocking_halts(rows)
     named = {n for n, _, _ in hits}
-    others = [(i + 1, rid) for i, rid in enumerate(_unretracted_halt_ids(rows))
-              if rid and not halt_has_no_id(rid) and i + 1 not in named]
     lines: list[str] = []
     idless = idless_open_halts(rows)
     if idless:
@@ -246,12 +281,16 @@ def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
                   f"action_reviewed is exactly '{handle}'" for n, handle in idless]
     if hits:
         lines.append(f"HALT rows that newly block an agentteams gate action under the 1.0 token rule ({len(hits)}):")
-        lines += [f"  row {n}: '{rid}' blocks '{act}'; if it no longer applies, retract it with a "
-                  f"HALT-RETRACTED row whose action_reviewed is exactly '{rid}'" for n, rid, act in hits]
-    if others:
-        lines.append(f"Other unretracted HALT rows ({len(others)}): each also blocks any action your own gates "
-                     "check (check_clearance) whose id appears as a token in it:")
-        lines += [f"  row {n}: '{rid}'" for n, rid in others]
+        lines += [f"  row {n}: '{rid}' blocks '{act}' (and every id under it, '{rid}:...'); if it no longer "
+                  f"applies, retract it with a HALT-RETRACTED row whose action_reviewed is exactly '{rid}'"
+                  for n, rid, act in hits]
+    families = [f for f in family_halts(rows) if f[0] not in named]   # each HALT is listed once
+    if families:
+        lines.append(f"Other unretracted HALT rows ({len(families)}): each blocks every id under it after a colon "
+                     "(since 1.3.1) and any id your own gates check (check_clearance) that appears as a token in it:")
+        lines += [f"  row {n}: '{rid}' now also blocks every id under it ('{rid}:...'), "
+                  + (f"in agentteams gate family '{fam}'" if fam else "including ids your own gates check")
+                  for n, rid, fam in families]
     return lines
 
 
@@ -294,6 +333,6 @@ def _unretracted_halt_ids(rows: list[dict[str, str]]) -> list[str]:
 
 
 __all__ = ["GATE_ACTIONS", "action_matches", "describe_newly_blocking_halts", "halt_blocks", "halt_display_id",
-           "halt_has_no_id",
+           "family_halts", "halt_has_no_id",
            "halt_names_action", "halt_retraction_id", "halt_row_handle", "idless_halt_note", "idless_open_halts",
            "newly_blocking_halts"]

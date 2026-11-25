@@ -134,6 +134,44 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
+### Governance reads check for symlinks by path, so a directory swapped mid-read is a race
+
+- **What:** the decision gate refuses a symlinked `references/` directory or a symlinked switch or decisions log
+  (`signing_switch.refuse_symlinked_component`): it checks each path component with `lstat`, then opens the file by
+  path, `O_NOFOLLOW` on the last component only. A directory replaced by a link between that check and the open
+  is not caught. The decisions log is also re-read by path for its format check and its rows.
+- **Writes are not affected:** they open `references/` once with `O_DIRECTORY|O_NOFOLLOW` and work relative to that
+  descriptor.
+- **Who:** only a process that can rewrite the team dir while a gate runs; such a process can already edit the
+  files themselves. Reading every governance file through one directory descriptor would close it; it needs the
+  log's format check to read from that descriptor too, so it is not in 1.3.1.
+
+### Through 1.3.0: a clearance recorded before a HALT's retraction took effect after it (fixed in 1.3.1, #616)
+
+- **What (agentteams ≤ 1.3.0):** a PASS recorded while a HALT on the action was open (or, for a family HALT, before
+  it) cleared the action as soon as the HALT was retracted, without anyone reviewing it at retraction time.
+- **Now:** an accepted retraction of a HALT on the action, on its family or on a `derives_from` ancestor voids every
+  earlier permission for that action. A PASS or CONDITIONAL PASS older than the retraction is void, and the gate says
+  which rows; the newest matching row still decides, so a void row never falls through to an older one. A standing
+  sandbox or S-10 exception whose decision row is older than the retraction no longer carries over, and the sandbox
+  "spent off" excuse recorded before it no longer applies. `--sign-decision` refuses to sign a clearance on an id,
+  or a `derives_from` parent, under an open HALT.
+- **Who:** teams that retract a HALT and expected an older clearance or standing exception to resume. Record a
+  fresh decision after the retraction.
+- **Still open:** a waiver issued before the retraction still clears: a waiver's issue time is an unsigned
+  timestamp in another log, so it cannot be ordered against the retraction row reliably.
+
+### Through 1.3.0: a HALT on a family id did not block its instance ids (fixed in 1.3.1, #636)
+
+- **What (agentteams ≤ 1.3.0):** a HALT on `server-apply` (or on `server-apply:remove-path:<host>`) did not stop a
+  PASS on `server-apply:remove-path:<host>:<path>` from clearing it, because the HALT side matched only ids that
+  start with the action, or the action's tokens inside the HALT id.
+- **Now:** a HALT also blocks every id under its own id after a colon. Only `:` counts: a HALT on `branch` does not
+  block `branch-delete`. Such a HALT is retracted only by a `HALT-RETRACTED` row with its own id.
+- **Who:** teams whose decisions log holds an unretracted HALT on a short id that their own gates' ids extend after
+  a colon (for example `deploy` and `deploy:prod`). `--verify-integrity` and `--migrate-decision-log --dry-run`
+  list every unretracted HALT this reaches, consumer-defined ids included.
+
 ### Through 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.1)
 
 - **What (agentteams ≤ 1.3.0):** a HALT row whose `action_reviewed` was empty, blank or punctuation only matched no

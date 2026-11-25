@@ -40,6 +40,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from agentteams.git_exec import run_git
+from agentteams.cli.sign_decision_refusals import (  # noqa: F401  (sign_decision_team_refusal: re-exported)
+    author_refusal,
+    open_halt_refusal,
+    sign_decision_team_refusal,
+)
 
 #: The env var naming the operator's Ed25519 private key FILE (never the key itself).
 KEYFILE_ENV = "AGENTTEAMS_DECISION_ED25519_KEYFILE"
@@ -53,6 +58,8 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/decision_log.py",
     "agentteams/cli/decision_text.py",  # computes the signed text_digest
     "agentteams/cli/decision_lineage.py",  # imported by decision_log at module level
+    "agentteams/cli/decision_authors.py",  # imported by decision_log at module level
+    "agentteams/cli/sign_decision_refusals.py",  # sign_decision's refusals, run before the key read
     "agentteams/cli/action_ids.py",  # imported by decision_log at module level
     "agentteams/cli/decision_chain.py",  # imported by decision_log at module level
     "agentteams/cli/grants.py",
@@ -488,32 +495,9 @@ def _project_roots(team_dir: Path) -> list[Path]:
     return roots
 
 
-def sign_decision_team_refusal(output_dir: Path) -> str | None:
-    """F-2: return why ``output_dir`` is not a team root ``--sign-decision`` may append to, or None.
-
-    The gate reads the decisions log and the verify-key store relative to the TEAM dir, so a row
-    minted anywhere else (``--project .``, a bare CWD) was a silent no-op the gate never read. A
-    team is detected by ``references/agent-privilege.json`` OR ``references/build-log.json``.
-
-    Args:
-        output_dir: The resolved ``--output`` / ``--project`` / CWD directory.
-
-    Returns:
-        The refusal sentence, or None when ``output_dir`` is a team dir.
-    """
-    from agentteams.cli.clearance_binding import is_team_dir
-
-    if is_team_dir(output_dir):
-        return None
-    return (f"{output_dir} is not an agentteams team dir (no references/agent-privilege.json or "
-            "references/build-log.json). The gate reads the decisions log and the verify-key store "
-            "relative to the team dir; pass --output <project>/.claude/agents (or the team's agents "
-            "dir). Refusing to sign (fail-closed).")
-
-
 def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | None = None,
                   allow_checkout: bool = False) -> int:
-    """Mint and append one operator Ed25519-signed constraint-relaxing decision row.
+    """Mint and append one operator Ed25519-signed decision row (constraint-relaxing or not).
 
     Reads a JSON spec (the decision fields + effect_* + derives_from + key_id), loads the operator
     private key from the file named by :data:`KEYFILE_ENV`, refuses a categorically non-eligible
@@ -521,9 +505,10 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     grant signing domain, signs the canonical payload with Ed25519, verifies it against the team's
     verify-key store, and appends the signed row.
 
-    Order (#9/#10): spec → classification and refusals → preflight (env, key file present,
-    integrity, install location) → display → confirm → key read → sign. The signed row is built
-    from the same in-memory spec the review digest covers.
+    Order (#9/#10): spec → classification and refusals (an authorizing row's author must be on the
+    roster; a clearance under an open HALT is refused) → preflight (env, key file present, integrity,
+    install location) → display → confirm → key read → sign. The signed row is built from the same
+    in-memory spec the review digest covers.
 
     Args:
         output_dir: The resolved team dir the row is appended under.
@@ -641,6 +626,11 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         print("Error: refusing to sign — this decision's payload begins with the dev-merge-authorization purpose tag "
               "(use --sign-dev-merge-authorization).", file=sys.stderr)
         return 1
+    fieldnames = read[1] if read is not None else None
+    refusal = author_refusal(output_dir, row, fieldnames) or open_halt_refusal(output_dir, row, fieldnames)
+    if refusal:
+        print(f"Error: {refusal}", file=sys.stderr)
+        return 1
     preflight = _signing_preflight(_project_roots(output_dir), allow_checkout, str(row.get("key_id") or ""))
     if preflight is None:
         return 1
@@ -652,7 +642,10 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
 
     # MAJOR-4: show the full derived material effect, not just a class label, before writing.
     profile = ec.effect_profile_from_row(row)
-    print("About to sign a constraint-relaxing security decision:")
+    # The heading names the class the gate applies; it said "constraint-relaxing" for every row. Indeterminate
+    # counts as relaxing, as it does for the text-binding guard above.
+    relaxing = needs_operator or derived_class != ec.NON_RELAXING
+    print(f"About to sign a {'constraint-relaxing' if relaxing else 'non-relaxing'} security decision:")
     print(f"  action_reviewed : {row.get('action_reviewed')}")
     print(f"  verdict         : {row.get('verdict')}")
     print(f"  derived class   : {derived_class}")

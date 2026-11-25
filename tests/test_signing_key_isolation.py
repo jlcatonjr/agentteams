@@ -408,7 +408,7 @@ def test_sign_decision_prints_the_location_warning(tmp_path, monkeypatch, capsys
     (tmp_path / "references").mkdir()
     (tmp_path / "references" / "build-log.json").write_text("{}\n")  # a team dir (F-2)
     spec = tmp_path / "spec.json"
-    spec.write_text(json.dumps({"action_reviewed": "grant-x"}))
+    spec.write_text(json.dumps({"action_reviewed": "grant-x", "author": "security"}))  # rostered (bl48-32)
     outside = _key(tmp_path / "op.key", 0o644)
     monkeypatch.setenv("AGENTTEAMS_DECISION_ED25519_KEYFILE", str(outside))
     build_team.main(["--sign-decision", str(spec), "--output", str(tmp_path)])
