@@ -226,6 +226,38 @@ def test_comparison_covers_a_meaningful_share_of_the_docs() -> None:
     assert len(docs_covered) >= 25, f"only {len(docs_covered)} docs covered; parser regression?"
 
 
+
+def _duplicate_h4(text: str) -> list[str]:
+    """``####`` headings that appear more than once in *text*, fenced code blocks ignored."""
+    seen: set[str] = set()
+    dups: list[str] = []
+    fenced = False
+    for line in text.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced and line.startswith("#### "):
+            title = line[5:].strip()
+            if title in seen and title not in dups:
+                dups.append(title)
+            seen.add(title)
+    return dups
+
+
+def test_no_two_h4_headings_on_one_page_share_a_title() -> None:
+    """Two ``#### `selftest(cfg)` `` headings on one page share an anchor, so a link reaches only the first.
+
+    Qualify the heading with its module (``agent_run.selftest(cfg)``), as the package pages already do.
+    """
+    found = {p.name: d for p in sorted(DOCS_DIR.glob("*.md")) if (d := _duplicate_h4(p.read_text(encoding="utf-8")))}
+    assert not found, f"duplicate #### headings: {found}"
+
+
+def test_the_duplicate_heading_check_is_live() -> None:
+    """Negative control: a repeated heading is caught; one inside a code fence is not."""
+    page = "#### `selftest(cfg)`\n\nx\n\n#### `selftest(cfg)`\n"
+    assert _duplicate_h4(page) == ["`selftest(cfg)`"]
+    assert _duplicate_h4("#### `a()`\n```\n#### `a()`\n```\n") == []
+
 # ---------------------------------------------------------------------------
 # The feature inventory guides the API-doc review, so its own arithmetic must hold
 #

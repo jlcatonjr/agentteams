@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (drift sweep: `sign_decision` steps, a duplicate heading, the probe-baseline note, the stdlib rule, the signing-migration hint)
+
+- `docs_src/api-reference/cli.md`: the `sign_decision` step list now matches the code's order, including the
+  non-empty `action_reviewed` check, the `text_digest` downgrade refusal or notice, the toolchain-group and
+  dev-merge-authorization refusals, and the append's refusal when the log changed after it was read (#470).
+- `docs_src/api-reference/vulnscan.md`: the two `selftest(cfg)` headings are now `agent_run.selftest(cfg)` and
+  `tools_image.selftest(cfg)`; links to the agent self-test checks point at the first. A test now fails any
+  api-reference page with two identical `####` headings.
+- `docs_src/cli-reference.md` (`--accept-probe-baseline`): record the review in
+  `references/redteam-probe-revalidation.md`; the command writes `note: ""` for every probe.
+- The self-build brief's style rule names `jsonschema` as the declared runtime dependency instead of claiming no
+  external dependencies.
+- The `enforce_decision_signing` notice printed at generation, and the same text in
+  `workspace-privilege-scoping.md`, now say how to make a log carry signed rows: migrate it with
+  `--migrate-decision-log`, then sign with `--sign-decision`, or set `AGENTTEAMS_DECISION_SIGNING_KEY`.
+
 ### fixed (vulnscan L1: a distro package with a pending update keeps its distro origin; #585 A2)
 
 - While a distro update is pending, `apt-cache policy` lists the installed version under `/var/lib/dpkg/status`

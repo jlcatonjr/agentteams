@@ -120,15 +120,22 @@ Mints and appends one Ed25519-signed constraint-relaxing decision row under the 
 `output_dir`. Returns 0, or 1 on any error (fail-closed). The steps run in this order (#9/#10):
 
 1. team-dir refusal;
-2. spec load and shape check, then the display-spoofing refusal; the chain link (`prev_digest`) and, when the
-   log has the column, `text_digest` (binding `conditions` and `evidence`) are computed, never taken from the spec;
-3. eligibility and effect classification, then the PR-E grant-purpose refusal;
-4. preflight: env, integrity, install location, key-file existence. With `allow_checkout`, an overridden
+2. spec load and shape check: a JSON object with a non-empty `action_reviewed`;
+3. the display-spoofing refusal;
+4. the row is built: the chain link (`prev_digest`, from the log's chain tip, whose bytes are kept for step 13)
+   and, when the log has the column (or is new), `text_digest` (binding `conditions` and `evidence`) are computed,
+   never taken from the spec;
+5. eligibility and effect classification;
+6. the `text_digest` downgrade refusal (a constraint-relaxing row into a log without the column; migrate it with
+   `--migrate-decision-log`), or, for a non-relaxing row, a notice that its text is not bound;
+7. the grant-purpose (PR-E), toolchain-group and dev-merge-authorization domain-separation refusals;
+8. preflight: env, integrity, install location, key-file existence. With `allow_checkout`, an overridden
    location refusal is recorded in the signed `conditions_verified`;
-5. the display, with the review digest;
-6. the confirm gate: a y/N prompt on a terminal, or an exact `confirm_sha256` match;
-7. the key read, then the signature over the same in-memory row;
-8. verify-before-append, then the append.
+9. the display, with the review digest;
+10. the confirm gate: a y/N prompt on a terminal, or an exact `confirm_sha256` match;
+11. the key read, then the signature over the same in-memory row;
+12. verify-before-append against the team's verify-key store;
+13. the append, refused if the log changed since step 4 read it (#470).
 
 ### `sign_grant(spec_path, resolve_dirs, *, confirm_sha256=None, allow_checkout=False)`
 
