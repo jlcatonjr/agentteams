@@ -83,6 +83,8 @@ from agentteams.cli.decision_log import (  # noqa: E402,F401
     _DEFAULT_DECISION_AUTHORS,
     _HALT_RETRACTION_VERDICT,
     _approved_decision_authors,
+    CLEARING_VERDICTS,
+    author_is_approved,
     _assert_authorizing_row_is_authentic,
     _assert_decision_chain_intact,
     _assert_no_unretracted_halt,
@@ -174,7 +176,7 @@ def _assert_destructive_action_allowed(
             _consume_security_waiver_use(output_dir, waiver, action=action)
         return
 
-    if verdict in {"PASS", "CONDITIONAL PASS"}:
+    if verdict in CLEARING_VERDICTS:
         read = _read_decision_rows(output_dir)
         signing_active = _decision_signing_active(read[1] if read else [])
         _assert_authorizing_row_is_authentic(
@@ -208,7 +210,7 @@ def _assert_destructive_action_allowed(
             f"(conditions_verified={cond_verified or 'pending'})"
         )
 
-    if verdict not in {"PASS", "CONDITIONAL PASS"}:
+    if verdict not in CLEARING_VERDICTS:
         raise RuntimeError(
             f"latest decision has unsupported verdict '{verdict or 'UNKNOWN'}'"
         )
@@ -550,8 +552,8 @@ def _validate_security_waiver(
     # a roster is text in the same tree. What it closes is the sub-finding: that the fields were
     # decorative.
     if output_dir is not None:
-        approved = {a.lower().lstrip("@") for a in _approved_decision_authors(output_dir)}
-        if approver.lower().lstrip("@") not in approved:
+        approved_ok, approved = author_is_approved(approver, output_dir)
+        if not approved_ok:
             raise RuntimeError(
                 f"waiver approver {approver!r} is not on the approved roster ({sorted(approved)}); "
                 f"see references/security-approvers.txt"

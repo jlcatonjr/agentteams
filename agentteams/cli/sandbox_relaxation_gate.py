@@ -45,6 +45,7 @@ from pathlib import Path
 
 from agentteams.cli import security_gate
 from agentteams.cli.decision_log import (
+    CLEARING_VERDICTS,
     _assert_authorizing_row_is_authentic,
     _assert_decision_chain_intact,
     _decision_signature_values,
@@ -91,7 +92,6 @@ SANDBOX_EXCEPTION_TTL_DAYS = 90
 _OPERATOR_OFF_REASONS = frozenset({"brief", "cli"})
 _ACTIVE = "active"
 _HEX64 = re.compile(r"[0-9a-f]{64}")
-_AUTHORIZING = frozenset({"PASS", "CONDITIONAL PASS"})
 
 #: How far ahead of now a signed row's date may lie (clock skew): a later date would stretch the Rule 15(d) sunset.
 _FUTURE_SKEW = timedelta(days=1)
@@ -368,7 +368,7 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
         return "is bound to a decision row that is no longer in the decisions log"
     row = matches[-1]
     verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
-    if verdict not in _AUTHORIZING or (verdict == "CONDITIONAL PASS" and
+    if verdict not in CLEARING_VERDICTS or (verdict == "CONDITIONAL PASS" and
                                        (row.get("conditions_verified") or "").strip().lower() != "verified"):
         return f"is bound to a decision row whose verdict is {verdict or 'empty'}"
     try:
@@ -523,7 +523,7 @@ def _spent_off_row(team_dir: Path, action: str) -> dict[str, str]:
     verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
     if (row.get("consumed") or "").strip().lower() not in {"yes", "true", "1"}:
         raise RuntimeError(f"the newest {action} decision is not marked consumed")
-    if verdict not in _AUTHORIZING:
+    if verdict not in CLEARING_VERDICTS:
         raise RuntimeError(f"the newest {action} decision does not authorize ({verdict or 'no verdict'})")
     if verdict == "CONDITIONAL PASS" and (row.get("conditions_verified") or "").strip().lower() != "verified":
         # the same bar as _unbound_reason: `consumed` is unsigned, so it cannot vouch for one

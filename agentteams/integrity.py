@@ -49,6 +49,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/governance_logs.py",     # the one appender of signed decision rows: lock, chain-break,
                                          # check_log and forged-record guards, confirm-time prefix (#470)
     "agentteams/cli/decision_lineage.py",  # C-2: derives_from lineage, so a rename can't evade a HALT
+    "agentteams/cli/decision_authors.py",  # C-5: the approver roster and the one roster check the gate uses
+    "agentteams/cli/sign_decision_refusals.py",  # --sign-decision's pre-key refusals (author roster, open HALT)
     "agentteams/cli/action_ids.py",      # C-2/C-5: which rows clear an action, which HALTs block it
     "agentteams/scan.py",                # C-4: the deterministic content scanner
     "agentteams/scan_operational.py",    # C-4: which pipeline-written JSON the scanner exempts

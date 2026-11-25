@@ -150,10 +150,13 @@ called before the key read. The error precedence is (amended by #9):
 
 ### `sign_decision_team_refusal(output_dir)`
 
-> *Source: `agentteams/cli/operator_signing.py`*
+> *Source: `agentteams/cli/sign_decision_refusals.py` (re-exported by `operator_signing`)*
 
 F-2: the refusal sentence when `output_dir` holds neither `references/agent-privilege.json` nor
-`references/build-log.json`, else `None`.
+`references/build-log.json`, else `None`. The same module holds the signer's other pre-key refusals:
+`author_refusal(output_dir, row, fieldnames)` (the row's author, read from the cells the log keeps
+(`stored_view(row, fieldnames)`), is off the approver roster) and `open_halt_refusal(output_dir, row)` (a clearance
+on an id under an open HALT, #616).
 
 ### `load_grant_spec(path, flag)` / `grant_spec_kwargs(spec)` / `report_issued(record, ledger_root, team_dir)`
 

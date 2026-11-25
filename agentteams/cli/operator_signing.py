@@ -40,6 +40,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from agentteams.git_exec import run_git
+from agentteams.cli.sign_decision_refusals import (  # noqa: F401  (sign_decision_team_refusal: re-exported)
+    author_refusal,
+    open_halt_refusal,
+    sign_decision_team_refusal,
+)
 
 #: The env var naming the operator's Ed25519 private key FILE (never the key itself).
 KEYFILE_ENV = "AGENTTEAMS_DECISION_ED25519_KEYFILE"
@@ -53,6 +58,8 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/decision_log.py",
     "agentteams/cli/decision_text.py",  # computes the signed text_digest
     "agentteams/cli/decision_lineage.py",  # imported by decision_log at module level
+    "agentteams/cli/decision_authors.py",  # imported by decision_log at module level
+    "agentteams/cli/sign_decision_refusals.py",  # sign_decision's refusals, run before the key read
     "agentteams/cli/action_ids.py",  # imported by decision_log at module level
     "agentteams/cli/decision_chain.py",  # imported by decision_log at module level
     "agentteams/cli/grants.py",
@@ -488,77 +495,6 @@ def _project_roots(team_dir: Path) -> list[Path]:
     return roots
 
 
-def sign_decision_team_refusal(output_dir: Path) -> str | None:
-    """F-2: return why ``output_dir`` is not a team root ``--sign-decision`` may append to, or None.
-
-    The gate reads the decisions log and the verify-key store relative to the TEAM dir, so a row
-    minted anywhere else (``--project .``, a bare CWD) was a silent no-op the gate never read. A
-    team is detected by ``references/agent-privilege.json`` OR ``references/build-log.json``.
-
-    Args:
-        output_dir: The resolved ``--output`` / ``--project`` / CWD directory.
-
-    Returns:
-        The refusal sentence, or None when ``output_dir`` is a team dir.
-    """
-    from agentteams.cli.clearance_binding import is_team_dir
-
-    if is_team_dir(output_dir):
-        return None
-    return (f"{output_dir} is not an agentteams team dir (no references/agent-privilege.json or "
-            "references/build-log.json). The gate reads the decisions log and the verify-key store "
-            "relative to the team dir; pass --output <project>/.claude/agents (or the team's agents "
-            "dir). Refusing to sign (fail-closed).")
-
-
-def _author_is_rostered(output_dir: Path, row: dict[str, str], fieldnames: list[str] | None) -> bool:
-    """Whether an authorizing row's author is on the roster the gate checks; prints the refusal when not.
-
-    The gate refuses an authorizing row (PASS, CONDITIONAL PASS, HALT-RETRACTED) whose author is off the roster,
-    whatever its signature; a HALT is honoured unauthenticated, so it is not checked. The author is read from the
-    cells the log keeps (*fieldnames*, or the columns a new log is created with).
-    """
-    from agentteams.cli import decision_log as dl
-
-    verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
-    if verdict not in {"PASS", "CONDITIONAL PASS", dl._HALT_RETRACTION_VERDICT}:
-        return True
-    kept = {c.strip() for c in (fieldnames or ["timestamp", "requesting_agent", *dl.SIGNED_DECISION_COLUMNS])}
-    author = dl._decision_author({k: v for k, v in row.items() if k in kept})
-    try:
-        approved = dl._approved_decision_authors(output_dir)
-    except RuntimeError as exc:
-        print(f"Error: refusing to sign: {exc}. The key was not read.", file=sys.stderr)
-        return False
-    if author in {a.lower().lstrip("@") for a in approved}:
-        return True
-    print(f"Error: refusing to sign: the row's author is '{author or 'none'}', which is not an approved security "
-          f"author in {output_dir / 'references' / dl._DECISION_AUTHORS_FILE} ({sorted(approved)}). The gate "
-          "refuses such a row whatever its signature. Set \"author\" (or the log's requesting_agent/owner column) "
-          "to a rostered author, or add one to the roster. The key was not read.", file=sys.stderr)
-    return False
-
-
-def _under_open_halt(output_dir: Path, row: dict[str, str]) -> bool:
-    """Whether a clearance (PASS, CONDITIONAL PASS) names an id under an open HALT; prints the refusal when so.
-
-    Such a row would be void at the gate once the HALT is retracted (#616, ruling R-17). HALT and HALT-RETRACTED
-    rows are not checked.
-    """
-    from agentteams.cli import decision_log as dl
-
-    if (row.get("verdict") or "").strip().upper() not in {"PASS", "CONDITIONAL PASS"}:
-        return False
-    halt_scan_action = (row.get("action_reviewed") or "").strip()
-    try:
-        dl._assert_no_unretracted_halt(output_dir, action=halt_scan_action)
-    except RuntimeError as exc:
-        print(f"Error: refusing to sign: '{halt_scan_action}' is under an open HALT ({exc}). Retract the HALT first, then sign "
-              "the clearance. The key was not read.", file=sys.stderr)
-        return True
-    return False
-
-
 def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | None = None,
                   allow_checkout: bool = False) -> int:
     """Mint and append one operator Ed25519-signed decision row (constraint-relaxing or not).
@@ -690,8 +626,10 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         print("Error: refusing to sign — this decision's payload begins with the dev-merge-authorization purpose tag "
               "(use --sign-dev-merge-authorization).", file=sys.stderr)
         return 1
-    if not _author_is_rostered(output_dir, row, read[1] if read is not None else None) or _under_open_halt(
-            output_dir, row):
+    refusal = (author_refusal(output_dir, row, read[1] if read is not None else None)
+               or open_halt_refusal(output_dir, row))
+    if refusal:
+        print(f"Error: {refusal}", file=sys.stderr)
         return 1
     preflight = _signing_preflight(_project_roots(output_dir), allow_checkout, str(row.get("key_id") or ""))
     if preflight is None:

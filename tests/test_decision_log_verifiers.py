@@ -558,9 +558,9 @@ def test_every_gate_call_site_is_listed():
                 # dev-merge:<owner/name>:pr-<N>-<sha>, built (and validated) by merge_action_id only.
                 assert text.count("merge_action = merge_action_id(repo, number, head_sha)") == 1
                 assert "dev-merge" in GATE_ACTIONS
-            elif arg == "halt_scan_action" and path.name == "operator_signing.py":
-                # bl48-01: the signer's refusal of a clearance under an open HALT. A HALT scan only, never a clearance.
-                assert text.count("_assert_no_unretracted_halt(output_dir, action=halt_scan_action)") == 1
+            elif arg == "halt_scan_action" and path.name == "sign_decision_refusals.py":
+                # #616: the signer's refusal of a clearance under an open HALT. HALT scans only, never a clearance.
+                assert "_assert_no_unretracted_halt(output_dir, action=halt_scan_action)" in text
                 assert "_assert_destructive_action_allowed" not in text and "check_clearance" not in text
             elif arg == "lineage_action" and path.name == "toolchain_group.py":
                 lineage_sites.append(arg)  # the group file's derives_from chain (v1.1.3): exactly one site, below
