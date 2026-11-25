@@ -19,6 +19,7 @@ import pytest
 
 import build_team
 from agentteams.cli import security_gate
+from agentteams import fences
 from agentteams.fences import _merge_fenced_content
 from agentteams.frameworks.canonical_paths import canonical_path_placeholders
 from agentteams.frameworks.registry import FRAMEWORK_IDS, agents_dir_for
@@ -55,8 +56,15 @@ def test_the_paths_come_from_the_adapter() -> None:
     assert canonical_path_placeholders("claude")["TEAM_INSTRUCTIONS_FILE"] == ".claude/CLAUDE.md"
     assert canonical_path_placeholders("codex")["AGENT_FILE_SUFFIX"] == ".toml"
     assert canonical_path_placeholders("goose")["TEAM_AGENTS_DIR"] == ".goose/recipes"
-    # An unknown id keeps the Copilot layout, as conflict_log_path_for always did.
-    assert canonical_path_placeholders("no-such-framework") == canonical_path_placeholders("copilot-vscode")
+    for fw in FRAMEWORK_IDS:                      # every path stays inside the project
+        for key, value in canonical_path_placeholders(fw).items():
+            assert not value.startswith(("..", "/")), (fw, key, value)
+
+
+def test_an_unknown_framework_is_refused() -> None:
+    # A silent Copilot fallback would hand a mistyped framework the very paths #609 replaces.
+    with pytest.raises(ValueError, match="no-such-framework"):
+        canonical_path_placeholders("no-such-framework")
 
 
 def _fence(items: list[str]) -> str:
@@ -65,15 +73,28 @@ def _fence(items: list[str]) -> str:
            f"{body}<!-- AGENTTEAMS:END {_SID} -->\n"
 
 
+_OLD_LIST = _fence([".github/copilot-instructions.md", ".github/agents/agent-updater.agent.md",
+                   ".github/agents/references/github-workflows-merge.reference.md", "SETUP-REQUIRED.md"])
+_NEW_LIST = _fence([".claude/CLAUDE.md", ".claude/agents/agent-updater.md",
+                   ".claude/agents/references/github-workflows-merge.reference.md", "SETUP-REQUIRED.md"])
+
+
 def test_merge_takes_new_list_for_existing_claude_team() -> None:
-    old = _fence([".github/copilot-instructions.md", ".github/agents/agent-updater.agent.md",
-                  ".github/agents/references/github-workflows-merge.reference.md", "SETUP-REQUIRED.md"])
-    new = _fence([".claude/CLAUDE.md", ".claude/agents/agent-updater.md",
-                  ".claude/agents/references/github-workflows-merge.reference.md", "SETUP-REQUIRED.md"])
-    mr = _merge_fenced_content(new, old, preserve_on_shrink=True, rel_path=".claude/agents/orchestrator.md")
+    mr = _merge_fenced_content(_NEW_LIST, _OLD_LIST, preserve_on_shrink=True,
+                               rel_path=".claude/agents/orchestrator.md")
     assert _SID not in mr.sections_preserved
     assert ".claude/agents/agent-updater.md" in mr.merged_content
     assert ".github/agents/agent-updater.agent.md" not in mr.merged_content
+
+
+def test_without_template_ownership_the_old_list_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Negative control: the fence's template ownership is what replaces the list; without it preserve pins it.
+    monkeypatch.setattr(fences, "_TEMPLATE_AUTHORITATIVE_FENCES", fences._TEMPLATE_AUTHORITATIVE_FENCES - {_SID})
+    mr = _merge_fenced_content(_NEW_LIST, _OLD_LIST, preserve_on_shrink=True,
+                               rel_path=".claude/agents/orchestrator.md")
+    assert _SID in mr.sections_preserved
+    assert ".github/agents/agent-updater.agent.md" in mr.merged_content
+    assert ".claude/agents/agent-updater.md" not in mr.merged_content
 
 
 def test_copilot_render_is_unchanged() -> None:

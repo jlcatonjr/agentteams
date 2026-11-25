@@ -15,15 +15,11 @@ from pathlib import Path
 from agentteams.frameworks.format_spec import COPILOT_INSTRUCTIONS_FILENAME
 from agentteams.frameworks.registry import FRAMEWORKS, conflict_log_path_for
 
-_FALLBACK = "copilot-vscode"
-
-
 def canonical_path_placeholders(framework: str) -> dict[str, str]:
     """Return the auto-resolved path placeholders for a framework's team.
 
     Args:
-        framework: A registered framework id; an unknown id resolves to the Copilot layout, as
-            ``conflict_log_path_for`` does.
+        framework: A registered framework id.
 
     Returns:
         ``TEAM_INSTRUCTIONS_FILE`` (project-relative, e.g. ``.claude/CLAUDE.md``), ``TEAM_AGENTS_DIR``
@@ -31,9 +27,12 @@ def canonical_path_placeholders(framework: str) -> dict[str, str]:
         ``CONFLICT_LOG_PATH``.
 
     Raises:
-        None.
+        ValueError: If ``framework`` is not registered (as ``registry.agents_dir_for`` does): a silent Copilot
+            fallback would send the team to the paths this module exists to replace.
     """
-    adapter = FRAMEWORKS.get(framework, FRAMEWORKS[_FALLBACK])()
+    if framework not in FRAMEWORKS:
+        raise ValueError(f"unknown framework {framework!r}")
+    adapter = FRAMEWORKS[framework]()
     agents_dir = adapter.get_agents_dir(Path(".")).as_posix()
     instructions = adapter.finalize_output_path(f"../{COPILOT_INSTRUCTIONS_FILENAME}", "instructions")
     return {
