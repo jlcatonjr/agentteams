@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (`--check-wiring` no longer passes a goose team on Linux when bwrap cannot run)
+
+- On Linux the goose verifier passed as ENFORCEABLE whenever `sandbox/confine-run.sh` existed, even on a host without
+  `bwrap` or with unprivileged user namespaces disabled, where the launcher confines nothing. It now consults the
+  live-host probe `os_sandbox_mechanism_available()` and reports `NOT ENFORCEABLE ON THIS HOST` as a failure when the
+  mechanism is provably absent. When the probe cannot decide, the pass stands with a note saying so.
+- **On upgrade:** a CI job that runs `--check-wiring` for a confined goose team in a container without `bwrap` now
+  fails. That is the intended signal: confine from the container, or install `bwrap` there.
+- Emission is unchanged: `is_sandbox_capable` still does not probe, because the render host is often not the host
+  that runs the team.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`

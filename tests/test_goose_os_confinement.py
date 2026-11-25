@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams import analyze
+from agentteams import analyze, host_features
 from agentteams.frameworks.goose import GooseAdapter
 from agentteams.frameworks._goose_sandbox_emit import (
     GOOSE_LINUX_RUNNER_REL,
@@ -297,6 +297,7 @@ def test_verify_linux_enforceable_via_neutral_launcher(monkeypatch, tmp_path):
     # (sandbox/confine-run.sh), NOT via Seatbelt. The verifier must check the launcher, not
     # .goose/sandbox.sb, and must not tell the user to fall back to a container on Linux.
     monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(host_features, "os_sandbox_mechanism_available", lambda platform=None: True)
 
     # No launcher emitted yet -> not a clean pass: regenerate.
     ok, msgs = verify_goose_sandbox_wiring(tmp_path, _confined_goose_manifest())
@@ -311,6 +312,38 @@ def test_verify_linux_enforceable_via_neutral_launcher(monkeypatch, tmp_path):
     assert ok is True
     assert any("ENFORCEABLE" in x and "confine-run.sh" in x for x in msgs)
     assert not any("container" in x for x in msgs)  # Linux no longer routes to outside-in fallback
+
+
+def _linux_with_launcher(monkeypatch, tmp_path, probe):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(host_features, "os_sandbox_mechanism_available", lambda platform=None: probe)
+    launcher = tmp_path / "sandbox" / "confine-run.sh"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    return verify_goose_sandbox_wiring(tmp_path, _confined_goose_manifest())
+
+
+def test_linux_launcher_without_mechanism_is_not_a_pass(monkeypatch, tmp_path):
+    # bl48-14: the launcher is present but bwrap / user namespaces are missing -> it confines nothing.
+    ok, msgs = _linux_with_launcher(monkeypatch, tmp_path, False)
+    assert ok is False
+    assert any("NOT ENFORCEABLE ON THIS HOST" in x and "bwrap" in x for x in msgs)
+    assert not any(x.startswith("ENFORCEABLE") for x in msgs)
+
+
+def test_linux_launcher_unprobeable_keeps_pass_with_note(monkeypatch, tmp_path):
+    ok, msgs = _linux_with_launcher(monkeypatch, tmp_path, None)
+    assert ok is True
+    assert any(x.startswith("ENFORCEABLE") for x in msgs)
+    assert any("could not be probed" in x for x in msgs)
+
+
+def test_linux_launcher_with_mechanism_message_unchanged(monkeypatch, tmp_path):
+    # Negative control: a host with the mechanism gets exactly the pre-bl48-14 single ENFORCEABLE line.
+    ok, msgs = _linux_with_launcher(monkeypatch, tmp_path, True)
+    assert ok is True
+    assert len(msgs) == 1 and msgs[0].startswith("ENFORCEABLE (linux) via the framework-neutral bwrap launcher")
+    assert not any("probed" in x or "NOT ENFORCEABLE" in x for x in msgs)
 
 
 def test_verify_windows_is_exit_neutral_not_a_clean_pass(monkeypatch, tmp_path):
