@@ -762,3 +762,19 @@ def test_the_clearance_is_never_read_through_a_symlinked_log(tmp_path):
         outside / "references" / "security-decisions.log.csv")
     with pytest.raises(RuntimeError, match="symlink"):
         security_gate._latest_security_decision(tmp_path / "team", action="overwrite")
+
+
+def test_a_family_halt_written_with_a_trailing_colon_blocks_its_instances(tmp_path):
+    _write_decisions_log(tmp_path, [_row("server-apply:", "HALT")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_SA)
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action="server-apply")
+
+
+def test_the_pre_upgrade_report_lists_each_halt_once(tmp_path):
+    from agentteams.cli.action_ids import describe_newly_blocking_halts
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row("deploy", "HALT")])
+    lines = describe_newly_blocking_halts(tmp_path)
+    assert sum("'server-apply'" in ln for ln in lines) == 1 and sum("'deploy'" in ln for ln in lines) == 1, lines

@@ -70,12 +70,12 @@ Read two parts of the report.
 - **HALTs that newly block.** The report lists:
     - each unretracted HALT that newly blocks an agentteams gate action, with the **exact id** to retract it by;
     - every other unretracted HALT, because it blocks any action that your own `check_clearance` gates use and
-      that its id names.
+      that its id names, and from 1.3.1 every id under it after a colon (`server-apply` blocks
+      `server-apply:remove-path:…`; `deploy` blocks your own `deploy:prod`; only `:` counts, and a trailing colon
+      on the HALT's id is ignored). Each line names the agentteams gate family the id belongs to, if any. Every
+      HALT is listed once.
     - each unretracted HALT whose id is empty or has no letter or digit. Such a HALT names no action, so it
       blocks **every** gated action. Before this change it blocked none, and a later PASS cleared the action.
-    - from 1.3.1, every unretracted HALT with a usable id, because it now also blocks every id under it after a
-      colon (`server-apply` blocks `server-apply:remove-path:…`; `deploy` blocks your own `deploy:prod`). Only
-      `:` counts. Each line names the agentteams gate family the id belongs to, if any.
 
     This part is advisory and does not change the exit code. `--migrate-decision-log --dry-run` prints the same
     list.
