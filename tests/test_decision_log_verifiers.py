@@ -558,6 +558,10 @@ def test_every_gate_call_site_is_listed():
                 # dev-merge:<owner/name>:pr-<N>-<sha>, built (and validated) by merge_action_id only.
                 assert text.count("merge_action = merge_action_id(repo, number, head_sha)") == 1
                 assert "dev-merge" in GATE_ACTIONS
+            elif arg == "halt_scan_action" and path.name == "operator_signing.py":
+                # bl48-01: the signer's refusal of a clearance under an open HALT. A HALT scan only, never a clearance.
+                assert text.count("_assert_no_unretracted_halt(output_dir, action=halt_scan_action)") == 1
+                assert "_assert_destructive_action_allowed" not in text and "check_clearance" not in text
             elif arg == "lineage_action" and path.name == "toolchain_group.py":
                 lineage_sites.append(arg)  # the group file's derives_from chain (v1.1.3): exactly one site, below
             else:
@@ -693,3 +697,43 @@ def test_newly_blocking_halts_lists_family_halts(tmp_path):
     _write_decisions_log(tmp_path, [_row("deploy", "HALT")])   # a consumer-defined id is listed too
     assert "'deploy' now also blocks every id under it ('deploy:...')" in "\n".join(
         describe_newly_blocking_halts(tmp_path))
+
+
+# ---------------------------------------------------------------------------
+# bl48-01 (#616, ruling R-17): after a HALT is retracted, no clearance older than the retraction survives
+# ---------------------------------------------------------------------------
+
+def test_pass_recorded_under_halt_is_void_after_retraction(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("overwrite", "HALT"), _row("overwrite", "PASS"), _retract("overwrite")])
+    ok, why = security_gate.check_clearance(tmp_path, action="overwrite")
+    assert not ok and "row 2" in why and "row 3" in why and "#616" in why
+    # Negative control: a clearance recorded after the retraction clears.
+    _write_decisions_log(tmp_path, [_row("overwrite", "HALT"), _retract("overwrite"), _row("overwrite", "PASS")])
+    assert security_gate.check_clearance(tmp_path, action="overwrite") == (True, "")
+
+
+def test_pass_before_halt_is_void_after_retraction(tmp_path):
+    # R-17 replaces the plan body: a PASS older than the retraction is void even when it predates the HALT.
+    from agentteams.cli import security_gate
+
+    # (Only a family HALT leaves the older PASS as the newest matching row; an exact-id HALT is itself newest.)
+    _write_decisions_log(tmp_path, [_row(_SA, "PASS"), _row("server-apply", "HALT"), _retract("server-apply")])
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "row 1" in why and "#616" in why
+
+
+def test_pass_under_family_halt_is_void(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row(_SA, "PASS"), _retract("server-apply")])
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "#616" in why
+
+
+def test_a_retraction_of_another_action_voids_nothing(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("overwrite", "PASS"), _row("prune", "HALT"), _retract("prune")])
+    assert security_gate.check_clearance(tmp_path, action="overwrite") == (True, "")   # negative control

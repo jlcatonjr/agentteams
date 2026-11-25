@@ -134,6 +134,18 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
+### Through 1.3.0: a clearance recorded before a HALT's retraction took effect after it (fixed in 1.3.1, #616)
+
+- **What (agentteams ≤ 1.3.0):** a PASS recorded while a HALT on the action was open (or, for a family HALT, before
+  it) cleared the action as soon as the HALT was retracted, without anyone reviewing it at retraction time.
+- **Now:** after a HALT on an action (or on its family) is retracted, every PASS or CONDITIONAL PASS for that action
+  older than the retraction is void, and the gate says which rows. The newest matching row still decides: a void row
+  never falls through to an older one. `--sign-decision` also refuses to sign a clearance on an id with an open HALT.
+- **Who:** teams that recorded a clearance and then a HALT, or a clearance under a HALT, and later retracted it.
+  Record a fresh clearance after the retraction.
+- **Not covered:** a HALT on a lineage ancestor; waivers; a standing sandbox or S-10 exception registered before
+  the retraction (each keeps its own checks).
+
 ### Through 1.3.0: a HALT on a family id did not block its instance ids (fixed in 1.3.1, #636)
 
 - **What (agentteams ≤ 1.3.0):** a HALT on `server-apply` (or on `server-apply:remove-path:<host>`) did not stop a

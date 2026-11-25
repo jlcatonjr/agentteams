@@ -693,3 +693,27 @@ def test_sign_decision_does_not_check_a_halt_author(tmp_path, monkeypatch, capsy
     rc, _out, err = _sign_as(tmp_path, monkeypatch, capsys, roster="security\n", absent_key=False,
                              author="orchestrator", verdict="HALT")
     assert _AUTHOR_REFUSAL not in err and rc == 0, err
+
+
+# --- bl48-01 (#616): --sign-decision refuses a clearance on an id under an open HALT ---------------------------
+
+def _halted_log(tmp: Path, mp: pytest.MonkeyPatch, capsys) -> Path:
+    """Sign a HALT on the spec's action into a new log (through --sign-decision itself)."""
+    assert _sign_with(_sd(tmp, mp, spec=_decision(verdict="HALT")), mp, capsys)[0] == 0
+    return tmp / "team" / "references" / "security-decisions.log.csv"
+
+
+def test_sign_decision_refuses_pass_under_open_halt(tmp_path, monkeypatch, capsys):
+    log = _halted_log(tmp_path, monkeypatch, capsys)
+    before = log.read_bytes()
+    argv = _sd(tmp_path, monkeypatch)
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    assert rc == 1 and out == "" and "is under an open HALT" in err and "The key was not read." in err
+    assert "cannot read operator private key" not in err and log.read_bytes() == before
+
+
+def test_sign_decision_signs_retraction_under_open_halt(tmp_path, monkeypatch, capsys):
+    _halted_log(tmp_path, monkeypatch, capsys)
+    argv = _sd(tmp_path, monkeypatch, spec=_decision(verdict="HALT-RETRACTED", evidence="settled"))
+    rc, _out, err = _sign_with(argv, monkeypatch, capsys)
+    assert "is under an open HALT" not in err and rc == 0, err

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a retracted HALT revives no earlier clearance, #616)
+
+- **Fixed:** the known issue #616 noted under 1.3.0. A PASS recorded while a HALT on the action was open (or before
+  a family HALT) took effect as soon as the HALT was retracted. Now, after a HALT on an action or its family is
+  retracted, every PASS or CONDITIONAL PASS for that action older than the retraction is void (ruling R-17); the
+  refusal names the clearance row and the retraction row. The newest matching row still decides.
+- **Signing:** `--sign-decision` refuses, before the key is read, a `PASS` or `CONDITIONAL PASS` on an id under an
+  open HALT. HALT and HALT-RETRACTED rows are not checked.
+- **Who notices:** a team that holds a clearance older than a retraction; record a fresh clearance after it.
+- **Not covered:** HALTs on lineage ancestors, waivers, and standing exceptions registered before the retraction.
+
 ### fixed (a HALT on a family id blocks every id under it after a colon, #636)
 
 - **Fixed:** a HALT on `server-apply` (or `server-apply:remove-path:<host>`) did not block a PASS on

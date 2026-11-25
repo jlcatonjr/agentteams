@@ -860,15 +860,15 @@ def _read_decision_rows_locked(log_path: Path, check_log) -> tuple[list[dict[str
 
 def _open_halt_for(
     rows: list[dict[str, str]], target: str, *, output_dir: Path, signing_active: bool,
-    skipped: list[str] | None = None,
+    skipped: list[str] | None = None, retracted: list[int] | None = None,
 ) -> tuple[int, dict[str, str]] | None:
     """Return the first unretracted HALT that blocks *target* (one with no usable id blocks every target), or None.
 
-    Encapsulates the whole-log scan-and-clear for one action id (the pre-lineage behaviour),
-    so the lineage-aware caller can run it for the requested action AND each ancestor without
-    duplicating the retraction authentication or evidence requirement. A retraction that fails
-    authentication or has no evidence retracts nothing and is skipped, its reason appended to *skipped*:
-    one unsigned historical row in an append-only signed log must not wedge the scan (rc.12 fix).
+    Encapsulates the whole-log scan-and-clear for one action id (the pre-lineage behaviour), so the lineage-aware
+    caller can run it for the requested action AND each ancestor without duplicating the retraction authentication
+    or evidence requirement. A retraction that fails authentication or has no evidence retracts nothing and is
+    skipped, its reason appended to *skipped*: one unsigned historical row in an append-only signed log must not wedge
+    the scan (rc.12 fix). *retracted* collects the 0-based index of each accepted retraction that cleared a HALT here.
     """
     # (index, row, retraction id, not matched as family). A HALT blocks every action named in its id, and every
     # action when it has no usable id (halt_blocks); unless matched as family it is retracted only by its exact id.
@@ -897,18 +897,19 @@ def _open_halt_for(
                 if skipped is not None:
                     skipped.append(f"row {index + 1} not accepted: {exc}")
                 continue
-            open_halts = [h for h in open_halts
-                          if not ((whole and not h[3]) or h[2] == reviewed.lower())]
+            kept = [h for h in open_halts if not ((whole and not h[3]) or h[2] == reviewed.lower())]
+            if retracted is not None and len(kept) < len(open_halts):
+                retracted.append(index)
+            open_halts = kept
     return (open_halts[0][0], open_halts[0][1]) if open_halts else None
 
 
 def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
     """Raise RuntimeError when a HALT for *action* (or a lineage ancestor) is unretracted.
 
-    This is C-2's "HALT is final" made mechanical. It scans **every** row rather than the
-    latest one, because the latest-row rule — correct for choosing which clearance applies —
-    let a later PASS silently supersede a HALT (probe A1), and let the `consumed` flag erase
-    one (probe A3).
+    This is C-2's "HALT is final" made mechanical. It scans **every** row rather than the latest one, because the
+    latest-row rule — correct for choosing which clearance applies — let a later PASS silently supersede a HALT (probe
+    A1), and let the `consumed` flag erase one (probe A3).
 
     A HALT is cleared only by a later :data:`_HALT_RETRACTION_VERDICT` row for the same action (for a HALT
     with no usable id: its row handle), with evidence, authenticated like any authorizing row. `consumed` is

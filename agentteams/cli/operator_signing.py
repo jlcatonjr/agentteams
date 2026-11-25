@@ -539,6 +539,26 @@ def _author_is_rostered(output_dir: Path, row: dict[str, str], fieldnames: list[
     return False
 
 
+def _under_open_halt(output_dir: Path, row: dict[str, str]) -> bool:
+    """Whether a clearance (PASS, CONDITIONAL PASS) names an id under an open HALT; prints the refusal when so.
+
+    Such a row would be void at the gate once the HALT is retracted (#616, ruling R-17). HALT and HALT-RETRACTED
+    rows are not checked.
+    """
+    from agentteams.cli import decision_log as dl
+
+    if (row.get("verdict") or "").strip().upper() not in {"PASS", "CONDITIONAL PASS"}:
+        return False
+    halt_scan_action = (row.get("action_reviewed") or "").strip()
+    try:
+        dl._assert_no_unretracted_halt(output_dir, action=halt_scan_action)
+    except RuntimeError as exc:
+        print(f"Error: refusing to sign: '{halt_scan_action}' is under an open HALT ({exc}). Retract the HALT first, then sign "
+              "the clearance. The key was not read.", file=sys.stderr)
+        return True
+    return False
+
+
 def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | None = None,
                   allow_checkout: bool = False) -> int:
     """Mint and append one operator Ed25519-signed constraint-relaxing decision row.
@@ -550,8 +570,9 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     verify-key store, and appends the signed row.
 
     Order (#9/#10): spec → classification and refusals (an authorizing row's author must be on the
-    roster) → preflight (env, key file present, integrity, install location) → display → confirm →
-    key read → sign. The signed row is built from the same in-memory spec the review digest covers.
+    roster; a clearance under an open HALT is refused) → preflight (env, key file present, integrity,
+    install location) → display → confirm → key read → sign. The signed row is built from the same
+    in-memory spec the review digest covers.
 
     Args:
         output_dir: The resolved team dir the row is appended under.
@@ -669,7 +690,8 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         print("Error: refusing to sign — this decision's payload begins with the dev-merge-authorization purpose tag "
               "(use --sign-dev-merge-authorization).", file=sys.stderr)
         return 1
-    if not _author_is_rostered(output_dir, row, read[1] if read is not None else None):
+    if not _author_is_rostered(output_dir, row, read[1] if read is not None else None) or _under_open_halt(
+            output_dir, row):
         return 1
     preflight = _signing_preflight(_project_roots(output_dir), allow_checkout, str(row.get("key_id") or ""))
     if preflight is None:

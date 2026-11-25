@@ -89,6 +89,7 @@ from agentteams.cli.decision_log import (  # noqa: E402,F401
     _decision_author,
     _decision_signature_payload,
     _decision_signing_active,
+    _open_halt_for,
     _read_decision_rows,
     sign_decision_row,
 )
@@ -144,7 +145,7 @@ def _assert_destructive_action_allowed(
     # decides whether any clearance may apply at all.
     _assert_no_unretracted_halt(output_dir, action=action)
 
-    decision = _latest_security_decision(output_dir, action=action)
+    decision, decision_index = _latest_security_decision_at(output_dir, action=action)
     if decision is None:
         waiver = _latest_security_waiver(output_dir, action=action)
         if waiver is not None:
@@ -179,6 +180,7 @@ def _assert_destructive_action_allowed(
         _assert_authorizing_row_is_authentic(
             decision, output_dir=output_dir, signing_active=signing_active, action=action
         )
+        _assert_not_older_than_a_retraction(output_dir, read, action=action, index=decision_index)
         # W11: a suffix that reads as a restriction and is not one. Advisory — see
         # decision_log.scope_suffix_warning for why this warns rather than refuses.
         warning = scope_suffix_warning(decision, action)
@@ -623,6 +625,32 @@ def verify_waivers(output_dir: Path) -> list[dict[str, str]]:
     return results
 
 
+def _assert_not_older_than_a_retraction(
+    output_dir: Path, read: tuple[list[dict[str, str]], list[str]] | None, *, action: str, index: int,
+) -> None:
+    """Refuse a clearance recorded before an accepted retraction of a HALT on *action* (C-2, #616, ruling R-17).
+
+    A HALT on the action (or on a family it belongs to) that is later retracted voids every clearance older than
+    that retraction, whether it was recorded under the HALT or before it: the retraction lifts the block, it never
+    revives an earlier clearance. The newest matching row still decides; a void row does not fall through to an
+    older one. Only the action's own HALTs count here (not lineage ancestors').
+
+    Raises:
+        RuntimeError: The clearance at row *index* (0-based) predates such a retraction.
+    """
+    if read is None:
+        return
+    retracted: list[int] = []
+    _open_halt_for(read[0], action, output_dir=output_dir, signing_active=_decision_signing_active(read[1]),
+                   retracted=retracted)
+    later = [r for r in retracted if r > index]
+    if later:
+        raise RuntimeError(
+            f"the newest clearance for '{action}' (row {index + 1}) is older than the HALT retraction at row "
+            f"{later[-1] + 1}: after a HALT is retracted, no earlier clearance survives. Record a new clearance "
+            "after the retraction (C-2, #616)")
+
+
 def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str] | None:
     """Return the newest security decision row matching an action keyword, or None when it is consumed.
 
@@ -630,9 +658,14 @@ def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str
     reached, so a superseded clearance can't be replayed once its successor is used. (Skipping consumed rows
     used to promote an older, unconsumed PASS to "latest"; mathAgents' P5 render, 2026-10-07.)
     """
+    return _latest_security_decision_at(output_dir, action=action)[0]
+
+
+def _latest_security_decision_at(output_dir: Path, *, action: str) -> tuple[dict[str, str] | None, int]:
+    """:func:`_latest_security_decision` plus the selected row's 0-based index in the log (-1 when None)."""
     log_path = output_dir / "references" / "security-decisions.log.csv"
     if not log_path.exists():
-        return None
+        return None, -1
 
     try:
         with log_path.open("r", encoding="utf-8", newline="") as fh:
@@ -646,9 +679,10 @@ def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str
         raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
 
     if not rows:
-        return None
+        return None, -1
 
-    for row in reversed(rows):
+    for index in range(len(rows) - 1, -1, -1):
+        row = rows[index]
         # A HALT-RETRACTION is a record that a block was lifted, not a clearance to act. It is
         # consumed by _assert_no_unretracted_halt; selecting it here would surface it as "the
         # latest decision" and refuse with 'unsupported verdict'.
@@ -662,10 +696,10 @@ def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str
         ]
         if any(_action_matches(candidate, action) for candidate in reviewed_candidates):
             if row.get("consumed", "").strip().lower() in {"yes", "true", "1"}:
-                return None  # the newest clearance is used up; an older one never stands in for it
+                return None, -1  # the newest clearance is used up; an older one never stands in for it
             normalized_row = {k: (v or "") for k, v in row.items()}
             normalized_row["action_reviewed"] = normalized_row.get(action_field, normalized_row.get("action_reviewed", ""))
             normalized_row["verdict"] = normalized_row.get(verdict_field, normalized_row.get("verdict", ""))
             normalized_row["timestamp"] = normalized_row.get("timestamp", normalized_row.get("date", ""))
-            return normalized_row
-    return None
+            return normalized_row, index
+    return None, -1
