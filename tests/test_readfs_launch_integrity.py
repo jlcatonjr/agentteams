@@ -218,3 +218,35 @@ def test_confined_team_readfs_args_unchanged():
     assert scoping.readfs_deny_globs(manifest) == ()
     texts = _rendered_recipes(manifest).values()
     assert texts and all("agentteams_readfs" in t and "--deny" not in t for t in texts)
+
+
+def test_skipped_protected_paths_are_reported_at_render(capsys):
+    # Review follow-up: an entry readfs cannot deny is named on stderr, never dropped silently.
+    assert scoping.readfs_deny_skipped({"privilege_profile": "exclusive", "protected_read_paths": [
+        "ok", "/abs", "~/x", "a/../b", ".", "q*"]}) == ("/abs", "~/x", "a/../b", ".", "q*")
+    manifest = _exclusive_manifest(["secrets/", "/abs/in/project", "~/notes"])
+    GooseAdapter().extra_output_files(manifest)
+    err = capsys.readouterr().err
+    assert "2 protected_read_path(s) NOT denied" in err
+    assert "/abs/in/project" in err and "~/notes" in err and "secrets/" not in err
+
+
+def test_no_skip_notice_when_every_entry_is_passed(capsys):
+    # Negative control: project-relative entries only -> no notice.
+    manifest = _exclusive_manifest(["secrets/", "notes/private"])
+    assert scoping.readfs_deny_skipped(manifest) == ()
+    GooseAdapter().extra_output_files(manifest)
+    assert "NOT denied" not in capsys.readouterr().err
+
+
+def test_one_component_deny_also_blocks_a_deeper_same_named_folder(tmp_path):
+    spec = importlib.util.spec_from_file_location("readfs_server", SERVER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    for rel in ("src/secrets/a.txt", "src/secretsx/a.txt"):
+        (tmp_path / rel).parent.mkdir(parents=True)
+        (tmp_path / rel).write_text("s")
+    ws = mod.Workspace(tmp_path, scoping.readfs_deny_globs(_exclusive_manifest(["secrets"])))
+    with pytest.raises(mod.ReadfsError, match="deny list"):
+        ws.resolve("src/secrets/a.txt")
+    ws.resolve("src/secretsx/a.txt")      # negative control: only the exact name is denied

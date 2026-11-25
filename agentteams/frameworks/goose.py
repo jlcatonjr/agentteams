@@ -132,6 +132,7 @@ from agentteams.frameworks.goose_tool_scoping import (
     grant_mode as _grant_mode,
     mark_declared as _mark_declared,
     readfs_deny_globs as _readfs_deny_globs,
+    readfs_deny_skipped as _readfs_deny_skipped,
 )
 
 __all__ = [
@@ -701,6 +702,12 @@ class GooseAdapter(FrameworkAdapter):
             # Under the switch, fail closed: the runner refuses a mismatched copy, so never install an edit.
             readfs = _pinned_readfs_mcp_content() if protected else _readfs_mcp_content()
             files.append((f"../../{_READFS_PROTECTED_PATH if protected else _READFS_SCRIPT}", readfs))
+            skipped = _readfs_deny_skipped(manifest)
+            if skipped:
+                print(f"  ⚠  readfs: {len(skipped)} protected_read_path(s) NOT denied by the read-only file server "
+                      f"(~ or absolute, '.', '..', or glob/shell characters): {', '.join(skipped)}. The OS boundary "
+                      "still applies; restate any that lie inside the project as project-relative paths.",
+                      file=sys.stderr)
             from agentteams import runner_mcp  # R6: granted agents launch the installed agentteams_runner server
 
             files.extend(runner_mcp.install_files(manifest))

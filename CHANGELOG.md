@@ -138,9 +138,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `exclusive` team's project-relative `protected_read_paths` were denied by the OS boundary but stayed readable
   through `agentteams_readfs`, which serves everything under `--root .` except its built-in deny list. Each such
   entry is now passed to the server as `--deny <entry>` and `--deny <entry>/**` (`goose_tool_scoping.readfs_deny_globs`).
-- `~/` and absolute entries are not passed (they lie outside `--root .`); entries with `..`, `.` alone, or glob or
-  shell metacharacters are skipped. The server matches a deny glob against each path component too, so a
-  one-component entry such as `secrets` also refuses a `secrets` directory deeper in the tree.
+- `~` and absolute entries are not passed (the globs are project-relative and are rebuilt from the manifest alone,
+  which does not carry the project root); entries with `..`, `.` alone, or glob or shell metacharacters are not
+  passed either. Each skipped entry is named in a warning at render time, so an in-project one can be restated as
+  a project-relative path. The server matches a deny glob against each path component too, so a one-component
+  entry such as `secrets` also refuses a `secrets` directory deeper in the tree.
 - The write-policy audit now requires the recipe's readfs entry to carry exactly these globs, so a hand-removed
   `--deny` is an error.
 - **On upgrade:** recipes rendered before this change fail that audit for an `exclusive` team with in-project

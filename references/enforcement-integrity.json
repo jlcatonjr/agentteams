@@ -106,7 +106,7 @@
     "agentteams/frameworks/_work_summary_hook_emit.py": "140753ad863863ee7b7d80983cb36b790c77b0b6f90128610388515e952654d5",
     "agentteams/frameworks/_write_roots.py": "bfa42145214d90b29afd4b0b933721bb7176194edecb0f31dff6e03e294f1b4a",
     "agentteams/frameworks/goose_recipe_grants.py": "8404d8d445ea49d3010c79f3eb63995354a3f6b6d5cc6f248e8a3ecb323e9d32",
-    "agentteams/frameworks/goose_tool_scoping.py": "012df7047b0a7a3ec99b7e43c3011cd8fe0a60e581589b253ede53b9610e6593",
+    "agentteams/frameworks/goose_tool_scoping.py": "f46c9fe0113caf84998b93b801ba60145d1f0fb62739857b9448c9c5e81e70fa",
     "agentteams/frameworks/wasm.py": "ba6024046eae7f8d274f7127327445d18462e9d0e828ec7af5e0d56104736463",
     "agentteams/front_matter_baseline.py": "5ac5553a968cdd5517f56056edf57b562ce64feab8f582964beadd1ec763ef41",
     "agentteams/front_matter_merge.py": "069c197aecebcbc04cd617645a8cf000f7bf67f13c8e264c3d35581438f5a086",

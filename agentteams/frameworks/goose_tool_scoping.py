@@ -214,13 +214,14 @@ def readfs_deny_globs(manifest: dict[str, Any]) -> tuple[str, ...]:
     """Return an ``exclusive`` team's in-project ``protected_read_paths`` as readfs ``--deny`` globs.
 
     The OS boundary (Seatbelt, the launcher's ``--exclude``) denies these paths, but the readfs server reads
-    whatever its ``--root .`` holds, so each in-project entry is passed to it too (remediation log row 507).
-    Only project-relative entries reach the server: ``~`` and absolute paths are outside ``--root .`` (the
-    renderer does not know the project root, so an absolute path inside it is not relativised), ``..`` and
-    ``.`` are skipped, and so is any entry :func:`path_char_problem` rejects (glob or shell metacharacters).
-    Each entry yields itself and ``<entry>/**``. The server matches an extra glob against the whole
-    root-relative path and against every path component, case-folded, so a one-component entry also denies
-    a same-named directory deeper in the tree: fail-closed.
+    whatever its ``--root .`` holds, so each project-relative entry is passed to it too. Entries that cannot be
+    passed are listed by :func:`readfs_deny_skipped`, which the goose adapter prints at render time. Each entry
+    yields itself and ``<entry>/**``. The server matches an extra glob against the whole root-relative path and
+    against every path component, case-folded, so a one-component entry also denies a same-named directory deeper
+    in the tree: fail-closed.
+
+    The globs come from the manifest alone, never from the project root, because the contract audit re-derives
+    them from a manifest that does not carry the root and requires the recipe to match exactly.
 
     Args:
         manifest: The team manifest.
@@ -231,18 +232,44 @@ def readfs_deny_globs(manifest: dict[str, Any]) -> tuple[str, ...]:
     Raises:
         Nothing.
     """
+    return _readfs_deny_split(manifest)[0]
+
+
+def readfs_deny_skipped(manifest: dict[str, Any]) -> tuple[str, ...]:
+    """Return the ``exclusive`` team's ``protected_read_paths`` entries that are NOT passed to readfs as ``--deny``.
+
+    Skipped: ``~`` and absolute paths (the globs are project-relative, and an absolute path inside the project
+    cannot be told apart from one outside it without the root), ``.`` alone, any entry with a ``..`` segment, and
+    any entry :func:`path_char_problem` rejects (glob or shell metacharacters). readfs does not deny these, so
+    the operator is told and can restate an in-project one as a project-relative path.
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        The skipped entries, in manifest order; ``()`` for any profile but ``exclusive``.
+
+    Raises:
+        Nothing.
+    """
+    return _readfs_deny_split(manifest)[1]
+
+
+def _readfs_deny_split(manifest: dict[str, Any]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """``(globs, skipped)`` for :func:`readfs_deny_globs` and :func:`readfs_deny_skipped`."""
     if manifest.get("privilege_profile") != "exclusive":
-        return ()
+        return (), ()
     globs: set[str] = set()
+    skipped: list[str] = []
     for entry in manifest.get("protected_read_paths") or []:
-        if path_char_problem(entry) is not None or entry.startswith(("~", "/")):
+        if not entry:
             continue
-        rel = posixpath.normpath(entry)
-        if rel == "." or ".." in entry.split("/"):
+        rel = posixpath.normpath(entry) if path_char_problem(entry) is None else ""
+        if not rel or entry.startswith(("~", "/")) or rel == "." or ".." in entry.split("/"):
+            skipped.append(str(entry))
             continue
         globs.update((rel, f"{rel}/**"))
-    return tuple(sorted(globs))
-
+    return tuple(sorted(globs)), tuple(skipped)
 
 
 def delegate_extensions(tools: frozenset[str] | None, extra: tuple[str, ...] = (),
