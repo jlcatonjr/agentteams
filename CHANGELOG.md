@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a non-Copilot orchestrator's update source pack names its own framework's files; #609)
+
+- The orchestrator's *Update Compatibility Source Pack* listed `.github/copilot-instructions.md`,
+  `.github/agents/agent-updater.agent.md` and `.github/agents/references/github-workflows-merge.reference.md` on every
+  framework, so a Claude, Goose, Codex, agents-md, Grok or WASM team's update pre-flight pointed at files its project
+  does not have. The list now uses three new placeholders, `{TEAM_INSTRUCTIONS_FILE}`, `{TEAM_AGENTS_DIR}` and
+  `{AGENT_FILE_SUFFIX}`, read from each adapter by `agentteams/frameworks/canonical_paths.py` (for example
+  `.claude/CLAUDE.md` and `.claude/agents/agent-updater.md` on Claude, `AGENTS.md` and
+  `.codex/agents/agent-updater.toml` on Codex). Copilot renders are unchanged.
+- **On upgrade:** `update_compatibility_source_pack` is now template-owned, so `--update --merge` replaces the old
+  Copilot list under the default `preserve` policy instead of keeping it because paths disappeared. A hand edit
+  inside that fence is replaced too, with a shrink notice and the `.lost` sidecar. On a non-Copilot team the path
+  change itself raises that notice, so under `--shrink-policy=halt` the run stops once: review it, then re-run with
+  `--shrink-policy=allow`. The fence version is unchanged. Re-pins `agentteams/fences.py` in `references/enforcement-integrity.json`.
+- **Test:** `tests/test_canonical_files_per_framework.py` renders a team on every registered framework and checks
+  that each listed file exists in it.
+
 ### fixed (@security's persona no longer says a grant never covers a server change; #558)
 
 - Rule S-VM said a grant "never covers merging, force-pushing, applying changes to a server". The code has allowed
