@@ -773,14 +773,17 @@ def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[st
     from agentteams.signing_switch import refuse_symlinked_component
 
     log_path = output_dir / "references" / "security-decisions.log.csv"
+    try:  # never through a symlink: not the log itself, nor a directory below the team dir, even when absent there
+        refuse_symlinked_component(log_path, output_dir)
+    except ValueError as exc:
+        raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
     if lstat_or_none(log_path, "security decisions log") is None:
         return None
     # A shared lock for the whole read, so a `governance_logs repair` (exclusive lock, in-place rewrite) is
     # never observed half-written (@security re-review C2). Appenders take the same exclusive lock.
-    try:  # never through a symlink: not the log itself, nor a directory below the team dir
-        refuse_symlinked_component(log_path, output_dir)
+    try:
         lock_fd = os.open(log_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
         raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
     try:
         if _fcntl is not None:
