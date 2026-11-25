@@ -248,3 +248,59 @@ def test_guard_refuses_a_symlinked_example_file(tmp_path: Path) -> None:
     kept, notices = GrokAdapter().guard_rendered_files([("../../AGENTS.md", "full")], agents)
     assert victim.read_text(encoding="utf-8") == "SECRET = 1\n"
     assert kept == [] and any("is a symlink" in n for n in notices)
+
+
+# bl48-28: --framework agents-md respects an AGENTS.md another target (or a person) owns ---------------------
+
+from agentteams.frameworks.agents_md import AgentsMdAdapter  # noqa: E402
+from agentteams.frameworks.goose import GOOSE_AGENTS_MD_NOTICE  # noqa: E402
+
+_NEUTRAL_RENDER = _AGENTS_MD_NOTICE + "\n\n# Neutral team\n"
+
+
+def _neutral(tmp_path: Path, existing: str | None) -> tuple[Path, list[tuple[str, str]], list[str]]:
+    root = tmp_path / "proj"
+    agents = root / ".agents"
+    agents.mkdir(parents=True)
+    if existing is not None:
+        (root / "AGENTS.md").write_text(existing, encoding="utf-8")
+    kept, notices = AgentsMdAdapter().guard_rendered_files(
+        [("../AGENTS.md", _NEUTRAL_RENDER), ("reader.md", "# Reader\n")], agents)
+    return root, kept, notices
+
+
+@pytest.mark.parametrize("existing, label", [
+    (_CODEX_FILE, "OpenAI Codex"),
+    (GROK_AGENTS_MD_NOTICE + "\n\n# Team\n", "Grok Build"),
+    (GOOSE_AGENTS_MD_NOTICE + "\n\n# Team\n", "Goose"),
+    ("# My hand-written instructions\n", "hand-written"),
+    (_FENCED_GOOSE, "hand-written"),
+])
+def test_agents_md_leaves_another_owners_file_untouched(tmp_path: Path, existing: str, label: str) -> None:
+    root, kept, notices = _neutral(tmp_path, existing)
+    assert kept == [("reader.md", "# Reader\n")]          # .agents/*.md are unaffected
+    assert len(notices) == 1 and label in notices[0] and "--overwrite" in notices[0]
+    for mode in ({}, {"overwrite": True}, {"merge": True}):
+        emit_all(kept, output_dir=root / ".agents", yes=True, **mode)
+        assert (root / "AGENTS.md").read_text(encoding="utf-8") == existing
+
+
+def test_agents_md_rerender_keeps_a_grok_runtime_fence(tmp_path: Path) -> None:
+    root, kept, notices = _neutral(tmp_path, _AGENTS_MD_NOTICE + "\n\n# Old\n\n" + grok_runtime_block() + "\n")
+    written = dict(kept)["../AGENTS.md"]
+    assert notices == [] and written.startswith(_AGENTS_MD_NOTICE)
+    assert "# Neutral team" in written and grok_runtime_block() in written and "# Old" not in written
+
+
+def test_agents_md_refuses_a_symlinked_agents_dir(tmp_path: Path) -> None:
+    root = tmp_path / "proj"
+    (root / "real").mkdir(parents=True)
+    (root / ".agents").symlink_to(root / "real")
+    kept, notices = AgentsMdAdapter().guard_rendered_files([("../AGENTS.md", _NEUTRAL_RENDER)], root / ".agents")
+    assert kept == [] and any("is a symlink" in n for n in notices)
+
+
+def test_agents_md_absent_file_is_written_as_today(tmp_path: Path) -> None:
+    # Negative control: no AGENTS.md yet -> the render passes through unchanged, with no notice.
+    _, kept, notices = _neutral(tmp_path, None)
+    assert kept == [("../AGENTS.md", _NEUTRAL_RENDER), ("reader.md", "# Reader\n")] and notices == []
