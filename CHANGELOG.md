@@ -58,8 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New notice:** the hub keeps its own text outside fences (from `--sync-init`), and a missing peer instruction
   file is rebuilt with it. When the pin's outside-fence text differs from the hub's, a sync pass now says so.
   Nothing is moved: Project-Specific Rules travel by rules projection.
-- **Internal:** the instruction-file name and placement rule moved from `interop` to
-  `interop_helpers.instructions_path` / `instructions_target_name`, so import and change detection share it.
+- **Internal:** import and change detection share one placement rule, `interop_helpers.instructions_path`,
+  derived from each adapter's own output path (so a wasm team's `.agentteams-wasm/TEAM.md` is watched, and a team
+  rendered with a custom `--output` keeps the same offset from its agents directory). `interop`'s own
+  framework-to-filename table is gone.
 
 ### fixed (pinned sync: a dry run lists its conflicts; a re-init keeps the hub; `agent_team` roster check)
 

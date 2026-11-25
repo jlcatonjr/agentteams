@@ -569,39 +569,47 @@ def keep_newer_fences(rendered: str, existing: str) -> tuple[str, list[str]]:
     return rendered, notices
 
 
-def instructions_target_name(target_framework: str) -> str:
-    """Instructions filename a framework owns (F.2; moved from ``interop``).
+def instructions_rel(framework: str) -> str:
+    """The instruction file's path relative to *framework*'s agents directory, as its adapter emits it.
+
+    Taken from the adapter's own ``finalize_output_path`` for the generic instructions entry (what the render
+    pipeline writes), not from a second table: ``../CLAUDE.md`` for claude, ``../../AGENTS.md`` for goose, codex
+    and grok, ``../TEAM.md`` for wasm.
 
     Args:
-        target_framework: A registered framework id.
+        framework: A registered framework id.
 
     Returns:
-        ``CLAUDE.md`` for claude, ``AGENTS.md`` for agents-md, goose, codex and grok, else
-        ``copilot-instructions.md``.
+        The relative path, ``/``-separated.
+
+    Raises:
+        KeyError: *framework* is not registered.
     """
-    if target_framework == "claude":
-        return "CLAUDE.md"
-    if target_framework in ("agents-md", "goose", "codex", "grok"):
-        return "AGENTS.md"
-    return "copilot-instructions.md"
+    from agentteams.frameworks.format_spec import COPILOT_INSTRUCTIONS_FILENAME
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    return FRAMEWORKS[framework]().finalize_output_path(f"../{COPILOT_INSTRUCTIONS_FILENAME}", "instructions")
 
 
 def instructions_path(agents_dir: Path, framework: str) -> Path:
-    """Where *framework* keeps its instruction file, given its agents directory (F.2).
+    """Where *framework*'s instruction file sits for a team whose agents directory is *agents_dir*.
 
-    goose, codex and grok keep ``AGENTS.md`` at the project root, two levels above their agents dir (e.g.
-    ``.goose/recipes``); every other framework keeps its file beside the agents dir. ``import_from_cai`` writes
-    there and ``multi_sync`` watches it for changes.
+    The path is relative to the agents directory, exactly as a native render places it, so a team rendered with a
+    custom ``--output`` has its file at the same offset from that directory (for goose, codex and grok: two levels
+    up, at what is the project root under the default layout). ``import_from_cai`` writes there and ``multi_sync``
+    watches it for changes.
 
     Args:
         agents_dir: The framework's agents directory.
         framework: A registered framework id.
 
     Returns:
-        The instruction file's path.
+        The instruction file's path (normalised, not resolved).
+
+    Raises:
+        KeyError: *framework* is not registered.
     """
-    base = agents_dir.parent.parent if framework in ("goose", "codex", "grok") else agents_dir.parent
-    return base / instructions_target_name(framework)
+    return Path(os.path.normpath(agents_dir / instructions_rel(framework)))
 
 
 def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, str]:

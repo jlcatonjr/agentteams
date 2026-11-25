@@ -824,7 +824,7 @@ def _write_bundle_artifacts(
     }
     instructions_map = {
         "source_name": cai.get("instructions_binding", {}).get("source_name", ""),
-        "target_name": _instructions_target_name(target_framework),
+        "target_name": Path(_instructions_rel(target_framework)).name,
     }
     interop_manifest = {
         "schema_version": "1.0",
@@ -937,7 +937,7 @@ from agentteams.interop_helpers import (
     capture_mcp_servers as _capture_mcp_servers,
     merge_instruction_file as _merge_instruction_file,
     instructions_path as _instructions_path,
-    instructions_target_name as _instructions_target_name,
+    instructions_rel as _instructions_rel,
     capture_escape_hatches as _capture_escape_hatches,
     capture_references as _capture_references,
     handoff_header_lines as _handoff_header_lines,

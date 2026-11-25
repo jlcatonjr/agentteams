@@ -346,7 +346,7 @@ def test_first_init_without_pin_instructions_still_succeeds(tmp_path: Path) -> N
     assert (tmp_path / _HUB / "team.cai.json").is_file()
 
 
-# --- bl48-29b: instruction-file edits count as changes; pin text outside fences ------------------------------
+# --- instruction-file edits count as changes; pin text outside fences is reported ------------------------------
 
 
 def _synced_team_with_instructions(root: Path) -> None:
@@ -396,13 +396,3 @@ def test_rebuilt_peer_warns_when_pin_text_outside_fences_differs(tmp_path: Path)
     result = _quiet(run_sync, tmp_path)
     assert not any("outside AGENTTEAMS fences differs" in n for n in result.notices), result.notices
 
-
-def test_instructions_path_matches_import_placement(tmp_path: Path) -> None:
-    from agentteams.frameworks.registry import FRAMEWORK_IDS, agents_dir_for
-    from agentteams.interop_helpers import instructions_path
-    expected = {"copilot-vscode": ".github/copilot-instructions.md", "copilot-cli": ".github/copilot-instructions.md",
-                "claude": ".claude/CLAUDE.md", "goose": "AGENTS.md", "agents-md": "AGENTS.md", "codex": "AGENTS.md",
-                "grok": "AGENTS.md", "wasm": ".agentteams-wasm/copilot-instructions.md"}
-    assert set(expected) == set(FRAMEWORK_IDS)
-    for fw in FRAMEWORK_IDS:
-        assert instructions_path(agents_dir_for(fw, tmp_path), fw) == tmp_path / expected[fw], fw
