@@ -30,7 +30,7 @@ from pathlib import Path
 MARKER = "agentteams-api-impact-skipped"
 #: PATH candidates after the recorded interpreter, newest first.
 PATH_CANDIDATES = ("python3.14", "python3.13", "python3.12", "python3.11", "python3")
-#: Local git config keys holding the machine paths of a hook installed inside the working tree (bl48-20): kept in
+#: Local git config keys holding the machine paths of a hook installed inside the working tree: kept in
 #: ``.git/config``, which is never committed, instead of in a hook file that may be.
 CONFIG_IMPORT_PATH = "agentteams.hookImportPath"
 CONFIG_PYTHON = "agentteams.hookPython"
@@ -93,7 +93,7 @@ def render_resolver(recorded: str, checkout: str, *, from_git_config: bool = Fal
         recorded: The interpreter recorded at install time (may be ``""``).
         checkout: The directory put on ``PYTHONPATH`` when the hook does not use a locked installation.
         from_git_config: Read both from local git config (:data:`CONFIG_IMPORT_PATH`, :data:`CONFIG_PYTHON`) at run
-            time instead of the baked values, for a hooks dir inside the working tree (bl48-20). The import path is
+            time instead of the baked values, for a hooks dir inside the working tree. The import path is
             dropped unless it is an absolute directory outside the tree; the interpreter passes the same checks as
             every candidate.
 

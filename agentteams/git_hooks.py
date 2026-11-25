@@ -677,7 +677,7 @@ def install_pre_commit_hook(
 
     checkout, recorded, notice = hp.checkout_path(at_path, repo_root), hp.recorded_interpreter(repo_root), ""
     in_tree = hp.hooks_dir_in_tree(repo_root, target_dir)
-    if in_tree:  # a committable hook carries no machine path (bl48-20): they go to .git/config instead
+    if in_tree:  # a committable hook carries no machine path: they go to .git/config instead
         hp.record_in_git_config(repo_root, checkout, recorded)
         checkout, recorded = "", ""
         notice = f"hooks dir {target_dir} is inside the working tree: machine paths kept in .git/config"

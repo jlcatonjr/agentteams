@@ -319,3 +319,27 @@ def test_default_hooks_dir_install_is_unchanged(tmp_path: Path, monkeypatch):
         _FAKE_CHECKOUT, recorded_python=_FAKE_PY)
     assert res.hook_path.read_text(encoding="utf-8") == expected and res.notice == ""
     assert _run(repo, env, "config", "--local", "--get", "agentteams.hookImportPath").returncode != 0
+
+
+def _planted_package(where: Path, flag: Path) -> Path:
+    """A fake ``agentteams`` package under *where* that leaves *flag* behind when it is imported."""
+    pkg = where / "agentteams"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text(f"open({str(flag)!r}, 'w').close()\n")
+    return where
+
+
+@pytest.mark.parametrize("inside", [True, False])
+def test_in_tree_hook_drops_an_import_path_inside_the_working_tree(tmp_path: Path, inside: bool):
+    # Review follow-up: a config import path inside the tree is never put on PYTHONPATH. Negative control
+    # (inside=False): the same planted package outside the tree IS imported, so the check can see a use.
+    env = _env([_fake_bin(tmp_path)])
+    repo = _in_tree_repo(tmp_path, env)
+    git_hooks.install_pre_commit_hook(repo, agentteams_path=str(REPO_ROOT))
+    flag = tmp_path / "PLANTED_IMPORTED"
+    where = _planted_package((repo / "vendor") if inside else (tmp_path / "outside"), flag)
+    _run(repo, env, "config", "--local", "agentteams.hookImportPath", str(where))
+    _run(repo, env, "config", "--local", "agentteams.hookPython", sys.executable)
+    proc = _change(repo, env)
+    assert proc.returncode == 0, proc.stderr
+    assert flag.exists() is (not inside)
