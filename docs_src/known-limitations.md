@@ -579,7 +579,8 @@ The verdict agentteams records per framework is `wasm_enforcement` in the team m
 - **Workaround:** render on the target framework from the brief (`--description … --framework <fw>`), or use
   multi-sync, which carries the brief's privilege settings in `team.cai.json` (`privilege`) and re-emits the
   sandbox files on each projection.
-- **Tracking:** remediation log row 266 (the multi-sync path is fixed; this one-shot path is by design).
+- **Tracking:** by design: one-shot conversion converts agent files only; multi-sync is the path that carries the
+  boundary (`team.cai.json` `privilege`).
 
 ### Several standing sandbox exceptions can hit the aggregate cap
 
