@@ -173,6 +173,47 @@ def test_row699_ordinary_commands_stay_silent(tmp_path: Path, cmd: str) -> None:
     assert not {c for c, _ in gate._bash_matches(cmd)} & PROMOTED_699, cmd
 
 
+# ── Row 730: config that hands over execution or the credential asks (bl48-08) ─────────────────────
+
+EXEC_CONFIG_WRITES = [
+    "git config core.hooksPath x", 'git config --global core.sshCommand "ssh -i k"', "git config credential.helper store",
+    "git config credential.https://h.helper x", "git config core.fsmonitor ./m", "git config core.askPass x",
+    "git -c core.hooksPath=/tmp/h push", "git --config-env=core.sshCommand=EV fetch", "git config core.HOOKSPATH x",
+    "git config set core.hooksPath x",
+]
+
+
+@pytest.mark.parametrize("cmd", EXEC_CONFIG_WRITES)
+def test_gate_asks_on_exec_handover_config(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
+    assert "git-alias-config" in {c for c, _ in gate._bash_matches(cmd)}
+
+
+@pytest.mark.parametrize("cmd", [
+    "git config --get core.hooksPath", "git config get core.sshCommand", "git config list", "git config user.name x",
+    "git config get alias.p", "git -C ../wt config list --show-origin", "git config core.hooksPathx y",
+])
+def test_exec_config_reads_stay_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+@pytest.mark.parametrize("cmd", ["git config core.hooksPath list", "git config core.hooksPath 'config list'",
+                                 "git config credential.helper 'config get'", "git config list; git config core.hooksPath x"])
+def test_config_value_named_list_still_asks(tmp_path: Path, cmd: str) -> None:
+    # The read exemption is the word right after the first `config`; a value or a later command cannot borrow it.
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
+
+
+def test_strict_denies_exec_config(tmp_path: Path) -> None:
+    gate = install(tmp_path, policy(preset="strict"))
+    assert verdict(gate, "Bash", {"command": "git config core.fsmonitor ./m"}) == (
+        "deny", "policy-deny", "git-alias-config")
+    assert verdict(gate, "Bash", {"command": "git config get core.fsmonitor"})[0] == "pass"
+
+
 def test_unrecorded_policy_file_is_ignored(tmp_path: Path) -> None:
     gate = install(tmp_path, policy(preset="strict"), record=False)
     assert verdict(gate, "Bash", {"command": "rm -rf build"})[0] == "ask"

@@ -328,6 +328,25 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   (next entry).
 - **Tracking:** remediation log rows 388 and 413. Threat model v3, section 2a.
 
+### The gate asks on some git config that runs a program, not all
+
+- **What:** `git-alias-config` asks on `alias.`, `push.`, `remote.`, `url.`, `credential.` and `core.hooksPath`,
+  `core.sshCommand`, `core.askPass`, `core.fsmonitor`, set through `git config`, `git -c` or `git --config-env`.
+  Other git configuration also runs a program and does not ask:
+  - `core.pager`, `core.editor`, `core.gitProxy`, `sequence.editor`, `diff.external`, `diff.*.textconv`,
+    `merge.*.driver`, `filter.*` and `gpg.program`, by any route;
+  - `include.path` through `git -c` (`git config include.path` asks, as `publication-channel`);
+  - `GIT_CONFIG_COUNT` and its key/value variables ask (`publication-channel`), but the reason shown names a
+    publication channel, not code execution;
+  - direct edits of `.git/config`: a Write or Edit, or a shell copy, `sed -i` or redirect into it, asks; an edit made
+    by an interpreter (`python3 -c "open('.git/config', 'a')…"`) does not.
+  - Also not covered: `git push --no-verify`, and the `GIT_SSH_COMMAND`, `GIT_SSH`, `GIT_ASKPASS`, `SSH_ASKPASS` and
+    `GIT_EXEC_PATH` environment variables.
+- **Who:** all Claude teams with the gate hook installed.
+- **Mitigation:** the gate is a review prompt, not a boundary. Run with the Claude sandbox on, and review
+  `.git/config` changes before a push.
+- **Tracking:** remediation log rows 702 and 730.
+
 ### The project gate policy is advisory where nothing write-protects the gate
 
 - **What:** the policy's digest is recorded in the installed gate. On Copilot, on Grok, and in any team whose OS

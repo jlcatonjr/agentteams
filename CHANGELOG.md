@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the gate asks on git config that runs a program or hands over the push credential; bl48-08)
+
+- **Fixed:** the constitutional gate's `git-alias-config` class now also asks on `credential.*`, `core.hooksPath`,
+  `core.sshCommand`, `core.askPass` and `core.fsmonitor`, set through `git config`, `git -c` or `git --config-env`.
+  Before, `git config core.hooksPath x` ran with no prompt, and the next commit, push or `git status` (the
+  operator's too) ran whatever it named; `credential.helper` handed the push credential to a program.
+- **Effect on headless sessions:** these commands now ask, which a headless session denies. Setup steps run
+  through agent Bash, such as `git config credential.helper osxkeychain`, `git config core.sshCommand "ssh -i …"` or
+  `git -c core.hooksPath=/dev/null …`, need an operator or must run outside the session. A project policy that
+  denies `git-alias-config` (and the `strict` preset) now denies them too. The class id is unchanged.
+- **Newly silent:** `git config get …` and `git config list` (git 2.46 and later) are reads, for every key, including
+  `alias.`, `push.`, `remote.` and `url.`, which asked before. Only the word right after the first `config` counts,
+  so `git config core.hooksPath 'config list'` still asks.
+- **Not covered:** other keys that run a program (`core.pager`, `core.editor`, `filter.*` and more) are listed in
+  the known limitations.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`

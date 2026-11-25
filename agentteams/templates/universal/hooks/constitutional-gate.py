@@ -150,11 +150,12 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
-    # alias./push. config can hide or redirect a push (`git -c alias.p='push -f' p`); row 699.
-    ("git-alias-config", r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:alias|push|remote|url)\.|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)"
-     r"(?=[^\n]*\s['\"]?(?:alias|push|remote|url)\.)",
-     "git alias, push or remote configuration that can hide or redirect a push"),
+    # alias./push. config can hide or redirect a push (row 699); credential.*, core.hooksPath/sshCommand/askPass/fsmonitor
+    # hand over the credential or run a program (row 730). `get|list` reads only as the word after the FIRST `config`.
+    ("git-alias-config", r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b)|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?!(?:(?!\bconfig\b)[^\n;&|])*\bconfig\s+(?:get|list)\b)"
+     r"(?=[^\n]*\s['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b))",
+     "git configuration that can hide or redirect a push, hand the credential to a program, or run a program (alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor)"),
     ("interpreter-send", r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
