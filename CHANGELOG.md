@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (brief ingestion no longer reads dependency manifests from `tmp/` or backup trees)
+
+- **Fixed:** the project scan read `package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml` and `go.mod`
+  from any directory within two levels, including `tmp/`, `.agentteams-backups/` and `.agentteams-fleet/`. A stale
+  or planted copy there added its dependencies to the brief's tools, and so to every rendered agent. Those
+  directories, `.pytest_cache` and `.mypy_cache` are now skipped. Language detection and retrieval inference skip
+  them too (they skipped nothing before, not even `node_modules`).
+- **New:** a stderr line names each manifest that added tools: `[ingest] tools from svc/requirements.txt: 3`.
+- **Changed for some projects:** real source kept under a directory literally named `tmp` no longer contributes
+  tools; declare them in the brief.
+
 ### fixed (fleet: an update that raised or was refused by a gate is FAIL, not OK)
 
 - **Fixed:** a fleet target whose update exited non-zero was reported `OK (+0/-0)` unless its output had a line
