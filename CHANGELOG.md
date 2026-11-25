@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shell does can change the words git receives. Before, quoting, comments, nested commands, brace expansion, word
   splitting and `$'…'` quoting could each make a write look like a read. The same rule covers the
   `publication-channel` keys (`remote.*.url`, `url.*.insteadOf`, and any `include.` or `includeIf.` key).
+- **Section renames:** `git config --rename-section foo core` (or `rename-section`, or an abbreviation such as
+  `--ren`) asks when either name begins with `alias`, `push`, `remote`, `url`, `credential`, `core`, `include` or
+  `agentteams`, in any case. git honours the rename, so `foo.hooksPath` set earlier becomes `core.hooksPath` with no
+  command naming the key. A rename between other sections stays silent.
 - **Newly silent:** `git config get …` and `git config list` (git 2.46 and later) are reads, for every key, including
   `alias.`, `push.`, `remote.` and `url.`, which asked before.
 - **Who notices the stricter reads:** a read naming one of these keys now asks when anything in the same Bash

@@ -62,6 +62,12 @@ fail-closed rule. A command naming such a key stays silent only when both hold:
   (`--comment`, which takes the next word, and any abbreviation are never skipped).
 
 Everything else asks, so quoting, expansion, substitution and continuation cannot make a write look like a read.
+
+**Section renames.** git honours `git config --rename-section foo core` (and `git config rename-section foo core`):
+a `foo.hooksPath` set earlier then reads back as `core.hooksPath`, with no command naming the key. So a rename asks
+when either section name begins, in any case, with `alias`, `push`, `remote`, `url`, `credential`, `core`,
+`include` (which covers `includeIf`) or `agentteams`. Any `--ren…` abbreviation, extra arguments or an unknown
+option ask, under the same plain-text rule. `git config --rename-section a b` stays silent.
 Reads that need any of those characters ask too: a quoted key (a key with a space always does), a read in a command
 that quotes or expands something elsewhere, a `~` path, a `\`-continued line, CRLF line endings, or a read run
 through a wrapper such as `sudo`.

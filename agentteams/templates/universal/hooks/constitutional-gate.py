@@ -98,8 +98,13 @@ _GIT_PUBLISH_KEYS = (r"\b(?:(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:instead
 #: Per class, a line naming `git`, `config` and such a key; _config_write() exempts only commands it proves are reads.
 _GIT_CONFIG_WRITES = {
     "publication-channel": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*{_GIT_PUBLISH_KEYS})", re.IGNORECASE),
-    "git-alias-config": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*\s['\"]?{_GIT_EXEC_KEYS})", re.IGNORECASE),
+    "git-alias-config": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*(?:\s['\"]?{_GIT_EXEC_KEYS}|\brename-section\b|\s--ren))",
+                                   re.IGNORECASE),
 }
+#: Section families those keys live in. git honours a section rename, so `git config --rename-section foo core`
+#: turns `foo.hooksPath` into core.hooksPath with no command naming the key; a rename into or out of one asks.
+#: git takes any unambiguous abbreviation (`--ren` is `--rename-section`), so any `--ren…` option is a candidate.
+_GATED_SECTIONS = re.compile(r"(?:alias|push|remote|url|credential|core|include|agentteams)", re.IGNORECASE)
 
 #: Bash patterns that match a Mandatory Review Trigger in security.template.md. Each is a
 #: judgment call routed to the operator, never an automatic deny — see the verdict policy above.
@@ -483,40 +488,77 @@ def _option_span(word: str, value_options: "frozenset[str]", flag_options: "froz
     return 2 if word in value_options else None
 
 
+def _config_args(words: "list[str]") -> "list[str] | None":
+    """The words after ``git [known global options] config``; None when ``words`` is not such a command."""
+    if not words or words[0].rsplit("/", 1)[-1] != "git":
+        return None
+    i = 1
+    while i < len(words) and words[i].startswith("-"):
+        span = _option_span(words[i], _GIT_VALUE_OPTIONS, _GIT_FLAG_OPTIONS)
+        if span is None:
+            return None
+        i += span
+    if i >= len(words) or words[i] != "config":
+        return None
+    return words[i + 1:]
+
+
 def _is_config_read(words: "list[str]") -> bool:
     """True only for ``git [global options] config`` then ``get``/``list``, or a read flag before the key.
 
     Only options git is known to accept count, so an unknown or abbreviated option (which may take the
     next word as its value) is never skipped past. Called only for plain text (:data:`_PLAIN_COMMAND`).
     """
-    if not words or words[0].rsplit("/", 1)[-1] != "git":
+    args = _config_args(words)
+    if args is None:
         return False
-    i = 1
-    while i < len(words) and words[i].startswith("-"):
-        span = _option_span(words[i], _GIT_VALUE_OPTIONS, _GIT_FLAG_OPTIONS)
-        if span is None:
-            return False
-        i += span
-    if i >= len(words) or words[i] != "config":
-        return False
-    i += 1
-    if words[i:i + 1] in (["get"], ["list"]):
+    if args[:1] in (["get"], ["list"]):
         return True
-    while i < len(words) and words[i].startswith("-"):
-        if words[i] in _CONFIG_READ_FLAGS:
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        if args[i] in _CONFIG_READ_FLAGS:
             return True
-        span = _option_span(words[i], _CONFIG_VALUE_OPTIONS, _CONFIG_FLAG_OPTIONS)
+        span = _option_span(args[i], _CONFIG_VALUE_OPTIONS, _CONFIG_FLAG_OPTIONS)
         if span is None:
             return False
         i += span
     return False
 
 
+def _is_ungated_rename(words: "list[str]") -> bool:
+    """True for ``git config [--]rename-section OLD NEW`` where neither name is in :data:`_GATED_SECTIONS`.
+
+    Exactly two names, and only known options around them; an abbreviated ``--rename-sec`` is unknown.
+    """
+    args = _config_args(words)
+    if args is None:
+        return False
+    names: list[str] = []
+    flagged, i = False, 0
+    while i < len(args):
+        if args[i] == "--rename-section":
+            flagged, i = True, i + 1
+        elif args[i].startswith("-"):
+            span = _option_span(args[i], _CONFIG_VALUE_OPTIONS, _CONFIG_FLAG_OPTIONS)
+            if span is None:
+                return False
+            i += span
+        else:
+            names.append(args[i])
+            i += 1
+    if not flagged:
+        if names[:1] != ["rename-section"]:
+            return False
+        names = names[1:]
+    return len(names) == 2 and not any(_GATED_SECTIONS.match(name) for name in names)
+
+
 def _config_write(class_id: str, line: str, plain: bool) -> bool:
     """True when ``line`` may write a ``class_id`` key (:data:`_GIT_CONFIG_WRITES`) through ``git config``.
 
     A positive, fail-closed rule. Exempt only when the whole Bash command is plain text (``plain``, see
-    :data:`_PLAIN_COMMAND`) and every command on the line naming such a key parses as a read.
+    :data:`_PLAIN_COMMAND`) and every command on the line naming such a key parses as a read, or as a
+    section rename that touches no gated section.
     """
     pattern = _GIT_CONFIG_WRITES.get(class_id)
     if pattern is None or not pattern.search(line):
@@ -524,7 +566,7 @@ def _config_write(class_id: str, line: str, plain: bool) -> bool:
     if not plain:
         return True
     named = [words for words in _shell_commands(line) or [] if pattern.search(" ".join(words))]
-    return not named or not all(_is_config_read(words) for words in named)
+    return not named or not all(_is_config_read(words) or _is_ungated_rename(words) for words in named)
 
 
 def _bash_matches(command: str, first_only: bool = False,

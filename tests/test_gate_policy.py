@@ -351,6 +351,38 @@ def test_remote_keys_stay_fast_at_the_line_cap(tmp_path: Path) -> None:
         assert time.perf_counter() - started < 1.5, line[:30]
 
 
+# git honours a section rename: `git config foo.hooksPath x; git config --rename-section foo core` leaves
+# core.hooksPath set, with no command naming the key.
+@pytest.mark.parametrize("cmd", [
+    "git config foo.hooksPath /tmp/h; git config --rename-section foo core",
+    "git config foo.hooksPath /tmp/h; git config rename-section foo core",
+    "git config foo.p status; git config --rename-section foo alias",
+    "git config --rename-section foo CORE", "git config --global --rename-section foo credential",
+    "git config rename-section foo includeIf.gitdir:/x/", "git config --rename-section foo agentteams",
+    "git config --rename-section foo remote.origin", "git config --rename-section foo url.https://x",
+    "git config --rename-section core foo", "git config --rename-section a 'core'",
+    "git config --rename-section a b c", "git config --rename-sec foo core", "git config --ren foo core",
+    "git config --rena foo alias",
+])
+def test_a_section_rename_into_a_gated_family_asks(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
+
+
+@pytest.mark.parametrize("cmd", ["git config --rename-section a b", "git config rename-section a b",
+                                 "git config --global --rename-section old-name new-name"])
+def test_an_ungated_section_rename_stays_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+@pytest.mark.parametrize("cmd", ["git config --get user.name\ngit config core.hooksPath /tmp/h",
+                                 "git config --get core.hooksPath ; git config --unset core.hooksPath"])
+def test_a_write_after_a_read_on_the_same_command_asks(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
+
+
 @pytest.mark.parametrize("cmd", ["sudo git config --get alias.p", "echo `git config --get alias.p`",
                                  "git config --get user.name; echo core.hooksPath"])
 def test_a_read_that_is_not_plainly_git_config_asks(tmp_path: Path, cmd: str) -> None:
