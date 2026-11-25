@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`plan_steps --set` marks a plan step with one command)
+
+- **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`
+  updates one step by rewriting that row only. Every other byte of the file is kept: line endings, blank lines,
+  and other rows that are themselves malformed. `set_step()` is the same thing as a function.
+- **Why:** the CLI offered only `--check`, so sessions wrote their own scripts to edit a steps CSV. Tables ended up
+  with statuses outside the vocabulary and, in places, shifted columns.
+- **Refused, with nothing written:** a status other than `pending`, `in_progress`, `done` or `blocked` (the legacy
+  `completed` is still read, but not written); a step id that names no row or more than one; a step row with
+  more cells than the header; a table that lacks the column being set.
+- **Checked on real tables:** run over copies of 812 step tables from this repository, 794 changed in the one row
+  only and 18 were refused with the file untouched. The whole-table writer (`update_step`) is unchanged; on the
+  same tables it converts CRLF line endings and drops cells from rows wider than the header.
+- **Symlinks:** a steps file reached through a symlink stays a symlink; the file it points to is updated.
+- **Tracing:** the workflow tracer counts a `--set` on a steps CSV as a write to it.
+- **Not changed:** the agent templates do not mention the command yet.
+
 ### added (a helper that finds repeated passages in Markdown docs and moves them to one snippet)
 
 - **New:** `python -m agentteams.doc_overlap PATH…` reports passages of 20 words or more that repeat across Markdown
