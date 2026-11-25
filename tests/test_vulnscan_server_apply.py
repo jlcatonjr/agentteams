@@ -473,3 +473,14 @@ def test_an_earlier_failed_or_unfinished_quarantine_refuses(env: dict[str, Any],
     res = act(env, RP)
     assert res["status"] == "failed" and ("failed" in res["detail"] or "never finished" in res["detail"]), res
     assert [c for c in env["kit"].calls if c[0] == "run-host.sh"] == []
+
+
+@pytest.mark.parametrize("halt_id", ["server-apply", "server-apply:remove-path:jlc-prod"])
+def test_removal_clearance_refuses_under_family_halt(env: dict[str, Any], halt_id: str) -> None:
+    # bl48-02 (#636): a HALT on the family, or on an intermediate scope, refuses the per-path clearance.
+    install_v2(env)
+    _scoped(env)
+    clearance(env, server_apply.removal_action("jlc-prod", ANACONDA))
+    clearance(env, halt_id, status="HALT", verified="")
+    res = act(env, RP)
+    assert res["status"] == "failed" and "C-5" in res["detail"] and env["kit"].calls == [], res

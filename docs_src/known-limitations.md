@@ -134,6 +134,17 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
+### Through 1.3.0: a HALT on a family id did not block its instance ids (fixed in 1.3.1, #636)
+
+- **What (agentteams ≤ 1.3.0):** a HALT on `server-apply` (or on `server-apply:remove-path:<host>`) did not stop a
+  PASS on `server-apply:remove-path:<host>:<path>` from clearing it, because the HALT side matched only ids that
+  start with the action, or the action's tokens inside the HALT id.
+- **Now:** a HALT also blocks every id under its own id after a colon. Only `:` counts: a HALT on `branch` does not
+  block `branch-delete`. Such a HALT is retracted only by a `HALT-RETRACTED` row with its own id.
+- **Who:** teams whose decisions log holds an unretracted HALT on a short id that their own gates' ids extend after
+  a colon (for example `deploy` and `deploy:prod`). `--verify-integrity` and `--migrate-decision-log --dry-run`
+  list every unretracted HALT this reaches, consumer-defined ids included.
+
 ### Through 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.1)
 
 - **What (agentteams ≤ 1.3.0):** a HALT row whose `action_reviewed` was empty, blank or punctuation only matched no

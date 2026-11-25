@@ -317,7 +317,7 @@ def _check_new(team_dir: Path, r: Relaxation) -> dict[str, str]:
         raise SandboxRelaxationError(f"the '{relaxation_action}' decision is inconsistent: {exc}") from exc
     if not exception:  # unreachable while the classifier's sandbox axis holds; fail closed if it ever drifts
         raise SandboxRelaxationError(f"the '{relaxation_action}' decision does not classify as an exception")
-    # C-2 over the family too: halt_names_action does not let a HALT on `sandbox-os-off` block `sandbox-os-off:claude`.
+    # C-2 over the family too: a HALT on any instance (`sandbox-os-off:goose`) also blocks `sandbox-os-off:claude`.
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
     security_gate._assert_destructive_action_allowed(team_dir, action=relaxation_action, consume=False)
     return row

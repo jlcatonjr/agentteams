@@ -631,3 +631,65 @@ def test_gate_reads_a_real_references_dir(tmp_path):
     assert dl._enforce_decision_signing(tmp_path) is True
     rows, _ = dl._read_decision_rows(tmp_path)
     assert rows[0]["verdict"] == "HALT"
+
+
+# ---------------------------------------------------------------------------
+# bl48-02 (#636, ruling R-18): a HALT on a family id blocks every id under it after a colon
+# ---------------------------------------------------------------------------
+
+_SA = "server-apply:remove-path:web1:/srv/old"
+
+
+def test_family_halt_blocks_instance_clearance(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row(_SA, "PASS")])
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "HALT" in why
+
+
+@pytest.mark.parametrize("halt_id,action", [
+    ("server-apply-old", _SA),           # no colon boundary
+    ("server", "serverless:x"),          # a substring, not a family
+    ("branch", "branch-delete"),         # R-18: '-' is not a family delimiter
+    ("vulnscan", "vulnscan_publish"),    # nor '_'
+    ("carve", "carve.out:x"),            # nor '.'
+])
+def test_family_halt_needs_a_colon_boundary(tmp_path, halt_id, action):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row(halt_id, "HALT"), _row(action, "PASS")])
+    assert security_gate.check_clearance(tmp_path, action=action) == (True, "")   # negative control
+
+
+def test_intermediate_scope_halt_blocks_path(tmp_path):
+    _write_decisions_log(tmp_path, [_row("server-apply:remove-path:web1", "HALT")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_SA)
+    dl._assert_no_unretracted_halt(tmp_path, action="server-apply:remove-path:web2:/srv/old")  # must not raise
+
+
+def test_family_halt_retracted_only_by_its_own_id(tmp_path):
+    rows = [_row("server-apply", "HALT"),
+            _row(_SA, "HALT-RETRACTED", conditions="instance settled", timestamp="2026-02-01T00:00:00Z")]
+    _write_decisions_log(tmp_path, rows)
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_SA)
+    _write_decisions_log(tmp_path, [*rows, _row("server-apply", "HALT-RETRACTED", conditions="family settled",
+                                                  timestamp="2026-02-02T00:00:00Z")])
+    dl._assert_no_unretracted_halt(tmp_path, action=_SA)  # must not raise
+
+
+def test_newly_blocking_halts_lists_family_halts(tmp_path):
+    from agentteams.cli.action_ids import describe_newly_blocking_halts
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row("deploy", "HALT"),
+                                    _row("deploy", "HALT-RETRACTED", conditions="done",
+                                         timestamp="2026-02-01T00:00:00Z")])
+    text = "\n".join(describe_newly_blocking_halts(tmp_path))
+    assert "'server-apply' now also blocks every id under it ('server-apply:...')" in text
+    assert "agentteams gate family 'server-apply'" in text
+    assert "'deploy' now also blocks" not in text   # retracted: not listed
+    _write_decisions_log(tmp_path, [_row("deploy", "HALT")])   # a consumer-defined id is listed too
+    assert "'deploy' now also blocks every id under it ('deploy:...')" in "\n".join(
+        describe_newly_blocking_halts(tmp_path))

@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a HALT on a family id blocks every id under it after a colon, #636)
+
+- **Fixed:** a HALT on `server-apply` (or `server-apply:remove-path:<host>`) did not block a PASS on
+  `server-apply:remove-path:<host>:<path>`, so `vulnscan` server-apply path removal and any `check_clearance` gate
+  called with an instance id could be cleared under a family HALT (C-2). The HALT side now also matches an id
+  that is the HALT's id plus `:` and more. Only `:` counts (ruling R-18): `branch` does not block `branch-delete`.
+  The clearing side (`action_matches`) is unchanged.
+- **Retraction:** such a HALT is retracted only by a `HALT-RETRACTED` row with its own id.
+- **Before upgrading:** `--verify-integrity` and `--migrate-decision-log --dry-run` now list every unretracted
+  HALT this reaches, with the agentteams gate family it belongs to, and consumer-defined ids too
+  (`action_ids.family_halts`).
+
 ### fixed (the tracked-marker check fails closed when git refuses a governed repository)
 
 - **Fixed:** when git refused the repository (`safe.directory` ownership, a broken `.git` file), a team whose
