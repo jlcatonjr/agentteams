@@ -619,17 +619,34 @@ def _commit_py(repo: Path) -> subprocess.CompletedProcess:
 
 
 _MAP = "references/architecture-graph.md"
-_SKIP_LINE = "map refresh skipped in an agent session (claude-code)"
+
+
+def _markers() -> tuple[tuple[str, str], ...]:
+    from agentteams.update_lock import INVOKER_ENV_MARKERS
+
+    return INVOKER_ENV_MARKERS
 
 
 @pytest.mark.skipif(not _has_git(), reason="git not available")
-def test_hook_skips_map_staging_under_an_agent_marker(tmp_path, monkeypatch):
+@pytest.mark.parametrize("name, invoker", _markers())
+def test_hook_skips_map_staging_under_an_agent_marker(tmp_path, monkeypatch, name, invoker):
     repo = _agent_pkg_repo(tmp_path, monkeypatch)
-    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv(name, "1")
     result = _commit_py(repo)
     assert result.returncode == 0, result.stderr
-    assert _SKIP_LINE in result.stderr
+    assert f"map refresh skipped in an agent session ({invoker})" in result.stderr
     assert _git(repo, "ls-files", _MAP).stdout.strip() == ""
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_an_empty_marker_does_not_skip(tmp_path, monkeypatch):
+    # A marker variable that is set but empty is not an agent session: the map is staged as usual.
+    repo = _agent_pkg_repo(tmp_path, monkeypatch)
+    monkeypatch.setenv("CLAUDECODE", "")
+    result = _commit_py(repo)
+    assert result.returncode == 0, result.stderr
+    assert "map refresh skipped" not in result.stderr
+    assert _git(repo, "ls-files", _MAP).stdout.strip() == _MAP
 
 
 @pytest.mark.skipif(not _has_git(), reason="git not available")

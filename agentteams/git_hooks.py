@@ -421,7 +421,7 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
 
     In an agent session (a variable in ``update_lock.INVOKER_ENV_MARKERS`` is set) the two map refreshes are skipped
     with one stderr line unless ``git config agentteams.hookAgentRefresh`` is true: they are built from the working
-    tree and would carry other sessions' uncommitted edits into the commit (bl48-35).
+    tree and would carry other sessions' uncommitted edits into the commit.
 
     The interpreter is resolved by :func:`agentteams._hook_python.render_resolver` (#447 a, c): the locked
     installation in a release-locked repository, else ``recorded_python`` or a 3.11+ ``python3.x`` on PATH. When none
@@ -474,7 +474,7 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
         '            if [ -n "$_at_mark" ]; then printf \'%s\\t%s\\n\' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$_at_why" >> "$_at_mark" 2>/dev/null || true; fi\n'
         '        fi\n'
         '    elif [ -n "$_at_root" ]; then\n'
-        "        # bl48-35: in an agent session the maps, built from the working tree, would carry other sessions'\n"
+        "        # In an agent session the maps, built from the working tree, would carry other sessions'\n"
         "        # uncommitted edits into this commit; skip them unless git config agentteams.hookAgentRefresh is true.\n"
         f"{agent_check}"
         '        if [ -n "$_at_agent" ] && [ "$(git config --bool agentteams.hookAgentRefresh 2>/dev/null)" != true ]; then\n'

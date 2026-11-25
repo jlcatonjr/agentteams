@@ -10,9 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The hook rebuilt `references/pipeline-graph.*` and `references/architecture-graph.*` from the working tree and
   staged them, so an agent's one-file commit also carried map changes caused by other sessions' uncommitted edits.
-- When one of the agent-host variables in `update_lock.INVOKER_ENV_MARKERS` is set (`CLAUDECODE`,
-  `CLAUDE_CODE_ENTRYPOINT`, `GOOSE_SESSION_ID`, `GOOSE_TERMINAL`, `CODEX_SANDBOX`, `CODEX_SANDBOX_NETWORK_DISABLED`),
-  the hook now skips both map refreshes and prints one line saying how to refresh them. `git config
+- When any agent-host variable that `update_lock.INVOKER_ENV_MARKERS` lists (the variables Claude Code, Goose and
+  Codex set in the shells they start) is set to a non-empty value, the hook now skips both map refreshes and prints one line saying how to refresh them. `git config
   agentteams.hookAgentRefresh true` keeps the old behaviour. The env-file guard, the code-index warm-up and the API
   impact check, strict mode included, are unchanged.
 - The markers are advisory: a shell that exports one also skips the refresh, which loses a convenience, not a gate.
