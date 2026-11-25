@@ -63,6 +63,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   small and large inputs interleaved, so time spent descheduled on a loaded machine no longer fails them (#584). A
   new negative control shows the helper still fails quadratic work. No product change.
 
+### fixed (a non-Copilot orchestrator's update source pack names its own framework's files; #609)
+
+- The orchestrator's *Update Compatibility Source Pack* listed `.github/copilot-instructions.md`,
+  `.github/agents/agent-updater.agent.md` and `.github/agents/references/github-workflows-merge.reference.md` on every
+  framework, so a Claude, Goose, Codex, agents-md, Grok or WASM team's update pre-flight pointed at files its project
+  does not have. The list now uses three new placeholders, `{TEAM_INSTRUCTIONS_FILE}`, `{TEAM_AGENTS_DIR}` and
+  `{AGENT_FILE_SUFFIX}`, read from each adapter by `agentteams/frameworks/canonical_paths.py` (for example
+  `.claude/CLAUDE.md` and `.claude/agents/agent-updater.md` on Claude, `AGENTS.md` and
+  `.codex/agents/agent-updater.toml` on Codex). Copilot renders are unchanged.
+- **On upgrade:** `update_compatibility_source_pack` is now template-owned, so `--update --merge` replaces the old
+  Copilot list under the default `preserve` policy instead of keeping it because paths disappeared. A hand edit
+  inside that fence is replaced too. Only an edit that trips a shrink criterion (a lost path or backticked token,
+  three or more lost list items, or a body cut by more than half) gets a shrink notice and a `.lost` sidecar; an
+  edit that drops none of those is replaced with no notice and no sidecar. On a non-Copilot team the path change
+  itself raises that notice, so under `--shrink-policy=halt` the run stops once: review it, then re-run with
+  `--shrink-policy=allow`. The fence version is unchanged. Re-pins `agentteams/fences.py` in
+  `references/enforcement-integrity.json`.
+- **Test:** `tests/test_canonical_files_per_framework.py` renders a team on every registered framework and checks
+  that each listed file exists in it.
+
+### fixed (@security's persona no longer says a grant never covers a server change; #558)
+
+- Rule S-VM said a grant "never covers merging, force-pushing, applying changes to a server". The code has allowed
+  `server-apply` and `runtime-patch` since the v2 grant: a v2 grant's signature binds the host and level pairs,
+  window and paths. The persona now says that an ordinary (v1) grant never covers a server or host change, that
+  those two operations need a v2 grant, and that no grant can name `merge`. Behaviour is unchanged.
+- **On upgrade:** `security_rules_invariant` is template-owned, so `--update --merge` takes the new wording. The fence
+  version is unchanged.
+
+### fixed (the operator-decision reference's example is an agent every team has; #635)
+
+- Section 4 of `references/operator-decision.reference.md` gave `@pr-manager`'s disposition prompt as its example
+  of a user-invocable agent asking the operator. `@pr-manager` is emitted only with GitHub management on, so most
+  teams read a pointer to an agent they do not have. The example is now `@git-operations`, with `@pr-manager`
+  kept as a conditional second example ("where the team has one").
+- **On upgrade:** `--update --merge` takes the new wording under the default `preserve` policy (no reference is
+  removed from the fence, so the shrink check does not hold the old body). The fence version is unchanged.
+- **Test:** `tests/test_universal_template_slugs.py` fails when a universal reference template names a
+  non-universal agent outside a sentence marked conditional; the mentions that predate it are listed in the test.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`

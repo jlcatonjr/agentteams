@@ -312,6 +312,7 @@ _TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
     # GitHub management by role and the integration-branch merge authorization (v1.2.0): shipped text, no extension.
     "github_management_rule",
     "dev_merge_rule",
+    "update_compatibility_source_pack",  # #609: per-framework file list; preserve must not pin the Copilot paths.
     # Follow-up #25 (`codex-translation-shrink-guard`): machine-generated tool limit + hand-off
     # list in each .codex/agents/*.toml. A shorter render is a removed hand-off/tool, never lost
     # enrichment, so the template body always wins (no --shrink-policy=allow needed).

@@ -70,12 +70,12 @@ number, or describe another option".
 ## 4. Who asks
 
 The agent that **holds the session with the operator** asks: normally `@orchestrator`, or a
-user-invocable agent the operator is running directly as the main session (for example `@pr-manager`'s
-disposition prompt). A subagent, a delegate, or anything another agent spawned does not query the
-operator: it returns the decision, with its proposed options and recommendation, to whoever spawned it,
-and that agent asks (authority follows the spawner — Workflow 12). The asking agent merges duplicate
-questions from several agents into one. An agent whose `tools:` do not grant the host's picker uses the
-numbered-list fallback.
+user-invocable agent the operator is running directly as the main session (for example `@git-operations`,
+or `@pr-manager`'s disposition prompt where the team has one). A subagent, a delegate, or anything
+another agent spawned does not query the operator: it returns the decision, with its proposed options
+and recommendation, to whoever spawned it, and that agent asks (authority follows the spawner —
+Workflow 12). The asking agent merges duplicate questions from several agents into one. An agent whose
+`tools:` do not grant the host's picker uses the numbered-list fallback.
 
 ## 5. After the answer
 
