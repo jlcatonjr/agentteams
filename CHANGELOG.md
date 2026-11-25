@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### tests (flaky timing and race tests made deterministic; #502, #611)
+### tests (flaky timing and race tests made deterministic; #502, #611, #584)
 
 - The heartbeat exemption tests drive the runner's own `_heartbeat` instead of a simulator that wrote a
   `runner.heartbeat.tmp` name without the runner's lock. The runner never writes that name; a snapshot could catch
@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The over-cap frame test's fake guest blocks after its oversized line, so only the session's frame-cap kill can end
   it; it used to exit by itself and sometimes beat the kill (#611). The exit-code test now also asserts that a guest
   which ends itself carries no signal. No product change.
+- The term-index linear-time tests measure this process's CPU time (`time.process_time`), best of five with the
+  small and large inputs interleaved, so time spent descheduled on a loaded machine no longer fails them (#584). A
+  new negative control shows the helper still fails quadratic work. No product change.
 
 ### added (`plan_steps --set` marks a plan step with one command)
 
