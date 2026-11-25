@@ -57,7 +57,7 @@ Raises:
 
 1. Preserves body prose while rewriting framework wrappers/front matter.
 2. The instructions file is placed at the adapter's `finalize_output_path` location — `copilot-instructions.md`, `CLAUDE.md`, or, for `goose`, the repo-root `AGENTS.md` (front matter stripped) — and rendered through the target adapter's `render_instructions_file`.
-3. Emits any adapter sidecars via `extra_output_files` — e.g. `goose`'s repo-root `.goosehints` integrator, capabilities reference, and resilient-runner script (see [Framework Adapters](frameworks.md#extra_output_filesmanifest)). When `project_manifest` carries no `host_features`, they are first resolved from its `privilege_profile` and `os_sandbox` (`host_features.merge_profile_features`, as `generate` does), so an emitter gated on a host feature runs on convert too.
+3. Emits any adapter sidecars via `extra_output_files` — e.g. `goose`'s repo-root `.goosehints` integrator, capabilities reference, and resilient-runner script (see [Framework Adapters](frameworks.md#extra_output_filesmanifest)).
 4. Copies passthrough assets such as `SETUP-REQUIRED.md` and `references/`.
 
 ### Goose target (`--framework goose`) — beta

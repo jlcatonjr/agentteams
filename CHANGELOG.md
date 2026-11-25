@@ -198,16 +198,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--bridge-merge` could not reach them. Both are now accepted and, like `generic`, write only the pair-dir
   artifacts: no `AGENTS.md` is created or relabelled. `grok` and `wasm` are still refused.
 
-### fixed (`--convert` resolves host features from the privilege profile)
-
-- **Fixed:** `convert_team` emitted adapter sidecars with no `host_features` in the manifest, because only
-  `generate` resolved them, so an emitter gated on a host feature did nothing on convert. They are now resolved
-  from the manifest's `privilege_profile` and `os_sandbox` first, as `generate` does (absent profile: `confined`).
-  An explicit `host_features` list is kept.
-- **Visible effect:** under the default `confined` profile a convert now also writes the OS-sandbox launcher files
-  (`sandbox/confine-run.sh` and its companions, which differ by platform) at the project root, two levels above the
-  target agents directory, as `generate` does. An existing one is skipped without `--overwrite`.
-
 ### fixed (`--sync` sees instruction-file edits; it says when the pin's text outside fences does not travel; #462)
 
 - **Fixed:** `--sync` decided what changed from the agents directories only, so a commit that edited or deleted a

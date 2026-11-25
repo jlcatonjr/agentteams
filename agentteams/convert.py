@@ -207,10 +207,6 @@ def convert_team(
     # ``.goosehints`` integrator). Paths are relative to the agents dir, like emit.py.
     # The adapter's guard drops sidecars it must never write over, even with --overwrite (codex: a foreign
     # repo-root AGENTS.md or an operator's own .codex/hooks.json); its notices go to skipped.
-    if "host_features" not in manifest:  # generate resolves these first; without them a gated emitter no-ops
-        from agentteams.host_features import merge_profile_features
-        manifest["host_features"] = merge_profile_features([], manifest.get("privilege_profile"), adapter.framework_id,
-                                                           os_sandbox=manifest.get("os_sandbox"))
     extras, guard_notices = adapter.guard_rendered_files(list(adapter.extra_output_files(manifest)), target_dir)
     result.skipped.extend(guard_notices)
     for rel_path, content in extras:
