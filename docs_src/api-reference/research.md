@@ -112,6 +112,10 @@ Three of those change what a claim is worth:
 provenance: backend=duckduckgo cached=false query_used='...' tried=duckduckgo,ddg_lite
 ```
 
+It exits 0 when a backend answered, even with no hits. It exits **3** when no backend answered
+(`backend=none` and an empty list), after printing `note: no search backend answered (tried …); the empty
+result is not evidence of absence`, so a script cannot mistake a dead search for "nothing exists".
+
 ### `fetch_text(url, max_bytes=400_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0)`
 
 Fetch a page and return extracted, bounded text. Public-HTTPS-only with an SSRF guard (no private/

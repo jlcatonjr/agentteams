@@ -496,3 +496,28 @@ def test_import_agentteams_research_search_without_pypdf() -> None:
         for mod in ("agentteams.research.search", "pypdf"):
             sys.modules.pop(mod, None)
         importlib.import_module("agentteams.research.search")
+
+
+# --- bl48-41c (row 130): a search no backend answered exits 3 ------------------------------------------------
+
+
+def _run_search(monkeypatch, capsys, results, backend):
+    from agentteams.research import __main__ as cli
+    from agentteams.research.search import SearchProvenance
+
+    prov = SearchProvenance(backend=backend, cached=False, query_used="q", backends_tried=("ddg", "searx"),
+                            challenged=False)
+    monkeypatch.setattr(cli, "web_search_with_provenance", lambda q, k, timeout_s: (results, "", prov))
+    code = cli.main(["search", "q"])
+    return code, capsys.readouterr().err
+
+
+def test_search_exits_3_when_no_backend_answers(monkeypatch, capsys):
+    code, err = _run_search(monkeypatch, capsys, [], None)
+    assert code == 3
+    assert "note: no search backend answered (tried ddg,searx); the empty result is not evidence of absence" in err
+
+
+def test_search_with_zero_hits_from_an_answering_backend_exits_0(monkeypatch, capsys):
+    code, err = _run_search(monkeypatch, capsys, [], "ddg")
+    assert code == 0 and "no search backend answered" not in err

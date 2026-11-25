@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`python -m agentteams.research search` exits 3 when no backend answered)
+
+- **Changed:** `search` exited 0 even when every backend failed, so an empty `[]` from a dead search looked like
+  "no results". It now exits 3 in that case and says so on stderr (`note: no search backend answered (tried …);
+  the empty result is not evidence of absence`). A backend that answered with no hits still exits 0. A script
+  that treated exit 0 as "the search ran" now sees the failure.
+
 ### fixed (`agents-md` and `codex` are bridge targets)
 
 - **Fixed:** `run_bridge` refused `agents-md` and `codex` as targets, though their pair directories
