@@ -330,10 +330,11 @@ def audit_problems(name: str, rendered: str, framework: str, manifest: dict[str,
         Nothing.
     """
     from agentteams.audit_agent_contract import _check_write_policy
+    from agentteams.frameworks.goose_tool_scoping import readfs_deny_globs
 
     ext = "." + name.split(".", 1)[1] if "." in name else ""
     findings = _check_write_policy({name: rendered}, agent_ext=ext, framework=framework, enabled=True,
-                                   mcp_grants=manifest.get("mcp_grants") or {})
+                                   mcp_grants=manifest.get("mcp_grants") or {}, readfs_deny=readfs_deny_globs(manifest))
     return [f.description for f in findings if f.severity == "error"]
 
 

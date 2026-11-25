@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the Goose read-only file server now refuses an exclusive team's in-project protected paths)
+
+- An `exclusive` team's project-relative `protected_read_paths` were denied by the OS boundary but stayed readable
+  through `agentteams_readfs`, which serves everything under `--root .` except its built-in deny list. Each such
+  entry is now passed to the server as `--deny <entry>` and `--deny <entry>/**` (`goose_tool_scoping.readfs_deny_globs`).
+- `~/` and absolute entries are not passed (they lie outside `--root .`); entries with `..`, `.` alone, or glob or
+  shell metacharacters are skipped. The server matches a deny glob against each path component too, so a
+  one-component entry such as `secrets` also refuses a `secrets` directory deeper in the tree.
+- The write-policy audit now requires the recipe's readfs entry to carry exactly these globs, so a hand-removed
+  `--deny` is an error.
+- **On upgrade:** recipes rendered before this change fail that audit for an `exclusive` team with in-project
+  `protected_read_paths` until they are re-rendered (`agentteams --update --merge`). Other teams are unchanged.
+- The Codex runner's readfs entry is unchanged: Codex starts that server inside `sandbox/confine-run.sh`, whose
+  `--exclude` flags already cover the same paths.
+
 ### security (`--check-wiring` no longer passes a goose team on Linux when bwrap cannot run)
 
 - On Linux the goose verifier passed as ENFORCEABLE whenever `sandbox/confine-run.sh` existed, even on a host without

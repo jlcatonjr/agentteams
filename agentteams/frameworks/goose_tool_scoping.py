@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import ast
 import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -63,6 +64,7 @@ from typing import Any
 
 from agentteams.frameworks.goose_recipe_emit import _MCP_EXT_TIMEOUT
 from agentteams.frameworks.goose_recipe_read import UNPARSED, recipe_extension_grants
+from agentteams.frameworks._write_roots import path_char_problem
 
 #: The Goose release the tool names below were verified against (stub-model spike, 2026-10-05).
 #: Informational until the phase-3 version check reads it; re-run scripts/goose-probe/ before bumping.
@@ -144,12 +146,13 @@ def declared_tools(content: str) -> frozenset[str]:
 
 
 def grant_extensions(tools: frozenset[str], *, protected: bool = False, spawn: bool = True,
-                     ) -> tuple[list[str], dict[str, list[str]], list[dict[str, Any]]]:
+                     deny: tuple[str, ...] = ()) -> tuple[list[str], dict[str, list[str]], list[dict[str, Any]]]:
     """Map declared tools to a recipe's extensions.
 
     Args:
         tools: Declared canonical tool tokens (:func:`declared_tools`).
         protected: Under ``write_policy: "orchestrator-only"``: launch readfs from :data:`READFS_PROTECTED_PATH`.
+        deny: Extra readfs ``--deny`` globs (:func:`readfs_deny_globs`).
         spawn: Keep ``summon``'s ``delegate``. Pass False for every recipe but the orchestrator: other agents hand
             off with ``load``, and a recipe run directly could otherwise ``delegate`` with no ``extensions``.
 
@@ -177,11 +180,11 @@ def grant_extensions(tools: frozenset[str], *, protected: bool = False, spawn: b
     if "summon" in granted:
         names.append("summon")
         allow["summon"] = [t for t in _TOOL_ORDER["summon"] if t in granted["summon"] and (spawn or t != "delegate")]
-    stdio = [readfs_extension(protected=protected)] if READFS_NAME in granted else []
+    stdio = [readfs_extension(protected=protected, deny=deny)] if READFS_NAME in granted else []
     return names, allow, stdio
 
 
-def readfs_extension(*, protected: bool = False) -> dict[str, Any]:
+def readfs_extension(*, protected: bool = False, deny: tuple[str, ...] = ()) -> dict[str, Any]:
     """Return the stdio extension entry for the shipped ``agentteams_readfs`` server.
 
     The path is relative to the project root, the same convention as the coordination server; Goose runs a stdio
@@ -190,6 +193,7 @@ def readfs_extension(*, protected: bool = False) -> dict[str, Any]:
 
     Args:
         protected: Point at :data:`READFS_PROTECTED_PATH` (under the switch) instead of :data:`READFS_SCRIPT`.
+        deny: Globs passed as ``--deny``, one flag each, after ``--root .`` (:func:`readfs_deny_globs`).
 
     Returns:
         The extension mapping, including its ``available_tools`` allowlist.
@@ -199,10 +203,45 @@ def readfs_extension(*, protected: bool = False) -> dict[str, Any]:
     """
     return {
         "type": "stdio", "name": READFS_NAME, "cmd": "python3",
-        "args": [*READFS_PYTHON_FLAGS, READFS_PROTECTED_PATH if protected else READFS_SCRIPT, "--root", "."],
+        "args": [*READFS_PYTHON_FLAGS, READFS_PROTECTED_PATH if protected else READFS_SCRIPT, "--root", ".",
+                 *(arg for glob in deny for arg in ("--deny", glob))],
         "env_keys": [], "timeout": _MCP_EXT_TIMEOUT,
         "available_tools": list(READFS_TOOLS),
     }
+
+
+def readfs_deny_globs(manifest: dict[str, Any]) -> tuple[str, ...]:
+    """Return an ``exclusive`` team's in-project ``protected_read_paths`` as readfs ``--deny`` globs.
+
+    The OS boundary (Seatbelt, the launcher's ``--exclude``) denies these paths, but the readfs server reads
+    whatever its ``--root .`` holds, so each in-project entry is passed to it too (remediation log row 507).
+    Only project-relative entries reach the server: ``~`` and absolute paths are outside ``--root .`` (the
+    renderer does not know the project root, so an absolute path inside it is not relativised), ``..`` and
+    ``.`` are skipped, and so is any entry :func:`path_char_problem` rejects (glob or shell metacharacters).
+    Each entry yields itself and ``<entry>/**``. The server matches an extra glob against the whole
+    root-relative path and against every path component, case-folded, so a one-component entry also denies
+    a same-named directory deeper in the tree: fail-closed.
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        The sorted, de-duplicated globs; ``()`` for any profile but ``exclusive``.
+
+    Raises:
+        Nothing.
+    """
+    if manifest.get("privilege_profile") != "exclusive":
+        return ()
+    globs: set[str] = set()
+    for entry in manifest.get("protected_read_paths") or []:
+        if path_char_problem(entry) is not None or entry.startswith(("~", "/")):
+            continue
+        rel = posixpath.normpath(entry)
+        if rel == "." or ".." in entry.split("/"):
+            continue
+        globs.update((rel, f"{rel}/**"))
+    return tuple(sorted(globs))
 
 
 
