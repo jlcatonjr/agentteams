@@ -45,11 +45,18 @@ The default `ask` classes:
 - `outbound-upload`, `outbound-derived`, `raw-socket`, `dns-exfil`, `publication-channel`,
   `git-alias-config` (`git -c`, `git --config-env` or `git config` for `alias.`, `push.`, `remote.`, `url.`,
   `credential.`, `core.hooksPath`, `core.sshCommand`, `core.askPass`, `core.fsmonitor`, `agentteams.hookPython` or
-  `agentteams.hookImportPath`, including `--add`, `--replace-all` and unset; `git config get` and
-  `git config list` are reads only as the word right after `config`), `interpreter-send`;
+  `agentteams.hookImportPath`, including `--add`, `--replace-all` and unset), `interpreter-send`;
 - `gh-delete`, `pr-merge`, `git-remote-delete`, `git-ref-delete`, `agentteams-branch-delete`;
 - `fs-delete`, `infra-delete`, `db-delete`, `interpreter-delete`;
 - `command-too-long`, `git-config-write`, `scanner-unverified`, `no-interpreter`.
+
+**Reads of git config.** For `git-alias-config` and the `git config` keys of `publication-channel`
+(`remote.*.url`, `url.*.insteadOf`, `include.path`), the gate splits the command into words with a shell tokenizer.
+A command is a read, and stays silent, only when it parses as `git [global options] config` followed by `get` or
+`list`, or with `--get…`, `--list`, `-l` or `--show-origin` before the key. A quoted value, a comment or a global
+option's value cannot make a write look like a read, and a command that does not tokenize asks. This is stricter
+than a plain read in three cases, which now ask: a read run through a wrapper (`sudo git config --get alias.p`), a
+read inside backticks, and a read on the same line as another mention of such a key.
 
 `git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation
 row 699, with the same class ids. One narrowing came with them: the `f` of `-f` is case-sensitive (git push has

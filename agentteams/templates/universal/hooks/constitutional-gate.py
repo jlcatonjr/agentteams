@@ -86,6 +86,19 @@ except ImportError:  # pragma: no cover - Windows
 
 HOOK_EVENT = "PreToolUse"
 
+#: `git config` keys that hide or redirect a push (alias./push./remote./url., row 699), or hand over the credential or
+#: run a program (credential.*, core.*, the generated git hook's agentteams.hook*, row 730). Case-insensitive.
+_GIT_EXEC_KEYS = (r"(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b"
+                  r"|agentteams\.hook(?:python|importpath)\b)")
+#: `git config` keys that add or repoint a publication channel: a remote or rewritten URL, or an included file.
+_GIT_PUBLISH_KEYS = (r"\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof)"
+                     r"|include(?:if\b[^\n]*)?\.path)\b")
+#: Per class, a line naming `git`, `config` and such a key; _config_write() exempts only commands it proves are reads.
+_GIT_CONFIG_WRITES = {
+    "publication-channel": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*{_GIT_PUBLISH_KEYS})", re.IGNORECASE),
+    "git-alias-config": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*\s['\"]?{_GIT_EXEC_KEYS})", re.IGNORECASE),
+}
+
 #: Bash patterns that match a Mandatory Review Trigger in security.template.md. Each is a
 #: judgment call routed to the operator, never an automatic deny — see the verdict policy above.
 _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
@@ -137,25 +150,22 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
     ("raw-socket", r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
      "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
     ("publication-channel", r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
      r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:remote|url)\.|"
      r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
      r"\bgh\s+api\b[^\n|;&]*(?:\$\(|`)|"
      r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s['\"]?(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:|[\w-]+(?:\.[\w-]+)+:[^\s/]*/?))|"
      r"\bGIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+|PARAMETERS|GLOBAL|SYSTEM)\b|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\binclude(?:if\b[^\n]*)?\.path\b)|"
      r"^(?=[^\n]*(?:\.git[\\/](?:config|modules[\\/]\S+[\\/]config|worktrees[\\/]\S+[\\/]config)|\.gitconfig))"
      r"(?=[^\n]*(?:\b(?:cp|mv|ln|install|dd|rsync)\b|\bsed\b[^\n]*\s-i|\bperl\b[^\n]*\s-p?i))|"
      r"(?:>>?|\btee\b(?:\s+-\S+)*)\s*['\"]?[^\s;&|'\"]*"
      r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
-    # alias./push. hide or redirect a push (row 699); credential.*, core.hooksPath/sshCommand/askPass/fsmonitor and the git
-    # hook's agentteams.hookPython/hookImportPath run a program (row 730). get|list: only the word after the 1st `config`.
-    ("git-alias-config", r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b|agentteams\.hook(?:python|importpath)\b)|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?!(?:(?!\bconfig\b)[^\n;&|])*\bconfig\s+(?:get|list)\b)"
-     r"(?=[^\n]*\s['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b|agentteams\.hook(?:python|importpath)\b))",
-     "git configuration that can hide or redirect a push, hand the credential to a program, or run a program (alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor, agentteams.hookPython/hookImportPath)"),
+    # `git config` writes of these keys are matched by _config_write(); `-c`/`--config-env` set them for one command.
+    ("git-alias-config",
+     r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?" + _GIT_EXEC_KEYS,
+     "git configuration that can hide or redirect a push, hand the credential to a program, or run a program "
+     "(alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor, agentteams.hook*)"),
     ("interpreter-send", r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
@@ -421,6 +431,60 @@ def _mask_quoted_separators(command: str) -> str:
     return "".join(out)
 
 
+#: git's global options that take the next word as their value (the `--opt=value` form is one word).
+_GIT_VALUE_OPTIONS = frozenset({"-C", "-c", "--config-env", "--git-dir", "--work-tree", "--namespace", "--exec-path"})
+#: `git config` options whose value is the next word; both belong to the option run before the key.
+_CONFIG_VALUE_OPTIONS = frozenset({"-f", "--file", "--blob"})
+
+
+def _shell_commands(line: str) -> "list[list[str]] | None":
+    """Split ``line`` into each command's words (at ``; & | ( )``); None when it does not tokenize."""
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()")
+    lexer.whitespace_split, lexer.commenters = True, ""
+    commands: list[list[str]] = [[]]
+    try:
+        for word in lexer:
+            if word and not word.strip(";&|()"):
+                commands.append([])
+            else:
+                commands[-1].append(word)
+    except ValueError:  # an unbalanced quote or a trailing backslash
+        return None
+    return [c for c in commands if c]
+
+
+def _is_config_read(words: "list[str]") -> bool:
+    """True only for ``git [global options] config`` then ``get``/``list``, or a read option before the key."""
+    if not words or words[0].rsplit("/", 1)[-1] != "git":
+        return False
+    i = 1
+    while i < len(words) and words[i].startswith("-"):
+        i += 2 if words[i] in _GIT_VALUE_OPTIONS else 1
+    if i >= len(words) or words[i] != "config":
+        return False
+    i += 1
+    if words[i:i + 1] in (["get"], ["list"]):
+        return True
+    while i < len(words) and words[i].startswith("-"):
+        if words[i].startswith("--get") or words[i] in ("--list", "-l", "--show-origin"):
+            return True
+        i += 2 if words[i] in _CONFIG_VALUE_OPTIONS else 1
+    return False
+
+
+def _config_write(class_id: str, line: str) -> bool:
+    """True when ``line`` may write a ``class_id`` key (:data:`_GIT_CONFIG_WRITES`) through ``git config``.
+
+    Exempt only when the line tokenizes and every command naming such a key parses as a read; a line
+    that does not tokenize asks. A linear pass, not a lookahead: a quoted value cannot pose as `config list`.
+    """
+    pattern = _GIT_CONFIG_WRITES.get(class_id)
+    if pattern is None or not pattern.search(line):
+        return False
+    named = [words for words in _shell_commands(line) or [] if pattern.search(" ".join(words))]
+    return not named or not all(_is_config_read(words) for words in named)
+
+
 def _bash_matches(command: str, first_only: bool = False,
                   extra: "frozenset[str]" = frozenset()) -> "list[tuple[str, str]]":
     """Return ``(class_id, reason)`` for the triggers a Bash command matches, in table order.
@@ -447,7 +511,7 @@ def _bash_matches(command: str, first_only: bool = False,
             return found
     table = _BASH_REVIEW_TRIGGERS + tuple(t for t in POLICY_ONLY_TRIGGERS if t[0] in extra)
     for class_id, pattern, reason in table:
-        if any(re.search(pattern, line, re.IGNORECASE) for line in lines):
+        if any(re.search(pattern, line, re.IGNORECASE) or _config_write(class_id, line) for line in lines):
             found.append((class_id, reason))
             if first_only:
                 return found

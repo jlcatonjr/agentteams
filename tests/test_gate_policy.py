@@ -214,6 +214,45 @@ def test_config_value_named_list_still_asks(tmp_path: Path, cmd: str) -> None:
     assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
 
 
+# The read exemption is decided by a linear tokenizer, never by a lookahead (review of the first fix):
+# a global option's value, a quoted value, a comment or a later command cannot pose as a read.
+TOKENIZER_MUST_ASK = [
+    "git -c user.name='config list' config core.hooksPath /tmp/h", "git -C 'd/config list' config credential.helper x",
+    "git -c user.name='config get' config alias.p 'push -f'", "git config core.hooksPath ' --list'",
+    "git config core.hooksPath /tmp/h # -l", "git config core.hooksPath 'config list'",
+    "git config list; git config core.hooksPath x", "git config core.hooksPath list", "git config core.hooksPath 'unbalanced",
+    "git -c user.name='config get' config agentteams.hookPython /x", "git config agentteams.hookImportPath ' --get'",
+    "git config remote.origin.url ' --list'", "git config include.path x # --get",
+]
+TOKENIZER_SILENT = [
+    "git config --get core.hooksPath", "git config get core.sshCommand", "git config list", "git config -l",
+    "git config --get alias.p", "git -C ../wt config list --show-origin", "git config -f x --get alias.p",
+    "git config --global --get alias.p", "git -c user.name=x config get agentteams.hookPython",
+    "git config --get remote.origin.url", "git config --get-all include.path",
+]
+
+
+@pytest.mark.parametrize("cmd", TOKENIZER_MUST_ASK)
+def test_tokenized_read_exemption_cannot_be_borrowed(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
+    assert {c for c, _ in gate._bash_matches(cmd)} & {"git-alias-config", "publication-channel"}, cmd
+
+
+@pytest.mark.parametrize("cmd", TOKENIZER_SILENT)
+def test_tokenized_reads_stay_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+@pytest.mark.parametrize("cmd", ["sudo git config --get alias.p", "echo `git config --get alias.p`",
+                                 "git config --get user.name; echo core.hooksPath"])
+def test_a_read_that_is_not_plainly_git_config_asks(tmp_path: Path, cmd: str) -> None:
+    # Documented as stricter: only `git [globals] config <read>` itself is proven a read.
+    gate = install(tmp_path, None)
+    assert "git-alias-config" in {c for c, _ in gate._bash_matches(cmd)}, cmd
+
+
 def test_strict_denies_exec_config(tmp_path: Path) -> None:
     gate = install(tmp_path, policy(preset="strict"))
     assert verdict(gate, "Bash", {"command": "git config core.fsmonitor ./m"}) == (

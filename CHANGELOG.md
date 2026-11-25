@@ -33,9 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through agent Bash, such as `git config credential.helper osxkeychain`, `git config core.sshCommand "ssh -i …"` or
   `git -c core.hooksPath=/dev/null …`, need an operator or must run outside the session. A project policy that
   denies `git-alias-config` (and the `strict` preset) now denies them too. The class id is unchanged.
+- **How a read is told from a write:** the gate splits the command into words with a shell tokenizer instead of a
+  regular-expression lookahead. A `git config` command is a read only when it parses as `git [global options]
+  config` followed by `get` or `list`, or with `--get…`, `--list`, `-l` or `--show-origin` before the key. Before,
+  the lookahead looked for those words anywhere, so a quoted value (`git config core.hooksPath ' --list'`), a
+  comment (`… # -l`) or a global option's value (`git -c user.name='config list' config core.hooksPath x`) made a
+  write pass silently. A command the tokenizer cannot parse (an unbalanced quote) asks. The same rule now covers
+  the `publication-channel` keys (`remote.*.url`, `url.*.insteadOf`, `include.path`).
 - **Newly silent:** `git config get …` and `git config list` (git 2.46 and later) are reads, for every key, including
-  `alias.`, `push.`, `remote.` and `url.`, which asked before. Only the word right after the first `config` counts,
-  so `git config core.hooksPath 'config list'` still asks.
+  `alias.`, `push.`, `remote.` and `url.`, which asked before.
+- **Who notices the stricter reads:** a read that is not plainly `git … config <read>` now asks when it names one
+  of these keys: `sudo git config --get alias.p`, a read inside backticks (`` echo `git config --get alias.p` ``),
+  and a read on the same line as an unrelated mention of such a key
+  (`git config --get user.name; echo core.hooksPath`). These passed silently before.
 - **Not covered:** other keys that run a program (`core.pager`, `core.editor`, `filter.*` and more) are listed in
   the known limitations.
 

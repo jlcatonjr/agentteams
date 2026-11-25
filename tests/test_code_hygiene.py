@@ -91,6 +91,14 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # split the whole shrink/merge subsystem (detect + preserve + additive) into one new
     # enforcement-registered module; deferred as a larger blast-radius refactor.
     "agentteams/fences.py",
+    # The constitutional-gate hook template (1038 when allowlisted, 2026-11-25): tipped over the ceiling by
+    # the linear `git config` read tokenizer that replaced three lookahead read guards (a quoted value or a
+    # global option's value could pose as `config list` and exempt a write). Kept whole by operator ruling:
+    # the hook is installed write-protected and is the enforcement point, so it must not import its decision
+    # logic from the writable package tree. No carve is safe either: any module the hook imports runs in the
+    # gate's process and can end it with an exit other than 0/2, which the harness treats as an allow, so
+    # moving code out would let an imported module end the gate open.
+    "agentteams/templates/universal/hooks/constitutional-gate.py",
 })
 BROAD_EXCEPT_BASELINE = 19      # 18→19: the Codex role gate (agentteams/data/codex-role-gate.py,
                                 # Phase 1b). Same CH-24-exempt boundary pattern as the
