@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the operator-decision reference's example is an agent every team has; #635)
+
+- Section 4 of `references/operator-decision.reference.md` gave `@pr-manager`'s disposition prompt as its example
+  of a user-invocable agent asking the operator. `@pr-manager` is emitted only with GitHub management on, so most
+  teams read a pointer to an agent they do not have. The example is now `@git-operations`, with `@pr-manager`
+  kept as a conditional second example ("where the team has one").
+- **On upgrade:** `--update --merge` takes the new wording under the default `preserve` policy (no reference is
+  removed from the fence, so the shrink check does not hold the old body). The fence version is unchanged.
+- **Test:** `tests/test_universal_template_slugs.py` fails when a universal reference template names a
+  non-universal agent outside a sentence marked conditional; the mentions that predate it are listed in the test.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`
