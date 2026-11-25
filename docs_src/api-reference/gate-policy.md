@@ -51,12 +51,15 @@ The default `ask` classes:
 - `command-too-long`, `git-config-write`, `scanner-unverified`, `no-interpreter`.
 
 **Reads of git config.** For `git-alias-config` and the `git config` keys of `publication-channel`
-(`remote.*.url`, `url.*.insteadOf`, `include.path`), the gate splits the command into words with a shell tokenizer.
-A command is a read, and stays silent, only when it parses as `git [global options] config` followed by `get` or
-`list`, or with `--get…`, `--list`, `-l` or `--show-origin` before the key. A quoted value, a comment or a global
+(`remote.*.url`, `url.*.insteadOf`, any `include.` or `includeIf.` key), the gate splits the command into words
+with a shell tokenizer. A command is a read, and stays silent, only when it parses as `git [global options] config`
+followed by `get` or `list`, or with `--get…`, `--list` or `-l` before the key. Only options git is known to accept
+may come before it (an unknown or abbreviated option, or `--comment`, which takes the next word, is never skipped),
+and no word may run a nested command (`` `…` ``, `$(…)`, `<(…)`, `>(…)`). A quoted value, a comment or a global
 option's value cannot make a write look like a read, and a command that does not tokenize asks. This is stricter
-than a plain read in three cases, which now ask: a read run through a wrapper (`sudo git config --get alias.p`), a
-read inside backticks, and a read on the same line as another mention of such a key.
+than a plain read in these cases, which now ask: a read run through a wrapper (`sudo git config --get alias.p`), a
+read inside backticks, a read on the same line as another mention of such a key, a read behind an option outside
+git's known set, and `--show-origin` without a read flag.
 
 `git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation
 row 699, with the same class ids. One narrowing came with them: the `f` of `-f` is case-sensitive (git push has

@@ -86,13 +86,15 @@ except ImportError:  # pragma: no cover - Windows
 
 HOOK_EVENT = "PreToolUse"
 
-#: `git config` keys that hide or redirect a push (alias./push./remote./url., row 699), or hand over the credential or
-#: run a program (credential.*, core.*, the generated git hook's agentteams.hook*, row 730). Case-insensitive.
+#: `git config` keys that can hide or redirect a push (alias./push./remote./url.), or hand over the push credential
+#: or name a program git runs (credential.*, core.*, the generated git hook's agentteams.hook*). Case-insensitive.
 _GIT_EXEC_KEYS = (r"(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b"
                   r"|agentteams\.hook(?:python|importpath)\b)")
 #: `git config` keys that add or repoint a publication channel: a remote or rewritten URL, or an included file.
-_GIT_PUBLISH_KEYS = (r"\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof)"
-                     r"|include(?:if\b[^\n]*)?\.path)\b")
+#: Any `include.` or `includeIf.` key counts: the condition may hold spaces (`includeIf.gitdir:~/my dir/.path`),
+#: and matching up to `.path` needed a second unbounded gap, which made a long line near cubic.
+_GIT_PUBLISH_KEYS = (r"\b(?:(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b"
+                     r"|include(?:if)?\.)")
 #: Per class, a line naming `git`, `config` and such a key; _config_write() exempts only commands it proves are reads.
 _GIT_CONFIG_WRITES = {
     "publication-channel": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*{_GIT_PUBLISH_KEYS})", re.IGNORECASE),
@@ -431,10 +433,27 @@ def _mask_quoted_separators(command: str) -> str:
     return "".join(out)
 
 
-#: git's global options that take the next word as their value (the `--opt=value` form is one word).
-_GIT_VALUE_OPTIONS = frozenset({"-C", "-c", "--config-env", "--git-dir", "--work-tree", "--namespace", "--exec-path"})
-#: `git config` options whose value is the next word; both belong to the option run before the key.
-_CONFIG_VALUE_OPTIONS = frozenset({"-f", "--file", "--blob"})
+#: git's global options the read check knows: those taking the next word as their value (or `--opt=value`), and
+#: those taking none. Any other option, abbreviations included, means the command is not proven a read.
+_GIT_VALUE_OPTIONS = frozenset({"-C", "-c", "--config-env", "--git-dir", "--work-tree", "--namespace", "--attr-source"})
+_GIT_FLAG_OPTIONS = frozenset({
+    "-p", "--paginate", "-P", "--no-pager", "--bare", "--exec-path", "--no-replace-objects", "--no-lazy-fetch",
+    "--no-optional-locks", "--no-advice", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs",
+})
+#: `git config` options allowed before a read flag (git 2.50's option table). `--comment` is left out on purpose:
+#: it applies only to writes and takes the next word, so `git config --comment --get k v` SETS k.
+_CONFIG_VALUE_OPTIONS = frozenset({"-f", "--file", "--blob", "-t", "--type", "--default"})
+_CONFIG_FLAG_OPTIONS = frozenset({
+    "--global", "--system", "--local", "--worktree", "--includes", "--no-includes", "-z", "--null", "--name-only",
+    "--show-origin", "--show-scope", "--show-names", "--bool", "--int", "--bool-or-int", "--bool-or-str", "--path",
+    "--expiry-date", "--fixed-value",
+})
+_CONFIG_READ_FLAGS = frozenset({
+    "--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list", "-l",
+})
+#: Shell syntax that runs a nested command from inside one word. The nested command is not the read around it.
+_NESTED_COMMAND = ("`", "$(", "<(", ">(")
 
 
 def _shell_commands(line: str) -> "list[list[str]] | None":
@@ -453,22 +472,41 @@ def _shell_commands(line: str) -> "list[list[str]] | None":
     return [c for c in commands if c]
 
 
+def _option_span(word: str, value_options: "frozenset[str]", flag_options: "frozenset[str]") -> "int | None":
+    """How many words a known option spans (1, or 2 with a separate value); None for any other option."""
+    if word in flag_options or (word.startswith("--") and word.split("=", 1)[0] in value_options and "=" in word):
+        return 1
+    return 2 if word in value_options else None
+
+
 def _is_config_read(words: "list[str]") -> bool:
-    """True only for ``git [global options] config`` then ``get``/``list``, or a read option before the key."""
+    """True only for ``git [global options] config`` then ``get``/``list``, or a read flag before the key.
+
+    Only options git is known to accept count, so an unknown or abbreviated option (which may take the
+    next word as its value) is never skipped past. A word that runs a nested command is never a read.
+    """
     if not words or words[0].rsplit("/", 1)[-1] != "git":
+        return False
+    if any(marker in word for word in words for marker in _NESTED_COMMAND):
         return False
     i = 1
     while i < len(words) and words[i].startswith("-"):
-        i += 2 if words[i] in _GIT_VALUE_OPTIONS else 1
+        span = _option_span(words[i], _GIT_VALUE_OPTIONS, _GIT_FLAG_OPTIONS)
+        if span is None:
+            return False
+        i += span
     if i >= len(words) or words[i] != "config":
         return False
     i += 1
     if words[i:i + 1] in (["get"], ["list"]):
         return True
     while i < len(words) and words[i].startswith("-"):
-        if words[i].startswith("--get") or words[i] in ("--list", "-l", "--show-origin"):
+        if words[i] in _CONFIG_READ_FLAGS:
             return True
-        i += 2 if words[i] in _CONFIG_VALUE_OPTIONS else 1
+        span = _option_span(words[i], _CONFIG_VALUE_OPTIONS, _CONFIG_FLAG_OPTIONS)
+        if span is None:
+            return False
+        i += span
     return False
 
 

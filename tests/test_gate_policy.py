@@ -173,7 +173,7 @@ def test_row699_ordinary_commands_stay_silent(tmp_path: Path, cmd: str) -> None:
     assert not {c for c, _ in gate._bash_matches(cmd)} & PROMOTED_699, cmd
 
 
-# ── Row 730: config that hands over execution or the credential asks (bl48-08) ─────────────────────
+# ── git config that hands over execution or the push credential asks ─────────────────────────────
 
 EXEC_CONFIG_WRITES = [
     "git config core.hooksPath x", 'git config --global core.sshCommand "ssh -i k"', "git config credential.helper store",
@@ -243,6 +243,52 @@ def test_tokenized_read_exemption_cannot_be_borrowed(tmp_path: Path, cmd: str) -
 def test_tokenized_reads_stay_silent(tmp_path: Path, cmd: str) -> None:
     gate = install(tmp_path, None)
     assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+@pytest.mark.parametrize("cmd", [
+    # A write nested in a read still runs: bash expands `…` and "$(…)" before git sees the read.
+    "git config --get user.name `git config core.hooksPath /tmp/h`",
+    'git config --get user.name "$(git config core.hooksPath /tmp/h)"',
+    "git config --get user.name `git config alias.p x`", 'git config --get user.name "$(git config alias.p x)"',
+    'git config --get user.name "${x:-$(git config core.hooksPath /tmp/h)}"',
+    # --comment takes the next word as its value, so git reads `--get` as the comment and sets the key;
+    # git accepts any unambiguous abbreviation, so an option outside the known set is never a read.
+    "git config --comment --get core.hooksPath /tmp/h", "git config --comm --get core.hooksPath /tmp/h",
+    "git config --comment=x --get core.hooksPath /tmp/h", "git config --gl --get core.hooksPath /tmp/h",
+    "git --attr-source x --unknown config --get core.hooksPath /tmp/h", "git -fx config --get alias.p y",
+])
+def test_a_nested_command_or_an_unknown_option_is_never_a_read(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
+    assert "git-alias-config" in {c for c, _ in gate._bash_matches(cmd)}, cmd
+
+
+@pytest.mark.parametrize("cmd", [
+    "git config --global --get alias.p", "git config -f x --get alias.p", "git config --file=x --get alias.p",
+    "git config --type bool --get core.fsmonitor", "git config -t bool --get core.fsmonitor",
+    "git config --default x --get core.hooksPath", "git config --show-origin --list", "git config --name-only -l",
+    "git --no-pager -C ../wt config --get alias.p", "git --git-dir=.git config --get-all credential.helper",
+])
+def test_known_options_before_a_read_flag_stay_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+def test_include_keys_stay_fast_at_the_line_cap(tmp_path: Path) -> None:
+    import time
+    gate = install(tmp_path, None)
+    for unit in ("git config includeif ", "git includeif ", "git config includeif.x "):
+        line = (unit * (8180 // len(unit) + 1))[:8180]
+        started = time.perf_counter()
+        gate._bash_matches(line)
+        assert time.perf_counter() - started < 1.5, unit  # about 0.2 s here; 2.5 s before the fix
+
+
+def test_include_keys_ask_however_the_condition_is_spelled(tmp_path: Path) -> None:
+    gate = install(tmp_path, None)
+    for cmd in ("git config include.path x", "git config includeIf.gitdir:~/x/.path y",
+                "git config 'includeIf.gitdir:~/my dir/.path' y"):
+        assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
 
 
 @pytest.mark.parametrize("cmd", ["sudo git config --get alias.p", "echo `git config --get alias.p`",
