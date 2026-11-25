@@ -732,3 +732,23 @@ def test_sign_decision_signs_retraction_under_open_halt(tmp_path, monkeypatch, c
     argv = _sd(tmp_path, monkeypatch, spec=_decision(verdict="HALT-RETRACTED", evidence="settled"))
     rc, _out, err = _sign_with(argv, monkeypatch, capsys)
     assert "is under an open HALT" not in err and rc == 0, err
+
+
+def test_sign_decision_reads_a_nine_column_log_as_stored(tmp_path, monkeypatch, capsys):
+    # The 9-column schema stores the id in `decision` and the verdict in `status`: the HALT check reads those.
+    argv = _sd(tmp_path, monkeypatch, spec=_decision(decision="prune-collectors", status="PASS", owner="security"))
+    cols = ("date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner,"
+            "derives_from,effect_grants,text_digest,sig_scheme,key_id,signature")
+    log = tmp_path / "team" / "references" / "security-decisions.log.csv"
+    log.write_text(f"{cols}\n2026-09-29,p,1,prune-collectors,HALT,,,,security,,,,,,\n", encoding="utf-8")
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    assert rc == 1 and "'prune-collectors' is under an open HALT" in err and "The key was not read." in err
+
+
+def test_sign_decision_refuses_a_clearance_whose_ancestor_is_halted(tmp_path, monkeypatch, capsys):
+    assert _sign_with(_sd(tmp_path, monkeypatch, spec=_decision(action_reviewed="approved-cleanup", verdict="HALT",
+                                                                 effect_grants=None, derives_from=None)),
+                      monkeypatch, capsys)[0] == 0
+    argv = _sd(tmp_path, monkeypatch, spec=_decision(derives_from="approved-cleanup"))   # rewrites spec.json
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    assert rc == 1 and "'approved-cleanup' is under an open HALT" in err and "The key was not read." in err

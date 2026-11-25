@@ -155,8 +155,8 @@ called before the key read. The error precedence is (amended by #9):
 F-2: the refusal sentence when `output_dir` holds neither `references/agent-privilege.json` nor
 `references/build-log.json`, else `None`. The same module holds the signer's other pre-key refusals:
 `author_refusal(output_dir, row, fieldnames)` (the row's author, read from the cells the log keeps
-(`stored_view(row, fieldnames)`), is off the approver roster) and `open_halt_refusal(output_dir, row)` (a clearance
-on an id under an open HALT, #616).
+(`stored_view(row, fieldnames)`), is off the approver roster) and `open_halt_refusal(output_dir, row, fieldnames)` (a clearance
+on an id, or a `derives_from` parent, under an open HALT, #616).
 
 ### `load_grant_spec(path, flag)` / `grant_spec_kwargs(spec)` / `report_issued(record, ledger_root, team_dir)`
 

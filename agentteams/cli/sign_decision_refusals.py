@@ -85,28 +85,34 @@ def author_refusal(output_dir: Path, row: dict[str, str], fieldnames: list[str] 
             "author, or add one to the roster. The key was not read.")
 
 
-def open_halt_refusal(output_dir: Path, row: dict[str, str]) -> str | None:
+def open_halt_refusal(output_dir: Path, row: dict[str, str], fieldnames: list[str] | None) -> str | None:
     """Why a clearance (PASS, CONDITIONAL PASS) cannot be signed under an open HALT, or None (#616).
 
-    Such a row would be void at the gate once the HALT is retracted. HALT and HALT-RETRACTED rows are not checked.
+    Such a row would be void at the gate once the HALT is retracted. The row is read as the log will store it
+    (:func:`stored_view`: ``action_reviewed``/``verdict``, or ``decision``/``status`` in the nine-column schema), and
+    every id it names is checked, with each ``derives_from`` parent the spec declares (a child inherits an ancestor's
+    HALT). HALT and HALT-RETRACTED rows are not checked.
 
     Args:
         output_dir: The team dir.
         row: The row being signed.
+        fieldnames: The existing log's header, or None for a new log.
 
     Returns:
         The refusal sentence, or None.
     """
     from agentteams.cli import decision_log as dl
 
-    if (row.get("verdict") or "").strip().upper() not in dl.CLEARING_VERDICTS:
+    stored = stored_view(row, fieldnames)
+    if (stored.get("verdict") or stored.get("status") or "").strip().upper() not in dl.CLEARING_VERDICTS:
         return None
-    halt_scan_action = (row.get("action_reviewed") or "").strip()
-    try:
-        dl._assert_no_unretracted_halt(output_dir, action=halt_scan_action)
-    except RuntimeError as exc:
-        return (f"refusing to sign: '{halt_scan_action}' is under an open HALT ({exc}). Retract the HALT first, then "
-                "sign the clearance. The key was not read.")
+    named = {(stored.get(k) or "").strip() for k in ("action_reviewed", "decision")} - {""}
+    for halt_scan_action in sorted(named | dl._row_lineage(stored)):
+        try:
+            dl._assert_no_unretracted_halt(output_dir, action=halt_scan_action)
+        except RuntimeError as exc:
+            return (f"refusing to sign: '{halt_scan_action}' is under an open HALT ({exc}). Retract the HALT first, "
+                    "then sign the clearance. The key was not read.")
     return None
 
 

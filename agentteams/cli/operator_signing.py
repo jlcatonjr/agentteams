@@ -626,8 +626,8 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         print("Error: refusing to sign — this decision's payload begins with the dev-merge-authorization purpose tag "
               "(use --sign-dev-merge-authorization).", file=sys.stderr)
         return 1
-    refusal = (author_refusal(output_dir, row, read[1] if read is not None else None)
-               or open_halt_refusal(output_dir, row))
+    fieldnames = read[1] if read is not None else None
+    refusal = author_refusal(output_dir, row, fieldnames) or open_halt_refusal(output_dir, row, fieldnames)
     if refusal:
         print(f"Error: {refusal}", file=sys.stderr)
         return 1

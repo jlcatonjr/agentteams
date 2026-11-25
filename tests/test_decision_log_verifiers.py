@@ -737,3 +737,28 @@ def test_a_retraction_of_another_action_voids_nothing(tmp_path):
 
     _write_decisions_log(tmp_path, [_row("overwrite", "PASS"), _row("prune", "HALT"), _retract("prune")])
     assert security_gate.check_clearance(tmp_path, action="overwrite") == (True, "")   # negative control
+
+
+def test_void_check_numbers_rows_like_the_gate_reader(tmp_path):
+    # One read, one numbering: blank lines in the log must not shift the clearance's row against the retraction's.
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row(_SA, "PASS"), _row("server-apply", "HALT"), _retract("server-apply")])
+    log = tmp_path / "references" / "security-decisions.log.csv"
+    lines = log.read_text(encoding="utf-8").splitlines(keepends=True)
+    log.write_text(lines[0] + "\n" + lines[1] + "\n\n" + "".join(lines[2:]) + "\n", encoding="utf-8")
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "(row 1)" in why and "row 3" in why, why
+
+
+def test_the_clearance_is_never_read_through_a_symlinked_log(tmp_path):
+    # The clearance comes from the gate's own read, which refuses a symlinked log (the HALT scan alone did too).
+    from agentteams.cli import security_gate
+
+    outside = tmp_path / "outside"
+    _write_decisions_log(outside, [_row("overwrite", "PASS")])
+    (tmp_path / "team" / "references").mkdir(parents=True)
+    (tmp_path / "team" / "references" / "security-decisions.log.csv").symlink_to(
+        outside / "references" / "security-decisions.log.csv")
+    with pytest.raises(RuntimeError, match="symlink"):
+        security_gate._latest_security_decision(tmp_path / "team", action="overwrite")
