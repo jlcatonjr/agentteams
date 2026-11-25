@@ -82,6 +82,20 @@ def test_rule_s_vm_is_inside_the_invariant_fence_and_cannot_weaken_halt() -> Non
     assert "valid, unexhausted S-VM standing grant" in text and "compromise indicator on a host (Rule S-VM) | **HALT**" in text
 
 
+def test_security_template_grant_wording_matches_grant_v2() -> None:
+    """#558: the persona said no grant covers a server change; a v2 grant covers server-apply and runtime-patch."""
+    from agentteams.vulnscan import grant, grant_v2
+    assert grant_v2.V2_OPS == {"server-apply", "runtime-patch"} and grant.OPS_RESERVED == {"merge"}
+    goldens = sorted(ROOT.glob("examples/*/expected/security.agent.md"))
+    assert goldens
+    for text in [SECURITY.read_text(encoding="utf-8")] + [g.read_text(encoding="utf-8") for g in goldens]:
+        flat = " ".join(text.split())
+        assert "applying changes to a server" not in flat
+        assert "`server-apply` and `runtime-patch` need a **v2 grant**" in flat
+        assert "no grant can name `merge`" in flat                    # negative control: merge stays reserved
+        assert "A grant **never** covers merging or force-pushing" in flat
+
+
 def test_goose_team_gets_the_sub_recipe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
     brief = json.loads((ROOT / "examples" / "software-project" / "brief.json").read_text(encoding="utf-8"))

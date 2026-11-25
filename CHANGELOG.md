@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (@security's persona no longer says a grant never covers a server change; #558)
+
+- Rule S-VM said a grant "never covers merging, force-pushing, applying changes to a server". The code has allowed
+  `server-apply` and `runtime-patch` since the v2 grant: a v2 grant's signature binds the host and level pairs,
+  window and paths. The persona now says that an ordinary (v1) grant never covers a server or host change, that
+  those two operations need a v2 grant, and that no grant can name `merge`. Behaviour is unchanged.
+- **On upgrade:** `security_rules_invariant` is template-owned, so `--update --merge` takes the new wording. The fence
+  version is unchanged.
+
 ### fixed (the operator-decision reference's example is an agent every team has; #635)
 
 - Section 4 of `references/operator-decision.reference.md` gave `@pr-manager`'s disposition prompt as its example
