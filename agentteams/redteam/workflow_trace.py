@@ -51,7 +51,7 @@ _DENIED = frozenset({"deny", "crash-deny"})
 _WORKFLOW_ENTRY_RE = re.compile(
     r"(?:^(?:#+\s*|\*\*)?|\b(?:[Ee]ntering|[Ss]tarting|[Rr]unning|[Ii]nvoking|[Nn]ow in) )Workflow (\d+[A-Z]?)\b", re.M)
 #: A shell command that writes: a redirect, tee, an in-place edit, a copy or move, or the plan/CSV helpers.
-_SHELL_WRITE_HINT_RE = re.compile(r">|\btee\b|\bsed\s+-i|\b(?:cp|mv|touch)\s|write_steps|update_step|atomic_rewrite")
+_SHELL_WRITE_HINT_RE = re.compile(r">|\btee\b|\bsed\s+-i|\b(?:cp|mv|touch)\s|write_steps|update_step|set_step|plan_steps\s+--set|atomic_rewrite")
 _REDIRECT_RE = re.compile(r"(?:^|[^>&0-9-])>{1,2}\s*([^\s;&|<>()'\"]+)")
 _TEE_RE = re.compile(r"\btee\s+(?:-a\s+)?([^\s;&|<>()'\"]+)")
 _TRACKED_PATH_RE = re.compile(r"[\w./~-]*(?:tmp/by-week/\d{4}-W\d{2}/[\w.-]+\.(?:plan\.md|steps\.csv)|workSummaries/[\w./-]+)")

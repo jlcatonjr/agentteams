@@ -92,10 +92,7 @@ For a threat modeler, the single most useful distinction in this system is that
 there are **two separate security surfaces**, and collapsing them produces a
 false sense of coverage.
 
-| Surface | What it governs | `@security`'s role |
-|---|---|---|
-| **Agentic-build security** | the agents and the build process itself — the constitution, the sentinel, the gates | **governs** it |
-| **Deployed-system security** | the defense-in-depth of the software a project *ships* (Part VI's L0–L7 model, S17) | only **reviews against** it |
+--8<-- "docs_src/assets/snippets/security-guide-part-i-table-surface-what-it-governs-security-s-role.md"
 
 The sentinel owns the first surface. For the second, it is a reviewer against a
 reference model — it does not deploy, harden, or run inside the shipped system.

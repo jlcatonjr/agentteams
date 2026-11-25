@@ -1,0 +1,12 @@
+{
+  "groups": [
+    {
+      "reason": "Security guide: one skeleton projected into audience editions (see the guide README). Passages may repeat between editions; review any that vary for factual disagreement.",
+      "paths": ["docs_src/agentteams-security-guide/*", "docs_src/assets/snippets/security-guide-*"]
+    },
+    {
+      "reason": "Sandboxing guide: one skeleton projected into audience editions (see the guide README).",
+      "paths": ["docs_src/agentteams-sandboxing-guide/*"]
+    }
+  ]
+}
