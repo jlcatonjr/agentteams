@@ -52,6 +52,7 @@ from typing import Any
 from agentteams.atomicio import write_new_atomic
 from agentteams.backup import backup_output_dir
 from agentteams.cli.decision_log import (
+    CLEARING_VERDICTS,
     _HALT_RETRACTION_VERDICT,
     _SECURITY_DECISION_REQUIRED_COLUMNS,
     SIGNED_DECISION_COLUMNS,
@@ -66,8 +67,6 @@ DECISION_LOG_REL = "references/security-decisions.log.csv"
 #: Signed-schema columns the migration never adds (see the module docstring).
 EXCLUDED_COLUMNS: frozenset[str] = frozenset({"prev_digest"})
 
-#: Verdicts that clear an action while live (``security_gate._assert_destructive_action_allowed``).
-_CLEARING_VERDICTS: frozenset[str] = frozenset({"PASS", "CONDITIONAL PASS"})
 
 #: ``consumed`` values the gate reads as spent (``security_gate._latest_security_decision``).
 _CONSUMED_VALUES: frozenset[str] = frozenset({"yes", "true", "1"})
@@ -226,7 +225,7 @@ def _revoked_rows(columns: list[str], records: list[tuple[int, int, list[str]]])
         row = dict(zip(columns, (f.strip() for f in fields)))
         verdict = (row.get("verdict") or row.get("status") or "").upper()
         consumed = (row.get("consumed") or "").lower() in _CONSUMED_VALUES
-        if (verdict in _CLEARING_VERDICTS and not consumed) or verdict == _HALT_RETRACTION_VERDICT:
+        if (verdict in CLEARING_VERDICTS and not consumed) or verdict == _HALT_RETRACTION_VERDICT:
             action = row.get("action_reviewed") or row.get("decision") or ""
             revoked.append(RevokedRow(line=line, action=action, verdict=verdict))
     return revoked

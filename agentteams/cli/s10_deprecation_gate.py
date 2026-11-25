@@ -184,6 +184,8 @@ def _check_new(team_dir: Path) -> dict[str, str]:
     if not exception:  # unreachable while effect_relaxes classifies as relaxing; fail closed if that ever drifts
         raise RuntimeError("the decision does not classify as an operator-signed exception")
     security_gate._assert_destructive_action_allowed(team_dir, action=DEPRECATION_ACTION, consume=False)
+    # #616 over every id this gate's HALT checks cover (a retracted HALT on any S-10 relaxation voids this row).
+    security_gate._assert_newest_clearance_not_void(team_dir, action=DEPRECATION_ACTION, also=HALT_ACTIONS)
     return row
 
 
@@ -195,7 +197,7 @@ def _authorize(team_dir: Path, *, consume: bool, now: datetime, halt_dirs: tuple
     entries = entries_for(team_dir, action)
     reasons: list[str] = []
     for entry in active_relaxing_exceptions({"exceptions": entries}, now=now):
-        reason = _unbound_reason(team_dir, entry, now=now, ttl_days=DEPRECATION_TTL_DAYS)
+        reason = _unbound_reason(team_dir, entry, now=now, ttl_days=DEPRECATION_TTL_DAYS, halt_ids=HALT_ACTIONS)
         if reason is None:
             return
         reasons.append(f"registered deprecation {entry.get('id')} did not carry over: it {reason}")
