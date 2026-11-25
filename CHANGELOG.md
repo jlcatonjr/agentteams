@@ -34,24 +34,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through agent Bash, such as `git config credential.helper osxkeychain`, `git config core.sshCommand "ssh -i …"` or
   `git -c core.hooksPath=/dev/null …`, need an operator or must run outside the session. A project policy that
   denies `git-alias-config` (and the `strict` preset) now denies them too. The class id is unchanged.
-- **How a read is told from a write:** the gate splits the command into words with a shell tokenizer instead of a
-  regular-expression lookahead. A `git config` command is a read only when it parses as `git [global options]
-  config` followed by `get` or `list`, or with `--get…`, `--list` or `-l` before the key, where only options git is
-  known to accept may come first (`--comment` takes the next word, so `git config --comment --get k v` sets `k`; an
-  abbreviation such as `--comm` counts as unknown), and no word runs a nested command (`` `…` ``, `$(…)`, `<(…)`).
-  Before,
-  the lookahead looked for those words anywhere, so a quoted value (`git config core.hooksPath ' --list'`), a
-  comment (`… # -l`) or a global option's value (`git -c user.name='config list' config core.hooksPath x`) made a
-  write pass silently. A command the tokenizer cannot parse (an unbalanced quote) asks. The same rule now covers
-  the `publication-channel` keys (`remote.*.url`, `url.*.insteadOf`, and any `include.` or `includeIf.` key).
+- **How a read is told from a write:** a positive, fail-closed rule instead of a regular-expression lookahead. A
+  `git config` command naming one of these keys is exempt as a read only when the whole Bash command is plain text
+  (ASCII letters and digits, space, tab, a plain newline between commands, `. _ - / : = @ , + %` and `; & |`), and
+  the command parses as `git [global options] config` followed by `get` or `list`, or with `--get…`, `--list` or
+  `-l` before the key, where only options git is known to accept may come first. With no quote, `$`, backtick,
+  backslash, brace, bracket, parenthesis, glob, `~`, `<`, `>`, `#` or `!`, and no other line break, nothing the
+  shell does can change the words git receives. Before, quoting, comments, nested commands, brace expansion, word
+  splitting and `$'…'` quoting could each make a write look like a read. The same rule covers the
+  `publication-channel` keys (`remote.*.url`, `url.*.insteadOf`, and any `include.` or `includeIf.` key).
 - **Newly silent:** `git config get …` and `git config list` (git 2.46 and later) are reads, for every key, including
   `alias.`, `push.`, `remote.` and `url.`, which asked before.
-- **Who notices the stricter reads:** a read that is not plainly `git … config <read>` now asks when it names one
-  of these keys: `sudo git config --get alias.p`, a read inside backticks (`` echo `git config --get alias.p` ``),
-  and a read on the same line as an unrelated mention of such a key
-  (`git config --get user.name; echo core.hooksPath`). These passed silently before. So do a read with an option
-  outside git's known set or an abbreviated one, `--show-origin` without a read flag, and any `git config`
-  naming an `include.` or `includeIf.` key other than `.path`.
+- **Who notices the stricter reads:** a read naming one of these keys now asks when anything in the same Bash
+  command is not plain text: a quoted key (`git config --get 'alias.p'`, so a key with a space always asks), a quote,
+  `$` or `#` anywhere else in the command (`git config --get alias.p && git commit -m "x"`,
+  `git config --get alias.p; echo $?`), a `~` path (`git -C ~/repo config --get alias.p`), a `\`-continued line,
+  CRLF line endings, or a read run through a wrapper (`sudo git config --get alias.p`). So does a read behind an
+  option outside git's known set or an abbreviated one, `--show-origin` without a read flag, and any `git config`
+  naming an `include.` or `includeIf.` key other than `.path`. All of these passed silently before. Plain reads,
+  such as `git config --get remote.origin.url` or `git -C path config --get core.hooksPath`, stay silent.
 - **Not covered:** other keys that run a program (`core.pager`, `core.editor`, `filter.*` and more) are listed in
   the known limitations.
 

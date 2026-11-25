@@ -51,15 +51,20 @@ The default `ask` classes:
 - `command-too-long`, `git-config-write`, `scanner-unverified`, `no-interpreter`.
 
 **Reads of git config.** For `git-alias-config` and the `git config` keys of `publication-channel`
-(`remote.*.url`, `url.*.insteadOf`, any `include.` or `includeIf.` key), the gate splits the command into words
-with a shell tokenizer. A command is a read, and stays silent, only when it parses as `git [global options] config`
-followed by `get` or `list`, or with `--get…`, `--list` or `-l` before the key. Only options git is known to accept
-may come before it (an unknown or abbreviated option, or `--comment`, which takes the next word, is never skipped),
-and no word may run a nested command (`` `…` ``, `$(…)`, `<(…)`, `>(…)`). A quoted value, a comment or a global
-option's value cannot make a write look like a read, and a command that does not tokenize asks. This is stricter
-than a plain read in these cases, which now ask: a read run through a wrapper (`sudo git config --get alias.p`), a
-read inside backticks, a read on the same line as another mention of such a key, a read behind an option outside
-git's known set, and `--show-origin` without a read flag.
+(`remote.*.url`, `url.*.insteadOf`, any `include.` or `includeIf.` key), the read exemption is a positive,
+fail-closed rule. A command naming such a key stays silent only when both hold:
+
+- the whole Bash command is plain text: ASCII letters and digits, space, tab, a plain newline between commands,
+  `. _ - / : = @ , + %` and the separators `; & |`. No quote of any kind, `$`, backtick, backslash, brace, bracket,
+  parenthesis, glob, `~`, `<`, `>`, `#` or `!`, and no other line break (`\r`, form feed, `\x85`, U+2028…);
+- each command naming the key parses as `git [global options] config` followed by `get` or `list`, or with
+  `--get…`, `--list` or `-l` before the key, where only options git is known to accept may come first
+  (`--comment`, which takes the next word, and any abbreviation are never skipped).
+
+Everything else asks, so quoting, expansion, substitution and continuation cannot make a write look like a read.
+Reads that need any of those characters ask too: a quoted key (a key with a space always does), a read in a command
+that quotes or expands something elsewhere, a `~` path, a `\`-continued line, CRLF line endings, or a read run
+through a wrapper such as `sudo`.
 
 `git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation
 row 699, with the same class ids. One narrowing came with them: the `f` of `-f` is case-sensitive (git push has

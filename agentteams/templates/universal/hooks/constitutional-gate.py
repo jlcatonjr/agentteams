@@ -452,8 +452,12 @@ _CONFIG_FLAG_OPTIONS = frozenset({
 _CONFIG_READ_FLAGS = frozenset({
     "--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list", "-l",
 })
-#: Shell syntax that runs a nested command from inside one word. The nested command is not the read around it.
-_NESTED_COMMAND = ("`", "$(", "<(", ">(")
+#: The only text in which a `git config` read can be proven a read: ASCII letters, digits, space, tab, a plain
+#: newline between commands, `. _ - / : = @ , + %` and the separators `; & |`. No quote of any kind, `$`, backtick,
+#: backslash, brace, bracket, parenthesis, glob, `~`, `<`, `>`, `#` or `!`, and no other line break: quoting,
+#: expansion, substitution and continuation then change nothing bash runs, so the words the tokenizer sees are
+#: the words git gets. A command outside this set that names an execution key asks, by construction.
+_PLAIN_COMMAND = re.compile(r"[A-Za-z0-9 \t\n._\-/:=@,+%;&|]*")
 
 
 def _shell_commands(line: str) -> "list[list[str]] | None":
@@ -483,11 +487,9 @@ def _is_config_read(words: "list[str]") -> bool:
     """True only for ``git [global options] config`` then ``get``/``list``, or a read flag before the key.
 
     Only options git is known to accept count, so an unknown or abbreviated option (which may take the
-    next word as its value) is never skipped past. A word that runs a nested command is never a read.
+    next word as its value) is never skipped past. Called only for plain text (:data:`_PLAIN_COMMAND`).
     """
     if not words or words[0].rsplit("/", 1)[-1] != "git":
-        return False
-    if any(marker in word for word in words for marker in _NESTED_COMMAND):
         return False
     i = 1
     while i < len(words) and words[i].startswith("-"):
@@ -510,27 +512,32 @@ def _is_config_read(words: "list[str]") -> bool:
     return False
 
 
-def _config_write(class_id: str, line: str) -> bool:
+def _config_write(class_id: str, line: str, plain: bool) -> bool:
     """True when ``line`` may write a ``class_id`` key (:data:`_GIT_CONFIG_WRITES`) through ``git config``.
 
-    Exempt only when the line tokenizes and every command naming such a key parses as a read; a line
-    that does not tokenize asks. A linear pass, not a lookahead: a quoted value cannot pose as `config list`.
+    A positive, fail-closed rule. Exempt only when the whole Bash command is plain text (``plain``, see
+    :data:`_PLAIN_COMMAND`) and every command on the line naming such a key parses as a read.
     """
     pattern = _GIT_CONFIG_WRITES.get(class_id)
     if pattern is None or not pattern.search(line):
         return False
+    if not plain:
+        return True
     named = [words for words in _shell_commands(line) or [] if pattern.search(" ".join(words))]
     return not named or not all(_is_config_read(words) for words in named)
 
 
 def _bash_matches(command: str, first_only: bool = False,
-                  extra: "frozenset[str]" = frozenset()) -> "list[tuple[str, str]]":
+                  extra: "frozenset[str]" = frozenset(), plain: "bool | None" = None) -> "list[tuple[str, str]]":
     """Return ``(class_id, reason)`` for the triggers a Bash command matches, in table order.
 
     ``first_only`` stops at the first match (the default verdict needs only that one). Otherwise every
     matching class is returned, so a project policy can deny a class that is not the first match, and
-    the :data:`POLICY_ONLY_TRIGGERS` named in ``extra`` are evaluated too (never otherwise).
+    the :data:`POLICY_ONLY_TRIGGERS` named in ``extra`` are evaluated too (never otherwise). ``plain``
+    says whether the command AS SENT is plain text (:data:`_PLAIN_COMMAND`); None judges ``command``.
     """
+    if plain is None:
+        plain = bool(_PLAIN_COMMAND.fullmatch(command))
     # A trailing pipe or `&&`/`||` continues the pipeline on the next line; join it so per-line
     # evaluation still sees `curl … |` and `sh` together.
     command = re.sub(r"(\||&&)[ \t]*\r?\n", r"\1 ", command)
@@ -549,7 +556,7 @@ def _bash_matches(command: str, first_only: bool = False,
             return found
     table = _BASH_REVIEW_TRIGGERS + tuple(t for t in POLICY_ONLY_TRIGGERS if t[0] in extra)
     for class_id, pattern, reason in table:
-        if any(re.search(pattern, line, re.IGNORECASE) or _config_write(class_id, line) for line in lines):
+        if any(re.search(pattern, line, re.IGNORECASE) or _config_write(class_id, line, plain) for line in lines):
             found.append((class_id, reason))
             if first_only:
                 return found
@@ -824,15 +831,17 @@ def main(payload: object, raw: bytes = b"") -> str:
 
     if tool_name == "Bash":
         # A backslash-newline is a line continuation to the shell; join it so no pattern is split by one.
-        command = re.sub(r"\\\r?\n", " ", str(tool_input.get("command", "")))
+        sent = str(tool_input.get("command", ""))
+        command = re.sub(r"\\\r?\n", " ", sent)
+        plain = bool(_PLAIN_COMMAND.fullmatch(sent))  # judged on the text as sent, not the joined one
         if policy is not None and re.search(_POLICY_FILES_RE, command, re.I) and re.search(_WRITE_VERBS_RE, command):
             _decide("deny", "this command names the project gate policy, the gate or its interpreter pin together "
                             "with a write; a recorded policy protects them. Changing them is an operator decision.",
                     "policy-protected", "policy")
         if policy is not None and policy.deny:
-            found = _bash_matches(command, extra=policy.deny & POLICY_ONLY_CLASSES)
+            found = _bash_matches(command, extra=policy.deny & POLICY_ONLY_CLASSES, plain=plain)
         else:
-            found = _bash_matches(command, first_only=True)
+            found = _bash_matches(command, first_only=True, plain=plain)
         if found:
             ask_found = [f for f in found if f[0] not in POLICY_ONLY_CLASSES]
             why = (ask_found or found)[0][1]

@@ -291,6 +291,66 @@ def test_include_keys_ask_however_the_condition_is_spelled(tmp_path: Path) -> No
         assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
 
 
+# The read exemption is a positive rule: only a command made entirely of plain characters can be proven a
+# read. Quoting, expansion, substitution and continuation all ask by construction.
+PLAIN_RULE_MUST_ASK = [
+    # a quote spanning a line: the write is outside the quote for bash
+    "echo '\ngit config --get user.name '; git config alias.p x #'",
+    "echo '\ngit config --get user.name '; git config core.hooksPath /tmp/h #'",
+    # ANSI-C quoting: bash closes $'\'' where a POSIX lexer leaves the quote open
+    "git config --get user.name $'\\'' ; git config alias.p x ; echo \\'",
+    "git config --get user.name $'\\'' ; git config core.hooksPath /tmp/h ; echo \\'",
+    # brace expansion and word splitting hand git an option the text does not show
+    "git config -f {.git/config,--comment} --get core.hooksPath /tmp/h",
+    "git config -f {.git/config,--comment} --get alias.p x",
+    "X=.git/config; git config -f $X --get core.hooksPath /tmp/h", "X=.git/config; git config -f $X --get alias.p x",
+    "git config -f ${=X} --get core.hooksPath /tmp/h", "git config --type=$X --get core.hooksPath /tmp/h",
+    # any quoting, a whole-word variable, a tilde path
+    "git config --get 'core.hooksPath'", 'git config --get "alias.p"', "git config --get $X core.hooksPath",
+    "git config -f ~/.gitconfig --get core.hooksPath",
+]
+
+
+@pytest.mark.parametrize("cmd", PLAIN_RULE_MUST_ASK)
+def test_a_read_that_is_not_plain_text_asks(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger")
+    assert {c for c, _ in gate._bash_matches(cmd)} & {"git-alias-config", "publication-channel"}, cmd
+
+
+def test_a_backslash_continued_read_asks(tmp_path: Path) -> None:
+    # main() joins the continuation before matching; the plain rule is judged on the text as sent.
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": "git config --get \\\ncore.hooksPath"})[:2] == ("ask", "bash-trigger")
+
+
+@pytest.mark.parametrize("brk", ["\r", "\r\n", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"])
+def test_every_extra_line_break_makes_a_read_ask(tmp_path: Path, brk: str) -> None:
+    gate = install(tmp_path, None)
+    cmd = f"git config --get user.name{brk}git config --get core.hooksPath"
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), repr(brk)
+
+
+@pytest.mark.parametrize("cmd", [
+    "git config --get user.name", "git config --list", "git config --get remote.origin.url",
+    "git -C path config --get core.hooksPath", "git config get core.hooksPath",
+    "git config --get user.name\ngit config --get core.hooksPath\n", "git fetch && git config --get alias.p",
+])
+def test_plain_reads_stay_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+def test_remote_keys_stay_fast_at_the_line_cap(tmp_path: Path) -> None:
+    import time
+    gate = install(tmp_path, None)
+    for line in ("git config remote." + "a." * 4085, ("git config remote.a.b " * 400)[:8180],
+                 "git config " + "remote.x" * 1020):
+        started = time.perf_counter()
+        gate._bash_matches(line[:8180])
+        assert time.perf_counter() - started < 1.5, line[:30]
+
+
 @pytest.mark.parametrize("cmd", ["sudo git config --get alias.p", "echo `git config --get alias.p`",
                                  "git config --get user.name; echo core.hooksPath"])
 def test_a_read_that_is_not_plainly_git_config_asks(tmp_path: Path, cmd: str) -> None:
