@@ -223,3 +223,35 @@ def test_sibling_behind_a_symlinked_parent_is_not_written(tmp_path):
 def test_review_lines_match_prefixed_notices():
     out = f"  [codex] Notice: {ss.RELAXED_PREFIX}: x\n  ✗  {ss.KEPT_PREFIX}: y\nunrelated\n"
     assert len(ss.review_lines(out)) == 2
+
+
+# --- bl48-11: governance reads refuse a symlinked directory, not only a symlinked file -------------------------
+
+
+def _linked_references(tmp_path: Path) -> Path:
+    """A team whose ``references/`` is a symlink to an outside dir holding a valid, owned switch."""
+    outside = _team(tmp_path, "outside", marker=_NATIVE, switch=True)
+    team = tmp_path / "team"
+    team.mkdir()
+    (team / "references").symlink_to(outside / "references", target_is_directory=True)
+    return team
+
+
+def test_switch_behind_a_symlinked_references_dir_is_refused(tmp_path):
+    team = _linked_references(tmp_path)
+    assert ss.read_switch(team / ss.SWITCH_REL) is True   # no root: the final component alone is checked
+    with pytest.raises(ValueError, match="symlink"):
+        ss.read_switch(team / ss.SWITCH_REL, root=team)
+    with pytest.raises(ValueError, match="symlink"):
+        ss.refuse_symlinked_component(team / ss.SWITCH_REL, team)
+
+
+def test_switch_in_a_real_references_dir_reads_normally(tmp_path):
+    team = _team(tmp_path, "team", marker=_NATIVE, switch=True)   # negative control
+    assert ss.read_switch(team / ss.SWITCH_REL, root=team) is True
+    ss.refuse_symlinked_component(team / ss.SWITCH_REL, team)
+
+
+def test_refuse_symlinked_component_needs_the_path_under_root(tmp_path):
+    with pytest.raises(ValueError, match="not under"):
+        ss.refuse_symlinked_component(tmp_path / "a" / "b", tmp_path / "c")

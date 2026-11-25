@@ -6,6 +6,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (a retracted HALT revives no earlier permission, #616)
+
+- **Fixed:** the known issue #616 noted under 1.3.0. A PASS recorded while a HALT on the action was open (or
+  before a family HALT) took effect as soon as the HALT was retracted. Now an accepted retraction of a HALT on the
+  action, on its family, or on a `derives_from` ancestor voids every earlier permission for that action: a PASS or
+  CONDITIONAL PASS older than the retraction (the refusal names both rows; the newest matching row still decides),
+  a standing sandbox or S-10 exception whose decision row is older than it (it no longer carries over), and the
+  sandbox "spent off" excuse recorded before it. Each is re-issued after the retraction. Where a gate's HALT checks
+  cover more than the action (a sandbox relaxation's or S-10 exemption's family, so a HALT on a sibling instance
+  counts; every S-10 relaxation id for the cooldown deprecation), a retraction of any of them voids too, and a HALT
+  still open in the same read of the log refuses there as well.
+- **Signing:** `--sign-decision` refuses, before the key is read, a `PASS` or `CONDITIONAL PASS` on an id (or a
+  `derives_from` parent) under an open HALT, reading the row as the log will store it. HALT and HALT-RETRACTED
+  rows are not checked.
+- **Who notices:** teams that retract a HALT and expected an older clearance, a standing exception or the
+  spent-off excuse to resume: record a fresh decision after the retraction.
+- **Not changed:** a waiver issued before the retraction still clears (a waiver's issue time is not signed).
+
+### security (a HALT on a family id blocks every id under it after a colon, #636)
+
+- **Fixed:** a HALT on `server-apply` (or `server-apply:remove-path:<host>`) did not block a PASS on
+  `server-apply:remove-path:<host>:<path>`, so `vulnscan` server-apply path removal and any `check_clearance` gate
+  called with an instance id could be cleared under a family HALT (C-2). The HALT side now also matches an id
+  that is the HALT's id plus `:` and more; a trailing colon on the HALT's id is ignored. Only `:` counts: `branch`
+  does not block `branch-delete`. The clearing side (`action_matches`) is unchanged.
+- **Retraction:** such a HALT is retracted only by a `HALT-RETRACTED` row with its own id.
+- **Who notices:** teams whose decisions log holds an unretracted HALT on a short id that their own gates' ids
+  extend after a colon (a HALT on `deploy` now blocks `deploy:prod`). `--verify-integrity` and
+  `--migrate-decision-log --dry-run` list every unretracted HALT once, with the agentteams gate family it belongs
+  to, consumer-defined ids included (`action_ids.family_halts`).
+
+### security (the tracked-marker check fails closed when git refuses a governed repository)
+
+- **Fixed:** when git refused the repository (`safe.directory` ownership, a broken `.git` file), a team whose
+  `signing-governed.marker` had been deleted read as ungoverned, so a missing signing switch fell back to legacy
+  unsigned behaviour. Now, when a `.git` entry is present and the team holds a `security-approvers.txt` roster or a
+  signed decision row (an unreadable decisions log counts), it counts as governed (fail-closed) and stderr names
+  the repository and the fix.
+- **Unchanged, with a warning:** the same refusal in a team with no roster and no signed row is still decided by
+  the marker file alone, and stderr now says so. No git binary, or no `.git` at all, is unchanged and silent.
+- **Who notices:** a governed team run where git will not open its repository (another uid in a container, a
+  broken `.git` file) whose switch file is missing: every gate now refuses until git can open the repository or
+  the switch is restored. `agentteams/signing_switch.py` is now integrity-pinned.
+
+### security (governance reads refuse a symlinked `references/` directory)
+
+- **Fixed:** the decision gate read `references/agent-privilege.json` and `references/security-decisions.log.csv`
+  through a symlinked `references/` directory (and the log through a symlinked file), so the switch, the HALTs and,
+  when the linked directory held no decisions log, the waivers and roster could come from outside the team. These
+  reads now refuse a symlink anywhere below the team dir, and every gate decision then refuses (fail-closed). The
+  switch reads in `projection_marker` do the same.
+- **New:** `signing_switch.refuse_symlinked_component(path, root)`; `read_switch` takes an optional `root`.
+- **Who notices:** a team whose `references/` was linked by hand. agentteams never creates such a link.
+- **Limit:** the team dir and its ancestors are not checked.
+
+### security (`--sign-decision` refuses an author the gate would refuse)
+
+- **Changed:** `--sign-decision` now refuses, before the key is read, a `PASS`, `CONDITIONAL PASS` or
+  `HALT-RETRACTED` row whose author is not on the team's `references/security-approvers.txt` roster (`security`
+  when that file is absent). The author is read as the log will store it (`author`, or the log's
+  `requesting_agent` or `owner` column). Such a row was signed and then refused by every gate.
+- **Who notices:** decision specs that fill `requesting_agent: orchestrator`, or name no author, now fail at
+  signing with a message naming the fix. `HALT` rows are not checked. The gate itself is unchanged.
+- **Internal:** the roster check, the author lookup and the clearing verdicts live in one pinned module
+  (`cli/decision_authors.py`), and the signer's pre-key refusals in another (`cli/sign_decision_refusals.py`).
+
+### security (a HALT ends a standing sandbox relaxation)
+
+- **Fixed:** in a governed workspace, a continuing sandbox relaxation (an active exception, or the pre-governance
+  `sandbox-os-off` carve-out) was carried over on later renders, and accepted by the `--run-wasm-agent` launch
+  check, even after a HALT on its family or action was recorded. The carry-over now repeats the HALT checks a new
+  relaxation runs and refuses (C-2).
+- **After a retraction:** the exception does not resume (#616 above); a decision recorded after the retraction
+  registers a fresh one.
+- **Who notices:** a governed team that records a HALT on a sandbox relaxation it keeps rendering: the render and
+  the WASM launch check refuse until the HALT is retracted and a fresh decision is signed, or the relaxation is
+  turned off.
+- **Limit:** a refused render does not remove the relaxed host configuration an earlier render wrote (an OS-off
+  render's settings stay in force until a render with the sandbox on); the launch check is what stops WASM use.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`

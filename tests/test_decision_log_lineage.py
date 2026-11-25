@@ -251,3 +251,27 @@ def test_traceability_noop_when_ungoverned(tmp_path):
     # (legacy behaviour preserved; the elevated path is what governs such rows in WS-B).
     row = {"action_reviewed": "prune-collectors", "verdict": "PASS", "derives_from": ""}
     dl._assert_relaxing_row_is_traceable(row, output_dir=tmp_path, action="prune-collectors")
+
+
+# --- #616: a retracted ANCESTOR HALT voids the child's older clearance (Rule 15(a)) --------------------------
+
+
+def test_retracted_ancestor_halt_voids_the_childs_older_pass(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_log(tmp_path, [
+        _r("prune-collectors", "PASS"),
+        _r("cleanup-collectors", "PASS", derives_from="prune-collectors"),
+        _r("prune-collectors", "HALT"),
+        _r("prune-collectors", "HALT-RETRACTED", evidence="root cause fixed"),
+    ])
+    ok, why = security_gate.check_clearance(tmp_path, action="cleanup-collectors")
+    assert not ok and "row 2" in why and "row 4" in why and "#616" in why
+    # Negative control: a child clearance recorded after the ancestor's retraction clears.
+    _write_log(tmp_path, [
+        _r("prune-collectors", "PASS"),
+        _r("prune-collectors", "HALT"),
+        _r("prune-collectors", "HALT-RETRACTED", evidence="root cause fixed"),
+        _r("cleanup-collectors", "PASS", derives_from="prune-collectors"),
+    ])
+    assert security_gate.check_clearance(tmp_path, action="cleanup-collectors") == (True, "")

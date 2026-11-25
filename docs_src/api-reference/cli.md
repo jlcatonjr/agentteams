@@ -122,7 +122,10 @@ Mints and appends one Ed25519-signed constraint-relaxing decision row under the 
 1. team-dir refusal;
 2. spec load and shape check, then the display-spoofing refusal; the chain link (`prev_digest`) and, when the
    log has the column, `text_digest` (binding `conditions` and `evidence`) are computed, never taken from the spec;
-3. eligibility and effect classification, then the PR-E grant-purpose refusal;
+3. eligibility and effect classification, then the PR-E grant-purpose refusal and the toolchain-group and
+   dev-merge purpose refusals; then, for an authorizing row, the author-roster refusal (the author the log will
+   store is off the approver roster), and for a PASS or CONDITIONAL PASS the open-HALT refusal (an id the row
+   names, or a `derives_from` parent, is under an open HALT, #616);
 4. preflight: env, integrity, install location, key-file existence. With `allow_checkout`, an overridden
    location refusal is recorded in the signed `conditions_verified`;
 5. the display, with the review digest;
@@ -150,10 +153,13 @@ called before the key read. The error precedence is (amended by #9):
 
 ### `sign_decision_team_refusal(output_dir)`
 
-> *Source: `agentteams/cli/operator_signing.py`*
+> *Source: `agentteams/cli/sign_decision_refusals.py` (re-exported by `operator_signing`)*
 
 F-2: the refusal sentence when `output_dir` holds neither `references/agent-privilege.json` nor
-`references/build-log.json`, else `None`.
+`references/build-log.json`, else `None`. The same module holds the signer's other pre-key refusals:
+`author_refusal(output_dir, row, fieldnames)` (the row's author, read from the cells the log keeps
+(`stored_view(row, fieldnames)`), is off the approver roster) and `open_halt_refusal(output_dir, row, fieldnames)` (a clearance
+on an id, or a `derives_from` parent, under an open HALT, #616).
 
 ### `load_grant_spec(path, flag)` / `grant_spec_kwargs(spec)` / `report_issued(record, ledger_root, team_dir)`
 

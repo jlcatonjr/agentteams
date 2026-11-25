@@ -45,6 +45,7 @@ from pathlib import Path
 
 from agentteams.cli import security_gate
 from agentteams.cli.decision_log import (
+    CLEARING_VERDICTS,
     _assert_authorizing_row_is_authentic,
     _assert_decision_chain_intact,
     _decision_signature_values,
@@ -91,7 +92,6 @@ SANDBOX_EXCEPTION_TTL_DAYS = 90
 _OPERATOR_OFF_REASONS = frozenset({"brief", "cli"})
 _ACTIVE = "active"
 _HEX64 = re.compile(r"[0-9a-f]{64}")
-_AUTHORIZING = frozenset({"PASS", "CONDITIONAL PASS"})
 
 #: How far ahead of now a signed row's date may lie (clock skew): a later date would stretch the Rule 15(d) sunset.
 _FUTURE_SKEW = timedelta(days=1)
@@ -317,9 +317,11 @@ def _check_new(team_dir: Path, r: Relaxation) -> dict[str, str]:
         raise SandboxRelaxationError(f"the '{relaxation_action}' decision is inconsistent: {exc}") from exc
     if not exception:  # unreachable while the classifier's sandbox axis holds; fail closed if it ever drifts
         raise SandboxRelaxationError(f"the '{relaxation_action}' decision does not classify as an exception")
-    # C-2 over the family too: halt_names_action does not let a HALT on `sandbox-os-off` block `sandbox-os-off:claude`.
+    # C-2 over the family too: a HALT on any instance (`sandbox-os-off:goose`) also blocks `sandbox-os-off:claude`.
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
     security_gate._assert_destructive_action_allowed(team_dir, action=relaxation_action, consume=False)
+    # #616 over the family too: a retracted HALT on a sibling instance voids this older row as well.
+    security_gate._assert_newest_clearance_not_void(team_dir, action=relaxation_action, also=(relaxation_family,))
     return row
 
 
@@ -330,7 +332,8 @@ def _decision_binding(row: dict[str, str]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int) -> str | None:
+def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int,
+                   halt_ids: tuple[str, ...] | None = None) -> str | None:
     """Why an active registry entry may NOT carry its relaxation over (S1), or None when it may.
 
     It may only when its ``expires`` is present (an expiry-less entry never lapses, so it is refused) and its
@@ -345,12 +348,14 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
         entry: The registry entry.
         now: Reference time (UTC).
         ttl_days: The calling gate's sunset, counted from the bound row's signed date.
+        halt_ids: The further ids the calling gate's HALT checks cover, which a retraction on voids the entry too
+            (default: the family, the entry action's part before its first colon).
 
     Returns:
         The reason, or None when the entry carries over.
 
     Raises:
-        RuntimeError: The decisions log is unreadable or its chain is broken.
+        RuntimeError: The decisions log is unreadable or its chain is broken, or a HALT the gate checks is open.
     """
     if not str(entry.get("expires") or "").strip():
         return "records no expiry"
@@ -363,12 +368,12 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
     rows, fieldnames = read
     _assert_decision_chain_intact(rows, fieldnames)
     # A row with a '|' in a signed field raises here: a malformed log refuses the carry-over (fail-closed).
-    matches = [row for row in rows if _decision_binding(row) == binding]
+    matches = [i for i, row in enumerate(rows) if _decision_binding(row) == binding]
     if not matches:
         return "is bound to a decision row that is no longer in the decisions log"
-    row = matches[-1]
+    row = rows[matches[-1]]
     verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
-    if verdict not in _AUTHORIZING or (verdict == "CONDITIONAL PASS" and
+    if verdict not in CLEARING_VERDICTS or (verdict == "CONDITIONAL PASS" and
                                        (row.get("conditions_verified") or "").strip().lower() != "verified"):
         return f"is bound to a decision row whose verdict is {verdict or 'empty'}"
     try:
@@ -376,6 +381,15 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
             fieldnames), action=str(entry.get("action") or ""))
     except RuntimeError as exc:
         return f"is bound to a decision row that no longer verifies ({exc})"
+    entry_action = str(entry.get("action") or "")
+    also = (entry_action.split(":", 1)[0],) if halt_ids is None else halt_ids
+    try:   # #616: a HALT retraction after the bound row voids it; the operator re-issues the decision
+        security_gate._assert_not_older_than_a_retraction(team_dir, read, action=entry_action, index=matches[-1],
+                                                          also=also)
+    except security_gate.OpenHaltError:
+        raise   # an open HALT refuses as a HALT, never reads as a lapse
+    except RuntimeError as exc:
+        return f"is bound to a decision row a later HALT retraction voids ({exc})"
     lapse = _signed_lapse_reason(row, now, ttl_days)
     if lapse is not None:
         return lapse
@@ -391,11 +405,27 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
     return None
 
 
+def _assert_not_halted(team_dir: Path, r: Relaxation) -> None:
+    """C-2 on a carry-over: an unretracted HALT on the family or the exact action ends a standing relaxation.
+
+    The carry-over skips :func:`_check_new`, so it repeats its HALT checks (as :func:`_spent_off_row` does). The
+    registry entry is left as it is: a ``HALT-RETRACTED`` row restores the carry-over.
+    """
+    relaxation_action, relaxation_family = r.action, r.kind
+    try:
+        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
+        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
+    except RuntimeError as exc:
+        raise SandboxRelaxationError(f"{r.action}: an unretracted HALT ends this standing relaxation (C-2); retract "
+                                     f"it or turn the relaxation off. {exc}") from exc
+
+
 def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object]:
     """Classify a continuing relaxation against the registry.
 
     Returns ``("active", entries)``, ``("pre-governance", None)``, ``("skip", None)`` or
-    ``("refuse", (message, lapsed_ids))``.
+    ``("refuse", (message, lapsed_ids))``. Raises :class:`SandboxRelaxationError` instead of returning
+    ``"active"`` or ``"pre-governance"`` while an unretracted HALT names the relaxation (C-2).
     """
     entries = entries_for(team_dir, r.action)
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
@@ -413,6 +443,7 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
         covered = set().union(*(_entry_tokens(e) for e in active))
         missing = sorted(set(r.grants) - covered)
         if not missing:
+            _assert_not_halted(team_dir, r)
             return "active", [e for e in active if _entry_tokens(e) & set(r.grants)]
         ever = set().union(*(_entry_tokens(e) for e in entries))
         if set(missing) & ever:
@@ -421,6 +452,7 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
         return "refuse", (f"{r.action} continues for {missing}, which no exception records (only sandbox-os-off "
                           "can predate governance); re-sign a decision or remove the grant", lapsed)
     if active:
+        _assert_not_halted(team_dir, r)
         return "active", [active[-1]]
     if r.kind == WASM_TO_OS_SWITCH and not open_ids:
         return "skip", None  # never switched under governance, or switched back (the entry retired)
@@ -428,6 +460,7 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
         named = ", ".join(str(i) for i in (lapsed or [e.get("id") for e in entries]))
         return "refuse", (f"exception {named} for {r.action} has lapsed; re-sign a decision or {_way_back(r)}", lapsed)
     if r.kind == SANDBOX_OS_OFF:
+        _assert_not_halted(team_dir, r)
         return "pre-governance", None
     return "refuse", (f"{r.action} continues but no exception was ever recorded for it (only sandbox-os-off can "
                       f"predate governance); re-sign a decision or {_way_back(r)}", lapsed)
@@ -497,14 +530,14 @@ def _spent_off_row(team_dir: Path, action: str) -> dict[str, str]:
         raise RuntimeError("no decisions log")
     rows, fieldnames = read
     _assert_decision_chain_intact(rows, fieldnames)
-    mine = [row for row in rows if (row.get("scope") or "").strip().lower() == action]
+    mine = [i for i, row in enumerate(rows) if (row.get("scope") or "").strip().lower() == action]
     if not mine:
         raise RuntimeError(f"no decision row is scoped to {action}")
-    row = mine[-1]
+    row = rows[mine[-1]]
     verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
     if (row.get("consumed") or "").strip().lower() not in {"yes", "true", "1"}:
         raise RuntimeError(f"the newest {action} decision is not marked consumed")
-    if verdict not in _AUTHORIZING:
+    if verdict not in CLEARING_VERDICTS:
         raise RuntimeError(f"the newest {action} decision does not authorize ({verdict or 'no verdict'})")
     if verdict == "CONDITIONAL PASS" and (row.get("conditions_verified") or "").strip().lower() != "verified":
         # the same bar as _unbound_reason: `consumed` is unsigned, so it cannot vouch for one
@@ -515,6 +548,9 @@ def _spent_off_row(team_dir: Path, action: str) -> dict[str, str]:
     relaxation_action, relaxation_family = action, action.split(":", 1)[0]
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
+    # #616: a spent row older than an accepted HALT retraction no longer excuses anything; it is re-issued after it.
+    security_gate._assert_not_older_than_a_retraction(team_dir, read, action=action, index=mine[-1],
+                                                      also=(relaxation_family,))
     return row
 
 
