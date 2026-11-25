@@ -115,6 +115,10 @@ registry's `expires` is not signed, so it can only shorten the sunset, never ext
 once must raise the cap in the registry (a visible, git-tracked decision). `sandbox-wasm-off` is not
 standing. Whether auto-approval is on is recorded in the build-log's `sandbox_exceptions` (`mcp_approval_auto: "on"`,
 written only when on; a record without it reads as off), and dropping the token retires its exception.
+An unretracted HALT on the family or the action ends the carry-over at once, on a render and at the
+`--run-wasm-agent` launch check, and the pre-governance carve-out below too. The registry entry stays: a
+`HALT-RETRACTED` row restores the carry-over. A refused render leaves the relaxed host configuration it already
+wrote on disk until a render with the sandbox back on replaces it.
 
 **Carve-out: an OS-off state that predates governance.** A continuing `sandbox-os-off` (the previous
 render already had the OS boundary off and this one keeps it off) with no exception ever recorded for its

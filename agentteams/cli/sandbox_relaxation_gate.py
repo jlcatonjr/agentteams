@@ -391,11 +391,27 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
     return None
 
 
+def _assert_not_halted(team_dir: Path, r: Relaxation) -> None:
+    """C-2 on a carry-over: an unretracted HALT on the family or the exact action ends a standing relaxation.
+
+    The carry-over skips :func:`_check_new`, so it repeats its HALT checks (as :func:`_spent_off_row` does). The
+    registry entry is left as it is: a ``HALT-RETRACTED`` row restores the carry-over.
+    """
+    relaxation_action, relaxation_family = r.action, r.kind
+    try:
+        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
+        security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
+    except RuntimeError as exc:
+        raise SandboxRelaxationError(f"{r.action}: an unretracted HALT ends this standing relaxation (C-2); retract "
+                                     f"it or turn the relaxation off. {exc}") from exc
+
+
 def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object]:
     """Classify a continuing relaxation against the registry.
 
     Returns ``("active", entries)``, ``("pre-governance", None)``, ``("skip", None)`` or
-    ``("refuse", (message, lapsed_ids))``.
+    ``("refuse", (message, lapsed_ids))``. Raises :class:`SandboxRelaxationError` instead of returning
+    ``"active"`` or ``"pre-governance"`` while an unretracted HALT names the relaxation (C-2).
     """
     entries = entries_for(team_dir, r.action)
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
@@ -413,6 +429,7 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
         covered = set().union(*(_entry_tokens(e) for e in active))
         missing = sorted(set(r.grants) - covered)
         if not missing:
+            _assert_not_halted(team_dir, r)
             return "active", [e for e in active if _entry_tokens(e) & set(r.grants)]
         ever = set().union(*(_entry_tokens(e) for e in entries))
         if set(missing) & ever:
@@ -421,6 +438,7 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
         return "refuse", (f"{r.action} continues for {missing}, which no exception records (only sandbox-os-off "
                           "can predate governance); re-sign a decision or remove the grant", lapsed)
     if active:
+        _assert_not_halted(team_dir, r)
         return "active", [active[-1]]
     if r.kind == WASM_TO_OS_SWITCH and not open_ids:
         return "skip", None  # never switched under governance, or switched back (the entry retired)
@@ -428,6 +446,7 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
         named = ", ".join(str(i) for i in (lapsed or [e.get("id") for e in entries]))
         return "refuse", (f"exception {named} for {r.action} has lapsed; re-sign a decision or {_way_back(r)}", lapsed)
     if r.kind == SANDBOX_OS_OFF:
+        _assert_not_halted(team_dir, r)
         return "pre-governance", None
     return "refuse", (f"{r.action} continues but no exception was ever recorded for it (only sandbox-os-off can "
                       f"predate governance); re-sign a decision or {_way_back(r)}", lapsed)

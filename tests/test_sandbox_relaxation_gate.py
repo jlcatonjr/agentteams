@@ -447,3 +447,47 @@ def test_unbound_entry_is_replaced_by_a_fresh_signed_decision(tmp_path, stub_ed2
     assert rec["authorization"] == "ed25519-decision" and rec["exception_id"] != entry["id"]
     statuses = {e["id"]: e["status"] for e in _registry(team)}
     assert statuses == {entry["id"]: "sunset", rec["exception_id"]: "active"}
+
+
+# --- C-2: a HALT recorded after registration ends the carry-over (bl48-05) -----------------------------------
+
+
+def _retraction(action: str) -> dict[str, str]:
+    """An authenticated HALT-RETRACTED row for *action*, with the evidence a retraction must carry."""
+    row = _row(action, verdict="HALT-RETRACTED") | {"conditions": "the HALT no longer applies"}
+    row["signature"] = _stub_sig(dl._decision_signature_values(row))
+    return row
+
+
+@pytest.mark.parametrize("halted", ["sandbox-os-off:claude", "sandbox-os-off"])
+def test_halt_after_registration_ends_carry_over(tmp_path, stub_ed25519, halted):
+    team, entry, later = _registered_os_off(tmp_path)
+    # Negative control: without the HALT the continuation carries over.
+    assert gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))[0]["authorization"] == \
+        "active-exception"
+    _log(team, _row(halted, verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.standing_authorization(team, "sandbox-os-off", "claude", now=_T0 + timedelta(days=1))
+    assert _registry(team)[0]["status"] == "active"   # the HALT does not retire the entry
+
+
+def test_halt_retraction_restores_carry_over(tmp_path, stub_ed25519):
+    team, entry, later = _registered_os_off(tmp_path)
+    _log(team, _row("sandbox-os-off:claude", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    _log(team, _retraction("sandbox-os-off:claude"))
+    [rec] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert rec["authorization"] == "active-exception" and rec["exception_id"] == entry["id"]
+
+
+def test_pre_governance_continuation_stops_under_halt(tmp_path):
+    team = _team(tmp_path)
+    later = gate.plan_relaxations(_st(os=False), _st(os=False), framework_id="claude", profile_would_emit=True)
+    _log(team)
+    assert gate.authorize(team, later, consume=False, now=_T0)[0]["authorization"] == "pre-governance"  # control
+    _log(team, _row("sandbox-os-off", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0)

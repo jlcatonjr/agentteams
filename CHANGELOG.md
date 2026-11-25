@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a HALT ends a standing sandbox relaxation)
+
+- **Fixed:** in a governed workspace, a continuing sandbox relaxation (an active exception, or the pre-governance
+  `sandbox-os-off` carve-out) was carried over on later renders, and accepted by the `--run-wasm-agent` launch
+  check, even after a HALT on its family or action was recorded. The carry-over now repeats the HALT checks a new
+  relaxation runs and refuses (C-2).
+- **Restoring:** the exception registry entry is not retired; a `HALT-RETRACTED` row restores the carry-over.
+- **Limit:** a refused render does not remove the relaxed host configuration an earlier render wrote (an OS-off
+  render's settings stay in force until a render with the sandbox on); the launch check is what stops WASM use.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`
