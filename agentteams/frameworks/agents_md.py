@@ -33,11 +33,13 @@ emit a mislabeled file). The CLI rejects those combinations with a clear error.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from ._agents_md_ownership import agents_md_decision, symlink_on_path
 from ._agents_md_rules import apply_constitutional_rules_baseline
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -47,6 +49,9 @@ _YAML_SCALAR_RE = re.compile(r'^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*"?([^"\n]+)"?\s*$
 # _strip_yaml_front_matter cannot see it, so it would leak the template filename into
 # the published AGENTS.md. Strip exactly that leading comment.
 _LEADING_MANIFEST_RE = re.compile(r"\A\s*<!--.*?SECTION MANIFEST.*?-->\s*\n?", re.DOTALL)
+
+#: The repo-root AGENTS.md, relative to the ``.agents`` dir (:meth:`AgentsMdAdapter.finalize_output_path`).
+_AGENTS_MD_REL = "../AGENTS.md"
 
 # One-line generated notice prepended to AGENTS.md (HTML comment: invisible to the
 # tools that consume it, documents the shared-namespace + detail-dir relationship).
@@ -194,8 +199,46 @@ class AgentsMdAdapter(FrameworkAdapter):
         root), so the repo root is one level up.
         """
         if file_type == "instructions" and rel_path.endswith("copilot-instructions.md"):
-            return "../AGENTS.md"
+            return _AGENTS_MD_REL
         return super().finalize_output_path(rel_path, file_type)
+
+    def guard_rendered_files(
+        self, rendered_files: list[tuple[str, str]], output_dir: Path
+    ) -> tuple[list[tuple[str, str]], list[str]]:
+        """Apply the agents-md repo-root AGENTS.md rule (:func:`._agents_md_ownership.agents_md_decision`).
+
+        agents-md writes only an AGENTS.md that is absent or its own; one generated for Codex, Grok or Goose, or
+        written by hand, is left untouched with a notice (bl48-28). The ``.agents/*.md`` files are always kept.
+
+        Args:
+            rendered_files: ``(rel_path, content)`` pairs relative to *output_dir*.
+            output_dir: The agents output directory (``.agents``).
+
+        Returns:
+            ``(kept_files, notices)``.
+
+        Raises:
+            Nothing.
+        """
+        kept: list[tuple[str, str]] = []
+        notices: list[str] = []
+        out_dir = Path(os.path.normpath(output_dir))
+        for rel_path, content in rendered_files:
+            if rel_path != _AGENTS_MD_REL:
+                kept.append((rel_path, content))
+                continue
+            target = Path(os.path.normpath(out_dir / rel_path))
+            linked = symlink_on_path(out_dir, target.parent)
+            if linked is not None:
+                notices.append(f"{target}: left untouched; {linked} is a symlink, so the .agents dir may not be "
+                               "what it appears.")
+                continue
+            decided, notice = agents_md_decision(target, content, repo_root=target.parent)
+            if notice:
+                notices.append(notice)
+            if decided is not None:
+                kept.append((rel_path, decided))
+        return kept, notices
 
 
 # ---------------------------------------------------------------------------

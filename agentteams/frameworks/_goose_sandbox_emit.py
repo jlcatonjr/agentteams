@@ -47,6 +47,7 @@ from agentteams.host_features import is_sandbox_capable
 from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
 from agentteams.frameworks._control_plane_protect import substrate_protect_paths  # P20 D5
 from agentteams.frameworks._goose_egress import ollama_egress_warning  # SEC-2026-11-23-im-sealed-mail-B/C
+from agentteams.frameworks._linux_sandbox_emit import linux_launcher_verdict  # bl48-14
 from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
 from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
@@ -805,9 +806,9 @@ def verify_goose_sandbox_wiring(
     Returns ``(ok, messages)``:
 
     * **Linux** — verifies the framework-neutral bwrap launcher ``sandbox/confine-run.sh``, NOT
-      Seatbelt: ``ok=True`` with an ``ENFORCEABLE`` notice when the launcher is present (it still
-      must be WRAPPED around the invocation to take effect), or ``ok=False`` with a regenerate
-      warning when a confined team is missing it.
+      Seatbelt: ``ok=True`` with an ``ENFORCEABLE`` notice when the launcher is present and this host
+      can run it (it still must WRAP the invocation); ``ok=False`` when bwrap/userns is provably absent
+      (``linux_launcher_verdict``) or when a confined team is missing the launcher (regenerate).
     * **Windows / other** — exit-NEUTRAL (``ok=True``) with an explicit "NOT ENFORCEABLE HERE"
       notice (no emittable boundary there); never a misleading clean pass. Points at outside-in
       confinement.
@@ -824,10 +825,8 @@ def verify_goose_sandbox_wiring(
     requested = manifest is not None and _goose_sandbox_feature_enabled(manifest)
     plat = sys.platform
 
-    # Linux: enforcement is the FRAMEWORK-NEUTRAL bwrap launcher (repo-root
-    # ``sandbox/confine-run.sh``, emitted by ``_linux_sandbox_emit``), NOT Seatbelt. Verify the
-    # launcher, never ``.goose/sandbox.sb`` (which is macOS-only). Linux is now enforceable, so
-    # this is no longer the exit-neutral "NOT ENFORCEABLE HERE" case.
+    # Linux: enforcement is the FRAMEWORK-NEUTRAL bwrap launcher (repo-root ``sandbox/confine-run.sh``), NOT
+    # Seatbelt. Verify the launcher (never ``.goose/sandbox.sb``) and that this host can run it (bl48-14).
     if plat.startswith("linux"):
         if not requested:
             return True, [
@@ -835,14 +834,14 @@ def verify_goose_sandbox_wiring(
             ]
         launcher = project_root / "sandbox" / "confine-run.sh"
         if launcher.is_file():
-            return True, [
+            return linux_launcher_verdict(plat, [
                 f"ENFORCEABLE ({plat}) via the framework-neutral bwrap launcher emitted at "
                 "sandbox/confine-run.sh (read-only root + rootless netns + NoNewPrivs + "
                 "credential read-exclusion). It must WRAP the goose invocation — "
                 "`sandbox/confine-run.sh --scratch DIR … -- goose run …` — to take effect; the "
                 "launcher itself is inert until used. Run its deny test to confirm on this "
                 "kernel. T6 + host-as-TCB remain bounded, never closed.",
-            ]
+            ])
         return False, [
             f"WARNING: confinement was requested for this goose team on {plat} but the "
             "framework-neutral launcher sandbox/confine-run.sh was not emitted — regenerate "
