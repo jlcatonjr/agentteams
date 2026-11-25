@@ -355,7 +355,7 @@ def test_update_merge_restores_the_rules_region_end_to_end(tmp_path):
     assert re.search(r"^\|\s*project_specific_rules\s*\|", merged, re.MULTILINE)
 
 
-# --- bl48-24: the Project Layout region survives --overwrite ------------------------------------------
+# --- the Project Layout region survives --overwrite ------------------------------------------
 
 LAYOUT_LINE = "- Deliverables live under Projects/*/"
 
