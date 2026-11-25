@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 from agentteams.cli import exception_registry as er
 from agentteams.cli import s10_exempt_gate as gate
-from tests._sandbox_gate_helpers import _log, _row, _team
+from tests._sandbox_gate_helpers import _log, _retraction, _row, _team
 
 _T0 = datetime(2026, 11, 3, tzinfo=UTC)
 _REPO = "jlcatonjr/agentteams"
@@ -294,3 +294,15 @@ def test_a_halt_behind_a_symlinked_surface_outside_the_project_binds(tmp_path, s
     (tmp_path / "proj" / ".codex" / "agents").symlink_to(elsewhere, target_is_directory=True)
     assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == []
 
+
+
+def test_a_halt_retraction_does_not_resume_a_registered_carry_over(tmp_path, stub_ed25519) -> None:
+    # #616: an exception registered before a HALT's retraction stays ended; a decision after it re-registers.
+    team = _team(tmp_path)
+    _log(team, _row(_ACTION))
+    assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0) == [_REPO]
+    _log(team, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-04"),
+         _retraction("s10-cooldown-exempt"))
+    assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
+    _log(team, _row(_ACTION, stamp="2026-11-05"))   # negative control: re-issued after the retraction
+    assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0 + timedelta(days=2)) == [_REPO]

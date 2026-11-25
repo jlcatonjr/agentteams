@@ -363,10 +363,10 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
     rows, fieldnames = read
     _assert_decision_chain_intact(rows, fieldnames)
     # A row with a '|' in a signed field raises here: a malformed log refuses the carry-over (fail-closed).
-    matches = [row for row in rows if _decision_binding(row) == binding]
+    matches = [i for i, row in enumerate(rows) if _decision_binding(row) == binding]
     if not matches:
         return "is bound to a decision row that is no longer in the decisions log"
-    row = matches[-1]
+    row = rows[matches[-1]]
     verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
     if verdict not in CLEARING_VERDICTS or (verdict == "CONDITIONAL PASS" and
                                        (row.get("conditions_verified") or "").strip().lower() != "verified"):
@@ -376,6 +376,11 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
             fieldnames), action=str(entry.get("action") or ""))
     except RuntimeError as exc:
         return f"is bound to a decision row that no longer verifies ({exc})"
+    try:   # #616: a HALT retraction after the bound row voids it; the operator re-issues the decision
+        security_gate._assert_not_older_than_a_retraction(team_dir, read, action=str(entry.get("action") or ""),
+                                                          index=matches[-1])
+    except RuntimeError as exc:
+        return f"is bound to a decision row a later HALT retraction voids ({exc})"
     lapse = _signed_lapse_reason(row, now, ttl_days)
     if lapse is not None:
         return lapse
@@ -516,10 +521,10 @@ def _spent_off_row(team_dir: Path, action: str) -> dict[str, str]:
         raise RuntimeError("no decisions log")
     rows, fieldnames = read
     _assert_decision_chain_intact(rows, fieldnames)
-    mine = [row for row in rows if (row.get("scope") or "").strip().lower() == action]
+    mine = [i for i, row in enumerate(rows) if (row.get("scope") or "").strip().lower() == action]
     if not mine:
         raise RuntimeError(f"no decision row is scoped to {action}")
-    row = mine[-1]
+    row = rows[mine[-1]]
     verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
     if (row.get("consumed") or "").strip().lower() not in {"yes", "true", "1"}:
         raise RuntimeError(f"the newest {action} decision is not marked consumed")
@@ -534,6 +539,8 @@ def _spent_off_row(team_dir: Path, action: str) -> dict[str, str]:
     relaxation_action, relaxation_family = action, action.split(":", 1)[0]
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
+    # #616: a spent row older than an accepted HALT retraction no longer excuses anything; it is re-issued after it.
+    security_gate._assert_not_older_than_a_retraction(team_dir, read, action=action, index=mine[-1])
     return row
 
 

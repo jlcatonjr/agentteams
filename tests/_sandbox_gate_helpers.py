@@ -47,6 +47,16 @@ def _row(action: str, *, scope: str | None = None, relaxes: str | None = None, g
     return row
 
 
+def _retraction(action: str, *, stamp: str = "2026-10-31") -> dict[str, str]:
+    """An authenticated (stub-signed) HALT-RETRACTED row for *action*, with the evidence a retraction must carry.
+
+    Its ``scope`` is empty, so it is never read as the newest row scoped to the action.
+    """
+    row = _row(action, verdict="HALT-RETRACTED", stamp=stamp, scope="") | {"conditions": "the HALT no longer applies"}
+    row["signature"] = _stub_sig(dl._decision_signature_values(row))
+    return row
+
+
 def _baseline_row() -> dict[str, str]:
     """The ``approved-baseline`` PASS row a signed row's lineage (``derives_from``) names."""
     return {"timestamp": "2026-10-01", "requesting_agent": "security", "action_reviewed": "approved-baseline",

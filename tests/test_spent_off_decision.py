@@ -16,7 +16,7 @@ import pytest
 
 from agentteams.cli import sandbox_relaxation_gate as G
 from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError, spent_off_decision
-from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _baseline_row, _row, _team
+from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _baseline_row, _retraction, _row, _team
 
 FW = "claude"
 ACTION = f"sandbox-wasm-off:{FW}"
@@ -190,3 +190,16 @@ def test_a_refusal_reason_carries_no_path(tmp_path: Path) -> None:
 
 def test_it_is_public() -> None:
     assert "spent_off_decision" in G.__all__
+
+
+def test_a_spent_row_older_than_a_halt_retraction_does_not_excuse(tmp_path: Path, stub_ed25519) -> None:
+    # #616: the spent-off excuse recorded before a HALT's retraction does not apply; one recorded after it does.
+    team = _team(tmp_path)
+    halt = {c: "" for c in FIELDS} | {"timestamp": "2026-11-02", "requesting_agent": "security",
+                                      "action_reviewed": ACTION, "verdict": "HALT"}
+    retraction = _retraction(ACTION, stamp="2026-11-03")
+    _write(team, _spent(), halt, retraction)
+    _refused(team, "older than the HALT retraction")
+    assert G._spent_off_decision(team, ACTION) is False
+    _write(team, _spent(), halt, retraction, _spent(stamp="2026-11-04"))   # negative control
+    assert G._spent_off_decision(team, ACTION) is True
