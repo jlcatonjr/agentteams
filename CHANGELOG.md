@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (generated PR agents create the labels they apply)
+
+- **Fixed:** the `pr-manager` and `pr-notifier` personas applied the `pr-mgmt` and `awaiting-review` labels but never
+  created them, so the first `gh pr edit --add-label` failed in a repository without them. `@pr-manager` now runs
+  `gh label create … --force` for both before it runs `@pr-notifier`'s edit command (the notifier has no shell).
+  `--force` also resets an existing label's colour and description. Existing teams get it on `--update --merge`.
+
 ### changed (`python -m agentteams.research search` exits 3 when no backend answered)
 
 - **Changed:** `search` exited 0 even when every backend failed, so an empty `[]` from a dead search looked like
