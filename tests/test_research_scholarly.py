@@ -358,7 +358,7 @@ def test_format_citation_falls_back_to_url_when_no_doi():
     assert "https://arxiv.org/abs/1" in line and "doi.org" not in line
 
 
-# --- bl48-68: authorships, ORCID, affiliations, country, language ----------------------------------------
+# --- authorships, ORCID, affiliations, country, language ----------------------------------------
 #
 # Shapes follow each API's documented response (OpenAlex Work.authorships, Crossref work.author,
 # arXiv Atom <arxiv:affiliation>); not checked against a live response in this change.
