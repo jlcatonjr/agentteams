@@ -679,3 +679,24 @@ def test_every_framework_hook_layout_counts_its_project_as_a_root(
     gate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gate)
     assert gate._project_roots() == [(tmp_path / "proj").resolve()]
+
+
+# ── The git hook's interpreter and import path (agentteams._hook_python) are execution keys ───────────
+
+def _hook_config_keys() -> tuple[str, str]:
+    from agentteams._hook_python import CONFIG_IMPORT_PATH, CONFIG_PYTHON
+    return CONFIG_PYTHON, CONFIG_IMPORT_PATH
+
+
+@pytest.mark.parametrize("form", ["git config {k} /x", "git config --local {k} /x", "git -c {k}=/x status",
+                                  "git config --add {k} /x", "git config --unset {k}", "git config set {k} /x"])
+def test_writing_the_git_hooks_interpreter_or_import_path_asks(form: str) -> None:
+    """End to end: the keys the generated git hook executes and imports from, as git_hooks writes them."""
+    for key in _hook_config_keys():
+        code, decision = _run_template(form.format(k=key))
+        assert code == 0 and decision is not None and decision["permissionDecision"] == "ask", (form, key)
+
+
+def test_reading_the_git_hooks_interpreter_or_import_path_is_silent() -> None:
+    for key in _hook_config_keys():
+        assert _run_template(f"git config --get {key}") == (0, None), key
