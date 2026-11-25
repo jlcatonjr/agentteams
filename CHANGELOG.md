@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (a retraction in another team directory does not void this log's older clearances)
+
+- **Documented:** in known-limitations: gates that read HALTs from other team or surface directories block on an
+  open HALT there, but a retraction recorded there does not void this log's older clearances. Record the
+  retraction in the canonical governance log too, or re-sign the clearance. The design is decided after 1.3.1.
+
 ### security (a retracted `integration-merge` HALT does not revive an older merge PASS, #616)
 
 - **Fixed:** `agentteams --merge-pr` refuses while a HALT on `integration-merge` or `dev-merge` is open, but its

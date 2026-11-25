@@ -320,3 +320,18 @@ def test_a_retracted_sibling_halt_voids_an_older_exemption(tmp_path, stub_ed2551
     assert gate.authorized_exempt_repos(fresh, [_REPO], consume=False, now=_T0) == []
     _log(fresh, _row(_ACTION, stamp="2026-11-06"))   # negative control
     assert gate.authorized_exempt_repos(fresh, [_REPO], consume=False, now=_T0 + timedelta(days=3)) == [_REPO]
+
+
+def test_a_retraction_in_another_team_dir_does_not_void_this_logs_older_clearance(tmp_path, stub_ed25519) -> None:
+    """Pins a documented limitation (known-limitations, 1.3.1): rows in two logs share no order, so a HALT-RETRACTED
+    row in another team dir does not void the canonical log's older clearance; an open HALT there still blocks.
+    Changing this is a design decision, not a fix: update the docs with the test."""
+    canonical = _canonical(tmp_path)
+    _log(canonical, _row(_ACTION))
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0) == [_REPO]   # registered
+    other = _native(tmp_path, ".codex/agents")
+    _log(other, _row("s10-cooldown-exempt", verdict="HALT", stamp="2026-11-04"))
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
+    _log(other, _retraction("s10-cooldown-exempt", stamp="2026-11-05"))
+    # The canonical exception, registered before that retraction, carries over again.
+    assert gate.authorized_exempt_repos(canonical, [_REPO], consume=True, now=_T0 + timedelta(days=2)) == [_REPO]

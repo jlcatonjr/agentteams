@@ -146,6 +146,19 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   files themselves. Reading every governance file through one directory descriptor would close it; it needs the
   log's format check to read from that descriptor too, so it is not in 1.3.1.
 
+### A retraction recorded in another team directory does not void this log's older clearances
+
+- **What:** some gates also read HALTs from the decisions logs of other team or surface directories in the project:
+  `--merge-pr` (`dev_merge`), the S-10 local-repository exemption and the S-10 cooldown deprecation gates, the
+  S-10 toolchain group (its own HALT and its lineage), and the sha-bound clearance check (`clearance_binding`).
+  An open HALT in any of those logs blocks. A `HALT-RETRACTED` row there does not void a clearance in this log
+  that is older than it (#616), because rows in two logs share no order and their timestamps are written by
+  agents. So once such a HALT is retracted in the other directory, this log's older clearance, or a standing
+  exception bound to it, applies again.
+- **Workaround:** record the retraction in the canonical governance log as well, or re-sign the clearance after
+  the retraction.
+- **Decision:** the design is decided after 1.3.1. A test pins the current behaviour, so a change is deliberate.
+
 ### Through 1.3.0: a clearance recorded before a HALT's retraction took effect after it (fixed in 1.3.1, #616)
 
 - **What (agentteams ≤ 1.3.0):** a PASS recorded while a HALT on the action was open (or, for a family HALT, before
