@@ -373,6 +373,109 @@ def test_an_exact_family_retraction_ignores_case_and_whitespace(tmp_path):
     _write_decisions_log(tmp_path, [_row(f"{_FAM}:o/a", "HALT"), _retract(f" {_FAM.upper()} ")])
     dl._assert_no_unretracted_halt(tmp_path, action=_FAM)  # must not raise
 
+# --- a HALT with no usable id blocks every action (it used to block none) -----------------------
+
+_NO_ID = ["", "   ", "--", "(…)"]
+
+
+def _handle(rows: list[dict[str, str]], number: int) -> str:
+    """The row handle of the HALT on 1-based row *number*, computed as the gate does."""
+    from agentteams.cli.action_ids import halt_row_handle
+
+    return halt_row_handle(number, rows[number - 1])
+
+
+@pytest.mark.parametrize("halt_id", _NO_ID)
+def test_a_halt_with_no_usable_id_blocks_every_action(tmp_path, halt_id):
+    rows = [_row(halt_id, "HALT"), _row("overwrite", "PASS", timestamp="2026-02-01T00:00:00Z")]
+    _write_decisions_log(tmp_path, rows)
+    for action in ("overwrite", "prune", "some-custom-action"):
+        with pytest.raises(RuntimeError, match=r"row 1, .*no usable action id.*" + _handle(rows, 1)):
+            dl._assert_no_unretracted_halt(tmp_path, action=action)
+
+
+def test_a_halt_with_an_id_still_blocks_only_what_it_names(tmp_path):
+    """Negative control: the id-less rule does not widen a HALT that has an id."""
+    _write_decisions_log(tmp_path, [_row("prune", "HALT")])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+@pytest.mark.parametrize("halt_id", _NO_ID)
+def test_the_row_handle_retracts_a_halt_with_no_usable_id(tmp_path, halt_id):
+    rows = [_row("prune", "PASS"), _row(halt_id, "HALT")]
+    assert _handle(rows, 2).startswith("halt-row:2:") and len(_handle(rows, 2)) == len("halt-row:2:") + 16
+    _write_decisions_log(tmp_path, rows + [_retract(f" {_handle(rows, 2).upper()} ")])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+@pytest.mark.parametrize("retraction", ["overwrite", "", "--", "halt-row:2", "halt-row", "halt-row:2:0000000000000000",
+                                        "ROW1", "ROW3"])
+def test_nothing_but_its_own_row_handle_retracts_a_halt_with_no_usable_id(tmp_path, retraction):
+    rows = [_row("", "HALT", timestamp="2025-12-01T00:00:00Z"), _row("", "HALT"), _row("", "HALT", conditions="x",
+                                                                                    timestamp="2026-01-02T00:00:00Z")]
+    retraction = {"ROW1": _handle(rows, 1), "ROW3": _handle(rows, 3)}.get(retraction, retraction)
+    _write_decisions_log(tmp_path, rows + [_retract(_handle(rows, 1)), _retract(_handle(rows, 3)), _retract(retraction)])
+    with pytest.raises(RuntimeError, match=_handle(rows, 2)):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_row_handle_retraction_needs_evidence(tmp_path):
+    rows = [_row("", "HALT")]
+    _write_decisions_log(tmp_path, rows + [{**_retract(_handle(rows, 1)), "conditions": ""}])
+    with pytest.raises(RuntimeError, match="carries no evidence"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_row_handle_stops_matching_when_rows_before_the_halt_change(tmp_path):
+    """@security: rows in an unchained prefix can be added or removed. A shifted HALT must block again."""
+    halt, other = _row("", "HALT"), _row("", "HALT", timestamp="2025-12-01T00:00:00Z")
+    retraction = _retract(_handle([halt], 1))
+    _write_decisions_log(tmp_path, [halt, retraction])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # as written: retracted
+    _write_decisions_log(tmp_path, [_row("prune", "PASS"), halt, retraction])  # a row inserted before it
+    with pytest.raises(RuntimeError, match="no usable action id"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+    _write_decisions_log(tmp_path, [other, retraction])  # a different HALT moved onto row 1
+    with pytest.raises(RuntimeError, match="no usable action id"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+@pytest.mark.parametrize(("scope", "retracted"), [("", True), ("HANDLE", True), ("overwrite", False)])
+def test_a_scoped_row_handle_retraction_must_name_the_handle_in_its_scope(tmp_path, scope, retracted):
+    rows = [{**_row("", "HALT"), "scope": ""}]
+    handle = _handle(rows, 1)
+    _write_scoped(tmp_path, rows + [{**_retract(handle), "scope": handle if scope == "HANDLE" else scope}])
+    if retracted:
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+    else:
+        with pytest.raises(RuntimeError, match="no usable action id"):
+            dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_halt_with_no_usable_id_blocks_through_check_clearance(tmp_path):
+    from agentteams.cli.security_gate import check_clearance
+
+    rows = [_row("", "HALT"), _row("overwrite", "PASS", timestamp="2026-02-01T00:00:00Z")]
+    _write_decisions_log(tmp_path, rows)
+    cleared, why = check_clearance(tmp_path, action="overwrite")
+    assert not cleared and _handle(rows, 1) in why
+    # Tools build the retraction from the id the refusal names (`vulnscan halts`): it is the handle, not the action.
+    assert f"latest decision for action '{_handle(rows, 1)}' is HALT" in why
+
+
+def test_the_pre_upgrade_report_lists_halts_with_no_usable_id(tmp_path):
+    from agentteams.cli.action_ids import describe_newly_blocking_halts, idless_open_halts
+
+    rows = [_row("", "HALT"), _row("--", "HALT"), _row("overwrite", "PASS")]
+    rows.append(_retract(_handle(rows, 1)))
+    assert idless_open_halts(rows) == [(2, _handle(rows, 2))]
+    _write_decisions_log(tmp_path, rows)
+    text = "\n".join(describe_newly_blocking_halts(tmp_path))
+    assert "no usable id (1)" in text and "EVERY gated action" in text
+    assert "row 2: " in text and f"'{_handle(rows, 2)}'" in text and _handle(rows, 1) not in text
+    assert "row 2: '--'" not in text  # not also listed among the ordinary HALTs
+
+
 def test_the_pre_upgrade_report_names_newly_blocking_halts(tmp_path):
     from agentteams.cli.action_ids import describe_newly_blocking_halts, newly_blocking_halts
 

@@ -173,10 +173,7 @@ def test_regex_metacharacters_in_a_form_are_literal() -> None:
 def test_matching_time_grows_no_faster_than_the_input() -> None:
     reg = _reg(*[_term(f"t{n}", f"word{n} tail") for n in range(30)])
     m = Matcher(reg)
-    small, large = "word1 tail x " * 2000, "word1 tail x " * 16000
-    t0 = time.perf_counter(); m.occurrences(small); t1 = time.perf_counter(); m.occurrences(large)
-    t2 = time.perf_counter()
-    assert (t2 - t1) < 20 * max(t1 - t0, 1e-3)
+    _grows_linearly(m.occurrences, lambda k: "word1 tail x " * (2000 * k))
 
 
 @pytest.mark.parametrize("pattern, path, hit", [
