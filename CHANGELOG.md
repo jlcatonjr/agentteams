@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (vulnscan L1: a distro package with a pending update keeps its distro origin; #585 A2)
+
+- While a distro update is pending, `apt-cache policy` lists the installed version under `/var/lib/dpkg/status`
+  only, so L1 reported the package as `repo:unknown` and the workstation raised a false upstream end-of-life
+  finding (seen for nginx and python3-jwt). It is now `pkg:<package>` with an `INFO ... (update pending)` line when
+  every archive serving the candidate is the distro's (or an accepted mirror), the candidate has the same upstream
+  version, and the installed version carries a distro revision. Anything else stays `repo:unknown`.
+- **Newly accepted (Rule 12):** a locally installed `.deb` whose name and upstream version match a distro package
+  with a newer distro candidate is judged `pkg:`. The upstream-version and revision conditions keep that narrow.
+- `agentteams/data/server_kit/L1-audit.sh` is integrity-pinned; its digest is re-recorded. Hosts pick it up when
+  the kit is staged again.
+
 ### fixed (a provider failure after an attempt keeps the worst-case USD charge; #573)
 
 - A WASM agent's model call that failed after at least one HTTP attempt kept its worst-case tokens but was charged

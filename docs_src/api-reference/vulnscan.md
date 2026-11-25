@@ -1403,7 +1403,12 @@ or world write bit. An entry with no `Signed-By`, several keys, an inline key or
 upstream, and each accepted mirror is reported as an `INFO apt mirror ...` line. Any other origin is
 `repo:<host>:<package>`, and an unreadable one
 (including an installed version only `/var/lib/dpkg/status` knows, such as a local `.deb`) is
-`repo:unknown:<package>`. On apt hosts the origin is the `***` block of `apt-cache policy`; on dnf hosts it is
+`repo:unknown:<package>`. One exception on apt hosts: while a distro update is pending, the installed version is
+known only to `/var/lib/dpkg/status` and the archive serves the candidate. That package is `pkg:` (with an
+`INFO <package>: installed version superseded in the archive (update pending)` line) when every archive serving the
+candidate counts as above, the candidate has the same upstream version (the part before the last `-`, epoch
+included), and the installed version carries a distribution revision (it has a `-`); otherwise it stays
+`repo:unknown`. On apt hosts the origin is the `***` block of `apt-cache policy`; on dnf hosts it is
 `dnf -C repoquery --installed --qf '%{from_repo}'` (or `yumdb`), resolved to a host through
 `/etc/yum.repos.d`. Only `pkg:` is left to distro updates; `repo:` is judged upstream.
 

@@ -50,7 +50,8 @@
 # RUNTIME manager: nvm / volta / fnm / conda / pyenv / tarball, or for a dpkg/rpm-owned binary
 #   pkg:<package>[:universe]   the installed version comes from an allowlisted distro archive (distro_host), or from a
 #                              mirror whose every apt entry pins Signed-By to the distro archive keyring (mirror_trust_init);
-#                              ":universe" marks Ubuntu universe/multiverse (security fixes need esm-apps)
+#                              ":universe" marks Ubuntu universe/multiverse (security fixes need esm-apps); also a distro
+#                              revision superseded by such an archive's candidate of the same upstream version (INFO: pending)
 #   repo:<host>:<package>      any other origin: a third-party repository (nginx.org, PGDG, docker, PPA, ...)
 #   repo:unknown:<package>     origin unreadable, a local .deb/.rpm, or a version no repository serves any more
 # repo: installs are judged against upstream versions on the workstation; pkg: installs are left to distro updates.
@@ -259,15 +260,21 @@ mirror_trust_init(){
   done < <(read -r -a arr <<<"$pairs"; [ "${#arr[@]}" -gt 0 ] && printf '%s\n' "${arr[@]}")
 }
 mirror_ok(){ case " $MIRROR_OK " in *" ${1%/}|$2 "*) return 0;; esac; return 1; }   # mirror_ok <uri> <suite>
-apt_sources(){  # "host component uri suite" per archive serving the installed version: the `***` block of apt-cache policy
+apt_sources(){  # "host component uri suite" per archive serving the installed version (the `***` block of apt-cache policy).
+  # None (only dpkg status) but a candidate that is a newer distro revision of the same upstream version: the candidate's
+  # archives, each row ending " pending" (an update not yet installed; #585).
   tmo apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy "$1" 2>/dev/null | awk '
-    /^ \*\*\* /{inb=1; next}
-    inb && $1 ~ /^-?[0-9]+$/ && ($2 ~ /^\// || $2 ~ /:/) {   # a source line, not the next version
-      if ($2 ~ /^\//) next                                   # /var/lib/dpkg/status: installed, origin unknown
+    function up(v) { sub(/-[^-]*$/, "", v); return v }
+    $1 == "Installed:" {inst = $2; next}  $1 == "Candidate:" {cand = $2; next}
+    $1 ~ /^-?[0-9]+$/ && ($2 ~ /^\// || $2 ~ /:/) {          # a source line, not the next version
+      if (blk == "" || $2 ~ /^\//) next                       # /var/lib/dpkg/status: installed, origin unknown
       h = "unknown"
       if ($2 ~ /^[a-z+]+:\/\//) { h = $2; sub(/^[a-z+]+:\/\//, "", h); sub(/[\/:].*$/, "", h); if (h == "") h = "unknown" }
-      n = split($3, s, "/"); print tolower(h), (n > 1 ? s[2] : "-"), $2, (n > 0 && s[1] != "" ? s[1] : "-"); next }
-    inb {exit}'
+      n = split($3, s, "/"); r = tolower(h) " " (n > 1 ? s[2] : "-") " " $2 " " (n > 0 && s[1] != "" ? s[1] : "-")
+      if (blk == "i") ins = ins r "\n"; else pend = pend r " pending\n"; next }
+    { blk = ($1 == "***") ? "i" : ($1 == cand ? "c" : "") }   # a version line (or the header): which block follows
+    END { if (ins != "") printf "%s", ins
+          else if (inst ~ /-/ && cand != inst && up(cand) == up(inst)) printf "%s", pend }'
 }
 rpm_repo(){  # repo id the installed rpm came from (cache only, never the network), or nothing
   local r=""
@@ -294,14 +301,17 @@ repo_host(){  # host of repo id $1's first baseurl/mirrorlist/metalink in /etc/y
   printf '%s\n' "$h" | tr 'A-Z' 'a-z'
 }
 pkg_origin(){  # pkg:<name>[:universe] for an allowlisted distro archive; else repo:<host|unknown>:<name>
-  local p="$1" h c bad="" uni="" any=0 r v
+  local p="$1" h c bad="" uni="" any=0 r v f pend=""
   if command -v dpkg >/dev/null 2>&1; then
     if command -v apt-cache >/dev/null 2>&1; then
-      while read -r h c u s; do
+      while read -r h c u s f; do
         [ -n "$h" ] || continue
-        any=1; distro_host "$h" || mirror_ok "$u" "$s" || { [ -n "$bad" ] || bad="$h"; }
+        any=1; pend="$f"; distro_host "$h" || mirror_ok "$u" "$s" || { [ -n "$bad" ] || bad="$h"; }
         case "$c" in universe|multiverse) uni=":universe";; esac
       done < <(apt_sources "$p")
+      # A pending update counts only when every candidate archive is the distro's; otherwise the origin stays unknown.
+      if [ -n "$pend" ] && [ -n "$bad" ]; then any=0; bad=""
+      elif [ -n "$pend" ]; then printf 'INFO        %s: installed version superseded in the archive (update pending)\n' "$p" >&2; fi
     fi
   elif command -v rpm >/dev/null 2>&1; then
     r=$(rpm_repo "$p"); h=""
