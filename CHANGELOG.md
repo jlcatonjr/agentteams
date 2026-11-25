@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### changed (`--sign-decision` refuses an author the gate would refuse)
+
+- **Changed:** `--sign-decision` now refuses, before the key is read, a `PASS`, `CONDITIONAL PASS` or
+  `HALT-RETRACTED` row whose author is not on the team's `references/security-approvers.txt` roster (`security`
+  when that file is absent). The author is read as the log will store it (`author`, or the log's
+  `requesting_agent` or `owner` column). Such a row was signed and then refused by every gate.
+- **Who notices:** decision specs that fill `requesting_agent: orchestrator`, or name no author, now fail at
+  signing with a message naming the fix. `HALT` rows are not checked. The gate itself is unchanged.
+
 ### fixed (a HALT ends a standing sandbox relaxation)
 
 - **Fixed:** in a governed workspace, a continuing sandbox relaxation (an active exception, or the pre-governance

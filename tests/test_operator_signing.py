@@ -69,7 +69,8 @@ def _team(tmp: Path, *, pub: bytes = _PUB, roster: bool = True) -> Path:
     (team / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
     (store / f"{_KEY_ID}.pub.pem").write_bytes(pub)
     if roster:
-        (team / "references" / "security-approvers.txt").write_text("alice\n", encoding="utf-8")
+        # alice approves grants; security authors the decision specs (--sign-decision checks the roster, bl48-32)
+        (team / "references" / "security-approvers.txt").write_text("alice\nsecurity\n", encoding="utf-8")
     return team
 
 
@@ -657,3 +658,38 @@ def test_no_default_key_says_why(key_id, why, tmp_path, monkeypatch, capsys):
     err = _norm(capsys.readouterr().err, tmp_path)
     assert err == (f"Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set, and {why} — it must name the "
                    "operator private key file (never an agent env). Refusing to sign (fail-closed).\n")
+
+
+# --- bl48-32: --sign-decision refuses an authorizing row whose author the gate would refuse --------------------
+# The key named by the env does not exist, so "cannot read operator private key" in the output would mean the key
+# was read; the refusal must come first. HALT rows are honoured unauthenticated, so their author is not checked.
+
+_AUTHOR_REFUSAL = "which is not an approved security author"
+
+
+def _sign_as(tmp: Path, mp: pytest.MonkeyPatch, capsys, *, roster: str, absent_key: bool, **over: object):
+    argv = _sd(tmp, mp, spec=_decision(**over))
+    (tmp / "team" / "references" / "security-approvers.txt").write_text(roster, encoding="utf-8")
+    return _sign_with(argv, mp, capsys, key=tmp / "absent.key" if absent_key else None)
+
+
+@pytest.mark.parametrize("author", ["orchestrator", None])
+def test_sign_decision_refuses_unrostered_or_missing_author(author, tmp_path, monkeypatch, capsys):
+    rc, out, err = _sign_as(tmp_path, monkeypatch, capsys, roster="security\n", absent_key=True, author=author)
+    assert rc == 1 and out == ""
+    assert _AUTHOR_REFUSAL in err and f"'{author or 'none'}'" in err and "The key was not read." in err
+    assert "cannot read operator private key" not in err   # refused before the key file was opened
+    assert not (tmp_path / "team" / "references" / "security-decisions.log.csv").exists()
+
+
+@pytest.mark.parametrize("author,roster", [("security", "security\n"), ("operator", "operator\n"),
+                                           ("@Security", "security\n")])
+def test_sign_decision_signs_a_rostered_author(author, roster, tmp_path, monkeypatch, capsys):
+    rc, _out, err = _sign_as(tmp_path, monkeypatch, capsys, roster=roster, absent_key=False, author=author)
+    assert rc == 0 and _AUTHOR_REFUSAL not in err
+
+
+def test_sign_decision_does_not_check_a_halt_author(tmp_path, monkeypatch, capsys):
+    rc, _out, err = _sign_as(tmp_path, monkeypatch, capsys, roster="security\n", absent_key=False,
+                             author="orchestrator", verdict="HALT")
+    assert _AUTHOR_REFUSAL not in err and rc == 0, err

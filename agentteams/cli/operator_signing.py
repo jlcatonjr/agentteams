@@ -511,6 +511,34 @@ def sign_decision_team_refusal(output_dir: Path) -> str | None:
             "dir). Refusing to sign (fail-closed).")
 
 
+def _author_is_rostered(output_dir: Path, row: dict[str, str], fieldnames: list[str] | None) -> bool:
+    """Whether an authorizing row's author is on the roster the gate checks; prints the refusal when not.
+
+    The gate refuses an authorizing row (PASS, CONDITIONAL PASS, HALT-RETRACTED) whose author is off the roster,
+    whatever its signature; a HALT is honoured unauthenticated, so it is not checked. The author is read from the
+    cells the log keeps (*fieldnames*, or the columns a new log is created with).
+    """
+    from agentteams.cli import decision_log as dl
+
+    verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
+    if verdict not in {"PASS", "CONDITIONAL PASS", dl._HALT_RETRACTION_VERDICT}:
+        return True
+    kept = {c.strip() for c in (fieldnames or ["timestamp", "requesting_agent", *dl.SIGNED_DECISION_COLUMNS])}
+    author = dl._decision_author({k: v for k, v in row.items() if k in kept})
+    try:
+        approved = dl._approved_decision_authors(output_dir)
+    except RuntimeError as exc:
+        print(f"Error: refusing to sign: {exc}. The key was not read.", file=sys.stderr)
+        return False
+    if author in {a.lower().lstrip("@") for a in approved}:
+        return True
+    print(f"Error: refusing to sign: the row's author is '{author or 'none'}', which is not an approved security "
+          f"author in {output_dir / 'references' / dl._DECISION_AUTHORS_FILE} ({sorted(approved)}). The gate "
+          "refuses such a row whatever its signature. Set \"author\" (or the log's requesting_agent/owner column) "
+          "to a rostered author, or add one to the roster. The key was not read.", file=sys.stderr)
+    return False
+
+
 def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | None = None,
                   allow_checkout: bool = False) -> int:
     """Mint and append one operator Ed25519-signed constraint-relaxing decision row.
@@ -521,9 +549,9 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     grant signing domain, signs the canonical payload with Ed25519, verifies it against the team's
     verify-key store, and appends the signed row.
 
-    Order (#9/#10): spec → classification and refusals → preflight (env, key file present,
-    integrity, install location) → display → confirm → key read → sign. The signed row is built
-    from the same in-memory spec the review digest covers.
+    Order (#9/#10): spec → classification and refusals (an authorizing row's author must be on the
+    roster) → preflight (env, key file present, integrity, install location) → display → confirm →
+    key read → sign. The signed row is built from the same in-memory spec the review digest covers.
 
     Args:
         output_dir: The resolved team dir the row is appended under.
@@ -640,6 +668,8 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         # Domain separation: a decision payload must never double as a dev-merge-authorization payload.
         print("Error: refusing to sign — this decision's payload begins with the dev-merge-authorization purpose tag "
               "(use --sign-dev-merge-authorization).", file=sys.stderr)
+        return 1
+    if not _author_is_rostered(output_dir, row, read[1] if read is not None else None):
         return 1
     preflight = _signing_preflight(_project_roots(output_dir), allow_checkout, str(row.get("key_id") or ""))
     if preflight is None:
