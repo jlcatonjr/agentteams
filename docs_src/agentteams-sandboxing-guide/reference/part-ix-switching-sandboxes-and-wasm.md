@@ -116,8 +116,9 @@ once must raise the cap in the registry (a visible, git-tracked decision). `sand
 standing. Whether auto-approval is on is recorded in the build-log's `sandbox_exceptions` (`mcp_approval_auto: "on"`,
 written only when on; a record without it reads as off), and dropping the token retires its exception.
 An unretracted HALT on the family or the action ends the carry-over at once, on a render and at the
-`--run-wasm-agent` launch check, and the pre-governance carve-out below too. The registry entry stays: a
-`HALT-RETRACTED` row restores the carry-over. A refused render leaves the relaxed host configuration it already
+`--run-wasm-agent` launch check, and the pre-governance carve-out below too. Retracting the HALT does not
+resume it: an exception whose decision row is older than the retraction stays ended, and a decision signed after
+the retraction registers a fresh one (#616). A refused render leaves the relaxed host configuration it already
 wrote on disk until a render with the sandbox back on replaces it.
 
 **Carve-out: an OS-off state that predates governance.** A continuing `sandbox-os-off` (the previous

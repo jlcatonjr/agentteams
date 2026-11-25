@@ -138,13 +138,16 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 
 - **What (agentteams ≤ 1.3.0):** a PASS recorded while a HALT on the action was open (or, for a family HALT, before
   it) cleared the action as soon as the HALT was retracted, without anyone reviewing it at retraction time.
-- **Now:** after a HALT on an action (or on its family) is retracted, every PASS or CONDITIONAL PASS for that action
-  older than the retraction is void, and the gate says which rows. The newest matching row still decides: a void row
-  never falls through to an older one. `--sign-decision` also refuses to sign a clearance on an id with an open HALT.
-- **Who:** teams that recorded a clearance and then a HALT, or a clearance under a HALT, and later retracted it.
-  Record a fresh clearance after the retraction.
-- **Not covered:** a HALT on a lineage ancestor; waivers; a standing sandbox or S-10 exception registered before
-  the retraction (each keeps its own checks).
+- **Now:** an accepted retraction of a HALT on the action, on its family or on a `derives_from` ancestor voids every
+  earlier permission for that action. A PASS or CONDITIONAL PASS older than the retraction is void, and the gate says
+  which rows; the newest matching row still decides, so a void row never falls through to an older one. A standing
+  sandbox or S-10 exception whose decision row is older than the retraction no longer carries over, and the sandbox
+  "spent off" excuse recorded before it no longer applies. `--sign-decision` refuses to sign a clearance on an id,
+  or a `derives_from` parent, under an open HALT.
+- **Who:** teams that retract a HALT and expected an older clearance or standing exception to resume. Record a
+  fresh decision after the retraction.
+- **Still open:** a waiver issued before the retraction still clears: a waiver's issue time is an unsigned
+  timestamp in another log, so it cannot be ordered against the retraction row reliably.
 
 ### Through 1.3.0: a HALT on a family id did not block its instance ids (fixed in 1.3.1, #636)
 
