@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`agents-md` and `codex` are bridge targets)
+
+- **Fixed:** `run_bridge` refused `agents-md` and `codex` as targets, though their pair directories
+  (`references/bridges/<source>-to-agents-md/`, `…-to-codex/`) are part of the bridge layout, so `--bridge-check` and
+  `--bridge-merge` could not reach them. Both are now accepted and, like `generic`, write only the pair-dir
+  artifacts: no `AGENTS.md` is created or relabelled. `grok` and `wasm` are still refused.
+
 ### fixed (`--convert` resolves host features from the privilege profile)
 
 - **Fixed:** `convert_team` emitted adapter sidecars with no `host_features` in the manifest, because only

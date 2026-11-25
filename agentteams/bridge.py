@@ -87,9 +87,9 @@ class BridgeResult:
 
 #: Where a NATIVE team of each target framework keeps its build-log. A bridge never writes one,
 #: so its presence under a bridge target means the directory also holds a full native team.
-#: codex (2026-10-01): run_bridge does not accept codex as a target today, so that entry is
-#: reached only by direct callers of :func:`native_team_notice`; an ``origin: "interop"``
-#: marker (``projection_marker``) gets the interop refresh command instead of ``--update``.
+#: codex: a codex bridge target writes no entry file (the ``generic`` branch of
+#: :func:`_render_target_files`); an ``origin: "interop"`` marker (``projection_marker``)
+#: gets the interop refresh command instead of ``--update``.
 _NATIVE_BUILD_LOGS: dict[str, tuple[str, ...]] = {
     "claude": (".claude", "agents", "references", "build-log.json"),
     "goose": (".goose", "recipes", "references", "build-log.json"),
@@ -279,7 +279,7 @@ def run_bridge(
     src_fw = source_framework or detect_framework(source_dir)
     if src_fw not in {"copilot-vscode", "copilot-cli", "claude", "goose", "canonical"}:
         raise ValueError(f"Unknown source framework {src_fw!r}")
-    if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose", "generic"}:
+    if target_framework not in {"copilot-vscode", "copilot-cli", "claude", "goose", "generic", "agents-md", "codex"}:
         raise ValueError(f"Unknown target framework {target_framework!r}")
     if src_fw == "goose" and target_framework == "goose":
         raise ValueError(
@@ -867,10 +867,9 @@ def _render_target_files(
             (agents_dir / "bridge-orchestrator.agent.md", bridge_agent),
         ]
 
-    if target_framework == "generic":
-        # No native consumer entry files: a generic target has no framework to
-        # write CLAUDE.md/AGENTS.md/.github/copilot-instructions.md style files
-        # for. Without this explicit branch, generic would silently fall through
+    if target_framework in ("generic", "agents-md", "codex"):
+        # No native consumer entry files: generic has no framework to write them for, and agents-md/codex
+        # would create or relabel a shared AGENTS.md (row 194). Without this explicit branch, generic would fall through
         # to the copilot-cli shape below — the pair-dir artifacts (manifest,
         # inventory, entrypoint, domain-boundary — framework-agnostic by
         # construction; quickstart carries an explicit generic-specific section,
