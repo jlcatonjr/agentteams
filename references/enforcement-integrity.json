@@ -18,7 +18,7 @@
     "agentteams/branch_model.py": "b64bd62256faa1e873d79178fc5989db549cfa8097a6972605f5efb238a1a32d",
     "agentteams/carveout_checks.py": "5fe064d1d76efe7610b8afcc77b23d1cc5f996c18172c61eca1286f020c657d3",
     "agentteams/carveouts.py": "73ce9546dce19d182ca824eed042c0f1b968db5d92d36db95488e9e778d93e56",
-    "agentteams/cli/action_ids.py": "7d635094a0d61ffbfc2b67fe4c68d2742dfe1d6062cb38761776eea90fb914ee",
+    "agentteams/cli/action_ids.py": "a29a50bc5ec576ca08d21e511cbd24cb095e08f570267b082e290da7cae75fe4",
     "agentteams/cli/adopt_merge_gate.py": "2e57ab651e9259a1159155cb17d995e986b51eac510afe1b7db361cff55868e6",
     "agentteams/cli/carveout_commands.py": "722a4d54377f78090a6a1eea267b5fa6a32a3035255d3bbdc236d11cf7bffb8d",
     "agentteams/cli/clearance_binding.py": "1ac73408e346771dece0280598f4ae3f77b6a19e52786465401822f9dcad6699",

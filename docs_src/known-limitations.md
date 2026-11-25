@@ -134,9 +134,9 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
-### Before 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.0)
+### Through 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.1)
 
-- **What (agentteams < 1.3.0, release candidates included):** a HALT row whose `action_reviewed` was empty, blank or punctuation only matched no
+- **What (agentteams ≤ 1.3.0):** a HALT row whose `action_reviewed` was empty, blank or punctuation only matched no
   action, so a later PASS cleared the action it was meant to stop.
 - **Now:** such a HALT blocks every gated action until a `HALT-RETRACTED` row whose `action_reviewed` is exactly
   its row handle, `halt-row:<N>:<digest>`, retracts it, with evidence, authenticated like any retraction.

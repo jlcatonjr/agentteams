@@ -100,7 +100,7 @@ def halt_names_action(halt_reviewed: str, action: str) -> bool:
 def halt_has_no_id(halt_reviewed: str) -> bool:
     """Return True when a HALT row's id has no letter or digit (empty, blank or punctuation only).
 
-    Such a HALT names no action, so it blocks every one. Before 1.3.0 it matched none, and a later
+    Such a HALT names no action, so it blocks every one. Through 1.3.0 it matched none, and a later
     PASS cleared the action (C-2 fail-open).
 
     Args:
