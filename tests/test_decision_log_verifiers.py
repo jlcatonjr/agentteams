@@ -587,3 +587,47 @@ def test_every_listed_gate_action_is_a_real_gate_call():
     source = "\n".join(p.read_text(encoding="utf-8") for p in [*(repo / "agentteams").rglob("*.py"), repo / "build_team.py"])
     for action in GATE_ACTIONS:
         assert f'"{action}"' in source, action
+
+
+# ---------------------------------------------------------------------------
+# bl48-11: the gate never reads its switch or its log through a symlinked directory
+# ---------------------------------------------------------------------------
+
+def _linked_team(tmp_path: Path) -> Path:
+    """A team whose ``references/`` links to an outside dir holding a switch and a HALT-carrying log."""
+    outside = tmp_path / "outside"
+    _write_decisions_log(outside, [_row("prune", "HALT")])
+    (outside / "references" / "agent-privilege.json").write_text('{"enforce_decision_signing": true}')
+    team = tmp_path / "team"
+    team.mkdir()
+    (team / "references").symlink_to(outside / "references", target_is_directory=True)
+    return team
+
+
+def test_gate_refuses_a_symlinked_references_dir(tmp_path):
+    team = _linked_team(tmp_path)
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._enforce_decision_signing(team)
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._read_decision_rows(team)
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._assert_no_unretracted_halt(team, action="other")   # the outside log is never read as the team's
+
+
+def test_gate_refuses_a_symlinked_decisions_log(tmp_path):
+    outside = tmp_path / "outside"
+    _write_decisions_log(outside, [_row("prune", "PASS")])
+    (tmp_path / "team" / "references").mkdir(parents=True)
+    (tmp_path / "team" / "references" / "security-decisions.log.csv").symlink_to(
+        outside / "references" / "security-decisions.log.csv")
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._read_decision_rows(tmp_path / "team")
+
+
+def test_gate_reads_a_real_references_dir(tmp_path):
+    # Negative control: the same files in a real references/ dir read normally.
+    _write_decisions_log(tmp_path, [_row("prune", "HALT")])
+    (tmp_path / "references" / "agent-privilege.json").write_text('{"enforce_decision_signing": true}')
+    assert dl._enforce_decision_signing(tmp_path) is True
+    rows, _ = dl._read_decision_rows(tmp_path)
+    assert rows[0]["verdict"] == "HALT"

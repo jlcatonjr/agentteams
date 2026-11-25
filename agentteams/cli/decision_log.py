@@ -472,11 +472,11 @@ def _enforce_decision_signing(output_dir: Path) -> bool:
     Raises:
         RuntimeError: The config file exists but cannot be stat'd, read or parsed.
     """
+    from agentteams.signing_switch import _read_regular_text, is_governed  # the one governance predicate
     config_path = output_dir / "references" / _AGENT_PRIVILEGE_CONFIG
     if lstat_or_none(config_path, "agent-privilege switch") is None:  # unstat-able refuses (3.14, #555)
         # GV1 fail-closed: a governed workspace (signing-governed.marker, or a git-tracked one since deleted: item 17)
         # must enforce signing; with the config absent, RAISE rather than revert to legacy OFF.
-        from agentteams.signing_switch import is_governed  # the one governance predicate
         if is_governed(output_dir):
             raise RuntimeError(
                 f"governed workspace ({output_dir}) but {config_path} is absent — refusing to fall "
@@ -484,8 +484,8 @@ def _enforce_decision_signing(output_dir: Path) -> bool:
             )
         return False
     try:
-        payload = json.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        payload = json.loads(_read_regular_text(config_path, root=output_dir))  # no symlinked dir either (bl48-11)
+    except (OSError, ValueError) as exc:
         raise RuntimeError(
             f"agent-privilege switch ({config_path}) is present but unreadable: {exc}. "
             "Refusing to silently disable strict enforcement — fix or remove the file."
@@ -795,31 +795,30 @@ def _assert_decision_chain_intact(rows: list[dict[str, str]], fieldnames: list[s
 def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[str]] | None:
     """Return ``(rows, fieldnames)`` for the decisions log, or None when it does not exist.
 
-    **Fail-closed on width.** Every record must have exactly as many fields as the header. Cells
-    are mapped to columns by position, so a row written in the other schema (a 9-column
-    ``date,plan_slug,step,decision,status,...`` row under the seeded 6-column legacy header, or
-    the reverse) lands its verdict in the wrong column: a HALT written that way reads as no
-    verdict at all, and a later PASS in the header's own form cleared the action (item 06,
-    G-07-1). The same holds for a quote left open, which can swallow later rows (a HALT among
-    them) without changing any field count. Any problem :func:`agentteams.governance_logs.check_log`
-    reports therefore refuses every gate decision, naming the record, rather than being read; a
-    HALT the gate cannot read must block, never vanish (C-2).
+    **Fail-closed on width.** Every record must have exactly as many fields as the header. Cells are mapped to columns
+    by position, so a row written in the other schema (a 9-column ``date,plan_slug,step,decision,status,...`` row under
+    the seeded 6-column legacy header, or the reverse) lands its verdict in the wrong column: a HALT written that way
+    reads as no verdict at all, and a later PASS in the header's own form cleared the action (item 06, G-07-1). The same
+    holds for a quote left open, which can swallow later rows (a HALT among them) without changing any field count. Any
+    problem :func:`agentteams.governance_logs.check_log` reports therefore refuses every gate decision, naming the
+    record, rather than being read; a HALT the gate cannot read must block, never vanish (C-2).
 
     Raises:
-        RuntimeError: The log is unreadable or headerless, its header matches neither schema,
-            or ``check_log`` reports a problem (wrong width, open quote, swallowed rows).
+        RuntimeError: The log is unreadable, reached through a symlink, or headerless, its header matches neither
+            schema, or ``check_log`` reports a problem (wrong width, open quote, swallowed rows).
     """
-    from agentteams.governance_logs import check_log
-    from agentteams.governance_logs import fcntl as _fcntl
+    from agentteams.governance_logs import check_log, fcntl as _fcntl
+    from agentteams.signing_switch import refuse_symlinked_component
 
     log_path = output_dir / "references" / "security-decisions.log.csv"
     if lstat_or_none(log_path, "security decisions log") is None:
         return None
     # A shared lock for the whole read, so a `governance_logs repair` (exclusive lock, in-place rewrite) is
     # never observed half-written (@security re-review C2). Appenders take the same exclusive lock.
-    try:
-        lock_fd = os.open(log_path, os.O_RDONLY)
-    except OSError as exc:
+    try:  # never through a symlink: not the log itself, nor a directory below the team dir (bl48-11)
+        refuse_symlinked_component(log_path, output_dir)
+        lock_fd = os.open(log_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except (OSError, ValueError) as exc:
         raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
     try:
         if _fcntl is not None:

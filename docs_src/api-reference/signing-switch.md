@@ -64,11 +64,20 @@ project, never a symlink. Native siblings and projections of another source are 
 returns the notices to print. A failed sibling write becomes a `KEPT_PREFIX` notice, never an
 exception.
 
-### `read_switch(path) -> bool | None`
+### `read_switch(path, root=None) -> bool | None`
 
 Returns the switch value, or `None` when nothing is there. Raises `ValueError` for a symlink, a
-non-regular file, malformed JSON or a non-boolean value. It never defaults to `false`.
-`projection_marker` delegates to it.
+non-regular file, malformed JSON or a non-boolean value. It never defaults to `false`. With
+`root` (the team dir), a symlinked directory between `root` and `path` is refused too.
+`projection_marker` delegates to it and passes the team dir.
+
+### `refuse_symlinked_component(path, root) -> None`
+
+Raises `ValueError` when `path` is not under `root`, or when any component of `path` below `root`
+(the file included) is a symlink or cannot be stat'd. The walk stops at the first component that
+does not exist. `root` and its ancestors are not checked. The decision gate calls it before it
+reads `references/agent-privilege.json` or `references/security-decisions.log.csv`, so neither is
+read through a linked `references/` directory.
 
 ### `owns_switch(agents_dir) -> bool`, `is_governed(*dirs) -> bool`, `switch_payload(value, note) -> str`
 

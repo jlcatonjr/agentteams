@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (governance reads refuse a symlinked `references/` directory)
+
+- **Fixed:** the decision gate read `references/agent-privilege.json` and `references/security-decisions.log.csv`
+  through a symlinked `references/` directory (and the log through a symlinked file), so the switch and the HALTs
+  could come from outside the team. Both reads now refuse a symlink anywhere below the team dir, and every gate
+  decision then refuses (fail-closed). The switch reads in `projection_marker` do the same.
+- **New:** `signing_switch.refuse_symlinked_component(path, root)`; `read_switch` takes an optional `root`.
+- **Who notices:** a team whose `references/` was linked by hand. agentteams never creates such a link.
+- **Limit:** the team dir and its ancestors are not checked.
+
 ### changed (`--sign-decision` refuses an author the gate would refuse)
 
 - **Changed:** `--sign-decision` now refuses, before the key is read, a `PASS`, `CONDITIONAL PASS` or

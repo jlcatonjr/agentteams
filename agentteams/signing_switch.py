@@ -29,7 +29,9 @@ now go through:
   (or is created) ``true`` and a :data:`KEPT_PREFIX` notice reports the conflict.
 
 Writes never follow a symlink: the ``references/`` dir is opened ``O_DIRECTORY|O_NOFOLLOW`` and
-the switch is replaced by a temp file + ``os.replace`` relative to that descriptor.
+the switch is replaced by a temp file + ``os.replace`` relative to that descriptor. Governance reads
+that name the team dir (``read_switch(path, root)``, the decision gate) refuse a symlinked directory
+below it as well as a symlinked file (:func:`refuse_symlinked_component`).
 """
 
 from __future__ import annotations
@@ -105,13 +107,51 @@ class SwitchOutcome:
     notices: list[str] = field(default_factory=list)
 
 
-def _read_regular_text(path: Path) -> str:
-    """Read ``path`` opened ``O_NOFOLLOW`` after an lstat regular-file check.
+def refuse_symlinked_component(path: Path, root: Path) -> None:
+    """Refuse a governance path that is reached through a symlink anywhere below ``root``.
+
+    Each component of ``path`` below ``root`` (the final one included) is checked with ``os.lstat``; the walk stops
+    at the first component that does not exist (nothing below it can be read). ``root`` itself and its ancestors are
+    trusted and not checked.
+
+    Args:
+        path: The governance file (a switch, the decisions log).
+        root: The team dir the file belongs to.
+
+    Returns:
+        None.
 
     Raises:
-        ValueError: A symlink, a non-regular file, or unreadable.
+        ValueError: ``path`` is not under ``root``, a component is a symlink, or a component cannot be stat'd.
     """
     try:
+        rel = path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{path} is not under {root}") from exc
+    cur = root
+    for part in rel.parts:
+        cur = cur / part
+        try:
+            mode = os.lstat(cur).st_mode
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise ValueError(f"{path}: cannot stat {cur}: {exc}") from exc
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"{path}: {cur} is a symlink; governance files are never read through a link")
+
+
+def _read_regular_text(path: Path, root: Path | None = None) -> str:
+    """Read ``path`` opened ``O_NOFOLLOW`` after an lstat regular-file check.
+
+    With ``root``, every component of ``path`` below it is checked first (:func:`refuse_symlinked_component`).
+
+    Raises:
+        ValueError: A symlink (a symlinked directory below ``root`` too), a non-regular file, or unreadable.
+    """
+    try:
+        if root is not None:
+            refuse_symlinked_component(path, root)
         if not stat.S_ISREG(os.lstat(path).st_mode):
             raise ValueError(f"{path} is a symlink or not a regular file")
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -132,22 +172,23 @@ def _parse_switch(text: str, path: Path) -> dict:
     return data
 
 
-def read_switch(path: Path) -> bool | None:
+def read_switch(path: Path, root: Path | None = None) -> bool | None:
     """Return a switch's ``enforce_decision_signing``; ``None`` when absent.
 
     Args:
         path: The switch file.
+        root: The team dir; when given, a symlinked directory between it and ``path`` is refused too.
 
     Returns:
         The boolean value, or ``None`` when nothing (not even a dangling link) is there.
 
     Raises:
-        ValueError: The switch is present but a symlink, not a regular file, unreadable,
-            malformed, or its value is not a JSON boolean (never defaulted to false).
+        ValueError: The switch is present but a symlink (or below ``root`` through one), not a regular
+            file, unreadable, malformed, or its value is not a JSON boolean (never defaulted to false).
     """
     if not os.path.lexists(path):
         return None
-    return _parse_switch(_read_regular_text(path), path)["enforce_decision_signing"]
+    return _parse_switch(_read_regular_text(path, root), path)["enforce_decision_signing"]
 
 
 def _switch_state(agents_dir: Path) -> tuple[bool | None, str]:
@@ -570,6 +611,7 @@ __all__ = [
     "marker_deletion_commits",
     "owns_switch",
     "read_switch",
+    "refuse_symlinked_component",
     "review_lines",
     "review_reason",
     "switch_payload",
