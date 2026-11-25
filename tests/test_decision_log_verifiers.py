@@ -552,7 +552,8 @@ def test_every_gate_call_site_is_listed():
                 assert "s10-cooldown" not in GATE_ACTIONS
             elif arg == "halt_family" and path.name == "dev_merge.py":
                 # The integration-branch merge authorization's two HALT families, both listed.
-                assert "for halt_family in (FAMILY, ACTION_FAMILY):" in text
+                assert "for halt_family in HALT_FAMILIES:" in text
+                assert "HALT_FAMILIES: tuple[str, ...] = (FAMILY, ACTION_FAMILY)" in text
                 assert {"integration-merge", "dev-merge"} <= set(GATE_ACTIONS)
             elif arg == "merge_action" and path.name == "dev_merge.py":
                 # dev-merge:<owner/name>:pr-<N>-<sha>, built (and validated) by merge_action_id only.

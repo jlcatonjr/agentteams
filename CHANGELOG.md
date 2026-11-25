@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (a retracted `integration-merge` HALT does not revive an older merge PASS, #616)
+
+- **Fixed:** `agentteams --merge-pr` refuses while a HALT on `integration-merge` or `dev-merge` is open, but its
+  check that a clearance is not older than a retraction looked only at the per-merge id. After a HALT on
+  `integration-merge` was retracted, a PASS recorded before that retraction merged again. The check now covers
+  both HALT ids (one shared list, `dev_merge.HALT_FAMILIES`), so that PASS is void.
+- **Who notices:** an operator who retracts an `integration-merge` HALT and expected an earlier per-merge PASS to
+  still apply: record a fresh PASS after the retraction.
+
 ### security (a retracted HALT revives no earlier permission, #616)
 
 - **Fixed:** the known issue #616 noted under 1.3.0. A PASS recorded while a HALT on the action was open (or
