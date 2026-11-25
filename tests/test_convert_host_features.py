@@ -1,4 +1,4 @@
-"""``--convert`` resolves host features from the brief's privilege profile (remediation row 208, bl48-41c).
+"""``--convert`` resolves host features from the brief's privilege profile.
 
 ``generate`` sets ``manifest["host_features"]`` before rendering; ``convert_team`` never did, so an emitter gated
 on a host feature no-oped on convert.

@@ -498,7 +498,7 @@ def test_import_agentteams_research_search_without_pypdf() -> None:
         importlib.import_module("agentteams.research.search")
 
 
-# --- bl48-41c (row 130): a search no backend answered exits 3 ------------------------------------------------
+# --- a search no backend answered exits 3 ------------------------------------------------
 
 
 def _run_search(monkeypatch, capsys, results, backend):

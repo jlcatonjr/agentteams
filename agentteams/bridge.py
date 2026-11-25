@@ -869,7 +869,7 @@ def _render_target_files(
 
     if target_framework in ("generic", "agents-md", "codex"):
         # No native consumer entry files: generic has no framework to write them for, and agents-md/codex
-        # would create or relabel a shared AGENTS.md (row 194). Without this explicit branch, generic would fall through
+        # would create or relabel a shared AGENTS.md. Without this explicit branch, generic would fall through
         # to the copilot-cli shape below — the pair-dir artifacts (manifest,
         # inventory, entrypoint, domain-boundary — framework-agnostic by
         # construction; quickstart carries an explicit generic-specific section,

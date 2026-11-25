@@ -214,7 +214,7 @@ def test_schema_file_present_and_parses():
     assert "recipients" in data["properties"]
 
 
-# ----------------------------- bl48-41c (row 659): labels are created ----------------------------------------
+# ----------------------------- the PR personas create the labels they apply ----------------------------------
 
 _TEMPLATES = Path(__file__).resolve().parents[1] / "agentteams" / "templates" / "domain"
 
@@ -225,8 +225,10 @@ def _invariant_core(name: str) -> str:
 
 
 def test_pr_templates_create_their_labels():
-    core = _invariant_core("pr-manager")
+    lines = _invariant_core("pr-manager").splitlines()
     for label in ("pr-mgmt", "awaiting-review"):
-        assert f"`gh label create {label} " in core and "--force`" in core, label
+        # One whole command per line, so --force belongs to this label's create and not to a neighbour's.
+        own = [ln for ln in lines if f"`gh label create {label} " in ln]
+        assert len(own) == 1 and own[0].rstrip().endswith("--force`"), (label, own)
     # The notifier has no shell: it relies on @pr-manager having created the labels its command applies.
     assert "@pr-manager" in _invariant_core("pr-notifier") and "gh label create" in _invariant_core("pr-notifier")

@@ -1428,7 +1428,7 @@ def test_unpaired_bridge_markers_fall_back_to_the_whole_write():
     assert content == rendered and notice and "backup" in notice
 
 
-# --- bl48-41c (row 194): agents-md and codex are bridge targets with no entry files -----------------------
+# --- agents-md and codex are bridge targets with no entry files -----------------------
 
 
 @pytest.mark.parametrize("target", ["agents-md", "codex"])
