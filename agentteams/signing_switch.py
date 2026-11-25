@@ -134,10 +134,10 @@ def refuse_symlinked_component(path: Path, root: Path) -> None:
         cur = cur / part
         try:
             mode = os.lstat(cur).st_mode
-        except FileNotFoundError:
+        except (FileNotFoundError, NotADirectoryError):
             return
         except OSError as exc:
-            raise ValueError(f"{path}: cannot stat {cur}: {exc}") from exc
+            raise ValueError(f"{path}: cannot stat {cur} ({exc.strerror or exc}); refusing (fail-closed)") from exc
         if stat.S_ISLNK(mode):
             raise ValueError(f"{path}: {cur} is a symlink; governance files are never read through a link")
 
