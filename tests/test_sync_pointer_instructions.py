@@ -1,4 +1,4 @@
-"""``--sync`` keeps a pointer instruction file a pointer, and says when it adds sections (#461, bl48-29a).
+"""``--sync`` keeps a pointer instruction file a pointer, and says when it adds sections (#461).
 
 A deliberately short instruction file that holds only a framework-owned fence (a goose bridge entry in a root
 ``AGENTS.md``) shares no template section with the projection. Before the fix every ``--sync`` pass silently grew it
