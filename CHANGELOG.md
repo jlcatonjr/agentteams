@@ -6,6 +6,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (known limitation: convert and interop emit no OS sandbox boundary)
+
+- `docs_src/known-limitations.md` now says that `--convert-from` and `--interop-from` convert agent files only, so
+  a team's OS sandbox launcher, session sandbox settings and protected-path rules do not reach the target. Render
+  on the target from the brief, or use multi-sync, which carries the brief's privilege settings in
+  `team.cai.json`.
+
+### docs (drift sweep: `sign_decision` steps, a duplicate heading, the probe-baseline note, the stdlib rule, the signing-migration hint)
+
+- `docs_src/api-reference/cli.md`: the `sign_decision` step list now matches the code's order, including the
+  non-empty `action_reviewed` check, the `text_digest` downgrade refusal or notice, the toolchain-group and
+  dev-merge-authorization refusals, and the append's refusal when the log changed after it was read (#470).
+- `docs_src/api-reference/vulnscan.md`: the two `selftest(cfg)` headings are now `agent_run.selftest(cfg)` and
+  `tools_image.selftest(cfg)`; links to the agent self-test checks point at the first. A test now fails any
+  api-reference page with two identical `####` headings.
+- `docs_src/cli-reference.md` (`--accept-probe-baseline`): record the review in
+  `references/redteam-probe-revalidation.md`; the command writes `note: ""` for every probe.
+- The self-build brief's style rule names `jsonschema` as the declared runtime dependency instead of claiming no
+  external dependencies.
+- The `enforce_decision_signing` notice printed at generation, and the same text in
+  `workspace-privilege-scoping.md`, now say how to make a log carry signed rows: migrate it with
+  `--migrate-decision-log`, then sign with `--sign-decision`, or set `AGENTTEAMS_DECISION_SIGNING_KEY`.
+
+### fixed (vulnscan L1: a distro package with a pending update keeps its distro origin; #585 A2)
+
+- While a distro update is pending, `apt-cache policy` lists the installed version under `/var/lib/dpkg/status`
+  only, so L1 reported the package as `repo:unknown` and the workstation raised a false upstream end-of-life
+  finding (seen for nginx and python3-jwt). It is now `pkg:<package>` with an `INFO ... (update pending)` line when
+  every archive serving the candidate is the distro's (or an accepted mirror), the candidate has the same upstream
+  version, and the installed version carries a distro revision. Anything else stays `repo:unknown`.
+- **Newly accepted (Rule 12):** a locally installed `.deb` whose name and upstream version match a distro package
+  with a newer distro candidate is judged `pkg:`. The upstream-version and revision conditions keep that narrow.
+- `agentteams/data/server_kit/L1-audit.sh` is integrity-pinned; its digest is re-recorded. Hosts pick it up when
+  the kit is staged again.
+
+### fixed (a provider failure after an attempt keeps the worst-case USD charge; #573)
+
+- A WASM agent's model call that failed after at least one HTTP attempt kept its worst-case tokens but was charged
+  $0, so under a `max_usd` cap every such failure reopened USD headroom: a run could exceed its cap by up to
+  `max_model_calls` worst-case reservations. The mediator now commits the reservation's USD too when the run is
+  priced. An unpriced run still counts the call as unmetered, and a failure before any attempt is still refunded.
+- **Who sees a difference:** a priced run near its USD cap against a flaky provider stops at `max_usd` sooner.
+- `agentteams/wasm_agent/mediation.py` is integrity-pinned; its digest is re-recorded.
+
+### tests (flaky timing and race tests made deterministic; #502, #611, #584)
+
+- The heartbeat exemption tests drive the runner's own `_heartbeat` instead of a simulator that wrote a
+  `runner.heartbeat.tmp` name without the runner's lock. The runner never writes that name; a snapshot could catch
+  the simulator mid-beat (#502). A new test shows a planted `runner.heartbeat.tmp` is still an undeclared write: the
+  exemption is the exact heartbeat path. No product change.
+- The over-cap frame test's fake guest blocks after its oversized line, so only the session's frame-cap kill can end
+  it; it used to exit by itself and sometimes beat the kill (#611). The exit-code test now also asserts that a guest
+  which ends itself carries no signal. No product change.
+- The term-index linear-time tests measure this process's CPU time (`time.process_time`), best of five with the
+  small and large inputs interleaved, so time spent descheduled on a loaded machine no longer fails them (#584). A
+  new negative control shows the helper still fails quadratic work. No product change.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`

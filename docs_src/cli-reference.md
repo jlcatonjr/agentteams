@@ -1076,7 +1076,8 @@ flipped to a false `DEFENDED` exactly that way — and only a reviewed diff tell
 scheduled job that re-baselined itself would clear its own flag every night and measure
 nothing. Refused under `--dry-run`.
 
-Record what you concluded in the affected probe's `note` field before committing.
+Record the review in `references/redteam-probe-revalidation.md` (newest first) and commit it with the
+baseline change; the command writes `note: ""` for every probe.
 
 ### `--redteam-freshness-check`
 

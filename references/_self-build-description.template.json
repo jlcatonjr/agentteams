@@ -92,7 +92,7 @@
     }
   ],
   "style_rules": [
-    "stdlib-only: no external dependencies in src/ (pytest is dev-only)",
+    "stdlib-only in agentteams/ except `jsonschema` (a declared runtime dependency); pytest is dev-only; the agentteams[research] and agentteams[signing] extras are lazily imported, so neither is needed by the base install",
     "All public functions must have docstrings with Args/Returns/Raises",
     "Type annotations required on all public function signatures",
     "Templates use `{UPPER_SNAKE_CASE}` for auto-resolved placeholders and `{MANUAL:UPPER_SNAKE_CASE}` for human-required",

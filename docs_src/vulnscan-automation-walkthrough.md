@@ -376,7 +376,7 @@ python -m agentteams.vulnscan agent-selftest
 A sha256 mismatch fails the build. The self-test needs `agent.key_file` and `agent.team_dir` from
 Step 6: it mounts `team_dir` exactly as a run does, and refuses (exit 1) when it is unset or fails
 its checks. It starts the gateway and runs the container with the agent's exact flags, then prints `{"passed": ..., "checks": {...}}`. Every check must be `true`; the
-reference [lists what each one proves](api-reference/vulnscan.md#selftestcfg). Agent mode refuses to
+reference [lists what each one proves](api-reference/vulnscan.md#agent_runselftestcfg). Agent mode refuses to
 run until a passing self-test exists **for the current image and the current container flags**:
 after every image rebuild, and after an agentteams upgrade that changes how the containers are
 started, re-run `agent-selftest` (the run's refusal says which). After installing rc.4, re-run
@@ -388,7 +388,7 @@ empty read-only tmpfs: the agent cannot read the DLP list or the spend files.
 
 A passing goose self-test looks like this (also saved to `<state>/agent-selftest.json`). The digests and
 times are placeholders: yours will differ. Another framework replaces the four `goose_*` checks with its own
-([the full list](api-reference/vulnscan.md#selftestcfg)):
+([the full list](api-reference/vulnscan.md#agent_runselftestcfg)):
 
 ```text
 $ python -P -m agentteams.vulnscan agent-selftest
