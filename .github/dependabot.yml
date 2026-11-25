@@ -32,4 +32,9 @@ updates:
       github-actions:
         patterns:
           - "*"
+    # Rule S-10's 14-day release cooldown (Dependabot's own default is 3 days).
+    # Each PR must also update references/dependency-pins.json github_actions
+    # (references/git-procedures.md section J).
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5

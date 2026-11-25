@@ -656,3 +656,42 @@ cannot read branch protection (no admin rights): hand that step to the operator.
 `--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary. Writes to a
 branch-protection or ruleset endpoint, and `--apply`, prompt through the constitutional gate where hooks run.
 
+
+---
+
+## J. Workflow Action Pins (2026-11-25)
+
+Every `uses:` in `.github/workflows/*.yml` names a full commit SHA with the exact release tag as a comment
+(`uses: actions/checkout@<40-hex sha>   # v7.0.1`), never a tag or branch. A tag can be moved by the action's owner;
+a commit cannot. The pins are recorded under `github_actions` in `references/dependency-pins.json`, and
+`tests/test_workflow_action_pins.py` refuses a tag ref, a SHA without its tag comment, and any ref that differs from
+that record.
+
+**To add or bump an action:**
+
+1. Resolve the tag in the action's own repository:
+   `git ls-remote https://github.com/<owner>/<repo> 'refs/tags/v<major>*'`. For an annotated tag, take the peeled
+   `^{}` line (the tag object's SHA does not work as a `uses:` ref). Pin only a SHA that this listing shows the tag
+   pointing at. A commit pushed to a fork can be addressed under the upstream name (`<owner>/<repo>@<sha>`), so a SHA
+   from anywhere else (a PR, an advisory, a blog post) is not enough on its own.
+2. Vet the release under Rule S-10 (security agent, "Dependency Vetting Before Install"):
+   - no known vulnerability: search the GitHub advisory database
+     (`gh api "advisories?ecosystem=actions&affects=<owner>/<repo>"`) and OSV for that release;
+   - the 14-day cooldown: the release is at least 14 days old
+     (`gh api repos/<owner>/<repo>/releases/tags/<tag> --jq .published_at`);
+   - the latest stable release: the newest non-prerelease release that has cleared the cooldown. Staying on an older
+     major (for example because the newest one breaks a workflow) needs a recorded `@security` clearance naming the
+     reason, cited in the PR;
+   - the remediation carve-out applies as S-10 states it: a release that fixes a vulnerability the project's scan
+     reports may be adopted inside the cooldown and need not be the latest stable, and it must still pass the
+     vulnerability search and the identity check in step 1.
+3. In one PR, change the `github_actions` entry (`sha`, `tag`, `commit_date`, `release_date`, `verified_on`,
+   `vuln_search`) and every workflow line that uses the action. `@security` re-resolves the SHA itself before it
+   clears the PR.
+
+**Dependabot.** `.github/dependabot.yml` opens a weekly grouped PR that moves the workflow SHAs and tag comments, with
+a 14-day `cooldown`. It does not touch `dependency-pins.json`, so the pins test fails that PR until it is completed:
+check each new SHA as in steps 1 and 2, then update the `github_actions` entries in the same PR.
+
+When GitHub announces an advisory for a pinned action, the fix arrives only through this procedure. Pushing a change
+to a workflow file needs a token with the `workflow` scope; if the session's token lacks it, the operator pushes.
