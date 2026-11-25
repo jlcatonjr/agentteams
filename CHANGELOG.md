@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### tests (flaky timing and race tests made deterministic; #502, #611)
+
+- The heartbeat exemption tests drive the runner's own `_heartbeat` instead of a simulator that wrote a
+  `runner.heartbeat.tmp` name without the runner's lock. The runner never writes that name; a snapshot could catch
+  the simulator mid-beat (#502). A new test shows a planted `runner.heartbeat.tmp` is still an undeclared write: the
+  exemption is the exact heartbeat path. No product change.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`
