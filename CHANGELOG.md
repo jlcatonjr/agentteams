@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a provider failure after an attempt keeps the worst-case USD charge; #573)
+
+- A WASM agent's model call that failed after at least one HTTP attempt kept its worst-case tokens but was charged
+  $0, so under a `max_usd` cap every such failure reopened USD headroom: a run could exceed its cap by up to
+  `max_model_calls` worst-case reservations. The mediator now commits the reservation's USD too when the run is
+  priced. An unpriced run still counts the call as unmetered, and a failure before any attempt is still refunded.
+- **Who sees a difference:** a priced run near its USD cap against a flaky provider stops at `max_usd` sooner.
+- `agentteams/wasm_agent/mediation.py` is integrity-pinned; its digest is re-recorded.
+
 ### tests (flaky timing and race tests made deterministic; #502, #611, #584)
 
 - The heartbeat exemption tests drive the runner's own `_heartbeat` instead of a simulator that wrote a
