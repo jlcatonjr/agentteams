@@ -764,10 +764,13 @@ def main(payload: object, raw: bytes = b"") -> str:
         # than 0/2 is a non-blocking error), so _import_integrity re-runs under the pinned
         # interpreter or fails visibly (the checkout-root fallback was removed; see _import_integrity).
         integrity = _import_integrity(raw)
-        # Row 603: the hook's project roots, the cwd AND the tree agentteams is imported from (the code that runs).
-        roots = dict.fromkeys(p.resolve() for p in (*_project_roots(), Path.cwd(), Path(integrity.__file__).parents[1]))
-        integrity_findings = [f for root in roots for f in integrity.verify(root)]
-        tampered = [f for f in integrity_findings if f.rel_path.endswith("scan.py")]
+        integrity_findings = []  # the hook's project roots, the cwd AND the imported agentteams tree (row 603)
+        for root in dict.fromkeys(p.resolve() for p in (*_project_roots(), Path.cwd(), Path(integrity.__file__).parents[1])):
+            try:  # describe() here too: a non-string digest raises in it. A crash would let the write through.
+                integrity_findings += [f for f in integrity.verify(root) if f.describe()]
+            except (RuntimeError, AttributeError, TypeError) as exc:  # unparsable or ill-typed manifest: ask below
+                integrity_findings.append(integrity.IntegrityFinding(str(root / integrity.MANIFEST_REL_PATH), "", type(exc).__name__, "manifest-unreadable"))
+        tampered = [f for f in integrity_findings if f.rel_path.endswith("scan.py") or f.reason == "manifest-unreadable"]
         # PR-D (row 31): a MISSING manifest where one is expected (this repo ships it, or the
         # scanner runs from inside the project) leaves the scanner unverifiable. Under the
         # confined fail-closed policy that is `ask` (not `deny`: a deleted manifest is also what

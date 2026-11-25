@@ -623,6 +623,7 @@ def test_gate_verifies_the_tree_agentteams_is_imported_from(tmp_path: Path, monk
     from agentteams import integrity
 
     gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))  # the same root twice: verified once
     seen: list[Path] = []
     real = integrity.verify
     monkeypatch.setattr(integrity, "verify", lambda root: seen.append(Path(root).resolve()) or real(root))
@@ -630,3 +631,12 @@ def test_gate_verifies_the_tree_agentteams_is_imported_from(tmp_path: Path, monk
     imported = Path(integrity.__file__).resolve().parents[1]
     assert {proj.resolve(), (proj / "sub").resolve(), imported} <= set(seen)
     assert len(seen) == len(set(seen))
+
+
+@pytest.mark.parametrize("manifest", ["{not json", '{"modules": []}', "[]", '{"modules": {"agentteams/scan.py": 5}}'])
+def test_an_unreadable_project_manifest_asks_instead_of_crashing(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest: str) -> None:
+    # An exception escaping the gate lets the write through in the cooperative profile.
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    (proj / "references" / "enforcement-integrity.json").write_text(manifest, encoding="utf-8")
+    assert _write_verdict(gate) == ("ask", "scanner-unverified")
