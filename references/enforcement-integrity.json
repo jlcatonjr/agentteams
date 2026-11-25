@@ -58,7 +58,7 @@
     "agentteams/data/codex-role-gate.py": "4f2bda5fc06cdb664598dd1da08252c20314cb0f397557362d4f5262128c475b",
     "agentteams/data/goose-readfs-mcp.py": "dc8413e8ec16298e79b5ff27e6629c792693ef88bcae4c9f9c40e85d127cab58",
     "agentteams/data/launcher_lineage.json": "e268e553cd44f5ed99dad36773e2eb9763c9d9c343945a16e3a5e6103fb0fae1",
-    "agentteams/data/server_kit/L1-audit.sh": "f4b18bbc814cf34360cd65841be4f364740fa29c4930648fa5c11332bd934a04",
+    "agentteams/data/server_kit/L1-audit.sh": "7cd9a36df3ed11f54019ee5657821423ee05f83d541f61b6c3a6548061f9323a",
     "agentteams/data/server_kit/L2-os-patch.sh": "2c5fcbe489e7a79d2a882962f34ba7ee8547efe2514a02a3079a43f9a9a32a02",
     "agentteams/data/server_kit/L3-node-runtime.sh": "66c221db80bf10615b0304a4c084dc1422f546a50d2f5e685be86c8abe9f25a0",
     "agentteams/data/server_kit/L4-python-app.sh": "06325062a69e69784f28d95facddb1f95b2debd21d3903b3c317f10c5aa67ca7",

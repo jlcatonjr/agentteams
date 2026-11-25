@@ -263,7 +263,7 @@ mirror_ok(){ case " $MIRROR_OK " in *" ${1%/}|$2 "*) return 0;; esac; return 1; 
 apt_sources(){  # "host component uri suite" per archive serving the installed version (the `***` block of apt-cache policy).
   # None (only dpkg status) but a candidate that is a newer distro revision of the same upstream version: the candidate's
   # archives, each row ending " pending" (an update not yet installed; #585).
-  tmo apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy "$1" 2>/dev/null | awk '
+  LC_ALL=C tmo apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy "$1" 2>/dev/null | awk '
     function up(v) { sub(/-[^-]*$/, "", v); return v }
     $1 == "Installed:" {inst = $2; next}  $1 == "Candidate:" {cand = $2; next}
     $1 ~ /^-?[0-9]+$/ && ($2 ~ /^\// || $2 ~ /:/) {          # a source line, not the next version

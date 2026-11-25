@@ -24,7 +24,9 @@ def _apt_cache(installed: str, candidate: str, uri: str) -> str:
 [ "$*" = "-o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy $6" ] || exit 1
 shift 4
 [ "$2" = nginx ] || exit 0
-echo "nginx:"; echo "  Installed: {installed}"; echo "  Candidate: {candidate}"; echo "  Version table:"
+# apt translates the labels: a German server says "Installiert:" unless L1 pins the C locale
+if [ "${{LC_ALL:-}}" = C ]; then i=Installed c=Candidate; else i=Installiert c=Installationskandidat; fi
+echo "nginx:"; echo "  $i: {installed}"; echo "  $c: {candidate}"; echo "  Version table:"
 printf '     {candidate} 500\\n        500 {uri} noble-security/main amd64 Packages\\n'
 printf ' *** {installed} 100\\n        100 /var/lib/dpkg/status\\n'
 """
