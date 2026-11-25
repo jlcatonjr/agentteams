@@ -331,7 +331,7 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 ### The gate asks on some git config that runs a program, not all
 
 - **What:** `git-alias-config` asks on `alias.`, `push.`, `remote.`, `url.`, `credential.` and `core.hooksPath`,
-  `core.sshCommand`, `core.askPass`, `core.fsmonitor`, set through `git config`, `git -c` or `git --config-env`.
+  `core.sshCommand`, `core.askPass`, `core.fsmonitor`, `agentteams.hookPython`, `agentteams.hookImportPath`, set through `git config`, `git -c` or `git --config-env`.
   Other git configuration also runs a program and does not ask:
   - `core.pager`, `core.editor`, `core.gitProxy`, `sequence.editor`, `diff.external`, `diff.*.textconv`,
     `merge.*.driver`, `filter.*` and `gpg.program`, by any route;

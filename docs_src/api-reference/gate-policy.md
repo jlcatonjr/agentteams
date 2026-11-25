@@ -44,7 +44,8 @@ The default `ask` classes:
   `git-force-push-short` (`git push -f`, `-uf`, or a `+refspec`, quoted or not), `fleet-lock-lift`;
 - `outbound-upload`, `outbound-derived`, `raw-socket`, `dns-exfil`, `publication-channel`,
   `git-alias-config` (`git -c`, `git --config-env` or `git config` for `alias.`, `push.`, `remote.`, `url.`,
-  `credential.`, `core.hooksPath`, `core.sshCommand`, `core.askPass` or `core.fsmonitor`; `git config get` and
+  `credential.`, `core.hooksPath`, `core.sshCommand`, `core.askPass`, `core.fsmonitor`, `agentteams.hookPython` or
+  `agentteams.hookImportPath`, including `--add`, `--replace-all` and unset; `git config get` and
   `git config list` are reads only as the word right after `config`), `interpreter-send`;
 - `gh-delete`, `pr-merge`, `git-remote-delete`, `git-ref-delete`, `agentteams-branch-delete`;
 - `fs-delete`, `infra-delete`, `db-delete`, `interpreter-delete`;

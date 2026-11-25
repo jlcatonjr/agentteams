@@ -150,12 +150,12 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
-    # alias./push. config can hide or redirect a push (row 699); credential.*, core.hooksPath/sshCommand/askPass/fsmonitor
-    # hand over the credential or run a program (row 730). `get|list` reads only as the word after the FIRST `config`.
-    ("git-alias-config", r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b)|"
+    # alias./push. hide or redirect a push (row 699); credential.*, core.hooksPath/sshCommand/askPass/fsmonitor and the git
+    # hook's agentteams.hookPython/hookImportPath run a program (row 730). get|list: only the word after the 1st `config`.
+    ("git-alias-config", r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b|agentteams\.hook(?:python|importpath)\b)|"
      r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?!(?:(?!\bconfig\b)[^\n;&|])*\bconfig\s+(?:get|list)\b)"
-     r"(?=[^\n]*\s['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b))",
-     "git configuration that can hide or redirect a push, hand the credential to a program, or run a program (alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor)"),
+     r"(?=[^\n]*\s['\"]?(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b|agentteams\.hook(?:python|importpath)\b))",
+     "git configuration that can hide or redirect a push, hand the credential to a program, or run a program (alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor, agentteams.hookPython/hookImportPath)"),
     ("interpreter-send", r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),

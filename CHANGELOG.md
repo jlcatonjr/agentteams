@@ -25,8 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### security (the gate asks on git config that runs a program or hands over the push credential)
 
 - **Fixed:** the constitutional gate's `git-alias-config` class now also asks on `credential.*`, `core.hooksPath`,
-  `core.sshCommand`, `core.askPass` and `core.fsmonitor`, set through `git config`, `git -c` or `git --config-env`.
-  Before, `git config core.hooksPath x` ran with no prompt, and the next commit, push or `git status` (the
+  `core.sshCommand`, `core.askPass` and `core.fsmonitor`, and on `agentteams.hookPython` and
+  `agentteams.hookImportPath` (the generated git hook runs that interpreter with that import path), set or unset
+  through `git config`, `git -c` or `git --config-env`. Before, `git config core.hooksPath x` ran with no prompt, and the next commit, push or `git status` (the
   operator's too) ran whatever it named; `credential.helper` handed the push credential to a program.
 - **Effect on headless sessions:** these commands now ask, which a headless session denies. Setup steps run
   through agent Bash, such as `git config credential.helper osxkeychain`, `git config core.sshCommand "ssh -i …"` or

@@ -179,7 +179,12 @@ EXEC_CONFIG_WRITES = [
     "git config core.hooksPath x", 'git config --global core.sshCommand "ssh -i k"', "git config credential.helper store",
     "git config credential.https://h.helper x", "git config core.fsmonitor ./m", "git config core.askPass x",
     "git -c core.hooksPath=/tmp/h push", "git --config-env=core.sshCommand=EV fetch", "git config core.HOOKSPATH x",
-    "git config set core.hooksPath x",
+    "git config set core.hooksPath x", "git config --unset core.hooksPath", "git config unset credential.helper",
+    # The generated git hook executes agentteams.hookPython and imports from agentteams.hookImportPath.
+    "git config agentteams.hookPython /usr/bin/python3", "git -c agentteams.hookImportPath=/x status",
+    "git --config-env=agentteams.hookPython=EV status", "git config --add agentteams.hookpython x",
+    "git config --replace-all AGENTTEAMS.HOOKIMPORTPATH x", "git config --unset agentteams.hookPython",
+    "git config unset agentteams.hookImportPath",
 ]
 
 
@@ -193,6 +198,8 @@ def test_gate_asks_on_exec_handover_config(tmp_path: Path, cmd: str) -> None:
 @pytest.mark.parametrize("cmd", [
     "git config --get core.hooksPath", "git config get core.sshCommand", "git config list", "git config user.name x",
     "git config get alias.p", "git -C ../wt config list --show-origin", "git config core.hooksPathx y",
+    "git config --get agentteams.hookPython", "git config get agentteams.hookImportPath", "git config agentteams.other x",
+    "git config agentteams.hookPythonx y",
 ])
 def test_exec_config_reads_stay_silent(tmp_path: Path, cmd: str) -> None:
     gate = install(tmp_path, None)
