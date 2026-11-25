@@ -348,6 +348,19 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   `.git/config` changes before a push.
 - **Tracking:** remediation log rows 702 and 730.
 
+### A user-level gate install treats the home directory as the project
+
+- **What:** the gate takes its project root from where it is installed: the directory two levels above the hook
+  (`<project>/.claude/hooks`, `.github/hooks` or `.grok/hooks`), plus `$CLAUDE_PROJECT_DIR`. A copy installed at
+  user level, in `~/.claude/hooks`, therefore makes the home directory a project root. Every check that uses the
+  roots then covers the whole home directory: the scanner's integrity manifest is looked for there, the interpreter
+  pin may not point inside it, and `AGENTTEAMS_GATE_LOG` may not be written inside it.
+- **Who:** anyone who installs the gate in a user-level hooks directory instead of a project.
+- **Mitigation:** install the gate per project, as agentteams renders it. Put the gate log and the pinned interpreter
+  outside the home directory if a user-level copy is used.
+- **Tracking:** the gate does not restrict roots to the known layouts on purpose. Narrowing them would also drop
+  Grok's `.grok/hooks` project from the pin and integrity checks.
+
 ### The project gate policy is advisory where nothing write-protects the gate
 
 - **What:** the policy's digest is recorded in the installed gate. On Copilot, on Grok, and in any team whose OS

@@ -585,7 +585,8 @@ _REEXEC_TIMEOUT = 30
 
 
 def _project_roots() -> list[Path]:
-    """The project tree(s) this hook guards: ``<project>/.claude/hooks/<this>`` and ``$CLAUDE_PROJECT_DIR``."""
+    """The project tree(s) this hook guards: ``<project>/<.claude|.github|.grok>/hooks/<this>`` and ``$CLAUDE_PROJECT_DIR``.
+    Any install location counts ``parents[2]``, so a user-level ``~/.claude/hooks`` install makes the home directory a root."""
     parents = Path(__file__).resolve().parents
     roots = [parents[2]] if len(parents) > 2 else []
     env_root = os.environ.get("CLAUDE_PROJECT_DIR")

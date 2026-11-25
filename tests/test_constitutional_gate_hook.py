@@ -640,3 +640,20 @@ def test_an_unreadable_project_manifest_asks_instead_of_crashing(
     gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
     (proj / "references" / "enforcement-integrity.json").write_text(manifest, encoding="utf-8")
     assert _write_verdict(gate) == ("ask", "scanner-unverified")
+
+
+@pytest.mark.parametrize("layout", [".claude/hooks", ".github/hooks", ".grok/hooks"])
+def test_every_framework_hook_layout_counts_its_project_as_a_root(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, layout: str) -> None:
+    # Pins today's behaviour: narrowing _project_roots() to some layouts would drop Grok's project from the
+    # pin and integrity checks. A user-level install (~/.claude/hooks) likewise makes the home directory a root.
+    import importlib.util
+
+    hook = tmp_path / "proj" / layout / "constitutional-gate.py"
+    hook.parent.mkdir(parents=True)
+    hook.write_bytes(TEMPLATE.read_bytes())
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    spec = importlib.util.spec_from_file_location(f"_gate_layout_{layout.replace('/', '_')}", hook)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    assert gate._project_roots() == [(tmp_path / "proj").resolve()]
