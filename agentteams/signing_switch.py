@@ -41,6 +41,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -300,15 +301,56 @@ def _project_root(agents_dir: Path) -> Path:
     return agents_dir.parents[1] if any(posix.endswith("/" + t) for t in TEAM_DIRS) else agents_dir.parent
 
 
+def _has_governance_evidence(agents_dir: Path) -> bool:
+    """Whether ``agents_dir`` holds a security-approvers roster or a signed decision row (ruling R-19).
+
+    An unreadable or malformed decisions log counts as evidence (fail closed).
+    """
+    from agentteams.cli.decision_log import _read_decision_rows
+
+    if os.path.lexists(agents_dir / "references" / "security-approvers.txt"):
+        return True
+    try:
+        read = _read_decision_rows(agents_dir)
+    except (RuntimeError, OSError, ValueError):
+        return True
+    return read is not None and any((row.get("signature") or "").strip() for row in read[0])
+
+
+def _git_refused(agents_dir: Path, stderr: str) -> bool:
+    """The answer when ``git rev-parse`` failed: True (fail closed) only where git refused a repository that is there
+    (a ``.git`` entry at the project root or above) and the team holds governance evidence (ruling R-19).
+
+    A refusal without evidence keeps the existence test alone, with a warning; no ``.git`` at all is silent.
+    """
+    root = _project_root(agents_dir).absolute()
+    repo = next((p for p in (root, *root.parents) if os.path.lexists(p / ".git")), None)
+    if repo is None:
+        return False   # genuinely outside a work tree
+    why = (stderr.strip().splitlines() or ["no message"])[0]
+    fix = ("If the repository is yours, fix what git reports (for example: git config --global --add "
+           f"safe.directory {repo}).")
+    if _has_governance_evidence(agents_dir):
+        print(f"signing governance: git refused the repository at {repo} ({why}); treating {agents_dir} as "
+              f"signing-governed (fail-closed): it holds a security-approvers roster or signed decision rows. {fix}",
+              file=sys.stderr)
+        return True
+    print(f"signing governance: git refused the repository at {repo} ({why}); {agents_dir} holds no roster or "
+          f"signed decision rows, so only the marker file on disk is read. {fix}", file=sys.stderr)
+    return False
+
+
 def _marker_tracked(agents_dir: Path) -> bool:
     """True when git still governs ``agents_dir`` through a tracked marker (IM item 17, G-22-7).
 
     Governed when the marker is in the index, or in the tree of HEAD, its upstream, or ``origin/HEAD``. So a
     deleted or deletion-staged marker still governs, and so does one whose deletion was committed only on the
     current branch. Fail-closed cases (True): a git repository nested inside the project between its root and the
-    team dir (a planted ``.git``), and a git timeout. Not a work tree, no git, or git refusing the repository
-    (``safe.directory``): False, the existence test alone, as before. git runs hardened in a repository the agent
-    can write: no fsmonitor or hooks from its config, and no inherited ``GIT_DIR``/``GIT_INDEX_FILE``/… .
+    team dir (a planted ``.git``), a git timeout, and git refusing a repository that is there (``safe.directory``,
+    a broken ``.git`` file) when the team holds a roster or signed decision rows (:func:`_git_refused`; without
+    them, the existence test alone with a warning). Not a work tree or no git: False, the existence test alone, as
+    before. git runs hardened in a repository the agent can write: no fsmonitor or hooks from its config, and no
+    inherited ``GIT_DIR``/``GIT_INDEX_FILE``/… .
     """
     base, rel = agents_dir, Path(GOVERNED_MARKER)
     while not base.is_dir():  # a removed team dir (git rm of its last file) still counts: ask from an ancestor
@@ -318,7 +360,7 @@ def _marker_tracked(agents_dir: Path) -> bool:
     try:
         top = _git(base, "rev-parse", "--show-toplevel")
         if top.returncode != 0:
-            return False
+            return _git_refused(agents_dir, top.stderr or "")
         root, top_dir = _project_root(agents_dir).resolve(), Path(top.stdout.strip()).resolve()
         if top_dir != root and top_dir.is_relative_to(root):
             return True  # a repository nested inside the project answers for itself: fail closed

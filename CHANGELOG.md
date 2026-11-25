@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (the tracked-marker check fails closed when git refuses a governed repository)
+
+- **Fixed:** when git refused the repository (`safe.directory` ownership, a broken `.git` file), a team whose
+  `signing-governed.marker` had been deleted read as ungoverned, so a missing signing switch fell back to legacy
+  unsigned behaviour. Now, when a `.git` entry is present and the team holds a `security-approvers.txt` roster or a
+  signed decision row, it counts as governed (fail-closed) and stderr names the repository and the fix.
+- **Unchanged, with a warning:** the same refusal in a team with no roster and no signed row is still decided by
+  the marker file alone, and stderr now says so. No git binary, or no `.git` at all, is unchanged and silent.
+
 ### fixed (governance reads refuse a symlinked `references/` directory)
 
 - **Fixed:** the decision gate read `references/agent-privilege.json` and `references/security-decisions.log.csv`

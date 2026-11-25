@@ -393,3 +393,59 @@ def test_doctor_says_a_branch_only_deletion_still_governs(tmp_path, capsys):
     out = _doctor(work, capsys)
     assert "still governs until that deletion reaches the upstream and default branch" in out
     assert "no longer signing-governed" not in out
+
+
+# --------------------------------------------------------------------------- bl48-07: git refusing the repository
+# Ruling R-19: fail closed only where governance evidence exists (a roster, or signed decision rows); otherwise the
+# marker file alone decides, as before, with a visible warning.
+
+
+def _refused_repo(tmp_path: Path) -> Path:
+    """A project whose `.git` is a file naming a missing gitdir (git exits 128); the marker is absent on disk."""
+    agents = tmp_path / ".claude" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (tmp_path / ".git").write_text(f"gitdir: {tmp_path / 'missing'}\n")
+    return agents
+
+
+@needs_git
+@pytest.mark.parametrize("evidence", ["roster", "signed-row"])
+def test_a_git_refusal_in_a_governed_project_fails_closed(tmp_path, capsys, evidence):
+    agents = _refused_repo(tmp_path)
+    if evidence == "roster":
+        (agents / "references" / "security-approvers.txt").write_text("security\n")
+    else:
+        (agents / "references" / "security-decisions.log.csv").write_text(
+            "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,signature\n"
+            "2026-11-01,security,prune,PASS,,,abc123\n")
+    assert signing_switch.is_governed(agents)
+    err = capsys.readouterr().err
+    assert "git refused the repository" in err and "fail-closed" in err and str(tmp_path) in err
+
+
+@needs_git
+def test_decision_log_raises_when_git_refuses_a_governed_repo(tmp_path):
+    agents = _refused_repo(tmp_path)
+    (agents / "references" / "security-approvers.txt").write_text("security\n")
+    with pytest.raises(RuntimeError, match="governed workspace"):
+        _enforce_decision_signing(agents)
+
+
+@needs_git
+def test_a_git_refusal_without_governance_evidence_warns_and_reads_the_file(tmp_path, capsys):
+    agents = _refused_repo(tmp_path)
+    (agents / "references" / "security-decisions.log.csv").write_text(   # unsigned rows are not evidence
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        "2026-11-01,security,prune,PASS,,\n")
+    assert not signing_switch.is_governed(agents)
+    err = capsys.readouterr().err
+    assert "git refused the repository" in err and "fail-closed" not in err
+    assert _enforce_decision_signing(agents) is False
+
+
+def test_outside_git_stays_silent(tmp_path, capsys):
+    agents = tmp_path / ".claude" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (agents / "references" / "security-approvers.txt").write_text("security\n")
+    assert not signing_switch.is_governed(agents)   # no .git anywhere: not a refusal
+    assert capsys.readouterr().err == ""
