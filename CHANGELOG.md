@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   action, on its family, or on a `derives_from` ancestor voids every earlier permission for that action: a PASS or
   CONDITIONAL PASS older than the retraction (the refusal names both rows; the newest matching row still decides),
   a standing sandbox or S-10 exception whose decision row is older than it (it no longer carries over), and the
-  sandbox "spent off" excuse recorded before it. Each is re-issued after the retraction.
+  sandbox "spent off" excuse recorded before it. Each is re-issued after the retraction. Where a gate's HALT checks
+  cover more than the action (a sandbox relaxation's or S-10 exemption's family, so a HALT on a sibling instance
+  counts; every S-10 relaxation id for the cooldown deprecation), a retraction of any of them voids too, and a HALT
+  still open in the same read of the log refuses there as well.
 - **Signing:** `--sign-decision` refuses, before the key is read, a `PASS` or `CONDITIONAL PASS` on an id (or a
   `derives_from` parent) under an open HALT, reading the row as the log will store it. HALT and HALT-RETRACTED
   rows are not checked.

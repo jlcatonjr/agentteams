@@ -306,3 +306,17 @@ def test_a_halt_retraction_does_not_resume_a_registered_carry_over(tmp_path, stu
     assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
     _log(team, _row(_ACTION, stamp="2026-11-05"))   # negative control: re-issued after the retraction
     assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0 + timedelta(days=2)) == [_REPO]
+
+
+def test_a_retracted_sibling_halt_voids_an_older_exemption(tmp_path, stub_ed25519) -> None:
+    sibling = "s10-cooldown-exempt:jlcatonjr/researchteam"
+    team = _team(tmp_path)   # carry-over
+    _log(team, _row(_ACTION))
+    assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0) == [_REPO]
+    _log(team, _row(sibling, verdict="HALT", stamp="2026-11-04"), _retraction(sibling, stamp="2026-11-05"))
+    assert gate.authorized_exempt_repos(team, [_REPO], consume=True, now=_T0 + timedelta(days=1)) == []
+    fresh = _team(tmp_path / "b")   # an unconsumed row older than the sibling's retraction
+    _log(fresh, _row(_ACTION), _row(sibling, verdict="HALT", stamp="2026-11-04"), _retraction(sibling, stamp="2026-11-05"))
+    assert gate.authorized_exempt_repos(fresh, [_REPO], consume=False, now=_T0) == []
+    _log(fresh, _row(_ACTION, stamp="2026-11-06"))   # negative control
+    assert gate.authorized_exempt_repos(fresh, [_REPO], consume=False, now=_T0 + timedelta(days=3)) == [_REPO]

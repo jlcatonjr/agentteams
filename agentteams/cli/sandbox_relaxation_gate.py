@@ -320,6 +320,8 @@ def _check_new(team_dir: Path, r: Relaxation) -> dict[str, str]:
     # C-2 over the family too: a HALT on any instance (`sandbox-os-off:goose`) also blocks `sandbox-os-off:claude`.
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
     security_gate._assert_destructive_action_allowed(team_dir, action=relaxation_action, consume=False)
+    # #616 over the family too: a retracted HALT on a sibling instance voids this older row as well.
+    security_gate._assert_newest_clearance_not_void(team_dir, action=relaxation_action, also=(relaxation_family,))
     return row
 
 
@@ -330,7 +332,8 @@ def _decision_binding(row: dict[str, str]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int) -> str | None:
+def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int,
+                   halt_ids: tuple[str, ...] | None = None) -> str | None:
     """Why an active registry entry may NOT carry its relaxation over (S1), or None when it may.
 
     It may only when its ``expires`` is present (an expiry-less entry never lapses, so it is refused) and its
@@ -345,12 +348,14 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
         entry: The registry entry.
         now: Reference time (UTC).
         ttl_days: The calling gate's sunset, counted from the bound row's signed date.
+        halt_ids: The further ids the calling gate's HALT checks cover, which a retraction on voids the entry too
+            (default: the family, the entry action's part before its first colon).
 
     Returns:
         The reason, or None when the entry carries over.
 
     Raises:
-        RuntimeError: The decisions log is unreadable or its chain is broken.
+        RuntimeError: The decisions log is unreadable or its chain is broken, or a HALT the gate checks is open.
     """
     if not str(entry.get("expires") or "").strip():
         return "records no expiry"
@@ -376,9 +381,13 @@ def _unbound_reason(team_dir: Path, entry: dict, *, now: datetime, ttl_days: int
             fieldnames), action=str(entry.get("action") or ""))
     except RuntimeError as exc:
         return f"is bound to a decision row that no longer verifies ({exc})"
+    entry_action = str(entry.get("action") or "")
+    also = (entry_action.split(":", 1)[0],) if halt_ids is None else halt_ids
     try:   # #616: a HALT retraction after the bound row voids it; the operator re-issues the decision
-        security_gate._assert_not_older_than_a_retraction(team_dir, read, action=str(entry.get("action") or ""),
-                                                          index=matches[-1])
+        security_gate._assert_not_older_than_a_retraction(team_dir, read, action=entry_action, index=matches[-1],
+                                                          also=also)
+    except security_gate.OpenHaltError:
+        raise   # an open HALT refuses as a HALT, never reads as a lapse
     except RuntimeError as exc:
         return f"is bound to a decision row a later HALT retraction voids ({exc})"
     lapse = _signed_lapse_reason(row, now, ttl_days)
@@ -540,7 +549,8 @@ def _spent_off_row(team_dir: Path, action: str) -> dict[str, str]:
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_family)
     security_gate._assert_no_unretracted_halt(team_dir, action=relaxation_action)
     # #616: a spent row older than an accepted HALT retraction no longer excuses anything; it is re-issued after it.
-    security_gate._assert_not_older_than_a_retraction(team_dir, read, action=action, index=mine[-1])
+    security_gate._assert_not_older_than_a_retraction(team_dir, read, action=action, index=mine[-1],
+                                                      also=(relaxation_family,))
     return row
 
 

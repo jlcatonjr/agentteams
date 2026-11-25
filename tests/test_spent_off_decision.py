@@ -203,3 +203,16 @@ def test_a_spent_row_older_than_a_halt_retraction_does_not_excuse(tmp_path: Path
     assert G._spent_off_decision(team, ACTION) is False
     _write(team, _spent(), halt, retraction, _spent(stamp="2026-11-04"))   # negative control
     assert G._spent_off_decision(team, ACTION) is True
+
+
+def test_a_retracted_sibling_halt_voids_an_older_spent_row(tmp_path: Path, stub_ed25519) -> None:
+    team = _team(tmp_path)
+    halt = {c: "" for c in FIELDS} | {"timestamp": "2026-11-02", "requesting_agent": "security",
+                                      "action_reviewed": "sandbox-wasm-off:goose", "verdict": "HALT"}
+    retraction = _retraction("sandbox-wasm-off:goose", stamp="2026-11-03")
+    _write(team, _spent(), halt)
+    assert G._spent_off_decision(team, ACTION) is False
+    _write(team, _spent(), halt, retraction)
+    assert G._spent_off_decision(team, ACTION) is False
+    _write(team, _spent(), halt, retraction, _spent(stamp="2026-11-04"))   # negative control
+    assert G._spent_off_decision(team, ACTION) is True

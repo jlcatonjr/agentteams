@@ -494,3 +494,33 @@ def test_pre_governance_continuation_stops_under_halt(tmp_path):
     _log(team, _row("sandbox-os-off", verdict="HALT", sign=None))
     with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
         gate.authorize(team, later, consume=True, now=_T0)
+
+
+# --- #616 over the family: a retracted sibling-instance HALT also voids earlier permissions -------------------
+
+
+def test_retracted_sibling_halt_does_not_resume_carry_over(tmp_path, stub_ed25519):
+    team, entry, later = _registered_os_off(tmp_path)
+    _log(team, _row("sandbox-os-off:goose", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    _log(team, _retraction("sandbox-os-off:goose"))
+    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed"):
+        gate.standing_authorization(team, "sandbox-os-off", "claude", now=_T0 + timedelta(days=1))
+    with pytest.raises(gate.SandboxRelaxationError):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    _log(team, _row("sandbox-os-off:claude", stamp="2026-11-02"))   # negative control: re-issued after it
+    [rec] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert rec["authorization"] == "ed25519-decision" and rec["exception_id"] != entry["id"]
+
+
+def test_retracted_sibling_halt_voids_an_older_new_decision(tmp_path, stub_ed25519):
+    team = _team(tmp_path)
+    _log(team, _row("sandbox-os-off:claude"), _row("sandbox-os-off:goose", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, _os_off(), consume=False, now=_T0)
+    _log(team, _retraction("sandbox-os-off:goose"))
+    with pytest.raises(gate.SandboxRelaxationError, match="#616"):
+        gate.authorize(team, _os_off(), consume=False, now=_T0)
+    _log(team, _row("sandbox-os-off:claude", stamp="2026-11-02"))   # negative control
+    assert gate.authorize(team, _os_off(), consume=False, now=_T0)[0]["authorization"] == "ed25519-decision"

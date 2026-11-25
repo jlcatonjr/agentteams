@@ -630,8 +630,13 @@ def verify_waivers(output_dir: Path) -> list[dict[str, str]]:
     return results
 
 
+class OpenHaltError(RuntimeError):
+    """A HALT on a target is still open in the read the void check made (refuse as a HALT, not as a lapse)."""
+
+
 def _assert_not_older_than_a_retraction(
     output_dir: Path, read: tuple[list[dict[str, str]], list[str]] | None, *, action: str, index: int,
+    also: tuple[str, ...] = (),
 ) -> None:
     """Refuse a clearance recorded before an accepted retraction of a HALT that blocked *action* (C-2, #616).
 
@@ -639,27 +644,56 @@ def _assert_not_older_than_a_retraction(
     child inherits the ancestor's HALT) that is later retracted voids every clearance for the action older than that
     retraction, whether it was recorded under the HALT or before it: the retraction lifts the block, it never revives
     an earlier clearance. The newest matching row still decides; a void row does not fall through to an older one.
+    A caller whose HALT checks also cover other ids (a relaxation's family, which a HALT on a sibling instance
+    names) passes them in *also*, so the void check covers exactly what the HALT checks cover. A HALT still open in
+    this same read refuses too, closing the window after the caller's separate HALT scan.
 
     Raises:
+        OpenHaltError: A HALT on a target is open in this read.
         RuntimeError: The clearance at row *index* (0-based) predates such a retraction, or the lineage cannot be
             walked (fail closed).
     """
     if read is None:
         return
     rows, fieldnames = read
-    targets = [action]
-    if _DERIVES_FROM_FIELD in fieldnames:   # the same lineage walk the open-HALT scan makes
-        targets += sorted(_transitive_ancestors(action, _build_lineage_map(rows)))
+    targets: dict[str, None] = {}
+    for base in (action, *also):   # the same lineage walk the open-HALT scan makes for each id it checks
+        targets[base] = None
+        if _DERIVES_FROM_FIELD in fieldnames:
+            targets.update(dict.fromkeys(sorted(_transitive_ancestors(base, _build_lineage_map(rows)))))
     retracted: list[int] = []
     for target in targets:
-        _open_halt_for(rows, target, output_dir=output_dir, signing_active=_decision_signing_active(fieldnames),
-                       retracted=retracted)
+        open_halt = _open_halt_for(rows, target, output_dir=output_dir,
+                                   signing_active=_decision_signing_active(fieldnames), retracted=retracted)
+        if open_halt is not None:
+            raise OpenHaltError(f"'{target}' is under an unretracted HALT (row {open_halt[0] + 1}); C-2: a HALT is "
+                               "cleared only by a HALT-RETRACTED row")
     later = sorted(r for r in retracted if r > index)
     if later:
         raise RuntimeError(
             f"the newest clearance for '{action}' (row {index + 1}) is older than the HALT retraction at row "
             f"{later[-1] + 1}: after a HALT is retracted, no earlier clearance survives. Record a new clearance "
             "after the retraction (C-2, #616)")
+
+
+def _assert_newest_clearance_not_void(output_dir: Path, *, action: str, also: tuple[str, ...]) -> None:
+    """Run :func:`_assert_not_older_than_a_retraction` on the newest clearance for *action*, from one read.
+
+    For gates whose HALT checks cover more ids than *action* (the family of a sandbox relaxation or an S-10 entry):
+    ``_assert_destructive_action_allowed`` voids against *action*'s own HALTs only.
+
+    Args:
+        output_dir: The team dir holding the decisions log.
+        action: The action the clearance is for.
+        also: The further ids the caller's HALT checks cover.
+
+    Raises:
+        RuntimeError: The newest clearance is void, a HALT on a target is open, or the log is unreadable.
+    """
+    read = _read_decision_rows(output_dir)
+    decision, index = _latest_security_decision_at(read, action=action)
+    if decision is not None:
+        _assert_not_older_than_a_retraction(output_dir, read, action=action, index=index, also=also)
 
 
 def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str] | None:

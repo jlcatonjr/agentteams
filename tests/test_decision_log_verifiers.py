@@ -778,3 +778,15 @@ def test_the_pre_upgrade_report_lists_each_halt_once(tmp_path):
     _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row("deploy", "HALT")])
     lines = describe_newly_blocking_halts(tmp_path)
     assert sum("'server-apply'" in ln for ln in lines) == 1 and sum("'deploy'" in ln for ln in lines) == 1, lines
+
+
+def test_the_void_check_refuses_a_halt_open_in_its_own_read(tmp_path, monkeypatch):
+    # The HALT scan and the clearance read are separate reads; a HALT the void check sees open refuses there too.
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("overwrite-001", "HALT"), _row("overwrite", "PASS")])
+    monkeypatch.setattr(security_gate, "_assert_no_unretracted_halt", lambda output_dir, action: None)
+    ok, why = security_gate.check_clearance(tmp_path, action="overwrite")
+    assert not ok and "unretracted HALT" in why
+    _write_decisions_log(tmp_path, [_row("overwrite", "PASS")])   # negative control
+    assert security_gate.check_clearance(tmp_path, action="overwrite") == (True, "")

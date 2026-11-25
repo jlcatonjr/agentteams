@@ -331,8 +331,10 @@ def test_a_sibling_retraction_does_not_clear_a_family_halt(tmp_path, stub_ed2551
         m.setattr(gate, "_assert_no_open_family_halt", lambda halt_dir: None)
         assert gate.authorized_deprecation(build("core-only"), True, consume=True, now=_T0) is None
     # Positive control: with both layers off, the same log authorizes, so the refusals above come from the scans.
+    # (The #616 void check also refuses a HALT still open in its own read; it is switched off here too.)
     monkeypatch.setattr(gate.security_gate, "_assert_no_unretracted_halt", lambda halt_dir, action: None)
     monkeypatch.setattr(gate, "_assert_no_open_family_halt", lambda halt_dir: None)
+    monkeypatch.setattr(gate.security_gate, "_assert_newest_clearance_not_void", lambda *a, **k: None)
     assert gate.authorized_deprecation(build("neither"), True, consume=True, now=_T0) == "signed"
 
 
@@ -342,7 +344,9 @@ def test_an_exact_retraction_clears_its_halt(tmp_path, stub_ed25519) -> None:
     halt = "s10-cooldown-exempt:o/a"
     for i, scope in enumerate(("", f"{halt};s10-cooldown-exempt;s10-cooldown")):
         team = _team(tmp_path / str(i))
-        _log(team, _row(_ACTION), _row(halt, verdict="HALT", stamp="2026-11-20"), _retraction(halt, scope=scope))
+        # The PASS comes after the retraction: one older than it is void (#616).
+        _log(team, _row(halt, verdict="HALT", stamp="2026-11-20"), _retraction(halt, scope=scope),
+             _row(_ACTION, stamp="2026-11-20"))
         assert gate.authorized_deprecation(team, True, consume=True, now=_T0) == "signed", scope
 
 
@@ -441,3 +445,19 @@ def test_a_future_dated_row_is_refused(tmp_path, stub_ed25519, capsys) -> None:
     team2 = _team(tmp_path / "b")
     _log(team2, _row(_ACTION, stamp="2026-11-21T12:00:00+00:00"))   # within the skew allowance
     assert gate.authorized_deprecation(team2, True, consume=True, now=_T0) == "signed"
+
+
+@pytest.mark.parametrize("halt", ["s10-cooldown", "s10-cooldown-exempt:o/r"])
+def test_a_retracted_halt_on_any_s10_relaxation_voids_older_permissions(tmp_path, stub_ed25519, halt) -> None:
+    # #616 over every id this gate's HALT checks cover: neither the carry-over nor the unconsumed row resumes.
+    # (A HALT on s10-toolchain-group cannot be retracted by a decision row at all: that row is non-eligible.)
+    team = _team(tmp_path)
+    _log(team, _row(_ACTION))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0) == "signed"
+    _log(team, _row(halt, verdict="HALT", stamp="2026-11-22"), _retraction(halt, scope=""))
+    assert gate.authorized_deprecation(team, True, consume=True, now=_T0 + timedelta(days=1)) is None
+    fresh = _team(tmp_path / "b")
+    _log(fresh, _row(_ACTION), _row(halt, verdict="HALT", stamp="2026-11-22"), _retraction(halt, scope=""))
+    assert gate.authorized_deprecation(fresh, True, consume=False, now=_T0) is None
+    _log(fresh, _row(_ACTION, stamp="2026-11-24"))   # negative control: re-issued after the retraction
+    assert gate.authorized_deprecation(fresh, True, consume=False, now=_T0 + timedelta(days=4)) == "signed"
