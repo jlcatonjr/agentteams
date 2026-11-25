@@ -888,7 +888,7 @@ def run_fleet(args, parser) -> int:
                 # targets) before any overwrite/merge of an existing file.
                 switch_reason = _switch_reason(_switch_review_lines(out))
                 tr.status = "FAIL" if rc != 0 else "REVIEW" if switch_reason else "OK"
-                tr.detail = "; ".join(filter(None, (_first_error(out) if rc != 0 else "",
+                tr.detail = "; ".join(filter(None, (_first_error(out) if rc != 0 else  # a FAIL wrote nothing to recover
                     "non-git workspace — recovery via .agentteams-backups (pre-write snapshot)", switch_reason)))
             print(f"    {target}: {tr.status}  (+{tr.added_lines}/-{tr.removed_lines}, "
                   f"{len(tr.shrink_notices)} shrink, {len(tr.user_editable_deletions)} UE-del, "

@@ -120,7 +120,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[SEC-GATE/DESTRUCTIVE:overwrite] blocked: …`, `Validation errors:`) matched neither, so a failed security
   precondition looked like a current team. A dry run had the mirror defect: a gate refusal showed `WOULD-UPDATE`.
 - **Now:** any non-zero exit is `FAIL` on the apply path, the dry-run path and in a non-git workspace (which showed
-  `REVIEW`), and the run exits 1. The row's detail shows the exception or gate line instead of "non-zero exit".
+  `REVIEW`), and the run exits 1. The row's detail shows the exception or gate line instead of "non-zero exit"; a
+  failed non-git row no longer points at a `.agentteams-backups` recovery snapshot.
 
 ### fixed (`--overwrite` keeps a hand-written `## Project Layout`; #543)
 

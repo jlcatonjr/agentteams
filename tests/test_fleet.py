@@ -1113,7 +1113,7 @@ def test_an_unstatable_agentteams_brief_is_not_skipped_for_the_root_brief(tmp_pa
 
 
 # ---------------------------------------------------------------------------
-# bl48-27: a non-zero update exit is a FAIL row, never OK
+# A non-zero update exit is a FAIL row, never OK
 # ---------------------------------------------------------------------------
 
 _GATE_LINES = (
@@ -1166,4 +1166,10 @@ def test_first_error_names_the_gate_line():
 
 def test_non_git_nonzero_exit_is_fail(tmp_path, monkeypatch):
     [row] = _fleet_rows(tmp_path, monkeypatch, 1, "[UPDATE-LOCK] refused: held\n", git=False)
-    assert row["status"] == "FAIL" and row["detail"].startswith("[UPDATE-LOCK] refused: held; non-git workspace")
+    assert row["status"] == "FAIL" and row["detail"] == "[UPDATE-LOCK] refused: held"
+    assert "recovery via .agentteams-backups" not in row["detail"]
+
+
+def test_non_git_zero_exit_keeps_the_recovery_note(tmp_path, monkeypatch):
+    [row] = _fleet_rows(tmp_path, monkeypatch, 0, "Merged: 0 file(s)\n", git=False)
+    assert row["status"] == "OK" and "recovery via .agentteams-backups" in row["detail"]
