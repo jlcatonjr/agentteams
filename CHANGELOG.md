@@ -250,10 +250,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/`, `.github/agents/references/` and `.claude/agents/references/` (every directory the repair reads
   logs from).
 
-### fixed (brief ingestion no longer reads dependency manifests from `tmp/` or backup trees)
+### fixed (brief ingestion no longer reads dependency manifests from a `tmp` scratch folder or backup trees)
 
 - **Fixed:** the project scan read `package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml` and `go.mod`
-  from any directory within two levels, including `tmp/`, `.agentteams-backups/` and `.agentteams-fleet/`. A stale
+  from any directory within two levels, including a `tmp` scratch folder, `.agentteams-backups/` and `.agentteams-fleet/`. A stale
   or planted copy there added its dependencies to the brief's tools, and so to every rendered agent. Those
   directories, `.pytest_cache` and `.mypy_cache` are now skipped. Language detection and retrieval inference skip
   them too (they skipped nothing before, not even `node_modules`).
