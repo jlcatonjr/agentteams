@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-25
+
+### release notes
+
+agentteams 1.3.1 backports one security fix from `dev` to the 1.3 line: a HALT with no usable id now blocks every
+gated action (it blocked none through 1.3.0). **Action for existing teams:** run `--verify-integrity` after
+upgrading. A decisions log that holds such a HALT refuses every gated action, the scheduled vulnerability
+remediation included, until the row is reviewed and either retracted by its row handle or left in force. Nothing
+else from `dev` is included.
+
 ### security (a HALT with no usable id blocks every gated action; it used to block none)
 
 - A HALT row whose `action_reviewed` is empty, blank or punctuation only names no action, so no gate attributed it and
