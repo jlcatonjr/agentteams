@@ -5,6 +5,7 @@ Split out of ``agentteams.fleet`` to keep that module under the CH-07 line ceili
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from agentteams._fleet_snapshot import SNAPSHOT_REVIEW_PREFIX
 from agentteams.user_regions import MERGE_REFUSED, MERGE_WOULD_REFUSE
 from agentteams.vulnscan.project_policy import ENROLL_HINT
 
+#: A ``build_team`` gate refusal line: ``[SEC-GATE/INTEL-FRESHNESS] blocked: …``, ``[UPDATE-LOCK] refused: …``.
+_GATE_REFUSAL_RE = re.compile(r"\[[A-Z][A-Za-z0-9/:_-]*\] (blocked|refused):")
 #: What ``user_regions.merge_carry`` writes when a merge refuses a file to keep its user region (#533).
 REGION_REFUSAL_MARKERS = (f": {MERGE_REFUSED}: ", f": {MERGE_WOULD_REFUSE}: ")
 #: Leads the row detail for such a refusal: the file no longer receives template updates until it is fixed by hand.
@@ -40,8 +43,10 @@ def region_refusal(out: str) -> str | None:
 def first_error(out: str) -> str:
     """Return the line a FAIL row's detail shows: a user-region refusal first, else the first error line.
 
-    A bare ``Errors:`` header (``emit.print_summary``) gives way to the line under it, so the detail names the
-    file rather than the header.
+    After a refusal, in order: the ``[fleet] exception:`` line, a gate refusal line (``[SEC-GATE/…] blocked:``,
+    ``[UPDATE-LOCK] refused:``), ``Validation errors:``, then the first ``Error`` / ``Traceback`` line. A bare
+    ``Errors:`` or ``Validation errors:`` header gives way to the line under it, so the detail names the file or
+    field rather than the header.
 
     Args:
         out: The target run's captured stdout and stderr.
@@ -56,9 +61,12 @@ def first_error(out: str) -> str:
     if refused:
         return refused
     lines = [line.strip() for line in out.splitlines() if line.strip()]
-    for i, line in enumerate(lines):
-        if line.startswith("Error") or "Traceback" in line:
-            return (lines[i + 1] if line == "Errors:" and i + 1 < len(lines) else line)[:160]
+    for match in (lambda ln: ln.startswith("[fleet] exception:"), _GATE_REFUSAL_RE.match,
+                  lambda ln: ln == "Validation errors:", lambda ln: ln.startswith("Error") or "Traceback" in ln):
+        for i, line in enumerate(lines):
+            if match(line):
+                header = line in ("Errors:", "Validation errors:") and i + 1 < len(lines)
+                return (lines[i + 1] if header else line)[:160]
     return "non-zero exit (see captured output)"
 
 

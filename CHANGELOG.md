@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (fleet: an update that raised or was refused by a gate is FAIL, not OK)
+
+- **Fixed:** a fleet target whose update exited non-zero was reported `OK (+0/-0)` unless its output had a line
+  starting `Error` or a traceback. An exception caught by the fleet runner (`[fleet] exception: …`) and a gate
+  refusal (`[SEC-GATE/INTEL-FRESHNESS] blocked: …`, `[UPDATE-LOCK] refused: …`, `[OUTPUT-TARGET] refused: …`,
+  `[SEC-GATE/DESTRUCTIVE:overwrite] blocked: …`, `Validation errors:`) matched neither, so a failed security
+  precondition looked like a current team. A dry run had the mirror defect: a gate refusal showed `WOULD-UPDATE`.
+- **Now:** any non-zero exit is `FAIL` on the apply path, the dry-run path and in a non-git workspace (which showed
+  `REVIEW`), and the run exits 1. The row's detail shows the exception or gate line instead of "non-zero exit".
+
 ### fixed (`--overwrite` keeps a hand-written `## Project Layout`; #543)
 
 - **Fixed:** an `--overwrite` render replaced the body of the user-editable `## Project Layout` section in
