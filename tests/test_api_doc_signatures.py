@@ -226,7 +226,6 @@ def test_comparison_covers_a_meaningful_share_of_the_docs() -> None:
     assert len(docs_covered) >= 25, f"only {len(docs_covered)} docs covered; parser regression?"
 
 
-
 def _duplicate_h4(text: str) -> list[str]:
     """``####`` headings that appear more than once in *text*, fenced code blocks ignored."""
     seen: set[str] = set()
@@ -257,6 +256,7 @@ def test_the_duplicate_heading_check_is_live() -> None:
     page = "#### `selftest(cfg)`\n\nx\n\n#### `selftest(cfg)`\n"
     assert _duplicate_h4(page) == ["`selftest(cfg)`"]
     assert _duplicate_h4("#### `a()`\n```\n#### `a()`\n```\n") == []
+
 
 # ---------------------------------------------------------------------------
 # The feature inventory guides the API-doc review, so its own arithmetic must hold
