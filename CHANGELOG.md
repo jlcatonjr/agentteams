@@ -204,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `generate` resolved them, so an emitter gated on a host feature did nothing on convert. They are now resolved
   from the manifest's `privilege_profile` and `os_sandbox` first, as `generate` does (absent profile: `confined`).
   An explicit `host_features` list is kept.
+- **Visible effect:** under the default `confined` profile a convert now also writes the OS-sandbox launcher files
+  (`sandbox/confine-run.sh` and its companions, which differ by platform) at the project root, two levels above the
+  target agents directory, as `generate` does. An existing one is skipped without `--overwrite`.
 
 ### fixed (`--sync` sees instruction-file edits; it says when the pin's text outside fences does not travel; #462)
 
