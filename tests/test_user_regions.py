@@ -353,3 +353,50 @@ def test_update_merge_restores_the_rules_region_end_to_end(tmp_path):
     merged = instr.read_text(encoding="utf-8")
     assert merged.count("## Project-Specific Rules") == 1 and "- an unfenced project line" in merged
     assert re.search(r"^\|\s*project_specific_rules\s*\|", merged, re.MULTILINE)
+
+
+# --- bl48-24: the Project Layout region survives --overwrite ------------------------------------------
+
+LAYOUT_LINE = "- Deliverables live under Projects/*/"
+
+
+def _instruction(layout_body: str = "", *, fenced: str = "v1") -> str:
+    """A rendered instruction file: a directory_structure fence, the Layout region, then the next fence."""
+    from agentteams.project_notes import _ensure_project_layout_section
+    text = ("# Team\n<!-- AGENTTEAMS:BEGIN directory_structure v=1 -->\n## Directory Structure\n" + fenced
+            + "\n<!-- AGENTTEAMS:END directory_structure -->\n---\n"
+            "<!-- AGENTTEAMS:BEGIN output_conventions v=1 -->\n## Output Conventions\n"
+            "<!-- AGENTTEAMS:END output_conventions -->\n")
+    text = _ensure_project_layout_section("CLAUDE.md", text)
+    return text.replace("`--update` never overwrites it.\n", "`--update` never overwrites it.\n" + layout_body, 1)
+
+
+def test_overwrite_carries_a_hand_edited_project_layout(monkeypatch):
+    old, new = _instruction(f"\n{LAYOUT_LINE}\n"), _instruction(fenced="v2")
+    content, carried, problems = U.carry_regions(old, new)
+    assert LAYOUT_LINE in content and "v2" in content and not problems
+    assert [c[0] for c in carried] == ["## Project Layout"]
+    monkeypatch.setattr(U, "CARRIED_HEADINGS", U.HEADINGS)  # negative control: the old heading set loses it
+    assert LAYOUT_LINE not in U.carry_regions(old, new)[0]
+
+
+@pytest.mark.parametrize("rel_path", ["CLAUDE.md", "../copilot-instructions.md", "../../AGENTS.md"])
+def test_emit_overwrite_keeps_layout_on_each_instruction_surface(tmp_path, rel_path):
+    out = tmp_path / "a" / "b"
+    out.mkdir(parents=True)
+    target = (out / rel_path).resolve()
+    target.write_text(_instruction(f"\n{LAYOUT_LINE}\n"))
+    result = _emit(out, [(rel_path, _instruction(fenced="v2"))])
+    text = target.read_text()
+    assert LAYOUT_LINE in text and "v2" in text, result.errors
+    assert any("carried user region '## Project Layout'" in n for n in result.notices)
+
+
+def test_layout_without_a_place_in_the_new_render_is_refused():
+    _, _, problems = U.carry_regions(_instruction(f"\n{LAYOUT_LINE}\n"), "# Team, no directory structure\n")
+    assert problems == ["the new render has no '## Project Layout' region to carry the existing one into"]
+
+
+def test_banner_only_layout_is_not_refused():
+    _, carried, problems = U.carry_regions(_instruction(), "# Team, no directory structure\n")
+    assert not problems and not carried

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--overwrite` keeps a hand-written `## Project Layout`; #543)
+
+- **Fixed:** an `--overwrite` render replaced the body of the user-editable `## Project Layout` section in
+  `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md` with the bare banner, and said
+  nothing. It is now carried like the two Project-Specific regions, and printed: `carried user region '## Project
+  Layout' (N lines, sha256 …) across --overwrite`.
+- **Newly refused:** when the new render has no Layout section (no Directory Structure fence) and the file on disk
+  holds text there, the file is not overwritten and an error says so. A Layout section holding only the banner is
+  dropped as before. `--discard-user-regions` now drops this region too.
+- **Not changed:** `--update --merge` already kept the section, since it sits outside every fence.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`

@@ -1164,8 +1164,8 @@ the dispatched agent's registered prefixes and every remaining argument matches 
 
 ### `--discard-user-regions`
 
-With `--overwrite`: drop the user-editable `## Project-Specific Notes` / `## Project-Specific Rules` regions
-instead of carrying them into the new files. By default `--overwrite` carries each region and prints it,
+With `--overwrite`: drop the user-editable `## Project-Specific Notes` / `## Project-Specific Rules` /
+`## Project Layout` regions instead of carrying them into the new files. By default `--overwrite` carries each region and prints it,
 since carried text is instruction-bearing. See [`user_regions`](api-reference/user-regions.md).
 
 ### `--serve-requests`
