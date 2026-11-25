@@ -649,8 +649,12 @@ _REEXEC_TIMEOUT = 30
 
 
 def _project_roots() -> list[Path]:
-    """The project tree(s) this hook guards: ``<project>/<.claude|.github|.grok>/hooks/<this>`` and ``$CLAUDE_PROJECT_DIR``.
-    Any install location counts ``parents[2]``, so a user-level ``~/.claude/hooks`` install makes the home directory a root."""
+    """The project tree(s) this hook guards: ``parents[2]`` of this file and ``$CLAUDE_PROJECT_DIR``.
+
+    The rendered layouts are ``<project>/.claude/hooks``, ``.github/hooks`` and ``.grok/hooks``. Any
+    install location counts ``parents[2]``, so a user-level ``~/.claude/hooks`` install makes the home
+    directory a root (see the known limitations).
+    """
     parents = Path(__file__).resolve().parents
     roots = [parents[2]] if len(parents) > 2 else []
     env_root = os.environ.get("CLAUDE_PROJECT_DIR")
@@ -829,13 +833,9 @@ def main(payload: object, raw: bytes = b"") -> str:
         # than 0/2 is a non-blocking error), so _import_integrity re-runs under the pinned
         # interpreter or fails visibly (the checkout-root fallback was removed; see _import_integrity).
         integrity = _import_integrity(raw)
-        integrity_findings = []  # the hook's project roots, the cwd AND the imported agentteams tree (row 603)
-        for root in dict.fromkeys(p.resolve() for p in (*_project_roots(), Path.cwd(), Path(integrity.__file__).parents[1])):
-            try:  # describe() here too: a non-string digest raises in it. A crash would let the write through.
-                integrity_findings += [f for f in integrity.verify(root) if f.describe()]
-            except (RuntimeError, AttributeError, TypeError) as exc:  # unparsable or ill-typed manifest: ask below
-                integrity_findings.append(integrity.IntegrityFinding(str(root / integrity.MANIFEST_REL_PATH), "", type(exc).__name__, "manifest-unreadable"))
-        tampered = [f for f in integrity_findings if f.rel_path.endswith("scan.py") or f.reason == "manifest-unreadable"]
+        integrity_findings = _verify_scanner_roots(integrity)
+        tampered = [f for f in integrity_findings
+                    if f.rel_path.endswith("scan.py") or f.reason == "manifest-unreadable"]
         # PR-D (row 31): a MISSING manifest where one is expected (this repo ships it, or the
         # scanner runs from inside the project) leaves the scanner unverifiable. Under the
         # confined fail-closed policy that is `ask` (not `deny`: a deleted manifest is also what
@@ -868,6 +868,32 @@ def main(payload: object, raw: bytes = b"") -> str:
             _ask_git_config("scan")
         return "scan"
     return "none"
+
+
+def _verify_scanner_roots(integrity) -> list:
+    """Integrity findings for every tree whose scanner this write could be trusting (row 603).
+
+    The trees are the hook's project roots, the working directory and the tree ``agentteams`` is
+    imported from (under an editable install, the code that actually runs), each verified once. A
+    manifest that cannot be parsed, or holds a non-string digest, becomes a ``manifest-unreadable``
+    finding instead of an exception: an exception escaping the gate lets the write through in the
+    cooperative profile. ``describe()`` runs here because an ill-typed digest raises only there.
+
+    Args:
+        integrity: The imported ``agentteams.integrity`` module.
+
+    Returns:
+        The findings of every root, in root order.
+    """
+    roots = (*_project_roots(), Path.cwd(), Path(integrity.__file__).parents[1])
+    findings = []
+    for root in dict.fromkeys(p.resolve() for p in roots):
+        try:
+            findings += [f for f in integrity.verify(root) if f.describe()]
+        except (RuntimeError, AttributeError, TypeError) as exc:  # unparsable or ill-typed manifest
+            manifest = str(root / integrity.MANIFEST_REL_PATH)
+            findings.append(integrity.IntegrityFinding(manifest, "", type(exc).__name__, "manifest-unreadable"))
+    return findings
 
 
 def _ask_git_config(checked: str) -> None:
