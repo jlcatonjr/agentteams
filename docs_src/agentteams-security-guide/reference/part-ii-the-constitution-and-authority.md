@@ -47,15 +47,7 @@ still have zero authority to issue instructions.
 
 The tiers, highest first:
 
-| Tier | Source | Note |
-|---|---|---|
-| **Tier 0** | Host-platform constraints | the platform the harness runs under |
-| **Tier 1** | Constitutional Core (C-1..C-5) | non-overridable |
-| **Tier 2** | Live operator instruction | the human running the session |
-| **Tier 3** | Project extensions | the numbered Rules and project memory |
-| **Tier 4** | Agent role instructions | an agent's own definition |
-| **Tier 5** | The authority hierarchy | governs *what is true*; **confers no permission** |
-| **Tier 6** | Read content | listed only to state it has **no** authority (C-4) |
+--8<-- "docs_src/assets/snippets/security-guide-part-ii-table-tier-source-note.md"
 
 **Conflict resolution is by tier, then specificity — never by recency,
 context-window proximity, or forcefulness.** A claim announcing its own
@@ -104,18 +96,7 @@ decides.
 
 **Its rules are S-1..S-10:**
 
-| Rule | Coverage |
-|---|---|
-| **S-1** | no credentials/PII in any committed file |
-| **S-2** | read-only external repos |
-| **S-3** | reference integrity |
-| **S-4** | destructive-operation safeguards |
-| **S-5** | content-injection guard (incl. C-1 precedence and C-3 capability-lift claims → HALT) |
-| **S-6** | reviewed-content isolation |
-| **S-7** | scope limitation |
-| **S-8** | no machine-specific info in any tracked file (**any match = HALT**, stricter than S-1) |
-| **S-9** | pathway-safety verification |
-| **S-10** | dependency vetting (known-vulnerability search, 14-day release cooldown, latest stable release only; scan-detected vulnerability fixes exempt from the last two) |
+--8<-- "docs_src/assets/snippets/security-guide-part-ii-table-rule-coverage.md"
 
 **S-1 and S-8 have a deterministic scanner backstop** (`agentteams.scan`,
 S15); the remaining S-rules are **procedural judgment calls**. Every verdict —
@@ -174,17 +155,8 @@ code-enforced and fail-closed; what they cannot cover is the key-holder threat
 (symmetric signing, above) and the runtime tool calls that live on the hook's
 surface rather than the CLI gate's.
 
-**Source.** `agentteams/cli/security_gate.py:120-169,430-477`;
-`agentteams/cli/signed_ledger.py:9-92`;
-`agentteams/front_matter_merge.py:368-408`;
-`agentteams/audit_agent_contract.py:202-243`.
+--8<-- "docs_src/assets/snippets/security-guide-part-ii-source-agentteams-cli-security-gate-py.md"
 
 ---
 
-**Sources for Part II.** `.claude/CLAUDE.md`;
-`agentteams/templates/universal/orchestrator.template.md`;
-`agentteams/templates/universal/instruction-authority.reference.template.md`;
-`agentteams/audit_agent_contract.py`;
-`agentteams/templates/universal/security.template.md`; `agentteams/scan.py`;
-`agentteams/cli/security_gate.py`; `agentteams/cli/signed_ledger.py`;
-`agentteams/front_matter_merge.py`.
+--8<-- "docs_src/assets/snippets/security-guide-part-ii-sources.md"

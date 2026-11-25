@@ -2253,6 +2253,41 @@ python -m agentteams.plan_priority PLAN.steps.csv [MORE ...] [--json] [--require
     2 on a validation error or a cycle.
   - API: [`plan_priority`](api-reference/plan-priority.md).
 
+## Plan Step Helper
+
+A module CLI that checks a plan's `.steps.csv`, or updates one step of it.
+
+```
+python -m agentteams.plan_steps --check PLAN.steps.csv [MORE ...]
+python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]
+```
+
+- `--check` validates against the Rule 9 contract. It exits 1 on an error; warnings do not change the exit code.
+- `--set` marks one step. The status must be `pending`, `in_progress`, `done` or `blocked`. Only that row is
+  rewritten; every other byte of the file is kept. It exits 1, and writes nothing, when the status is outside
+  that set, the step id names no row or more than one, the step's row has more cells than the header, or the
+  table lacks the column being set.
+- Use `--set` instead of writing a script to edit the CSV.
+- API: [`plan_steps`](api-reference/plan_steps.md).
+
+## Documentation Overlap Helper
+
+A module CLI that finds passages repeated across Markdown files. It is read-only unless `--yes` or
+`--write-baseline` is given, and its exit codes are its own.
+
+```
+python -m agentteams.doc_overlap PATH [PATH ...] [--json] [--declared FILE] [--check --baseline FILE]
+python -m agentteams.doc_overlap --extract NAME PAGE [PAGE ...] [--yes]
+```
+
+- A scan reports exact repeats, near repeats to review, and overlap declared as intended.
+- `--check --baseline FILE` exits 1 when a repeated passage is not in the baseline.
+- `--extract` moves the longest run of lines shared by the named docs-site pages into one snippet
+  file and includes it in each page. It is a dry run until `--yes`, and it refuses unless every page
+  expands to its original text.
+- Exit status: 0 clean, 1 new repetition under `--check`, 2 a refused or invalid request.
+- API and the rules for a refusal: [`doc_overlap`](api-reference/doc-overlap.md).
+
 ## Exit Codes
 
 | Code | Meaning |

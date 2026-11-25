@@ -50,3 +50,10 @@ it, so there is only one copy to keep current:
 ```
 
 The path is relative to the repository root.
+
+The same include keeps one copy of a table or list that several pages share. Snippet files live in
+`docs_src/assets/snippets/`. `python -m agentteams.doc_overlap docs_src` lists passages that repeat
+across pages, and its `--extract` option moves one into a snippet for you
+(see [`doc_overlap`](../api-reference/doc-overlap.md)). A test fails when a page gains a repeated
+passage that is not in `references/doc-overlap-baseline.json`. Use includes for reference matter,
+not narrative: GitHub shows the include line, not the text.

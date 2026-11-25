@@ -33,16 +33,7 @@ cross-cut by a `design → build → baseline → tune → operate → respond �
 so each layer is considered at each lifecycle stage
 (`agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70`).
 
-| Layer | Concern |
-|---|---|
-| **L0** | Governance |
-| **L1** | Identity |
-| **L2** | Crypto / secrets |
-| **L3** | **Host & workload hardening** — where OS confinement lives |
-| **L4** | Network |
-| **L5** | Application & supply chain |
-| **L6** | Detection / logging |
-| **L7** | Resilience / backup / IR |
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-table-layer-concern.md"
 
 ### The boundary it draws
 
@@ -79,11 +70,7 @@ A privilege profile selects how much OS boundary a generated team requests
 (`agentteams/host_features.py:134-261`). An **unknown** profile **fails closed** — it
 raises rather than silently downgrading to something weaker.
 
-| Profile | OS boundary | Emits |
-|---|---|---|
-| **`cooperative`** | None (`os_sandbox: "off"` is the dedicated off switch) | No sandbox request |
-| **`confined`** | Requested — **today's default** | A sandbox request token |
-| **`exclusive`** | Requested + read-exclusion | A sandbox request token **and** `denyRead` |
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-table-profile-os-boundary-emits.md"
 
 ### agentteams emits configuration, it does not enforce (fact 2 + fact 4)
 
@@ -169,11 +156,7 @@ confinement enforcement engages only once the operator wires the emitted example
 governance layers (constitution, sentinel, gates, scanner) are always active; the
 OS-confinement enforcement layer is opt-in.
 
-**Source.** `agentteams/host_features.py:134-261`;
-`agentteams/frameworks/_sandbox_emit.py:25-208`;
-`agentteams/frameworks/_goose_sandbox_emit.py:1-222`;
-`references/agentteams-remediation-log.csv` (D-3);
-`agentteams/cli/artifacts.py:321-411`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-source-agentteams-host-features-py.md"
 
 ---
 
@@ -260,11 +243,4 @@ does not show the call was inspected.
 
 ---
 
-**Sources for Part VI.**
-`agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70,119-130`;
-`agentteams/host_features.py:134-261`;
-`agentteams/frameworks/_sandbox_emit.py:25-208`;
-`agentteams/frameworks/_goose_sandbox_emit.py:1-222`;
-`references/agentteams-remediation-log.csv` (D-3);
-`agentteams/cli/artifacts.py:321-411`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vi-sources.md"

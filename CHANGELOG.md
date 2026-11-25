@@ -6,12 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### changed (dev is 1.4.0.dev0 after the 1.3 cut; a dev build's install hint points at v1.3.0-rc.1)
+### added (`plan_steps --set` marks a plan step with one command)
+
+- **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`
+  updates one step by rewriting that row only. Every other byte of the file is kept: line endings, blank lines,
+  and other rows that are themselves malformed. `set_step()` is the same thing as a function.
+- **Why:** the CLI offered only `--check`, so sessions wrote their own scripts to edit a steps CSV. Tables ended up
+  with statuses outside the vocabulary and, in places, shifted columns.
+- **Refused, with nothing written:** a status other than `pending`, `in_progress`, `done` or `blocked` (the legacy
+  `completed` is still read, but not written); a step id that names no row or more than one; a step row with
+  more cells than the header; a table that lacks the column being set.
+- **Checked on real tables:** run over copies of 812 step tables from this repository, 794 changed in the one row
+  only and 18 were refused with the file untouched. The whole-table writer (`update_step`) is unchanged; on the
+  same tables it converts CRLF line endings and drops cells from rows wider than the header.
+- **Symlinks:** a steps file reached through a symlink stays a symlink; the file it points to is updated.
+- **Tracing:** the workflow tracer counts a `--set` on a steps CSV as a write to it.
+- **Not changed:** the agent templates do not mention the command yet.
+
+### added (a helper that finds repeated passages in Markdown docs and moves them to one snippet)
+
+- **New:** `python -m agentteams.doc_overlap PATH…` reports passages of 20 words or more that repeat across Markdown
+  files: exact repeats, near repeats to review, and overlap declared as intended. Rendered example output and backups
+  are not scanned.
+- **Reduce:** `--extract NAME PAGE…` moves the longest run of lines shared by the named docs-site pages into
+  `docs_src/assets/snippets/NAME.md` and includes it in each page. It is a dry run until `--yes`, takes whole
+  passages only, and refuses unless every page expands to its original text.
+- **Hold:** `--check --baseline FILE` exits 1 when a repeated passage is not in the baseline. A test runs it over
+  `docs_src` with `references/doc-overlap-baseline.json` and `references/doc-overlap-declared.json`.
+- **First use:** 19 tables and source lists that the security guide's editions shared are now snippets. 20 pages
+  changed and each expands to its previous text; repeated words in the guide fell from 1,588 to 507.
+- **Limits:** it finds copied text, not reworded text, and it does not change templates or what an agent loads.
+  The strict site build passes and the guide's rendered pages are unchanged.
+
+### changed (dev is 1.4.0.dev0 after the 1.3 cut; a dev build's install hint points at v1.3.0)
 
 - `pyproject.toml` on `dev` is `1.4.0.dev0`, so builds from `dev` cannot be mistaken for 1.3.x. `release/1.3` carries
   the 1.3 line: it was cut from `dev` at `62d745ed`, and v1.3.0-rc.1 was signed on it on 2026-11-23.
 - `capability_hints.LAST_RELEASE_TAG`, the tag a dev or local build's install hint pins, moves from `v1.2.2` to the
-  newest published tag, `v1.3.0-rc.1`.
+  newest published tag: `v1.3.0-rc.1` at the cut, then `v1.3.0` when the release was merged forward into `dev`.
 
 ### security (two warnings: Codex sealed results, and a Goose exclusive egress that reaches Ollama)
 
@@ -33,6 +65,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including one whose derived class, printed four lines below, was `non-relaxing`. It now reads "non-relaxing" for
   such a row. An indeterminate row still reads "constraint-relaxing", because every gate treats it as relaxing.
 - Nothing about what is signed, refused or confirmed changes.
+
+## [1.3.0] - 2026-11-24
+
+### release notes
+
+agentteams 1.3.0 is the first release of the 1.3 line. It is v1.3.0-rc.2 with no further change. The line was cut
+from `dev` rather than `main`. The operator skipped the rc.1 soaks across the consumer repositories and none ran on
+rc.2, so the candidates were checked by CI and review only. The full changes are in the [1.3.0-rc.2] and
+[1.3.0-rc.1] sections below; the highlights:
+
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** A scripted overwrite
+  that drops routed agents on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`.
+- **Security tightening: carried-over exceptions lapse at their signed decision's sunset (#595)**, and HALTs bind
+  across a repository's team dirs, retract by exact id and fail closed on unreadable dirs, logs and briefs
+  (issues #578, #596, #597, #588, #598 and #599). Teams on Python 3.14 with agentteams before 1.3.0 should upgrade.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Templates (#622):** a retired template source line now reaches existing teams on `--update --merge`.
+- **Action for existing teams:** run `--update --merge`. It replaces any hand edit inside the
+  `infra_security_model` fence (#622); under `--shrink-policy=halt`, review that notice and re-run with
+  `--shrink-policy=allow`. Where a merge prints a stale cross-surface notice (F10), re-render that surface with
+  `--update --overwrite` or delete the quoted lines.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568).
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
+
+Install it from its signed tag, and verify the tag before installing.
+
+## [1.3.0-rc.2] - 2026-11-24
+
+### release notes
+
+agentteams 1.3.0-rc.2 is the second release candidate of the 1.3 line, on `release/1.3` after v1.3.0-rc.1. It
+carries the must-fix finding from the rc.1 pre-soak review (the rc.1 soaks were skipped); the full 1.3 notes are
+under [1.3.0-rc.1] below.
+
+- **A retired template source line reaches existing teams (#622).** The universal `security-infrastructure-layers`
+  reference no longer cites a private checkout's directory, and its `infra_security_model` fence is now
+  template-owned, so `--update --merge` replaces the old line instead of keeping it. A template-owned fence's shrink
+  notice gives a count, not the lost text. **Action for existing teams:** run `--update --merge`; under
+  `--shrink-policy=halt`, review the notice and re-run with `--shrink-policy=allow`.
+
+v1.3.0 follows this candidate. Install it from its signed tag, and verify the tag before installing.
+
+### security (a template's retired source line reaches existing teams; #622)
+
+- **What was wrong:** the universal `security-infrastructure-layers` reference cited a private checkout's directory
+  in its `infra_security_model` fence, so every generated team published it. Deleting the line from the template
+  was not enough: on `--update --merge`, the shrink guard read the removed path as "lost concrete refs", and the
+  default `--shrink-policy=preserve` kept each team's old body.
+- **Now:**
+  - The line reads "Full source grounding: the standards named above."
+  - `infra_security_model` is a template-owned fence: projects record their choices in the file's USER-EDITABLE
+    `project_infra_security_notes` section, so a merge always takes the template's body. A team whose body still
+    matches a recorded render already got template updates through the fence baseline; this reaches the rest.
+  - A shrink notice for a template-owned fence gives the number of lost references, not the references, so the
+    retired text is not copied into `update.report.md`. The old body is still in the `.lost.<fence>.md.agentteams-bak`
+    sidecar in the run's backup directory.
+  - A test refuses any template that names a root directory `.gitignore` marks as private.
+- **Upgrade note:** the next `--update --merge` replaces a hand edit inside `infra_security_model`, with a shrink
+  notice and the sidecar. Under `--shrink-policy=halt` that notice still stops the run: review it, then re-run with
+  `--shrink-policy=allow`. The old body then exists only in that run's backup under `.agentteams-backups/`, which
+  carries its own `*` `.gitignore`; if you removed that file to commit backups, delete those backups instead.
+  Generated repositories keep the old line in their git history; this fixes the tree only.
+
+## [1.3.0-rc.1] - 2026-11-23
+
+### release notes
+
+agentteams 1.3.0-rc.1 is the first release candidate of the 1.3 line. It is the first line cut from `dev` rather than
+`main` (at `62d745ed`, onto `release/1.3`), under the release model in `docs_src/release-and-branching.md`; `main`
+stays at v1.2.2 until 1.3.0 is released. The entries below it are everything that landed on `dev` after the 1.2 cut.
+
+- **Behaviour change: `--overwrite` refuses to drop an orchestrator's routing (#392 item 12).** When the build would
+  not keep agents the orchestrator routes to, the run stops with `[ROUTING-LOSS] blocked` before any write. A
+  scripted overwrite that drops them on purpose names them with `--accept-routing-loss SLUG[,SLUG...]`; otherwise
+  keep them with `--adopt-orphans`, the brief, or `--update --merge`.
+- **Security tightening: a carried-over exception lapses at its signed decision's sunset (#595).** The registry's
+  unsigned `expires` can no longer extend a sandbox relaxation or S-10 exemption. An exception registered some days
+  after its decision was signed lapses that many days sooner than before, and a decision row already past its 90
+  days is refused at registration: the operator re-signs it.
+- **Security tightening: HALTs.** A HALT in any generated team dir of the repository now binds a file clearance
+  checked in another (#578) and a per-repository S-10 exemption rendered from another (#597). A retraction clears
+  only its own id, or the whole family only when it names the gate action exactly (#596). Unreadable team dirs, logs
+  and briefs fail closed, including under Python 3.14's `Path` changes (#588, #598, #599). Teams on Python 3.14 with
+  agentteams before 1.3.0 should read that upgrade note below.
+- **`--verify-toolchain-pin` checks signed tags in every tier and no longer exits `2` (#555).**
+- **Action for existing teams (F10).** A `--update --merge` now prints a notice for unfenced lines an older render
+  left naming another surface's agents directory. It removes nothing: re-render that surface with
+  `--update --overwrite`, or delete the quoted lines by hand.
+- **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568). **Beta:**
+  `agentteams.term_index` and `--term-check` (#548), and the WASM streaming session mode (#567).
+- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+  rows newer than the HALT as void and record a fresh PASS.
+
+Release-candidate soak: v1.3.0 follows once infrastructureManagement reports that every consumer repository rendered
+this candidate, installed from its signed tag, cleanly.
 
 ### security (a carried-over exception never outlives its signed decision's sunset; #595)
 

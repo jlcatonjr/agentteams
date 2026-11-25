@@ -67,11 +67,7 @@ auditing the audit — is what distinguishes it from a test suite.
 
 **Attacker tiers** (a control is meaningful only against a stated tier):
 
-| Tier | The attacker |
-|---|---|
-| **T0** | supplies content the agent *reads* (injected text) |
-| **T1** | an in-repo agent with **write + execute** |
-| **T2** | the operator's own shell |
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-table-tier-the-attacker.md"
 
 **Outcome classes:** DEFENDED / PARTIAL / EXPLOITED / DOCUMENTED-LIMIT /
 OUT-OF-TIER; an unknown outcome **raises** (a typo is a defect, not a measurement)
@@ -99,16 +95,8 @@ targets. F-1..F-6 are named failure modes, not a proof of their own absence, and
 the byte-identity assertion tells you what happened to the copy — not that every
 future attack leaves the tree untouched.
 
-**Source.**
-`agentteams/templates/universal/redteam-methodology.reference.template.md:22-239`;
-`agentteams/redteam/registry.py:36-55`; `agentteams/redteam/runner.py:39-79`;
-`agentteams/redteam/selfaudit.py:33-101`; `agentteams/redteam/cycle.py:1-215`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-source.md"
 
 ---
 
-**Sources for Part VII.** `agentteams/security_refs.py`;
-`agentteams/security_feed_render.py`;
-`agentteams/templates/universal/security-vulnerability-watch.reference.template.md`;
-`agentteams/templates/universal/redteam-methodology.reference.template.md`;
-`agentteams/redteam/registry.py`; `agentteams/redteam/runner.py`;
-`agentteams/redteam/selfaudit.py`; `agentteams/redteam/cycle.py`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-sources.md"

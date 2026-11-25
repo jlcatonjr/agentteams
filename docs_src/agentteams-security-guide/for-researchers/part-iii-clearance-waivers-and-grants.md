@@ -51,13 +51,7 @@ Every verdict, including a plain PASS, appends a row (current schema is 9
 columns; a legacy 6-column schema is still read). The destructive gate consults
 this log as its clearance engine, in this order:
 
-| Log state | Gate behaviour |
-|---|---|
-| Unretracted **HALT** anywhere | **Blocks** — checked first, over the whole log |
-| **PASS** (matching, unconsumed) | Allows |
-| **CONDITIONAL PASS**, `conditions_verified == "verified"` | Allows |
-| **CONDITIONAL PASS**, conditions not verified | Blocks **"as if HALT"** |
-| Row already consumed/used | Skipped — a clearance **cannot be replayed** |
+--8<-- "docs_src/assets/snippets/security-guide-part-iii-table-log-state-gate-behaviour.md"
 
 Two adversary-relevant properties: HALT is checked first (a stop cannot be
 outvoted), and a consumed row is skipped (a clearance **cannot be replayed** to
