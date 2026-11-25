@@ -43,6 +43,8 @@ from agentteams.research.reputable import (
     config_for_project_type,
 )
 from agentteams.research.scholarly import (
+    Affiliation,
+    Authorship,
     ScholarlyWork,
     format_citation,
     scholarly_search,
@@ -82,7 +84,9 @@ __all__ = [
     "READ_CONTENT_PATTERNS",
     "RESEARCH_CONFIG",
     "SOFTWARE_CONFIG",
+    "Affiliation",
     "AllowlistConfig",
+    "Authorship",
     "Briefing",
     "BriefingClaim",
     "BriefingStats",

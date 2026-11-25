@@ -169,6 +169,7 @@ def test_absent_fields_stay_absent_rather_than_being_invented():
     assert w.authors == []
     assert w.abstract == ""
     assert w.venue == ""
+    assert w.authorships == [] and w.language is None
 
 
 # --- host allowlist --------------------------------------------------------
@@ -355,3 +356,137 @@ def test_format_citation_falls_back_to_url_when_no_doi():
     work = ScholarlyWork(title="T", url="https://arxiv.org/abs/1")
     line = format_citation(work)
     assert "https://arxiv.org/abs/1" in line and "doi.org" not in line
+
+
+# --- bl48-68: authorships, ORCID, affiliations, country, language ----------------------------------------
+#
+# Shapes follow each API's documented response (OpenAlex Work.authorships, Crossref work.author,
+# arXiv Atom <arxiv:affiliation>); not checked against a live response in this change.
+
+_OPENALEX_AUTHORSHIPS = {
+    "results": [
+        {
+            "title": "A Stratified Survey",
+            "id": "https://openalex.org/W9",
+            "language": "en",
+            "authorships": [
+                {
+                    "author_position": "first",
+                    "author": {"id": "https://openalex.org/A1", "display_name": "Ana Field",
+                               "orcid": "https://orcid.org/0000-0002-1825-0097"},
+                    "institutions": [
+                        {"id": "https://openalex.org/I1", "display_name": "Uni One", "country_code": "US"},
+                        {"id": "https://openalex.org/I2", "display_name": "Lab Two", "country_code": "DE"},
+                    ],
+                    "countries": ["US", "DE"],
+                },
+                {"author": {"id": "https://openalex.org/A2", "display_name": "Bo Bare"}},
+            ],
+        }
+    ]
+}
+
+_CROSSREF_AUTHORSHIPS = {
+    "message": {
+        "items": [
+            {
+                "title": ["Crossref With Affiliations"],
+                "language": "en",
+                "author": [
+                    {"given": "Jane", "family": "Doe", "ORCID": "http://orcid.org/0000-0001-5109-3700",
+                     "affiliation": [{"name": "Some University"}, {"bad": "shape"}]},
+                    {"given": "No", "family": "Extras"},
+                ],
+            }
+        ]
+    }
+}
+
+_ARXIV_AFFILIATION_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2101.00002v1</id>
+    <title>Affiliated</title>
+    <author><name>R Searcher</name><arxiv:affiliation>Institute X</arxiv:affiliation></author>
+    <author><name>U Naffiliated</name></author>
+  </entry>
+</feed>"""
+
+
+def test_parse_openalex_keeps_authorships_and_language():
+    from agentteams.research.scholarly import Affiliation, Authorship
+    w = _parse_openalex(_OPENALEX_AUTHORSHIPS, 5)[0]
+    assert w.language == "en" and w.authors == ["Ana Field", "Bo Bare"]
+    first, second = w.authorships
+    assert first == Authorship(
+        name="Ana Field", openalex_id="https://openalex.org/A1", orcid="https://orcid.org/0000-0002-1825-0097",
+        affiliations=[Affiliation("Uni One", "https://openalex.org/I1", "US"),
+                      Affiliation("Lab Two", "https://openalex.org/I2", "DE")],
+        country_codes=["US", "DE"])
+    # Negative control: an author without orcid or institutions gets None / [] — nothing inferred.
+    assert second == Authorship(name="Bo Bare", openalex_id="https://openalex.org/A2")
+
+
+def test_parse_crossref_keeps_orcid_and_affiliation_names_only():
+    w = _parse_crossref(_CROSSREF_AUTHORSHIPS, 5)[0]
+    assert w.language == "en"
+    doe, bare = w.authorships
+    assert doe.name == "Jane Doe" and doe.orcid == "http://orcid.org/0000-0001-5109-3700"
+    assert [a.name for a in doe.affiliations] == ["Some University"]
+    assert doe.openalex_id is None and doe.country_codes == []
+    assert all(a.openalex_id is None and a.country_code is None for a in doe.affiliations)
+    assert bare.orcid is None and bare.affiliations == []
+
+
+def test_parse_arxiv_keeps_affiliation_when_present():
+    w = _parse_arxiv(_ARXIV_AFFILIATION_XML, 5)[0]
+    assert [(a.name, [f.name for f in a.affiliations]) for a in w.authorships] == [
+        ("R Searcher", ["Institute X"]), ("U Naffiliated", [])]
+    assert w.language is None
+
+
+def test_malformed_authorship_shapes_keep_the_work():
+    payload = {"results": [{"title": "T", "id": "x", "authorships": [
+        {"author": {"display_name": "A", "orcid": 7}, "institutions": "nope", "countries": [1, "FR"]}]}]}
+    [w] = _parse_openalex(payload, 5)
+    assert w.authorships[0].orcid is None and w.authorships[0].affiliations == []
+    assert w.authorships[0].country_codes == ["FR"]
+
+
+def test_authorships_survive_the_cache_round_trip(tmp_path, monkeypatch):
+    from agentteams.research import cache
+    monkeypatch.delenv(cache.NO_CACHE_ENV, raising=False)
+    monkeypatch.setenv(cache.CACHE_DIR_ENV, str(tmp_path / "rcache"))
+    with patch("agentteams.research.scholarly.httpx.get",
+               return_value=_FakeResp(payload=_OPENALEX_AUTHORSHIPS, url="https://api.openalex.org/works")):
+        live = scholarly_search("q", sources=("openalex",))
+    with patch("agentteams.research.scholarly.httpx.get", side_effect=AssertionError("cache should answer")):
+        assert scholarly_search("q", sources=("openalex",)) == live
+    from agentteams.research.scholarly import _work_from_dict
+    # Negative control: an entry with an unknown key (a newer release) loads without raising.
+    rebuilt = _work_from_dict({"title": "T", "future_field": 1, "authorships": [{"name": "A", "x": 2}]})
+    assert rebuilt is not None and rebuilt.authorships[0].name == "A"
+    assert _work_from_dict({"authors": "not a work"}) is None
+
+
+def test_cache_key_is_versioned(tmp_path, monkeypatch):
+    from agentteams.research import cache
+    monkeypatch.delenv(cache.NO_CACHE_ENV, raising=False)
+    monkeypatch.setenv(cache.CACHE_DIR_ENV, str(tmp_path / "rcache"))
+    cache.store(cache.make_key("scholar", "q", 5, "openalex"), [{"title": "Old shape", "authors": []}])
+    with patch("agentteams.research.scholarly.httpx.get",
+               return_value=_FakeResp(payload=_OPENALEX_AUTHORSHIPS, url="https://api.openalex.org/works")):
+        assert [w.title for w in scholarly_search("q", sources=("openalex",))] == ["A Stratified Survey"]
+
+
+def test_scholar_cli_serialises_authorships(monkeypatch, capsys):
+    import json
+
+    from agentteams.research import __main__ as cli
+    works = _parse_openalex(_OPENALEX_AUTHORSHIPS, 5)
+    monkeypatch.setattr(cli, "scholarly_search", lambda *a, **kw: works)
+    assert cli.main(["scholar", "q"]) == 0
+    [record] = json.loads(capsys.readouterr().out)
+    assert record["authorships"][0]["affiliations"][0] == {"name": "Uni One", "openalex_id": "https://openalex.org/I1",
+                                                            "country_code": "US"}
+    assert record["language"] == "en"

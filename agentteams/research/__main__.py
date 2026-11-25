@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 
 from agentteams.research.scholarly import SOURCES, format_citation, scholarly_search
 from agentteams.research.search import fetch_text, web_search_with_provenance
@@ -125,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         payload: list[dict[str, object]] = []
         for work in works:
-            record: dict[str, object] = dict(work.__dict__)
+            record: dict[str, object] = asdict(work)  # authorships are nested dataclasses
             if args.citations:
                 record["citation"] = format_citation(work)
             payload.append(record)

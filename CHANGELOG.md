@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`ScholarlyWork` keeps author ids, ORCID, affiliations, country codes and language; #577)
+
+- **New:** `ScholarlyWork.authorships` (`Authorship`: `name`, `openalex_id`, `orcid`, `affiliations`,
+  `country_codes`; `Affiliation`: `name`, `openalex_id`, `country_code`) and `ScholarlyWork.language`, filled from
+  what each source carries: OpenAlex has all of them; Crossref has ORCID, affiliation names and language; arXiv has
+  affiliation names when the feed lists them. Nothing is inferred; `authors` is unchanged. Both classes are
+  exported from `agentteams.research`.
+- **Cache:** results are stored with `dataclasses.asdict` under a new `scholar-v2` key and rebuilt tolerantly
+  (unknown keys ignored, a bad item skipped), so cached results from before this change (up to 6 hours) are
+  fetched again once.
+- **Possible break:** code that serialises `work.__dict__` itself now meets nested dataclasses; use
+  `dataclasses.asdict(work)`. The `scholar` CLI does.
+- **Not verified live:** the parsers follow the documented OpenAlex, Crossref and arXiv response shapes and are
+  tested with fixtures; no live response was checked in this change.
+
 ### fixed (generated PR agents create the labels they apply)
 
 - **Fixed:** the `pr-manager` and `pr-notifier` personas applied the `pr-mgmt` and `awaiting-review` labels but never

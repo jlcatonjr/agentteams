@@ -406,7 +406,31 @@ Single-source variants. Each returns `[]` on any failure and never raises.
 
 ### `ScholarlyWork`
 
-`title`, `authors`, `year`, `doi`, `url`, `abstract`, `venue`, `source`.
+`title`, `authors`, `year`, `doi`, `url`, `abstract`, `venue`, `source`, `authorships` (`list[Authorship]`, one per
+author in source order; `authors` keeps the bare names), `language` (`str | None`, as the source gives it, e.g.
+`"en"`).
+
+### `Authorship`
+
+`name`, `openalex_id`, `orcid`, `affiliations` (`list[Affiliation]`), `country_codes` (`list[str]`).
+
+### `Affiliation`
+
+`name`, `openalex_id`, `country_code`.
+
+Each source fills only what it carries, and values are kept as given (an ORCID stays in URL form):
+
+| Source | Author id | ORCID | Affiliations | Country codes | Language |
+|---|---|---|---|---|---|
+| OpenAlex | `author.id` | `author.orcid` | `institutions[]`: name, id, `country_code` | `countries[]` | work `language` |
+| Crossref | — | `ORCID` | `affiliation[].name` only | — | work `language` |
+| arXiv | — | — | `<arxiv:affiliation>` names, when present | — | — |
+
+A missing value is `None` or `[]`; a malformed sub-field is left empty and the work is kept. Results are cached
+under a `scholar-v2` key as plain dictionaries (`dataclasses.asdict`), so older cache entries, which had no
+authorships, are not served. A caller that serialises a work itself should use `dataclasses.asdict(work)`:
+`work.__dict__` now holds nested dataclasses, which `json.dumps` refuses. The `scholar` CLI prints the nested
+records.
 
 ### `format_citation(work) -> str`
 
