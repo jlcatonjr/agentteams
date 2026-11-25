@@ -61,7 +61,7 @@ def test_apply_refuses_a_stale_or_wrong_digest(tmp_path):
     with pytest.raises(ValueError, match="digest does not match"):
         apply_repair(log, digest, confirm=_yes)
     assert log.read_bytes() == before
-    assert not list(tmp_path.glob("*.bak-*"))
+    assert not list(tmp_path.rglob("*.bak-*"))
 
 
 @pytest.mark.parametrize("row, why", [
@@ -298,3 +298,37 @@ def test_the_guarantee_decision_cells_identical_and_conditions_verified_keeps_it
         cv = header.index("conditions_verified")
         assert item.fixed[cv].startswith(item.original[cv] + ",")
         assert item.fixed[cv].split()[0].rstrip(":") == item.original[cv].split()[0].rstrip(":")
+
+
+# --- bl48-39: the backup goes to a self-ignoring backup root -----------------------------------------
+
+
+def test_backup_goes_to_the_ignored_backup_root(tmp_path):
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    log = _log(tmp_path, GOOD, SPLIT)
+    backup = apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    root = tmp_path / ".agentteams-backups"
+    assert backup.parent == root / "governance-log-repair" and backup.name.startswith(log.name + ".bak-")
+    assert (root / ".gitignore").read_text().splitlines()[-1] == "*"
+    assert (root.stat().st_mode & 0o777, backup.parent.stat().st_mode & 0o777) == (0o700, 0o700)
+    status = subprocess.run(["git", "-C", str(tmp_path), "status", "--porcelain", "--untracked-files=all"],
+                            capture_output=True, text=True, check=True).stdout
+    assert ".bak-" not in status and "security-decisions.log.csv" in status   # the log itself is still listed
+
+
+@pytest.mark.parametrize("which", ["root", "sub"])
+def test_symlinked_backup_dir_is_refused_and_log_untouched(tmp_path, which):
+    log = _log(tmp_path, GOOD, SPLIT)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    root = tmp_path / ".agentteams-backups"
+    if which == "root":
+        root.symlink_to(elsewhere)
+    else:
+        root.mkdir()
+        (root / "governance-log-repair").symlink_to(elsewhere)
+    before = log.read_bytes()
+    with pytest.raises(ValueError, match="is a symlink or not a directory; nothing written"):
+        apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    assert log.read_bytes() == before and not list(elsewhere.iterdir())

@@ -33,8 +33,11 @@ This module fixes such rows under three rules the operator set on 2026-11-11.
     allocate a pseudo-terminal. What makes any repair harmless is the column rules: the decision cells (`decision`/`action_reviewed`, `status`/`verdict`, `scope`) stay byte-identical, and `conditions_verified` keeps its original text as a prefix (a re-join only appends `,<fragment>` to it), so its leading `verified`/`pending` token never changes.
 - **Everything else stays byte-identical, and no concurrent append is lost.**
   - The log is locked and read once, and the plan is computed from exactly those bytes.
-  - A backup `LOG.bak-<UTC timestamp>` is written first (exclusive create, fsync). Remove it once the log has
-    been checked.
+  - A backup `LOG.bak-<UTC timestamp>` is written first (exclusive create, fsync), to
+    `.agentteams-backups/governance-log-repair/` beside the log (directories mode `0700`). The backup root gets a
+    `.gitignore` holding `*`, so the copy of a private log stays local whatever the project's `.gitignore` says.
+    If either directory is a symlink or not a directory, the repair is refused and nothing is written. Remove the
+    backup once the log has been checked.
   - The log is rewritten in place through the locked descriptor, writing first and truncating after, with a full
     flush (`F_FULLFSYNC` on macOS). An `append_row` waiting on the lock appends to the repaired file, and the
     gate's reader takes a shared lock, so it never sees a half-written log. A write error restores the original

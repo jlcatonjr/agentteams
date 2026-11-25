@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a governance-log repair backup can no longer be committed by accident)
+
+- **Fixed:** `governance_logs repair LOG --apply` wrote its backup as `LOG.bak-<timestamp>` beside the log, where no
+  ignore rule covered it, so a broad `git add` could commit a full copy of a private log such as
+  `references/security-decisions.log.csv`. The backup now goes to `.agentteams-backups/governance-log-repair/`
+  beside the log; that backup root carries a `*` `.gitignore`, as every other backup root does.
+- **Newly refused:** a repair whose backup directory is a symlink or not a directory; nothing is written.
+- **Cleanup:** backups made by earlier releases stay where they were. `git status` lists them as untracked; delete
+  them once the repaired log has been checked. This repository's `.gitignore` now ignores `references/*.log.csv.bak-*`.
+
 ### fixed (brief ingestion no longer reads dependency manifests from `tmp/` or backup trees)
 
 - **Fixed:** the project scan read `package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml` and `go.mod`

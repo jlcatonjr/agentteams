@@ -216,6 +216,8 @@ references/runtime-handoffs.json
 .github/copilot/
 references/adjacent-repos.md
 references/security-decisions.log.csv
+# Governance-log repair backups written beside the log by releases before 1.4 (now under .agentteams-backups/).
+references/*.log.csv.bak-*
 references/mcp-needs.csv
 references/agentteams-remediation-log.csv
 # Branch-deletion ledger (agentteams --branch-cleanup / --branch-post-merge): operational record.
