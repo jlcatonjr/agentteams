@@ -947,3 +947,48 @@ class TestAdapterRelPath:
     def test_agents_md_returns_none(self):
         from agentteams.frameworks.agents_md import AgentsMdAdapter
         assert AgentsMdAdapter().vscode_tasks_rel_path() is None
+
+
+# ---------------------------------------------------------------------------
+# bl48-41b: JSONC comment stripping is string-aware
+# ---------------------------------------------------------------------------
+
+_URL_USER_TASK = ('    {\n      "label": "fetch",\n      "type": "shell",\n'
+                  '      "command": "curl https://example.com/x",\n      "problemMatcher": []\n    }')
+
+
+class TestJsoncStringAwareStrip:
+    def test_comment_markers_inside_strings_kept(self):
+        text = '{"a": "a // b", "b": "/* x */", "c": "q\\" // still a string"} // gone'
+        assert json.loads(_strip_jsonc_comments(text)) == {"a": "a // b", "b": "/* x */", "c": 'q" // still a string'}
+
+    def test_block_comment_stripped(self):
+        text = '{\n  /* one\n     two */ "a": 1, /* inline */ "b": 2\n}'
+        stripped = _strip_jsonc_comments(text)
+        assert json.loads(stripped) == {"a": 1, "b": 2}
+        assert stripped.count("\n") == text.count("\n")   # line numbers in parse errors stay right
+
+    def test_jsonc_with_url_in_user_task_merges(self, tmp_path):
+        existing = tmp_path / "tasks.json"
+        existing.write_text('{\n  "version": "2.0.0",\n  "tasks": [\n    // mine\n' + _URL_USER_TASK + '\n  ]\n}',
+                            encoding="utf-8")
+        result = sentinel_merge(existing, render_tasks_json([]))
+        assert _URL_USER_TASK in result and "// mine" in result
+        assert "agentteams: update agents" in {t["label"] for t in json.loads(_strip_jsonc_comments(result))["tasks"]}
+
+    def test_stale_agentteams_task_with_url_is_removed(self, tmp_path):
+        stale = ('    {\n      "label": "agentteams: old",\n      "type": "shell",\n'
+                 '      "command": "curl https://example.com/old",\n      "detail": "AGENTTEAMS"\n    }')
+        existing = tmp_path / "tasks.json"
+        existing.write_text('{\n  "version": "2.0.0",\n  "tasks": [\n    // mine\n' + _URL_USER_TASK + ',\n'
+                            + stale + '\n  ]\n}', encoding="utf-8")
+        result = sentinel_merge(existing, render_tasks_json([]))
+        labels = [t["label"] for t in json.loads(_strip_jsonc_comments(result))["tasks"]]
+        assert "agentteams: old" not in labels and "fetch" in labels and _URL_USER_TASK in result
+
+    def test_broken_jsonc_still_raises(self, tmp_path):
+        # Negative control: a URL does not make a genuinely broken file parse.
+        existing = tmp_path / "tasks.json"
+        existing.write_text('{\n  // c\n  "u": "https://x",\n  "tasks": [,]\n}', encoding="utf-8")
+        with pytest.raises(ValueError, match="JSONC but could not be parsed"):
+            sentinel_merge(existing, render_tasks_json([]))

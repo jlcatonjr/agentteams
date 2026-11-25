@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a commented `.vscode/tasks.json` with a URL in any task merges again)
+
+- The JSONC comment stripper removed every `//` to the end of the line, including the one in `https://` inside a
+  string, so a `tasks.json` with comments and a URL in any task could not be parsed and the whole tasks merge
+  refused. It also left `/* */` block comments in place. It now skips string literals and strips both comment
+  forms; a block comment keeps its line breaks, so a parse error names the right line.
+- A stale `"detail": "AGENTTEAMS"` task that contains a URL is now removed on the next merge. User tasks are never
+  rewritten. A file that is broken for another reason still refuses with the same message.
+
 ### fixed (`--framework agents-md` no longer overwrites an AGENTS.md that Codex, Grok, Goose or a person owns)
 
 - The agents-md adapter had no ownership guard, so a neutral render replaced a repo-root `AGENTS.md` generated for
