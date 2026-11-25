@@ -57,6 +57,12 @@ Parse all dependency manifest files found in a project directory.
 
 Recognizes: `requirements.txt`, `pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`.
 
+Directories named `node_modules`, `.git`, `__pycache__`, `.venv`, `venv`, `.tox`, `dist`, `build`, `vendor`, `tmp`,
+`.agentteams-backups`, `.agentteams-fleet`, `.pytest_cache` and `.mypy_cache` are not searched, so a stale manifest
+copy in a scratch or backup tree adds no tools. The match is by name: a scratch directory under another name is
+still read. Language detection and retrieval inference skip the same directories. When `load` adds tools from
+manifests it prints one stderr line per manifest that contributed: `[ingest] tools from <relative path>: N`.
+
 **Args:**
 
 - `project_path` (`Path`) — Root directory of the project to scan.

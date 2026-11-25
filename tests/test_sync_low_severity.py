@@ -303,3 +303,96 @@ def test_codex_s_own_import_keeps_its_write_policy_fence(tmp_path: Path) -> None
     _quiet(import_from_cai, cai, "codex", tmp_path / ".codex" / "agents", overwrite=True)
     text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "Codex policy." in text and text.count("AGENTTEAMS:BEGIN codex_write_policy ") == 1
+
+
+# --- the agent_team roster check, and a re-init that would empty the hub ---------------------------------------
+
+
+def _agent_team(*slugs: str) -> str:
+    return _fence("agent_team", 1, "## Agent Team\n" + "".join(f"- `@{s}` — does {s} work\n" for s in slugs))
+
+
+def test_agent_team_fence_mismatch_is_reported(tmp_path: Path) -> None:
+    from agentteams.sync_hub_refresh import agent_team_roster_mismatch
+    hub = {"agents": [{"slug": "orchestrator"}, {"slug": "helper"}]}
+    assert agent_team_roster_mismatch("# T\n" + _agent_team("orchestrator", "ghost"), hub) == (
+        "agent_team fence lists agents the roster lacks (ghost) and omits roster agents (helper); regenerate the "
+        "pin natively (--update --merge)")
+    # Negative controls: a matching roster, and a file with no agent_team fence, say nothing.
+    assert agent_team_roster_mismatch("# T\n" + _agent_team("helper", "orchestrator"), hub) == ""
+    assert agent_team_roster_mismatch("# T\n", hub) == ""
+    # End to end: a sync pass whose pin lists an agent it does not have reports it.
+    _team(tmp_path, instructions="# Team\n\n" + _agent_team("orchestrator", "helper"))
+    (tmp_path / _PIN_INSTR).write_text("# Team\n\n" + _agent_team("orchestrator", "helper", "ghost"), encoding="utf-8")
+    _change_pin(tmp_path)
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert any("roster lacks (ghost)" in n for n in result.notices), result.notices
+
+
+def test_reinit_with_missing_pin_instructions_is_refused_and_keeps_the_hub(tmp_path: Path) -> None:
+    _team(tmp_path, instructions="# Team\n\n" + _fence("project_notes", 1, "Pin notes."))
+    team_file = tmp_path / _HUB / "team.cai.json"
+    before = team_file.read_bytes()
+    assert b"Pin notes." in before
+    (tmp_path / _PIN_INSTR).unlink()
+    with pytest.raises(ValueError, match=r"the pin \(copilot-vscode\) has no deployed instruction file; restore it"):
+        sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "claude"])
+    assert team_file.read_bytes() == before
+
+
+def test_first_init_without_pin_instructions_still_succeeds(tmp_path: Path) -> None:
+    _team(tmp_path)  # negative control: no hub yet, no pin instruction file
+    assert (tmp_path / _HUB / "team.cai.json").is_file()
+
+
+# --- instruction-file edits count as changes; pin text outside fences is reported ------------------------------
+
+
+def _synced_team_with_instructions(root: Path) -> None:
+    _team(root, instructions="# Team\n\nPin preamble.\n\n" + _fence("project_notes", 1, "Pin notes."))
+    assert (root / _PEER_INSTR).is_file()
+
+
+def test_peer_instruction_edit_counts_as_a_change(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    peer = tmp_path / _PEER_INSTR
+    peer.write_text(peer.read_text(encoding="utf-8").replace("Pin notes.", "Peer edit."), encoding="utf-8")
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert "claude" in result.changed_frameworks
+    assert "Pin notes." in peer.read_text(encoding="utf-8")
+
+
+def test_peer_instruction_deletion_counts_as_a_change(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    (tmp_path / _PEER_INSTR).unlink()
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert "claude" in result.changed_frameworks
+    assert "Pin notes." in (tmp_path / _PEER_INSTR).read_text(encoding="utf-8")
+
+
+def test_an_unrelated_commit_is_still_no_change(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    (tmp_path / "README.md").write_text("readme\n", encoding="utf-8")
+    _commit(tmp_path)
+    assert _quiet(run_sync, tmp_path).note == "no framework changed since last sync"
+
+
+def test_rebuilt_peer_warns_when_pin_text_outside_fences_differs(tmp_path: Path) -> None:
+    _synced_team_with_instructions(tmp_path)
+    pin = tmp_path / _PIN_INSTR
+    pin.write_text(pin.read_text(encoding="utf-8").replace("Pin preamble.", "A newer pin preamble."),
+                   encoding="utf-8")
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert any("the pin's text outside AGENTTEAMS fences differs from the hub's" in n for n in result.notices)
+    # Negative control: identical outside-fence text gives no such notice.
+    _change_pin(tmp_path)
+    pin.write_text(pin.read_text(encoding="utf-8").replace("A newer pin preamble.", "Pin preamble."),
+                   encoding="utf-8")
+    _commit(tmp_path)
+    result = _quiet(run_sync, tmp_path)
+    assert not any("outside AGENTTEAMS fences differs" in n for n in result.notices), result.notices
+

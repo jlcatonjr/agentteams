@@ -41,7 +41,8 @@ change. You have no shell: `@pr-manager` runs the commands you return. Recipient
    recipients (the tag lets later scans find and de-duplicate it). You may read the PR through `github-read`
    when it is live for you.
 3. **Honour `opt_out: true`** in the registry: skip both the request and the @-mention.
-4. **Apply the labels `pr-mgmt` and `awaiting-review`** on first notification.
+4. **Apply the labels `pr-mgmt` and `awaiting-review`** on first notification. `@pr-manager` creates both
+   (`gh label create … --force`) before it runs your command.
 5. **Never propose a merge, close, approval or push.** Notification is all you do.
 <!-- AGENTTEAMS:END invariant_core -->
 

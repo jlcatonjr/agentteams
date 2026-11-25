@@ -1426,3 +1426,40 @@ def test_unpaired_bridge_markers_fall_back_to_the_whole_write():
     half = "mine\n<!-- AGENTTEAMS-BRIDGE:BEGIN goose-bridge-hints v=1 -->\nmore\n"
     content, notice = refresh_keeping_project_text(".goosehints", half, rendered)
     assert content == rendered and notice and "backup" in notice
+
+
+# --- agents-md and codex are bridge targets with no entry files -----------------------
+
+
+@pytest.mark.parametrize("target", ["agents-md", "codex"])
+def test_bridge_check_accepts_agents_md_and_codex_targets(tmp_path: Path, target: str):
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    generated = run_bridge(source_dir=source_dir, source_framework="copilot-vscode", target_framework=target,
+                           output_root=out_root)
+    assert generated.success, generated.errors
+    checked = run_bridge(source_dir=source_dir, source_framework="copilot-vscode", target_framework=target,
+                         output_root=out_root, check_only=True)
+    assert checked.success and checked.check_ok, checked.errors
+
+
+@pytest.mark.parametrize("target", ["agents-md", "codex"])
+def test_agents_md_bridge_writes_no_agents_md(tmp_path: Path, target: str):
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    out_root = tmp_path / "out"
+    assert not (out_root / "AGENTS.md").exists()
+    result = run_bridge(source_dir=source_dir, source_framework="copilot-vscode", target_framework=target,
+                        output_root=out_root, overwrite=True)
+    pair_dir = out_root / "references" / "bridges" / f"copilot-vscode-to-{target}"
+    assert result.written and all(Path(p).is_relative_to(pair_dir) for p in result.written)
+    assert not (out_root / "AGENTS.md").exists()
+
+
+def test_grok_is_still_refused_as_a_bridge_target(tmp_path: Path):
+    source_dir = tmp_path / "src" / ".github" / "agents"
+    _build_source("copilot-vscode", source_dir)
+    with pytest.raises(ValueError, match="Unknown target framework 'grok'"):
+        run_bridge(source_dir=source_dir, source_framework="copilot-vscode", target_framework="grok",
+                   output_root=tmp_path / "out")

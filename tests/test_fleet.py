@@ -1110,3 +1110,66 @@ def test_an_unstatable_agentteams_brief_is_not_skipped_for_the_root_brief(tmp_pa
         assert brief_candidate(tmp_path) == tmp_path / ".agentteams" / "brief.json"   # no raise on 3.13
     finally:
         (tmp_path / ".agentteams").chmod(0o700)
+
+
+# ---------------------------------------------------------------------------
+# A non-zero update exit is a FAIL row, never OK
+# ---------------------------------------------------------------------------
+
+_GATE_LINES = (
+    "[SEC-GATE/INTEL-FRESHNESS] blocked: the KEV snapshot is 9 days old",
+    "[UPDATE-LOCK] refused: another update holds the lock",
+    "[OUTPUT-TARGET] refused: the output is outside the project",
+    "[SEC-GATE/DESTRUCTIVE:overwrite] blocked: no clearance",
+)
+
+
+def _fleet_rows(tmp_path: Path, monkeypatch, rc: int, out: str, *, apply: bool = True, git: bool = True) -> list[dict]:
+    import json
+    ws = tmp_path / "ws"
+    _mk_agent(ws / ".github" / "agents", "_build-description.json", "{}")
+    _mk_agent(ws / ".github" / "agents", "a.agent.md", "x\n")
+    if git:
+        _init_repo(ws)
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: (rc, out))
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=apply), parser=None)
+    report = next((tmp_path / ".agentteams-fleet").iterdir())
+    data = json.loads((report / "report.json").read_text())
+    return [t for w in data["workspaces"] for t in w["targets"]]
+
+
+def test_an_update_that_raised_is_fail_not_ok(tmp_path, monkeypatch):
+    [row] = _fleet_rows(tmp_path, monkeypatch, 1, "\n[fleet] exception: RuntimeError: kev fetch\n")
+    assert row["status"] == "FAIL" and row["detail"].startswith("[fleet] exception")
+
+
+def test_a_clean_zero_exit_stays_ok(tmp_path, monkeypatch):
+    [row] = _fleet_rows(tmp_path, monkeypatch, 0, "Merged: 0 file(s)\n")
+    assert row["status"] == "OK"
+
+
+@pytest.mark.parametrize("apply", [True, False])
+@pytest.mark.parametrize("line", _GATE_LINES)
+def test_a_blocked_security_gate_is_fail(tmp_path, monkeypatch, line, apply):
+    [row] = _fleet_rows(tmp_path, monkeypatch, 1, f"Rendering...\n{line}\n", apply=apply)
+    assert row["status"] == "FAIL" and row["detail"] == line
+
+
+def test_first_error_names_the_gate_line():
+    from agentteams._fleet_report import first_error
+    assert first_error("x\n[fleet] exception: OSError: gone\n") == "[fleet] exception: OSError: gone"
+    assert first_error("x\n[SEC-GATE/INTEL-FRESHNESS] blocked: stale\nError: later\n") == (
+        "[SEC-GATE/INTEL-FRESHNESS] blocked: stale")
+    assert first_error("Validation errors:\n  - field x is required\n") == "- field x is required"
+    assert first_error("see [SEC-GATE/X] blocked: mid-line\n") == "non-zero exit (see captured output)"
+
+
+def test_non_git_nonzero_exit_is_fail(tmp_path, monkeypatch):
+    [row] = _fleet_rows(tmp_path, monkeypatch, 1, "[UPDATE-LOCK] refused: held\n", git=False)
+    assert row["status"] == "FAIL" and row["detail"] == "[UPDATE-LOCK] refused: held"
+    assert "recovery via .agentteams-backups" not in row["detail"]
+
+
+def test_non_git_zero_exit_keeps_the_recovery_note(tmp_path, monkeypatch):
+    [row] = _fleet_rows(tmp_path, monkeypatch, 0, "Merged: 0 file(s)\n", git=False)
+    assert row["status"] == "OK" and "recovery via .agentteams-backups" in row["detail"]

@@ -22,7 +22,9 @@ rows under the operator's constraints (2026-11-11) and @security's conditions (H
   What makes any repair harmless is the column rules above: the decision cells (``decision``/``action_reviewed``, ``status``/``verdict``, ``scope``) stay byte-identical, and ``conditions_verified`` keeps its original text as a prefix (a re-join only appends ``,<fragment>`` to it), so its leading ``verified``/``pending`` token never changes.
 * **Everything else stays byte-identical, and no concurrent append is lost.**
   - The file is locked and read once, and the plan is computed from exactly those bytes.
-  - A backup ``LOG.bak-<UTC timestamp>`` is written atomically (exclusive create, fsync).
+  - A backup ``LOG.bak-<UTC timestamp>`` is written atomically (exclusive create, fsync) to
+    ``.agentteams-backups/governance-log-repair/`` beside the log, a backup root whose ``*`` ``.gitignore`` keeps it
+    out of every commit (the logs are private). A symlinked backup directory refuses the repair.
   - The log is rewritten in place through the locked descriptor (truncate, write, fsync). An ``append_row``
     waiting on the lock therefore appends to the repaired file, never to a replaced one.
   - The result is re-checked with :func:`agentteams.governance_logs.check_log`, and on failure the original
@@ -46,6 +48,7 @@ from pathlib import Path
 
 import sys
 
+from agentteams.backup import BACKUP_DIR_NAME, ensure_backup_root_ignored
 from agentteams.governance_logs import LOG_NAMES, check_log, fcntl
 
 #: Columns whose cells are prose, so a fragment of one may be re-joined into it. Never a verdict, action, date,
@@ -295,8 +298,14 @@ def _write_in_place(fd: int, data: bytes) -> None:
 
 
 def _write_backup(path: Path, raw: bytes) -> Path:
+    root = path.parent / BACKUP_DIR_NAME
+    for directory in (root, root / "governance-log-repair"):
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+            raise ValueError(f"backup directory {directory} is a symlink or not a directory; nothing written")
+        directory.mkdir(mode=0o700, exist_ok=True)
+    ensure_backup_root_ignored(root)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup = path.with_name(f"{path.name}.bak-{stamp}")
+    backup = root / "governance-log-repair" / f"{path.name}.bak-{stamp}"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     bfd = os.open(backup, flags, 0o600)
     try:

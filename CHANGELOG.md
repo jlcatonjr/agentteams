@@ -162,6 +162,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Emission is unchanged: `is_sandbox_capable` still does not probe, because the render host is often not the host
   that runs the team.
 
+### added (`ScholarlyWork` keeps author ids, ORCID, affiliations, country codes and language; #577)
+
+- **New:** `ScholarlyWork.authorships` (`Authorship`: `name`, `openalex_id`, `orcid`, `affiliations`,
+  `country_codes`; `Affiliation`: `name`, `openalex_id`, `country_code`) and `ScholarlyWork.language`, filled from
+  what each source carries: OpenAlex has all of them; Crossref has ORCID, affiliation names and language; arXiv has
+  affiliation names when the feed lists them. Nothing is inferred; `authors` is unchanged. Both classes are
+  exported from `agentteams.research`.
+- **Cache:** results are stored with `dataclasses.asdict` under a new `scholar-v2` key and rebuilt tolerantly
+  (unknown keys ignored, a bad item skipped), so cached results from before this change (up to 6 hours) are
+  fetched again once.
+- **Possible break:** code that serialises `work.__dict__` itself now meets nested dataclasses; use
+  `dataclasses.asdict(work)`. The `scholar` CLI does.
+- **Not verified live:** the parsers follow the documented OpenAlex, Crossref and arXiv response shapes and are
+  tested with fixtures; no live response was checked in this change.
+
+### fixed (generated PR agents create the labels they apply)
+
+- **Fixed:** the `pr-manager` and `pr-notifier` personas applied the `pr-mgmt` and `awaiting-review` labels but never
+  created them, so the first `gh pr edit --add-label` failed in a repository without them. `@pr-manager` now runs
+  `gh label create … --force` for both before it runs `@pr-notifier`'s edit command (the notifier has no shell).
+  `--force` also resets an existing label's colour and description. Existing teams get it on `--update --merge`.
+
+### changed (`python -m agentteams.research search` exits 3 when no backend answered)
+
+- **Changed:** `search` exited 0 even when every backend failed, so an empty `[]` from a dead search looked like
+  "no results". It now exits 3 in that case and says so on stderr (`note: no search backend answered (tried …);
+  the empty result is not evidence of absence`). A backend that answered with no hits still exits 0. A script
+  that treated exit 0 as "the search ran" now sees the failure.
+
+### fixed (`agents-md` and `codex` are bridge targets)
+
+- **Fixed:** `run_bridge` refused `agents-md` and `codex` as targets, though their pair directories
+  (`references/bridges/<source>-to-agents-md/`, `…-to-codex/`) are part of the bridge layout, so `--bridge-check` and
+  `--bridge-merge` could not reach them. Both are now accepted and, like `generic`, write only the pair-dir
+  artifacts: no `AGENTS.md` is created or relabelled. `grok` and `wasm` are still refused.
+
+### fixed (`--convert` resolves host features from the privilege profile)
+
+- **Fixed:** `convert_team` emitted adapter sidecars with no `host_features` in the manifest, because only
+  `generate` resolved them, so an emitter gated on a host feature did nothing on convert. They are now resolved
+  from the manifest's `privilege_profile` and `os_sandbox` first, as `generate` does (absent profile: `confined`).
+  An explicit `host_features` list is kept.
+
+### fixed (`--sync` sees instruction-file edits; it says when the pin's text outside fences does not travel; #462)
+
+- **Fixed:** `--sync` decided what changed from the agents directories only, so a commit that edited or deleted a
+  peer's instruction file (`.claude/CLAUDE.md`, `.github/copilot-instructions.md`, a root `AGENTS.md`) was "no
+  framework changed since last sync" and sat unreconciled. A change to a framework's instruction file now counts
+  for that framework; a root `AGENTS.md` counts for every framework that writes it, and a deleted one is rebuilt.
+- **New notice:** the hub keeps its own text outside fences (from `--sync-init`), and a missing peer instruction
+  file is rebuilt with it. When the pin's outside-fence text differs from the hub's, a sync pass now says so.
+  Nothing is moved: Project-Specific Rules travel by rules projection.
+- **Internal:** import and change detection share one placement rule, `interop_helpers.instructions_path`,
+  derived from each adapter's own output path (so a wasm team's `.agentteams-wasm/TEAM.md` is watched, and a team
+  rendered with a custom `--output` keeps the same offset from its agents directory). `interop`'s own
+  framework-to-filename table is gone.
+
+### fixed (pinned sync: a dry run lists its conflicts; a re-init keeps the hub; `agent_team` roster check)
+
+- **Dry run:** `--sync --dry-run` printed `N conflict(s) resolved to the pin — logged to
+  .agentteams/sync-conflicts.log.csv`, but a dry run writes no log. It now prints `N conflict(s) would be resolved
+  to the pin (a dry run logs nothing)` and lists the first 50, one per line, so they can be reviewed before they
+  apply.
+- **Re-init:** `--sync-init` over an existing hub, with the pin's instruction file missing, emptied the hub's
+  instruction content. It is now refused with the existing "the pin (…) has no deployed instruction file;
+  restore it …" message, and nothing is written. A first `--sync-init` with no instruction file still works.
+- **Roster check:** a sync pass reports when the hub's `agent_team` fence lists agents the roster lacks or omits
+  ones it has (`sync_hub_refresh.agent_team_roster_mismatch`). It only reports; the fence is not rewritten.
+
+### fixed (`--sync` keeps a pointer instruction file a pointer; #461)
+
+- **Fixed:** a deliberately short instruction file (for example a root `AGENTS.md` holding only a goose bridge fence)
+  was grown into a full instruction render on the next `--sync`, with no notice. A file that shares no
+  template-owned fence with the projection now gets only its own fences refreshed, and the notice names what was
+  not added: `pointer instruction file (fences: goose_bridge_entry): 2 template section(s) not added: …; regenerate
+  it natively (--update --merge) to adopt them`.
+- **New notice:** when a sync fence-merge does add sections to an instruction file, it says so (`added section(s):
+  …`).
+- **Still expanded:** a file holding even one template-owned fence (say `project_overview`) is not a pointer.
+
+### fixed (a governance-log repair backup can no longer be committed by accident)
+
+- **Fixed:** `governance_logs repair LOG --apply` wrote its backup as `LOG.bak-<timestamp>` beside the log, where no
+  ignore rule covered it, so a broad `git add` could commit a full copy of a private log such as
+  `references/security-decisions.log.csv`. The backup now goes to `.agentteams-backups/governance-log-repair/`
+  beside the log; that backup root carries a `*` `.gitignore`, as every other backup root does.
+- **Newly refused:** a repair whose backup directory is a symlink or not a directory; nothing is written.
+- **Never copied:** a CAI export (`capture_references`) and a hub load (`load_canonical`) now skip any
+  `.agentteams-backups/` tree under `references/`, so a repair backup of a team's log does not reach the sync hub or
+  its peers.
+- **Cleanup:** backups made by earlier releases stay where they were. `git status` lists them as untracked; delete
+  them once the repaired log has been checked. This repository's `.gitignore` now ignores `*.csv.bak-*` in
+  `references/`, `.github/agents/references/` and `.claude/agents/references/` (every directory the repair reads
+  logs from).
+
+### fixed (brief ingestion no longer reads dependency manifests from `tmp/` or backup trees)
+
+- **Fixed:** the project scan read `package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml` and `go.mod`
+  from any directory within two levels, including `tmp/`, `.agentteams-backups/` and `.agentteams-fleet/`. A stale
+  or planted copy there added its dependencies to the brief's tools, and so to every rendered agent. Those
+  directories, `.pytest_cache` and `.mypy_cache` are now skipped. Language detection and retrieval inference skip
+  them too (they skipped nothing before, not even `node_modules`).
+- **New:** a stderr line names each manifest that added tools: `[ingest] tools from svc/requirements.txt: 3`.
+- **Changed for some projects:** real source kept under a directory literally named `tmp` no longer contributes
+  tools; declare them in the brief.
+
+### fixed (fleet: an update that raised or was refused by a gate is FAIL, not OK)
+
+- **Fixed:** a fleet target whose update exited non-zero was reported `OK (+0/-0)` unless its output had a line
+  starting `Error` or a traceback. An exception caught by the fleet runner (`[fleet] exception: …`) and a gate
+  refusal (`[SEC-GATE/INTEL-FRESHNESS] blocked: …`, `[UPDATE-LOCK] refused: …`, `[OUTPUT-TARGET] refused: …`,
+  `[SEC-GATE/DESTRUCTIVE:overwrite] blocked: …`, `Validation errors:`) matched neither, so a failed security
+  precondition looked like a current team. A dry run had the mirror defect: a gate refusal showed `WOULD-UPDATE`.
+- **Now:** any non-zero exit is `FAIL` on the apply path, the dry-run path and in a non-git workspace (which showed
+  `REVIEW`), and the run exits 1. The row's detail shows the exception or gate line instead of "non-zero exit"; a
+  failed non-git row no longer points at a `.agentteams-backups` recovery snapshot.
+
+### fixed (`--overwrite` keeps a hand-written `## Project Layout`; #543)
+
+- **Fixed:** an `--overwrite` render replaced the body of the user-editable `## Project Layout` section in
+  `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md` with the bare banner, and said
+  nothing. It is now carried like the two Project-Specific regions, and printed: `carried user region '## Project
+  Layout' (N lines, sha256 …) across --overwrite`.
+- **Newly refused:** when the new render has no Layout section (no Directory Structure fence) and the file on disk
+  holds text there, the file is not overwritten and an error says so. A Layout section holding only the banner is
+  dropped as before. `--discard-user-regions` now drops this region too.
+- **Not changed:** `--update --merge` already kept the section, since it sits outside every fence.
+
 ### added (`plan_steps --set` marks a plan step with one command)
 
 - **New:** `python -m agentteams.plan_steps --set PLAN.steps.csv STEP [--status S] [--note TEXT | --append-note TEXT]`
