@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--convert` resolves host features from the privilege profile)
+
+- **Fixed:** `convert_team` emitted adapter sidecars with no `host_features` in the manifest, because only
+  `generate` resolved them, so an emitter gated on a host feature did nothing on convert. They are now resolved
+  from the manifest's `privilege_profile` and `os_sandbox` first, as `generate` does (absent profile: `confined`).
+  An explicit `host_features` list is kept.
+
 ### fixed (`--sync` sees instruction-file edits; it says when the pin's text outside fences does not travel; #462)
 
 - **Fixed:** `--sync` decided what changed from the agents directories only, so a commit that edited or deleted a
