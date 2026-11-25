@@ -475,6 +475,21 @@ def test_tag_drift_warns_when_head_is_clean(tmp_path, monkeypatch, capsys, _pin_
     assert "(agentteams/cli/decision_log.py)" in err
 
 
+@pytest.mark.parametrize(("over", "klass", "heading"), [
+    ({"action_reviewed": "grant-cross-repo-write"}, "relaxing", "constraint-relaxing"),          # needs the operator
+    ({"action_reviewed": "prune", "effect_grants": None, "derives_from": None}, "relaxing", "constraint-relaxing"),
+    ({"action_reviewed": "record-closure", "effect_grants": None, "derives_from": None}, "non-relaxing", "non-relaxing"),
+])
+def test_the_prompt_heading_names_the_class_the_gate_applies(over, klass, heading, tmp_path, monkeypatch, capsys):
+    """The heading said "constraint-relaxing" for every row, a non-relaxing one included (found signing a closing row)."""
+    monkeypatch.setattr(operator_signing, "_key_dir", lambda: tmp_path / "operator-home" / ".config" / "agentteams" / "keys")
+    capsys.readouterr()
+    _invoke(_sd(tmp_path, monkeypatch, spec=_decision(**over)))
+    out = capsys.readouterr().out
+    assert f"  derived class   : {klass}\n" in out
+    assert out.startswith(f"About to sign a {heading} security decision:\n")
+
+
 def test_pip_layout_without_git_or_manifest_changes_no_output(tmp_path, monkeypatch, capsys):
     """No manifest, no git, outside cwd: the self-check is a silent no-op (commit-1 output)."""
     from agentteams.cli import operator_signing

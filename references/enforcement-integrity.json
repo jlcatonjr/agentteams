@@ -35,7 +35,7 @@
     "agentteams/cli/grants.py": "71f900ef274fe604134a78994f318fb8eac4ee6dbfeb5415397555a7ab4c7887",
     "agentteams/cli/management_directives.py": "2eb9a585c8beb90c5a538f06014ec076ef9be062d3e7cc3e8b1ceb70cfe9f72b",
     "agentteams/cli/mcp_grant_commands.py": "5b5787ba1bb9d016860f0d81b51212b165b962ce288c60ab9b9e7c07dec72cbe",
-    "agentteams/cli/operator_signing.py": "52093874d0b30b87266a09971cdac5ecc7ba740afd3e0e14eef76a63aad6acdd",
+    "agentteams/cli/operator_signing.py": "88fc8b8696c7d0754a9c213b390686cafe476ff5612c11a331793892c444f872",
     "agentteams/cli/os_sandbox_switch.py": "d3606b3b9d1ac1b3db17ff76106dc6ac74d0bc2deb39b0952504db24142323c4",
     "agentteams/cli/proposal_commands.py": "3a759bb63ccb66917650fd316522f23e072b8779e229188e27041447baf574e7",
     "agentteams/cli/s10_deprecation_gate.py": "dce3fd9b96c479901f4f80bf576725b90483e39619960f55b962f1ec16074a22",

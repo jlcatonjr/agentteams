@@ -561,7 +561,7 @@ def _under_open_halt(output_dir: Path, row: dict[str, str]) -> bool:
 
 def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | None = None,
                   allow_checkout: bool = False) -> int:
-    """Mint and append one operator Ed25519-signed constraint-relaxing decision row.
+    """Mint and append one operator Ed25519-signed decision row (constraint-relaxing or not).
 
     Reads a JSON spec (the decision fields + effect_* + derives_from + key_id), loads the operator
     private key from the file named by :data:`KEYFILE_ENV`, refuses a categorically non-eligible
@@ -704,7 +704,10 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
 
     # MAJOR-4: show the full derived material effect, not just a class label, before writing.
     profile = ec.effect_profile_from_row(row)
-    print("About to sign a constraint-relaxing security decision:")
+    # The heading names the class the gate applies; it said "constraint-relaxing" for every row. Indeterminate
+    # counts as relaxing, as it does for the text-binding guard above.
+    relaxing = needs_operator or derived_class != ec.NON_RELAXING
+    print(f"About to sign a {'constraint-relaxing' if relaxing else 'non-relaxing'} security decision:")
     print(f"  action_reviewed : {row.get('action_reviewed')}")
     print(f"  verdict         : {row.get('verdict')}")
     print(f"  derived class   : {derived_class}")
