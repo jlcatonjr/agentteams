@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (a git hook installed into a tracked hooks dir no longer carries this machine's paths)
+
+- The pre-commit and pre-push hooks had the agentteams checkout path and the installing interpreter written into
+  them. With `core.hooksPath` pointing inside the working tree (a tracked `.githooks/`, say), committing the hooks
+  published a home-directory path, and on other machines the hook fell back or ran another checkout.
+- For a hooks dir inside the working tree, the installer now writes both into local git config
+  (`agentteams.hookImportPath`, `agentteams.hookPython`, in `.git/config`) and the hook reads them at run time; it
+  prints a notice saying so. The import path must be an absolute directory outside the working tree, and the
+  interpreter passes the same checks as before (3.11+, not inside the tree).
+- The default `.git/hooks` install is unchanged. A hook committed by an older version keeps its paths until it is
+  reinstalled (`agentteams --install-git-hooks`).
+
 ### security (the gate checks the scanner in its own project and in the code it imports, not only the cwd)
 
 - **Fixed:** before trusting `agentteams.scan`, the constitutional gate verified the integrity manifest of the

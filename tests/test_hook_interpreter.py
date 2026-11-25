@@ -261,3 +261,61 @@ def test_the_fixture_path_exposes_no_real_python(tmp_path: Path):
     for name in _hook_python.PATH_CANDIDATES:
         found = shutil.which(name, path=path)
         assert found is None or Path(found).parent == fake, found
+
+
+# bl48-20: a hooks dir inside the working tree (core.hooksPath) carries no machine path -----------------------
+
+_FAKE_CHECKOUT = "/home/alice/src/agentteams"
+_FAKE_PY = "/home/alice/.venv/bin/python3"
+
+
+def _in_tree_repo(tmp_path: Path, env: dict[str, str]) -> Path:
+    repo = _repo(tmp_path, env)
+    assert _run(repo, env, "config", "--local", "core.hooksPath", ".githooks").returncode == 0
+    return repo
+
+
+def test_in_tree_hooks_path_has_no_absolute_paths(tmp_path: Path, monkeypatch):
+    from agentteams import scan
+
+    env = _env([_fake_bin(tmp_path)])
+    repo = _in_tree_repo(tmp_path, env)
+    monkeypatch.setattr(_hook_python, "recorded_interpreter", lambda root: _FAKE_PY)
+    res = git_hooks.install_pre_commit_hook(repo, agentteams_path=_FAKE_CHECKOUT)
+    assert res.hook_path == (repo / ".githooks" / "pre-commit").resolve() and "inside the working tree" in res.notice
+    for name in ("pre-commit", "pre-push"):
+        text = (repo / ".githooks" / name).read_text(encoding="utf-8")
+        assert "/home/alice" not in text and str(tmp_path) not in text, name
+        assert not [f for f in scan.scan_content(text, f".githooks/{name}") if "alice" in f.snippet], name
+    assert _run(repo, env, "config", "--local", "--get", "agentteams.hookImportPath").stdout.strip() == _FAKE_CHECKOUT
+    assert _run(repo, env, "config", "--local", "--get", "agentteams.hookPython").stdout.strip() == _FAKE_PY
+
+
+def test_in_tree_hook_runs_via_git_config(tmp_path: Path):
+    env = _env([_fake_bin(tmp_path)])
+    repo = _in_tree_repo(tmp_path, env)
+    git_hooks.install_pre_commit_hook(repo, agentteams_path=str(REPO_ROOT))
+    _run(repo, env, "config", "--local", "agentteams.hookPython", sys.executable)  # this host's interpreter
+    proc = _change(repo, env)
+    assert proc.returncode == 0, proc.stderr
+    assert _SKIPPED not in proc.stderr and "API impact" in proc.stderr
+    # A config value inside the working tree is refused like a baked one.
+    planted = repo / "tools" / "python3.12"
+    planted.parent.mkdir()
+    planted.write_text(f"#!/bin/sh\ntouch {repo}/PLANTED_RAN\nexec {sys.executable} \"$@\"\n")
+    planted.chmod(0o755)
+    _run(repo, env, "config", "--local", "agentteams.hookPython", str(planted))
+    proc = _change(repo, env, "def a(x, z):\n    pass\n")
+    assert _SKIPPED in proc.stderr and not (repo / "PLANTED_RAN").exists()
+
+
+def test_default_hooks_dir_install_is_unchanged(tmp_path: Path, monkeypatch):
+    # Negative control: .git/hooks is not committable, so the paths stay baked in, exactly as before.
+    env = _env([_fake_bin(tmp_path)])
+    repo = _repo(tmp_path, env)
+    monkeypatch.setattr(_hook_python, "recorded_interpreter", lambda root: _FAKE_PY)
+    res = git_hooks.install_pre_commit_hook(repo, agentteams_path=_FAKE_CHECKOUT)
+    expected = "#!/bin/sh\n" + git_hooks._render_env_guard_block() + git_hooks._render_hook_block(
+        _FAKE_CHECKOUT, recorded_python=_FAKE_PY)
+    assert res.hook_path.read_text(encoding="utf-8") == expected and res.notice == ""
+    assert _run(repo, env, "config", "--local", "--get", "agentteams.hookImportPath").returncode != 0

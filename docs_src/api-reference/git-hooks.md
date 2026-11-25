@@ -24,6 +24,13 @@ Two maps are refreshed, each under its own guard, plus an optional cache warm-up
 - **Release-locked repository** (the root `toolchain.lock` has an `agentteams=` or `agentteams.tag=` key; failing closed like [`fleet`](fleet.md) release locks, also a `toolchain.lock` that is not a readable regular file or has a line without `=`): the locked installation, `<root>/.venv/bin/python`, run with `-I`. It must import `agentteams` on Python 3.11+, and `.venv` must be untracked. Otherwise the hook skips; it never falls back to the agentteams checkout, which would run unreleased code in a repository that pins a release.
 - **Otherwise:** the interpreter recorded at install time (`agentteams --install-git-hooks` / `--update`), then `python3.14` … `python3.11`, then `python3` on PATH, run with `-P`, with the checkout on `PYTHONPATH` (dropped when it lies strictly inside the repository, such as an in-repo `.venv`; the agentteams repository's own root is kept). A candidate must be 3.11+, and neither its path nor its `readlink -f` target may be inside the working tree.
 
+**A hooks dir inside the working tree** (`core.hooksPath` pointing at a tracked directory such as `.githooks/`) can be
+committed, so the installer writes neither machine path into it. It stores the checkout in `git config --local
+agentteams.hookImportPath` and the interpreter in `agentteams.hookPython` (in `.git/config`, never committed; an empty
+value removes the key), and the hook reads them at run time. The import path is dropped unless it is an absolute
+directory outside the working tree; the interpreter passes the same checks as every candidate. The default
+`.git/hooks` install is unchanged.
+
 When none qualifies, every step is skipped: the hook prints `agentteams: hooks SKIPPED, API impact not checked: <reason>` and appends `<UTC time>\t<reason>` to `agentteams-api-impact-skipped` in the git directory. An API impact step that fails (any exit other than 0 or 3) is appended there too. `python -m agentteams.api_impact status` prints those lines and exits 1 until a hook run whose API impact step completes (exit 0, or 3 in strict mode) removes the marker. The commit itself still succeeds; a skip is recorded, not blocking.
 
 **Pre-push block.** The same install adds an `api-review-pre-push` block to the `pre-push` hook. It is inert until
@@ -78,7 +85,8 @@ API-impact step's exit 3 in opt-in strict mode. Each guard fires only
 when relevant files are staged. Resolves the hooks directory via
 `git rev-parse --git-path hooks` (honours `core.hooksPath`, worktrees, submodules).
 `code_index_hook` (default `False`) additionally installs the opt-in code-index
-warm-up guard described above.
+warm-up guard described above. When the hooks directory is inside the working tree, the machine paths go to local
+git config instead of the hook text, and `InstallResult.notice` says so (printed by `maybe_install_git_hooks`).
 
 ### `maybe_install_git_hooks(args, project_root) -> None`
 

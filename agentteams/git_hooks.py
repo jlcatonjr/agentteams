@@ -96,6 +96,7 @@ class InstallResult:
     action: str            # "created" | "updated" | "unchanged"
     hook_path: Path
     agentteams_path: str
+    notice: str = ""       # set when the machine paths went to .git/config (hooks dir inside the working tree)
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +396,8 @@ def _hooks_dir_fallback(repo_root: Path) -> Path:
     return (dot_git / "hooks").resolve()
 
 
-def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, recorded_python: str = "") -> str:
+def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, recorded_python: str = "",
+                       from_git_config: bool = False) -> str:
     """Render the sentinel-delimited refresh block for a pre-commit hook.
 
     Independent, guarded refreshes, each firing only when relevant files are
@@ -420,7 +422,9 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
     The interpreter is resolved by :func:`agentteams._hook_python.render_resolver` (#447 a, c): the locked
     installation in a release-locked repository, else ``recorded_python`` or a 3.11+ ``python3.x`` on PATH. When none
     qualifies, every step is skipped and the skip is appended to a marker in the git directory, which
-    ``api_impact status`` reports until a hook run that reaches the API impact step removes it.
+    ``api_impact status`` reports until a hook run that reaches the API impact step removes it. With
+    ``from_git_config`` (a hooks dir inside the working tree) the import path and interpreter are read from local git
+    config at run time instead.
     """
     from agentteams._hook_python import render_resolver
 
@@ -452,7 +456,7 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
         '    _at_root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
         '    _staged="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)"\n'
         '    if [ -n "$_at_root" ]; then\n'
-        f"{render_resolver(recorded_python, agentteams_path)}"
+        f"{render_resolver(recorded_python, agentteams_path, from_git_config=from_git_config)}"
         '    fi\n'
         '    if [ -n "$_at_root" ] && [ -z "$_at_py" ]; then\n'
         '        if [ -n "$(git diff --cached --name-only 2>/dev/null)" ]; then\n'
@@ -496,7 +500,7 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False, r
     )
 
 
-def _render_pre_push_block(agentteams_path: str, *, recorded_python: str = "") -> str:
+def _render_pre_push_block(agentteams_path: str, *, recorded_python: str = "", from_git_config: bool = False) -> str:
     """Render the sentinel-delimited API review block for a pre-push hook (#447 b).
 
     It does nothing unless ``git config agentteams.apiReviewPrePush`` is set. Then it runs
@@ -509,6 +513,7 @@ def _render_pre_push_block(agentteams_path: str, *, recorded_python: str = "") -
     Args:
         agentteams_path: Directory put on ``PYTHONPATH`` outside a release-locked repository.
         recorded_python: The interpreter recorded at install time (may be ``""``).
+        from_git_config: Read both from local git config at run time (a hooks dir inside the working tree).
 
     Returns:
         The block text.
@@ -527,7 +532,7 @@ def _render_pre_push_block(agentteams_path: str, *, recorded_python: str = "") -
         "if command -v git >/dev/null 2>&1 && [ -n \"$(git config --get agentteams.apiReviewPrePush 2>/dev/null)\" ]; then\n"
         '    _at_root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
         '    if [ -n "$_at_root" ]; then\n'
-        f"{render_resolver(recorded_python, agentteams_path)}"
+        f"{render_resolver(recorded_python, agentteams_path, from_git_config=from_git_config)}"
         '        if [ -z "$_at_py" ]; then\n'
         '            echo "agentteams: pre-push API review SKIPPED: $_at_why" >&2\n'
         '            if [ -n "$_at_mark" ]; then printf \'%s\\t%s\\n\' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "pre-push: $_at_why" >> "$_at_mark" 2>/dev/null || true; fi\n'
@@ -668,31 +673,36 @@ def install_pre_commit_hook(
     target_dir = hooks_dir if hooks_dir is not None else _resolve_hooks_dir(repo_root)
     hook_path = target_dir / "pre-commit"
 
-    from agentteams._hook_python import checkout_path, recorded_interpreter
+    from agentteams import _hook_python as hp
 
+    checkout, recorded, notice = hp.checkout_path(at_path, repo_root), hp.recorded_interpreter(repo_root), ""
+    in_tree = hp.hooks_dir_in_tree(repo_root, target_dir)
+    if in_tree:  # a committable hook carries no machine path (bl48-20): they go to .git/config instead
+        hp.record_in_git_config(repo_root, checkout, recorded)
+        checkout, recorded = "", ""
+        notice = f"hooks dir {target_dir} is inside the working tree: machine paths kept in .git/config"
     block = _render_env_guard_block() + _render_hook_block(
-        checkout_path(at_path, repo_root), code_index_hook=code_index_hook,
-        recorded_python=recorded_interpreter(repo_root))
+        checkout, code_index_hook=code_index_hook, recorded_python=recorded, from_git_config=in_tree)
     existing = hook_path.read_text(encoding="utf-8") if hook_path.is_file() else None
     merged = _merge_hook_content(existing, block)
 
     push_path = target_dir / "pre-push"
     push_existing = push_path.read_text(encoding="utf-8") if push_path.is_file() else None
     push_merged = _merge_hook_content(push_existing, _render_pre_push_block(
-        checkout_path(at_path, repo_root), recorded_python=recorded_interpreter(repo_root)))
+        checkout, recorded_python=recorded, from_git_config=in_tree))
     if push_existing != push_merged:
         target_dir.mkdir(parents=True, exist_ok=True)
         push_path.write_text(push_merged, encoding="utf-8")
         push_path.chmod(0o755)
 
     if existing == merged:
-        return InstallResult(action="unchanged", hook_path=hook_path, agentteams_path=at_path)
+        return InstallResult(action="unchanged", hook_path=hook_path, agentteams_path=at_path, notice=notice)
 
     action = "updated" if existing else "created"
     target_dir.mkdir(parents=True, exist_ok=True)
     hook_path.write_text(merged, encoding="utf-8")
     hook_path.chmod(0o755)
-    return InstallResult(action=action, hook_path=hook_path, agentteams_path=at_path)
+    return InstallResult(action=action, hook_path=hook_path, agentteams_path=at_path, notice=notice)
 
 
 # ---------------------------------------------------------------------------
@@ -756,6 +766,8 @@ def maybe_install_git_hooks(args, project_root: Path) -> None:
         return
     if res.action != "unchanged":
         print(f"  ✓  Pipeline-graph pre-commit hook {res.action}: {res.hook_path}")
+    if res.notice:
+        print(f"  i  {res.notice}")
 
 
 def maybe_refresh_architecture_map(args, project_root: Path) -> None:
