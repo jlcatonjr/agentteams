@@ -47,7 +47,7 @@ from agentteams.host_features import is_sandbox_capable
 from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
 from agentteams.frameworks._control_plane_protect import substrate_protect_paths  # P20 D5
 from agentteams.frameworks._goose_egress import ollama_egress_warning  # SEC-2026-11-23-im-sealed-mail-B/C
-from agentteams.frameworks._linux_sandbox_emit import linux_launcher_verdict  # bl48-14
+from agentteams.frameworks._linux_sandbox_emit import linux_launcher_verdict
 from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
 from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
@@ -826,7 +826,7 @@ def verify_goose_sandbox_wiring(
     plat = sys.platform
 
     # Linux: enforcement is the FRAMEWORK-NEUTRAL bwrap launcher (repo-root ``sandbox/confine-run.sh``), NOT
-    # Seatbelt. Verify the launcher (never ``.goose/sandbox.sb``) and that this host can run it (bl48-14).
+    # Seatbelt. Verify the launcher (never ``.goose/sandbox.sb``) and that this host can run it.
     if plat.startswith("linux"):
         if not requested:
             return True, [

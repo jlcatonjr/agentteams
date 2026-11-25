@@ -230,7 +230,7 @@ def linux_launcher_verdict(plat: str, enforceable: list[str]) -> tuple[bool, lis
     namespaces exist on the live host (:func:`agentteams.host_features.os_sandbox_mechanism_available`).
     Emission deliberately does not probe (the render host is often not the run host); this
     verify-time check does, so ``--check-wiring`` never reports ENFORCEABLE for a launcher that
-    confines nothing (remediation log row 267, bl48-14).
+    confines nothing.
 
     Args:
         plat: The live platform string (a ``linux*`` value).
