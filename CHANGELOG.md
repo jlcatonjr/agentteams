@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`--sync` keeps a pointer instruction file a pointer; #461)
+
+- **Fixed:** a deliberately short instruction file (for example a root `AGENTS.md` holding only a goose bridge fence)
+  was grown into a full instruction render on the next `--sync`, with no notice. A file that shares no
+  template-owned fence with the projection now gets only its own fences refreshed, and the notice names what was
+  not added: `pointer instruction file (fences: goose_bridge_entry): 2 template section(s) not added: …; regenerate
+  it natively (--update --merge) to adopt them`.
+- **New notice:** when a sync fence-merge does add sections to an instruction file, it says so (`added section(s):
+  …`).
+- **Still expanded:** a file holding even one template-owned fence (say `project_overview`) is not a pointer.
+
 ### fixed (a governance-log repair backup can no longer be committed by accident)
 
 - **Fixed:** `governance_logs repair LOG --apply` wrote its backup as `LOG.bak-<timestamp>` beside the log, where no

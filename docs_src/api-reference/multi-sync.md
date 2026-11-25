@@ -77,7 +77,10 @@ fence-merge also never lowers an existing fence's version: a deployed fence with
 reported, except one no release writes (no template or emitter has it): its versions are hand-written, so
 the pin's copy wins and a peer can't block every sync by raising one. A hub with no fences is replaced by
 the pin's fenced file (it could never be fence-merged). Fences one framework owns (`grok_runtime`,
-`goose_bridge_entry`, `goose_bridge_hints`) are stripped from every other framework's instruction file. A
+`goose_bridge_entry`, `goose_bridge_hints`) are stripped from every other framework's instruction file. An
+existing instruction file that shares no template-owned fence with the projection (a short pointer `AGENTS.md`
+holding one bridge fence, say) stays a pointer: only its own fences are refreshed, and a notice names the
+template sections not added (#461). When a fence-merge adds sections to any other file, the notice names them. A
 dry `--sync` keeps the hub in memory between frameworks, so it reports what a real pass would.
 
 ## Public functions

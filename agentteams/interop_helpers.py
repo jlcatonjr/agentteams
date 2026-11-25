@@ -578,6 +578,11 @@ def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, st
     carries — is kept from *existing*. When *existing* has no parseable fences it is not
     replaced at all (it may be project-owned).
 
+    A *pointer* file — one sharing no template-owned fence with *rendered* (its fences are all
+    :data:`~agentteams.frameworks._agents_md_ownership.FRAMEWORK_OWNED_FENCE_IDS` or ids the render
+    lacks) — only has its own fences refreshed; the sections it lacks are named in the notice, not
+    added (#461). Sections added to any other file are named in the notice too.
+
     Args:
         rendered: The instruction content being projected.
         existing: The instruction file currently on disk.
@@ -586,13 +591,26 @@ def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, st
         ``(content, notice)``: the content to write (``None`` = leave the file as it is) and a
         human-readable notice ("" when nothing needs saying).
     """
-    from agentteams.fences import _merge_fenced_content
+    from agentteams.fences import _extract_fenced_regions, _merge_fenced_content
+    from agentteams.frameworks._agents_md_ownership import FRAMEWORK_OWNED_FENCE_IDS
 
-    rendered, kept = keep_newer_fences(rendered, existing)
-    notice = "; ".join(kept)
+    rendered, notices = keep_newer_fences(rendered, existing)
+    have, offered = _extract_fenced_regions(existing), _extract_fenced_regions(rendered)
+    if isinstance(have, dict) and have and isinstance(offered, dict) \
+            and not set(have) & (set(offered) - set(FRAMEWORK_OWNED_FENCE_IDS)):
+        skipped = [sid for sid in offered if sid not in have]
+        for sid in skipped:
+            rendered = rendered.replace(offered[sid], "", 1)
+        if skipped:
+            notices.append(f"pointer instruction file (fences: {', '.join(have)}): {len(skipped)} template "
+                           f"section(s) not added: {', '.join(skipped)}; regenerate it natively (--update --merge) "
+                           "to adopt them")
     result = _merge_fenced_content(rendered, existing, preserve_on_shrink=True)
     if result.parse_errors or not result.merged_content:
         return None, "existing instruction file has no mergeable AGENTTEAMS fences; left untouched"
+    if result.sections_added:
+        notices.append(f"added section(s): {', '.join(result.sections_added)}")
+    notice = "; ".join(notices)
     if result.merged_content == existing:
         return None, notice
     return result.merged_content, notice
