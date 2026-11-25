@@ -163,7 +163,7 @@ def _run_from(hook: Path, cwd: Path, log: Path) -> subprocess.CompletedProcess[s
 
 
 def test_gate_log_inside_project_outside_cwd_is_refused(tmp_path: Path) -> None:
-    # Row 603 (bl48-21): the project is the hook's own, not the cwd; a sub directory cwd used to let this through.
+    # The project is the hook's own, not the cwd; a sub directory cwd used to let this through.
     hook, sub = _project_hook(tmp_path)
     log = tmp_path / "proj" / "logs" / "g.log"
     log.parent.mkdir()

@@ -909,11 +909,12 @@ def main(payload: object, raw: bytes = b"") -> str:
 
 
 def _verify_scanner_roots(integrity) -> list:
-    """Integrity findings for every tree whose scanner this write could be trusting (row 603).
+    """Integrity findings for every tree whose scanner this write could be trusting.
 
     The trees are the hook's project roots, the working directory and the tree ``agentteams`` is
     imported from (under an editable install, the code that actually runs), each verified once. A
-    manifest that cannot be parsed, or holds a non-string digest, becomes a ``manifest-unreadable``
+    manifest that cannot be decoded or parsed (not UTF-8, invalid or too deeply nested JSON, an I/O
+    error), or holds a non-string digest, becomes a ``manifest-unreadable``
     finding instead of an exception: an exception escaping the gate lets the write through in the
     cooperative profile. ``describe()`` runs here because an ill-typed digest raises only there.
 
@@ -928,7 +929,8 @@ def _verify_scanner_roots(integrity) -> list:
     for root in dict.fromkeys(p.resolve() for p in roots):
         try:
             findings += [f for f in integrity.verify(root) if f.describe()]
-        except (RuntimeError, AttributeError, TypeError) as exc:  # unparsable or ill-typed manifest
+        # RuntimeError includes RecursionError; ValueError includes UnicodeDecodeError.
+        except (RuntimeError, AttributeError, TypeError, ValueError, OSError) as exc:
             manifest = str(root / integrity.MANIFEST_REL_PATH)
             findings.append(integrity.IntegrityFinding(manifest, "", type(exc).__name__, "manifest-unreadable"))
     return findings

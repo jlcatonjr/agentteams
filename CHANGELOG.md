@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or none, so a changed `scan.py` in the hook's own project went unnoticed. The gate now verifies the union of
   the hook's project roots (its install location and `$CLAUDE_PROJECT_DIR`), the working directory, and the tree
   `agentteams` is imported from, which under an editable install is the code that actually runs.
-- **Unreadable manifest:** a manifest in any of those trees that cannot be parsed now asks
+- **Unreadable manifest:** a manifest in any of those trees that cannot be decoded or parsed (not UTF-8, invalid or
+  too deeply nested JSON, an I/O error) or that holds a non-string digest now asks
   (`scanner-unverified`, reason `manifest-unreadable`) in both profiles. Before, it raised out of the gate, and in
   the cooperative profile an exception lets the write through.
 - **Gate log:** `AGENTTEAMS_GATE_LOG` is refused when it lies inside any of the hook's project roots or the working

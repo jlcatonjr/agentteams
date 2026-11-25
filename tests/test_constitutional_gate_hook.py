@@ -12,6 +12,7 @@ way otherwise — and the failure mode it deliberately accepts.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -574,7 +575,7 @@ def test_a_fleet_run_without_a_lock_lift_is_not_gated() -> None:
     assert code == 0 and decision is None
 
 
-# ── Row 603 (bl48-21): the scanner check covers the hook's project, the cwd and the imported tree ─────
+# ── The scanner check covers the hook's project, the cwd and the imported tree ─────────────────────
 
 def _gate_in_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scan_digest: str | None):
     """Install the gate in ``tmp_path/proj`` with a manifest pinning ``agentteams/scan.py``; cwd ``proj/sub``."""
@@ -640,6 +641,27 @@ def test_an_unreadable_project_manifest_asks_instead_of_crashing(
     gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
     (proj / "references" / "enforcement-integrity.json").write_text(manifest, encoding="utf-8")
     assert _write_verdict(gate) == ("ask", "scanner-unverified")
+
+
+@pytest.mark.parametrize("manifest", [b"\xff", ("[" * 200000 + "]" * 200000).encode()])
+def test_an_undecodable_or_too_deep_manifest_asks_instead_of_crashing(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest: bytes) -> None:
+    # Not UTF-8 raises UnicodeDecodeError (a ValueError); too deep raises RecursionError (a RuntimeError).
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    (proj / "references" / "enforcement-integrity.json").write_bytes(manifest)
+    assert _write_verdict(gate) == ("ask", "scanner-unverified")
+
+
+def test_an_unreadable_pinned_scanner_asks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    scan = proj / "agentteams" / "scan.py"
+    scan.chmod(0)
+    try:
+        if os.access(scan, os.R_OK):
+            pytest.skip("running as a user who can read a mode-000 file")
+        assert _write_verdict(gate) == ("ask", "scanner-unverified")
+    finally:
+        scan.chmod(0o644)
 
 
 @pytest.mark.parametrize("layout", [".claude/hooks", ".github/hooks", ".grok/hooks"])
