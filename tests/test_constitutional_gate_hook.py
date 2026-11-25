@@ -572,3 +572,61 @@ def test_fleet_release_lock_lift_requires_authorization(command: str) -> None:
 def test_a_fleet_run_without_a_lock_lift_is_not_gated() -> None:
     code, decision = _run_template("agentteams --fleet . --update --merge --fleet-exclude 'agentteams*'")
     assert code == 0 and decision is None
+
+
+# ── Row 603 (bl48-21): the scanner check covers the hook's project, the cwd and the imported tree ─────
+
+def _gate_in_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scan_digest: str | None):
+    """Install the gate in ``tmp_path/proj`` with a manifest pinning ``agentteams/scan.py``; cwd ``proj/sub``."""
+    import hashlib
+    import importlib.util
+
+    proj = tmp_path / "proj"
+    (proj / ".claude" / "hooks").mkdir(parents=True)
+    (proj / "sub").mkdir()
+    (proj / "agentteams").mkdir()
+    (proj / "references").mkdir()
+    scan = (REPO / "agentteams" / "scan.py").read_bytes()
+    (proj / "agentteams" / "scan.py").write_bytes(scan)
+    digest = scan_digest if scan_digest is not None else hashlib.sha256(scan).hexdigest()
+    (proj / "references" / "enforcement-integrity.json").write_text(
+        json.dumps({"modules": {"agentteams/scan.py": digest}}), encoding="utf-8")
+    hook = proj / ".claude" / "hooks" / "constitutional-gate.py"
+    hook.write_bytes(TEMPLATE.read_bytes())
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(proj / "sub")
+    spec = importlib.util.spec_from_file_location(f"_gate_root_{tmp_path.name}", hook)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    return gate, proj
+
+
+def _write_verdict(gate) -> tuple[str, str]:
+    try:
+        return "pass", gate.main({"tool_name": "Write", "tool_input": {"file_path": "notes.md", "content": "hello"}})
+    except gate._Verdict as v:
+        return v.decision, v.reason_id
+
+
+def test_gate_verifies_project_manifest_from_subdirectory_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gate, _ = _gate_in_project(tmp_path, monkeypatch, "0" * 64)
+    assert _write_verdict(gate) == ("ask", "scanner-unverified")
+
+
+def test_gate_passes_a_matching_project_manifest_from_subdirectory_cwd(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gate, _ = _gate_in_project(tmp_path, monkeypatch, None)
+    assert _write_verdict(gate) == ("pass", "scan")
+
+
+def test_gate_verifies_the_tree_agentteams_is_imported_from(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams import integrity
+
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    seen: list[Path] = []
+    real = integrity.verify
+    monkeypatch.setattr(integrity, "verify", lambda root: seen.append(Path(root).resolve()) or real(root))
+    assert _write_verdict(gate) == ("pass", "scan")
+    imported = Path(integrity.__file__).resolve().parents[1]
+    assert {proj.resolve(), (proj / "sub").resolve(), imported} <= set(seen)
+    assert len(seen) == len(set(seen))

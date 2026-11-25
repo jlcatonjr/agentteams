@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the gate checks the scanner in its own project and in the code it imports, not only the cwd; bl48-21)
+
+- **Fixed:** before trusting `agentteams.scan`, the constitutional gate verified the integrity manifest of the
+  working directory only. A session started in a subdirectory or another worktree checked a different manifest,
+  or none, so a changed `scan.py` in the hook's own project went unnoticed. The gate now verifies the union of
+  the hook's project roots (its install location and `$CLAUDE_PROJECT_DIR`), the working directory, and the tree
+  `agentteams` is imported from, which under an editable install is the code that actually runs.
+- **Gate log:** `AGENTTEAMS_GATE_LOG` is refused when it lies inside any of the hook's project roots or the working
+  directory, with the same "path is inside the project" note; before, only the working directory counted.
+- **Newly asks or refuses, nothing newly allowed:** a mismatched scanner in any of those trees asks
+  (`scanner-unverified`), and a gate log inside the project but outside the working directory is not written.
+  Every root checked before is still checked.
+
 ### security (the gate asks on git config that runs a program or hands over the push credential; bl48-08)
 
 - **Fixed:** the constitutional gate's `git-alias-config` class now also asks on `credential.*`, `core.hooksPath`,

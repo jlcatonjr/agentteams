@@ -764,8 +764,9 @@ def main(payload: object, raw: bytes = b"") -> str:
         # than 0/2 is a non-blocking error), so _import_integrity re-runs under the pinned
         # interpreter or fails visibly (the checkout-root fallback was removed; see _import_integrity).
         integrity = _import_integrity(raw)
-
-        integrity_findings = integrity.verify(Path.cwd())
+        # Row 603: the hook's project roots, the cwd AND the tree agentteams is imported from (the code that runs).
+        roots = dict.fromkeys(p.resolve() for p in (*_project_roots(), Path.cwd(), Path(integrity.__file__).parents[1]))
+        integrity_findings = [f for root in roots for f in integrity.verify(root)]
         tampered = [f for f in integrity_findings if f.rel_path.endswith("scan.py")]
         # PR-D (row 31): a MISSING manifest where one is expected (this repo ships it, or the
         # scanner runs from inside the project) leaves the scanner unverifiable. Under the
@@ -820,8 +821,7 @@ def _log_target(raw: str) -> Path:
     if not path.is_absolute():
         raise ValueError("path is not absolute")
     parent = path.parent.resolve()
-    project = Path.cwd().resolve()
-    if parent == project or project in parent.parents:
+    if _inside(parent, [*_project_roots(), Path.cwd().resolve()]):
         raise ValueError("path is inside the project")
     for directory in (parent, *parent.parents):
         if (directory / ".git").exists():

@@ -95,8 +95,9 @@ def test_crash_record_never_carries_the_exception_text(tmp_path: Path) -> None:
 
 
 def test_fail_closed_crash_logs_once_and_denies(tmp_path: Path) -> None:
-    hook = tmp_path / "hooks" / "constitutional-gate.py"
-    hook.parent.mkdir()
+    # Installed as <project>/.claude/hooks/<gate>, so the log beside the project is outside every project root.
+    hook = tmp_path / "proj" / ".claude" / "hooks" / "constitutional-gate.py"
+    hook.parent.mkdir(parents=True)
     hook.write_text(TEMPLATE.read_text().replace("_FAIL_CLOSED_ON_ERROR = False", "_FAIL_CLOSED_ON_ERROR = True", 1))
     log = tmp_path / "gate.jsonl"
     proc = _run("not json", {"AGENTTEAMS_GATE_LOG": str(log)}, hook=hook)
@@ -143,6 +144,42 @@ def test_unsafe_log_path_is_refused_without_changing_the_decision(tmp_path: Path
     assert not (REPO / "gate-should-not-exist.jsonl").exists()
     if where == "symlink":
         assert (tmp_path / "real.jsonl").read_text() == ""
+
+
+def _project_hook(tmp_path: Path) -> tuple[Path, Path]:
+    """Install the gate in ``tmp_path/proj``; return ``(hook, proj/sub)``, the sub directory as the cwd."""
+    hooks = tmp_path / "proj" / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    (tmp_path / "proj" / "sub").mkdir()
+    (hooks / "constitutional-gate.py").write_bytes(TEMPLATE.read_bytes())
+    return hooks / "constitutional-gate.py", tmp_path / "proj" / "sub"
+
+
+def _run_from(hook: Path, cwd: Path, log: Path) -> subprocess.CompletedProcess[str]:
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("AGENTTEAMS_GATE_LOG", "CLAUDE_PROJECT_DIR"))}
+    env["AGENTTEAMS_GATE_LOG"] = str(log)
+    return subprocess.run([sys.executable, str(hook)], input=json.dumps(_bash("rm -rf build")), capture_output=True,
+                          text=True, cwd=str(cwd), env=env, timeout=30, check=False)
+
+
+def test_gate_log_inside_project_outside_cwd_is_refused(tmp_path: Path) -> None:
+    # Row 603 (bl48-21): the project is the hook's own, not the cwd; a sub directory cwd used to let this through.
+    hook, sub = _project_hook(tmp_path)
+    log = tmp_path / "proj" / "logs" / "g.log"
+    log.parent.mkdir()
+    proc = _run_from(hook, sub, log)
+    assert json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert "path is inside the project" in proc.stderr
+    assert not log.exists()
+
+
+def test_gate_log_outside_every_root_is_written_from_a_subdirectory(tmp_path: Path) -> None:
+    hook, sub = _project_hook(tmp_path)
+    log = tmp_path / "outside" / "g.log"
+    log.parent.mkdir()
+    proc = _run_from(hook, sub, log)
+    assert "decision log not written" not in proc.stderr
+    assert [r["decision"] for r in _lines(log)] == ["ask"]
 
 
 def test_chain_links_every_line_even_under_concurrent_writers(tmp_path: Path) -> None:
