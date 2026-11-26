@@ -51,6 +51,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/decision_lineage.py",  # C-2: derives_from lineage, so a rename can't evade a HALT
     "agentteams/cli/decision_authors.py",  # C-5: the approver roster and the one roster check the gate uses
     "agentteams/cli/sign_decision_refusals.py",  # --sign-decision's pre-key refusals (author roster, open HALT)
+    "agentteams/cli/key_retirement.py",  # C-5: a retired verify key verifies only its signed snapshot
+    "agentteams/cli/key_retirement_verb.py",  # --retire-verify-key: what the snapshot keeps, each signature verified
     "agentteams/signing_switch.py",  # C-2/C-5: is_governed (decides fail-closed signing), the switch reads and the
                                      # symlink refusal the decision gate reads its log and switch through
     "agentteams/cli/action_ids.py",      # C-2/C-5: which rows clear an action, which HALTs block it

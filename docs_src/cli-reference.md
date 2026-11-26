@@ -1463,6 +1463,33 @@ Read-only: list every entry in `references/exception-registry.json` under `--out
 
 **Operator-only.** Sign a first-party toolchain group file (`.agentteams/toolchain-group.json`: `version` 2, `scope`, `group`, `workspaces`, `purpose`, `sequence`, `key_id`, `derives_from`) in place with the Ed25519 decision key. It uses `--sign-decision`'s path: shape check, display of the group and every workspace, review digest and confirmation (`--confirm-review-sha256` without a terminal), preflight (key file, integrity, install location), then verification against `--output`'s `references/authorized-verify-keys/<key_id>.pub.pem` before it writes. The signature covers every field except itself. Commit the same signed bytes in every listed workspace. The file lifts Rule S-10's cooldown and the per-release pin row for releases of its repositories, in its workspaces; see the constitution's "First-party toolchain group" section.
 
+### `--retire-verify-key` / `--retire-include`
+
+**Operator-only.** `--retire-verify-key OLD --key-id NEW --team-dir DIR [--retire-include FILE ...]` retires the
+Ed25519 verify key `OLD` without revoking what it already signed. It writes
+`DIR/references/authorized-verify-keys/OLD.retired.json`: the sha256 of every signature under `OLD` in the team's
+decisions log and, at the project root, the capability-grants log, `.agentteams/carveouts.json`,
+`.agentteams/toolchain-group.json` and `.agentteams/dev-merge-authorization.json`, plus each `--retire-include` file
+(a decisions log, capability-grants log, carve-out registry, toolchain group or dev-merge authorization, repeatable;
+another kind, or one with no signature under `OLD`, is refused). Each signature is verified under `OLD` against its own
+document first; one that does not verify refuses the run and is named. The record is signed with key `NEW`, which
+must differ from `OLD` by its bytes and must not be retired, and is bound to `<project>:<team dir>` (the build log's
+`project_name` slug and the team dir's path from the project root). `DIR` must be a generated team dir
+(`.claude/agents`, `.github/agents`, ...); a gates-only team dir is refused, as is an agent session. Records `OLD`
+signed for other keys are re-signed with `NEW` in the same run, keeping their snapshots; one that lists digests its
+committed copy does not is refused, and one with no committed copy is shown as such. A team dir in a nested
+repository is refused when an outer repository's store holds the same key. The order is `--sign-decision`'s:
+pre-key refusals, preflight (integrity, key file, install location), display of every kept signature and its document
+and every re-signed record, review digest and confirmation (`--confirm-review-sha256` without a terminal), the key
+read, signing, then verification of each record before anything is written. Afterwards, in every team dir store of
+the project (and under any other file name holding the same key), a signature under `OLD` verifies only when every
+record retiring that key lists its digest, and new signing under `OLD` is refused. A record that does not verify, or
+whose binding is not its store's, refuses every signature under `OLD`; a symbolic link at a generated team dir path
+refuses every Ed25519 verify of the project. The user-level `~/.config/agentteams/verify-keys/` is not covered: remove
+the old key there. `--verify-integrity` reports the records of every store and warns when one is missing on disk or
+its own `.pub.pem` is. Procedure and what
+to check in the review: `references/authorized-verify-keys/README.md` ("Retiring a key").
+
 ### `--verify-toolchain-group`
 
 Read-only. Verify this workspace's `.agentteams/toolchain-group.json` against `--output`'s governed team dir: the signature, the workspace binding (`repo:` from the git `origin`, which must be a github.com URL, and `team:` from `--team-id`, else the brief's `team_id`, else its slugified `project_name`; the brief is `--description`, else the project's own brief as fleet discovery finds it), HALTs on `s10-toolchain-group` and on any `s10-cooldown-exempt` action, the signed `derives_from` lineage (each parent an authentic authorizing decision in the governed log, its chain recorded and acyclic, and no unretracted HALT on it or any ancestor), and the recorded `sequence`. Prints the group a render would use. **Exit code:** `0` when it verifies and at least one member remains; `1` otherwise, including an ungoverned workspace (a render never applies the group there) and a group whose every member a HALT drops.

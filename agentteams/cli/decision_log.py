@@ -542,19 +542,21 @@ _VERIFY_KEY_STORE_REL = "references/authorized-verify-keys"
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
-def _load_verify_key(output_dir: Path, key_id: str) -> str:
+def _load_verify_key(output_dir: Path, key_id: str, *, signature: str) -> str:
     """Return the PEM of the Ed25519 public verify key named by ``key_id`` (fail-closed).
 
     Args:
         output_dir: The team root.
         key_id: The signed ``key_id`` selecting which public key to verify against.
+        signature: The signature about to be verified (checked against a retired key's snapshot).
 
     Returns:
         The PEM text.
 
     Raises:
         RuntimeError: ``key_id`` is malformed, the key file is missing (the relaxing path is then
-            *unavailable* — the availability gate), or it cannot be read / escapes the store.
+            *unavailable* — the availability gate), or it cannot be read / escapes the store, or
+            the key is retired and ``signature`` is not in its signed snapshot (``key_retirement``).
     """
     if not key_id or not _KEY_ID_RE.match(key_id):
         raise RuntimeError(f"relaxing authorization names a missing/invalid key_id ({key_id!r})")
@@ -567,6 +569,9 @@ def _load_verify_key(output_dir: Path, key_id: str) -> str:
             f"no Ed25519 verify key for key_id {key_id!r} at {_VERIFY_KEY_STORE_REL}/"
             f"{key_id}.pub.pem — the relaxing authorization path is unavailable (fail-closed)."
         )
+    from agentteams.cli.key_retirement import assert_signature_permitted
+
+    assert_signature_permitted(output_dir, key_id, signature)
     try:
         return path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -600,17 +605,17 @@ def _assert_ed25519_sufficient(row: dict[str, str], *, output_dir: Path, action:
             f"operator's Ed25519 signature can authorize this."
         )
     from agentteams.cli.grants import payload_claims_grant_purpose
+    from agentteams.cli.key_retirement import payload_claims_retirement_purpose as _retirement
 
-    if payload_claims_grant_purpose(_decision_signature_values(row)):
-        # PR-E domain separation: the same operator key signs grants, whose payloads begin with
-        # the grant purpose tag. A decision whose payload lies in that domain could be a replayed
-        # grant signature — refuse it (--sign-decision refuses to mint one, too).
-        raise RuntimeError(
-            f"decision authorizing action '{action}' has a payload in the capability-"
-            f"grant signing domain (it begins with the grant purpose tag); refused (fail-closed)."
-        )
-    public_pem = _load_verify_key(output_dir, (row.get("key_id") or "").strip())
+    grant = payload_claims_grant_purpose(_decision_signature_values(row))
+    if grant or _retirement(_decision_signature_values(row)):
+        # PR-E domain separation: the same operator key signs grants and key-retirement records, whose payloads
+        # begin with their purpose tags. A decision payload in either domain could be a replayed signature.
+        raise RuntimeError(f"decision authorizing action '{action}' has a payload in the "
+                           f"{'capability-grant' if grant else 'key-retirement'} signing domain (it begins with "
+                           "that purpose tag); refused (fail-closed).")
     signature = (row.get("signature") or "").strip()
+    public_pem = _load_verify_key(output_dir, (row.get("key_id") or "").strip(), signature=signature)
     try:
         ok = verify_by_scheme(
             SIG_SCHEME_ED25519,

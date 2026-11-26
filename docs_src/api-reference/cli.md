@@ -169,6 +169,27 @@ F-2: the refusal sentence when `output_dir` holds neither `references/agent-priv
 (`stored_view(row, fieldnames)`), is off the approver roster) and `open_halt_refusal(output_dir, row, fieldnames)` (a clearance
 on an id, or a `derives_from` parent, under an open HALT, #616).
 
+### `retire_verify_key(old, new, team_dir, includes, *, confirm_sha256=None, allow_checkout=False)` / `assert_signature_permitted(team_dir, key_id, signature)`
+
+> *Source: `agentteams/cli/key_retirement_verb.py` (the verb) and `agentteams/cli/key_retirement.py` (the check)*
+
+`--retire-verify-key`: writes `<team_dir>/references/authorized-verify-keys/<old>.retired.json`, the sorted sha256
+of the decoded bytes of every signature under `old` (`collect_signatures`, each verified under `old` against its own
+document's signed values), signed with key `new` over `[agentteams-key-retirement-v1, key_id, not_after, signed_by,
+binding, digests]`, where `binding(team_dir)` is `<project_name slug>:<team dir from the project root>`. Returns 0, or
+1 on any error. Before the key is read it refuses inside an agent session, two equal or malformed key ids or the same
+key bytes under two ids, a non-team or gates-only dir, a missing `.pub.pem` for either key, a retired `new`, a store
+whose record `old` signed but which lacks `new`, an include of an unknown kind or with no signature under `old`, a
+signature that does not verify, and display-spoofing characters. Then the preflight, the display, confirm, the key
+read, signing of the new record and of each record `old` signed (re-signed by `new` with its snapshot,
+`records_signed_by`, after a comparison with its committed copy that refuses a widened one), and verification of each (`verify_signed_record`) before anything is written.
+`assert_signature_permitted` is called by `decision_log._load_verify_key(output_dir, key_id, *, signature)`: it
+matches the key by its bytes against every record in `scan_dirs(team_dir)` (`clearance_binding.halt_scan_dirs` plus,
+outside git, the generated team dirs beside it, a symbolic link in their paths refusing); with none, nothing changes;
+otherwise every applicable record must verify (binding, and a signer that differs by its bytes and is not retired),
+and the signature's digest must be listed in every one, else `RuntimeError`. `report_lines(team_dir)` gives
+`--verify-integrity` its lines for every store in `scan_dirs`.
+
 ### `load_grant_spec(path, flag)` / `grant_spec_kwargs(spec)` / `report_issued(record, ledger_root, team_dir)`
 
 > *Source: `agentteams/cli/operator_signing.py`*

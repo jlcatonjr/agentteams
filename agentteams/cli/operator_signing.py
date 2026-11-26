@@ -60,6 +60,8 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/decision_lineage.py",  # imported by decision_log at module level
     "agentteams/cli/decision_authors.py",  # imported by decision_log at module level
     "agentteams/cli/sign_decision_refusals.py",  # sign_decision's refusals, run before the key read
+    "agentteams/cli/key_retirement.py",  # every verify-key load applies a retired key's snapshot
+    "agentteams/cli/key_retirement_verb.py",  # --retire-verify-key: collects, verifies and signs
     "agentteams/cli/action_ids.py",  # imported by decision_log at module level
     "agentteams/cli/decision_chain.py",  # imported by decision_log at module level
     "agentteams/cli/grants.py",
@@ -612,6 +614,12 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         print("Error: refusing to sign — this decision's payload begins with the capability-"
               "grant purpose tag (use --sign-grant for grants).", file=sys.stderr)
         return 1
+    from agentteams.cli.key_retirement import payload_claims_retirement_purpose
+
+    if payload_claims_retirement_purpose(dl._decision_signature_values(row)):
+        print("Error: refusing to sign — this decision's payload begins with the key-retirement purpose tag "
+              "(use --retire-verify-key).", file=sys.stderr)
+        return 1
     from agentteams.cli.toolchain_group import PURPOSE as _GROUP_PURPOSE
 
     if "|".join(dl._decision_signature_values(row)).startswith(_GROUP_PURPOSE + "|"):
@@ -668,7 +676,7 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         row["signature"] = sl.ed25519_sign(private_pem, values)
         # F-2 verify-before-append: the key the GATE will load (this team's store, by key_id)
         # must verify the new signature, or the row is refused now rather than at gate time.
-        public_pem = dl._load_verify_key(output_dir, row.get("key_id", ""))
+        public_pem = dl._load_verify_key(output_dir, row.get("key_id", ""), signature=row["signature"])
         if not sl.ed25519_verify(public_pem, values, row["signature"]):
             raise RuntimeError(
                 f"the signature does not verify against {dl._VERIFY_KEY_STORE_REL}/"
