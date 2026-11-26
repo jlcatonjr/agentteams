@@ -1548,6 +1548,8 @@ edited after signing (such a row no longer clears). Advisory: it does not change
 `--verify-integrity` (and `--migrate-decision-log --dry-run`) lists each unretracted HALT that newly blocks an
 agentteams gate action this way, with the exact id to retract it by, and every other unretracted HALT, which blocks any
 action your own `check_clearance` gates use whose id appears in it. Advisory: it does not change the exit code.
+It lists first each unretracted HALT whose id has no letter or digit, with the row handle (`halt-row:<N>:<digest>`)
+that retracts it: such a HALT blocks every gated action.
 
 **Governance logs:** it also checks the append-only CSV logs (`security-decisions.log.csv`,
 `agentteams-remediation-log.csv`, `redteam-findings.log.csv`, `mcp-needs.csv`, `conflict-log.csv`) found under

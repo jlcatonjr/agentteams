@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-25
+
+### release notes
+
+agentteams 1.3.1 backports one security fix from `dev` to the 1.3 line: a HALT with no usable id now blocks every
+gated action (it blocked none through 1.3.0). **Action for existing teams:** run `--verify-integrity` after
+upgrading. A decisions log that holds such a HALT refuses every gated action, the scheduled vulnerability
+remediation included, until the row is reviewed and either retracted by its row handle or left in force. Nothing
+else from `dev` is included.
+
+### security (a HALT with no usable id blocks every gated action; it used to block none)
+
+- A HALT row whose `action_reviewed` is empty, blank or punctuation only names no action, so no gate attributed it and
+  a later PASS cleared the action. It now blocks every gated action (C-2: a HALT the gate reads but cannot attribute
+  must block, never vanish).
+- It is retracted only by a `HALT-RETRACTED` row whose `action_reviewed` is exactly its row handle,
+  `halt-row:<N>:<digest>`, with evidence and authenticated like any retraction. The handle binds the row's number
+  and a digest of its signed fields (date, id, verdict, `conditions_verified`, author, chain link, and every
+  optional signed column the row fills in, such as `scope` or `text_digest`), so a HALT shifted by rows added or
+  removed before it blocks again. Free-text `conditions` and `evidence` are covered only through `text_digest`.
+- The gate's refusal names the handle as the HALT's id, so `vulnscan halts` prints a retraction that works.
+- **On upgrade:** a log holding such a row refuses every gated action, the scheduled vulnerability remediation
+  included, until the row is reviewed. `--verify-integrity` and `--migrate-decision-log --dry-run` list each one
+  with its handle.
+- Free-text HALT matching is unchanged: such a HALT blocks the actions whose id appears in it as a whole token.
+
 ## [1.3.0] - 2026-11-24
 
 ### release notes
