@@ -1792,8 +1792,11 @@ clearance first: more items in a capability list, a capability key absent on dis
 change, and any value either side cannot parse (an `mcpServers` or `hooks` block, a list in a
 different vocabulary). In a governed workspace (`enforce_decision_signing`) the clearance is a
 PASS row signed with the operator's Ed25519 key, never a waiver, with `scope=reconcile-apply-widen`
-and `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>` (separated
-by `;`); it counts against the exception cap. In an ungoverned workspace an ordinary
+and `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>@sha256:<hex>`
+(separated by `;`); it counts against the exception cap. The digest is of the value that will be
+written (a list's sorted items, otherwise its text), so a clearance covers the value the operator
+reviewed and refuses a different one rendered for the key later. The refusal prints each token
+in full. In an ungoverned workspace an ordinary
 `reconcile-apply-widen` PASS row from an approved author clears it (a waiver still does not, and
 a row that lists `effect_grants` must list exactly this run's). An unretracted HALT recorded as
 `reconcile-apply-widen` or `reconcile-apply` blocks it, a clearance older than the retraction of

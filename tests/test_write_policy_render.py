@@ -163,7 +163,7 @@ def test_switching_on_an_existing_team(tmp_path):
     # The read-only set adds Read where an agent lacked it, so those files widen and need a signed clearance.
     proc = _cli(*base, "--reconcile-front-matter", "--reconcile-apply", cwd=tmp_path)
     assert proc.returncode == 1, proc.stdout[-1500:] + proc.stderr[-1500:]
-    tokens = sorted(re.findall(r"REFUSED (\S+): (\S+) — widens", proc.stdout))
+    tokens = sorted(re.findall(r"REFUSED \S+: \S+ — widens.* granting (\S+)$", proc.stdout, re.M))
     assert tokens, proc.stdout[-1500:]
     pytest.importorskip("cryptography", reason="the 'signing' extra is not installed")
     from agentteams.cli.signed_ledger import ed25519_sign
@@ -172,7 +172,7 @@ def test_switching_on_an_existing_team(tmp_path):
     private, public = _keypair()
     (out / "references" / "authorized-verify-keys" / f"{_KEY_ID}.pub.pem").write_text(public, encoding="utf-8")
     (out / "references" / "security-decisions.log.csv").unlink()  # the generated legacy header has no signing columns
-    _log(out, _row("reconcile-apply-widen", grants=";".join(f"frontmatter:{f}#{k}" for f, k in tokens), relaxes="",
+    _log(out, _row("reconcile-apply-widen", grants=";".join(tokens), relaxes="",
                    sign=lambda values: ed25519_sign(private, values)))
     proc = _cli(*base, "--reconcile-front-matter", "--reconcile-apply", cwd=tmp_path)
     assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]

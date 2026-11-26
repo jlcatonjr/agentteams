@@ -2,7 +2,7 @@
 
 A narrowing and a non-capability key apply as before. A widening needs, in a governed workspace, a signed decision
 (never a waiver) whose ``scope`` is the action and whose ``effect_grants`` are exactly this run's
-``frontmatter:<file>#<key>`` tokens; in an ungoverned one, an ordinary PASS row from an approved author.
+``frontmatter:<file>#<key>@sha256:<digest of the value>`` tokens; in an ungoverned one, an ordinary PASS row from an approved author.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from agentteams import front_matter_reconcile as fmr
+from agentteams import front_matter_widening as fmw
 from agentteams.cli import reconcile_apply_gate as gate
 from agentteams.cli import security_gate
 from agentteams.front_matter_reconcile import Divergence
@@ -23,6 +24,7 @@ from tests._sandbox_gate_helpers import _log, _retraction, _row, _team
 _A = gate.ACTION
 _ORCH_DISK = "---\nname: o\ndescription: old\ntools: Read\nagents:\n  - a\n---\nbody\n"
 _ORCH_TMPL = "---\nname: o\ndescription: old\ntools: Read\nagents:\n  - a\n  - b\n---\nbody\n"
+_ORCH_TOKEN = gate.grant_token("orchestrator.md", "agents", fmw.value_digest("agents", "\n  - a\n  - b"))
 
 
 def _run(team: Path, rendered: list[tuple[str, str]], *, dry_run: bool = False) -> int:
@@ -72,7 +74,7 @@ def test_orchestrator_agents_widening_refused_without_decision(tmp_path, capsys)
 
 def test_signed_exact_grant_clears_widening(tmp_path, stub_ed25519):
     team, orch, rendered = _widening_team(tmp_path)
-    _log(team, _row(_A, grants="frontmatter:orchestrator.md#agents", relaxes=""))
+    _log(team, _row(_A, grants=_ORCH_TOKEN, relaxes=""))
     assert _run(team, rendered) == 0
     assert orch.read_text(encoding="utf-8") == _ORCH_TMPL
     assert _consumed(team) == [_A]
@@ -118,6 +120,20 @@ def test_the_row_checked_is_the_row_spent(tmp_path, stub_ed25519, monkeypatch):
     with (team / "references" / "security-decisions.log.csv").open(newline="") as fh:
         spent = [r["effect_grants"] for r in csv.DictReader(fh) if (r.get("consumed") or "") == "yes"]
     assert spent == [";".join(tokens)], "a row other than the one whose grants were checked was spent"
+
+
+def test_the_clearance_is_bound_to_the_value_it_was_signed_for(tmp_path, stub_ed25519, capsys):
+    """A row signed for value A does not clear a wider value B rendered for the same key later."""
+    wider = _ORCH_TMPL.replace("  - b\n", "  - b\n  - c\n")
+    team, orch, rendered = _widening_team(tmp_path)
+    assert _run(team, rendered) == 1
+    token = re.search(r"effect_grants=(\S+?),", capsys.readouterr().out).group(1)
+    assert token.startswith("frontmatter:orchestrator.md#agents@sha256:"), token
+    _log(team, _row(_A, grants=token, relaxes=""))
+    assert _run(team, [("orchestrator.md", wider)]) == 1
+    assert orch.read_text(encoding="utf-8") == _ORCH_DISK and _consumed(team) == []
+    assert _run(team, rendered) == 0  # negative control: the value it was signed for clears
+    assert orch.read_text(encoding="utf-8") == _ORCH_TMPL
 
 
 def test_governed_symmetric_signature_is_insufficient(tmp_path, stub_ed25519):
@@ -258,8 +274,6 @@ def test_a_deny_list_adds_its_new_denials_and_waits_to_drop_one(tmp_path):
     ("Read, Bash", "Read, Grep", "Read"),
 ])
 def test_the_safe_part_keeps_the_templates_shape(disk, tmpl, expected):
-    from agentteams import front_matter_widening as fmw
-
     assert fmw.safe_part("tools", disk, tmpl) == expected
 
 
@@ -296,7 +310,7 @@ def test_a_flow_list_not_made_only_of_well_formed_items_is_widening(template):
 
 def test_dry_run_consumes_nothing(tmp_path, stub_ed25519, capsys):
     team, orch, rendered = _widening_team(tmp_path)
-    _log(team, _row(_A, grants="frontmatter:orchestrator.md#agents", relaxes=""))
+    _log(team, _row(_A, grants=_ORCH_TOKEN, relaxes=""))
     log = (team / "references" / "security-decisions.log.csv").read_bytes()
     assert _run(team, rendered, dry_run=True) == 0
     assert orch.read_text(encoding="utf-8") == _ORCH_DISK
@@ -306,3 +320,17 @@ def test_dry_run_consumes_nothing(tmp_path, stub_ed25519, capsys):
     team2, _orch2, rendered2 = _widening_team(tmp_path / "none")
     assert _run(team2, rendered2, dry_run=True) == 0
     assert "REFUSED orchestrator.md: agents" in capsys.readouterr().out
+
+
+def test_the_value_digest_changes_with_the_items_the_key_or_the_text():
+    base = fmw.value_digest("tools", "['read', 'edit']")
+    assert fmw.value_digest("tools", "['read', 'edit', 'execute']") != base
+    assert fmw.value_digest("agents", "['read', 'edit']") != base  # the key is part of the digest
+    block = fmw.value_digest("mcpServers", "\n  r:\n    command: x")
+    assert fmw.value_digest("mcpServers", "\n  r:\n    command: y") != block
+
+
+def test_the_value_digest_ignores_order_quoting_and_trailing_whitespace():
+    assert fmw.value_digest("tools", '["edit", "read"]') == fmw.value_digest("tools", "['read', 'edit']")
+    block = fmw.value_digest("mcpServers", "\n  r:\n    command: x")
+    assert fmw.value_digest("mcpServers", "\n  r:\n    command: x  ") == block

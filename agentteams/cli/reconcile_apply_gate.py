@@ -9,7 +9,8 @@ parse) is applied only when a decision row for :data:`ACTION` clears it. Modelle
 
 * **Governed workspace** (``enforce_decision_signing``): never a waiver; the newest ``ACTION`` row
   must carry ``scope`` exactly :data:`ACTION` and ``effect_grants`` exactly this run's tokens
-  (:func:`grant_token`), so a superset or a subset refuses and names the difference. A declared
+  (:func:`grant_token`, which carries a digest of the value to be written), so a superset or a subset
+  refuses and names the difference, and a value changed after signing refuses too. A declared
   grant makes Rule 15 demand the operator's Ed25519 signature. The aggregate cap is checked, then
   the destructive-action gate.
 * **Ungoverned workspace:** an ordinary ``ACTION`` PASS row from an approved author clears it,
@@ -41,17 +42,19 @@ class ReconcileApplyError(RuntimeError):
     """A capability widening through ``--reconcile-apply`` is not cleared (fail-closed)."""
 
 
-def grant_token(rel_path: str, key: str) -> str:
-    """Return the ``effect_grants`` token for widening ``key`` in the agent file ``rel_path``.
+def grant_token(rel_path: str, key: str, digest: str) -> str:
+    """Return the ``effect_grants`` token for writing one widened value of ``key`` in the agent file ``rel_path``.
 
     Args:
         rel_path: The agent file's path relative to the agents directory.
         key: The front-matter key being widened.
+        digest: :func:`agentteams.front_matter_widening.value_digest` of the value that will be written, so a
+            clearance covers that value and no other one rendered for the key later.
 
     Returns:
-        ``frontmatter:<rel_path>#<key>``.
+        ``frontmatter:<rel_path>#<key>@<digest>``.
     """
-    return f"frontmatter:{rel_path}#{key}"
+    return f"frontmatter:{rel_path}#{key}@{digest}"
 
 
 def _split(cell: str) -> set[str]:

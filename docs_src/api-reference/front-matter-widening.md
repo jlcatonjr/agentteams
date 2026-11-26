@@ -35,3 +35,10 @@ share (template order), for `disallowedTools` the union (template items, then th
 `--reconcile-apply` writes it when the widening is refused, so a removal never waits on a clearance. `None` when
 either side is not a strictly read list, when it changes nothing, or when an allow list would be left empty
 (Grok and Goose read an empty tools list as every tool, and Claude a missing grant), so that key is refused whole.
+
+```python
+value_digest(key: str, value: str) -> str
+```
+`sha256:<hex>` of the canonical value a widening would write: a strictly read list's sorted, de-duplicated items
+(a reorder or a quoting change keeps the digest), otherwise its text with line endings and trailing whitespace
+normalised. The `reconcile-apply-widen` grant token carries it, so a clearance covers only the value reviewed.

@@ -8,6 +8,7 @@ well formed, because an item a reader silently drops is a grant nobody reviewed.
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS, _parse_capability_list
@@ -120,3 +121,26 @@ def _render_like(template: str, items: list[str]) -> str:
         quote = text[1:].lstrip()[0]
         return "[" + ", ".join(f"{quote}{item}{quote}" for item in items) + "]"
     return ", ".join(items)
+
+
+def value_digest(key: str, value: str) -> str:
+    """Return ``sha256:<hex>`` of the canonical form of the value a widening would write.
+
+    A strictly read list (:func:`parse_items`) is canonicalised to its sorted, de-duplicated items, so a reorder or
+    a change of quoting does not change the digest while any change of items does. Any other value is taken as
+    text, with line endings and trailing whitespace normalised. A clearance names this digest, so it clears the
+    value the operator reviewed and nothing rendered for the key later.
+
+    Args:
+        key: The front-matter key.
+        value: The template's value.
+
+    Returns:
+        The digest, prefixed ``sha256:``.
+    """
+    items = parse_items(key, value)
+    if items is not None:
+        canonical = "list:" + "\n".join(sorted(set(items)))
+    else:
+        canonical = "text:" + "\n".join(line.rstrip() for line in value.replace("\r\n", "\n").strip("\n").splitlines())
+    return "sha256:" + hashlib.sha256(f"{key}\n{canonical}".encode("utf-8")).hexdigest()

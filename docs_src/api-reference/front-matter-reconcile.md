@@ -31,7 +31,7 @@ Human-readable report. Says so explicitly when the team is already reconciled, a
 ```python
 run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> int
 ```
-CLI entry. Applies every safe divergence; applies the widening ones only when `cli/reconcile_apply_gate.authorize` clears this run's exact set of `frontmatter:<file>#<key>` tokens under the `reconcile-apply-widen` action (see [`--reconcile-apply`](../cli-reference.md#front-matter-reconciliation)). Returns 0, or 1 when a widening was refused (the safe ones are still applied). Divergence alone is a finding to read, not an error.
+CLI entry. Applies every safe divergence; applies the widening ones only when `cli/reconcile_apply_gate.authorize` clears this run's exact set of `frontmatter:<file>#<key>@sha256:<hex>` tokens (the digest is `front_matter_widening.value_digest` of the template value) under the `reconcile-apply-widen` action (see [`--reconcile-apply`](../cli-reference.md#front-matter-reconciliation)). Returns 0, or 1 when a widening was refused (the safe ones are still applied). Divergence alone is a finding to read, not an error.
 
 ```python
 migrate_capability_key(agents_dir: Path, *, dry_run: bool = True) -> list[CapabilityKeyMigration]

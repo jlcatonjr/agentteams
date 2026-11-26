@@ -30,8 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `model` change, or a value either side cannot read strictly: a list counts only when every item in it is well
   formed, so an unquoted item in a flow list or a trailing comma widens) needs a `reconcile-apply-widen` decision. In a governed
   workspace that is a PASS row signed with the operator's Ed25519 key, never a waiver, with
-  `scope=reconcile-apply-widen`, `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>`,
-  and room under the exception cap. In an ungoverned workspace an ordinary PASS row from an approved author clears
+  `scope=reconcile-apply-widen`, `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>@sha256:<hex>`
+  (a digest of the value that will be written, so a value changed after signing refuses), and room under the
+  exception cap. In an ungoverned workspace an ordinary PASS row from an approved author clears
   it. Both paths go through the destructive-action gate, so a HALT recorded as `reconcile-apply-widen` or
   `reconcile-apply` blocks it, a clearance older than the retraction of either is void, and a clearance is spent
   once. The gate checks the grants on the row it selects in its one

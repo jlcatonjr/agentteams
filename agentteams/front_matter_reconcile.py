@@ -499,7 +499,7 @@ def run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> in
     if not (getattr(args, "reconcile_apply", False) and divergences):
         return 0
     widening = [d for d in divergences if _is_written(d) and classify(d) == "widening"]
-    tokens = {gate.grant_token(d.rel_path, d.key) for d in widening}
+    tokens = {_token(d) for d in widening}
     refusal = ""
     if widening:
         try:
@@ -530,10 +530,16 @@ def run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> in
     return 0
 
 
+def _token(d: Divergence) -> str:
+    from agentteams.cli.reconcile_apply_gate import grant_token
+
+    return grant_token(d.rel_path, d.key, front_matter_widening.value_digest(d.key, d.template))
+
+
 def _print_refusals(widening: list[Divergence], reason: str, hint: str) -> None:
     for d in widening:
         part = front_matter_widening.safe_part(d.key, d.deployed, d.template)
         held = f"; its removals applied, and it is set to {part.strip()!r} until then" if part else ""
         print(f"  REFUSED {d.rel_path}: {d.key} — widens a capability grant (C-3){held}; record a "
-              f"'reconcile-apply-widen' decision granting frontmatter:{d.rel_path}#{d.key}")
+              f"'reconcile-apply-widen' decision granting {_token(d)}")
     print(f"  Not cleared: {reason}\n  To apply them, {hint}, then re-run.")
