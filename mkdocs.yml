@@ -298,6 +298,7 @@ nav:
               - prompt-roots: api-reference/prompt-roots.md
               - parallel-plan: api-reference/parallel-plan.md
               - plan-priority: api-reference/plan-priority.md
+              - ref-branch: api-reference/ref-branch.md
               - doc-overlap: api-reference/doc-overlap.md
               - sandbox_handoff: api-reference/sandbox-handoff.md
               - feature-inventory: api-reference/feature-inventory.md
