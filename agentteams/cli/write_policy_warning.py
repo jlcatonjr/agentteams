@@ -16,6 +16,7 @@ from typing import Any
 from agentteams.audit import _load_files_from_disk
 from agentteams.audit_agent_contract import _check_write_policy
 from agentteams.audit_types import _agent_file_ext
+from agentteams.frameworks.goose_tool_scoping import readfs_deny_globs
 
 
 def unnarrowed_adopted_agents(manifest: dict[str, Any], output_dir: Path, rendered: list[str]) -> list[str]:
@@ -43,7 +44,8 @@ def unnarrowed_adopted_agents(manifest: dict[str, Any], output_dir: Path, render
         return []
     ours = {Path(rel).as_posix() for rel in rendered}
     findings = _check_write_policy(file_map, agent_ext=agent_ext, framework=str(manifest.get("framework", "")),
-                                   enabled=True, unreadable=unreadable, mcp_grants=manifest.get("mcp_grants"))
+                                   enabled=True, unreadable=unreadable, mcp_grants=manifest.get("mcp_grants"),
+                                   readfs_deny=readfs_deny_globs(manifest))
     return sorted({f.file for f in findings if f.severity == "error" and f.file not in ours})
 
 

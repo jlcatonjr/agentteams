@@ -526,7 +526,7 @@ needs no config).
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
-| `agent-selftest` | Prove the container's isolation for the current image ([checks](#selftestcfg)) |
+| `agent-selftest` | Prove the container's isolation for the current image ([checks](#agent_runselftestcfg)) |
 | `agent-run` | One agent run on the latest scan |
 | `tools-image build [--python-image IMG] [--node-version V --node-sha256-amd64 S --node-sha256-arm64 S]` | Build the tools image ([Subprocess confinement](#subprocess-confinement-tools-container)): git, OpenSSH, netcat, Node.js + npm (pinned in `tools_image.NODE_*`), the egress proxy and the probe. `scripts/vulnscan-tools-image.sh` checks the Node.js pin against the release's GPG-signed `SHASUMS256.txt`, resolves the python base image to a digest and runs this, then `tools-selftest` |
 | `tools-selftest` | Prove the tools container's isolation for the current image and flags; confined operations refuse until it has passed. Exit 0 pass, 1 fail |
@@ -1403,7 +1403,12 @@ or world write bit. An entry with no `Signed-By`, several keys, an inline key or
 upstream, and each accepted mirror is reported as an `INFO apt mirror ...` line. Any other origin is
 `repo:<host>:<package>`, and an unreadable one
 (including an installed version only `/var/lib/dpkg/status` knows, such as a local `.deb`) is
-`repo:unknown:<package>`. On apt hosts the origin is the `***` block of `apt-cache policy`; on dnf hosts it is
+`repo:unknown:<package>`. One exception on apt hosts: while a distro update is pending, the installed version is
+known only to `/var/lib/dpkg/status` and the archive serves the candidate. That package is `pkg:` (with an
+`INFO <package>: installed version superseded in the archive (update pending)` line) when every archive serving the
+candidate counts as above, the candidate has the same upstream version (the part before the last `-`, epoch
+included), and the installed version carries a distribution revision (it has a `-`); otherwise it stays
+`repo:unknown`. On apt hosts the origin is the `***` block of `apt-cache policy`; on dnf hosts it is
 `dnf -C repoquery --installed --qf '%{from_repo}'` (or `yumdb`), resolved to a host through
 `/etc/yum.repos.d`. Only `pkg:` is left to distro updates; `repo:` is judged upstream.
 
@@ -2860,7 +2865,7 @@ without submitting a report of its own is `agent-error`, not `completed`.
 
 Fold the active notes into the task and ledger which ones went in.
 
-#### `selftest(cfg)`
+#### `agent_run.selftest(cfg)`
 
 Run the isolation self-test container (with the gateway it needs) and record the result against
 the framework, the image id and `flags_sha256`: a hash of the container and gateway flags, the
@@ -3290,7 +3295,7 @@ The selected agent definition (`agent.recipe`, else the driver's), and the copy 
 
 ### `agentteams.vulnscan.selftest_probe`
 
-The in-container probe the [self-test](#selftestcfg) runs with the agent's exact flags. It prints one
+The in-container probe the [self-test](#agent_runselftestcfg) runs with the agent's exact flags. It prints one
 line, `SELFTEST {json}`, with one boolean per check; its text is part of `flags_sha256`.
 
 `PROBE_TEMPLATE`: the probe's Python source, with `%(gateway)s`, `%(port)d`, `%(key_env)s`,
@@ -3409,7 +3414,7 @@ Build the tools image from `agentteams/data/vulnscan_tools` (`build_argv`). Node
 (24.21.0, released 2026-09-07) with `NODE_SHA256` per architecture from its GPG-signed
 `SHASUMS256.txt` (signer in `NODE_RELEASE_SIGNERS`); another version needs both checksums.
 
-#### `selftest(cfg)`
+#### `tools_image.selftest(cfg)`
 
 Runs the image's probe with a confined operation's exact flags, with `--network none` and through an
 egress proxy allowing only `registry.npmjs.org:443`. Checks (prefixed `none:` / `proxy:`):

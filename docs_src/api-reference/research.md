@@ -112,6 +112,10 @@ Three of those change what a claim is worth:
 provenance: backend=duckduckgo cached=false query_used='...' tried=duckduckgo,ddg_lite
 ```
 
+It exits 0 when a backend answered, even with no hits. It exits **3** when no backend answered
+(`backend=none` and an empty list), after printing `note: no search backend answered (tried …); the empty
+result is not evidence of absence`, so a script cannot mistake a dead search for "nothing exists".
+
 ### `fetch_text(url, max_bytes=400_000, timeout_s=8.0, max_chars=4000, max_pdf_bytes=12_000_000, pdf_timeout_s=60.0)`
 
 Fetch a page and return extracted, bounded text. Public-HTTPS-only with an SSRF guard (no private/
@@ -402,7 +406,31 @@ Single-source variants. Each returns `[]` on any failure and never raises.
 
 ### `ScholarlyWork`
 
-`title`, `authors`, `year`, `doi`, `url`, `abstract`, `venue`, `source`.
+`title`, `authors`, `year`, `doi`, `url`, `abstract`, `venue`, `source`, `authorships` (`list[Authorship]`, one per
+author in source order; `authors` keeps the bare names), `language` (`str | None`, as the source gives it, e.g.
+`"en"`).
+
+### `Authorship`
+
+`name`, `openalex_id`, `orcid`, `affiliations` (`list[Affiliation]`), `country_codes` (`list[str]`).
+
+### `Affiliation`
+
+`name`, `openalex_id`, `country_code`.
+
+Each source fills only what it carries, and values are kept as given (an ORCID stays in URL form):
+
+| Source | Author id | ORCID | Affiliations | Country codes | Language |
+|---|---|---|---|---|---|
+| OpenAlex | `author.id` | `author.orcid` | `institutions[]`: name, id, `country_code` | `countries[]` | work `language` |
+| Crossref | — | `ORCID` | `affiliation[].name` only | — | work `language` |
+| arXiv | — | — | `<arxiv:affiliation>` names, when present | — | — |
+
+A missing value is `None` or `[]`; a malformed sub-field is left empty and the work is kept. Results are cached
+under a `scholar-v2` key as plain dictionaries (`dataclasses.asdict`), so older cache entries, which had no
+authorships, are not served. A caller that serialises a work itself should use `dataclasses.asdict(work)`:
+`work.__dict__` now holds nested dataclasses, which `json.dumps` refuses. The `scholar` CLI prints the nested
+records.
 
 ### `format_citation(work) -> str`
 
