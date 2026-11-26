@@ -45,10 +45,10 @@ and re-check before reporting. Where the module is unavailable, read with
 | 3 | Classify | A purpose family for each authored file | `@code-hygiene` |
 | 4 | Fragments | Counts of the scaffolds that recur across families (connection set-up, read-only guards, path edits, dry-run switches) | `@code-hygiene` |
 | 5 | Review | One reviewer per family group, each under the brief below | domain agents, read-only |
-| 6 | Verify | Every high-impact claim re-read from the default branch | `@technical-validator` |
+| 6 | Verify | Every high-impact claim re-read from the default branch | `@technical-validator` where the team has one, otherwise `@adversarial` |
 | 7 | Placement | A home for each proposed tool, by the placement rule below | `@repo-liaison` |
-| 8 | Report | Findings with excerpts quoted exactly and screened for sensitive identifiers | `@primary-producer` |
-| 9 | Audit | An accuracy audit and a design audit (prompts below) | `@quality-auditor`, `@adversarial` |
+| 8 | Report | Findings with excerpts quoted exactly and screened for sensitive identifiers | `@primary-producer` where the team has one, otherwise `@orchestrator` |
+| 9 | Audit | An accuracy audit and a design audit (prompts below) | `@quality-auditor` where the team has one, and `@adversarial` |
 | 10 | Consolidation plan | Waves of work: prerequisites, then the most-used low-risk tools, then safety-critical ones | `@orchestrator` |
 
 Working rules for phases 1 to 4:
