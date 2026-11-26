@@ -104,8 +104,12 @@ _GIT_CONFIG_WRITES = {
 }
 #: An assignment, on the same line as a `git` command, of a variable that names a program git runs: `GIT_EDITOR=x
 #: git config --edit` runs x. Covers `VAR=x git …`, `env VAR=x git …` and `export VAR=x; git …` on one line.
-_GIT_PROGRAM_ENV = (r"\b(?:GIT_EDITOR|EDITOR|VISUAL|GIT_SEQUENCE_EDITOR|GIT_PAGER|PAGER|GIT_SSH|GIT_SSH_COMMAND|GIT_ASKPASS"
-                    r"|SSH_ASKPASS|GIT_EXTERNAL_DIFF|GIT_PROXY_COMMAND)=(?=[^\n]*\bgit\b)")
+#: One exemption: GIT_PAGER/PAGER set to the bare word `cat` or to nothing, then whitespace (`GIT_PAGER=cat git log`),
+#: is how sessions turn paging off; asking on it would train operators to approve this class unread. What that lets
+#: through is running `cat` from PATH as the pager. Any other value (a path, quotes, arguments, `cat;x`) asks.
+_GIT_PROGRAM_ENV = (r"\b(?:GIT_EDITOR|EDITOR|VISUAL|GIT_SEQUENCE_EDITOR|GIT_SSH|GIT_SSH_COMMAND|GIT_ASKPASS"
+                    r"|SSH_ASKPASS|GIT_EXTERNAL_DIFF|GIT_PROXY_COMMAND)=(?=[^\n]*\bgit\b)"
+                    r"|\b(?:GIT_)?PAGER=(?!(?-i:cat)?[ \t])(?=[^\n]*\bgit\b)")
 #: Section families those keys live in. git honours a section rename, so `git config --rename-section foo core`
 #: turns `foo.hooksPath` into core.hooksPath with no command naming the key, and removing a section unsets every
 #: key in it (`--remove-section core` clears core.hooksPath, like `--unset`). Renaming into or out of one, or

@@ -81,6 +81,12 @@ same line as a later `git` command asks under `git-alias-config`: `GIT_EDITOR=/p
 earlier line or in an earlier command, or set by a sourced file, is not seen. Like every trigger it also matches
 quoted text, so `git commit -m "EDITOR=vim"` asks.
 
+One exemption: `GIT_PAGER` or `PAGER` set to the bare word `cat`, or to nothing, followed by whitespace
+(`GIT_PAGER=cat git log`, `PAGER= git diff`) stays silent. That is how agent sessions turn paging off, and asking on
+it would fire constantly and train operators to approve this class without reading it. What it lets through is
+running `cat` from `PATH` as the pager. Any other value asks (`/tmp/x`, `./cat`, `cat;x`, `"cat"`, `less -R`), the
+other ten variables have no exemption, and the exemption never covers a git config write on the same line.
+
 `git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation
 row 699, with the same class ids. One narrowing came with them: the `f` of `-f` is case-sensitive (git push has
 no `-F`), so `strict` no longer denies `git commit -F msg && git push`. The match is not scoped to the push

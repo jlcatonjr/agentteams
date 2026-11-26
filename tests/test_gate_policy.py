@@ -411,6 +411,39 @@ def test_an_env_prefix_naming_gits_program_asks(tmp_path: Path, var: str, form: 
     assert "git-alias-config" in {c for c, _ in gate._bash_matches(cmd)}, cmd
 
 
+# Agent sessions disable paging with `GIT_PAGER=cat git log`; asking on it would train operators to approve
+# git-alias-config unread. Only the bare word `cat` or an empty value, followed by whitespace, is exempt.
+@pytest.mark.parametrize("var", ["GIT_PAGER", "PAGER"])
+@pytest.mark.parametrize("value", ["cat", ""])
+@pytest.mark.parametrize("rest", ["git log", "git diff", "git -C x log"])
+def test_disabling_the_pager_with_cat_or_nothing_stays_silent(tmp_path: Path, var: str, value: str, rest: str) -> None:
+    gate = install(tmp_path, None)
+    cmd = f"{var}={value} {rest}"
+    assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+@pytest.mark.parametrize("var", ["GIT_PAGER", "PAGER"])
+@pytest.mark.parametrize("value", ["/tmp/x", "./cat", "cat;x", '"cat"', "cat\\ x", "'less -R'", "sh", "CAT", "cats",
+                                   "cat/x", "''"])
+def test_any_other_pager_value_asks(tmp_path: Path, var: str, value: str) -> None:
+    gate = install(tmp_path, None)
+    cmd = f"{var}={value} git log"
+    assert "git-alias-config" in {c for c, _ in gate._bash_matches(cmd)}, cmd
+
+
+@pytest.mark.parametrize("var", [v for v in GIT_PROGRAM_VARIABLES if v not in ("GIT_PAGER", "PAGER")])
+def test_cat_is_no_exemption_for_the_other_variables(tmp_path: Path, var: str) -> None:
+    gate = install(tmp_path, None)
+    assert "git-alias-config" in {c for c, _ in gate._bash_matches(f"{var}=cat git log")}, var
+
+
+@pytest.mark.parametrize("cmd", ["GIT_PAGER=cat git config core.hooksPath /tmp/h",
+                                 "GIT_PAGER=cat git log; git config alias.p x", "PAGER= git -c core.sshCommand=x fetch"])
+def test_an_exempt_pager_does_not_hide_a_gated_write(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
+
+
 @pytest.mark.parametrize("cmd", ["git config --edit", "git config -e", "MY_EDITOR=/x git log", "EDITOR=vi make",
                                  "echo $EDITOR; git log", "git log --format=GIT_PAGER"])
 def test_editor_variables_without_an_assignment_before_git_stay_silent(tmp_path: Path, cmd: str) -> None:
