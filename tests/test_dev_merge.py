@@ -311,7 +311,8 @@ class _FakeGh:
 
 
 def _merge(root, team, monkeypatch, gh, branch=_BRANCH) -> int:
-    return dm.merge_pr(root, team, team_id=_TEAM, number=7, integration_branch=branch, origin=_REPO, gh=gh)
+    return dm.merge_pr(root, team, team_id=_TEAM, number=7, integration_branch=branch, origin=_REPO, gh=gh,
+                       release=lambda *_: None)
 
 
 def _pass(team: Path) -> None:
@@ -331,6 +332,44 @@ def test_a_qualifying_merge_runs_exactly_the_merge_commit_command_and_spends_the
     assert not set(merge[0]) & set(dm.FORBIDDEN_MERGE_FLAGS)
     allowed, _why = security_gate.check_clearance(team, action=dm.merge_action_id(_REPO, 7, _SHA))
     assert not allowed   # one PASS, one merge
+
+
+def _merge_with(root, team, gh, release) -> int:
+    return dm.merge_pr(root, team, team_id=_TEAM, number=7, integration_branch=_BRANCH, origin=_REPO, gh=gh,
+                       release=release)
+
+
+@pytest.mark.parametrize("release, why", [
+    (lambda *_: "it carries 1 commit(s) from main", "carries 1 commit"),
+    (lambda *_: (_ for _ in ()).throw(OSError("fetch failed")), "could not be checked"),
+])
+def test_release_mechanics_refuse_before_the_pass_is_spent(tmp_path, capsys, release, why) -> None:
+    from agentteams.cli import security_gate
+
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _pass(team)
+    gh = _FakeGh()
+    assert _merge_with(root, team, gh, release) == 2
+    assert not [c for c in gh.calls if c[:2] == ["pr", "merge"]]
+    assert why in capsys.readouterr().err
+    assert security_gate.check_clearance(team, action=dm.merge_action_id(_REPO, 7, _SHA))[0]   # PASS unspent
+
+
+def test_release_mechanics_are_checked_again_at_merge_time(tmp_path, capsys) -> None:
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _pass(team)
+    gh = _FakeGh()
+    calls = []
+
+    def late(*args):
+        calls.append(args)
+        return None if len(calls) == 1 else "it changes the package version"
+
+    assert _merge_with(root, team, gh, late) == 2
+    assert len(calls) == 2 and not [c for c in gh.calls if c[:2] == ["pr", "merge"]]
+    assert "at merge time" in capsys.readouterr().err
 
 
 def test_without_a_pass_nothing_is_merged(tmp_path, monkeypatch, capsys) -> None:
