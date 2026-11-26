@@ -22,13 +22,17 @@ from typing import Any
 
 
 def read_steps(path: Path | str) -> list[dict[str, str]]:
-    """Read a plan steps.csv. Returns a list of dicts keyed by header column."""
-    return _parse_steps(Path(path).read_text(encoding="utf-8"), path)
+    """Read a plan steps.csv. Returns a list of dicts keyed by header column.
+
+    A quoted cell that spans lines keeps its line breaks. Rows with an empty ``step`` are skipped.
+    """
+    with Path(path).open(encoding="utf-8", newline="") as fh:  # newline="": a CRLF inside a cell is kept as written
+        return _parse_steps(fh.read(), path)
 
 
 def _parse_steps(text: str, path: Path | str) -> list[dict[str, str]]:
     """Parse steps-CSV *text* the way :func:`read_steps` does; *path* only labels the warning."""
-    reader = csv.DictReader(text.splitlines())
+    reader = csv.DictReader(io.StringIO(text, newline=""))  # not splitlines(): that drops a newline inside a quoted cell
     rows: list[dict[str, str]] = []
     for row in reader:
         if not row.get("step"):
@@ -50,8 +54,8 @@ def write_steps(path: Path | str, rows: list[dict[str, str]],
     """Write ``rows`` as a whole steps CSV (quoted as needed), replacing any file at ``path``.
 
     The text is checked before the file is touched: it must read back as the rows given. The
-    write is a rename, so a refusal or a failure leaves an existing file as it was. A file that
-    already uses CRLF line endings keeps them; a symlink stays a link. To change one step of an
+    write is a rename, so a refusal or a failure leaves an existing file as it was. A file whose
+    header line ends in CRLF is written with CRLF throughout; a symlink stays a link. To change one step of an
     existing table use :func:`update_step` or :func:`set_step`, which keep every other row.
 
     Args:
@@ -59,11 +63,14 @@ def write_steps(path: Path | str, rows: list[dict[str, str]],
         rows: Row dicts keyed by column name.
         fieldnames: Column order (default: the keys of the first row).
 
+    Returns:
+        None.
+
     Raises:
         ValueError: No rows and no ``fieldnames``, a row has a key outside ``fieldnames``, a
             ``status`` outside :data:`KNOWN_STATUSES` (an empty one included), or the text would
             not read back as the rows given. Nothing is written.
-        OSError: The file cannot be written.
+        OSError: The file cannot be written; ``PermissionError`` when it is read-only.
     """
     if not rows and not fieldnames:
         raise ValueError("write_steps needs rows or explicit fieldnames")
@@ -98,7 +105,13 @@ def _check_status(value: str, step: str) -> None:
 
 
 def _replace_text(target: Path, text: str) -> None:
-    """Write *text* to *target* by rename, keeping the mode of a file already there."""
+    """Write *text* to *target* by rename, keeping the mode of a file already there.
+
+    A rename would replace a read-only file, so that case is refused first. Other hard links to
+    the old file keep the old content.
+    """
+    if target.exists() and not os.access(target, os.W_OK):
+        raise PermissionError(f"{target} is read-only")
     tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
     try:
         with tmp.open("w", encoding="utf-8", newline="") as fh:
@@ -124,17 +137,19 @@ def update_step(path: Path | str, step: str, **fields: str) -> None:
         path: The ``.steps.csv`` path.
         step: The ``step`` id to update, compared with surrounding spaces ignored. It must name
             exactly one row.
-        **fields: Column values to set (each column must already exist in the header).
+        **fields: Column values to set (each column must already exist in the header). With
+            none, the step is looked up and nothing is written.
+
+    Returns:
+        None.
 
     Raises:
-        KeyError: ``step`` is not in the file.
+        KeyError: ``step`` is empty or not in the file.
         ValueError: A field is not a header column, a ``status`` outside the vocabulary, a
             duplicated ``step`` id, a header with a repeated column, a target row wider than the header, or a result that does not
             read back as intended. Nothing is written.
-        OSError: The file cannot be read or written.
+        OSError: The file cannot be read or written; ``PermissionError`` when it is read-only.
     """
-    if not fields:
-        return
     if "status" in fields:
         _check_status(str(fields["status"]), str(step))
     _set_cells(path, step, {k: str(v) for k, v in fields.items()}, unknown="not header columns: {names}")
@@ -232,7 +247,9 @@ def _set_cells(path: Path | str, step: str, changes: dict[str, str], *, append_n
     header = [c.strip() for c in records[0][2]]
     if len(set(header)) != len(header):
         raise ValueError("the header repeats a column")
-    wanted = ["step", *changes, *(["notes"] if append_note is not None else [])]
+    if "step" not in header:
+        raise ValueError("the table has no 'step' column")
+    wanted = [*changes, *(["notes"] if append_note is not None else [])]
     missing = [c for c in dict.fromkeys(wanted) if c not in header]
     if missing:
         if unknown:
@@ -240,6 +257,8 @@ def _set_cells(path: Path | str, step: str, changes: dict[str, str], *, append_n
         raise ValueError(f"the table has no {' or '.join(repr(m) for m in missing)} column")
     step_at = header.index("step")
     key = str(step).strip()
+    if not key:
+        raise KeyError(step)  # a row with no id is not a step: read_steps skips it
     hits = [r for r in records[1:] if len(r[2]) > step_at and r[2][step_at].strip() == key]
     if not hits:
         raise KeyError(step)
@@ -249,6 +268,8 @@ def _set_cells(path: Path | str, step: str, changes: dict[str, str], *, append_n
     if len(cells) > len(header):
         raise ValueError(f"step {step!r} has more cells than the header (an unquoted comma?); fix the row first")
     cells = cells + [""] * (len(header) - len(cells))
+    if not changes and append_note is None:
+        return dict(zip(header, cells))  # a lookup: the step exists and is unambiguous; nothing to write
     if append_note is not None:
         existing = cells[header.index("notes")].strip()
         changes["notes"] = f"{existing}; {append_note}" if existing else append_note

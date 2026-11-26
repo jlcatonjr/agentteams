@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`write_steps` checks the text before it touches the file** and writes by rename. Before, it wrote first and
   checked after, so a refused table had already replaced the old file. It also keeps CRLF line endings when the
   file already uses them, and keeps a symlink a symlink.
+- **Smaller changes in `update_step`:** the step id is matched with surrounding spaces ignored, as are header
+  names; an empty id is refused; with no fields it only looks the step up. A read-only file is refused by all
+  three writers. Writing by rename means another hard link to the file keeps the old content.
+- **`read_steps` keeps a line break inside a quoted cell.** Before, the two lines were joined with nothing between.
 - **A status outside the vocabulary is refused at write time.** `write_steps` and `update_step` raise `ValueError`,
   and write nothing, for a `status` other than `pending`, `in_progress`, `done`, `blocked` or the legacy
   `completed`; an empty status is refused too. A table without a `status` column is not checked. Of 332 recent

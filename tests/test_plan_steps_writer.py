@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from agentteams.plan_steps import read_steps, update_step, write_steps
@@ -57,16 +59,19 @@ def test_update_step_sets_any_column_and_accepts_the_legacy_status(tmp_path):
     update_step(p, "1", status="completed", agent="@b")
     (row,) = read_steps(p)
     assert row["status"] == "completed" and row["agent"] == "@b"
-    update_step(p, "1")  # nothing to set: no error, no change
-    assert read_steps(p) == [row]
+    before = p.read_bytes()
+    update_step(p, "1")  # nothing to set: the step is looked up and the file is left alone
+    assert p.read_bytes() == before
+    with pytest.raises(KeyError):
+        update_step(p, "9")  # ... and a lookup of a missing step still fails
 
 
 def test_write_steps_refuses_before_touching_the_file(tmp_path):
-    # A cell holding a carriage return does not read back as given; the old file must survive the refusal.
+    # A refusal must come before the write: the old file survives it and no temp file is left.
     p = tmp_path / "x.steps.csv"
     p.write_text("step,status\n1,pending\n", encoding="utf-8")
     with pytest.raises(ValueError, match="nothing was written"):
-        write_steps(p, [{"step": "1", "status": "done", "notes": "a\rb"}], ["step", "status", "notes"])
+        write_steps(p, [{"step": "1", "status": "done"}, {"step": "2", "status": "finished"}], ["step", "status"])
     with pytest.raises(ValueError, match="outside the header"):
         write_steps(p, [{"step": "1", "status": "x", "extra": "y"}], ["step", "status"])
     assert p.read_text(encoding="utf-8") == "step,status\n1,pending\n"
@@ -98,3 +103,41 @@ def test_a_status_outside_the_vocabulary_is_refused_at_write_time(tmp_path):
         update_step(p, "1", status="finished")
     assert p.read_text(encoding="utf-8") == "step,status\n1,Pending \n2,completed\n"
     write_steps(p, [{"step": "1", "notes": "no status column, nothing to check"}], ["step", "notes"])
+
+
+def test_a_row_without_an_id_is_not_a_step(tmp_path):
+    p = tmp_path / "x.steps.csv"
+    text = "step,status\n,pending\n1,pending\n"
+    p.write_text(text, encoding="utf-8")
+    for blank in ("", "  "):
+        with pytest.raises(KeyError):
+            update_step(p, blank, status="done")
+    q = tmp_path / "y.steps.csv"
+    q.write_text("id,status\n1,pending\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no 'step' column"):
+        update_step(q, "1", status="done")
+    assert p.read_text(encoding="utf-8") == text
+
+
+def test_a_multi_line_cell_survives_a_read_and_a_write(tmp_path):
+    p = tmp_path / "x.steps.csv"
+    write_steps(p, [{"step": "1", "status": "pending", "notes": "line one\nline two"}], ["step", "status", "notes"])
+    assert read_steps(p)[0]["notes"] == "line one\nline two"
+    update_step(p, "1", notes="a\r\nb")
+    assert read_steps(p)[0]["notes"] == "a\r\nb"
+
+
+def test_a_read_only_table_is_not_replaced(tmp_path):
+    p = tmp_path / "x.steps.csv"
+    p.write_text("step,status\n1,pending\n", encoding="utf-8")
+    p.chmod(0o444)
+    try:
+        if os.access(p, os.W_OK):
+            pytest.skip("this user can write a read-only file")
+        with pytest.raises(PermissionError):
+            update_step(p, "1", status="done")
+        with pytest.raises(PermissionError):
+            write_steps(p, [{"step": "1", "status": "done"}], ["step", "status"])
+        assert p.read_text(encoding="utf-8") == "step,status\n1,pending\n"
+    finally:
+        p.chmod(0o644)
