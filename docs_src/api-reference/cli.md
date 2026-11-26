@@ -175,16 +175,19 @@ on an id, or a `derives_from` parent, under an open HALT, #616).
 `--retire-verify-key`: writes `<team_dir>/references/authorized-verify-keys/<old>.retired.json`, the sorted sha256
 of the decoded bytes of every signature under `old` (`collect_signatures`, each verified under `old` against its own
 document's signed values), signed with key `new` over `[agentteams-key-retirement-v1, key_id, not_after, signed_by,
-digests]`. Returns 0, or 1 on any error. Before the key is read it refuses inside an agent session, two equal or
-malformed key ids or the same key bytes under two ids, a non-team dir, a missing `.pub.pem` for either key, a retired
-`new`, a store holding the key that would not read this team dir's record, an include of an unknown kind or with no
-signature under `old`, a signature that does not verify, and display-spoofing characters; then the preflight, the
-display, confirm, the key read, the signature and verify-before-write. `assert_signature_permitted` is called by
-`decision_log._load_verify_key(output_dir, key_id, *, signature)`: it matches the key by its bytes against every
-record in `scan_dirs(team_dir)` (`clearance_binding.halt_scan_dirs` plus, outside git, the generated team dirs beside
-it); with none, nothing changes; otherwise every applicable record must verify under a key that differs by its bytes
-and is not retired, and the signature's digest must be listed, else `RuntimeError`. `report_lines(team_dir)` gives
-`--verify-integrity` its lines.
+binding, digests]`, where `binding(team_dir)` is `<project_name slug>:<team dir from the project root>`. Returns 0, or
+1 on any error. Before the key is read it refuses inside an agent session, two equal or malformed key ids or the same
+key bytes under two ids, a non-team or gates-only dir, a missing `.pub.pem` for either key, a retired `new`, a store
+whose record `old` signed but which lacks `new`, an include of an unknown kind or with no signature under `old`, a
+signature that does not verify, and display-spoofing characters. Then the preflight, the display, confirm, the key
+read, signing of the new record and of each record `old` signed (re-signed by `new`, snapshot unchanged,
+`records_signed_by`), and verification of each (`verify_signed_record`) before anything is written.
+`assert_signature_permitted` is called by `decision_log._load_verify_key(output_dir, key_id, *, signature)`: it
+matches the key by its bytes against every record in `scan_dirs(team_dir)` (`clearance_binding.halt_scan_dirs` plus,
+outside git, the generated team dirs beside it, a symbolic link in their paths refusing); with none, nothing changes;
+otherwise every applicable record must verify (binding, and a signer that differs by its bytes and is not retired),
+and the signature's digest must be listed in every one, else `RuntimeError`. `report_lines(team_dir)` gives
+`--verify-integrity` its lines for every store in `scan_dirs`.
 
 ### `load_grant_spec(path, flag)` / `grant_spec_kwargs(spec)` / `report_issued(record, ledger_root, team_dir)`
 

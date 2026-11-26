@@ -73,13 +73,14 @@ def _team(tmp_path: Path) -> Path:
     (team / "references").mkdir(parents=True, exist_ok=True)
     (team / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
     (team / "references" / "security-approvers.txt").write_text("security\n", encoding="utf-8")
+    (team / "references" / "build-log.json").write_text(json.dumps({"project_name": "proj"}), encoding="utf-8")
     return team
 
 
 def _record(team: Path, keys: dict[str, str], signatures: list[str], *, signer: str = NEW,
             sign_with: str | None = None, key_id: str = OLD) -> dict:
     """Write a retirement record for ``key_id`` listing ``signatures``, signed by ``sign_with`` (default: signer)."""
-    doc = {"key_id": key_id, "not_after": "2026-12-05", "signed_by": signer,
+    doc = {"key_id": key_id, "not_after": "2026-12-05", "signed_by": signer, "binding": kr.binding(team),
            "signature_sha256": sorted({kr.signature_digest(s) for s in signatures})}
     doc["signature"] = sl.ed25519_sign(keys[sign_with or signer], kr.signed_values(doc))
     kr.record_path(team, key_id).write_text(json.dumps(doc), encoding="utf-8")
@@ -315,7 +316,7 @@ def test_a_record_binds_the_key_in_every_store_of_the_project(git, tmp_path, key
     assert problem is not None and _RETIRED in problem.detail
 
 
-def test_the_verb_refuses_a_store_the_others_would_not_see(tmp_path, keys, monkeypatch, capsys):
+def test_the_verb_refuses_a_gates_only_team_dir(tmp_path, keys, monkeypatch, capsys):
     team = _team(tmp_path)
     _git(tmp_path / "proj", "init", "-q")
     gates = tmp_path / "proj" / "gates"
@@ -327,7 +328,7 @@ def test_the_verb_refuses_a_store_the_others_would_not_see(tmp_path, keys, monke
     monkeypatch.setenv(_KEY_ENV, str(_keyfile(tmp_path, keys, NEW)))
     assert _retire(gates) == 1
     err = capsys.readouterr().err
-    assert ".claude/agents" in err and "The key was not read." in err
+    assert "not a generated team dir" in err and "The key was not read." in err
     assert _retire(team) == 0  # negative control: retiring from the canonical dir works and binds the gates dir
     with pytest.raises(RuntimeError, match=_RETIRED):
         _direct_load_site(gates, keys)[1]()
@@ -571,3 +572,105 @@ def test_signature_digest_is_over_the_decoded_bytes():
     assert kr.signature_digest(sig) == kr.signature_digest(sig.upper()) == kr.signature_digest(f" {sig} ")
     assert kr.signature_digest("not hex") is None and kr.signature_digest("") is None
     assert os.sep not in kr.record_path(Path("t"), OLD).name
+
+
+# ------------------------------------------------------------------------------------- second review round
+
+def _standard(tmp_path: Path, rel: str, *key_ids: str, project: str = "proj") -> Path:
+    """Another generated team dir of the project, holding copies of ``key_ids``' public keys."""
+    src = _team(tmp_path) / kr.STORE_REL
+    d = tmp_path / project / rel
+    (d / kr.STORE_REL).mkdir(parents=True, exist_ok=True)
+    (d / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
+    (d / "references" / "build-log.json").write_text(json.dumps({"project_name": project}), encoding="utf-8")
+    for key_id in key_ids:
+        (d / kr.STORE_REL / f"{key_id}.pub.pem").write_bytes((src / f"{key_id}.pub.pem").read_bytes())
+    return d
+
+
+def test_snapshots_of_several_records_intersect(tmp_path, keys):
+    team = _team(tmp_path)
+    kept, verify_kept = _direct_load_site(team, keys)
+    left_out, verify_left_out = _direct_load_site(team, keys)
+    _record(team, keys, [kept])  # the operator's current snapshot leaves one signature out
+    planted = _standard(tmp_path, ".codex/agents", OLD, NEW)
+    _record(planted, keys, [kept, left_out])  # an older, wider, operator-signed record in an unused team dir
+    verify_kept()  # negative control: listed in both
+    with pytest.raises(RuntimeError, match=_RETIRED):
+        verify_left_out()
+
+
+def test_a_record_from_another_project_is_refused(tmp_path, keys):
+    team = _team(tmp_path)
+    kept, verify = _direct_load_site(team, keys)
+    other = _standard(tmp_path, ".claude/agents", OLD, NEW, project="other")
+    foreign = _record(other, keys, [kept])
+    verify()  # negative control: no record in this project
+    kr.record_path(team, OLD).write_text(json.dumps(foreign), encoding="utf-8")  # replayed here
+    with pytest.raises(RuntimeError, match="bound to"):
+        verify()
+
+
+def test_verify_integrity_reports_records_in_every_store(tmp_path, keys, capsys):
+    team = _team(tmp_path)
+    sibling = _standard(tmp_path, ".github/agents", OLD, NEW)
+    main(["--verify-integrity", "--output", str(team)])
+    assert "Retired verify key" not in capsys.readouterr().out  # negative control
+    _record(sibling, keys, [])
+    main(["--verify-integrity", "--output", str(team)])
+    assert f"Retired verify key {OLD} (.github/agents)" in capsys.readouterr().out
+
+
+def test_retiring_a_record_signer_re_signs_its_records(tmp_path, keys, monkeypatch, capsys):
+    team = _team(tmp_path)
+    monkeypatch.setattr(ops, "_confirm", lambda digest, confirm: True)
+    kept, verify_kept = _direct_load_site(team, keys)
+    first = _record(team, keys, [kept])  # OLD retired, record signed by NEW
+    monkeypatch.setenv(_KEY_ENV, str(_keyfile(tmp_path, keys, THIRD)))
+    rc = main(["--retire-verify-key", NEW, "--key-id", THIRD, "--team-dir", str(team)])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert f"re-signs    : the retirement record of {OLD!r}" in out and "snapshot unchanged" in out
+    again = json.loads(kr.record_path(team, OLD).read_text(encoding="utf-8"))
+    assert again["signed_by"] == THIRD and again["signature_sha256"] == first["signature_sha256"]
+    verify_kept()  # what OLD's record kept still verifies
+    with pytest.raises(RuntimeError, match=_RETIRED):
+        _direct_load_site(team, keys, key_id=NEW)[1]()
+
+
+def test_retiring_a_record_signer_refuses_when_the_new_key_cannot_re_sign(tmp_path, keys, monkeypatch, capsys):
+    team = _team(tmp_path)
+    kept, verify_kept = _direct_load_site(team, keys)
+    sibling = _standard(tmp_path, ".github/agents", OLD, NEW)  # holds no THIRD key
+    _record(sibling, keys, [kept])
+    monkeypatch.setenv(_KEY_ENV, str(tmp_path / "absent.key"))
+    assert main(["--retire-verify-key", NEW, "--key-id", THIRD, "--team-dir", str(team)]) == 1
+    err = capsys.readouterr().err
+    assert ".github/agents" in err and "The key was not read." in err
+    verify_kept()  # negative control: nothing changed
+
+
+@pytest.mark.parametrize("git", [True, False])
+def test_a_symlinked_standard_team_dir_refuses_every_verify(git, tmp_path, keys):
+    team = _team(tmp_path)
+    _, verify = _direct_load_site(team, keys)
+    root = tmp_path / "proj"
+    if git:
+        _git(root, "init", "-q")
+    verify()  # negative control: no symlink
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (root / ".github").mkdir()
+    (root / ".github" / "agents").symlink_to(elsewhere)
+    with pytest.raises(RuntimeError, match=r"\.github"):
+        verify()
+
+
+def test_verify_integrity_warns_when_a_records_own_key_file_is_missing(tmp_path, keys, capsys):
+    team = _team(tmp_path)
+    _record(team, keys, [])
+    main(["--verify-integrity", "--output", str(team)])
+    assert "retires nothing" not in capsys.readouterr().out  # negative control
+    (team / kr.STORE_REL / f"{OLD}.pub.pem").unlink()
+    main(["--verify-integrity", "--output", str(team)])
+    assert "retires nothing" in capsys.readouterr().out

@@ -18,18 +18,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NEW`. It runs the same pre-key checks as the other signers (agent-session refusal, integrity, install location,
   review digest and confirmation) and verifies the record before writing it.
 - **Enforced at every Ed25519 verify site of a team dir:** a signature under a retired key verifies only when its
-  digest is in the record, so new signing under it is refused too. Keys are matched by their bytes, so the same key
-  under a second file name is retired as well, and a record binds the key in every team dir store of the project. The
-  record must be signed by a key that differs by its bytes and is not retired; one signed by the retired key, by an
+  digest is in the record (in every record, when several retire the same key), so new signing under it is refused
+  too. Keys are matched by their bytes, so the same key under a second file name is retired as well, and a record
+  binds the key in every team dir store of the project. Each record is bound to its project and team dir and is
+  refused anywhere else. The record must be signed by a key that differs by its bytes and is not retired; one signed by the retired key, by an
   absent or retired signer, edited after signing, malformed or a symbolic link refuses every signature under the key.
   The retirement date is recorded and reported, not compared. Retirement payloads have their own purpose tag, which
   the decision minter and verifier refuse.
 - **Not covered:** `~/.config/agentteams/verify-keys/` (MCP-direct and vulnscan grants). Retiring a key there means
   removing its `.pub.pem`; the README says what that ends.
-- **Reported:** `--verify-integrity` prints one line per retired key, warns when a record lists digests its
-  committed copy does not, and warns when a committed record is missing on disk (report-only).
-- **Who notices:** nobody until an operator writes a record; a store without one behaves exactly as before. Code
-  outside agentteams that calls `decision_log._load_verify_key` must now pass the `signature=` it verifies.
+- **Retiring a record's signer:** the same run re-signs the records the retired key signed with the new key, snapshot
+  unchanged, so what they kept keeps verifying.
+- **Reported:** `--verify-integrity` prints one line per retired key in every team dir store of the project, and warns
+  when a record lists digests its committed copy does not, when a committed record is missing on disk, and when a
+  record's own `.pub.pem` is missing (report-only).
+- **Who notices:** every Ed25519 verify (decisions, grants, carve-outs, toolchain groups, dev-merge authorizations)
+  now also looks for retirement records in every generated team dir of the project. A project with a symbolic link at
+  a generated team dir path (`.github/agents` linked elsewhere, say) has every such verify refused, naming the path,
+  even with no record anywhere; otherwise a store without a record behaves as before. Code outside agentteams that
+  calls `decision_log._load_verify_key` must now pass the `signature=` it verifies.
 
 ### added (every team receives a script-consolidation reference)
 

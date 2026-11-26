@@ -7,9 +7,10 @@ signed that row. Each candidate is verified under the old key against the values
 decision row, a capability grant, the carve-out registry, a toolchain group or a dev-merge authorization). One that
 does not verify, or a file of any other kind, refuses the retirement and is named.
 
-Before the key is read it also refuses a team dir whose record another store holding the same key would not see
-(:func:`agentteams.cli.key_retirement.scan_dirs` is not symmetric for a gates-only team dir), so one record binds
-the key in every store of the project. Integrity-pinned and in the signing closure: it runs in the signing process.
+It runs only in a generated team dir (``.claude/agents``, ``.github/agents``, ...), whose record every other store of
+the project reads (:func:`agentteams.cli.key_retirement.scan_dirs`); a gates-only team dir is refused. When the key
+being retired signed other keys' retirement records, the same run re-signs each of them with the new key, snapshot
+unchanged, so retiring a signer never silently revokes what those records kept. Integrity-pinned and in the signing closure: it runs in the signing process.
 Stdlib only (``cryptography`` is the lazily imported ``signing`` extra).
 """
 
@@ -26,8 +27,6 @@ from pathlib import Path
 
 from agentteams.cli import key_retirement as kr
 from agentteams.cli.clearance_binding import lstat_or_none
-
-_MAX_BYTES = 8 * 1024 * 1024
 
 
 def _decision_candidates(rows: list[dict[str, str]], name: str, lines: list[int]) -> list[tuple]:
@@ -99,7 +98,7 @@ def _candidates(path: Path, key_id: str) -> list[tuple[str, str, list[str]]]:
     from agentteams.atomicio import read_regular_nofollow
 
     try:
-        text = read_regular_nofollow(path, _MAX_BYTES).decode("utf-8")
+        text = read_regular_nofollow(path, kr.MAX_BYTES).decode("utf-8")
     except (OSError, ValueError) as exc:
         raise RuntimeError(f"{path} cannot be read: {exc}") from exc
     if path.suffix == ".csv":
@@ -140,7 +139,7 @@ def collect_signatures(team_dir: Path, key_id: str, includes: list[str]) -> list
     from agentteams.cli.toolchain_group import GROUP_FILE_REL
 
     defaults = [Path(team_dir) / "references" / "security-decisions.log.csv"]
-    root = kr._project_root(team_dir)
+    root = kr.project_root(team_dir)
     if root is not None:
         defaults += [root / rel for rel in (GRANT_LOG_REL, REGISTRY_REL, GROUP_FILE_REL, AUTH_FILE_REL)]
     found: list[tuple[str, str, list[str]]] = []
@@ -174,19 +173,22 @@ def _fingerprint(team_dir: Path, key_id: str) -> str:
         return "unreadable"
 
 
-def _unseen_stores(team_dir: Path, old: str) -> list[Path]:
-    """Stores holding ``old``'s key whose own :func:`~key_retirement.scan_dirs` would not see ``team_dir``'s record."""
-    key = kr.material(Path(team_dir) / kr.STORE_REL / f"{old}.pub.pem")
-    here = Path(team_dir).resolve()
-    unseen = []
-    for d in kr.scan_dirs(team_dir)[1:]:
-        store = d / kr.STORE_REL
-        if lstat_or_none(store, "verify-key store") is None:
-            continue
-        holds = any(kr.material(pem) == key for pem in sorted(store.glob("*.pub.pem")))
-        if holds and here not in {x.resolve() for x in kr.scan_dirs(d)}:
-            unseen.append(d)
-    return unseen
+def _resign_plan(team_dir: Path, old: str, new: str) -> list[tuple[Path, dict]]:
+    """``(store, unsigned record)`` for each live record ``old`` signed, re-pointed at ``new`` (raises RuntimeError).
+
+    Every such store must hold ``new`` (the same key bytes as in ``team_dir``), or the run is refused naming it.
+    """
+    store = Path(team_dir) / kr.STORE_REL
+    new_key = kr.material(store / f"{new}.pub.pem")
+    plan = []
+    for d, doc in kr.records_signed_by(team_dir, kr.material(store / f"{old}.pub.pem")):
+        there = d / kr.STORE_REL / f"{new}.pub.pem"
+        if lstat_or_none(there, "verify key") is None or kr.material(there) != new_key:
+            raise RuntimeError(f"{old!r} signed the retirement record of {doc['key_id']!r} in {d}, which would stop "
+                               f"verifying once {old!r} is retired, and that store does not hold {new!r} to re-sign "
+                               f"it; provision {new!r} there first")
+        plan.append((d, {k: doc[k] for k in kr.RECORD_FIELDS if k != "signature"} | {"signed_by": new}))
+    return plan
 
 
 def _pre_key_refusal(old: str, new: str, team_dir: Path) -> str | None:
@@ -197,11 +199,12 @@ def _pre_key_refusal(old: str, new: str, team_dir: Path) -> str | None:
     host = agent_session()
     if host:
         return f"refusing to sign inside an agent session ({host}); run this from your own terminal"
-    if not (kr._KEY_ID_RE.match(old or "") and kr._KEY_ID_RE.match(new or "")) or old == new:
+    if not (kr.KEY_ID_RE.match(old or "") and kr.KEY_ID_RE.match(new or "")) or old == new:
         return "--retire-verify-key and --key-id must be two different key ids (letters, digits, '.', '_', '-')"
     team = sign_decision_team_refusal(team_dir)
     if team:
         return team
+    kr.binding(team_dir)  # a generated team dir of a named project, or RuntimeError
     for key_id in (old, new):
         if lstat_or_none(Path(team_dir) / kr.STORE_REL / f"{key_id}.pub.pem", "verify key") is None:
             return f"there is no {kr.STORE_REL}/{key_id}.pub.pem in {team_dir}"
@@ -210,11 +213,6 @@ def _pre_key_refusal(old: str, new: str, team_dir: Path) -> str | None:
         return f"{old!r} and {new!r} are the same key under two names; sign with a different key"
     if kr.applicable_records(team_dir, kr.material(store / f"{new}.pub.pem")):
         return f"key {new!r} is itself retired, so it cannot sign a retirement record"
-    unseen = _unseen_stores(team_dir, old)
-    if unseen:
-        return (f"a record in {team_dir} would not bind {old!r} in {', '.join(map(str, unseen))}, which hold the same "
-                "key and do not read this store; retire it from a generated team dir (such as .claude/agents) "
-                "instead")
     return None
 
 
@@ -222,8 +220,10 @@ def retire_verify_key(old: str, new: str, team_dir: Path, includes: list[str], *
                       confirm_sha256: str | None = None, allow_checkout: bool = False) -> int:
     """Operator-only: write ``<old>.retired.json``, the verified snapshot of ``old``'s signatures, signed by ``new``.
 
-    Shares ``--sign-toolchain-group``'s path: pre-key refusals, display, review digest and confirmation, preflight
-    (integrity, key file, install location), sign, then verify against ``team_dir``'s store before writing.
+    Uses ``--sign-decision``'s path, in this order: pre-key refusals (including every collected signature verified),
+    preflight (integrity, key file, install location), display, review digest and confirmation, key read, signing
+    (the new record, and each record ``old`` signed, re-signed by ``new``), then verification of each against its
+    store before anything is written.
 
     Args:
         old: The key being retired.
@@ -242,16 +242,18 @@ def retire_verify_key(old: str, new: str, team_dir: Path, includes: list[str], *
 
     team_dir = Path(team_dir)
     labelled: list[tuple[str, str]] = []
+    resign: list[tuple[Path, dict]] = []
     try:
         refusal = _pre_key_refusal(old, new, team_dir)
         labelled = [] if refusal else collect_signatures(team_dir, old, includes)
+        resign = [] if refusal else _resign_plan(team_dir, old, new)
     except RuntimeError as exc:
         refusal = str(exc)
     spoof = None if refusal else ops._spoofing_problem([label for label, _ in labelled], "source labels")
     if refusal or spoof:
         print(f"Error: {refusal or spoof}. The key was not read.", file=sys.stderr)
         return 1
-    record = {"key_id": old, "not_after": date.today().isoformat(), "signed_by": new,
+    record = {"key_id": old, "not_after": date.today().isoformat(), "signed_by": new, "binding": kr.binding(team_dir),
               "signature_sha256": sorted({digest for _, digest in labelled})}
     preflight = ops._signing_preflight(ops._project_roots(team_dir), allow_checkout, new)
     if preflight is None:
@@ -262,20 +264,28 @@ def retire_verify_key(old: str, new: str, team_dir: Path, includes: list[str], *
     print(f"  retired key : {old}  (public key sha256 {_fingerprint(team_dir, old)})")
     print(f"  signing key : {new}  (public key sha256 {_fingerprint(team_dir, new)})")
     print(f"  team dir    : {team_dir.resolve()}")
+    print(f"  binding     : {record['binding']}")
     print(f"  not_after   : {record['not_after']}")
     for label, digest in labelled:
         print(f"  keeps       : {digest[:16]}  {label}")
+    for d, doc in resign:
+        print(f"  re-signs    : the retirement record of {doc['key_id']!r} in {d}: snapshot unchanged "
+              f"({len(doc['signature_sha256'])} signature(s)), signer {old} -> {new}")
     print(f"  values      : {json.dumps(kr.signed_values(record), ensure_ascii=True)}")
-    if not ops._confirm(ops.review_digest("key-retirement", record, team_dir, new), confirm_sha256):
+    spec = {"record": record, "re_signs": [[str(d.resolve()), doc] for d, doc in resign]}
+    if not ops._confirm(ops.review_digest("key-retirement", spec, team_dir, new), confirm_sha256):
         return 1
     private_pem = ops._read_operator_private_key(keyfile)
     if private_pem is None:
         return 1
     try:
-        record["signature"] = sl.ed25519_sign(private_pem, kr.signed_values(record))
-        kr._verify_doc(team_dir, kr.validate(record, old))
-        replace_no_follow(kr.record_path(team_dir, old),
-                          json.dumps({k: record[k] for k in kr._FIELDS}, indent=2, ensure_ascii=True) + "\n")
+        writes = [(d, dict(doc)) for d, doc in resign] + [(team_dir, record)]
+        for d, doc in writes:
+            doc["signature"] = sl.ed25519_sign(private_pem, kr.signed_values(doc))
+            kr.verify_signed_record(d, kr.validate(doc, doc["key_id"]))
+        for d, doc in writes:  # the re-signed records first: they verify whether or not the new record lands
+            replace_no_follow(kr.record_path(d, doc["key_id"]),
+                              json.dumps({k: doc[k] for k in kr.RECORD_FIELDS}, indent=2, ensure_ascii=True) + "\n")
     except (OSError, RuntimeError) as exc:
         print(f"Error: {exc}. Nothing written.", file=sys.stderr)
         return 1

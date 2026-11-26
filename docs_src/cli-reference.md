@@ -1473,14 +1473,19 @@ decisions log and, at the project root, the capability-grants log, `.agentteams/
 (a decisions log, capability-grants log, carve-out registry, toolchain group or dev-merge authorization, repeatable;
 another kind, or one with no signature under `OLD`, is refused). Each signature is verified under `OLD` against its own
 document first; one that does not verify refuses the run and is named. The record is signed with key `NEW`, which
-must differ from `OLD` by its bytes and must not be retired. It refuses inside an agent session, and from a team dir
-whose record another store holding the key would not read; then it uses `--sign-decision`'s path: display of every
-kept signature and its document, review digest and confirmation (`--confirm-review-sha256` without a terminal),
-preflight (integrity, key file, install location), then verification against `NEW.pub.pem` before it writes.
-Afterwards, in every team dir store of the project (and under any other file name holding the same key), a signature
-under `OLD` verifies only when its digest is listed, and new signing under `OLD` is refused. A record that does not
-verify refuses every signature under `OLD`. The user-level `~/.config/agentteams/verify-keys/` is not covered: remove
-the old key there. `--verify-integrity` reports each record and warns when one is missing on disk. Procedure and what
+must differ from `OLD` by its bytes and must not be retired, and is bound to `<project>:<team dir>` (the build log's
+`project_name` slug and the team dir's path from the project root). `DIR` must be a generated team dir
+(`.claude/agents`, `.github/agents`, ...); a gates-only team dir is refused, as is an agent session. Records `OLD`
+signed for other keys are re-signed with `NEW` in the same run, snapshot unchanged. The order is `--sign-decision`'s:
+pre-key refusals, preflight (integrity, key file, install location), display of every kept signature and its document
+and every re-signed record, review digest and confirmation (`--confirm-review-sha256` without a terminal), the key
+read, signing, then verification of each record before anything is written. Afterwards, in every team dir store of
+the project (and under any other file name holding the same key), a signature under `OLD` verifies only when every
+record retiring that key lists its digest, and new signing under `OLD` is refused. A record that does not verify, or
+whose binding is not its store's, refuses every signature under `OLD`; a symbolic link at a generated team dir path
+refuses every Ed25519 verify of the project. The user-level `~/.config/agentteams/verify-keys/` is not covered: remove
+the old key there. `--verify-integrity` reports the records of every store and warns when one is missing on disk or
+its own `.pub.pem` is. Procedure and what
 to check in the review: `references/authorized-verify-keys/README.md` ("Retiring a key").
 
 ### `--verify-toolchain-group`
