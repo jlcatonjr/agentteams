@@ -133,6 +133,15 @@ habits are out of scope** — insecure-by-default code is owned by `@security`
 (CWE / OWASP LLM & Web + S-rules); route those findings there, do not duplicate
 the security taxonomies here (CH-05/CH-14).
 
+**CH-08 / CH-27 — script reviews.** When the same one-off logic has been written
+again, or the operator asks for a review of ad-hoc scripts, follow the
+script-consolidation procedure:
+
+`#file:references/script-consolidation.reference.md`
+
+It gathers evidence for your judgment and does not decide conformance. Every
+coverage verdict in it carries the reference ref it was read from.
+
 **CH-26 — Least authority for tool grants.** Each agent's `tools:` field must list
 only the tools its declared function requires; excess grants are a violation even
 if never exercised. Full enforcement detail is in the companion reference file.
