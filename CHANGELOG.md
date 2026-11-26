@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (one security policy, the root `SECURITY.md`, which is the one GitHub shows)
+
+- **Fixed:** the repository carried two policies. GitHub shows `.github/SECURITY.md` ahead of the root file, so
+  reporters saw a stale copy whose fallback, "a private coordination issue", does not exist on GitHub and would
+  have sent a report to a public issue, which the root policy forbids. That copy is deleted; the root
+  `SECURITY.md` is the only policy and keeps its response targets (acknowledgement within 3 business days, a fix
+  target within 10).
+- The root policy now gives the one fallback for a reporter without the Security tab: a public issue that says
+  only that they have a security report and asks to be contacted, with no details.
+- `.github/CODEOWNERS` protects `/SECURITY.md` in place of the deleted path, and a test keeps exactly one policy
+  file, keeps the private-issue text out, and keeps tracked docs from linking to a policy outside the root.
+- **Who notices:** a reporter reading the repository's Security policy page, which shows the root text once this
+  reaches the default branch.
+
 ### security (`--reconcile-apply` widens a capability grant only under a recorded clearance)
 
 - **Fixed:** `--reconcile-front-matter --reconcile-apply` took the template's value for every diverging

@@ -19,6 +19,9 @@ Report it privately through GitHub: open the repository's **Security** tab and c
 vulnerability** (<https://github.com/jlcatonjr/agentteams/security/advisories/new>). Only the
 maintainers can see the report.
 
+If the Security tab is unavailable to you, open a public issue that says only that you have a security report
+and asks a maintainer to contact you; put no details in it.
+
 Please include:
 - A description of the vulnerability.
 - Steps to reproduce, or a proof-of-concept.
