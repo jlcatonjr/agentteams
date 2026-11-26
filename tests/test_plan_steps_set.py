@@ -1,8 +1,8 @@
 """test_plan_steps_set.py — ``python -m agentteams.plan_steps --set``: one command to mark a step.
 
 Sessions kept writing their own scripts to edit a steps CSV, and tables ended up with statuses
-outside the vocabulary and with shifted columns. ``--set`` writes through ``update_step`` and
-refuses a status the tools do not know.
+outside the vocabulary and with shifted columns. ``--set`` rewrites the one row and refuses a
+status the tools do not know.
 """
 from __future__ import annotations
 

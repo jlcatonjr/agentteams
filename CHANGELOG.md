@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (`plan_steps.update_step` rewrites one row; `write_steps` checks before it writes)
+
+- **`update_step` no longer rewrites the whole table.** It replaces the one row and keeps every other byte, as
+  `--set` does. Before, an update converted CRLF line endings to LF, dropped cells from any row wider than the
+  header, removed blank lines, and set every row that shared the step id.
+- **Now refused, with nothing written:** a step id that names more than one row, a target row with more cells
+  than the header, and a header that repeats a column. An unknown column and an unknown step are refused as before.
+- **`write_steps` checks the text before it touches the file** and writes by rename. Before, it wrote first and
+  checked after, so a refused table had already replaced the old file. It also keeps CRLF line endings when the
+  file already uses them, and keeps a symlink a symlink.
+- **Checked on real tables:** `update_step` run over copies of 907 step tables from this repository changed one
+  row only in 889 and refused 18 with the file untouched.
+- **If you call `update_step` to set several rows that share an id,** fix the duplicate id first; that call now
+  raises `ValueError`.
+
 ### added (every team receives a script-consolidation reference)
 
 - **New reference:** `references/script-consolidation.reference.md` gives the procedure for reviewing one-off
@@ -504,8 +519,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `completed` is still read, but not written); a step id that names no row or more than one; a step row with
   more cells than the header; a table that lacks the column being set.
 - **Checked on real tables:** run over copies of 812 step tables from this repository, 794 changed in the one row
-  only and 18 were refused with the file untouched. The whole-table writer (`update_step`) is unchanged; on the
-  same tables it converts CRLF line endings and drops cells from rows wider than the header.
+  only and 18 were refused with the file untouched. At that point the whole-table writer (`update_step`), on
+  the same tables, converted CRLF line endings and dropped cells from rows wider than the header; the `fixed`
+  entry on `update_step` changes that.
 - **Symlinks:** a steps file reached through a symlink stays a symlink; the file it points to is updated.
 - **Tracing:** the workflow tracer counts a `--set` on a steps CSV as a write to it.
 - **Not changed:** the agent templates do not mention the command yet.
