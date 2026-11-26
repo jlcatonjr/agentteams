@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`script_census`: an inventory of scripts, and which of them are copies)
+
+- **New:** `python -m agentteams.script_census inventory ROOT…` writes one CSV row per script to stdout
+  (`path, size, lines, sha256, ext, root`). `mark-copies` reads that CSV on stdin and adds `copy_kind`:
+  `authored`, `snapshot`, `tracked-duplicate` or `missing`.
+- **Why:** these are the first two steps of the script-consolidation review every team now has a reference
+  for. Gathering them by hand was itself a recurring one-off script.
+- **Every omission is counted:** pruned folders, nested checkouts, symbolic links, oversize files and files
+  that are not scripts are reported on stderr by reason.
+- **Limits it keeps:** read-only; symbolic links are never followed or read; a nested checkout or project is
+  never entered; git is asked only for the named repository's own listing.
+- **Checked on this repository:** `tmp` and `scripts` gave 652 scripts in under a second, 3 of them
+  byte-identical copies of tracked files.
+- **Not included:** classifying scripts into families, a recurrence check, usage ranking, fleet-wide runs.
+
 ### added (every team receives a script-consolidation reference)
 
 - **New reference:** `references/script-consolidation.reference.md` gives the procedure for reviewing one-off
