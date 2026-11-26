@@ -30,6 +30,7 @@ These are filled automatically by the rendering engine from the project descript
 - `{DIAGRAM_TOOLS}` — Diagram tool(s) detected from the project description (e.g., "Mermaid or Graphviz/DOT")
 - `{DIAGRAM_EXTENSION}` — Default file extension for diagram source files (e.g., "mmd")
 - `{COMPONENT_SLUG}` — Generic `<component-slug>` pattern used in file naming conventions
+- `{TEAM_INSTRUCTIONS_FILE}`, `{TEAM_AGENTS_DIR}`, `{AGENT_FILE_SUFFIX}` — the team's instructions file and agents directory (project-relative) and its agent file suffix, for the framework being rendered: `.github/copilot-instructions.md`, `.github/agents`, `.agent.md` on Copilot; `.claude/CLAUDE.md`, `.claude/agents`, `.md` on Claude; `AGENTS.md`, `.codex/agents`, `.toml` on Codex. Use them wherever prose names a team file, so a non-Copilot team is not sent to Copilot paths. Read from the adapter by `agentteams/frameworks/canonical_paths.canonical_path_placeholders`, which `analyze` also uses for `{CONFLICT_LOG_PATH}`
 - `{TOOL_DOCS_URL}` — Official documentation URL for the tool
 - `{TOOL_VERSION_RESOLUTION}` — Empty unless the tool entry declares `version_source`; then a
   "Version resolution" block telling the agent to read the version from the target project's pin

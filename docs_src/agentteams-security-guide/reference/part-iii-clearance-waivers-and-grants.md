@@ -56,13 +56,7 @@ continue to read (`agentteams/cli/decision_log.py:22-63`).
 
 The destructive gate consults this log as the clearance engine. Its decision order:
 
-| Log state | Gate behaviour |
-|---|---|
-| Unretracted **HALT** anywhere | **Blocks** — checked first, over the whole log |
-| **PASS** (matching, unconsumed) | Allows |
-| **CONDITIONAL PASS**, `conditions_verified == "verified"` | Allows |
-| **CONDITIONAL PASS**, conditions not verified | Blocks **"as if HALT"** |
-| Row already consumed/used | Skipped — a clearance **cannot be replayed** |
+--8<-- "docs_src/assets/snippets/security-guide-part-iii-table-log-state-gate-behaviour.md"
 
 The HALT-first, replay-proof logic lives in
 `agentteams/cli/security_gate.py:96-259`; row-consumption bookkeeping is at

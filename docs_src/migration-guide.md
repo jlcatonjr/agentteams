@@ -70,7 +70,12 @@ Read two parts of the report.
 - **HALTs that newly block.** The report lists:
     - each unretracted HALT that newly blocks an agentteams gate action, with the **exact id** to retract it by;
     - every other unretracted HALT, because it blocks any action that your own `check_clearance` gates use and
-      that its id names.
+      that its id names, and from 1.3.1 every id under it after a colon (`server-apply` blocks
+      `server-apply:remove-path:…`; `deploy` blocks your own `deploy:prod`; only `:` counts, and a trailing colon
+      on the HALT's id is ignored). Each line names the agentteams gate family the id belongs to, if any. Every
+      HALT is listed once.
+    - each unretracted HALT whose id is empty or has no letter or digit. Such a HALT names no action, so it
+      blocks **every** gated action. Before this change it blocked none, and a later PASS cleared the action.
 
     This part is advisory and does not change the exit code. `--migrate-decision-log --dry-run` prints the same
     list.
@@ -80,6 +85,17 @@ exact id, as reported. It needs non-empty `evidence` (or `conditions`) saying wh
 must authenticate like any other authorizing row in that log (signed, when the log is signing-active). A HALT
 matched only by token is cleared **only** by its exact id: retracting the plain action (`overwrite`) does not
 clear `m6-overwrite-render-…`. A retraction is a governance decision, so route it through @security as usual.
+
+A HALT with no usable id has no id to retract it by, so it is retracted by its **row handle**,
+`halt-row:<N>:<digest>`. Copy the handle from the report or from the gate's refusal; do not compose it by hand.
+
+- The handle names the row's number and 16 hex digits of a digest of the row's signed fields: date, id, verdict,
+  `conditions_verified`, author, the chain link, and every optional signed column the row fills in (such as
+  `scope` or `text_digest`). If rows before the HALT
+  are added or removed, or one of those fields changes, the handle no longer matches and the HALT blocks again.
+  Free-text `conditions` and `evidence` are covered only when the row carries a `text_digest`.
+- If the log has a `scope` column and the retraction fills it in, the scope must be the handle itself.
+- Until such a HALT is retracted, every gate refuses, the scheduled vulnerability remediation included.
 
 #### Step 2 — Upgrade or re-pad a legacy log: `--migrate-decision-log`
 

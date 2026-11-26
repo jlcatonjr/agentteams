@@ -12,6 +12,12 @@ a projection lowering a fence, but cannot catch stale same-version values (`src/
 `run_sync` therefore calls `refresh_hub_binding` before every projection, and
 `--sync-refresh-instructions` runs the same refresh on its own.
 
+Only fences move into the hub: the hub keeps its own text outside fences, which dates from `--sync-init`, and a
+peer instruction file that is missing is rebuilt with that text, not the pin's. When the pin's outside-fence text
+differs from the hub's (fenced regions removed, whitespace collapsed), `refresh_hub_for_projection` says so in a
+notice. Project-Specific Rules travel by [`rules_projection`](rules-projection.md); re-running `--sync-init`
+re-seeds the rest.
+
 ## Public types
 
 - `HubRefreshResult`: `pin`, `refreshed` (fences replaced from the pin), `added` (fences only the
@@ -60,9 +66,19 @@ the refusal, and the next sync brings the pin up to it. Stale values at the same
 
 ### `refuse_unsafe_pin_instructions`
 
-`refuse_unsafe_pin_instructions(root, pin_doc, hub) -> None`
+`refuse_unsafe_pin_instructions(root, pin_doc, hub, *, existing_hub_dir=None) -> None`
 
 Raises `ValueError` carrying `pin_instruction_problem`'s text. `run_sync` and `sync_init` call it first.
+`sync_init` passes `existing_hub_dir`: when a hub already exists there it is checked as well as the seed, so a
+re-init whose pin instruction file is missing is refused instead of emptying the hub's instruction content.
+
+### `agent_team_roster_mismatch`
+
+`agent_team_roster_mismatch(content, hub) -> str`
+
+Compares the `` `@slug` `` handles in *content*'s `agent_team` fence with the hub's agent slugs and returns a
+notice naming the agents listed but absent and the agents present but not listed, or `""` when they match or there
+is no `agent_team` fence. It only reports: the fence is moved from the pin verbatim and never rewritten.
 
 ### `refresh_hub_for_projection`
 
@@ -70,7 +86,8 @@ Raises `ValueError` carrying `pin_instruction_problem`'s text. `run_sync` and `s
 
 `run_sync`'s pre-projection step: `refresh_hub_binding` from the pin alone, reported in `notices`, saved unless
 `dry_run`. When it replaces a fence-less hub's instruction text, it first backs up `team.cai.json` (as
-`refresh_hub_instructions` does) and names the backup in `notices`.
+`refresh_hub_instructions` does) and names the backup in `notices`. It also adds `agent_team_roster_mismatch`'s
+notice when the hub's `agent_team` fence and its roster disagree.
 
 ## The projection guard
 

@@ -69,7 +69,8 @@ def _team(tmp: Path, *, pub: bytes = _PUB, roster: bool = True) -> Path:
     (team / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
     (store / f"{_KEY_ID}.pub.pem").write_bytes(pub)
     if roster:
-        (team / "references" / "security-approvers.txt").write_text("alice\n", encoding="utf-8")
+        # alice approves grants; security authors the decision specs (--sign-decision checks the roster, bl48-32)
+        (team / "references" / "security-approvers.txt").write_text("alice\nsecurity\n", encoding="utf-8")
     return team
 
 
@@ -474,6 +475,21 @@ def test_tag_drift_warns_when_head_is_clean(tmp_path, monkeypatch, capsys, _pin_
     assert "(agentteams/cli/decision_log.py)" in err
 
 
+@pytest.mark.parametrize(("over", "klass", "heading"), [
+    ({"action_reviewed": "grant-cross-repo-write"}, "relaxing", "constraint-relaxing"),          # needs the operator
+    ({"action_reviewed": "prune", "effect_grants": None, "derives_from": None}, "relaxing", "constraint-relaxing"),
+    ({"action_reviewed": "record-closure", "effect_grants": None, "derives_from": None}, "non-relaxing", "non-relaxing"),
+])
+def test_the_prompt_heading_names_the_class_the_gate_applies(over, klass, heading, tmp_path, monkeypatch, capsys):
+    """The heading said "constraint-relaxing" for every row, a non-relaxing one included (found signing a closing row)."""
+    monkeypatch.setattr(operator_signing, "_key_dir", lambda: tmp_path / "operator-home" / ".config" / "agentteams" / "keys")
+    capsys.readouterr()
+    _invoke(_sd(tmp_path, monkeypatch, spec=_decision(**over)))
+    out = capsys.readouterr().out
+    assert f"  derived class   : {klass}\n" in out
+    assert out.startswith(f"About to sign a {heading} security decision:\n")
+
+
 def test_pip_layout_without_git_or_manifest_changes_no_output(tmp_path, monkeypatch, capsys):
     """No manifest, no git, outside cwd: the self-check is a silent no-op (commit-1 output)."""
     from agentteams.cli import operator_signing
@@ -657,3 +673,82 @@ def test_no_default_key_says_why(key_id, why, tmp_path, monkeypatch, capsys):
     err = _norm(capsys.readouterr().err, tmp_path)
     assert err == (f"Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set, and {why} — it must name the "
                    "operator private key file (never an agent env). Refusing to sign (fail-closed).\n")
+
+
+# --- bl48-32: --sign-decision refuses an authorizing row whose author the gate would refuse --------------------
+# The key named by the env does not exist, so "cannot read operator private key" in the output would mean the key
+# was read; the refusal must come first. HALT rows are honoured unauthenticated, so their author is not checked.
+
+_AUTHOR_REFUSAL = "which is not an approved security author"
+
+
+def _sign_as(tmp: Path, mp: pytest.MonkeyPatch, capsys, *, roster: str, absent_key: bool, **over: object):
+    argv = _sd(tmp, mp, spec=_decision(**over))
+    (tmp / "team" / "references" / "security-approvers.txt").write_text(roster, encoding="utf-8")
+    return _sign_with(argv, mp, capsys, key=tmp / "absent.key" if absent_key else None)
+
+
+@pytest.mark.parametrize("author", ["orchestrator", None])
+def test_sign_decision_refuses_unrostered_or_missing_author(author, tmp_path, monkeypatch, capsys):
+    rc, out, err = _sign_as(tmp_path, monkeypatch, capsys, roster="security\n", absent_key=True, author=author)
+    assert rc == 1 and out == ""
+    assert _AUTHOR_REFUSAL in err and f"'{author or 'none'}'" in err and "The key was not read." in err
+    assert "cannot read operator private key" not in err   # refused before the key file was opened
+    assert not (tmp_path / "team" / "references" / "security-decisions.log.csv").exists()
+
+
+@pytest.mark.parametrize("author,roster", [("security", "security\n"), ("operator", "operator\n"),
+                                           ("@Security", "security\n")])
+def test_sign_decision_signs_a_rostered_author(author, roster, tmp_path, monkeypatch, capsys):
+    rc, _out, err = _sign_as(tmp_path, monkeypatch, capsys, roster=roster, absent_key=False, author=author)
+    assert rc == 0 and _AUTHOR_REFUSAL not in err
+
+
+def test_sign_decision_does_not_check_a_halt_author(tmp_path, monkeypatch, capsys):
+    rc, _out, err = _sign_as(tmp_path, monkeypatch, capsys, roster="security\n", absent_key=False,
+                             author="orchestrator", verdict="HALT")
+    assert _AUTHOR_REFUSAL not in err and rc == 0, err
+
+
+# --- bl48-01 (#616): --sign-decision refuses a clearance on an id under an open HALT ---------------------------
+
+def _halted_log(tmp: Path, mp: pytest.MonkeyPatch, capsys) -> Path:
+    """Sign a HALT on the spec's action into a new log (through --sign-decision itself)."""
+    assert _sign_with(_sd(tmp, mp, spec=_decision(verdict="HALT")), mp, capsys)[0] == 0
+    return tmp / "team" / "references" / "security-decisions.log.csv"
+
+
+def test_sign_decision_refuses_pass_under_open_halt(tmp_path, monkeypatch, capsys):
+    log = _halted_log(tmp_path, monkeypatch, capsys)
+    before = log.read_bytes()
+    argv = _sd(tmp_path, monkeypatch)
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    assert rc == 1 and out == "" and "is under an open HALT" in err and "The key was not read." in err
+    assert "cannot read operator private key" not in err and log.read_bytes() == before
+
+
+def test_sign_decision_signs_retraction_under_open_halt(tmp_path, monkeypatch, capsys):
+    _halted_log(tmp_path, monkeypatch, capsys)
+    argv = _sd(tmp_path, monkeypatch, spec=_decision(verdict="HALT-RETRACTED", evidence="settled"))
+    rc, _out, err = _sign_with(argv, monkeypatch, capsys)
+    assert "is under an open HALT" not in err and rc == 0, err
+
+
+def test_sign_decision_reads_a_nine_column_log_as_stored(tmp_path, monkeypatch, capsys):
+    # The 9-column schema stores the id in `decision` and the verdict in `status`: the HALT check reads those.
+    argv = _sd(tmp_path, monkeypatch, spec=_decision(decision="prune-collectors", status="PASS", owner="security"))
+    cols = ("date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner,"
+            "derives_from,effect_grants,text_digest,sig_scheme,key_id,signature")
+    log = tmp_path / "team" / "references" / "security-decisions.log.csv"
+    log.write_text(f"{cols}\n2026-09-29,p,1,prune-collectors,HALT,,,,security,,,,,,\n", encoding="utf-8")
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    assert rc == 1 and "'prune-collectors' is under an open HALT" in err and "The key was not read." in err
+
+
+def test_sign_decision_refuses_a_clearance_whose_ancestor_is_halted(tmp_path, monkeypatch, capsys):
+    assert _sign_with(_sd(tmp_path, monkeypatch, spec=_decision(action_reviewed="approved-cleanup", verdict="HALT",
+                                                                 effect_grants=None, derives_from=None)),
+                      monkeypatch, capsys)[0] == 0
+    argv = _sd(tmp_path, monkeypatch, spec=_decision(derives_from="approved-cleanup"))   # rewrites spec.json
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    assert rc == 1 and "'approved-cleanup' is under an open HALT" in err and "The key was not read." in err

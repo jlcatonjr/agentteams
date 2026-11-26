@@ -21,14 +21,7 @@ against the **effective, post-redirect URL host**, per-host response **size
 bounds**, and IDNA normalization, so a redirect or a compromised look-alike
 subdomain cannot slip content past the boundary.
 
-| Source | Kind | Notes |
-|---|---|---|
-| **CISA KEV** (Known Exploited Vulnerabilities) | live | `www.cisa.gov` |
-| **FIRST EPSS** (exploit-prediction scores) | live | `api.first.org` |
-| **MITRE CVE** | live | `cveawg.mitre.org` |
-| **NVD CVSS** | live, **optional, rate-limited** | `services.nvd.nist.gov` |
-| **OSV.dev** | live, **package-level** — only when `tools` are given | `api.osv.dev` |
-| **OWASP LLM Top 10 (2025)** | **static** (source-versioned) | + a static source registry |
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-table-source-kind-notes.md"
 
 **Six intel-bearing placeholders.** The watch renders **six** intel-bearing
 placeholders into the security agent — current threats, the prevention playbook,
@@ -78,11 +71,7 @@ auditing the audit — is what distinguishes this from a test suite.**
 **Attacker tiers — a control is meaningful only against a stated tier.** A claim
 with no tier is not a measurement:
 
-| Tier | The attacker |
-|---|---|
-| **T0** | supplies content the agent *reads* (injected text) |
-| **T1** | an in-repo agent with **write + execute** |
-| **T2** | the operator's own shell |
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-table-tier-the-attacker.md"
 
 This is the same discipline a threat modeler applies by hand: name the adversary's
 capability before claiming a control defeats them. The in-scope adversary of S1
@@ -109,14 +98,7 @@ meaningful against the population it was computed over.
 are the transferable failure modes of any audit machinery, and a researcher can
 apply them to their own tooling directly:
 
-| ID | Failure mode it catches |
-|---|---|
-| **F-1** | a verifier that always passes — every verifier needs a sensitivity test and a negative control |
-| **F-2** | a fix wired to one of two call sites — every fix must reach every call path |
-| **F-3** | hand-rolling what the tool provides — no hand-rolled target, descriptor, or VCS resolution |
-| **F-4** | a coverage claim with an unexamined denominator — every count carries the population it was computed over |
-| **F-5** | a probe that got blinder, not better — every probe whose behaviour changed is re-validated for intent |
-| **F-6** | accepting a weakness with no ledger diff — every accepted weakness has a named reason |
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-table-id-failure-mode-it-catches.md"
 
 **CLI and the exit-code hierarchy.** `--redteam` runs the audit;
 `--redteam-freshness-check` checks the standing run's currency;
@@ -132,10 +114,7 @@ named failure modes, not a proof of their own absence — and the byte-identity
 assertion tells you what happened to the copy, not that every future attack leaves
 the tree untouched.
 
-**Source.**
-`agentteams/templates/universal/redteam-methodology.reference.template.md:22-239`;
-`agentteams/redteam/registry.py:36-55`; `agentteams/redteam/runner.py:39-79`;
-`agentteams/redteam/selfaudit.py:33-101`; `agentteams/redteam/cycle.py:1-215`.
+--8<-- "docs_src/assets/snippets/security-guide-part-vii-source.md"
 
 ---
 

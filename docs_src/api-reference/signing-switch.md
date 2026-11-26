@@ -64,11 +64,20 @@ project, never a symlink. Native siblings and projections of another source are 
 returns the notices to print. A failed sibling write becomes a `KEPT_PREFIX` notice, never an
 exception.
 
-### `read_switch(path) -> bool | None`
+### `read_switch(path, root=None) -> bool | None`
 
 Returns the switch value, or `None` when nothing is there. Raises `ValueError` for a symlink, a
-non-regular file, malformed JSON or a non-boolean value. It never defaults to `false`.
-`projection_marker` delegates to it.
+non-regular file, malformed JSON or a non-boolean value. It never defaults to `false`. With
+`root` (the team dir), a symlinked directory between `root` and `path` is refused too.
+`projection_marker` delegates to it and passes the team dir.
+
+### `refuse_symlinked_component(path, root) -> None`
+
+Raises `ValueError` when `path` is not under `root`, or when any component of `path` below `root`
+(the file included) is a symlink or cannot be stat'd. The walk stops at the first component that
+does not exist. `root` and its ancestors are not checked. The decision gate calls it before it
+reads `references/agent-privilege.json` or `references/security-decisions.log.csv`, so neither is
+read through a linked `references/` directory.
 
 ### `owns_switch(agents_dir) -> bool`, `is_governed(*dirs) -> bool`, `switch_payload(value, note) -> str`
 
@@ -81,9 +90,13 @@ A dir is governed when its `signing-governed.marker` exists, or when git still t
   is staged, and one whose deletion is committed only on the current branch all still govern. Governance ends
   only when the deletion has reached the upstream and default branches.
 - **Fail closed:** a git repository nested inside the project, between its root and the team dir (a planted
-  `.git`), counts as governed, and so does a git timeout.
+  `.git`), counts as governed, and so does a git timeout. So does git refusing a repository that is there (a
+  `.git` entry at the project root or above: `safe.directory` ownership, a broken `.git` file) when the team dir
+  holds a `references/security-approvers.txt` roster or a signed row in its decisions log (an unreadable log
+  counts); one line on stderr names the repository and the fix.
 - **Fail open (existence only, as before):** outside a git work tree, without git, when git refuses the
-  repository (`safe.directory` ownership), and for a marker git never tracked (untracked or ignored).
+  repository and the team holds no roster or signed row (with a warning on stderr), and for a marker git never
+  tracked (untracked or ignored).
 - git runs hardened (no fsmonitor or hooks from the repository's config), and inherited `GIT_DIR`,
   `GIT_INDEX_FILE`, `GIT_WORK_TREE`, `GIT_CEILING_DIRECTORIES` and similar variables are removed. If the team dir
   itself is gone, git is asked from the nearest existing ancestor. A non-governed team costs up to four git

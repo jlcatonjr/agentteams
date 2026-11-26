@@ -83,13 +83,19 @@ from agentteams.cli.decision_log import (  # noqa: E402,F401
     _DEFAULT_DECISION_AUTHORS,
     _HALT_RETRACTION_VERDICT,
     _approved_decision_authors,
+    CLEARING_VERDICTS,
+    author_is_approved,
     _assert_authorizing_row_is_authentic,
     _assert_decision_chain_intact,
     _assert_no_unretracted_halt,
     _decision_author,
     _decision_signature_payload,
     _decision_signing_active,
+    _open_halt_for,
     _read_decision_rows,
+    _DERIVES_FROM_FIELD,
+    _build_lineage_map,
+    _transitive_ancestors,
     sign_decision_row,
 )
 
@@ -144,7 +150,8 @@ def _assert_destructive_action_allowed(
     # decides whether any clearance may apply at all.
     _assert_no_unretracted_halt(output_dir, action=action)
 
-    decision = _latest_security_decision(output_dir, action=action)
+    read = _read_decision_rows(output_dir)   # one read: the clearance and the void check number rows alike
+    decision, decision_index = _latest_security_decision_at(read, action=action)
     if decision is None:
         waiver = _latest_security_waiver(output_dir, action=action)
         if waiver is not None:
@@ -173,12 +180,12 @@ def _assert_destructive_action_allowed(
             _consume_security_waiver_use(output_dir, waiver, action=action)
         return
 
-    if verdict in {"PASS", "CONDITIONAL PASS"}:
-        read = _read_decision_rows(output_dir)
+    if verdict in CLEARING_VERDICTS:
         signing_active = _decision_signing_active(read[1] if read else [])
         _assert_authorizing_row_is_authentic(
             decision, output_dir=output_dir, signing_active=signing_active, action=action
         )
+        _assert_not_older_than_a_retraction(output_dir, read, action=action, index=decision_index)
         # W11: a suffix that reads as a restriction and is not one. Advisory — see
         # decision_log.scope_suffix_warning for why this warns rather than refuses.
         warning = scope_suffix_warning(decision, action)
@@ -206,7 +213,7 @@ def _assert_destructive_action_allowed(
             f"(conditions_verified={cond_verified or 'pending'})"
         )
 
-    if verdict not in {"PASS", "CONDITIONAL PASS"}:
+    if verdict not in CLEARING_VERDICTS:
         raise RuntimeError(
             f"latest decision has unsupported verdict '{verdict or 'UNKNOWN'}'"
         )
@@ -548,8 +555,8 @@ def _validate_security_waiver(
     # a roster is text in the same tree. What it closes is the sub-finding: that the fields were
     # decorative.
     if output_dir is not None:
-        approved = {a.lower().lstrip("@") for a in _approved_decision_authors(output_dir)}
-        if approver.lower().lstrip("@") not in approved:
+        approved_ok, approved = author_is_approved(approver, output_dir)
+        if not approved_ok:
             raise RuntimeError(
                 f"waiver approver {approver!r} is not on the approved roster ({sorted(approved)}); "
                 f"see references/security-approvers.txt"
@@ -623,6 +630,72 @@ def verify_waivers(output_dir: Path) -> list[dict[str, str]]:
     return results
 
 
+class OpenHaltError(RuntimeError):
+    """A HALT on a target is still open in the read the void check made (refuse as a HALT, not as a lapse)."""
+
+
+def _assert_not_older_than_a_retraction(
+    output_dir: Path, read: tuple[list[dict[str, str]], list[str]] | None, *, action: str, index: int,
+    also: tuple[str, ...] = (),
+) -> None:
+    """Refuse a clearance recorded before an accepted retraction of a HALT that blocked *action* (C-2, #616).
+
+    A HALT on the action, on a family it belongs to, or on a transitive ``derives_from`` ancestor (Rule 15(a): the
+    child inherits the ancestor's HALT) that is later retracted voids every clearance for the action older than that
+    retraction, whether it was recorded under the HALT or before it: the retraction lifts the block, it never revives
+    an earlier clearance. The newest matching row still decides; a void row does not fall through to an older one.
+    A caller whose HALT checks also cover other ids (a relaxation's family, which a HALT on a sibling instance
+    names) passes them in *also*, so the void check covers exactly what the HALT checks cover. A HALT still open in
+    this same read refuses too, closing the window after the caller's separate HALT scan.
+
+    Raises:
+        OpenHaltError: A HALT on a target is open in this read.
+        RuntimeError: The clearance at row *index* (0-based) predates such a retraction, or the lineage cannot be
+            walked (fail closed).
+    """
+    if read is None:
+        return
+    rows, fieldnames = read
+    targets: dict[str, None] = {}
+    for base in (action, *also):   # the same lineage walk the open-HALT scan makes for each id it checks
+        targets[base] = None
+        if _DERIVES_FROM_FIELD in fieldnames:
+            targets.update(dict.fromkeys(sorted(_transitive_ancestors(base, _build_lineage_map(rows)))))
+    retracted: list[int] = []
+    for target in targets:
+        open_halt = _open_halt_for(rows, target, output_dir=output_dir,
+                                   signing_active=_decision_signing_active(fieldnames), retracted=retracted)
+        if open_halt is not None:
+            raise OpenHaltError(f"'{target}' is under an unretracted HALT (row {open_halt[0] + 1}); C-2: a HALT is "
+                               "cleared only by a HALT-RETRACTED row")
+    later = sorted(r for r in retracted if r > index)
+    if later:
+        raise RuntimeError(
+            f"the newest clearance for '{action}' (row {index + 1}) is older than the HALT retraction at row "
+            f"{later[-1] + 1}: after a HALT is retracted, no earlier clearance survives. Record a new clearance "
+            "after the retraction (C-2, #616)")
+
+
+def _assert_newest_clearance_not_void(output_dir: Path, *, action: str, also: tuple[str, ...]) -> None:
+    """Run :func:`_assert_not_older_than_a_retraction` on the newest clearance for *action*, from one read.
+
+    For gates whose HALT checks cover more ids than *action* (the family of a sandbox relaxation or an S-10 entry):
+    ``_assert_destructive_action_allowed`` voids against *action*'s own HALTs only.
+
+    Args:
+        output_dir: The team dir holding the decisions log.
+        action: The action the clearance is for.
+        also: The further ids the caller's HALT checks cover.
+
+    Raises:
+        RuntimeError: The newest clearance is void, a HALT on a target is open, or the log is unreadable.
+    """
+    read = _read_decision_rows(output_dir)
+    decision, index = _latest_security_decision_at(read, action=action)
+    if decision is not None:
+        _assert_not_older_than_a_retraction(output_dir, read, action=action, index=index, also=also)
+
+
 def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str] | None:
     """Return the newest security decision row matching an action keyword, or None when it is consumed.
 
@@ -630,25 +703,28 @@ def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str
     reached, so a superseded clearance can't be replayed once its successor is used. (Skipping consumed rows
     used to promote an older, unconsumed PASS to "latest"; mathAgents' P5 render, 2026-10-07.)
     """
-    log_path = output_dir / "references" / "security-decisions.log.csv"
-    if not log_path.exists():
-        return None
+    return _latest_security_decision_at(_read_decision_rows(output_dir), action=action)[0]
 
-    try:
-        with log_path.open("r", encoding="utf-8", newline="") as fh:
-            reader = csv.DictReader(fh)
-            actual_columns = [c.strip() for c in (reader.fieldnames or [])]
-            schema_kind = _security_decision_schema_kind(actual_columns)
-            action_field = "action_reviewed" if schema_kind == "legacy" else "decision"
-            verdict_field = "verdict" if schema_kind == "legacy" else "status"
-            rows = list(reader)
-    except (OSError, csv.Error) as exc:
-        raise RuntimeError(f"unable to read security decisions log: {exc}") from exc
 
-    if not rows:
-        return None
+def _latest_security_decision_at(
+    read: tuple[list[dict[str, str]], list[str]] | None, *, action: str,
+) -> tuple[dict[str, str] | None, int]:
+    """:func:`_latest_security_decision` over one :func:`_read_decision_rows` result, plus the row's 0-based index.
 
-    for row in reversed(rows):
+    The gate selects the clearance from the same read (one reader, one lock, one numbering) it checks for voiding
+    retractions, so the index means the same row in both.
+
+    Returns:
+        ``(row, index)``, or ``(None, -1)`` when no row matches or the newest match is consumed.
+    """
+    if not read or not read[0]:
+        return None, -1
+    rows, fieldnames = read
+    schema_kind = _security_decision_schema_kind(fieldnames)
+    action_field = "action_reviewed" if schema_kind == "legacy" else "decision"
+    verdict_field = "verdict" if schema_kind == "legacy" else "status"
+    for index in range(len(rows) - 1, -1, -1):
+        row = rows[index]
         # A HALT-RETRACTION is a record that a block was lifted, not a clearance to act. It is
         # consumed by _assert_no_unretracted_halt; selecting it here would surface it as "the
         # latest decision" and refuse with 'unsupported verdict'.
@@ -661,11 +737,11 @@ def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str
             row.get("decision") or "",
         ]
         if any(_action_matches(candidate, action) for candidate in reviewed_candidates):
-            if row.get("consumed", "").strip().lower() in {"yes", "true", "1"}:
-                return None  # the newest clearance is used up; an older one never stands in for it
+            if (row.get("consumed") or "").strip().lower() in {"yes", "true", "1"}:
+                return None, -1  # the newest clearance is used up; an older one never stands in for it
             normalized_row = {k: (v or "") for k, v in row.items()}
             normalized_row["action_reviewed"] = normalized_row.get(action_field, normalized_row.get("action_reviewed", ""))
             normalized_row["verdict"] = normalized_row.get(verdict_field, normalized_row.get("verdict", ""))
             normalized_row["timestamp"] = normalized_row.get("timestamp", normalized_row.get("date", ""))
-            return normalized_row
-    return None
+            return normalized_row, index
+    return None, -1

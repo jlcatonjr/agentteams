@@ -373,6 +373,109 @@ def test_an_exact_family_retraction_ignores_case_and_whitespace(tmp_path):
     _write_decisions_log(tmp_path, [_row(f"{_FAM}:o/a", "HALT"), _retract(f" {_FAM.upper()} ")])
     dl._assert_no_unretracted_halt(tmp_path, action=_FAM)  # must not raise
 
+# --- a HALT with no usable id blocks every action (it used to block none) -----------------------
+
+_NO_ID = ["", "   ", "--", "(…)"]
+
+
+def _handle(rows: list[dict[str, str]], number: int) -> str:
+    """The row handle of the HALT on 1-based row *number*, computed as the gate does."""
+    from agentteams.cli.action_ids import halt_row_handle
+
+    return halt_row_handle(number, rows[number - 1])
+
+
+@pytest.mark.parametrize("halt_id", _NO_ID)
+def test_a_halt_with_no_usable_id_blocks_every_action(tmp_path, halt_id):
+    rows = [_row(halt_id, "HALT"), _row("overwrite", "PASS", timestamp="2026-02-01T00:00:00Z")]
+    _write_decisions_log(tmp_path, rows)
+    for action in ("overwrite", "prune", "some-custom-action"):
+        with pytest.raises(RuntimeError, match=r"row 1, .*no usable action id.*" + _handle(rows, 1)):
+            dl._assert_no_unretracted_halt(tmp_path, action=action)
+
+
+def test_a_halt_with_an_id_still_blocks_only_what_it_names(tmp_path):
+    """Negative control: the id-less rule does not widen a HALT that has an id."""
+    _write_decisions_log(tmp_path, [_row("prune", "HALT")])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+@pytest.mark.parametrize("halt_id", _NO_ID)
+def test_the_row_handle_retracts_a_halt_with_no_usable_id(tmp_path, halt_id):
+    rows = [_row("prune", "PASS"), _row(halt_id, "HALT")]
+    assert _handle(rows, 2).startswith("halt-row:2:") and len(_handle(rows, 2)) == len("halt-row:2:") + 16
+    _write_decisions_log(tmp_path, rows + [_retract(f" {_handle(rows, 2).upper()} ")])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+@pytest.mark.parametrize("retraction", ["overwrite", "", "--", "halt-row:2", "halt-row", "halt-row:2:0000000000000000",
+                                        "ROW1", "ROW3"])
+def test_nothing_but_its_own_row_handle_retracts_a_halt_with_no_usable_id(tmp_path, retraction):
+    rows = [_row("", "HALT", timestamp="2025-12-01T00:00:00Z"), _row("", "HALT"), _row("", "HALT", conditions="x",
+                                                                                    timestamp="2026-01-02T00:00:00Z")]
+    retraction = {"ROW1": _handle(rows, 1), "ROW3": _handle(rows, 3)}.get(retraction, retraction)
+    _write_decisions_log(tmp_path, rows + [_retract(_handle(rows, 1)), _retract(_handle(rows, 3)), _retract(retraction)])
+    with pytest.raises(RuntimeError, match=_handle(rows, 2)):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_row_handle_retraction_needs_evidence(tmp_path):
+    rows = [_row("", "HALT")]
+    _write_decisions_log(tmp_path, rows + [{**_retract(_handle(rows, 1)), "conditions": ""}])
+    with pytest.raises(RuntimeError, match="carries no evidence"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_row_handle_stops_matching_when_rows_before_the_halt_change(tmp_path):
+    """@security: rows in an unchained prefix can be added or removed. A shifted HALT must block again."""
+    halt, other = _row("", "HALT"), _row("", "HALT", timestamp="2025-12-01T00:00:00Z")
+    retraction = _retract(_handle([halt], 1))
+    _write_decisions_log(tmp_path, [halt, retraction])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # as written: retracted
+    _write_decisions_log(tmp_path, [_row("prune", "PASS"), halt, retraction])  # a row inserted before it
+    with pytest.raises(RuntimeError, match="no usable action id"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+    _write_decisions_log(tmp_path, [other, retraction])  # a different HALT moved onto row 1
+    with pytest.raises(RuntimeError, match="no usable action id"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+@pytest.mark.parametrize(("scope", "retracted"), [("", True), ("HANDLE", True), ("overwrite", False)])
+def test_a_scoped_row_handle_retraction_must_name_the_handle_in_its_scope(tmp_path, scope, retracted):
+    rows = [{**_row("", "HALT"), "scope": ""}]
+    handle = _handle(rows, 1)
+    _write_scoped(tmp_path, rows + [{**_retract(handle), "scope": handle if scope == "HANDLE" else scope}])
+    if retracted:
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+    else:
+        with pytest.raises(RuntimeError, match="no usable action id"):
+            dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_halt_with_no_usable_id_blocks_through_check_clearance(tmp_path):
+    from agentteams.cli.security_gate import check_clearance
+
+    rows = [_row("", "HALT"), _row("overwrite", "PASS", timestamp="2026-02-01T00:00:00Z")]
+    _write_decisions_log(tmp_path, rows)
+    cleared, why = check_clearance(tmp_path, action="overwrite")
+    assert not cleared and _handle(rows, 1) in why
+    # Tools build the retraction from the id the refusal names (`vulnscan halts`): it is the handle, not the action.
+    assert f"latest decision for action '{_handle(rows, 1)}' is HALT" in why
+
+
+def test_the_pre_upgrade_report_lists_halts_with_no_usable_id(tmp_path):
+    from agentteams.cli.action_ids import describe_newly_blocking_halts, idless_open_halts
+
+    rows = [_row("", "HALT"), _row("--", "HALT"), _row("overwrite", "PASS")]
+    rows.append(_retract(_handle(rows, 1)))
+    assert idless_open_halts(rows) == [(2, _handle(rows, 2))]
+    _write_decisions_log(tmp_path, rows)
+    text = "\n".join(describe_newly_blocking_halts(tmp_path))
+    assert "no usable id (1)" in text and "EVERY gated action" in text
+    assert "row 2: " in text and f"'{_handle(rows, 2)}'" in text and _handle(rows, 1) not in text
+    assert "row 2: '--'" not in text  # not also listed among the ordinary HALTs
+
+
 def test_the_pre_upgrade_report_names_newly_blocking_halts(tmp_path):
     from agentteams.cli.action_ids import describe_newly_blocking_halts, newly_blocking_halts
 
@@ -455,6 +558,10 @@ def test_every_gate_call_site_is_listed():
                 # dev-merge:<owner/name>:pr-<N>-<sha>, built (and validated) by merge_action_id only.
                 assert text.count("merge_action = merge_action_id(repo, number, head_sha)") == 1
                 assert "dev-merge" in GATE_ACTIONS
+            elif arg == "halt_scan_action" and path.name == "sign_decision_refusals.py":
+                # #616: the signer's refusal of a clearance under an open HALT. HALT scans only, never a clearance.
+                assert "_assert_no_unretracted_halt(output_dir, action=halt_scan_action)" in text
+                assert "_assert_destructive_action_allowed" not in text and "check_clearance" not in text
             elif arg == "lineage_action" and path.name == "toolchain_group.py":
                 lineage_sites.append(arg)  # the group file's derives_from chain (v1.1.3): exactly one site, below
             else:
@@ -484,3 +591,202 @@ def test_every_listed_gate_action_is_a_real_gate_call():
     source = "\n".join(p.read_text(encoding="utf-8") for p in [*(repo / "agentteams").rglob("*.py"), repo / "build_team.py"])
     for action in GATE_ACTIONS:
         assert f'"{action}"' in source, action
+
+
+# ---------------------------------------------------------------------------
+# bl48-11: the gate never reads its switch or its log through a symlinked directory
+# ---------------------------------------------------------------------------
+
+def _linked_team(tmp_path: Path) -> Path:
+    """A team whose ``references/`` links to an outside dir holding a switch and a HALT-carrying log."""
+    outside = tmp_path / "outside"
+    _write_decisions_log(outside, [_row("prune", "HALT")])
+    (outside / "references" / "agent-privilege.json").write_text('{"enforce_decision_signing": true}')
+    team = tmp_path / "team"
+    team.mkdir()
+    (team / "references").symlink_to(outside / "references", target_is_directory=True)
+    return team
+
+
+def test_gate_refuses_a_symlinked_references_dir(tmp_path):
+    team = _linked_team(tmp_path)
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._enforce_decision_signing(team)
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._read_decision_rows(team)
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._assert_no_unretracted_halt(team, action="other")   # the outside log is never read as the team's
+
+
+def test_gate_refuses_a_symlinked_decisions_log(tmp_path):
+    outside = tmp_path / "outside"
+    _write_decisions_log(outside, [_row("prune", "PASS")])
+    (tmp_path / "team" / "references").mkdir(parents=True)
+    (tmp_path / "team" / "references" / "security-decisions.log.csv").symlink_to(
+        outside / "references" / "security-decisions.log.csv")
+    with pytest.raises(RuntimeError, match="symlink"):
+        dl._read_decision_rows(tmp_path / "team")
+
+
+def test_gate_reads_a_real_references_dir(tmp_path):
+    # Negative control: the same files in a real references/ dir read normally.
+    _write_decisions_log(tmp_path, [_row("prune", "HALT")])
+    (tmp_path / "references" / "agent-privilege.json").write_text('{"enforce_decision_signing": true}')
+    assert dl._enforce_decision_signing(tmp_path) is True
+    rows, _ = dl._read_decision_rows(tmp_path)
+    assert rows[0]["verdict"] == "HALT"
+
+
+# ---------------------------------------------------------------------------
+# bl48-02 (#636, ruling R-18): a HALT on a family id blocks every id under it after a colon
+# ---------------------------------------------------------------------------
+
+_SA = "server-apply:remove-path:web1:/srv/old"
+
+
+def test_family_halt_blocks_instance_clearance(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row(_SA, "PASS")])
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "HALT" in why
+
+
+@pytest.mark.parametrize("halt_id,action", [
+    ("server-apply-old", _SA),           # no colon boundary
+    ("server", "serverless:x"),          # a substring, not a family
+    ("branch", "branch-delete"),         # R-18: '-' is not a family delimiter
+    ("vulnscan", "vulnscan_publish"),    # nor '_'
+    ("carve", "carve.out:x"),            # nor '.'
+])
+def test_family_halt_needs_a_colon_boundary(tmp_path, halt_id, action):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row(halt_id, "HALT"), _row(action, "PASS")])
+    assert security_gate.check_clearance(tmp_path, action=action) == (True, "")   # negative control
+
+
+def test_intermediate_scope_halt_blocks_path(tmp_path):
+    _write_decisions_log(tmp_path, [_row("server-apply:remove-path:web1", "HALT")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_SA)
+    dl._assert_no_unretracted_halt(tmp_path, action="server-apply:remove-path:web2:/srv/old")  # must not raise
+
+
+def test_family_halt_retracted_only_by_its_own_id(tmp_path):
+    rows = [_row("server-apply", "HALT"),
+            _row(_SA, "HALT-RETRACTED", conditions="instance settled", timestamp="2026-02-01T00:00:00Z")]
+    _write_decisions_log(tmp_path, rows)
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_SA)
+    _write_decisions_log(tmp_path, [*rows, _row("server-apply", "HALT-RETRACTED", conditions="family settled",
+                                                  timestamp="2026-02-02T00:00:00Z")])
+    dl._assert_no_unretracted_halt(tmp_path, action=_SA)  # must not raise
+
+
+def test_newly_blocking_halts_lists_family_halts(tmp_path):
+    from agentteams.cli.action_ids import describe_newly_blocking_halts
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row("deploy", "HALT"),
+                                    _row("deploy", "HALT-RETRACTED", conditions="done",
+                                         timestamp="2026-02-01T00:00:00Z")])
+    text = "\n".join(describe_newly_blocking_halts(tmp_path))
+    assert "'server-apply' now also blocks every id under it ('server-apply:...')" in text
+    assert "agentteams gate family 'server-apply'" in text
+    assert "'deploy' now also blocks" not in text   # retracted: not listed
+    _write_decisions_log(tmp_path, [_row("deploy", "HALT")])   # a consumer-defined id is listed too
+    assert "'deploy' now also blocks every id under it ('deploy:...')" in "\n".join(
+        describe_newly_blocking_halts(tmp_path))
+
+
+# ---------------------------------------------------------------------------
+# bl48-01 (#616, ruling R-17): after a HALT is retracted, no clearance older than the retraction survives
+# ---------------------------------------------------------------------------
+
+def test_pass_recorded_under_halt_is_void_after_retraction(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("overwrite", "HALT"), _row("overwrite", "PASS"), _retract("overwrite")])
+    ok, why = security_gate.check_clearance(tmp_path, action="overwrite")
+    assert not ok and "row 2" in why and "row 3" in why and "#616" in why
+    # Negative control: a clearance recorded after the retraction clears.
+    _write_decisions_log(tmp_path, [_row("overwrite", "HALT"), _retract("overwrite"), _row("overwrite", "PASS")])
+    assert security_gate.check_clearance(tmp_path, action="overwrite") == (True, "")
+
+
+def test_pass_before_halt_is_void_after_retraction(tmp_path):
+    # R-17 replaces the plan body: a PASS older than the retraction is void even when it predates the HALT.
+    from agentteams.cli import security_gate
+
+    # (Only a family HALT leaves the older PASS as the newest matching row; an exact-id HALT is itself newest.)
+    _write_decisions_log(tmp_path, [_row(_SA, "PASS"), _row("server-apply", "HALT"), _retract("server-apply")])
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "row 1" in why and "#616" in why
+
+
+def test_pass_under_family_halt_is_void(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row(_SA, "PASS"), _retract("server-apply")])
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "#616" in why
+
+
+def test_a_retraction_of_another_action_voids_nothing(tmp_path):
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("overwrite", "PASS"), _row("prune", "HALT"), _retract("prune")])
+    assert security_gate.check_clearance(tmp_path, action="overwrite") == (True, "")   # negative control
+
+
+def test_void_check_numbers_rows_like_the_gate_reader(tmp_path):
+    # One read, one numbering: blank lines in the log must not shift the clearance's row against the retraction's.
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row(_SA, "PASS"), _row("server-apply", "HALT"), _retract("server-apply")])
+    log = tmp_path / "references" / "security-decisions.log.csv"
+    lines = log.read_text(encoding="utf-8").splitlines(keepends=True)
+    log.write_text(lines[0] + "\n" + lines[1] + "\n\n" + "".join(lines[2:]) + "\n", encoding="utf-8")
+    ok, why = security_gate.check_clearance(tmp_path, action=_SA)
+    assert not ok and "(row 1)" in why and "row 3" in why, why
+
+
+def test_the_clearance_is_never_read_through_a_symlinked_log(tmp_path):
+    # The clearance comes from the gate's own read, which refuses a symlinked log (the HALT scan alone did too).
+    from agentteams.cli import security_gate
+
+    outside = tmp_path / "outside"
+    _write_decisions_log(outside, [_row("overwrite", "PASS")])
+    (tmp_path / "team" / "references").mkdir(parents=True)
+    (tmp_path / "team" / "references" / "security-decisions.log.csv").symlink_to(
+        outside / "references" / "security-decisions.log.csv")
+    with pytest.raises(RuntimeError, match="symlink"):
+        security_gate._latest_security_decision(tmp_path / "team", action="overwrite")
+
+
+def test_a_family_halt_written_with_a_trailing_colon_blocks_its_instances(tmp_path):
+    _write_decisions_log(tmp_path, [_row("server-apply:", "HALT")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action=_SA)
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action="server-apply")
+
+
+def test_the_pre_upgrade_report_lists_each_halt_once(tmp_path):
+    from agentteams.cli.action_ids import describe_newly_blocking_halts
+
+    _write_decisions_log(tmp_path, [_row("server-apply", "HALT"), _row("deploy", "HALT")])
+    lines = describe_newly_blocking_halts(tmp_path)
+    assert sum("'server-apply'" in ln for ln in lines) == 1 and sum("'deploy'" in ln for ln in lines) == 1, lines
+
+
+def test_the_void_check_refuses_a_halt_open_in_its_own_read(tmp_path, monkeypatch):
+    # The HALT scan and the clearance read are separate reads; a HALT the void check sees open refuses there too.
+    from agentteams.cli import security_gate
+
+    _write_decisions_log(tmp_path, [_row("overwrite-001", "HALT"), _row("overwrite", "PASS")])
+    monkeypatch.setattr(security_gate, "_assert_no_unretracted_halt", lambda output_dir, action: None)
+    ok, why = security_gate.check_clearance(tmp_path, action="overwrite")
+    assert not ok and "unretracted HALT" in why
+    _write_decisions_log(tmp_path, [_row("overwrite", "PASS")])   # negative control
+    assert security_gate.check_clearance(tmp_path, action="overwrite") == (True, "")

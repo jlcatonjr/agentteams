@@ -19,7 +19,7 @@ from agentteams.cli import sandbox_relaxation_gate as gate
 from agentteams.cli import security_gate
 from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_KINDS
 from agentteams.sandbox_state import SandboxExceptions, SandboxState
-from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _log, _row, _stub_sig, _team  # noqa: F401
+from tests._sandbox_gate_helpers import _COLUMNS, _KEY_ID, _log, _retraction, _row, _stub_sig, _team  # noqa: F401
 
 _T0 = datetime(2026, 11, 1, tzinfo=UTC)
 
@@ -447,3 +447,80 @@ def test_unbound_entry_is_replaced_by_a_fresh_signed_decision(tmp_path, stub_ed2
     assert rec["authorization"] == "ed25519-decision" and rec["exception_id"] != entry["id"]
     statuses = {e["id"]: e["status"] for e in _registry(team)}
     assert statuses == {entry["id"]: "sunset", rec["exception_id"]: "active"}
+
+
+# --- C-2: a HALT recorded after registration ends the carry-over (bl48-05) -----------------------------------
+
+
+@pytest.mark.parametrize("halted", ["sandbox-os-off:claude", "sandbox-os-off"])
+def test_halt_after_registration_ends_carry_over(tmp_path, stub_ed25519, halted):
+    team, entry, later = _registered_os_off(tmp_path)
+    # Negative control: without the HALT the continuation carries over.
+    assert gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))[0]["authorization"] == \
+        "active-exception"
+    _log(team, _row(halted, verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.standing_authorization(team, "sandbox-os-off", "claude", now=_T0 + timedelta(days=1))
+    assert _registry(team)[0]["status"] == "active"   # the HALT does not retire the entry
+
+
+def test_halt_retraction_does_not_resume_carry_over(tmp_path, stub_ed25519, capsys):
+    # #616: a retraction voids every earlier permission; the exception registered before it does not resume.
+    team, entry, later = _registered_os_off(tmp_path)
+    _log(team, _row("sandbox-os-off:claude", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    _log(team, _retraction("sandbox-os-off:claude"))
+    with pytest.raises(gate.SandboxRelaxationError):   # the newest row for the action is now the HALT itself
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed"):
+        gate.standing_authorization(team, "sandbox-os-off", "claude", now=_T0 + timedelta(days=1))
+    assert "a later HALT retraction voids" in capsys.readouterr().err
+    # Negative control: a decision recorded after the retraction registers a fresh exception that carries over.
+    _log(team, _row("sandbox-os-off:claude", stamp="2026-11-02"))
+    [rec] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert rec["authorization"] == "ed25519-decision" and rec["exception_id"] != entry["id"]
+    [cont] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=2))
+    assert cont["authorization"] == "active-exception" and cont["exception_id"] == rec["exception_id"]
+
+
+def test_pre_governance_continuation_stops_under_halt(tmp_path):
+    team = _team(tmp_path)
+    later = gate.plan_relaxations(_st(os=False), _st(os=False), framework_id="claude", profile_would_emit=True)
+    _log(team)
+    assert gate.authorize(team, later, consume=False, now=_T0)[0]["authorization"] == "pre-governance"  # control
+    _log(team, _row("sandbox-os-off", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0)
+
+
+# --- #616 over the family: a retracted sibling-instance HALT also voids earlier permissions -------------------
+
+
+def test_retracted_sibling_halt_does_not_resume_carry_over(tmp_path, stub_ed25519):
+    team, entry, later = _registered_os_off(tmp_path)
+    _log(team, _row("sandbox-os-off:goose", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    _log(team, _retraction("sandbox-os-off:goose"))
+    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed"):
+        gate.standing_authorization(team, "sandbox-os-off", "claude", now=_T0 + timedelta(days=1))
+    with pytest.raises(gate.SandboxRelaxationError):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    _log(team, _row("sandbox-os-off:claude", stamp="2026-11-02"))   # negative control: re-issued after it
+    [rec] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert rec["authorization"] == "ed25519-decision" and rec["exception_id"] != entry["id"]
+
+
+def test_retracted_sibling_halt_voids_an_older_new_decision(tmp_path, stub_ed25519):
+    team = _team(tmp_path)
+    _log(team, _row("sandbox-os-off:claude"), _row("sandbox-os-off:goose", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.authorize(team, _os_off(), consume=False, now=_T0)
+    _log(team, _retraction("sandbox-os-off:goose"))
+    with pytest.raises(gate.SandboxRelaxationError, match="#616"):
+        gate.authorize(team, _os_off(), consume=False, now=_T0)
+    _log(team, _row("sandbox-os-off:claude", stamp="2026-11-02"))   # negative control
+    assert gate.authorize(team, _os_off(), consume=False, now=_T0)[0]["authorization"] == "ed25519-decision"

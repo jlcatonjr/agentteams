@@ -27,6 +27,9 @@ guest program itself is P07; the team loader and launcher that build an `AgentSp
   `settle(child, usage, started=)` for P09 children: model calls, tokens and USD stay debited while a child runs and
   only its real usage is kept afterwards).
   The defaults are agentteams policy, not provider facts. A USD cap without a price for the model refuses the run.
+  A provider call that fails after at least one HTTP attempt may have been billed, so its reservation's worst case
+  is kept: the tokens, and the USD when the run is priced (unpriced, the call counts as unmetered). A call that
+  fails before any attempt is refunded.
   `BudgetExceeded(cap, detail="")` is what the ledger raises when a cap would be (or was) exceeded; `cap` names the
   `Budget` field.
 - `RunLink(run_id, parent=None, depth=1, slug="", parent_head="", delegation_id="")`: a parent run

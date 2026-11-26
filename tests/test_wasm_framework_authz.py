@@ -254,6 +254,18 @@ def test_standing_authorization_is_the_read_only_carry_over_check(tmp_path: Path
         gate.standing_authorization(team, "wasm-grant-widen", "wasm", tokens, now=datetime(2027, 6, 1, tzinfo=UTC))
 
 
+def test_standing_authorization_refuses_under_halt(tmp_path: Path, stub_ed25519: None) -> None:
+    team = _team(tmp_path)
+    tokens = ("wasm:analyst:read:data",)
+    _log(team, _row("wasm-grant-widen:wasm", grants=";".join(tokens)))
+    gate.authorize(team, [gate.Relaxation("wasm-grant-widen", "wasm", grants=tokens)], consume=True, now=_T0)
+    assert gate.standing_authorization(team, "wasm-grant-widen", "wasm", tokens, now=_T0)["authorization"] == \
+        "active-exception"   # negative control
+    _log(team, _row("wasm-grant-widen", verdict="HALT", sign=None))
+    with pytest.raises(gate.SandboxRelaxationError, match="HALT"):
+        gate.standing_authorization(team, "wasm-grant-widen", "wasm", tokens, now=_T0)
+
+
 def test_governed_raised_limits_must_match_the_recorded_state(copy_of, governed_team: Path) -> None:
     root = copy_of(governed_team)
     team = T.load_team(root)

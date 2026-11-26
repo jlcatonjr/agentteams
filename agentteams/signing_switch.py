@@ -29,7 +29,9 @@ now go through:
   (or is created) ``true`` and a :data:`KEPT_PREFIX` notice reports the conflict.
 
 Writes never follow a symlink: the ``references/`` dir is opened ``O_DIRECTORY|O_NOFOLLOW`` and
-the switch is replaced by a temp file + ``os.replace`` relative to that descriptor.
+the switch is replaced by a temp file + ``os.replace`` relative to that descriptor. Governance reads
+that name the team dir (``read_switch(path, root)``, the decision gate) refuse a symlinked directory
+below it as well as a symlinked file (:func:`refuse_symlinked_component`).
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -105,13 +108,51 @@ class SwitchOutcome:
     notices: list[str] = field(default_factory=list)
 
 
-def _read_regular_text(path: Path) -> str:
-    """Read ``path`` opened ``O_NOFOLLOW`` after an lstat regular-file check.
+def refuse_symlinked_component(path: Path, root: Path) -> None:
+    """Refuse a governance path that is reached through a symlink anywhere below ``root``.
+
+    Each component of ``path`` below ``root`` (the final one included) is checked with ``os.lstat``; the walk stops
+    at the first component that does not exist (nothing below it can be read). ``root`` itself and its ancestors are
+    trusted and not checked.
+
+    Args:
+        path: The governance file (a switch, the decisions log).
+        root: The team dir the file belongs to.
+
+    Returns:
+        None.
 
     Raises:
-        ValueError: A symlink, a non-regular file, or unreadable.
+        ValueError: ``path`` is not under ``root``, a component is a symlink, or a component cannot be stat'd.
     """
     try:
+        rel = path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{path} is not under {root}") from exc
+    cur = root
+    for part in rel.parts:
+        cur = cur / part
+        try:
+            mode = os.lstat(cur).st_mode
+        except (FileNotFoundError, NotADirectoryError):
+            return
+        except OSError as exc:
+            raise ValueError(f"{path}: cannot stat {cur} ({exc.strerror or exc}); refusing (fail-closed)") from exc
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"{path}: {cur} is a symlink; governance files are never read through a link")
+
+
+def _read_regular_text(path: Path, root: Path | None = None) -> str:
+    """Read ``path`` opened ``O_NOFOLLOW`` after an lstat regular-file check.
+
+    With ``root``, every component of ``path`` below it is checked first (:func:`refuse_symlinked_component`).
+
+    Raises:
+        ValueError: A symlink (a symlinked directory below ``root`` too), a non-regular file, or unreadable.
+    """
+    try:
+        if root is not None:
+            refuse_symlinked_component(path, root)
         if not stat.S_ISREG(os.lstat(path).st_mode):
             raise ValueError(f"{path} is a symlink or not a regular file")
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -132,22 +173,23 @@ def _parse_switch(text: str, path: Path) -> dict:
     return data
 
 
-def read_switch(path: Path) -> bool | None:
+def read_switch(path: Path, root: Path | None = None) -> bool | None:
     """Return a switch's ``enforce_decision_signing``; ``None`` when absent.
 
     Args:
         path: The switch file.
+        root: The team dir; when given, a symlinked directory between it and ``path`` is refused too.
 
     Returns:
         The boolean value, or ``None`` when nothing (not even a dangling link) is there.
 
     Raises:
-        ValueError: The switch is present but a symlink, not a regular file, unreadable,
-            malformed, or its value is not a JSON boolean (never defaulted to false).
+        ValueError: The switch is present but a symlink (or below ``root`` through one), not a regular
+            file, unreadable, malformed, or its value is not a JSON boolean (never defaulted to false).
     """
     if not os.path.lexists(path):
         return None
-    return _parse_switch(_read_regular_text(path), path)["enforce_decision_signing"]
+    return _parse_switch(_read_regular_text(path, root), path)["enforce_decision_signing"]
 
 
 def _switch_state(agents_dir: Path) -> tuple[bool | None, str]:
@@ -259,15 +301,58 @@ def _project_root(agents_dir: Path) -> Path:
     return agents_dir.parents[1] if any(posix.endswith("/" + t) for t in TEAM_DIRS) else agents_dir.parent
 
 
+def _has_governance_evidence(agents_dir: Path) -> bool:
+    """Whether ``agents_dir`` holds a security-approvers roster or a signed decision row.
+
+    An unreadable or malformed decisions log counts as evidence (fail closed). ``_read_decision_rows`` reports
+    those as RuntimeError; an OSError from its shared lock is caught too, because an escape would reach
+    :func:`_marker_tracked`'s ``except OSError`` and read as "not governed".
+    """
+    from agentteams.cli.decision_log import _read_decision_rows
+
+    if os.path.lexists(agents_dir / "references" / "security-approvers.txt"):
+        return True
+    try:
+        read = _read_decision_rows(agents_dir)
+    except (RuntimeError, OSError):
+        return True
+    return read is not None and any((row.get("signature") or "").strip() for row in read[0])
+
+
+def _git_refused(agents_dir: Path, stderr: str) -> bool:
+    """The answer when ``git rev-parse`` failed: True (fail closed) only where git refused a repository that is there
+    (a ``.git`` entry at the project root or above) and the team holds governance evidence.
+
+    A refusal without evidence keeps the existence test alone, with a warning; no ``.git`` at all is silent.
+    """
+    root = _project_root(agents_dir).absolute()
+    repo = next((p for p in (root, *root.parents) if os.path.lexists(p / ".git")), None)
+    if repo is None:
+        return False   # genuinely outside a work tree
+    why = (stderr.strip().splitlines() or ["no message"])[0]
+    fix = ("If the repository is yours, fix what git reports (for example: git config --global --add "
+           f"safe.directory {repo}).")
+    if _has_governance_evidence(agents_dir):
+        print(f"signing governance: git refused the repository at {repo} ({why}); treating {agents_dir} as "
+              f"signing-governed (fail-closed): it holds a security-approvers roster or signed decision rows. {fix}",
+              file=sys.stderr)
+        return True
+    print(f"signing governance: git refused the repository at {repo} ({why}); {agents_dir} holds no roster or "
+          f"signed decision rows, so only the marker file on disk is read. {fix}", file=sys.stderr)
+    return False
+
+
 def _marker_tracked(agents_dir: Path) -> bool:
     """True when git still governs ``agents_dir`` through a tracked marker (IM item 17, G-22-7).
 
     Governed when the marker is in the index, or in the tree of HEAD, its upstream, or ``origin/HEAD``. So a
     deleted or deletion-staged marker still governs, and so does one whose deletion was committed only on the
     current branch. Fail-closed cases (True): a git repository nested inside the project between its root and the
-    team dir (a planted ``.git``), and a git timeout. Not a work tree, no git, or git refusing the repository
-    (``safe.directory``): False, the existence test alone, as before. git runs hardened in a repository the agent
-    can write: no fsmonitor or hooks from its config, and no inherited ``GIT_DIR``/``GIT_INDEX_FILE``/… .
+    team dir (a planted ``.git``), a git timeout, and git refusing a repository that is there (``safe.directory``,
+    a broken ``.git`` file) when the team holds a roster or signed decision rows (:func:`_git_refused`; without
+    them, the existence test alone with a warning). Not a work tree or no git: False, the existence test alone, as
+    before. git runs hardened in a repository the agent can write: no fsmonitor or hooks from its config, and no
+    inherited ``GIT_DIR``/``GIT_INDEX_FILE``/… .
     """
     base, rel = agents_dir, Path(GOVERNED_MARKER)
     while not base.is_dir():  # a removed team dir (git rm of its last file) still counts: ask from an ancestor
@@ -277,7 +362,7 @@ def _marker_tracked(agents_dir: Path) -> bool:
     try:
         top = _git(base, "rev-parse", "--show-toplevel")
         if top.returncode != 0:
-            return False
+            return _git_refused(agents_dir, top.stderr or "")
         root, top_dir = _project_root(agents_dir).resolve(), Path(top.stdout.strip()).resolve()
         if top_dir != root and top_dir.is_relative_to(root):
             return True  # a repository nested inside the project answers for itself: fail closed
@@ -570,6 +655,7 @@ __all__ = [
     "marker_deletion_commits",
     "owns_switch",
     "read_switch",
+    "refuse_symlinked_component",
     "review_lines",
     "review_reason",
     "switch_payload",
