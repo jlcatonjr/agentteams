@@ -144,11 +144,25 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   descriptor.
 - **Who:** only a process that can rewrite the team dir while a gate runs; such a process can already edit the
   files themselves. Reading every governance file through one directory descriptor would close it; it needs the
-  log's format check to read from that descriptor too, so it is not in 1.3.1.
+  log's format check to read from that descriptor too, so it is not in 1.3.2.
 
-### Through 1.3.0: a clearance recorded before a HALT's retraction took effect after it (fixed in 1.3.1, #616)
+### A retraction recorded in another team directory does not void this log's older clearances
 
-- **What (agentteams ≤ 1.3.0):** a PASS recorded while a HALT on the action was open (or, for a family HALT, before
+- **What:** some gates also read HALTs from the decisions logs of other team or surface directories in the project:
+  `--merge-pr` (`dev_merge`), the S-10 local-repository exemption and the S-10 cooldown deprecation gates, the
+  S-10 toolchain group (its own HALT and its lineage), and the sha-bound clearance check (`clearance_binding`).
+  An open HALT in any of those logs blocks. A `HALT-RETRACTED` row there does not void a clearance in this log
+  that is older than it (#616), because rows in two logs share no order and their timestamps are written by
+  agents. So once such a HALT is retracted in the other directory, this log's older clearance, or a standing
+  exception bound to it, applies again.
+- **Workaround:** record both the HALT and its retraction in the canonical governance log, the HALT first, or
+  re-sign the clearance after the retraction. A `HALT-RETRACTED` row alone there voids nothing: a retraction only
+  counts when it clears a HALT open in the same log.
+- **Decision:** the design is decided after 1.3.2. A test pins the current behaviour, so a change is deliberate.
+
+### Through 1.3.1: a clearance recorded before a HALT's retraction took effect after it (fixed in 1.3.2, #616)
+
+- **What (agentteams ≤ 1.3.1):** a PASS recorded while a HALT on the action was open (or, for a family HALT, before
   it) cleared the action as soon as the HALT was retracted, without anyone reviewing it at retraction time.
 - **Now:** an accepted retraction of a HALT on the action, on its family or on a `derives_from` ancestor voids every
   earlier permission for that action. A PASS or CONDITIONAL PASS older than the retraction is void, and the gate says
@@ -161,9 +175,9 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Still open:** a waiver issued before the retraction still clears: a waiver's issue time is an unsigned
   timestamp in another log, so it cannot be ordered against the retraction row reliably.
 
-### Through 1.3.0: a HALT on a family id did not block its instance ids (fixed in 1.3.1, #636)
+### Through 1.3.1: a HALT on a family id did not block its instance ids (fixed in 1.3.2, #636)
 
-- **What (agentteams ≤ 1.3.0):** a HALT on `server-apply` (or on `server-apply:remove-path:<host>`) did not stop a
+- **What (agentteams ≤ 1.3.1):** a HALT on `server-apply` (or on `server-apply:remove-path:<host>`) did not stop a
   PASS on `server-apply:remove-path:<host>:<path>` from clearing it, because the HALT side matched only ids that
   start with the action, or the action's tokens inside the HALT id.
 - **Now:** a HALT also blocks every id under its own id after a colon. Only `:` counts: a HALT on `branch` does not
