@@ -1799,7 +1799,11 @@ a row that lists `effect_grants` must list exactly this run's). An unretracted H
 `reconcile-apply-widen` or `reconcile-apply` blocks it, a clearance older than the retraction of
 either is void, and a clearance is spent once.
 Without one, the narrowings still apply, each widening is printed as `REFUSED <file>: <key>` with
-the row to record, nothing from the widening set is written, and the run exits 1. With
+the row to record, and the run exits 1. A refused list key still loses what the template removes:
+an allow list is set to the items both sides share (the read-only switch drops `Write`/`Edit` at
+once, and only the added `Read` waits), and a `disallowedTools` list gains the template's new
+denials and keeps the ones it drops. When an allow list would be left empty, the whole key is
+refused and left as it is, because an empty tools list can mean every tool (Grok, Goose). With
 `--dry-run` the clearance is checked without being spent.
 A key absent on disk is added at the end of the front matter (printed `ADDED (absent)`), and a
 block value (such as `mcpServers`) is replaced whole; each capability change is printed as

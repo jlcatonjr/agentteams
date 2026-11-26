@@ -26,3 +26,12 @@ classify(key: str, deployed: str | None, template: str) -> str
 `"safe"` for a non-capability key, or a capability list whose template items are a subset of the deployed ones
 (for the `disallowedTools` deny list, a superset). `"widening"` for everything else among capability keys: more
 items, a key absent on disk, any `model` change, and any value `parse_items` cannot read.
+
+```python
+safe_part(key: str, deployed: str | None, template: str) -> str | None
+```
+The narrowing part of a widening list change, in the template's shape: for an allow list the items both sides
+share (template order), for `disallowedTools` the union (template items, then the deployed ones it drops).
+`--reconcile-apply` writes it when the widening is refused, so a removal never waits on a clearance. `None` when
+either side is not a strictly read list, when it changes nothing, or when an allow list would be left empty
+(Grok and Goose read an empty tools list as every tool, and Claude a missing grant), so that key is refused whole.

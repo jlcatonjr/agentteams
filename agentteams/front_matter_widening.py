@@ -74,3 +74,49 @@ def classify(key: str, deployed: str | None, template: str) -> str:
         return "widening"
     narrows = set(new) >= set(old) if key == "disallowedTools" else set(new) <= set(old)
     return "safe" if narrows else "widening"
+
+
+def safe_part(key: str, deployed: str | None, template: str) -> str | None:
+    """Return the narrowing part of a widening list change, written in the template's shape, or None.
+
+    For an allow list the safe part is the deployed items the template keeps (their intersection, in template
+    order): what the template removes goes at once, and only what it adds waits on a clearance. For the
+    ``disallowedTools`` deny list it is the mirror, the union (template items, then the deployed ones it drops):
+    new denials apply at once, and only a dropped denial waits. None when either side is not a strictly read list
+    (:func:`parse_items`), when the safe part changes nothing, or when an allow list would be left empty: an empty
+    ``tools`` list is read as every tool by Grok and Goose (``available_tools: []``), and Claude treats a missing
+    grant as every tool, so an empty intersection refuses the whole key.
+
+    Args:
+        key: The front-matter key.
+        deployed: The deployed value, or None when the key is absent on disk.
+        template: The template's value.
+
+    Returns:
+        The value text to write now, or None.
+    """
+    if key not in CAPABILITY_FRONT_MATTER_KEYS:
+        return None
+    new, old = parse_items(key, template), parse_items(key, deployed)
+    if new is None or old is None:
+        return None
+    if key == "disallowedTools":
+        items = [*dict.fromkeys(new), *(i for i in dict.fromkeys(old) if i not in set(new))]
+    else:
+        items = [i for i in dict.fromkeys(new) if i in set(old)]
+    if not items or set(items) == set(old):
+        return None
+    return _render_like(template, items)
+
+
+def _render_like(template: str, items: list[str]) -> str:
+    """Write *items* in the shape of *template*: a block list, a quoted flow list or a comma list."""
+    if template.startswith("\n"):
+        first = next(line for line in template.splitlines() if line.strip())
+        indent = first[: len(first) - len(first.lstrip())]
+        return "".join(f"\n{indent}- {item}" for item in items)
+    text = template.strip()
+    if text.startswith("["):
+        quote = text[1:].lstrip()[0]
+        return "[" + ", ".join(f"{quote}{item}{quote}" for item in items) + "]"
+    return ", ".join(items)

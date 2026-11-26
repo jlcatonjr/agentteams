@@ -486,7 +486,8 @@ def run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> in
 
     A divergence :func:`classify` calls widening is written only when
     :mod:`agentteams.cli.reconcile_apply_gate` clears this run's exact set of them (C-3). When it
-    does not, the safe ones are still applied and every widening is listed as refused.
+    does not, the safe ones are still applied, a refused list key still loses what the template removes
+    (:func:`agentteams.front_matter_widening.safe_part`), and every widening is listed as refused.
 
     Returns:
         Process exit code: 0, or 1 when a widening was refused.
@@ -507,7 +508,8 @@ def run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> in
             refusal = str(exc)
     if getattr(args, "dry_run", False):
         print("\n[DRY RUN] --reconcile-apply would change the keys listed above"
-              + (", except these widenings, which are not cleared:" if refusal else "."))
+              + (", except these widenings, which are not cleared (a list key's removals would still apply):"
+                 if refusal else "."))
         if refusal:
             _print_refusals(widening, refusal, gate.record_hint(tokens, governed=gate.is_governed(output_dir)))
         return 0
@@ -517,6 +519,9 @@ def run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> in
         except gate.ReconcileApplyError as exc:
             refusal = str(exc)
     apply = [d for d in divergences if not (refusal and d in widening)]
+    if refusal:  # a refused list key still loses what the template removes (the narrowing part applies now)
+        apply += [Divergence(d.rel_path, d.key, d.deployed, part) for d in widening
+                  if (part := front_matter_widening.safe_part(d.key, d.deployed, d.template)) is not None]
     for line in apply_divergences(apply, output_dir):
         print(f"  {line}")
     if refusal:
@@ -527,6 +532,8 @@ def run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> in
 
 def _print_refusals(widening: list[Divergence], reason: str, hint: str) -> None:
     for d in widening:
-        print(f"  REFUSED {d.rel_path}: {d.key} — widens a capability grant (C-3); record a "
+        part = front_matter_widening.safe_part(d.key, d.deployed, d.template)
+        held = f"; its removals applied, and it is set to {part.strip()!r} until then" if part else ""
+        print(f"  REFUSED {d.rel_path}: {d.key} — widens a capability grant (C-3){held}; record a "
               f"'reconcile-apply-widen' decision granting frontmatter:{d.rel_path}#{d.key}")
     print(f"  Not cleared: {reason}\n  To apply them, {hint}, then re-run.")

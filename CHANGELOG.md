@@ -38,10 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read of the log and spends only a row identical to that one, so a row appended meanwhile is neither checked in
   its place nor spent.
 - Without a clearance the narrowings still apply, each widening prints `REFUSED <file>: <key>` and the row to
-  record, and the run exits 1 (it always exited 0 before). `--dry-run` checks the clearance without spending it.
+  record, and the run exits 1 (it always exited 0 before). A refused list key still loses what the template
+  removes: an allow list keeps only the items both sides share, so switching to the read-only set drops
+  `Write`/`Edit` at once and only the added `Read` waits; a `disallowedTools` list gains its new denials at once.
+  If an allow list would be left empty, the whole key is refused, since an empty list can mean every tool. `--dry-run` checks the clearance without spending it.
 - **Who notices:** an operator who uses `--reconcile-apply` to give agents the runner's `mcpServers` block, to
-  restore `Write`/`Edit` after turning `write_policy` off, or to switch a team to the read-only set (which adds
-  `Read` where an agent lacked it); and any script that ignored the command's exit code.
+  restore `Write`/`Edit` after turning `write_policy` off, or to add `Read` when switching a team to the
+  read-only set; and any script that ignored the command's exit code.
 
 ### added (every team receives a script-consolidation reference)
 

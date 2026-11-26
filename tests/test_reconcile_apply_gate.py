@@ -8,6 +8,7 @@ A narrowing and a non-capability key apply as before. A widening needs, in a gov
 from __future__ import annotations
 
 import csv
+import re
 import types
 from pathlib import Path
 
@@ -205,6 +206,61 @@ def test_ungoverned_row_that_names_grants_must_name_this_runs(tmp_path, stub_ed2
     _log(team, _row(_A, scope="", grants="frontmatter:x.md#tools", relaxes=""))
     with pytest.raises(gate.ReconcileApplyError, match="missing from decision"):
         gate.authorize(team, {"frontmatter:orchestrator.md#agents"}, consume=False)
+
+
+_RO_DISK = "---\nname: c\ntools: Edit, Write, Grep, Glob, Bash\n---\nbody\n"
+_RO_TMPL = "---\nname: c\ntools: Read, Grep, Glob\n---\nbody\n"
+
+
+def test_a_key_that_removes_and_adds_applies_the_removal_without_a_clearance(tmp_path, capsys):
+    """The read-only switch removes Write/Edit/Bash at once; only the added Read waits on a clearance."""
+    team = _team(tmp_path, governed=True)
+    path = _deploy(team, "cleanup.md", _RO_DISK)
+    assert _run(team, [("cleanup.md", _RO_TMPL)]) == 1
+    assert path.read_text(encoding="utf-8") == "---\nname: c\ntools: Grep, Glob\n---\nbody\n"
+    assert "REFUSED cleanup.md: tools" in capsys.readouterr().out
+
+
+def test_with_the_clearance_the_added_items_apply_too(tmp_path, stub_ed25519, capsys):
+    team = _team(tmp_path, governed=True)
+    path = _deploy(team, "cleanup.md", _RO_DISK)
+    assert _run(team, [("cleanup.md", _RO_TMPL)]) == 1
+    token = re.search(r"effect_grants=(\S+?),", capsys.readouterr().out).group(1)
+    _log(team, _row(_A, grants=token, relaxes=""))
+    assert _run(team, [("cleanup.md", _RO_TMPL)]) == 0
+    assert path.read_text(encoding="utf-8") == _RO_TMPL
+
+
+@pytest.mark.parametrize("disk, tmpl", [
+    ("['write']", "['read']"),          # nothing in common: an empty tools list can mean every tool
+    ("Write, Bash", "Read"),
+    ("\n  - write", "\n  - read"),
+])
+def test_an_empty_intersection_refuses_the_whole_key(tmp_path, disk, tmpl):
+    team = _team(tmp_path, governed=True)
+    text = f"---\nname: c\ntools:{'' if disk.startswith(chr(10)) else ' '}{disk}\n---\nbody\n"
+    path = _deploy(team, "c.md", text)
+    render = f"---\nname: c\ntools:{'' if tmpl.startswith(chr(10)) else ' '}{tmpl}\n---\nbody\n"
+    assert _run(team, [("c.md", render)]) == 1
+    assert path.read_text(encoding="utf-8") == text
+
+
+def test_a_deny_list_adds_its_new_denials_and_waits_to_drop_one(tmp_path):
+    team = _team(tmp_path, governed=True)
+    path = _deploy(team, "d.md", "---\nname: d\ndisallowedTools: Bash\n---\nbody\n")
+    assert _run(team, [("d.md", "---\nname: d\ndisallowedTools: Write\n---\nbody\n")]) == 1
+    assert path.read_text(encoding="utf-8") == "---\nname: d\ndisallowedTools: Write, Bash\n---\nbody\n"
+
+
+@pytest.mark.parametrize("disk, tmpl, expected", [
+    ("['read', 'edit', 'execute']", "['read', 'search']", "['read']"),
+    ("\n  - a\n  - b", "\n  - a\n  - c", "\n  - a"),
+    ("Read, Bash", "Read, Grep", "Read"),
+])
+def test_the_safe_part_keeps_the_templates_shape(disk, tmpl, expected):
+    from agentteams import front_matter_widening as fmw
+
+    assert fmw.safe_part("tools", disk, tmpl) == expected
 
 
 @pytest.mark.parametrize("key, deployed, template, expected", [
