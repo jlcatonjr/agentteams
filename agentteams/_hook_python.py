@@ -30,6 +30,10 @@ from pathlib import Path
 MARKER = "agentteams-api-impact-skipped"
 #: PATH candidates after the recorded interpreter, newest first.
 PATH_CANDIDATES = ("python3.14", "python3.13", "python3.12", "python3.11", "python3")
+#: Local git config keys holding the machine paths of a hook installed inside the working tree: kept in
+#: ``.git/config``, which is never committed, instead of in a hook file that may be.
+CONFIG_IMPORT_PATH = "agentteams.hookImportPath"
+CONFIG_PYTHON = "agentteams.hookPython"
 
 
 def recorded_interpreter(repo_root: Path) -> str:
@@ -80,7 +84,7 @@ def checkout_path(agentteams_path: str, repo_root: Path) -> str:
     return "" if path != root and path.is_relative_to(root) else agentteams_path
 
 
-def render_resolver(recorded: str, checkout: str) -> str:
+def render_resolver(recorded: str, checkout: str, *, from_git_config: bool = False) -> str:
     """Shell lines that set ``_at_py`` (empty when no usable interpreter), ``_at_why`` and define ``_at_run``.
 
     The lines run inside the hook's ``if [ -n "$_at_root" ]`` branch and are indented for it.
@@ -88,6 +92,10 @@ def render_resolver(recorded: str, checkout: str) -> str:
     Args:
         recorded: The interpreter recorded at install time (may be ``""``).
         checkout: The directory put on ``PYTHONPATH`` when the hook does not use a locked installation.
+        from_git_config: Read both from local git config (:data:`CONFIG_IMPORT_PATH`, :data:`CONFIG_PYTHON`) at run
+            time instead of the baked values, for a hooks dir inside the working tree. The import path is
+            dropped unless it is an absolute directory outside the tree; the interpreter passes the same checks as
+            every candidate.
 
     Returns:
         The shell text.
@@ -95,12 +103,20 @@ def render_resolver(recorded: str, checkout: str) -> str:
     Raises:
         Nothing.
     """
-    cands = " ".join(shlex.quote(c) for c in ((recorded,) if recorded else ()) + PATH_CANDIDATES)
+    first = ('"$_at_cfgpy" ',) if from_git_config else ((shlex.quote(recorded) + " ",) if recorded else ())
+    cands = "".join(first) + " ".join(shlex.quote(c) for c in PATH_CANDIDATES)
+    pp = (f"        _at_cfgpy=\"$(git config --local --get {CONFIG_PYTHON} 2>/dev/null)\"\n"
+          f"        _at_pp=\"$(git config --local --get {CONFIG_IMPORT_PATH} 2>/dev/null)\"\n"
+          "        _at_ppr=\"$(cd \"$_at_pp\" 2>/dev/null && pwd -P)\" || _at_pp=\"\"\n"
+          "        case \"$_at_pp\" in /*) ;; *) _at_pp=\"\" ;; esac\n"
+          "        case \"$_at_pp\" in \"$_at_root\"/*|\"$_at_phys\"/*) _at_pp=\"\" ;; esac\n"
+          "        case \"$_at_ppr\" in \"$_at_root\"/*|\"$_at_phys\"/*) _at_pp=\"\" ;; esac\n"
+          if from_git_config else f"        _at_pp={shlex.quote(checkout)}\n")
     return (
         "        # Interpreter (agentteams._hook_python): the locked installation in a release-locked repository,\n"
         "        # else the recorded interpreter or python3.14..3.11/python3 on PATH; 3.11+, never inside the tree.\n"
         "        _at_py=\"\"; _at_mode=\"\"; _at_phys=\"$(cd \"$_at_root\" 2>/dev/null && pwd -P)\"\n"
-        f"        _at_pp={shlex.quote(checkout)}\n"
+        f"{pp}"
         "        # Locked when toolchain.lock pins agentteams (agentteams= or agentteams.tag=), and, failing closed as\n"
         "        # agentteams._fleet_locks does, when it is not a readable regular file or has a line without '='.\n"
         "        _at_lock=\"$_at_root/toolchain.lock\"\n"
@@ -133,6 +149,53 @@ def render_resolver(recorded: str, checkout: str) -> str:
         "        }\n"
         f"        _at_mark=\"$(git rev-parse --git-path {MARKER} 2>/dev/null)\"\n"
     )
+
+
+def hooks_dir_in_tree(repo_root: Path, hooks_dir: Path) -> bool:
+    """Whether *hooks_dir* lies in the working tree (so its hooks can be committed), not in a git directory.
+
+    Args:
+        repo_root: The repository root.
+        hooks_dir: The directory the hooks are written to (``core.hooksPath`` may point into the tree).
+
+    Returns:
+        True when *hooks_dir* is under *repo_root* and under neither its git directory nor its common git directory.
+
+    Raises:
+        Nothing.
+    """
+    try:
+        root, target = repo_root.resolve(), hooks_dir.resolve()
+        proc = subprocess.run(["git", "-C", str(root), "rev-parse", "--absolute-git-dir", "--git-common-dir"],
+                              capture_output=True, text=True, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return target.is_relative_to(root) and not target.is_relative_to(root / ".git")
+    git_dirs = [root / ".git", *((root / d).resolve() for d in proc.stdout.split("\n") if d.strip())]
+    return target.is_relative_to(root) and not any(target.is_relative_to(d) for d in git_dirs)
+
+
+def record_in_git_config(repo_root: Path, checkout: str, recorded: str) -> None:
+    """Store the hook's machine paths in the repository's local git config (``.git/config``, never committed).
+
+    An empty value removes the key, so a stale path from an earlier install cannot linger.
+
+    Args:
+        repo_root: The repository root.
+        checkout: The import path (:func:`checkout_path`), or ``""``.
+        recorded: The interpreter (:func:`recorded_interpreter`), or ``""``.
+
+    Raises:
+        OSError: git is missing or refused to write the config.
+    """
+    for key, value in ((CONFIG_IMPORT_PATH, checkout), (CONFIG_PYTHON, recorded)):
+        args = [key, value] if value else ["--unset", key]
+        try:
+            proc = subprocess.run(["git", "-C", str(repo_root), "config", "--local", *args],
+                                  capture_output=True, text=True, check=False)
+        except subprocess.SubprocessError as exc:
+            raise OSError(f"git config --local {key} failed: {exc}") from exc
+        if proc.returncode not in ((0, 5) if not value else (0,)):  # 5: --unset of a key that is not set
+            raise OSError(f"git config --local {key} failed: {proc.stderr.strip()}")
 
 
 def marker_path(repo: Path) -> Path | None:

@@ -19,10 +19,22 @@ Two maps are refreshed, each under its own guard, plus an optional cache warm-up
 - (opt-in via `--code-index-hook`) script/dependency files staged → warm the [code & API index cache](code-index.md) (`references/code-index/`, gitignored — never staged) via `refresh_code_index()`
 - anything staged (deletions included) → `python -m agentteams.api_impact --pre-commit --strict-capable` ([`api-impact`](api-impact.md)): a one-line summary of the staged API impact, a line for each module whose API page needs attention, and in the agentteams repository with `git config agentteams.regenerateMan true` a regenerated, staged `agentteams.1`. The hook captures the step's exit code (`|| _at_api=$?`, safe under `set -e`). Exit 3 fails the commit, which happens only when the operator has opted in with `git config agentteams.apiDocsStrict true` ([strict mode](api-impact.md#strict-mode)); any other non-zero exit is ignored.
 
+In an agent session (a variable in `update_lock.INVOKER_ENV_MARKERS` is set) the two map refreshes are skipped with
+one stderr line, unless `git config --bool agentteams.hookAgentRefresh` is `true`: the maps are built from the working
+tree, so other sessions' uncommitted edits would land in the commit. The env guard, the warm-up and the API-impact
+step run as usual. The markers are advisory (an environment can be forged); skipping loses a convenience, not a gate.
+
 **Interpreter.** The block resolves its own Python (`agentteams._hook_python`, #447):
 
 - **Release-locked repository** (the root `toolchain.lock` has an `agentteams=` or `agentteams.tag=` key; failing closed like [`fleet`](fleet.md) release locks, also a `toolchain.lock` that is not a readable regular file or has a line without `=`): the locked installation, `<root>/.venv/bin/python`, run with `-I`. It must import `agentteams` on Python 3.11+, and `.venv` must be untracked. Otherwise the hook skips; it never falls back to the agentteams checkout, which would run unreleased code in a repository that pins a release.
 - **Otherwise:** the interpreter recorded at install time (`agentteams --install-git-hooks` / `--update`), then `python3.14` … `python3.11`, then `python3` on PATH, run with `-P`, with the checkout on `PYTHONPATH` (dropped when it lies strictly inside the repository, such as an in-repo `.venv`; the agentteams repository's own root is kept). A candidate must be 3.11+, and neither its path nor its `readlink -f` target may be inside the working tree.
+
+**A hooks dir inside the working tree** (`core.hooksPath` pointing at a tracked directory such as `.githooks/`) can be
+committed, so the installer writes neither machine path into it. It stores the checkout in `git config --local
+agentteams.hookImportPath` and the interpreter in `agentteams.hookPython` (in `.git/config`, never committed; an empty
+value removes the key), and the hook reads them at run time. The import path is dropped unless it is an absolute
+directory outside the working tree; the interpreter passes the same checks as every candidate. The default
+`.git/hooks` install is unchanged.
 
 When none qualifies, every step is skipped: the hook prints `agentteams: hooks SKIPPED, API impact not checked: <reason>` and appends `<UTC time>\t<reason>` to `agentteams-api-impact-skipped` in the git directory. An API impact step that fails (any exit other than 0 or 3) is appended there too. `python -m agentteams.api_impact status` prints those lines and exits 1 until a hook run whose API impact step completes (exit 0, or 3 in strict mode) removes the marker. The commit itself still succeeds; a skip is recorded, not blocking.
 
@@ -78,7 +90,8 @@ API-impact step's exit 3 in opt-in strict mode. Each guard fires only
 when relevant files are staged. Resolves the hooks directory via
 `git rev-parse --git-path hooks` (honours `core.hooksPath`, worktrees, submodules).
 `code_index_hook` (default `False`) additionally installs the opt-in code-index
-warm-up guard described above.
+warm-up guard described above. When the hooks directory is inside the working tree, the machine paths go to local
+git config instead of the hook text, and `InstallResult.notice` says so (printed by `maybe_install_git_hooks`).
 
 ### `maybe_install_git_hooks(args, project_root) -> None`
 

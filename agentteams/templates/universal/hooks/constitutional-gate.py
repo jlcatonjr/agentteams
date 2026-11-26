@@ -86,6 +86,37 @@ except ImportError:  # pragma: no cover - Windows
 
 HOOK_EVENT = "PreToolUse"
 
+#: `git config` keys that can hide or redirect a push (alias./push./remote./url.), or hand over the push credential
+#: or name a program git runs (credential.*, core.*, the generated git hook's agentteams.hook*). Case-insensitive.
+_GIT_EXEC_KEYS = (r"(?:(?:alias|push|remote|url|credential)\.|core\.(?:hookspath|sshcommand|askpass|fsmonitor)\b"
+                  r"|agentteams\.hook(?:python|importpath)\b)")
+#: `git config` keys that add or repoint a publication channel: a remote or rewritten URL, or an included file.
+#: Any `include.` or `includeIf.` key counts: the condition may hold spaces (`includeIf.gitdir:~/my dir/.path`),
+#: and matching up to `.path` needed a second unbounded gap, which made a long line near cubic.
+_GIT_PUBLISH_KEYS = (r"\b(?:(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b"
+                     r"|include(?:if)?\.)")
+#: Per class, a line naming `git`, `config` and such a key; _config_write() exempts only commands it proves are reads.
+_GIT_CONFIG_WRITES = {
+    "publication-channel": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*{_GIT_PUBLISH_KEYS})", re.IGNORECASE),
+    "git-alias-config": re.compile(
+        rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*(?:\s['\"]?{_GIT_EXEC_KEYS}|\bre(?:name|move)-section\b|\s--re[nm]))",
+        re.IGNORECASE),
+}
+#: An assignment, on the same line as a `git` command, of a variable that names a program git runs: `GIT_EDITOR=x
+#: git config --edit` runs x. Covers `VAR=x git …`, `env VAR=x git …` and `export VAR=x; git …` on one line.
+#: One exemption: GIT_PAGER/PAGER set to the bare word `cat` or to nothing, then whitespace (`GIT_PAGER=cat git log`),
+#: is how sessions turn paging off; asking on it would train operators to approve this class unread. git documents
+#: GIT_PAGER empty or `cat` as "launch no pager", so for GIT_PAGER it starts nothing; for PAGER it may at most run
+#: `cat` from PATH as the pager. Any other value (a path, quotes, arguments, `cat;x`) asks.
+_GIT_PROGRAM_ENV = (r"\b(?:GIT_EDITOR|EDITOR|VISUAL|GIT_SEQUENCE_EDITOR|GIT_SSH|GIT_SSH_COMMAND|GIT_ASKPASS"
+                    r"|SSH_ASKPASS|GIT_EXTERNAL_DIFF|GIT_PROXY_COMMAND)=(?=[^\n]*\bgit\b)"
+                    r"|\b(?:GIT_)?PAGER=(?!(?-i:cat)?[ \t])(?=[^\n]*\bgit\b)")
+#: Section families those keys live in. git honours a section rename, so `git config --rename-section foo core`
+#: turns `foo.hooksPath` into core.hooksPath with no command naming the key, and removing a section unsets every
+#: key in it (`--remove-section core` clears core.hooksPath, like `--unset`). Renaming into or out of one, or
+#: removing one, asks. git takes any unambiguous abbreviation (`--ren`, `--rem`), so `--ren…`/`--rem…` are candidates.
+_GATED_SECTIONS = re.compile(r"(?:alias|push|remote|url|credential|core|include|agentteams)", re.IGNORECASE)
+
 #: Bash patterns that match a Mandatory Review Trigger in security.template.md. Each is a
 #: judgment call routed to the operator, never an automatic deny — see the verdict policy above.
 _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
@@ -137,24 +168,23 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
     ("raw-socket", r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
      "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
     ("publication-channel", r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
      r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:remote|url)\.|"
      r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
      r"\bgh\s+api\b[^\n|;&]*(?:\$\(|`)|"
      r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s['\"]?(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:|[\w-]+(?:\.[\w-]+)+:[^\s/]*/?))|"
      r"\bGIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+|PARAMETERS|GLOBAL|SYSTEM)\b|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\binclude(?:if\b[^\n]*)?\.path\b)|"
      r"^(?=[^\n]*(?:\.git[\\/](?:config|modules[\\/]\S+[\\/]config|worktrees[\\/]\S+[\\/]config)|\.gitconfig))"
      r"(?=[^\n]*(?:\b(?:cp|mv|ln|install|dd|rsync)\b|\bsed\b[^\n]*\s-i|\bperl\b[^\n]*\s-p?i))|"
      r"(?:>>?|\btee\b(?:\s+-\S+)*)\s*['\"]?[^\s;&|'\"]*"
      r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
-    # alias./push. config can hide or redirect a push (`git -c alias.p='push -f' p`); row 699.
-    ("git-alias-config", r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?(?:alias|push|remote|url)\.|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n;&|]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)"
-     r"(?=[^\n]*\s['\"]?(?:alias|push|remote|url)\.)",
-     "git alias, push or remote configuration that can hide or redirect a push"),
+    # `git config` writes of these keys are matched by _config_write(); `-c`/`--config-env` set them for one command.
+    ("git-alias-config",
+     r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?" + _GIT_EXEC_KEYS + "|" + _GIT_PROGRAM_ENV,
+     "git configuration that can hide or redirect a push, hand the credential to a program, or run a program "
+     "(alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor, agentteams.hook*, or an "
+     "environment variable naming the editor, pager, ssh, askpass, diff or proxy program for a git command)"),
     ("interpreter-send", r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
@@ -420,14 +450,154 @@ def _mask_quoted_separators(command: str) -> str:
     return "".join(out)
 
 
+#: git's global options the read check knows: those taking the next word as their value (or `--opt=value`), and
+#: those taking none. Any other option, abbreviations included, means the command is not proven a read.
+_GIT_VALUE_OPTIONS = frozenset({"-C", "-c", "--config-env", "--git-dir", "--work-tree", "--namespace", "--attr-source"})
+_GIT_FLAG_OPTIONS = frozenset({
+    "-p", "--paginate", "-P", "--no-pager", "--bare", "--exec-path", "--no-replace-objects", "--no-lazy-fetch",
+    "--no-optional-locks", "--no-advice", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs",
+})
+#: `git config` options allowed before a read flag (git 2.50's option table). `--comment` is left out on purpose:
+#: it applies only to writes and takes the next word, so `git config --comment --get k v` SETS k.
+_CONFIG_VALUE_OPTIONS = frozenset({"-f", "--file", "--blob", "-t", "--type", "--default"})
+_CONFIG_FLAG_OPTIONS = frozenset({
+    "--global", "--system", "--local", "--worktree", "--includes", "--no-includes", "-z", "--null", "--name-only",
+    "--show-origin", "--show-scope", "--show-names", "--bool", "--int", "--bool-or-int", "--bool-or-str", "--path",
+    "--expiry-date", "--fixed-value",
+})
+_CONFIG_READ_FLAGS = frozenset({
+    "--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list", "-l",
+})
+#: The only text in which a `git config` read can be proven a read: ASCII letters, digits, space, tab, a plain
+#: newline between commands, `. _ - / : = @ , + %` and the separators `; & |`. No quote of any kind, `$`, backtick,
+#: backslash, brace, bracket, parenthesis, glob, `~`, `<`, `>`, `#` or `!`, and no other line break: quoting,
+#: expansion, substitution and continuation then change nothing bash runs, so the words the tokenizer sees are
+#: the words git gets. A command outside this set that names an execution key asks, by construction.
+_PLAIN_COMMAND = re.compile(r"[A-Za-z0-9 \t\n._\-/:=@,+%;&|]*")
+
+
+def _shell_commands(line: str) -> "list[list[str]] | None":
+    """Split ``line`` into each command's words (at ``; & | ( )``); None when it does not tokenize."""
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()")
+    lexer.whitespace_split, lexer.commenters = True, ""
+    commands: list[list[str]] = [[]]
+    try:
+        for word in lexer:
+            if word and not word.strip(";&|()"):
+                commands.append([])
+            else:
+                commands[-1].append(word)
+    except ValueError:  # an unbalanced quote or a trailing backslash
+        return None
+    return [c for c in commands if c]
+
+
+def _option_span(word: str, value_options: "frozenset[str]", flag_options: "frozenset[str]") -> "int | None":
+    """How many words a known option spans (1, or 2 with a separate value); None for any other option."""
+    if word in flag_options or (word.startswith("--") and word.split("=", 1)[0] in value_options and "=" in word):
+        return 1
+    return 2 if word in value_options else None
+
+
+def _config_args(words: "list[str]") -> "list[str] | None":
+    """The words after ``git [known global options] config``; None when ``words`` is not such a command."""
+    if not words or words[0].rsplit("/", 1)[-1] != "git":
+        return None
+    i = 1
+    while i < len(words) and words[i].startswith("-"):
+        span = _option_span(words[i], _GIT_VALUE_OPTIONS, _GIT_FLAG_OPTIONS)
+        if span is None:
+            return None
+        i += span
+    if i >= len(words) or words[i] != "config":
+        return None
+    return words[i + 1:]
+
+
+def _is_config_read(words: "list[str]") -> bool:
+    """True only for ``git [global options] config`` then ``get``/``list``, or a read flag before the key.
+
+    Only options git is known to accept count, so an unknown or abbreviated option (which may take the
+    next word as its value) is never skipped past. Called only for plain text (:data:`_PLAIN_COMMAND`).
+    """
+    args = _config_args(words)
+    if args is None:
+        return False
+    if args[:1] in (["get"], ["list"]):
+        return True
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        if args[i] in _CONFIG_READ_FLAGS:
+            return True
+        span = _option_span(args[i], _CONFIG_VALUE_OPTIONS, _CONFIG_FLAG_OPTIONS)
+        if span is None:
+            return False
+        i += span
+    return False
+
+
+#: Section-changing `git config` actions and how many section names each takes.
+_SECTION_ACTIONS = {"rename-section": 2, "remove-section": 1}
+
+
+def _is_ungated_section_change(words: "list[str]") -> bool:
+    """True for a section rename or removal where no name is in :data:`_GATED_SECTIONS`.
+
+    ``git config --rename-section OLD NEW`` / ``rename-section OLD NEW`` or ``--remove-section NAME`` /
+    ``remove-section NAME``: exactly that many names and only known options around them. An abbreviated
+    action (``--ren``, ``--rem``) is an unknown option, so it is never exempt.
+    """
+    args = _config_args(words)
+    if args is None:
+        return False
+    names: list[str] = []
+    action, i = "", 0
+    while i < len(args):
+        if args[i][2:] in _SECTION_ACTIONS and args[i].startswith("--") and not action:
+            action, i = args[i][2:], i + 1
+        elif args[i].startswith("-"):
+            span = _option_span(args[i], _CONFIG_VALUE_OPTIONS, _CONFIG_FLAG_OPTIONS)
+            if span is None:
+                return False
+            i += span
+        else:
+            names.append(args[i])
+            i += 1
+    if not action:
+        if not names or names[0] not in _SECTION_ACTIONS:
+            return False
+        action, names = names[0], names[1:]
+    return len(names) == _SECTION_ACTIONS[action] and not any(_GATED_SECTIONS.match(name) for name in names)
+
+
+def _config_write(class_id: str, line: str, plain: bool) -> bool:
+    """True when ``line`` may write a ``class_id`` key (:data:`_GIT_CONFIG_WRITES`) through ``git config``.
+
+    A positive, fail-closed rule. Exempt only when the whole Bash command is plain text (``plain``, see
+    :data:`_PLAIN_COMMAND`) and every command on the line naming such a key parses as a read, or as a
+    section rename or removal that touches no gated section.
+    """
+    pattern = _GIT_CONFIG_WRITES.get(class_id)
+    if pattern is None or not pattern.search(line):
+        return False
+    if not plain:
+        return True
+    named = [words for words in _shell_commands(line) or [] if pattern.search(" ".join(words))]
+    return not named or not all(_is_config_read(words) or _is_ungated_section_change(words) for words in named)
+
+
 def _bash_matches(command: str, first_only: bool = False,
-                  extra: "frozenset[str]" = frozenset()) -> "list[tuple[str, str]]":
+                  extra: "frozenset[str]" = frozenset(), plain: "bool | None" = None) -> "list[tuple[str, str]]":
     """Return ``(class_id, reason)`` for the triggers a Bash command matches, in table order.
 
     ``first_only`` stops at the first match (the default verdict needs only that one). Otherwise every
     matching class is returned, so a project policy can deny a class that is not the first match, and
-    the :data:`POLICY_ONLY_TRIGGERS` named in ``extra`` are evaluated too (never otherwise).
+    the :data:`POLICY_ONLY_TRIGGERS` named in ``extra`` are evaluated too (never otherwise). ``plain``
+    says whether the command AS SENT is plain text (:data:`_PLAIN_COMMAND`); None judges ``command``.
     """
+    if plain is None:
+        plain = bool(_PLAIN_COMMAND.fullmatch(command))
     # A trailing pipe or `&&`/`||` continues the pipeline on the next line; join it so per-line
     # evaluation still sees `curl … |` and `sh` together.
     command = re.sub(r"(\||&&)[ \t]*\r?\n", r"\1 ", command)
@@ -446,7 +616,7 @@ def _bash_matches(command: str, first_only: bool = False,
             return found
     table = _BASH_REVIEW_TRIGGERS + tuple(t for t in POLICY_ONLY_TRIGGERS if t[0] in extra)
     for class_id, pattern, reason in table:
-        if any(re.search(pattern, line, re.IGNORECASE) for line in lines):
+        if any(re.search(pattern, line, re.IGNORECASE) or _config_write(class_id, line, plain) for line in lines):
             found.append((class_id, reason))
             if first_only:
                 return found
@@ -584,7 +754,12 @@ _REEXEC_TIMEOUT = 30
 
 
 def _project_roots() -> list[Path]:
-    """The project tree(s) this hook guards: ``<project>/.claude/hooks/<this>`` and ``$CLAUDE_PROJECT_DIR``."""
+    """The project tree(s) this hook guards: ``parents[2]`` of this file and ``$CLAUDE_PROJECT_DIR``.
+
+    The rendered layouts are ``<project>/.claude/hooks``, ``.github/hooks`` and ``.grok/hooks``. Any
+    install location counts ``parents[2]``, so a user-level ``~/.claude/hooks`` install makes the home
+    directory a root (see the known limitations).
+    """
     parents = Path(__file__).resolve().parents
     roots = [parents[2]] if len(parents) > 2 else []
     env_root = os.environ.get("CLAUDE_PROJECT_DIR")
@@ -716,15 +891,17 @@ def main(payload: object, raw: bytes = b"") -> str:
 
     if tool_name == "Bash":
         # A backslash-newline is a line continuation to the shell; join it so no pattern is split by one.
-        command = re.sub(r"\\\r?\n", " ", str(tool_input.get("command", "")))
+        sent = str(tool_input.get("command", ""))
+        command = re.sub(r"\\\r?\n", " ", sent)
+        plain = bool(_PLAIN_COMMAND.fullmatch(sent))  # judged on the text as sent, not the joined one
         if policy is not None and re.search(_POLICY_FILES_RE, command, re.I) and re.search(_WRITE_VERBS_RE, command):
             _decide("deny", "this command names the project gate policy, the gate or its interpreter pin together "
                             "with a write; a recorded policy protects them. Changing them is an operator decision.",
                     "policy-protected", "policy")
         if policy is not None and policy.deny:
-            found = _bash_matches(command, extra=policy.deny & POLICY_ONLY_CLASSES)
+            found = _bash_matches(command, extra=policy.deny & POLICY_ONLY_CLASSES, plain=plain)
         else:
-            found = _bash_matches(command, first_only=True)
+            found = _bash_matches(command, first_only=True, plain=plain)
         if found:
             ask_found = [f for f in found if f[0] not in POLICY_ONLY_CLASSES]
             why = (ask_found or found)[0][1]
@@ -763,9 +940,9 @@ def main(payload: object, raw: bytes = b"") -> str:
         # than 0/2 is a non-blocking error), so _import_integrity re-runs under the pinned
         # interpreter or fails visibly (the checkout-root fallback was removed; see _import_integrity).
         integrity = _import_integrity(raw)
-
-        integrity_findings = integrity.verify(Path.cwd())
-        tampered = [f for f in integrity_findings if f.rel_path.endswith("scan.py")]
+        integrity_findings = _verify_scanner_roots(integrity)
+        tampered = [f for f in integrity_findings
+                    if f.rel_path.endswith("scan.py") or f.reason == "manifest-unreadable"]
         # PR-D (row 31): a MISSING manifest where one is expected (this repo ships it, or the
         # scanner runs from inside the project) leaves the scanner unverifiable. Under the
         # confined fail-closed policy that is `ask` (not `deny`: a deleted manifest is also what
@@ -800,6 +977,34 @@ def main(payload: object, raw: bytes = b"") -> str:
     return "none"
 
 
+def _verify_scanner_roots(integrity) -> list:
+    """Integrity findings for every tree whose scanner this write could be trusting.
+
+    The trees are the hook's project roots, the working directory and the tree ``agentteams`` is
+    imported from (under an editable install, the code that actually runs), each verified once. A
+    manifest that cannot be decoded or parsed (not UTF-8, invalid or too deeply nested JSON, an I/O
+    error), or holds a non-string digest, becomes a ``manifest-unreadable``
+    finding instead of an exception: an exception escaping the gate lets the write through in the
+    cooperative profile. ``describe()`` runs here because an ill-typed digest raises only there.
+
+    Args:
+        integrity: The imported ``agentteams.integrity`` module.
+
+    Returns:
+        The findings of every root, in root order.
+    """
+    roots = (*_project_roots(), Path.cwd(), Path(integrity.__file__).parents[1])
+    findings = []
+    for root in dict.fromkeys(p.resolve() for p in roots):
+        try:
+            findings += [f for f in integrity.verify(root) if f.describe()]
+        # RuntimeError includes RecursionError; ValueError includes UnicodeDecodeError.
+        except (RuntimeError, AttributeError, TypeError, ValueError, OSError) as exc:
+            manifest = str(root / integrity.MANIFEST_REL_PATH)
+            findings.append(integrity.IntegrityFinding(manifest, "", type(exc).__name__, "manifest-unreadable"))
+    return findings
+
+
 def _ask_git_config(checked: str) -> None:
     """Route a write to a git config file to the operator (Rule S-9 criterion 6)."""
     _policy_ask("Mandatory Review Trigger: a write to a git config file can add or repoint a remote "
@@ -819,8 +1024,7 @@ def _log_target(raw: str) -> Path:
     if not path.is_absolute():
         raise ValueError("path is not absolute")
     parent = path.parent.resolve()
-    project = Path.cwd().resolve()
-    if parent == project or project in parent.parents:
+    if _inside(parent, [*_project_roots(), Path.cwd().resolve()]):
         raise ValueError("path is inside the project")
     for directory in (parent, *parent.parents):
         if (directory / ".git").exists():
