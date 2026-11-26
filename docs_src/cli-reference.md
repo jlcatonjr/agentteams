@@ -2283,14 +2283,15 @@ A read-only module CLI for the first steps of a script review: which scripts exi
 
 ```
 python -m agentteams.script_census inventory ROOT [ROOT ...] [--ext LIST] [--max-bytes N]
-python -m agentteams.script_census mark-copies [--repo DIR] [--snapshot-marker NAME] < inventory.csv
+python -m agentteams.script_census mark-copies [--repo DIR] [--max-bytes N] [--snapshot-marker NAME] < inventory.csv
 ```
 
 - `inventory` writes one CSV row per script to stdout: `path, size, lines, sha256, ext, root`. What it leaves
   out is counted on stderr by reason.
 - `mark-copies` reads that CSV on stdin and adds `copy_kind`: `authored`, `snapshot`, `tracked-duplicate` or
   `missing`.
-- Symbolic links are never followed or read, and git is never run inside a scanned folder.
+- A symbolic link below a root is never followed or read, a root that is a link is refused, and git is never
+  run inside a scanned folder.
 - Exit status: 0 when the table was written, 2 for a request that cannot be carried out.
 - API: [`script_census`](api-reference/script-census.md).
 

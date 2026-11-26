@@ -18,9 +18,13 @@ They are the first steps of the review in `references/script-consolidation.refer
 - `mark-copies` reads that CSV and adds a `copy_kind` column.
 - Both are read-only and write only to stdout and stderr.
 
-**What it never does.** It never follows or reads a symbolic link. It never enters a nested
-checkout or project. It never runs git inside a scanned folder: git is asked one question, in the
-one repository you name, and the blob ids of scanned files are computed in Python.
+**What it never does.** It never follows or reads a symbolic link below a root, and it refuses a
+root that is itself a link. It never enters a nested checkout or project. It never runs git inside
+a scanned folder: git is asked one question, at the top of the one repository you name, and the blob
+ids of scanned files are computed in Python.
+
+**Mind the `root` column.** A root is written to the CSV exactly as you gave it. Give relative
+roots when the output will be saved in the repository, so that no home path lands in a file.
 
 **Not in this module.** Classifying scripts into families, ranking them by use, and running across
 several repositories.
@@ -29,7 +33,7 @@ several repositories.
 
 ```
 python -m agentteams.script_census inventory ROOT [ROOT ...] [--ext LIST] [--max-bytes N]
-python -m agentteams.script_census mark-copies [--repo DIR] [--snapshot-marker NAME] < inventory.csv
+python -m agentteams.script_census mark-copies [--repo DIR] [--max-bytes N] [--snapshot-marker NAME] < inventory.csv
 ```
 
 The two are meant to be piped:
@@ -38,8 +42,9 @@ The two are meant to be piped:
 python -m agentteams.script_census inventory tmp scripts | python -m agentteams.script_census mark-copies
 ```
 
-Exit status: 0 when the table was written; 2 when a root is not a directory, the input is not an
-inventory, or `--repo` is not a git repository.
+Exit status: 0 when the table was written; 2 when a root is not a directory or is a symbolic link,
+the input is not an inventory, a row's `path` is absolute or has a `..` component, or `--repo` is not
+a git repository.
 
 ## Inventory columns
 
@@ -67,6 +72,7 @@ Each is counted on stderr under the name shown.
 | `oversize` | A file larger than `--max-bytes` (default 1,000,000) |
 | `other-extension` | A file whose extension is not a script extension, or a file with no extension that does not start with `#!` |
 | `unreadable` | A file that could not be read as a regular file |
+| `unreadable-dir` | A folder that could not be listed |
 
 ## Copy kinds
 
@@ -75,7 +81,7 @@ Each is counted on stderr under the name shown.
 | `copy_kind` | Meaning |
 |---|---|
 | `snapshot` | A folder in the file's path matches a snapshot marker: the backup folder, `snapshots`, `snapshots-*`, `.worktrees`, `worktrees`, `archive`, or a pattern given with `--snapshot-marker` |
-| `missing` | The file can no longer be read |
+| `missing` | The file can no longer be read below its root: it is gone, larger than `--max-bytes`, or now reached through a symbolic link |
 | `tracked-duplicate` | The file is not itself tracked by the repository, and its bytes equal a file the repository tracks |
 | `authored` | None of the above |
 
@@ -86,18 +92,19 @@ Two tracked files with the same bytes are both `authored`: the repository alread
 ### inventory(roots, *, extensions, max_bytes)
 
 Returns `(rows, pruned)`: the rows as dicts keyed by `INVENTORY_COLUMNS`, and a counter of what was
-left out by reason. Raises `CensusError` when a root is not a directory.
+left out by reason. Raises `CensusError` when a root is not a directory or is itself a symbolic link.
 
-### mark_copies(rows, *, repo, snapshot_markers)
+### mark_copies(rows, *, repo, snapshot_markers, max_bytes)
 
 Returns the rows, in order, each with `copy_kind` set. A relative `root` is read from the current
-directory, as `inventory` wrote it. Raises `CensusError` when a row has no `path` or `root`, or
-`repo` is not a git repository.
+directory, as `inventory` wrote it. The rows are text, so they are not trusted: `path` must be
+relative with no `..` component. Raises `CensusError` when a row has no `path` or `root`, a `path`
+is absolute or has a `..` component, or `repo` is not a git repository.
 
 ### tracked_blobs(repo)
 
 The blob ids of the content `repo` tracks, each with the repository paths that hold it. One
-`git ls-files` in `repo`, with inherited `GIT_*` variables removed so that a `GIT_DIR` in the
+`git ls-files` at the top of `repo`, with inherited `GIT_*` variables removed so that a `GIT_DIR` in the
 environment cannot redirect it. Submodule entries are left out.
 
 ### main(argv)

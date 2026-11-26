@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for. Gathering them by hand was itself a recurring one-off script.
 - **Every omission is counted:** pruned folders, nested checkouts, symbolic links, oversize files and files
   that are not scripts are reported on stderr by reason.
-- **Limits it keeps:** read-only; symbolic links are never followed or read; a nested checkout or project is
-  never entered; git is asked only for the named repository's own listing.
-- **Checked on this repository:** `tmp` and `scripts` gave 652 scripts in under a second, 3 of them
+- **Limits it keeps:** read-only; a symbolic link below a root is never followed or read, and a root that is a
+  link is refused; a nested checkout or project is never entered; git is asked only for the named repository's
+  own listing; rows read from stdin cannot name a file outside their root.
+- **Checked on this repository:** `tmp` and `scripts` gave about 650 scripts in under a second, 3 of them
   byte-identical copies of tracked files.
 - **Not included:** classifying scripts into families, a recurrence check, usage ranking, fleet-wide runs.
 

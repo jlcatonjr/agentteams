@@ -693,6 +693,8 @@ def _walk_depth(path: Path, max_depth: int = 3) -> list[Path]:
 #: Installed packages, build output, and scratch / backup / report trees whose stale manifest copies would add tools.
 _PRUNE_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", ".tox", "dist", "build", "vendor",
                "tmp", BACKUP_DIR_NAME, ".agentteams-fleet", ".pytest_cache", ".mypy_cache"}
+#: Public name for the set above, for modules that extend it instead of restating it (CH-05).
+PRUNE_DIRS: frozenset[str] = frozenset(_PRUNE_DIRS)
 
 
 def _find_manifests(project_path: Path, filename: str, max_depth: int) -> list[Path]:

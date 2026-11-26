@@ -145,3 +145,49 @@ def test_cli_pipes_inventory_into_mark_copies(tree: Path, monkeypatch: pytest.Mo
     assert sc.main(["mark-copies"]) == 2
     assert sc.main(["inventory", "nope"]) == 2
     assert "not a directory" in capsys.readouterr().err
+
+
+def test_a_root_that_is_a_symlink_is_refused(tree: Path, tmp_path: Path) -> None:
+    link = tmp_path / "rootlink"
+    link.symlink_to(tree / "tmp", target_is_directory=True)
+    for spelled in (str(link), f"{link}/"):
+        with pytest.raises(sc.CensusError, match="symbolic link"):
+            sc.inventory([spelled])
+
+
+def test_a_folder_that_cannot_be_listed_is_counted(tree: Path) -> None:
+    locked = tree / "tmp" / "locked"
+    locked.mkdir()
+    (locked / "hidden.py").write_text("pass\n", encoding="utf-8")
+    locked.chmod(0)
+    try:
+        if os.access(locked, os.R_OK):
+            pytest.skip("this user can list a folder with no permissions")
+        _, pruned = sc.inventory([tree / "tmp"], max_bytes=1000)
+        assert pruned["unreadable-dir"] == 1
+    finally:
+        locked.chmod(0o755)
+
+
+def test_the_listing_covers_the_whole_repository_from_a_subfolder(tree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # `git ls-files` lists only the folder it runs in; from tmp/ the tracked tools/ would be missed.
+    monkeypatch.chdir(tree)
+    rows, _ = sc.inventory(["tmp", "tools"], max_bytes=1000)
+    kinds = {f"{r['root']}/{r['path']}": r["copy_kind"] for r in sc.mark_copies(rows, repo=tree / "tmp")}
+    assert kinds["tmp/week1/report_copy.py"] == "tracked-duplicate" and kinds["tools/report.py"] == "authored"
+
+
+def test_rows_from_stdin_cannot_point_outside_their_root(tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tree)
+    for bad in ("../outside/secret.py", str(tmp_path / "outside" / "secret.py"), ""):
+        with pytest.raises(sc.CensusError, match="not a relative path"):
+            sc.mark_copies([{"path": bad, "root": "tmp"}], repo=tree)
+    # A file reached through a link is not read: the inventory would never have listed it.
+    (tree / "tmp" / "week1" / "report_copy.py").unlink()
+    (tree / "tmp" / "week1" / "report_copy.py").symlink_to(tree / "tools" / "report.py")
+    via_dir = {"path": "linkdir/secret.py", "root": "tmp"}
+    via_file = {"path": "week1/report_copy.py", "root": "tmp"}
+    assert [r["copy_kind"] for r in sc.mark_copies([via_dir, via_file], repo=tree)] == ["missing", "missing"]
+    big = {"path": "week1/big.py", "root": "tmp"}
+    assert sc.mark_copies([big], repo=tree, max_bytes=1000)[0]["copy_kind"] == "missing"
+    assert sc.mark_copies([big], repo=tree)[0]["copy_kind"] == "authored"

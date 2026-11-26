@@ -9,8 +9,9 @@ The first two steps of a script-consolidation review (``references/script-consol
   snapshot or worktree folder, ``tracked-duplicate`` for an untracked file whose bytes equal a file
   the repository tracks, ``authored`` otherwise, and ``missing`` when the file can no longer be read.
 
-Both are read-only and print to stdout. Symbolic links are never followed or read. git is asked one
-question, in the one repository named: its own listing of tracked content. It is never run inside
+Both are read-only and print to stdout. A symbolic link below a root is never followed or read, and a
+root that is itself a link is refused. git is asked one question, at the top of the one repository
+named: its own listing of tracked content. It is never run inside
 a nested checkout, and the blob ids of scanned files are computed here in Python.
 
 Classification, usage ranking and fleet-wide runs are not part of this module.
@@ -32,7 +33,7 @@ from pathlib import Path, PurePosixPath
 
 from agentteams.backup import BACKUP_DIR_NAME
 from agentteams.git_exec import run_git
-from agentteams.ingest import _PRUNE_DIRS as _INGEST_PRUNE_DIRS
+from agentteams.ingest import PRUNE_DIRS as _INGEST_PRUNE_DIRS
 
 #: Directory names never entered. CH-05: this extends the set ``ingest`` already keeps (which itself
 #: names ``backup.BACKUP_DIR_NAME``) instead of restating it; ``cli.artifacts._SCRATCH_DIR_NAMES`` is
@@ -62,21 +63,23 @@ class CensusError(ValueError):
     """A request that cannot be carried out: a root that is not a directory, or input that is not an inventory."""
 
 
-def _read_regular(path: str, max_bytes: int | None = None) -> bytes | None:
+def _read_regular(path: str, max_bytes: int) -> bytes | None:
     """The bytes of *path* when it is a regular file opened without following a link; otherwise ``None``.
 
-    ``None`` also when the file is larger than *max_bytes* or cannot be read.
+    ``None`` also when the file is larger than *max_bytes* or cannot be read. At most ``max_bytes + 1``
+    bytes are read, so a file that grows after it is opened cannot be read without bound.
     """
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0)
     try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        fd = os.open(path, flags)
     except OSError:
         return None
     try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or (max_bytes is not None and info.st_size > max_bytes):
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
             return None
         with os.fdopen(fd, "rb", closefd=False) as fh:
-            return fh.read()
+            data = fh.read(max_bytes + 1)
+        return data if len(data) <= max_bytes else None
     except OSError:
         return None
     finally:
@@ -98,20 +101,26 @@ def inventory(roots: Sequence[Path | str], *, extensions: Iterable[str] | None =
         ``(rows, pruned)``. ``rows`` are dicts keyed by :data:`INVENTORY_COLUMNS`, sorted by root
         (in the order given) and then path, with ``path`` relative to its root in POSIX form.
         ``pruned`` counts what was left out, by reason: ``pruned-dir``, ``nested-checkout``,
-        ``symlink``, ``oversize``, ``other-extension``, ``unreadable``.
+        ``symlink``, ``oversize``, ``other-extension``, ``unreadable``, ``unreadable-dir``.
 
     Raises:
-        CensusError: A root is not a directory.
+        CensusError: A root is not a directory, or is itself a symbolic link.
     """
     wanted = frozenset(e.lower() for e in (extensions if extensions is not None else SCRIPT_EXTENSIONS))
     rows: list[dict[str, str]] = []
     pruned: Counter[str] = Counter()
     for root in roots:
         top = str(root)
+        if os.path.islink(top.rstrip("/\\") or top):
+            raise CensusError(f"{top} is a symbolic link; name the directory it points to")
         if not os.path.isdir(top):
             raise CensusError(f"{top} is not a directory")
         found: list[dict[str, str]] = []
-        for here, dirs, files in os.walk(top, followlinks=False):
+
+        def unreadable_dir(_exc: OSError) -> None:
+            pruned["unreadable-dir"] += 1
+
+        for here, dirs, files in os.walk(top, followlinks=False, onerror=unreadable_dir):
             keep: list[str] = []
             for name in sorted(dirs):
                 full = os.path.join(here, name)
@@ -160,7 +169,7 @@ def inventory(roots: Sequence[Path | str], *, extensions: Iterable[str] | None =
 def tracked_blobs(repo: Path | str) -> dict[str, set[str]]:
     """The blob ids of the content *repo* tracks, each with the repository paths that hold it.
 
-    One ``git ls-files -s -z`` in *repo* itself, with inherited ``GIT_*`` variables removed so a
+    One ``git ls-files -s -z`` at the top of *repo*, with inherited ``GIT_*`` variables removed so a
     ``GIT_DIR`` in the environment cannot redirect it. Submodule entries are left out.
 
     Args:
@@ -173,8 +182,9 @@ def tracked_blobs(repo: Path | str) -> dict[str, set[str]]:
         CensusError: *repo* is not a git repository, or git cannot be run.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    top = _repo_root(repo)  # ls-files lists only the folder it runs in; the listing must cover the whole repository
     try:
-        proc = run_git(Path(repo), "ls-files", "-s", "-z", "--full-name", hardened=True, env=env, timeout=GIT_TIMEOUT,
+        proc = run_git(Path(top), "ls-files", "-s", "-z", "--full-name", hardened=True, env=env, timeout=GIT_TIMEOUT,
                        devnull_stdin=True)
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         raise CensusError(f"git could not list {repo}: {exc}") from exc
@@ -210,11 +220,12 @@ def _blob_id(data: bytes, hex_length: int) -> str:
 
 
 def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
-                snapshot_markers: Sequence[str] = SNAPSHOT_MARKERS) -> list[dict[str, str]]:
+                snapshot_markers: Sequence[str] = SNAPSHOT_MARKERS, max_bytes: int = MAX_BYTES) -> list[dict[str, str]]:
     """Add ``copy_kind`` to inventory rows.
 
     Checked in this order: ``snapshot`` when a component of ``root`` joined with ``path`` matches a
-    snapshot marker; ``missing`` when the file can no longer be read as a regular file;
+    snapshot marker; ``missing`` when the file can no longer be read as a regular file below its
+    root (it is gone, larger than *max_bytes*, or now reached through a symbolic link);
     ``tracked-duplicate`` when the file is not itself tracked by *repo* and its bytes equal a file
     *repo* tracks; otherwise ``authored``. Two tracked files with the same bytes are both
     ``authored``: the repository already records that.
@@ -224,12 +235,17 @@ def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
             current directory, as ``inventory`` wrote it.
         repo: The repository whose tracked content is the reference.
         snapshot_markers: ``fnmatch`` patterns matched against each path component.
+        max_bytes: Files larger than this are ``missing``. Use the value the inventory was made with.
+
+    The rows are text from stdin, so they are not trusted: ``path`` must be relative with no ``..``
+    component. What a row can reveal is one verdict about a file the caller can already read.
 
     Returns:
         The rows, in order, each with ``copy_kind`` set to one of :data:`COPY_KINDS`.
 
     Raises:
-        CensusError: A row lacks ``path`` or ``root``, or *repo* is not a git repository.
+        CensusError: A row lacks ``path`` or ``root``, a ``path`` is absolute or has a ``..``
+            component, or *repo* is not a git repository.
     """
     blobs = tracked_blobs(repo)
     top = _repo_root(repo)
@@ -238,12 +254,16 @@ def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
     for row in rows:
         if "path" not in row or "root" not in row:
             raise CensusError("a row has no 'path' or 'root' column: the input is not an inventory")
-        full = os.path.join(row["root"], *PurePosixPath(row["path"]).parts)
+        rel = PurePosixPath(row["path"])
+        if not rel.parts or rel.is_absolute() or ".." in rel.parts or os.path.isabs(row["path"]):
+            raise CensusError(f"path {row['path']!r} is not a relative path below its root")
+        full = os.path.join(row["root"], *rel.parts)
         parts = Path(os.path.normpath(full)).parts
         if any(fnmatch.fnmatchcase(part, marker) for part in parts for marker in snapshot_markers):
             kind = "snapshot"
         else:
-            data = _read_regular(full)
+            inside = os.path.realpath(full) == os.path.join(os.path.realpath(row["root"]), *rel.parts)
+            data = _read_regular(full, max_bytes) if inside else None  # not inside: a link stands in the way
             if data is None:
                 kind = "missing"
             else:
@@ -283,6 +303,8 @@ def main(argv: list[str] | None = None) -> int:
     inv.add_argument("--max-bytes", type=int, default=MAX_BYTES, metavar="N", help=f"leave out larger files (default {MAX_BYTES})")
     mark = sub.add_parser("mark-copies", help="read an inventory on stdin and add copy_kind")
     mark.add_argument("--repo", default=".", metavar="DIR", help="repository whose tracked content is the reference (default: .)")
+    mark.add_argument("--max-bytes", type=int, default=MAX_BYTES, metavar="N",
+                      help=f"the limit the inventory was made with (default {MAX_BYTES}); a larger file is 'missing'")
     mark.add_argument("--snapshot-marker", action="append", default=[], metavar="NAME",
                       help="another folder-name pattern that marks a snapshot (repeatable)")
     args = parser.parse_args(argv)
@@ -301,7 +323,8 @@ def main(argv: list[str] | None = None) -> int:
         header = list(reader.fieldnames or [])
         if "path" not in header or "root" not in header:
             raise CensusError("stdin is not an inventory: it has no 'path' and 'root' columns")
-        marked = mark_copies(reader, repo=args.repo, snapshot_markers=(*SNAPSHOT_MARKERS, *args.snapshot_marker))
+        marked = mark_copies(reader, repo=args.repo, snapshot_markers=(*SNAPSHOT_MARKERS, *args.snapshot_marker),
+                             max_bytes=args.max_bytes)
         _write_csv(marked, [*(c for c in header if c != "copy_kind"), "copy_kind"])
         counts = Counter(r["copy_kind"] for r in marked)
         for kind in COPY_KINDS:
