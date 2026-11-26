@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (`--merge-pr` refuses release mechanics, pin moves and gate-code changes; D1, D3, D5)
+
+- **What was wrong:** the integration-branch merge gate checked a pull request's paths only. With a signed
+  authorization it would have merged, without the prompt, a forward merge of `main` or a release line into the
+  integration branch, a version bump, a `toolchain.lock` pin move, and a change to the gate's own modules. Those
+  modules are integrity-pinned, but a stale manifest only printed a warning, so the change could reach CI green.
+- **Now `--merge-pr` refuses, before the PASS is spent and again at merge time:**
+  - a pull request that carries a commit reachable from `main`, a `release/*` branch or a `v*` tag, or a commit
+    with the same patch as a release-only commit (a rebased or cherry-picked release). The check fetches those refs
+    from the remote into a temporary repository; any fetch or read error refuses;
+  - a change to `pyproject.toml`'s version or build settings (`project.version`, `project.dynamic`,
+    `tool.setuptools.dynamic`, `build-system`), to `capability_hints.LAST_RELEASE_TAG`, or a new release heading in
+    `CHANGELOG.md`;
+  - a change to a `*.lock` file, a lockfile the base's workflows name, a file holding `NAME=owner/repo@<sha>` pin
+    lines, or any module the base's integrity manifest pins.
+- Every module the gate loads is now pinned, and a test checks the gate's import tree.
+- A stale integrity manifest now fails the test suite instead of printing a warning.
+- **Remaining residue:** a forward merge squashed into one commit has no single matching patch. It is caught when
+  it brings a release heading or a version change, which a `.0` forward merge does.
+- These are refusals only: an ordinary feature or fix pull request still merges unprompted.
+
 ## [1.3.1] - 2026-11-25
 
 ### release notes

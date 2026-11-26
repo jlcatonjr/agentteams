@@ -548,8 +548,35 @@ def _gather(gh: GhRunner, repo: str, number: int) -> tuple[str, dict, dict, list
     return default_branch, pull, view, _required_checks(gh, repo, number), files, runs
 
 
+#: A release-mechanics checker: (repo, branch, number, head sha, files) to a reason or None; raises on an error.
+ReleaseChecker = Callable[[str, str, int, str, list[str]], "str | None"]
+
+
+def release_check(repo: str, branch: str, number: int, head_sha: str, files: list[str]) -> str | None:
+    """The 1.3.2 release-mechanics refusals (:mod:`agentteams.cli.dev_merge_release`) for pull request *number*.
+
+    Args:
+        repo: ``owner/name``.
+        branch: The integration branch.
+        number: The pull-request number.
+        head_sha: The checked head.
+        files: Every path the pull request changes.
+
+    Returns:
+        A reason, or None.
+
+    Raises:
+        dev_merge_release.ReleaseCheckError: A check could not be completed.
+    """
+    from agentteams.cli import dev_merge_release as dmr
+
+    return dmr.release_problem(repo_url=f"https://github.com/{repo}.git", base_branch=branch,
+                               head_ref=f"refs/pull/{number}/head", head_sha=head_sha, files=files)
+
+
 def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: int, integration_branch: str | None,
-             halt_dirs: tuple[Path, ...] = (), origin: str | None = None, gh: GhRunner | None = None) -> int:
+             halt_dirs: tuple[Path, ...] = (), origin: str | None = None, gh: GhRunner | None = None,
+             release: ReleaseChecker | None = None) -> int:
     """``agentteams --merge-pr N``: merge pull request *N* into the integration branch without the gate's prompt.
 
     Args:
@@ -561,6 +588,7 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
         halt_dirs: Every team dir whose HALTs bind.
         origin: This checkout's ``owner/name`` (default: the git origin).
         gh: The ``gh`` runner (default :func:`run_gh`).
+        release: The release-mechanics checker (default :func:`release_check`; tests pass a stub).
 
     Returns:
         0 merged; 2 a condition does not hold (ask the operator: the ordinary prompted path); 1 an error, or an alarm
@@ -568,7 +596,10 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
     """
     from agentteams.cli import security_gate
 
+    from agentteams.cli import dev_merge_release as dmr
+
     gh = gh or run_gh
+    release = release or release_check
 
     def refuse(why: str) -> int:
         print(f"Not merged: {why}. Ask the operator (a direct `gh pr merge` goes through the gate's prompt).",
@@ -599,6 +630,12 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
     if problem:
         return refuse(f"pull request #{number} does not qualify: {problem}")
     head_sha = str(pull["head"]["sha"]).lower()
+    try:   # D1/D3/D5: release mechanics, pin moves and enforcement code stay with the operator (fails closed)
+        problem = release(repo, branch, number, head_sha, files)
+    except (dmr.ReleaseCheckError, OSError, subprocess.SubprocessError, ValueError) as exc:   # fail closed
+        return refuse(f"pull request #{number} could not be checked for release mechanics ({exc})")
+    if problem:
+        return refuse(f"pull request #{number} does not qualify: {problem}")
     merge_action = merge_action_id(repo, number, head_sha)
     allowed, why = security_gate.check_clearance(governance_dir, action=merge_action)
     if not allowed:
@@ -619,6 +656,12 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
     late = pr_problem(repo=repo, branch=branch, default_branch=_default, pull=again, view=again_view,
                       required=again_required, files=again_files, signed_checks=auth.required_checks,
                       runs=again_runs)
+    if late:
+        return refuse(f"at merge time pull request #{number} no longer qualifies: {late} (the PASS is spent)")
+    try:
+        late = release(repo, branch, number, head_sha, again_files)
+    except (dmr.ReleaseCheckError, OSError, subprocess.SubprocessError, ValueError) as exc:   # fail closed
+        return refuse(f"at merge time the release-mechanics check could not be completed ({exc}) (the PASS is spent)")
     if late:
         return refuse(f"at merge time pull request #{number} no longer qualifies: {late} (the PASS is spent)")
     argv = ["pr", "merge", str(number), "-R", repo, "--merge", "--match-head-commit", head_sha]
