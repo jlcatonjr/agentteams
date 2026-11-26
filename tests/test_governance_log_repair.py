@@ -61,7 +61,7 @@ def test_apply_refuses_a_stale_or_wrong_digest(tmp_path):
     with pytest.raises(ValueError, match="digest does not match"):
         apply_repair(log, digest, confirm=_yes)
     assert log.read_bytes() == before
-    assert not list(tmp_path.glob("*.bak-*"))
+    assert not list(tmp_path.rglob("*.bak-*"))
 
 
 @pytest.mark.parametrize("row, why", [
@@ -298,3 +298,69 @@ def test_the_guarantee_decision_cells_identical_and_conditions_verified_keeps_it
         cv = header.index("conditions_verified")
         assert item.fixed[cv].startswith(item.original[cv] + ",")
         assert item.fixed[cv].split()[0].rstrip(":") == item.original[cv].split()[0].rstrip(":")
+
+
+# --- the backup goes to a self-ignoring backup root and never travels -----------------------------------------
+
+
+def test_backup_goes_to_the_ignored_backup_root(tmp_path):
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    log = _log(tmp_path, GOOD, SPLIT)
+    backup = apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    root = tmp_path / ".agentteams-backups"
+    assert backup.parent == root / "governance-log-repair" and backup.name.startswith(log.name + ".bak-")
+    assert (root / ".gitignore").read_text().splitlines()[-1] == "*"
+    assert (root.stat().st_mode & 0o777, backup.parent.stat().st_mode & 0o777) == (0o700, 0o700)
+    status = subprocess.run(["git", "-C", str(tmp_path), "status", "--porcelain", "--untracked-files=all"],
+                            capture_output=True, text=True, check=True).stdout
+    assert ".bak-" not in status and "security-decisions.log.csv" in status   # the log itself is still listed
+
+
+@pytest.mark.parametrize("which", ["root", "sub"])
+def test_symlinked_backup_dir_is_refused_and_log_untouched(tmp_path, which):
+    log = _log(tmp_path, GOOD, SPLIT)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    root = tmp_path / ".agentteams-backups"
+    if which == "root":
+        root.symlink_to(elsewhere)
+    else:
+        root.mkdir()
+        (root / "governance-log-repair").symlink_to(elsewhere)
+    before = log.read_bytes()
+    with pytest.raises(ValueError, match="is a symlink or not a directory; nothing written"):
+        apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    assert log.read_bytes() == before and not list(elsewhere.iterdir())
+
+
+def test_a_repair_backup_never_reaches_a_cai_export(tmp_path):
+    from agentteams.interop_helpers import capture_references
+    agents = tmp_path / ".claude" / "agents"
+    refs = agents / "references"
+    refs.mkdir(parents=True)
+    (agents / "orchestrator.md").write_text("---\nname: o\ndescription: d\n---\n\n# o\n", encoding="utf-8")
+    (refs / "notes.md").write_text("ordinary reference\n", encoding="utf-8")
+    log = _log(refs, GOOD, SPLIT)
+    backup = apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    assert backup.is_relative_to(refs)
+    exported = {r["rel_path"] for r in capture_references(agents)}
+    # The ordinary reference and the log itself are exported (negative control); the backup is not.
+    assert {"references/notes.md", "references/security-decisions.log.csv"} <= exported
+    assert not any(".agentteams-backups" in p for p in exported)
+
+
+def test_a_repair_backup_in_a_hub_is_not_loaded(tmp_path):
+    pytest.importorskip("jsonschema")
+    from agentteams.canonical import load_canonical, materialize_canonical
+    from agentteams.interop import export_to_cai
+    agents = tmp_path / ".claude" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (agents / "orchestrator.md").write_text("---\nname: o\ndescription: d\n---\n\n# o\n", encoding="utf-8")
+    (agents / "references" / "notes.md").write_text("ordinary reference\n", encoding="utf-8")
+    hub = tmp_path / "hub"
+    materialize_canonical(export_to_cai(agents, "claude"), hub)
+    log = _log(hub / "references", GOOD, SPLIT)
+    apply_repair(log, plan_repair(log).digest, confirm=_yes)
+    loaded = {r["rel_path"] for r in load_canonical(hub)["references"]}
+    assert "references/notes.md" in loaded and not any(".agentteams-backups" in p for p in loaded)

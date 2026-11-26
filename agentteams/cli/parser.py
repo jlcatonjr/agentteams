@@ -120,7 +120,7 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="discard_user_regions",
         default=False,
         help="With --overwrite: drop the user-editable '## Project-Specific Notes' / '## Project-Specific "
-             "Rules' regions instead of carrying them into the new files (the default carries them and "
+             "Rules' / '## Project Layout' regions instead of carrying them into the new files (the default carries them and "
              "prints each one, since carried text is instruction-bearing).",
     )
     overwrite_group.add_argument(

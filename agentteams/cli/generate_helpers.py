@@ -532,12 +532,12 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
     _warn_sandbox_deny_path_mismatch(manifest, output_dir)
     if manifest.get("enforce_decision_signing"):
         print(
-            "  ⚖  Strict agent-privilege enforcement (enforce_decision_signing) is ON for "
-            "this team — an unsigned authorizing security-decision row will be refused "
-            "(fail-closed). NOTE: this also applies to any EXISTING unsigned PASS / "
-            "HALT-RETRACTED rows already in this workspace's decisions log — they will stop "
-            "clearing until signing is activated (add a `signature` column or set "
-            "AGENTTEAMS_DECISION_SIGNING_KEY). To turn enforcement off, set "
+            "  ⚖  Strict agent-privilege enforcement (enforce_decision_signing) is ON for this team — an "
+            "unsigned authorizing security-decision row will be refused (fail-closed). NOTE: this also applies "
+            "to any EXISTING unsigned PASS / HALT-RETRACTED rows already in this workspace's decisions log — "
+            "they will stop clearing until the log can carry signed rows (migrate it with `agentteams "
+            "--migrate-decision-log --output <team dir> --yes`, then sign them with `--sign-decision`), or "
+            "set AGENTTEAMS_DECISION_SIGNING_KEY. To turn enforcement off, set "
             f"\"enforce_decision_signing\": false in the brief and re-run --update. "
             f"Switch: {AGENT_PRIVILEGE_REL_PATH}"
         )

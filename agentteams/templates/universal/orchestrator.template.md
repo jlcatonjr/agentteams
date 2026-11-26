@@ -236,9 +236,9 @@ new operational rule remains a manual edit in each deployed team.
 
 Before orchestrating any on-the-fly agent file update, review these canonical files in order:
 
-1. `.github/copilot-instructions.md` — authority hierarchy, constitutional rules, and project-specific constraints
-2. `.github/agents/agent-updater.agent.md` — update protocol, drift triggers, and compatibility maintenance practices
-3. `.github/agents/references/github-workflows-merge.reference.md` — merge/rebase/conflict and repository operation guardrails
+1. `{TEAM_INSTRUCTIONS_FILE}` — authority hierarchy, constitutional rules, and project-specific constraints
+2. `{TEAM_AGENTS_DIR}/agent-updater{AGENT_FILE_SUFFIX}` — update protocol, drift triggers, and compatibility maintenance practices
+3. `{TEAM_AGENTS_DIR}/references/github-workflows-merge.reference.md` — merge/rebase/conflict and repository operation guardrails
 4. `SETUP-REQUIRED.md` — unresolved manual placeholders that can affect update correctness
 
 Use this baseline command sequence for update-safe execution:

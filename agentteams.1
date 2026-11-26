@@ -34,7 +34,7 @@ With \-\-dry\-run: emit the per\-file action plan as a single JSON document on s
 Overwrite existing agent files unconditionally (full\-file replacement). Use \-\-merge instead to preserve user\-authored content in fenced files. With \-\-package\-team: replace an existing output zip file instead of refusing to run.
 .TP
 .B \-\-discard\-user\-regions
-With \-\-overwrite: drop the user\-editable '## Project\-Specific Notes' / '## Project\-Specific Rules' regions instead of carrying them into the new files (the default carries them and prints each one, since carried text is instruction\-bearing).
+With \-\-overwrite: drop the user\-editable '## Project\-Specific Notes' / '## Project\-Specific Rules' / '## Project Layout' regions instead of carrying them into the new files (the default carries them and prints each one, since carried text is instruction\-bearing).
 .TP
 .B \-\-merge
 Update only template\-fenced regions in existing agent files, preserving all user\-authored content outside fence markers. Skips legacy files (no fence markers) with a warning.

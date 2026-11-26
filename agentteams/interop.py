@@ -351,20 +351,6 @@ def _capture_skills(source_dir: Path, adapter: Any) -> list[dict[str, Any]]:
     return sorted(skills, key=lambda s: s["slug"])
 
 
-def _instructions_target_name(target_framework: str) -> str:
-    """Instructions filename a framework owns at its project root (F.2).
-
-    claude -> CLAUDE.md, agents-md/goose -> AGENTS.md, everything else
-    copilot-instructions.md. Placement differs (goose's lives two levels
-    above ``.goose/recipes``); the caller resolves the directory.
-    """
-    if target_framework == "claude":
-        return "CLAUDE.md"
-    if target_framework in ("agents-md", "goose", "codex", "grok"):
-        return "AGENTS.md"
-    return "copilot-instructions.md"
-
-
 def import_from_cai(
     cai: dict[str, Any],
     target_framework: str,
@@ -624,14 +610,7 @@ def import_from_cai(
     result.notices += _iwp.codex_import_notices(manifest, [Path(d).stem for d, _ in pending])
     instructions_content = str(cai.get("instructions_binding", {}).get("content", ""))
     if instructions_content:
-        # F.2: instructions filename + placement is framework-owned. goose's
-        # AGENTS.md lives at the PROJECT ROOT (two levels above .goose/recipes);
-        # every other framework keeps it beside the agents dir.
-        instructions_name = _instructions_target_name(target_framework)
-        if target_framework in ("goose", "codex", "grok"):
-            inst_dest = target_dir.parent.parent / instructions_name
-        else:
-            inst_dest = target_dir.parent / instructions_name
+        inst_dest = _instructions_path(target_dir, target_framework)  # F.2: name and placement are framework-owned
         # A CAI is data: crafted ownership notices (spoofing) and other frameworks' owned fences never reach a target.
         instructions_content = _strip_foreign_fences(_strip_all_ownership_notices(instructions_content),
                                                      target_framework)
@@ -845,7 +824,7 @@ def _write_bundle_artifacts(
     }
     instructions_map = {
         "source_name": cai.get("instructions_binding", {}).get("source_name", ""),
-        "target_name": _instructions_target_name(target_framework),
+        "target_name": Path(_instructions_rel(target_framework)).name,
     }
     interop_manifest = {
         "schema_version": "1.0",
@@ -957,6 +936,8 @@ from agentteams.interop_helpers import (
     require_safe_slug as _require_safe_slug,
     capture_mcp_servers as _capture_mcp_servers,
     merge_instruction_file as _merge_instruction_file,
+    instructions_path as _instructions_path,
+    instructions_rel as _instructions_rel,
     capture_escape_hatches as _capture_escape_hatches,
     capture_references as _capture_references,
     handoff_header_lines as _handoff_header_lines,

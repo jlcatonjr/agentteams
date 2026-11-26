@@ -6,6 +6,283 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (known limitation: convert and interop emit no OS sandbox boundary)
+
+- `docs_src/known-limitations.md` now says that `--convert-from` and `--interop-from` convert agent files only, so
+  a team's OS sandbox launcher, session sandbox settings and protected-path rules do not reach the target. Render
+  on the target from the brief, or use multi-sync, which carries the brief's privilege settings in
+  `team.cai.json`.
+
+### docs (drift sweep: `sign_decision` steps, a duplicate heading, the probe-baseline note, the stdlib rule, the signing-migration hint)
+
+- `docs_src/api-reference/cli.md`: the `sign_decision` step list now matches the code's order, including the
+  non-empty `action_reviewed` check, the `text_digest` downgrade refusal or notice, the toolchain-group and
+  dev-merge-authorization refusals, and the append's refusal when the log changed after it was read (#470).
+- `docs_src/api-reference/vulnscan.md`: the two `selftest(cfg)` headings are now `agent_run.selftest(cfg)` and
+  `tools_image.selftest(cfg)`; links to the agent self-test checks point at the first. A test now fails any
+  api-reference page with two identical `####` headings.
+- `docs_src/cli-reference.md` (`--accept-probe-baseline`): record the review in
+  `references/redteam-probe-revalidation.md`; the command writes `note: ""` for every probe.
+- The self-build brief's style rule names `jsonschema` as the declared runtime dependency instead of claiming no
+  external dependencies.
+- The `enforce_decision_signing` notice printed at generation, and the same text in
+  `workspace-privilege-scoping.md`, now say how to make a log carry signed rows: migrate it with
+  `--migrate-decision-log`, then sign with `--sign-decision`, or set `AGENTTEAMS_DECISION_SIGNING_KEY`.
+
+### fixed (vulnscan L1: a distro package with a pending update keeps its distro origin; #585 A2)
+
+- While a distro update is pending, `apt-cache policy` lists the installed version under `/var/lib/dpkg/status`
+  only, so L1 reported the package as `repo:unknown` and the workstation raised a false upstream end-of-life
+  finding (seen for nginx and python3-jwt). It is now `pkg:<package>` with an `INFO ... (update pending)` line when
+  every archive serving the candidate is the distro's (or an accepted mirror), the candidate has the same upstream
+  version, and the installed version carries a distro revision. Anything else stays `repo:unknown`.
+- **Newly accepted (Rule 12):** a locally installed `.deb` whose name and upstream version match a distro package
+  with a newer distro candidate is judged `pkg:`. The upstream-version and revision conditions keep that narrow.
+- `agentteams/data/server_kit/L1-audit.sh` is integrity-pinned; its digest is re-recorded. Hosts pick it up when
+  the kit is staged again.
+
+### fixed (a provider failure after an attempt keeps the worst-case USD charge; #573)
+
+- A WASM agent's model call that failed after at least one HTTP attempt kept its worst-case tokens but was charged
+  $0, so under a `max_usd` cap every such failure reopened USD headroom: a run could exceed its cap by up to
+  `max_model_calls` worst-case reservations. The mediator now commits the reservation's USD too when the run is
+  priced. An unpriced run still counts the call as unmetered, and a failure before any attempt is still refunded.
+- **Who sees a difference:** a priced run near its USD cap against a flaky provider stops at `max_usd` sooner.
+- `agentteams/wasm_agent/mediation.py` is integrity-pinned; its digest is re-recorded.
+
+### tests (flaky timing and race tests made deterministic; #502, #611, #584)
+
+- The heartbeat exemption tests drive the runner's own `_heartbeat` instead of a simulator that wrote a
+  `runner.heartbeat.tmp` name without the runner's lock. The runner never writes that name; a snapshot could catch
+  the simulator mid-beat (#502). A new test shows a planted `runner.heartbeat.tmp` is still an undeclared write: the
+  exemption is the exact heartbeat path. No product change.
+- The over-cap frame test's fake guest blocks after its oversized line, so only the session's frame-cap kill can end
+  it; it used to exit by itself and sometimes beat the kill (#611). The exit-code test now also asserts that a guest
+  which ends itself carries no signal. No product change.
+- The term-index linear-time tests measure this process's CPU time (`time.process_time`), best of five with the
+  small and large inputs interleaved, so time spent descheduled on a loaded machine no longer fails them (#584). A
+  new negative control shows the helper still fails quadratic work. No product change.
+
+### fixed (a non-Copilot orchestrator's update source pack names its own framework's files; #609)
+
+- The orchestrator's *Update Compatibility Source Pack* listed `.github/copilot-instructions.md`,
+  `.github/agents/agent-updater.agent.md` and `.github/agents/references/github-workflows-merge.reference.md` on every
+  framework, so a Claude, Goose, Codex, agents-md, Grok or WASM team's update pre-flight pointed at files its project
+  does not have. The list now uses three new placeholders, `{TEAM_INSTRUCTIONS_FILE}`, `{TEAM_AGENTS_DIR}` and
+  `{AGENT_FILE_SUFFIX}`, read from each adapter by `agentteams/frameworks/canonical_paths.py` (for example
+  `.claude/CLAUDE.md` and `.claude/agents/agent-updater.md` on Claude, `AGENTS.md` and
+  `.codex/agents/agent-updater.toml` on Codex). Copilot renders are unchanged.
+- **On upgrade:** `update_compatibility_source_pack` is now template-owned, so `--update --merge` replaces the old
+  Copilot list under the default `preserve` policy instead of keeping it because paths disappeared. A hand edit
+  inside that fence is replaced too. Only an edit that trips a shrink criterion (a lost path or backticked token,
+  three or more lost list items, or a body cut by more than half) gets a shrink notice and a `.lost` sidecar; an
+  edit that drops none of those is replaced with no notice and no sidecar. On a non-Copilot team the path change
+  itself raises that notice, so under `--shrink-policy=halt` the run stops once: review it, then re-run with
+  `--shrink-policy=allow`. The fence version is unchanged. Re-pins `agentteams/fences.py` in
+  `references/enforcement-integrity.json`.
+- **Test:** `tests/test_canonical_files_per_framework.py` renders a team on every registered framework and checks
+  that each listed file exists in it.
+
+### fixed (@security's persona no longer says a grant never covers a server change; #558)
+
+- Rule S-VM said a grant "never covers merging, force-pushing, applying changes to a server". The code has allowed
+  `server-apply` and `runtime-patch` since the v2 grant: a v2 grant's signature binds the host and level pairs,
+  window and paths. The persona now says that an ordinary (v1) grant never covers a server or host change, that
+  those two operations need a v2 grant, and that no grant can name `merge`. Behaviour is unchanged.
+- **On upgrade:** `security_rules_invariant` is template-owned, so `--update --merge` takes the new wording. The fence
+  version is unchanged.
+
+### fixed (the operator-decision reference's example is an agent every team has; #635)
+
+- Section 4 of `references/operator-decision.reference.md` gave `@pr-manager`'s disposition prompt as its example
+  of a user-invocable agent asking the operator. `@pr-manager` is emitted only with GitHub management on, so most
+  teams read a pointer to an agent they do not have. The example is now `@git-operations`, with `@pr-manager`
+  kept as a conditional second example ("where the team has one").
+- **On upgrade:** `--update --merge` takes the new wording under the default `preserve` policy (no reference is
+  removed from the fence, so the shrink check does not hold the old body). The fence version is unchanged.
+- **Test:** `tests/test_universal_template_slugs.py` fails when a universal reference template names a
+  non-universal agent outside a sentence marked conditional; the mentions that predate it are listed in the test.
+
+### changed (the generated fleet VS Code task is labelled a preview and passes `--dry-run`)
+
+- The task was labelled `agentteams: fleet update (all)` but never applied anything: without `--yes`, fleet mode
+  only previews. It is now `agentteams: fleet preview (all, dry-run)` and its command passes `--dry-run` explicitly,
+  so a change to fleet's default can never turn it into a bulk write. A test keeps every generated task free of
+  `--yes`, `--overwrite`, `--prune`, `--bridge-refresh` and `--fleet-ignore-locks`.
+- On the next merge an existing `tasks.json` loses the old task and gains the new one. A user task with the old
+  label but without `"detail": "AGENTTEAMS"` is kept.
+- Fixed with it: when the merge removed the only task in a commented `tasks.json`, the tasks it then added began
+  with a comma and the file no longer parsed.
+
+### fixed (a commented `.vscode/tasks.json` with a URL in any task merges again)
+
+- The JSONC comment stripper removed every `//` to the end of the line, including the one in `https://` inside a
+  string, so a `tasks.json` with comments and a URL in any task could not be parsed and the whole tasks merge
+  refused. It also left `/* */` block comments in place. It now skips string literals and strips both comment
+  forms; a block comment keeps its line breaks, so a parse error names the right line.
+- A stale `"detail": "AGENTTEAMS"` task that contains a URL is now removed on the next merge. User tasks are never
+  rewritten. A file that is broken for another reason still refuses with the same message.
+
+### fixed (`--framework agents-md` no longer overwrites an AGENTS.md that Codex, Grok, Goose or a person owns)
+
+- The agents-md adapter had no ownership guard, so a neutral render replaced a repo-root `AGENTS.md` generated for
+  Codex, Grok or Goose, or written by hand. It now writes the file only when it is absent or was generated by
+  agents-md (`_agents_md_ownership.agents_md_decision`), carrying over any `grok_runtime` or `codex_write_policy`
+  block. Any other file is left byte-identical with a notice, in every mode: `--overwrite` does not bypass it.
+- `AGENTS.md` is never written when it or the `.agents` dir is a symlink, when it is unreadable, or when its fences
+  are malformed. (The `.agents/*.md` files are still written through a symlinked `.agents` dir, as before.)
+- **On upgrade:** a project that relied on agents-md replacing a hand-written or legacy fenced `AGENTS.md` must
+  remove that file first. The `.agents/*.md` detail files are unaffected.
+
+### security (the Goose read-only file server now refuses an exclusive team's in-project protected paths)
+
+- An `exclusive` team's project-relative `protected_read_paths` were denied by the OS boundary but stayed readable
+  through `agentteams_readfs`, which serves everything under `--root .` except its built-in deny list. Each such
+  entry is now passed to the server as `--deny <entry>` and `--deny <entry>/**` (`goose_tool_scoping.readfs_deny_globs`).
+- `~` and absolute entries are not passed (the globs are project-relative and are rebuilt from the manifest alone,
+  which does not carry the project root); entries with `..`, `.` alone, or glob or shell metacharacters are not
+  passed either. Each skipped entry is named in a warning at render time, so an in-project one can be restated as
+  a project-relative path. The server matches a deny glob against each path component too, so a one-component
+  entry such as `secrets` also refuses a `secrets` directory deeper in the tree.
+- The write-policy audit now requires the recipe's readfs entry to carry exactly these globs, so a hand-removed
+  `--deny` is an error.
+- **On upgrade:** recipes rendered before this change fail that audit for an `exclusive` team with in-project
+  `protected_read_paths` until they are re-rendered (`agentteams --update --merge`). Other teams are unchanged.
+- The Codex runner's readfs entry is unchanged: Codex starts that server inside `sandbox/confine-run.sh`, whose
+  `--exclude` flags already cover the same paths.
+
+### security (`--check-wiring` no longer passes a goose team on Linux when bwrap cannot run)
+
+- On Linux the goose verifier passed as ENFORCEABLE whenever `sandbox/confine-run.sh` existed, even on a host without
+  `bwrap` or with unprivileged user namespaces disabled, where the launcher confines nothing. It now consults the
+  live-host probe `os_sandbox_mechanism_available()` and reports `NOT ENFORCEABLE ON THIS HOST` as a failure when the
+  mechanism is provably absent. When the probe cannot decide, the pass stands with a note saying so.
+- **On upgrade:** a CI job that runs `--check-wiring` for a confined goose team in a container without `bwrap` now
+  fails. That is the intended signal: confine from the container, or install `bwrap` there.
+- Emission is unchanged: `is_sandbox_capable` still does not probe, because the render host is often not the host
+  that runs the team.
+
+### added (`ScholarlyWork` keeps author ids, ORCID, affiliations, country codes and language; #577)
+
+- **New:** `ScholarlyWork.authorships` (`Authorship`: `name`, `openalex_id`, `orcid`, `affiliations`,
+  `country_codes`; `Affiliation`: `name`, `openalex_id`, `country_code`) and `ScholarlyWork.language`, filled from
+  what each source carries: OpenAlex has all of them; Crossref has ORCID, affiliation names and language; arXiv has
+  affiliation names when the feed lists them. Nothing is inferred; `authors` is unchanged. Both classes are
+  exported from `agentteams.research`.
+- **Cache:** results are stored with `dataclasses.asdict` under a new `scholar-v2` key and rebuilt tolerantly
+  (unknown keys ignored, a bad item skipped), so cached results from before this change (up to 6 hours) are
+  fetched again once.
+- **Possible break:** code that serialises `work.__dict__` itself now meets nested dataclasses; use
+  `dataclasses.asdict(work)`. The `scholar` CLI does.
+- **Not verified live:** the parsers follow the documented OpenAlex, Crossref and arXiv response shapes and are
+  tested with fixtures; no live response was checked in this change.
+
+### fixed (generated PR agents create the labels they apply)
+
+- **Fixed:** the `pr-manager` and `pr-notifier` personas applied the `pr-mgmt` and `awaiting-review` labels but never
+  created them, so the first `gh pr edit --add-label` failed in a repository without them. `@pr-manager` now runs
+  `gh label create … --force` for both before it runs `@pr-notifier`'s edit command (the notifier has no shell).
+  `--force` also resets an existing label's colour and description. Existing teams get it on `--update --merge`.
+
+### changed (`python -m agentteams.research search` exits 3 when no backend answered)
+
+- **Changed:** `search` exited 0 even when every backend failed, so an empty `[]` from a dead search looked like
+  "no results". It now exits 3 in that case and says so on stderr (`note: no search backend answered (tried …);
+  the empty result is not evidence of absence`). A backend that answered with no hits still exits 0. A script
+  that treated exit 0 as "the search ran" now sees the failure.
+
+### fixed (`agents-md` and `codex` are bridge targets)
+
+- **Fixed:** `run_bridge` refused `agents-md` and `codex` as targets, though their pair directories
+  (`references/bridges/<source>-to-agents-md/`, `…-to-codex/`) are part of the bridge layout, so `--bridge-check` and
+  `--bridge-merge` could not reach them. Both are now accepted and, like `generic`, write only the pair-dir
+  artifacts: no `AGENTS.md` is created or relabelled. `grok` and `wasm` are still refused.
+
+### fixed (`--sync` sees instruction-file edits; it says when the pin's text outside fences does not travel; #462)
+
+- **Fixed:** `--sync` decided what changed from the agents directories only, so a commit that edited or deleted a
+  peer's instruction file (`.claude/CLAUDE.md`, `.github/copilot-instructions.md`, a root `AGENTS.md`) was "no
+  framework changed since last sync" and sat unreconciled. A change to a framework's instruction file now counts
+  for that framework; a root `AGENTS.md` counts for every framework that writes it, and a deleted one is rebuilt.
+- **New notice:** the hub keeps its own text outside fences (from `--sync-init`), and a missing peer instruction
+  file is rebuilt with it. When the pin's outside-fence text differs from the hub's, a sync pass now says so.
+  Nothing is moved: Project-Specific Rules travel by rules projection.
+- **Internal:** import and change detection share one placement rule, `interop_helpers.instructions_path`,
+  derived from each adapter's own output path (so a wasm team's `.agentteams-wasm/TEAM.md` is watched, and a team
+  rendered with a custom `--output` keeps the same offset from its agents directory). `interop`'s own
+  framework-to-filename table is gone.
+
+### fixed (pinned sync: a dry run lists its conflicts; a re-init keeps the hub; `agent_team` roster check)
+
+- **Dry run:** `--sync --dry-run` printed `N conflict(s) resolved to the pin — logged to
+  .agentteams/sync-conflicts.log.csv`, but a dry run writes no log. It now prints `N conflict(s) would be resolved
+  to the pin (a dry run logs nothing)` and lists the first 50, one per line, so they can be reviewed before they
+  apply.
+- **Re-init:** `--sync-init` over an existing hub, with the pin's instruction file missing, emptied the hub's
+  instruction content. It is now refused with the existing "the pin (…) has no deployed instruction file;
+  restore it …" message, and nothing is written. A first `--sync-init` with no instruction file still works.
+- **Roster check:** a sync pass reports when the hub's `agent_team` fence lists agents the roster lacks or omits
+  ones it has (`sync_hub_refresh.agent_team_roster_mismatch`). It only reports; the fence is not rewritten.
+
+### fixed (`--sync` keeps a pointer instruction file a pointer; #461)
+
+- **Fixed:** a deliberately short instruction file (for example a root `AGENTS.md` holding only a goose bridge fence)
+  was grown into a full instruction render on the next `--sync`, with no notice. A file that shares no
+  template-owned fence with the projection now gets only its own fences refreshed, and the notice names what was
+  not added: `pointer instruction file (fences: goose_bridge_entry): 2 template section(s) not added: …; regenerate
+  it natively (--update --merge) to adopt them`.
+- **New notice:** when a sync fence-merge does add sections to an instruction file, it says so (`added section(s):
+  …`).
+- **Still expanded:** a file holding even one template-owned fence (say `project_overview`) is not a pointer.
+
+### fixed (a governance-log repair backup can no longer be committed by accident)
+
+- **Fixed:** `governance_logs repair LOG --apply` wrote its backup as `LOG.bak-<timestamp>` beside the log, where no
+  ignore rule covered it, so a broad `git add` could commit a full copy of a private log such as
+  `references/security-decisions.log.csv`. The backup now goes to `.agentteams-backups/governance-log-repair/`
+  beside the log; that backup root carries a `*` `.gitignore`, as every other backup root does.
+- **Newly refused:** a repair whose backup directory is a symlink or not a directory; nothing is written.
+- **Never copied:** a CAI export (`capture_references`) and a hub load (`load_canonical`) now skip any
+  `.agentteams-backups/` tree under `references/`, so a repair backup of a team's log does not reach the sync hub or
+  its peers.
+- **Cleanup:** backups made by earlier releases stay where they were. `git status` lists them as untracked; delete
+  them once the repaired log has been checked. This repository's `.gitignore` now ignores `*.csv.bak-*` in
+  `references/`, `.github/agents/references/` and `.claude/agents/references/` (every directory the repair reads
+  logs from).
+
+### fixed (brief ingestion no longer reads dependency manifests from a `tmp` scratch folder or backup trees)
+
+- **Fixed:** the project scan read `package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml` and `go.mod`
+  from any directory within two levels, including a `tmp` scratch folder, `.agentteams-backups/` and `.agentteams-fleet/`. A stale
+  or planted copy there added its dependencies to the brief's tools, and so to every rendered agent. Those
+  directories, `.pytest_cache` and `.mypy_cache` are now skipped. Language detection and retrieval inference skip
+  them too (they skipped nothing before, not even `node_modules`).
+- **New:** a stderr line names each manifest that added tools: `[ingest] tools from svc/requirements.txt: 3`.
+- **Changed for some projects:** real source kept under a directory literally named `tmp` no longer contributes
+  tools; declare them in the brief.
+
+### fixed (fleet: an update that raised or was refused by a gate is FAIL, not OK)
+
+- **Fixed:** a fleet target whose update exited non-zero was reported `OK (+0/-0)` unless its output had a line
+  starting `Error` or a traceback. An exception caught by the fleet runner (`[fleet] exception: …`) and a gate
+  refusal (`[SEC-GATE/INTEL-FRESHNESS] blocked: …`, `[UPDATE-LOCK] refused: …`, `[OUTPUT-TARGET] refused: …`,
+  `[SEC-GATE/DESTRUCTIVE:overwrite] blocked: …`, `Validation errors:`) matched neither, so a failed security
+  precondition looked like a current team. A dry run had the mirror defect: a gate refusal showed `WOULD-UPDATE`.
+- **Now:** any non-zero exit is `FAIL` on the apply path, the dry-run path and in a non-git workspace (which showed
+  `REVIEW`), and the run exits 1. The row's detail shows the exception or gate line instead of "non-zero exit"; a
+  failed non-git row no longer points at a `.agentteams-backups` recovery snapshot.
+
+### fixed (`--overwrite` keeps a hand-written `## Project Layout`; #543)
+
+- **Fixed:** an `--overwrite` render replaced the body of the user-editable `## Project Layout` section in
+  `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md` with the bare banner, and said
+  nothing. It is now carried like the two Project-Specific regions, and printed: `carried user region '## Project
+  Layout' (N lines, sha256 …) across --overwrite`.
+- **Newly refused:** when the new render has no Layout section (no Directory Structure fence) and the file on disk
+  holds text there, the file is not overwritten and an error says so. A Layout section holding only the banner is
+  dropped as before. `--discard-user-regions` now drops this region too.
+- **Not changed:** `--update --merge` already kept the section, since it sits outside every fence.
+
 ### security (a retracted HALT revives no earlier permission, #616)
 
 - **Fixed:** the known issue #616 noted under 1.3.0. A PASS recorded while a HALT on the action was open (or

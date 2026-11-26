@@ -436,9 +436,10 @@ AGENTTEAMS_META_TASKS: list[dict[str, Any]] = [
         "detail": "AGENTTEAMS",
     },
     {
-        "label": "agentteams: fleet update (all)",
+        # A preview only: --dry-run is explicit so a change to fleet's default can never make this a bulk write.
+        "label": "agentteams: fleet preview (all, dry-run)",
         "type": "shell",
-        "command": "agentteams --fleet . --fleet-frameworks all --update --merge",
+        "command": "agentteams --fleet . --fleet-frameworks all --update --merge --dry-run",
         "group": "none",
         "presentation": {"reveal": "always", "panel": "shared"},
         "problemMatcher": [],
@@ -536,15 +537,27 @@ def _try_parse_json(text: str) -> "dict[str, Any] | None":
 
 
 def _strip_jsonc_comments(text: str) -> str:
-    """Strip // line comments from JSONC text for parsing purposes.
+    """Strip ``//`` line and ``/* */`` block comments from JSONC text for parsing purposes.
 
-    This is a simple heuristic — it strips every ``//`` to end-of-line, including
-    those that might appear inside string values.  For sentinel detection this is
-    acceptable: the only consequence of a false strip is that a task label or
-    command is slightly mangled during parse, which will not affect whether we
-    find ``"detail": "AGENTTEAMS"`` on a task object.
+    A forward scan (:func:`_skip_jsonc_token`): string literals, escapes included, are copied verbatim, so a
+    ``//`` or ``/*`` inside a value (a URL in a ``command``) is kept. A block comment keeps its newlines, so a
+    parse error still names the right line. Trailing commas are not removed.
     """
-    return re.sub(r"//[^\n]*", "", text)
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        skipped = _skip_jsonc_token(text, i)
+        if skipped is None:
+            out.append(text[i])
+            i += 1
+            continue
+        token = text[i:skipped]
+        if token.startswith('"'):
+            out.append(token)
+        elif token.startswith("/*"):
+            out.append("\n" * token.count("\n"))
+        i = skipped
+    return "".join(out)
 
 
 def _merge_standard_json(existing: dict[str, Any], new_content: str) -> str:
@@ -790,7 +803,8 @@ def _merge_jsonc(existing: dict[str, Any], raw: str, new_content: str) -> str:
         indented = "\n".join("    " + line for line in task_str.splitlines())
         chunks.append(indented)
 
-    insertion = ",\n\n" + ",\n\n".join(chunks)
+    # No leading comma when the array holds no task (the refresh may have removed the only one).
+    insertion = (",\n\n" if _task_object_spans(raw) else "") + ",\n\n".join(chunks)
 
     # Splice before the structural ] that closes the tasks array.
     # _find_tasks_close_bracket scans forward with full string and comment

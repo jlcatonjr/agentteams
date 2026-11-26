@@ -699,8 +699,9 @@ author name. It applies to both authorization paths (PASS and HALT-RETRACTED).
   — no team breaks by surprise. A present-but-unreadable switch fails **closed** (it will
   not silently disable itself).
 - **Migration edge:** turning it on also stops any **existing** unsigned authorizations in
-  that workspace's decisions log from clearing until signing is activated (add a `signature`
-  column, or set `AGENTTEAMS_DECISION_SIGNING_KEY`).
+  that workspace's decisions log from clearing until the log can carry signed rows (migrate
+  it with `agentteams --migrate-decision-log --output <team dir> --yes`, then sign them with
+  `--sign-decision`), or set `AGENTTEAMS_DECISION_SIGNING_KEY`.
 
 > **Known residual (honest ceiling).** `references/agent-privilege.json` sits inside the
 > agent write root, so an agent with Write could disable the control by setting it `false`

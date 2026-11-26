@@ -50,6 +50,7 @@ from typing import Any
 import jsonschema
 
 from agentteams.atomicio import _atomic_write_text
+from agentteams.backup import BACKUP_DIR_NAME
 from agentteams.yaml_frontmatter import parse_yaml_front_matter
 
 __all__ = [
@@ -599,7 +600,7 @@ def load_canonical(dir_path: Path) -> dict[str, Any]:
                 "content": p.read_text(encoding="utf-8"),
             }
             for p in sorted(references_root.rglob("*"))
-            if p.is_file()
+            if p.is_file() and BACKUP_DIR_NAME not in p.relative_to(references_root).parts  # backups stay local
         ]
 
     # D.1: Validate the reassembled CAI against the schema.

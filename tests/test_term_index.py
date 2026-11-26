@@ -484,19 +484,35 @@ def test_a_document_over_the_size_limit_is_not_read(tmp_path: Path, monkeypatch)
     assert set(a.docs) == {"b.md"}
 
 
-def _best_of_three(fn, arg) -> float:
-    best = float("inf")
-    for _ in range(3):
-        t0 = time.perf_counter()
-        fn(arg)
-        best = min(best, time.perf_counter() - t0)
-    return best
+def _best_cpu(fn, small_arg, large_arg, runs: int = 5) -> tuple[float, float]:
+    """Best CPU time of ``runs`` calls on each argument, interleaved (small, large, small, ...).
+
+    ``process_time`` counts only this process's CPU, so time spent descheduled under a loaded machine is not charged
+    (#584); interleaving lets frequency scaling hit both sides alike.
+    """
+    best = [float("inf"), float("inf")]
+    for _ in range(runs):
+        for i, arg in enumerate((small_arg, large_arg)):
+            t0 = time.process_time()
+            fn(arg)
+            best[i] = min(best[i], time.process_time() - t0)
+    return best[0], best[1]
 
 
 def _grows_linearly(fn, make) -> None:
-    """8x the input may cost at most 20x the time (linear is ~8x; quadratic would be ~64x)."""
-    small, large = _best_of_three(fn, make(1)), _best_of_three(fn, make(8))
+    """8x the input may cost at most 20x the CPU time (linear is ~8x; quadratic would be ~64x)."""
+    small, large = _best_cpu(fn, make(1), make(8))
     assert large < 20 * max(small, 5e-3), (small, large)
+
+
+def test_the_linear_time_helper_catches_quadratic_work() -> None:
+    """Negative control: the helper still fails work that grows with the square of the input."""
+    def quadratic(n: int) -> None:
+        for _ in range(n):
+            for _ in range(n):
+                pass
+    with pytest.raises(AssertionError):
+        _grows_linearly(quadratic, lambda k: 600 * k)
 
 
 @pytest.mark.parametrize("unit", ["`" * 3 + "a``b ", "<!-- x ", '"a ', "[a](b ", "> q\n", "# h\n", "```\n",

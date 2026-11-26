@@ -47,6 +47,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from agentteams import host_features
+
 #: Neutral repo-root-relative launcher path for a 2-deep agents dir (``.claude/agents``,
 #: ``.github/agents``, ``.goose/recipes``, ``.codex/agents``). 1-deep adapters (agents-md, ``.agents``) pass
 #: their own ``rel_path`` (``../sandbox/confine-run.sh``) via ``sandbox_launcher_rel_path``.
@@ -221,7 +223,37 @@ def macos_sandbox_output_files(
     return files
 
 
+def linux_launcher_verdict(plat: str, enforceable: list[str]) -> tuple[bool, list[str]]:
+    """Gate a "launcher present" wiring verdict on whether this host can RUN the bwrap launcher.
+
+    A present ``sandbox/confine-run.sh`` is only a boundary when ``bwrap`` and unprivileged user
+    namespaces exist on the live host (:func:`agentteams.host_features.os_sandbox_mechanism_available`).
+    Emission deliberately does not probe (the render host is often not the run host); this
+    verify-time check does, so ``--check-wiring`` never reports ENFORCEABLE for a launcher that
+    confines nothing.
+
+    Args:
+        plat: The live platform string (a ``linux*`` value).
+        enforceable: The caller's ENFORCEABLE messages, returned unchanged when the probe passes.
+
+    Returns:
+        ``(False, [refusal])`` when the mechanism is provably absent; ``(True, enforceable)`` when
+        it is present; ``(True, enforceable + [note])`` when it cannot be probed.
+    """
+    available = host_features.os_sandbox_mechanism_available()
+    if available is False:
+        return False, [
+            f"NOT ENFORCEABLE ON THIS HOST ({plat}): sandbox/confine-run.sh is present, but bubblewrap "
+            "(`bwrap`) or unprivileged user namespaces are missing or disabled, so the launcher confines "
+            "nothing. Install bwrap / enable user namespaces, or confine from a container.",
+        ]
+    if available is None:
+        return True, [*enforceable, "Note: the bwrap mechanism could not be probed on this host."]
+    return True, enforceable
+
+
 __all__ = [
+    "linux_launcher_verdict",
     "linux_sandbox_output_files",
     "macos_sandbox_output_files",
     "LINUX_SANDBOX_LAUNCHER_REL",

@@ -41,7 +41,7 @@ Generate bridge artifacts or validate bridge freshness.
 Args:
 
 1. `source_dir` (`Path`): canonical source agent directory.
-2. `target_framework` (`str`): target runtime framework.
+2. `target_framework` (`str`): target runtime framework: `copilot-vscode`, `copilot-cli`, `claude`, `goose`, `generic`, `agents-md` or `codex`. The last three write no entry files, only the pair-dir artifacts (an `agents-md`/`codex` entry file would create or relabel a shared `AGENTS.md`); any other value raises `ValueError`.
 3. `output_root` (`Path`): root where bridge artifacts are written.
 4. `source_framework` (`str | None`): optional source override.
 5. `dry_run` (`bool`): simulate writes.
