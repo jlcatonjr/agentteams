@@ -50,6 +50,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                          # check_log and forged-record guards, confirm-time prefix (#470)
     "agentteams/cli/decision_lineage.py",  # C-2: derives_from lineage, so a rename can't evade a HALT
     "agentteams/cli/decision_authors.py",  # C-5: the approver roster and the one roster check the gate uses
+    "agentteams/cli/open_halts.py",  # C-2: the public listing of open HALTs, judged by the gate's own scan
     "agentteams/cli/sign_decision_refusals.py",  # --sign-decision's pre-key refusals (author roster, open HALT)
     "agentteams/cli/key_retirement.py",  # C-5: a retired verify key verifies only its signed snapshot
     "agentteams/cli/key_retirement_verb.py",  # --retire-verify-key: what the snapshot keeps, each signature verified

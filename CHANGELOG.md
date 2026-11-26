@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (a read-only listing of a team directory's open HALTs, judged by the gate's own rules; beta)
+
+- **New beta function:** `agentteams.cli.open_halts.open_halts(team_dir, action=None)` returns `HaltRow` entries
+  (`row`, `halt_id`, `is_open`, `retracted_by`, `blocks`). With `action`, it lists the HALT rows that block that
+  action now, found as the gate finds them: on the action and its `derives_from` ancestors, with the colon family
+  rule and the gate's retraction rules. Without one, it lists every HALT row and whether it is retracted, judged by
+  exact id. It calls the gate's own scan rather than repeating it, and refuses a log the gate would refuse.
+- **Separators, stated:** only `:` makes a family. A HALT on `family` or `family/gate` does not block
+  `family/gate/study:sha256-...`; a HALT on `family/gate/study` does. The API reference page lists the strict, family
+  and token rules.
+- **Who notices:** tools that re-implemented the retraction rules can call this instead. Nothing in the gate changes.
+
 ### docs (one security policy, the root `SECURITY.md`, which is the one GitHub shows)
 
 - **Fixed:** the repository carried two policies. GitHub shows `.github/SECURITY.md` ahead of the root file, so

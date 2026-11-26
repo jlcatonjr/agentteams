@@ -40,6 +40,8 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `decision_log.py` | Authenticates rows in the security-decisions log (HMAC signing/verification, calls `decision_chain` for the chain check); carved from `security_gate.py` at its own CH-07 ceiling. |
 | `action_ids.py` | How a decision row's `action_reviewed` id is matched: `action_matches` (strict, decides which rows can clear an action) and `halt_names_action` (a HALT also blocks every action named as a token run in its id). A HALT whose id has no letter or digit blocks every action (`halt_blocks`) and is retracted by its row handle (`halt_row_handle`). Integrity-pinned. |
 | `decision_chain.py` | The security-decisions log's hash chain in one place: `verify_chain` (including the pre-1.0 legacy prefix), `chain_tip` for every writer, and `describe_log_chain` for `--verify-integrity`. Integrity-pinned. |
+| `decision_uses.py` | A decision row may appear only once (`assert_no_duplicate_clearing_rows`, run with the chain check), and each use of a clearance is recorded as its own `USED` row (`append_use_row`); `is_spent` reads either record. Integrity-pinned. |
+| `open_halts.py` | **Beta.** `open_halts(team_dir, action=None)`: a read-only listing of the decisions log's HALT rows, judged by the gate's own HALT scan. Integrity-pinned. See [below](#beta-api-open_haltsopen_halts). |
 | `decision_log_migrate.py` | `--migrate-decision-log`: appends the missing signing columns to a team's decisions-log header (never `prev_digest`), padding short legacy rows with empty cells (signed payloads unchanged), and lists the unsigned authorizing rows that signing revokes. A separate module because `decision_log.py` is integrity-pinned. See [below](#decision-log-migration). |
 | `adopt_only.py` | `--adopt-only`: adopts a named subset of orphan agents by rewriting only the orchestrator's adopted routing rows (and, gated, its `agents:` list). `tools_grant` reports each slug's `tools:` line, wider than read-only unless every tool is. |
 | `reconcile_apply_gate.py` | What clears a capability widening by `--reconcile-apply` (action `reconcile-apply-widen`): in a governed workspace a signed, non-waiver decision with `scope` exactly the action, `effect_grants` exactly this run's `frontmatter:<file>#<key>@sha256:<hex>` tokens (a digest of the value written) and room under the aggregate cap; in an ungoverned one an ordinary PASS row from an approved author. Both end in the destructive-action gate. Integrity-pinned. |
@@ -332,6 +334,59 @@ Things to know before relying on it:
 It is stricter than the check the gate uses internally to excuse stale WASM evidence. That check accepts any row that
 authenticates under the workspace's own signing state; this function also requires a governed workspace and an
 Ed25519-signed row.
+
+## Beta API: `open_halts.open_halts`
+
+**Beta** (STABILITY.md): its signature, the `HaltRow` fields and the rules it applies may change in a minor release.
+Import it as `from agentteams.cli.open_halts import open_halts, HaltRow`.
+
+### `open_halts(team_dir, action=None)`
+
+Read-only: lists the HALT rows of `team_dir/references/security-decisions.log.csv` as the destructive-action gate's
+own HALT check judges them, by calling that check's scan rather than re-implementing it. Returns a list of `HaltRow`
+in row order, empty when the log is absent or holds no HALT.
+
+- **With `action`:** the HALT rows that block that action now, each once. They are found the way the gate finds them:
+  on the action itself and on each `derives_from` ancestor (when the log has that column), with the gate's matching
+  and retraction rules for that action. Every entry has `is_open` true, and `blocks` names the action or the ancestor
+  it was found on.
+- **Without `action`:** every HALT row, each judged for its own id, which is retraction by exact id. A row with
+  `is_open` false blocks no action, and `retracted_by` names the accepted retraction that cleared it. A row with
+  `is_open` true still blocks at least its own id; a retraction of exactly a family's id may still lift it at that
+  family's own gate action (ask with `action` to know).
+
+| `HaltRow` field | Meaning |
+|---|---|
+| `row` | The 1-based row number in the log (the header is not counted). |
+| `halt_id` | The id a refusal names and a `HALT-RETRACTED` row must carry to retract it: the HALT's own id, or for a HALT with no letter or digit in its id, its row handle `halt-row:<N>:<digest>`. |
+| `is_open` | Whether it is still in force (for `action`, or for its own id). |
+| `retracted_by` | The 1-based row of the accepted retraction that cleared it, or `None`. |
+| `blocks` | With `action`: the id it blocks (the action or an ancestor). Without: its own retraction id. |
+
+Which actions a HALT blocks (the gate's rules, `action_ids.halt_blocks`):
+
+- **Strict match:** the HALT's id equals the action's id, or extends it with `-`, `_`, `.` or `:` and more. A HALT on
+  `prune-001` blocks `prune`.
+- **Family, across a colon only:** the action's id extends the HALT's id with `:` and more. A HALT on `server-apply`
+  blocks `server-apply:remove-path:<host>:<path>`.
+- **Tokens:** the action's tokens appear as a run in the HALT's id. Tokens split on every character that is not a
+  letter or digit (so on `/` too), and on camelCase and letter-digit boundaries.
+- **`/` makes no family.** For the action `family/gate/study:sha256-...`, a HALT on `family` or on `family/gate` does
+  not block it, and a HALT on `family/gate/study` does (across the colon). In the other direction, the token rule
+  makes a HALT on `family/gate/study` also block `family/gate` and `gate`.
+- **No usable id:** a HALT whose id has no letter or digit blocks every action and is retracted only by its row handle.
+
+Things to know before relying on it:
+
+- **It writes nothing**, and it is a point-in-time read: call it immediately before acting on the answer.
+- **It refuses what the gate refuses.** An unreadable or malformed log, a broken hash chain, a signed decision row that
+  appears twice, or (with `action`) a `derives_from` lineage that cannot be walked raises `RuntimeError`.
+- **One id, one log.** With `action` it answers the destructive-action gate's HALT check for that one id in this one
+  team directory. A gate that also checks a family id (a sandbox relaxation checks `sandbox-os-off` as well as
+  `sandbox-os-off:claude`, so a HALT on a sibling instance blocks it) or reads HALTs from other directories
+  (`--merge-pr`, the S-10 gates) is answered by asking for each id, in each directory, that gate checks.
+- **No open HALT is not a clearance.** The action still needs a PASS or a waiver, and a retracted HALT that is still
+  the newest row matching the action refuses until a new clearance is recorded.
 
 ## Related pages
 

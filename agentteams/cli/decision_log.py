@@ -830,7 +830,7 @@ def _read_decision_rows_locked(log_path: Path, check_log) -> tuple[list[dict[str
 
 def _open_halt_for(
     rows: list[dict[str, str]], target: str, *, output_dir: Path, signing_active: bool,
-    skipped: list[str] | None = None, retracted: list[int] | None = None,
+    skipped: list[str] | None = None, retracted: list[int] | None = None, outcome: dict[int, int | None] | None = None,
 ) -> tuple[int, dict[str, str]] | None:
     """Return the first unretracted HALT that blocks *target* (one with no usable id blocks every target), or None.
 
@@ -839,7 +839,8 @@ def _open_halt_for(
     duplicating the retraction authentication or evidence requirement. A retraction that fails
     authentication or has no evidence retracts nothing and is skipped, its reason appended to *skipped*:
     one unsigned historical row in an append-only signed log must not wedge the scan (rc.12 fix). *retracted*, when given, collects the 0-based index of each
-    accepted retraction that cleared a HALT on *target*.
+    accepted retraction that cleared a HALT on *target*; *outcome* maps each HALT that blocks *target* to the index
+    of the retraction that cleared it, or None while it is open (``open_halts``).
     """
     # (index, row, retraction id, not matched as family). A HALT blocks every action named in its id, and every
     # action when it has no usable id (halt_blocks); unless matched as family it is retracted only by its exact id.
@@ -871,7 +872,11 @@ def _open_halt_for(
             kept = [h for h in open_halts if not ((whole and not h[3]) or h[2] == reviewed.lower())]
             if retracted is not None and len(kept) < len(open_halts):
                 retracted.append(index)
+            if outcome is not None:
+                outcome.update({h[0]: index for h in open_halts if h not in kept})
             open_halts = kept
+    if outcome is not None:
+        outcome.update({h[0]: None for h in open_halts})
     return (open_halts[0][0], open_halts[0][1]) if open_halts else None
 
 
