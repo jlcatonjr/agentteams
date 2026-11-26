@@ -2,7 +2,8 @@
 
 A narrowing and a non-capability key apply as before. A widening needs, in a governed workspace, a signed decision
 (never a waiver) whose ``scope`` is the action and whose ``effect_grants`` are exactly this run's
-``frontmatter:<file>#<key>@sha256:<digest of the value>`` tokens; in an ungoverned one, an ordinary PASS row from an approved author.
+``frontmatter:<file>#<key>@sha256:<digest of the value>`` tokens; in an ungoverned one, an ordinary PASS row from
+an approved author.
 """
 
 from __future__ import annotations

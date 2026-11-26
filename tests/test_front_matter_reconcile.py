@@ -190,6 +190,13 @@ def test_this_repos_own_team_is_reconciled() -> None:
 
 
 def _generate(tmp_path: Path):
+    """Generate the self team through the CLI, so every file is what a real build writes.
+
+    Not ``test_integration._run_pipeline``: that helper skips the adapter's builder step, so its
+    ``team-builder.md`` keeps the template's canonical tool names that a real Claude build maps
+    to Claude names, and the file diverges from its own render.
+    """
+    import subprocess
     import sys
 
     import pytest
@@ -198,11 +205,13 @@ def _generate(tmp_path: Path):
     brief = repo / ".github/agents/_build-description.json"
     if not brief.exists():
         pytest.skip("self brief absent")
-    sys.path.insert(0, str(repo / "tests"))
-    from test_integration import _run_pipeline
-
     out = tmp_path / "agents"
-    _run_pipeline(brief, out, framework="claude")
+    proc = subprocess.run(
+        [sys.executable, "build_team.py", "--description", str(brief), "--framework", "claude",
+         "--output", str(out), "--yes", "--no-scan", *seed_offline_intel(out, "claude")],
+        cwd=repo, capture_output=True, text=True, timeout=600,
+    )
+    assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
     return brief, out
 
 
@@ -242,9 +251,8 @@ def test_cli_report_never_writes_even_with_divergence(tmp_path: Path) -> None:
 def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
     """And with the explicit flag, it does apply a narrowing — reporting the capability change.
 
-    The generated team's ``team-builder.md`` declares its tools in a different vocabulary from its
-    render, so that divergence cannot be shown to narrow: it is refused without a clearance (exit 1)
-    and its file is left byte-identical, while the narrowing still applies.
+    A freshly generated team diverges nowhere else, so only the perturbed key changes and the run
+    needs no clearance.
     """
     import subprocess
     import sys
@@ -255,8 +263,6 @@ def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
     target.write_text(original.replace("tools: ", "tools: Bash, ", 1), encoding="utf-8")
     other = out / "security.md"
     other_before = other.read_text(encoding="utf-8")
-    builder = out / "team-builder.md"
-    builder_before = builder.read_bytes()
 
     repo = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
@@ -265,9 +271,28 @@ def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
          *seed_offline_intel(out, "claude")],
         cwd=repo, capture_output=True, text=True, timeout=600,
     )
-    assert proc.returncode == 1, proc.stdout[-3000:] + proc.stderr[-2000:]
+    assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-2000:]
     assert "applied navigator.md: tools  [CAPABILITY GRANT CHANGED]" in proc.stdout, proc.stdout[-1500:]
-    assert "REFUSED team-builder.md: tools" in proc.stdout, proc.stdout[-1500:]
+    assert "REFUSED" not in proc.stdout, proc.stdout[-1500:]
     assert target.read_text(encoding="utf-8") == original, "did not restore the template value"
     assert other.read_text(encoding="utf-8") == other_before, "an unrelated file changed"
-    assert builder.read_bytes() == builder_before, "a refused widening was written"
+
+
+def test_a_freshly_generated_team_is_reconciled(tmp_path: Path) -> None:
+    """A real build's files match their render, the Claude ``team-builder.md`` included (its canonical tool names
+    are mapped to Claude names at render time), so a fresh team needs no clearance. The perturbed-key tests above
+    are the negative control."""
+    import subprocess
+    import sys
+
+    brief, out = _generate(tmp_path)
+    assert "tools: Read, Edit, Write, Grep, Glob, Bash" in (out / "team-builder.md").read_text(encoding="utf-8")
+    repo = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [sys.executable, "build_team.py", "--description", str(brief), "--framework", "claude",
+         "--output", str(out), "--reconcile-front-matter", "--reconcile-apply", "--yes",
+         *seed_offline_intel(out, "claude")],
+        cwd=repo, capture_output=True, text=True, timeout=600,
+    )
+    assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
+    assert "0 divergences" in proc.stdout, proc.stdout[-1500:]
