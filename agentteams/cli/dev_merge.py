@@ -55,6 +55,9 @@ SCOPE = "integration-pr-merge"
 FAMILY = "integration-merge"
 #: The per-merge clearance family: ``dev-merge:<owner>/<name>:pr-<N>-<head sha>``. A HALT on any of them ends it too.
 ACTION_FAMILY = "dev-merge"
+#: Every id whose HALT ends the authorization and voids an older per-merge clearance once retracted (#616): the HALT
+#: scan and the void check both read this one tuple, so the two cannot drift.
+HALT_FAMILIES: tuple[str, ...] = (FAMILY, ACTION_FAMILY)
 #: The exception-registry key holding the highest sequence seen (rollback guard).
 HIGH_WATER_KEY = "dev_merge_sequence"
 #: The file format version.
@@ -263,7 +266,7 @@ def _halted(halt_dirs: tuple[Path, ...]) -> str | None:
     from agentteams.cli import security_gate
 
     for d in dict.fromkeys(halt_dirs):
-        for halt_family in (FAMILY, ACTION_FAMILY):
+        for halt_family in HALT_FAMILIES:
             try:
                 security_gate._assert_no_unretracted_halt(d, action=halt_family)
             except RuntimeError as exc:
@@ -601,6 +604,11 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
     head_sha = str(pull["head"]["sha"]).lower()
     merge_action = merge_action_id(repo, number, head_sha)
     allowed, why = security_gate.check_clearance(governance_dir, action=merge_action)
+    if allowed:   # #616: a retracted HALT on any id the HALT scan covers voids an older PASS too
+        try:
+            security_gate._assert_newest_clearance_not_void(governance_dir, action=merge_action, also=HALT_FAMILIES)
+        except RuntimeError as exc:
+            allowed, why = False, str(exc)
     if not allowed:
         return refuse(f"no usable @security PASS for {merge_action} ({why})")
     try:
@@ -770,7 +778,7 @@ def verify_command(project_root: Path, governance_dir: Path, team_id: str, halt_
 
 __all__ = [
     "ACTION_FAMILY", "AUTH_FILE_REL", "AuthResult", "DevMergeError", "FAMILY", "FORBIDDEN_MERGE_FLAGS",
-    "FORMAT_VERSION", "GhRunner", "HIGH_WATER_KEY", "MAX_HEAD_RUNS", "MAX_PR_FILES", "MAX_REQUIRED_CHECKS", "PURPOSE", "SCOPE", "SENSITIVE_FILES",
+    "FORMAT_VERSION", "GhRunner", "HALT_FAMILIES", "HIGH_WATER_KEY", "MAX_HEAD_RUNS", "MAX_PR_FILES", "MAX_REQUIRED_CHECKS", "PURPOSE", "SCOPE", "SENSITIVE_FILES",
     "SENSITIVE_PREFIXES", "agent_session", "branch_refusal",
     "load_authorization", "merge_action_id", "merge_pr", "pr_problem", "read_document", "run_gh", "sign_file",
     "signed_values", "validate", "verify_command", "verify_signature",

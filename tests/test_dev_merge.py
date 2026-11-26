@@ -15,7 +15,7 @@ import pytest
 
 from agentteams.cli import dev_merge as dm
 from agentteams.cli import exception_registry as er
-from tests._sandbox_gate_helpers import _keypair, _log, _row
+from tests._sandbox_gate_helpers import _keypair, _log, _retraction, _row
 
 pytest.importorskip("cryptography")
 
@@ -499,3 +499,18 @@ def test_a_merge_waits_for_every_head_workflow_run(tmp_path, monkeypatch) -> Non
     gh = _FakeGh(runs=[_RUN, {"name": "CI", "status": "queued", "conclusion": None}])
     assert _merge(root, team, monkeypatch, gh) == 2
     assert not [c for c in gh.calls if c[:2] == ["pr", "merge"]]
+
+
+def test_a_retracted_integration_merge_halt_voids_an_older_pass(tmp_path, monkeypatch, capsys) -> None:
+    # #616: a HALT on integration-merge blocks the merge; once retracted, a PASS recorded before it stays void.
+    root, team, private = _project(tmp_path)
+    _write(root, _doc(private))
+    _pass(team)
+    _log(team, _row(dm.FAMILY, verdict="HALT", stamp="2026-11-14"), _retraction(dm.FAMILY, stamp="2026-11-15"))
+    gh = _FakeGh()
+    assert _merge(root, team, monkeypatch, gh) == 2
+    assert not [c for c in gh.calls if c[:2] == ["pr", "merge"]]
+    assert "#616" in capsys.readouterr().err
+    _pass(team)   # negative control: a PASS recorded after the retraction merges
+    gh = _FakeGh()
+    assert _merge(root, team, monkeypatch, gh) == 0
