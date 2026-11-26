@@ -147,7 +147,7 @@ def test_incremental_jsonl_doc_matches_full_build(tmp_path):
 
 
 def test_build_memory_index_output_unchanged_by_refactor(tmp_path, monkeypatch):
-    """Golden digest captured from the pre-refactor build_memory_index (prose sources)."""
+    """Golden digest of build_memory_index on prose sources: an unintended change to the output fails here."""
     monkeypatch.setattr(mi, "_utc_now_iso", lambda: "2026-01-01T00:00:00Z")
     corpus = {
         "alpha.md": "# Alpha\n\nThis document describes drift detection and the audit pipeline for agent "
@@ -165,10 +165,11 @@ def test_build_memory_index_output_unchanged_by_refactor(tmp_path, monkeypatch):
     for doc in idx["documents"]:
         doc["source_mtime"] = 0.0
         doc["vector_norm_sq"] = round(doc["vector_norm_sq"], 9)
-    # Golden captured at v2; the v3 bump changed JSONL and texts-built documents only.
-    idx["index_format_version"] = "json-bm25-postings-v2"
+    # Golden recaptured at v4, which adds file-name and title words to every document's terms
+    # (the v2 golden held through v3, which changed JSONL and texts-built documents only).
+    assert idx["index_format_version"] == "json-bm25-postings-v4"
     digest = hashlib.sha256(json.dumps(idx).encode()).hexdigest()
-    assert digest == "052b25c9691d5347b7b20584ff27e99550a8deae449051fb47119b5d4d80d6ec"
+    assert digest == "9df1a409e7c49efaeabfb37b5ae9374cb0b5a479cd49836fd853a2dbcef5722a"
 
 
 def test_file_doc_with_failed_stat_still_stale_when_deleted(tmp_path):
@@ -223,3 +224,28 @@ def test_incremental_refuses_format_version_mismatch(tmp_path):
     )
     assert (res.applied, res.reason) == (False, "index_format_version_mismatch")
     assert idx_path.read_text(encoding="utf-8") == before
+
+
+def test_file_name_and_title_words_are_terms(tmp_path):
+    """v4 (R2): a query made of a file's name words, or one word of its slug, finds that file first."""
+    body = "The audit pipeline compares template hashes against a stored baseline on every update run today.\n"
+    (tmp_path / "doc-overlap-mechanism.plan.md").write_text("# Reducing repeated passages\n\n" + body, encoding="utf-8")
+    (tmp_path / "other.md").write_text("# Other\n\n" + body + "\nIt mentions overlap once in passing here.\n", encoding="utf-8")
+    (tmp_path / "third.md").write_text("# Third\n\n" + body, encoding="utf-8")
+    idx = build_memory_index(sorted(tmp_path.glob("*.md")), root=tmp_path)
+    target = "doc-overlap-mechanism.plan.md"
+    for q in ("overlap mechanism", "doc-overlap-mechanism", "mechanism", "repeated passages", "doc_overlap plan"):
+        assert mi.query_index(idx, q)[0]["path"] == target, q
+    assert mi.query_index(idx, "mechanism", strategy="vector")[0]["path"] == target
+    doc = next(d for d in idx["documents"] if d["path"] == target)
+    tf = {term: e["tf"] for term, entries in idx["postings"].items() for e in entries if e["doc_id"] == doc["doc_id"]}
+    assert tf["doc-overlap-mechanism"] == 1 and tf["overlap"] == 1 and tf["repeated"] == 2   # title: body once, field once
+    assert sum(tf.values()) == doc["length"]
+
+
+def test_with_parts_and_query_terms():
+    assert mi._with_parts(["doc-overlap", "plain", "a_b_longer"]) == ["doc-overlap", "doc", "overlap", "plain", "a_b_longer", "longer"]
+    known = {"overlap": [], "by-week": [], "week": [], "doc": []}
+    # A hyphenated query word is split only when the index does not know it whole.
+    assert mi._known_query_terms("by-week doc-overlap overlap nothing-here", known) == ["by-week", "doc", "overlap", "overlap"]
+    assert mi._tokenize("doc-overlap") == ["doc-overlap"]   # the tokenizer itself is unchanged (code_index shares it)

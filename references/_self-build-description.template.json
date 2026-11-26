@@ -60,13 +60,12 @@
     "docs_src/contribute"
   ],
   "memory_index_exclude": [
-    "workSummaries",
+    "references/plans/snapshots-*",
     "references/*-2026-*.adversarial.md",
     "references/*-2026-*.conflict-audit.md",
     "references/openweights-security-model-eval.report.md",
     "references/systematic-update-lessons.md",
-    "references/fleet-update-scope-boundary.md",
-    "references/plans"
+    "references/fleet-update-scope-boundary.md"
   ],
   "tools": [
     {

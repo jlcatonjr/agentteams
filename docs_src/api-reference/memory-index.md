@@ -68,6 +68,7 @@ Build a BM25 search index over durable text sources.
 - `artifact_type`: `"memory-index"`
 - `memory_index_schema_version`: Current schema version
 - `index_format_version`: Serving-format identifier for the artifact structure
+  (`json-bm25-postings-v4`: a document's file-name words and title words are counted as terms; see below)
 - `index_build_id`: Build fingerprint for this specific index emission
 - `index_write_owner`: Writer ownership marker (`agentteams.build_team`)
 - `vector_runtime_mode`: Runtime strategy implementation (`sparse-tfidf-cosine`)
@@ -169,6 +170,12 @@ Return the top-*k* documents for *query* using the specified retrieval strategy.
 - `doc_id`: Internal document ID
 - `path`: Source file path
 - `title`: Extracted heading (first `# ` line) or filename
+
+**File-name and title words are terms.** Each word of a document's file name and of its title is counted once
+more than the body alone would count it, and a hyphenated or underscored name is also split into its words
+(`doc-overlap-mechanism.plan.md` yields `doc-overlap-mechanism`, `doc`, `overlap`, `mechanism` and `plan`). A
+query made of a file's name words therefore finds that file. In a query, a hyphenated word is split only when the
+index does not know it whole. An index in an older format is treated as stale and rebuilt.
 - `score`: Relevance score (rounded to 6 decimal places; BM25 for lexical, cosine similarity for vector)
 - `confidence`: `"reliable"` / `"candidate"` / `"weak"`, computed from `score` against per-strategy thresholds (lexical: `≥3.0` reliable, `1.0–3.0` candidate; vector: `≥0.30` reliable, `0.20–0.30` candidate). Replaces threshold prose several templates used to restate by hand — see `agentteams/templates/universal/conflict-resolution.template.md`'s `memory_index_consultation` fence for the canonical wording consumers cite.
 - `snippet`: Best single passage (backward-compat; always present)
