@@ -94,6 +94,31 @@ def test_a_grant_set_other_than_the_runs_refuses_and_names_the_difference(tmp_pa
     assert _consumed(team) == []
 
 
+def test_the_row_checked_is_the_row_spent(tmp_path, stub_ed25519, monkeypatch):
+    """A row appended after the gate selects its clearance is neither checked in its place nor spent."""
+    tokens = {"frontmatter:orchestrator.md#agents"}
+    team, _orch, _rendered = _widening_team(tmp_path)
+    _log(team, _row(_A, grants=";".join(tokens), relaxes=""))
+    real_read, calls = security_gate._read_decision_rows, []
+
+    def read_then_append(team_dir):
+        read = real_read(team_dir)
+        if not calls:  # the gate's first read of the log; another writer appends right after it
+            _log(team, _row(_A, grants="frontmatter:other.md#tools", relaxes="", stamp="2026-11-20"))
+        calls.append(1)
+        return read
+
+    monkeypatch.setattr(security_gate, "_read_decision_rows", read_then_append)
+    try:
+        gate.authorize(team, tokens, consume=True)
+    except gate.ReconcileApplyError:
+        assert _consumed(team) == []
+        return
+    with (team / "references" / "security-decisions.log.csv").open(newline="") as fh:
+        spent = [r["effect_grants"] for r in csv.DictReader(fh) if (r.get("consumed") or "") == "yes"]
+    assert spent == [";".join(tokens)], "a row other than the one whose grants were checked was spent"
+
+
 def test_governed_symmetric_signature_is_insufficient(tmp_path, stub_ed25519):
     """A declared grant makes the row constraint-relaxing, so only the operator's Ed25519 signature clears it."""
     team, _orch, _rendered = _widening_team(tmp_path)

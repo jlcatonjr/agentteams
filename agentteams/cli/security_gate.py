@@ -17,6 +17,7 @@ import hmac
 import os
 import warnings
 from datetime import UTC, datetime
+from collections.abc import Callable
 from pathlib import Path
 
 from agentteams.atomicio import atomic_rewrite_csv_rows
@@ -125,7 +126,8 @@ def check_clearance(output_dir: Path, *, action: str) -> tuple[bool, str]:
 
 
 def _assert_destructive_action_allowed(
-    output_dir: Path, *, action: str, consume: bool = True
+    output_dir: Path, *, action: str, consume: bool = True,
+    row_check: Callable[[dict[str, str]], None] | None = None,
 ) -> None:
     """Raise RuntimeError if security decisions do not allow destructive action.
 
@@ -145,6 +147,10 @@ def _assert_destructive_action_allowed(
             passes False to inspect without spending. Keeping this as one flag on one function
             rather than a parallel implementation is deliberate — two copies of a security
             decision procedure drift, and the copy that drifts is the one nobody runs.
+        row_check: A caller's own conditions on the clearance (an exact scope or grant set), run on the row
+            this call selects from its one read; it raises to refuse. With it, no waiver is accepted and only a
+            row identical to the checked one is spent, so a row appended after the selection is neither checked
+            in its place nor spent.
     """
     # C-2 first, and over the WHOLE log. Everything below chooses among clearances; this
     # decides whether any clearance may apply at all.
@@ -152,6 +158,10 @@ def _assert_destructive_action_allowed(
 
     read = _read_decision_rows(output_dir)   # one read: the clearance and the void check number rows alike
     decision, decision_index = _latest_security_decision_at(read, action=action)
+    if row_check is not None:
+        if decision is None:
+            raise RuntimeError(f"no unconsumed '{action}' decision in references/security-decisions.log.csv")
+        row_check(decision)
     if decision is None:
         waiver = _latest_security_waiver(output_dir, action=action)
         if waiver is not None:
@@ -176,6 +186,8 @@ def _assert_destructive_action_allowed(
 
     waiver = _latest_security_waiver(output_dir, action=action)
     if waiver is not None:
+        if row_check is not None:
+            raise RuntimeError(f"a waiver cannot authorize '{action}'; record a decision row")
         if consume:
             _consume_security_waiver_use(output_dir, waiver, action=action)
         return
@@ -194,12 +206,12 @@ def _assert_destructive_action_allowed(
 
     if verdict == "PASS":
         if consume:
-            _consume_security_decision_use(output_dir, decision, action=action)
+            _consume_security_decision_use(output_dir, decision, action=action, exact=row_check is not None)
         return
 
     if verdict == "CONDITIONAL PASS" and cond_verified == "verified":
         if consume:
-            _consume_security_decision_use(output_dir, decision, action=action)
+            _consume_security_decision_use(output_dir, decision, action=action, exact=row_check is not None)
         return
 
     if verdict == "USED":
@@ -223,8 +235,13 @@ def _assert_destructive_action_allowed(
     )
 
 
-def _consume_security_decision_use(output_dir: Path, decision: dict[str, str], *, action: str) -> None:
-    """Mark a validated security decision as consumed so it cannot be replayed."""
+def _consume_security_decision_use(
+    output_dir: Path, decision: dict[str, str], *, action: str, exact: bool = False
+) -> None:
+    """Mark a validated security decision as consumed so it cannot be replayed.
+
+    ``exact`` spends only a row whose every cell (``consumed`` aside) equals the validated one's.
+    """
     log_path = output_dir / "references" / "security-decisions.log.csv"
     try:
         with log_path.open("r", encoding="utf-8", newline="") as fh:
@@ -251,6 +268,8 @@ def _consume_security_decision_use(output_dir: Path, decision: dict[str, str], *
             continue
         row_verdict = row.get("verdict", row.get("status", row.get("decision", ""))).strip().upper()
         if row_verdict != target_verdict:
+            continue
+        if exact and any((row.get(f) or "") != (decision.get(f) or "") for f in fieldnames if f != "consumed"):
             continue
 
         if "consumed" not in fieldnames:

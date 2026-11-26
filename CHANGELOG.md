@@ -33,7 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scope=reconcile-apply-widen`, `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>`,
   and room under the exception cap. In an ungoverned workspace an ordinary PASS row from an approved author clears
   it. Both paths go through the destructive-action gate, so a HALT blocks it, a clearance older than a HALT
-  retraction is void, and a clearance is spent once.
+  retraction is void, and a clearance is spent once. The gate checks the grants on the row it selects in its one
+  read of the log and spends only a row identical to that one, so a row appended meanwhile is neither checked in
+  its place nor spent.
 - Without a clearance the narrowings still apply, each widening prints `REFUSED <file>: <key>` and the row to
   record, and the run exits 1 (it always exited 0 before). `--dry-run` checks the clearance without spending it.
 - **Who notices:** an operator who uses `--reconcile-apply` to give agents the runner's `mcpServers` block, to

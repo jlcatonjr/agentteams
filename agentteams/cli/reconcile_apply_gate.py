@@ -82,21 +82,22 @@ def _authorize(team_dir: Path, tokens: set[str], *, consume: bool) -> None:
     security_gate._assert_no_unretracted_halt(team_dir, action=ACTION)  # C-2 first, so a HALT reads as one
     if security_gate._latest_security_waiver(team_dir, action=ACTION) is not None:
         raise ReconcileApplyError(f"a waiver cannot authorize '{ACTION}'; record a decision row")
-    row = security_gate._latest_security_decision(team_dir, action=ACTION)
-    if row is None:
-        raise ReconcileApplyError(f"no unconsumed '{ACTION}' decision in references/security-decisions.log.csv")
-    granted = _split(row.get("effect_grants") or "")
-    if governed and (row.get("scope") or "").strip().lower() != ACTION:
-        raise ReconcileApplyError(f"the '{ACTION}' decision must carry scope={ACTION} exactly")
-    if (governed or granted) and granted != tokens:
-        extra, missing = sorted(granted - tokens), sorted(tokens - granted)
-        raise ReconcileApplyError(
-            f"the '{ACTION}' decision must grant exactly this run's widenings "
-            f"(extra in decision: {extra or 'none'}; missing from decision: {missing or 'none'})"
-        )
+
+    def row_check(row: dict[str, str]) -> None:
+        granted = _split(row.get("effect_grants") or "")
+        if governed and (row.get("scope") or "").strip().lower() != ACTION:
+            raise ReconcileApplyError(f"the '{ACTION}' decision must carry scope={ACTION} exactly")
+        if (governed or granted) and granted != tokens:
+            extra, missing = sorted(granted - tokens), sorted(tokens - granted)
+            raise ReconcileApplyError(
+                f"the '{ACTION}' decision must grant exactly this run's widenings "
+                f"(extra in decision: {extra or 'none'}; missing from decision: {missing or 'none'})"
+            )
+
     if governed:
         assert_within_aggregate_cap(team_dir, adding=1)
-    security_gate._assert_destructive_action_allowed(team_dir, action=ACTION, consume=consume)
+    # One read: the gate selects the newest row, runs row_check on it, and spends only that row.
+    security_gate._assert_destructive_action_allowed(team_dir, action=ACTION, consume=consume, row_check=row_check)
 
 
 def record_hint(tokens: set[str], *, governed: bool) -> str:
