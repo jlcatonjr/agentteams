@@ -19,6 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The orchestrator gains no lines.
 - **Expect on update:** one new file under `references/`, and nine added lines in the code-hygiene agent.
 
+### docs (a retraction in another team directory does not void this log's older clearances)
+
+- **Documented:** in known-limitations: gates that read HALTs from other team or surface directories block on an
+  open HALT there, but a retraction recorded there does not void this log's older clearances. Record both the
+  HALT and its retraction in the canonical governance log (the HALT first), or re-sign the clearance after the
+  retraction. The design is decided after 1.3.1.
+
+### security (a retracted `integration-merge` HALT does not revive an older merge PASS, #616)
+
+- **Fixed:** `agentteams --merge-pr` refuses while a HALT on `integration-merge` or `dev-merge` is open, but its
+  check that a clearance is not older than a retraction looked only at the per-merge id. After a HALT on
+  `integration-merge` was retracted, a PASS recorded before that retraction merged again. The check now covers
+  both HALT ids (one shared list, `dev_merge.HALT_FAMILIES`), so that PASS is void.
+- **Who notices:** an operator who retracts an `integration-merge` HALT and expected an earlier per-merge PASS to
+  still apply: record a fresh PASS after the retraction.
+
 ### added (`ref_branch`: read the default branch and say how stale the view is)
 
 - **New:** `python -m agentteams.ref_branch [REPO]` names the default-branch ref (`origin/HEAD`, else `origin/main` or
