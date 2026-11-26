@@ -127,7 +127,7 @@ def check_clearance(output_dir: Path, *, action: str) -> tuple[bool, str]:
 
 def _assert_destructive_action_allowed(
     output_dir: Path, *, action: str, consume: bool = True,
-    row_check: Callable[[dict[str, str]], None] | None = None,
+    row_check: Callable[[dict[str, str]], None] | None = None, also: tuple[str, ...] = (),
 ) -> None:
     """Raise RuntimeError if security decisions do not allow destructive action.
 
@@ -151,6 +151,8 @@ def _assert_destructive_action_allowed(
             this call selects from its one read; it raises to refuse. With it, no waiver is accepted and only a
             row identical to the checked one is spent, so a row appended after the selection is neither checked
             in its place nor spent.
+        also: Further HALT ids the caller's own HALT scan covers; the retraction-void check over this same read
+            covers them too (an open HALT on one refuses, and its retraction voids an older clearance).
     """
     # C-2 first, and over the WHOLE log. Everything below chooses among clearances; this
     # decides whether any clearance may apply at all.
@@ -197,7 +199,7 @@ def _assert_destructive_action_allowed(
         _assert_authorizing_row_is_authentic(
             decision, output_dir=output_dir, signing_active=signing_active, action=action
         )
-        _assert_not_older_than_a_retraction(output_dir, read, action=action, index=decision_index)
+        _assert_not_older_than_a_retraction(output_dir, read, action=action, index=decision_index, also=also)
         # W11: a suffix that reads as a restriction and is not one. Advisory — see
         # decision_log.scope_suffix_warning for why this warns rather than refuses.
         warning = scope_suffix_warning(decision, action)

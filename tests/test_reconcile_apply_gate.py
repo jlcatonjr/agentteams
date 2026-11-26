@@ -172,6 +172,23 @@ def _legacy_log(team: Path, *authors: str) -> None:
                          for i, author in enumerate(authors))
 
 
+@pytest.mark.parametrize("halt_id", gate.HALT_IDS)
+def test_a_halt_on_either_spelling_blocks_and_its_retraction_voids_an_older_clearance(tmp_path, stub_ed25519,
+                                                                                      halt_id):
+    tokens = {"frontmatter:orchestrator.md#agents"}
+    team, _orch, _rendered = _widening_team(tmp_path / "open")
+    _log(team, _row(_A, grants=";".join(tokens), relaxes=""), _row(halt_id, verdict="HALT", stamp="2026-11-01"))
+    with pytest.raises(gate.ReconcileApplyError, match="HALT"):
+        gate.authorize(team, tokens, consume=False)
+    team, _orch, _rendered = _widening_team(tmp_path / "retracted")
+    _log(team, _row(halt_id, verdict="HALT", stamp="2026-11-01"), _row(_A, grants=";".join(tokens), relaxes=""),
+         _retraction(halt_id, stamp="2026-11-02"))
+    with pytest.raises(gate.ReconcileApplyError, match="retraction"):
+        gate.authorize(team, tokens, consume=False)
+    _log(team, _row(_A, grants=";".join(tokens), relaxes="", stamp="2026-11-03"))  # negative control
+    gate.authorize(team, tokens, consume=False)
+
+
 def test_ungoverned_ordinary_pass_from_an_approved_author_clears(tmp_path):
     team, orch, rendered = _widening_team(tmp_path, governed=False)
     _legacy_log(team, "someone-else")

@@ -1795,8 +1795,9 @@ PASS row signed with the operator's Ed25519 key, never a waiver, with `scope=rec
 and `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>` (separated
 by `;`); it counts against the exception cap. In an ungoverned workspace an ordinary
 `reconcile-apply-widen` PASS row from an approved author clears it (a waiver still does not, and
-a row that lists `effect_grants` must list exactly this run's). An unretracted HALT on the action
-blocks it, a clearance older than a HALT retraction is void, and a clearance is spent once.
+a row that lists `effect_grants` must list exactly this run's). An unretracted HALT recorded as
+`reconcile-apply-widen` or `reconcile-apply` blocks it, a clearance older than the retraction of
+either is void, and a clearance is spent once.
 Without one, the narrowings still apply, each widening is printed as `REFUSED <file>: <key>` with
 the row to record, nothing from the widening set is written, and the run exits 1. With
 `--dry-run` the clearance is checked without being spent.
