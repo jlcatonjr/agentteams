@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (correction: #616 is not fixed in 1.3.1; it is planned for 1.3.2)
+
+- The [1.3.0] and [1.3.0-rc.1] release notes said the known issue #616 would be fixed in 1.3.1. 1.3.1 shipped with
+  only the fix for a HALT with no usable id, so those two lines now say 1.3.2 here. The released text on `main` and
+  `release/1.3` is unchanged; the v1.3.1 GitHub release notes carry the same correction.
+- Until 1.3.2 the workaround stands: record no PASS on an id with an open HALT, and after a retraction treat rows
+  newer than the HALT as void and record a fresh PASS.
+
 ### docs (a retraction in another team directory does not void this log's older clearances)
 
 - **Documented:** in known-limitations: gates that read HALTs from other team or surface directories block on an
@@ -445,22 +453,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bumping an action** now takes a reviewed PR: `references/git-procedures.md` section J. Dependabot's weekly
   action PR now waits 14 days after a release (`cooldown`), and is completed by updating the pins file in the same PR.
 
-### security (a HALT with no usable id blocks every gated action; it used to block none)
-
-- A HALT row whose `action_reviewed` is empty, blank or punctuation only names no action, so no gate attributed it and
-  a later PASS cleared the action. It now blocks every gated action (C-2: a HALT the gate reads but cannot attribute
-  must block, never vanish).
-- It is retracted only by a `HALT-RETRACTED` row whose `action_reviewed` is exactly its row handle,
-  `halt-row:<N>:<digest>`, with evidence and authenticated like any retraction. The handle binds the row's number
-  and a digest of its signed fields (date, id, verdict, `conditions_verified`, author, chain link, and every
-  optional signed column the row fills in, such as `scope` or `text_digest`), so a HALT shifted by rows added or
-  removed before it blocks again. Free-text `conditions` and `evidence` are covered only through `text_digest`.
-- The gate's refusal names the handle as the HALT's id, so `vulnscan halts` prints a retraction that works.
-- **On upgrade:** a log holding such a row refuses every gated action, the scheduled vulnerability remediation
-  included, until the row is reviewed. `--verify-integrity` and `--migrate-decision-log --dry-run` list each one
-  with its handle.
-- Free-text HALT matching is unchanged: such a HALT blocks the actions whose id appears in it as a whole token.
-
 ### security (two warnings: Codex sealed results, and a Goose exclusive egress that reaches Ollama)
 
 - **Codex:** with `write_policy: "orchestrator-only"`, a Codex render now warns that sealed results are not
@@ -481,6 +473,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including one whose derived class, printed four lines below, was `non-relaxing`. It now reads "non-relaxing" for
   such a row. An indeterminate row still reads "constraint-relaxing", because every gate treats it as relaxing.
 - Nothing about what is signed, refused or confirmed changes.
+
+## [1.3.1] - 2026-11-25
+
+### release notes
+
+agentteams 1.3.1 backports one security fix from `dev` to the 1.3 line: a HALT with no usable id now blocks every
+gated action (it blocked none through 1.3.0). **Action for existing teams:** run `--verify-integrity` after
+upgrading. A decisions log that holds such a HALT refuses every gated action, the scheduled vulnerability
+remediation included, until the row is reviewed and either retracted by its row handle or left in force. Nothing
+else from `dev` is included.
+
+### security (a HALT with no usable id blocks every gated action; it used to block none)
+
+- A HALT row whose `action_reviewed` is empty, blank or punctuation only names no action, so no gate attributed it and
+  a later PASS cleared the action. It now blocks every gated action (C-2: a HALT the gate reads but cannot attribute
+  must block, never vanish).
+- It is retracted only by a `HALT-RETRACTED` row whose `action_reviewed` is exactly its row handle,
+  `halt-row:<N>:<digest>`, with evidence and authenticated like any retraction. The handle binds the row's number
+  and a digest of its signed fields (date, id, verdict, `conditions_verified`, author, chain link, and every
+  optional signed column the row fills in, such as `scope` or `text_digest`), so a HALT shifted by rows added or
+  removed before it blocks again. Free-text `conditions` and `evidence` are covered only through `text_digest`.
+- The gate's refusal names the handle as the HALT's id, so `vulnscan halts` prints a retraction that works.
+- **On upgrade:** a log holding such a row refuses every gated action, the scheduled vulnerability remediation
+  included, until the row is reviewed. `--verify-integrity` and `--migrate-decision-log --dry-run` list each one
+  with its handle.
+- Free-text HALT matching is unchanged: such a HALT blocks the actions whose id appears in it as a whole token.
 
 ## [1.3.0] - 2026-11-24
 
@@ -503,8 +521,8 @@ rc.2, so the candidates were checked by CI and review only. The full changes are
   `--shrink-policy=allow`. Where a merge prints a stale cross-surface notice (F10), re-render that surface with
   `--update --overwrite` or delete the quoted lines.
 - **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568).
-- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
-  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+- **Known issue (#616), to be fixed in 1.3.2.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.2, record no PASS on an id with an open HALT, and after a retraction treat
   rows newer than the HALT as void and record a fresh PASS.
 
 Install it from its signed tag, and verify the tag before installing.
@@ -573,8 +591,8 @@ stays at v1.2.2 until 1.3.0 is released. The entries below it are everything tha
   `--update --overwrite`, or delete the quoted lines by hand.
 - **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568). **Beta:**
   `agentteams.term_index` and `--term-check` (#548), and the WASM streaming session mode (#567).
-- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
-  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+- **Known issue (#616), to be fixed in 1.3.2.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.2, record no PASS on an id with an open HALT, and after a retraction treat
   rows newer than the HALT as void and record a fresh PASS.
 
 Release-candidate soak: v1.3.0 follows once infrastructureManagement reports that every consumer repository rendered
