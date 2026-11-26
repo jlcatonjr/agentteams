@@ -28,7 +28,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS, _parse_capability_list
+from agentteams import front_matter_widening
+from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_front_matter
 
 #: Keys that carry a capability grant. Named so a report can mark them, because a diverging
@@ -287,28 +288,12 @@ def find_divergences(
     return sorted(found, key=lambda d: (d.rel_path, d.key))
 
 
-_BLOCK_ITEM_RE = re.compile(r"""^[ \t]+-[ \t]*(['"]?)([^'"\s#]+)\1[ \t]*$""")
-
-
-def _item_set(key: str, value: str | None) -> frozenset[str] | None:
-    """The items of a capability list value (flow, comma or ``- item`` block), or None when unparseable."""
-    if value is None:
-        return None
-    if value.startswith("\n"):
-        lines = [line for line in value.splitlines() if line.strip()]
-        items = [_BLOCK_ITEM_RE.match(line) for line in lines]
-        return frozenset(m.group(2) for m in items) if lines and all(items) else None
-    return _parse_capability_list(value, key=key)
-
-
 def classify(d: Divergence) -> str:
     """Return ``"safe"`` or ``"widening"`` for applying the template's value of one divergence.
 
-    Safe: a non-capability key, or a capability list whose template items are a subset of the
-    deployed ones (for the ``disallowedTools`` deny list, a superset). Everything else among
-    capability keys widens: more items, a key absent on disk, any ``model`` change, and any value
-    either side cannot parse (``mcpServers`` and ``hooks`` blocks among them). Unparseable is
-    widening, so the test fails closed.
+    The rule is :func:`agentteams.front_matter_widening.classify`: a non-capability key or a capability list the
+    template narrows is safe; everything else among capability keys, including any value that is not read
+    strictly, widens.
 
     Args:
         d: The divergence.
@@ -316,13 +301,7 @@ def classify(d: Divergence) -> str:
     Returns:
         ``"safe"`` or ``"widening"``.
     """
-    if not d.is_capability:
-        return "safe"
-    template, deployed = _item_set(d.key, d.template), _item_set(d.key, d.deployed)
-    if template is None or deployed is None:
-        return "widening"
-    narrows = template >= deployed if d.key == "disallowedTools" else template <= deployed
-    return "safe" if narrows else "widening"
+    return front_matter_widening.classify(d.key, d.deployed, d.template)
 
 
 def _is_written(d: Divergence) -> bool:

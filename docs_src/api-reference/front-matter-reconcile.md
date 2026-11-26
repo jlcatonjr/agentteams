@@ -21,7 +21,7 @@ Rewrite each diverging `key:` line to the template's value. The body is untouche
 ```python
 classify(d: Divergence) -> str
 ```
-`"safe"` or `"widening"` for taking the template's value. Safe: a non-capability key, or a capability list whose template items are a subset of the deployed ones (for `disallowedTools`, a superset). Widening: everything else among capability keys, including a key absent on disk, any `model` change and any value either side cannot parse, so the test fails closed.
+`"safe"` or `"widening"` for taking the template's value, by the rule in [`front_matter_widening`](front-matter-widening.md). Safe: a non-capability key, or a capability list whose template items are a subset of the deployed ones (for `disallowedTools`, a superset). Widening: everything else among capability keys, including a key absent on disk, any `model` change and any list that is not made only of well-formed items, so the test fails closed.
 
 ```python
 format_report(divergences: list[Divergence]) -> str

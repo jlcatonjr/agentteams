@@ -182,6 +182,20 @@ def test_absent_capability_key_and_model_change_are_widening(key, deployed, temp
     assert fmr.classify(Divergence("a.md", key, deployed, template)) == expected
 
 
+@pytest.mark.parametrize("template", [
+    "['read', execute]",        # an unquoted item the lenient parse drops
+    "['read', 'execute',]",     # trailing comma
+    "['read', ['execute']]",    # nested brackets
+    "['read' 'execute']",       # no separator
+    "[]",                       # an empty list can mean every tool
+    "['read', '']",
+])
+def test_a_flow_list_not_made_only_of_well_formed_items_is_widening(template):
+    assert fmr.classify(Divergence("a.md", "tools", "['read', 'edit']", template)) == "widening"
+    # Negative control: the well-formed subset is safe.
+    assert fmr.classify(Divergence("a.md", "tools", "['read', 'edit']", "['read']")) == "safe"
+
+
 def test_dry_run_consumes_nothing(tmp_path, stub_ed25519, capsys):
     team, orch, rendered = _widening_team(tmp_path)
     _log(team, _row(_A, grants="frontmatter:orchestrator.md#agents", relaxes=""))

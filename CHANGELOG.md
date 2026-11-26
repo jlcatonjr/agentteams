@@ -27,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no clearance, while the same `agents:` widening through `--adopt-orphans` needs a signed decision.
 - Each divergence is now classified. A narrowing (a capability list the template shrinks, a `disallowedTools` list
   it grows) and a non-capability key apply as before. A widening (more items, a capability key absent on disk, any
-  `model` change, or a value either side cannot parse) needs a `reconcile-apply-widen` decision. In a governed
+  `model` change, or a value either side cannot read strictly: a list counts only when every item in it is well
+  formed, so an unquoted item in a flow list or a trailing comma widens) needs a `reconcile-apply-widen` decision. In a governed
   workspace that is a PASS row signed with the operator's Ed25519 key, never a waiver, with
   `scope=reconcile-apply-widen`, `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>`,
   and room under the exception cap. In an ungoverned workspace an ordinary PASS row from an approved author clears
