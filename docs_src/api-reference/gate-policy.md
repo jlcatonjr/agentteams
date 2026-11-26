@@ -78,13 +78,16 @@ under the same plain-text rule. `git config --rename-section a b` and `git confi
 `PAGER`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_EXTERNAL_DIFF` or `GIT_PROXY_COMMAND` on the
 same line as a later `git` command asks under `git-alias-config`: `GIT_EDITOR=/path/x git config --edit` runs
 `/path/x`. That covers `VAR=x git …`, `env VAR=x git …` and `export VAR=x; git …` on one line. An assignment on an
-earlier line or in an earlier command, or set by a sourced file, is not seen. Like every trigger it also matches
-quoted text, so `git commit -m "EDITOR=vim"` asks.
+earlier line or in an earlier Bash call, or set by a sourced file, is not seen. The assignment must come before a
+`git` on its line, and like every trigger it also matches quoted text: `echo "EDITOR=vim" | git commit -F -` asks,
+while `git commit -m "EDITOR=vim"` (no `git` after the assignment) does not.
 
 One exemption: `GIT_PAGER` or `PAGER` set to the bare word `cat`, or to nothing, followed by whitespace
 (`GIT_PAGER=cat git log`, `PAGER= git diff`) stays silent. That is how agent sessions turn paging off, and asking on
-it would fire constantly and train operators to approve this class without reading it. What it lets through is
-running `cat` from `PATH` as the pager. Any other value asks (`/tmp/x`, `./cat`, `cat;x`, `"cat"`, `less -R`), the
+it would fire constantly and train operators to approve this class without reading it. It starts no program for
+`GIT_PAGER`: git documents (git(1), `GIT_PAGER`) that an empty value or the value `cat` means it launches no pager.
+For `PAGER`, git's documentation does not say the same; at worst the exemption runs `cat` as found on `PATH` as
+the pager. Any other value asks (`/tmp/x`, `./cat`, `cat;x`, `"cat"`, `less -R`), the
 other ten variables have no exemption, and the exemption never covers a git config write on the same line.
 
 `git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation

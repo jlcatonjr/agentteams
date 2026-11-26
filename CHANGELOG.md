@@ -79,7 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command now asks (`VAR=x git …`, `env VAR=x git …`, `export VAR=x; git …`). Who notices: a session that sets
   an editor or pager program inline for git now gets a prompt. Turning paging off stays silent: `GIT_PAGER` or
   `PAGER` set to the bare word `cat` or to nothing (`GIT_PAGER=cat git log`) is exempt, because sessions do it
-  constantly and a prompt there would be approved unread; it lets `cat` from `PATH` run as the pager.
+  constantly and a prompt there would be approved unread. For `GIT_PAGER` this starts no program (git documents
+  an empty value or `cat` as "launch no pager"); for `PAGER` it may at most run `cat` from `PATH` as the pager.
 - **Newly silent:** `git config get …` and `git config list` (git 2.46 and later) are reads, for every key, including
   `alias.`, `push.`, `remote.` and `url.`, which asked before.
 - **Who notices the stricter reads:** a read naming one of these keys now asks when anything in the same Bash

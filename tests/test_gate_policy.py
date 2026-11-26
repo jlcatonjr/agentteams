@@ -437,6 +437,29 @@ def test_cat_is_no_exemption_for_the_other_variables(tmp_path: Path, var: str) -
     assert "git-alias-config" in {c for c, _ in gate._bash_matches(f"{var}=cat git log")}, var
 
 
+@pytest.mark.parametrize("cmd", ["GIT_PAGER=cat PAGER=/x git log", "PAGER=cat GIT_EDITOR=/x git commit"])
+def test_an_exempt_pager_does_not_exempt_another_assignment(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
+
+
+def test_the_documented_quoted_text_examples(tmp_path: Path) -> None:
+    # docs_src/api-reference/gate-policy.md: the assignment must come before a `git` on its line.
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": 'echo "EDITOR=vim" | git commit -F -'})[:2] == ("ask", "bash-trigger")
+    assert verdict(gate, "Bash", {"command": 'git commit -m "EDITOR=vim"'})[0] == "pass"
+
+
+def test_program_assignments_stay_fast_at_the_line_cap(tmp_path: Path) -> None:
+    import time
+    gate = install(tmp_path, None)
+    for unit in ("EDITOR=x ", "GIT_PAGER=x ", "PAGER=cat "):
+        line = (unit * (8180 // len(unit) + 1))[:8180]
+        started = time.perf_counter()
+        gate._bash_matches(line)
+        assert time.perf_counter() - started < 1.5, unit  # about 0.03 s here
+
+
 @pytest.mark.parametrize("cmd", ["GIT_PAGER=cat git config core.hooksPath /tmp/h",
                                  "GIT_PAGER=cat git log; git config alias.p x", "PAGER= git -c core.sshCommand=x fetch"])
 def test_an_exempt_pager_does_not_hide_a_gated_write(tmp_path: Path, cmd: str) -> None:
