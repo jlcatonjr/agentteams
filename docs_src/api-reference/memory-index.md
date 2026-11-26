@@ -146,7 +146,7 @@ The reason the index is stale, or `None` when it is current (baseAgent P5–P6, 
 
 **Returns:** `str | None` — a short reason such as `"workSummaries/x.md changed or is gone"` or `"it was built from 103 source file(s); there are 110 now"`.
 
-**Safety:** Invalid/missing timestamps are treated as stale (conservative), and so is an `index_format_version` other than the current `INDEX_FORMAT_VERSION` (`json-bm25-postings-v3`): an index written in the v2 format is rebuilt once. Missing/unreadable files for hashed documents are also treated as stale, except that documents marked `"origin": "text"` are skipped: they were built from in-memory text (`build_memory_index_from_texts`) and have no file to compare.
+**Safety:** Invalid/missing timestamps are treated as stale (conservative), and so is an `index_format_version` other than the current `INDEX_FORMAT_VERSION` (`json-bm25-postings-v4`): an index written in an older format is rebuilt once. Missing/unreadable files for hashed documents are also treated as stale, except that documents marked `"origin": "text"` are skipped: they were built from in-memory text (`build_memory_index_from_texts`) and have no file to compare.
 
 ---
 
@@ -170,16 +170,16 @@ Return the top-*k* documents for *query* using the specified retrieval strategy.
 - `doc_id`: Internal document ID
 - `path`: Source file path
 - `title`: Extracted heading (first `# ` line) or filename
+- `score`: Relevance score (rounded to 6 decimal places; BM25 for lexical, cosine similarity for vector)
+- `confidence`: `"reliable"` / `"candidate"` / `"weak"`, computed from `score` against per-strategy thresholds (lexical: `≥3.0` reliable, `1.0–3.0` candidate; vector: `≥0.30` reliable, `0.20–0.30` candidate). Replaces threshold prose several templates used to restate by hand — see `agentteams/templates/universal/conflict-resolution.template.md`'s `memory_index_consultation` fence for the canonical wording consumers cite.
+- `snippet`: Best single passage (backward-compat; always present)
+- `snippets`: List of up to 3 best-matching passages (new in v1.2; dynamic passage scoring; present even for v1.1 indexes)
 
 **File-name and title words are terms.** Each word of a document's file name and of its title is counted once
 more than the body alone would count it, and a hyphenated or underscored name is also split into its words
 (`doc-overlap-mechanism.plan.md` yields `doc-overlap-mechanism`, `doc`, `overlap`, `mechanism` and `plan`). A
 query made of a file's name words therefore finds that file. In a query, a hyphenated word is split only when the
-index does not know it whole. An index in an older format is treated as stale and rebuilt.
-- `score`: Relevance score (rounded to 6 decimal places; BM25 for lexical, cosine similarity for vector)
-- `confidence`: `"reliable"` / `"candidate"` / `"weak"`, computed from `score` against per-strategy thresholds (lexical: `≥3.0` reliable, `1.0–3.0` candidate; vector: `≥0.30` reliable, `0.20–0.30` candidate). Replaces threshold prose several templates used to restate by hand — see `agentteams/templates/universal/conflict-resolution.template.md`'s `memory_index_consultation` fence for the canonical wording consumers cite.
-- `snippet`: Best single passage (backward-compat; always present)
-- `snippets`: List of up to 3 best-matching passages (new in v1.2; dynamic passage scoring; present even for v1.1 indexes)
+index does not know it whole. An index in an older format is treated as stale and rebuilt. A document's `length` includes these added terms.
 
 **Behavior:**
 
