@@ -274,7 +274,7 @@ Record the installed template digests this project trusts, in .agentteams/templa
 Report where a deployed team's YAML front matter diverges from its templates, and change nothing. Front matter cannot be fenced, so an edited file keeps its own values and a template's capability change stops there silently; this makes that visible without a full update run.
 .TP
 .B \-\-reconcile\-apply
-With \-\-reconcile\-front\-matter, take the template's value for each diverging key. Never implied by the report: `allowed\-tools` is a capability grant and widening one is a privileged change, so it requires saying so explicitly.
+With \-\-reconcile\-front\-matter, take the template's value for each diverging key. Never implied by the report. A value that widens a capability grant needs a 'reconcile\-apply\-widen' decision naming it, else it is refused (exit 1) while the other keys still apply.
 .TP
 .B \-\-absorb\-from DIR
 Absorb native framework edits back into the canonical baseline. Reads the native deployment, compares against canonical and the last sync baseline using a three\-way classifier, and prints a report. Default behavior writes nothing to canonical; pass \-\-absorb\-apply to write clean native\-moved changes. Capability\-bearing fields are NEVER auto\-applied (§6.1).

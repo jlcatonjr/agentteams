@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (one security policy, the root `SECURITY.md`, which is the one GitHub shows)
+
+- **Fixed:** the repository carried two policies. GitHub shows `.github/SECURITY.md` ahead of the root file, so
+  reporters saw a stale copy whose fallback, "a private coordination issue", does not exist on GitHub and would
+  have sent a report to a public issue, which the root policy forbids. That copy is deleted; the root
+  `SECURITY.md` is the only policy and keeps its response targets (acknowledgement within 3 business days, a fix
+  target within 10).
+- The root policy now gives the one fallback for a reporter without the Security tab: a public issue that says
+  only that they have a security report and asks to be contacted, with no details. Contact comes only from a
+  repository maintainer listed in `.github/CODEOWNERS`, and the reporter shares details with no one else who asks
+  on the issue.
+- `.github/CODEOWNERS` protects `/SECURITY.md` in place of the deleted path, and a test keeps exactly one policy
+  file, keeps the private-issue text out, and keeps tracked docs from linking to a policy outside the root.
+- **Who notices:** a reporter reading the repository's Security policy page, which shows the root text once this
+  reaches the default branch.
+
+### security (`--reconcile-apply` widens a capability grant only under a recorded clearance)
+
+- **Fixed:** `--reconcile-front-matter --reconcile-apply` took the template's value for every diverging
+  front-matter key, so one flag could add tools, an `agents:` slug, an `mcpServers` block or a `model` change with
+  no clearance, while the same `agents:` widening through `--adopt-orphans` needs a signed decision.
+- Each divergence is now classified. A narrowing (a capability list the template shrinks, a `disallowedTools` list
+  it grows) and a non-capability key apply as before. A widening (more items, a capability key absent on disk, any
+  `model` change, or a value either side cannot read strictly: a list counts only when every item in it is well
+  formed, so an unquoted item in a flow list or a trailing comma widens) needs a `reconcile-apply-widen` decision. In a governed
+  workspace that is a PASS row signed with the operator's Ed25519 key, never a waiver, with
+  `scope=reconcile-apply-widen`, `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>@sha256:<hex>`
+  (a digest of the value that will be written, so a value changed after signing refuses), and room under the
+  exception cap. In an ungoverned workspace an ordinary PASS row from an approved author clears
+  it. Both paths go through the destructive-action gate, so a HALT recorded as `reconcile-apply-widen` or
+  `reconcile-apply` blocks it, a clearance older than the retraction of either is void, and a clearance is spent
+  once. The gate checks the grants on the row it selects in its one
+  read of the log and spends only a row identical to that one, so a row appended meanwhile is neither checked in
+  its place nor spent.
+- Without a clearance the narrowings still apply, each widening prints `REFUSED <file>: <key>` and the row to
+  record, and the run exits 1 (it always exited 0 before). A refused list key still loses what the template
+  removes: an allow list keeps only the items both sides share, so switching to the read-only set drops
+  `Write`/`Edit` at once and only the added `Read` waits; a `disallowedTools` list gains its new denials at once.
+  If an allow list would be left empty, the whole key is refused, since an empty list can mean every tool. `--dry-run` checks the clearance without spending it.
+- **Who notices:** an operator who uses `--reconcile-apply` to give agents the runner's `mcpServers` block, to
+  restore `Write`/`Edit` after turning `write_policy` off, or to add `Read` when switching a team to the
+  read-only set; and any script that ignored the command's exit code.
+
 ### added (every team receives a script-consolidation reference)
 
 - **New reference:** `references/script-consolidation.reference.md` gives the procedure for reviewing one-off

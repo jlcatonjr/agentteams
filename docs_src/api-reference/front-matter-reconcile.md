@@ -16,7 +16,12 @@ Every front-matter key where the deployed file and the fresh render disagree. On
 ```python
 apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[str]
 ```
-Rewrite each diverging `key:` line to the template's value. The body is untouched, as is every key not in `divergences`. Returns one line per change, capability keys marked.
+Rewrite each diverging `key:` line to the template's value. The body is untouched, as is every key not in `divergences`. Returns one line per change, capability keys marked. Applies whatever it is given: the capability gate is in `run_reconcile`.
+
+```python
+classify(d: Divergence) -> str
+```
+`"safe"` or `"widening"` for taking the template's value, by the rule in [`front_matter_widening`](front-matter-widening.md). Safe: a non-capability key, or a capability list whose template items are a subset of the deployed ones (for `disallowedTools`, a superset). Widening: everything else among capability keys, including a key absent on disk, any `model` change and any list that is not made only of well-formed items, so the test fails closed.
 
 ```python
 format_report(divergences: list[Divergence]) -> str
@@ -26,7 +31,7 @@ Human-readable report. Says so explicitly when the team is already reconciled, a
 ```python
 run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> int
 ```
-CLI entry. Always returns 0: divergence is a finding to read, not an error.
+CLI entry. Applies every safe divergence; applies the widening ones only when `cli/reconcile_apply_gate.authorize` clears this run's exact set of `frontmatter:<file>#<key>@sha256:<hex>` tokens (the digest is `front_matter_widening.value_digest` of the template value) under the `reconcile-apply-widen` action (see [`--reconcile-apply`](../cli-reference.md#front-matter-reconciliation)). Returns 0, or 1 when a widening was refused (the safe ones are still applied). Divergence alone is a finding to read, not an error.
 
 ```python
 migrate_capability_key(agents_dir: Path, *, dry_run: bool = True) -> list[CapabilityKeyMigration]

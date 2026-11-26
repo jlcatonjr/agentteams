@@ -3,7 +3,7 @@
 
 # Security-sensitive paths
 /.github/workflows/ @jlcatonjr
-/.github/SECURITY.md @jlcatonjr
+/SECURITY.md @jlcatonjr
 /build_team.py @jlcatonjr
 /agentteams/security_refs.py @jlcatonjr
 /tests/test_security_refs.py @jlcatonjr

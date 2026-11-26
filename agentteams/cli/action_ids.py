@@ -40,7 +40,8 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
                                  "branch-cleanup", "vulnscan-remediation", "vulnscan-publish", "wasm-pin-remediation",
                                  "vulnscan-known", "server-apply", *SANDBOX_RELAXATION_KINDS, "s10-cooldown-exempt",
-                                 "s10-cooldown-deprecated", "carveout", "s10-toolchain-group", "integration-merge", "dev-merge")
+                                 "s10-cooldown-deprecated", "carveout", "s10-toolchain-group", "integration-merge", "dev-merge",
+                                 "reconcile-apply-widen")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:
