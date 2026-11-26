@@ -170,17 +170,20 @@ on an id, or a `derives_from` parent, under an open HALT, #616).
 
 ### `retire_verify_key(old, new, team_dir, includes, *, confirm_sha256=None, allow_checkout=False)` / `assert_signature_permitted(team_dir, key_id, signature)`
 
-> *Source: `agentteams/cli/key_retirement.py`*
+> *Source: `agentteams/cli/key_retirement_verb.py` (the verb) and `agentteams/cli/key_retirement.py` (the check)*
 
 `--retire-verify-key`: writes `<team_dir>/references/authorized-verify-keys/<old>.retired.json`, the sorted sha256
-of the decoded bytes of every signature under `old` (`collect_signatures`), signed with key `new` over
-`[agentteams-key-retirement-v1, key_id, not_after, signed_by, digests]`. Returns 0, or 1 on any error. Before the
-key is read it refuses inside an agent session, two equal or malformed key ids, a non-team dir, a missing
-`.pub.pem` for either key, a retired `new`, an include with no signature under `old`, and display-spoofing
-characters; then the preflight, the display, confirm, the key read, the signature and verify-before-write.
-`assert_signature_permitted` is called by `decision_log._load_verify_key(output_dir, key_id, *, signature)`: a key
-with no record is unaffected; otherwise the record must verify under a different key with no record of its own,
-and the signature's digest must be listed, else `RuntimeError`. `report_lines(team_dir)` gives
+of the decoded bytes of every signature under `old` (`collect_signatures`, each verified under `old` against its own
+document's signed values), signed with key `new` over `[agentteams-key-retirement-v1, key_id, not_after, signed_by,
+digests]`. Returns 0, or 1 on any error. Before the key is read it refuses inside an agent session, two equal or
+malformed key ids or the same key bytes under two ids, a non-team dir, a missing `.pub.pem` for either key, a retired
+`new`, a store holding the key that would not read this team dir's record, an include of an unknown kind or with no
+signature under `old`, a signature that does not verify, and display-spoofing characters; then the preflight, the
+display, confirm, the key read, the signature and verify-before-write. `assert_signature_permitted` is called by
+`decision_log._load_verify_key(output_dir, key_id, *, signature)`: it matches the key by its bytes against every
+record in `scan_dirs(team_dir)` (`clearance_binding.halt_scan_dirs` plus, outside git, the generated team dirs beside
+it); with none, nothing changes; otherwise every applicable record must verify under a key that differs by its bytes
+and is not retired, and the signature's digest must be listed, else `RuntimeError`. `report_lines(team_dir)` gives
 `--verify-integrity` its lines.
 
 ### `load_grant_spec(path, flag)` / `grant_spec_kwargs(spec)` / `report_issued(record, ledger_root, team_dir)`

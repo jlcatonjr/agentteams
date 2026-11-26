@@ -9,34 +9,39 @@ retired keep verifying, and no other signature under it does.
   old key made (``signature_sha256``). A signature under a retired key verifies only when its digest is listed; a
   new one never is. ``not_after`` (the retirement date) is recorded and reported, never compared: many signed
   documents carry no date, and an unsigned date can be backdated.
-* **The record is signed by another key.** ``signed_by`` must name a different key in the same store that has no
-  retirement record of its own. A record signed by the retired key itself would let whoever holds that key extend
-  its own snapshot, so it is refused. Adding a digest, removing one or changing any field breaks the signature.
+* **Keys are compared by their bytes.** A record retires the public key its ``.pub.pem`` holds, so the same key
+  stored under a second file name is retired too, and it binds in every team dir store :func:`scan_dirs` names
+  (the generated team dirs of the project and a declared ``parent_team``), so a document that names a sibling
+  store cannot escape it.
+* **The record is signed by another key.** ``signed_by`` must name a key in the same store whose bytes differ from
+  the retired key's and that no record retires. A record signed by the retired key itself, under any name, would let
+  whoever holds that key extend its own snapshot, so it is refused. Adding a digest, removing one or changing any
+  field breaks the signature.
 * **Fail-closed.** A record that is malformed, a symbolic link, unreadable, signed by an absent or retired key, or
   whose signature does not verify refuses every signature under the retired key: today's revocation.
 * **Domain separation.** The payload starts with :data:`PURPOSE`. The decision minter and verifier refuse a
   payload starting with it, and every other signed document starts with its own tag, so no retirement signature
   verifies as a decision, grant, carve-out registry, toolchain group or dev-merge authorization, and none of
   theirs verifies as a retirement record.
-* **Shrink-only, reported.** ``--verify-integrity`` prints one line per record and warns when the record lists a
-  digest its committed copy does not. The check is not enforced at verify time; whoever holds the signing key can
-  widen a snapshot, and the warning is how the operator sees it.
+* **Shrink-only, reported.** ``--verify-integrity`` prints one line per record, warns when the record lists a
+  digest its committed copy does not, and warns when a committed record is missing on disk (deleting a record
+  un-retires the key). Neither is enforced at verify time; whoever holds the signing key can widen a snapshot, and
+  the warnings are how the operator sees it.
+* **Not covered:** the user-level store ``~/.config/agentteams/verify-keys/`` (MCP-direct and vulnscan grants) has no
+  retirement records; retiring a key there means removing its ``.pub.pem``.
 
 ``assert_signature_permitted`` runs inside ``decision_log._load_verify_key``, so every Ed25519 verify path (and
-the verify-before-write of every signer) applies it. This module is integrity-pinned and in the signing closure.
+the verify-before-write of every signer) applies it. The operator verb is :mod:`agentteams.cli.key_retirement_verb`.
+Both modules are integrity-pinned and in the signing closure.
 Stdlib only (``cryptography`` is the lazily imported ``signing`` extra).
 """
 
 from __future__ import annotations
 
-import argparse
-import csv
 import hashlib
-import io
 import json
 import re
 import stat
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -167,13 +172,133 @@ def _read_json(path: Path, what: str) -> object:
         raise RuntimeError(f"{what} {path} cannot be read: {exc}") from exc
 
 
+def material(pem_path: Path) -> bytes:
+    """The raw 32-byte Ed25519 public key in a ``.pub.pem`` file: what identifies a key, whatever its file name.
+
+    Args:
+        pem_path: A public key file.
+
+    Returns:
+        The raw public key bytes.
+
+    Raises:
+        RuntimeError: The file cannot be read, is not an Ed25519 public key, or the ``signing`` extra is absent.
+    """
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    except ImportError as exc:
+        raise RuntimeError("the Ed25519 backend (the 'signing' extra) is not installed, so a retired key cannot be "
+                           "compared") from exc
+    try:
+        key = serialization.load_pem_public_key(Path(pem_path).read_bytes())
+    except (OSError, ValueError, TypeError) as exc:
+        raise RuntimeError(f"verify key {pem_path} cannot be read as a public key: {exc}") from exc
+    if not isinstance(key, Ed25519PublicKey):
+        raise RuntimeError(f"verify key {pem_path} is not an Ed25519 public key")
+    return key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+
+
+def _project_root(team_dir: Path) -> Path | None:
+    """The project root when ``team_dir`` is one of the known team dirs under it, else None."""
+    from agentteams.carveouts import TEAM_DIRS
+
+    resolved = Path(team_dir).resolve()
+    for rel in TEAM_DIRS:
+        if resolved.as_posix().endswith("/" + rel):
+            return resolved.parents[len(Path(rel).parts) - 1]
+    return None
+
+
+def scan_dirs(team_dir: Path) -> list[Path]:
+    """Every team dir whose retirement records bind a key verified in ``team_dir``.
+
+    ``clearance_binding.halt_scan_dirs`` (``team_dir``, every generated team dir under each enclosing git root, and
+    a declared ``parent_team``), plus the generated team dirs beside ``team_dir`` when it is one of them and the
+    project is not a git repository. A record for a key in any of these stores binds the same key everywhere in
+    the set, so a document cannot escape it by naming a sibling store.
+
+    Args:
+        team_dir: The team dir a signature is verified in.
+
+    Returns:
+        The dirs, ``team_dir`` first, without duplicates.
+
+    Raises:
+        RuntimeError: ``halt_scan_dirs`` refuses (a symbolic link in a team dir path, a bad ``parent_team``).
+    """
+    from agentteams.carveouts import TEAM_DIRS
+    from agentteams.cli.clearance_binding import halt_scan_dirs
+
+    dirs = list(halt_scan_dirs(Path(team_dir)))
+    seen = {d.resolve() for d in dirs}
+    root = _project_root(team_dir)
+    for rel in TEAM_DIRS if root is not None else ():
+        candidate = root / rel
+        st = lstat_or_none(candidate, "team dir")
+        if st is not None and stat.S_ISDIR(st.st_mode) and candidate.resolve() not in seen:
+            seen.add(candidate.resolve())
+            dirs.append(candidate)
+    return dirs
+
+
+def _record_paths(team_dir: Path) -> list[Path]:
+    """The retirement records in ``team_dir``'s store (none when the store is absent)."""
+    store = Path(team_dir) / STORE_REL
+    if lstat_or_none(store, "verify-key store") is None:
+        return []
+    try:
+        return sorted(store.glob(f"*{RECORD_SUFFIX}"))
+    except OSError as exc:
+        raise RuntimeError(f"the verify-key store {store} cannot be listed: {exc}") from exc
+
+
+def applicable_records(team_dir: Path, key: bytes) -> list[tuple[Path, str]]:
+    """``(team dir, retired key id)`` for every record, in :func:`scan_dirs`, that retires the key ``key``.
+
+    A record applies when the ``.pub.pem`` it names in its own store holds the same key bytes, so a second file
+    name for a retired key is retired too.
+
+    Args:
+        team_dir: The team dir a signature is verified in.
+        key: The raw public key bytes (:func:`material`).
+
+    Returns:
+        The applicable records.
+
+    Raises:
+        RuntimeError: A store or key file cannot be read.
+    """
+    found: list[tuple[Path, str]] = []
+    for d in scan_dirs(team_dir):
+        for path in _record_paths(d):
+            rid = path.name[: -len(RECORD_SUFFIX)]
+            pem = d / STORE_REL / f"{rid}.pub.pem"
+            if _KEY_ID_RE.match(rid) and lstat_or_none(pem, "verify key") is not None and material(pem) == key:
+                found.append((d, rid))
+    return found
+
+
 def _verify_doc(team_dir: Path, doc: dict) -> None:
-    """Verify a validated record's signature under its signer (raises RuntimeError)."""
+    """Verify a validated record's signature under its signer (raises RuntimeError).
+
+    The signer must be a different key by its bytes, not only by its id, and no record anywhere in
+    :func:`scan_dirs` may retire it.
+    """
     from agentteams.cli.decision_log import _load_verify_key
     from agentteams.cli.signed_ledger import ed25519_verify
 
+    store = Path(team_dir) / STORE_REL
     signer = doc["signed_by"]
-    if lstat_or_none(record_path(team_dir, signer), "retirement record") is not None:
+    signer_pem = store / f"{signer}.pub.pem"
+    if lstat_or_none(signer_pem, "verify key") is None:
+        raise RuntimeError(f"its signer {signer!r} has no {STORE_REL}/{signer}.pub.pem in {team_dir}")
+    signer_key = material(signer_pem)
+    retired_pem = store / f"{doc['key_id']}.pub.pem"
+    if lstat_or_none(retired_pem, "verify key") is not None and material(retired_pem) == signer_key:
+        raise RuntimeError(f"it is signed by {signer!r}, which is the same key as {doc['key_id']!r} under another "
+                           "name; a key cannot sign its own retirement")
+    if applicable_records(team_dir, signer_key):
         raise RuntimeError(f"it is signed by {signer!r}, which is itself retired; a retirement record must be "
                            "signed by a key that is not retired")
     public_pem = _load_verify_key(team_dir, signer, signature=doc["signature"])
@@ -187,7 +312,7 @@ def _verify_doc(team_dir: Path, doc: dict) -> None:
 
 
 def verified_record(team_dir: Path, key_id: str) -> dict | None:
-    """Load and verify ``key_id``'s retirement record, or None when the key has none.
+    """Load and verify ``key_id``'s retirement record in ``team_dir``'s store, or None when there is none.
 
     Args:
         team_dir: The team dir whose store holds the record.
@@ -208,10 +333,11 @@ def verified_record(team_dir: Path, key_id: str) -> dict | None:
 
 
 def assert_signature_permitted(team_dir: Path, key_id: str, signature: str) -> None:
-    """Refuse a signature under a retired key unless the key's verified snapshot lists it.
+    """Refuse a signature under a retired key unless a verified snapshot for that key lists it.
 
     Called by ``decision_log._load_verify_key`` before it returns a public key, so every Ed25519 verify applies it.
-    A key with no retirement record is unaffected.
+    The key is matched by its bytes, in every store :func:`scan_dirs` names; a key no record retires is unaffected.
+    Every applicable record must verify; the signature must be listed in one of them.
 
     Args:
         team_dir: The team dir whose store holds the key.
@@ -219,239 +345,27 @@ def assert_signature_permitted(team_dir: Path, key_id: str, signature: str) -> N
         signature: The hex signature about to be verified.
 
     Raises:
-        RuntimeError: The key is retired and the record does not verify, or the signature is not in its snapshot.
+        RuntimeError: The key is retired and a record does not verify, or the signature is in no snapshot.
     """
-    try:
-        record = verified_record(team_dir, key_id)
-    except RuntimeError as exc:
-        raise RuntimeError(f"verify key {key_id!r} has a retirement record that cannot be trusted: {exc}; every "
-                           "signature under it is refused (fail-closed)") from exc
-    if record is not None and signature_digest(signature) not in record["signature_sha256"]:
-        raise RuntimeError(f"verify key {key_id!r} is retired (not after {record['not_after']}); this signature "
-                           "is not in its operator-signed retirement snapshot (fail-closed)")
+    if not any(_record_paths(d) for d in scan_dirs(team_dir)):
+        return
+    records = applicable_records(team_dir, material(Path(team_dir) / STORE_REL / f"{key_id}.pub.pem"))
+    kept: set[str] = set()
+    for d, rid in records:
+        try:
+            doc = verified_record(d, rid)
+        except RuntimeError as exc:
+            raise RuntimeError(f"verify key {key_id!r} has a retirement record ({rid!r} in {d}) that cannot be "
+                               f"trusted: {exc}; every signature under it is refused (fail-closed)") from exc
+        kept.update(doc["signature_sha256"] if doc else ())
+    if records and signature_digest(signature) not in kept:
+        first = records[0][1]
+        alias = "" if first == key_id else f", retired as {first!r}"
+        raise RuntimeError(f"verify key {key_id!r} is retired{alias}; this signature is not in its operator-signed "
+                           "retirement snapshot (fail-closed)")
 
 
-# ---------------------------------------------------------------------------------- the operator verb and the report
-
-
-def _project_root(team_dir: Path) -> Path | None:
-    """The project root when ``team_dir`` is one of the known team dirs under it, else None."""
-    from agentteams.carveouts import TEAM_DIRS
-
-    resolved = Path(team_dir).resolve()
-    for rel in TEAM_DIRS:
-        if resolved.as_posix().endswith("/" + rel):
-            return resolved.parents[len(Path(rel).parts) - 1]
-    return None
-
-
-def _signatures_in(path: Path, key_id: str) -> list[tuple[str, str]]:
-    """``(label, signature)`` for each Ed25519 signature under ``key_id`` in a CSV log or a signed JSON file."""
-    from agentteams.atomicio import read_regular_nofollow
-
-    try:
-        text = read_regular_nofollow(path, _MAX_BYTES).decode("utf-8")
-    except (OSError, ValueError) as exc:
-        raise RuntimeError(f"{path} cannot be read: {exc}") from exc
-    found: list[tuple[str, str]] = []
-    if path.suffix == ".csv":
-        reader = csv.DictReader(io.StringIO(text))
-        for row in reader:
-            if ((row.get("key_id") or "").strip() == key_id and (row.get("sig_scheme") or "").strip().lower()
-                    == "ed25519" and (row.get("signature") or "").strip()):
-                what = " ".join(filter(None, ((row.get(c) or "").strip() for c in
-                                              ("date", "action_reviewed", "verdict", "grant_id", "target_path"))))
-                found.append((f"{path.name} line {reader.line_num}: {what}", row["signature"].strip()))
-        return found
-    try:
-        doc = json.loads(text)
-    except ValueError as exc:
-        raise RuntimeError(f"{path} is not JSON: {exc}") from exc
-    sig = doc.get("signature") if isinstance(doc, dict) else None
-    if isinstance(sig, str) and doc.get("key_id") == key_id:
-        found.append((path.name, sig))
-    elif isinstance(sig, dict) and sig.get("key_id") == key_id and isinstance(sig.get("value"), str):
-        found.append((path.name, sig["value"]))
-    return found
-
-
-def collect_signatures(team_dir: Path, key_id: str, includes: list[str]) -> list[tuple[str, str]]:
-    """Every signature under ``key_id`` the snapshot should keep: ``(label, digest)`` pairs, in source order.
-
-    Sources: the team's decisions log; at the project root (when ``team_dir`` is a known team dir), the capability
-    grants log, the carve-out registry, the toolchain group and the dev-merge authorization; then each ``includes``
-    file. Absent default sources are skipped; an include that is absent or holds no signature under the key refuses.
-
-    Args:
-        team_dir: The team dir.
-        key_id: The key being retired.
-        includes: Further signed CSV logs or JSON documents (``--include``).
-
-    Returns:
-        The labelled digests (a signature listed twice appears twice).
-
-    Raises:
-        RuntimeError: A source cannot be read, an include holds no signature under the key, or a signature is
-            not hex.
-    """
-    from agentteams.carveouts import REGISTRY_REL
-    from agentteams.cli.dev_merge import AUTH_FILE_REL
-    from agentteams.cli.grants import GRANT_LOG_REL
-    from agentteams.cli.toolchain_group import GROUP_FILE_REL
-
-    defaults = [Path(team_dir) / "references" / "security-decisions.log.csv"]
-    root = _project_root(team_dir)
-    if root is not None:
-        defaults += [root / rel for rel in (GRANT_LOG_REL, REGISTRY_REL, GROUP_FILE_REL, AUTH_FILE_REL)]
-    pairs: list[tuple[str, str]] = []
-    for path in defaults:
-        if lstat_or_none(path, "signed source") is not None:
-            pairs += _signatures_in(path, key_id)
-    for name in includes:
-        found = _signatures_in(Path(name), key_id)
-        if not found:
-            raise RuntimeError(f"--include {name} holds no Ed25519 signature under key {key_id!r}")
-        pairs += found
-    labelled: list[tuple[str, str]] = []
-    for label, sig in pairs:
-        digest = signature_digest(sig)
-        if digest is None:
-            raise RuntimeError(f"{label}: the signature is not hex")
-        labelled.append((label, digest))
-    return labelled
-
-
-def _fingerprint(team_dir: Path, key_id: str) -> str:
-    """The sha256 of ``key_id``'s public key file, for the operator to recognise."""
-    try:
-        return hashlib.sha256((Path(team_dir) / STORE_REL / f"{key_id}.pub.pem").read_bytes()).hexdigest()
-    except OSError:
-        return "unreadable"
-
-
-def _pre_key_refusal(old: str, new: str, team_dir: Path) -> str | None:
-    """Why the verb refuses before anything is collected or the key is located, or None."""
-    from agentteams.cli.dev_merge import agent_session
-    from agentteams.cli.sign_decision_refusals import sign_decision_team_refusal
-
-    host = agent_session()
-    if host:
-        return f"refusing to sign inside an agent session ({host}); run this from your own terminal"
-    if not (_KEY_ID_RE.match(old or "") and _KEY_ID_RE.match(new or "")) or old == new:
-        return "--retire-verify-key and --key-id must be two different key ids (letters, digits, '.', '_', '-')"
-    team = sign_decision_team_refusal(team_dir)
-    if team:
-        return team
-    for key_id in (old, new):
-        if lstat_or_none(Path(team_dir) / STORE_REL / f"{key_id}.pub.pem", "verify key") is None:
-            return f"there is no {STORE_REL}/{key_id}.pub.pem in {team_dir}"
-    if lstat_or_none(record_path(team_dir, new), "retirement record") is not None:
-        return f"key {new!r} is itself retired, so it cannot sign a retirement record"
-    return None
-
-
-def retire_verify_key(old: str, new: str, team_dir: Path, includes: list[str], *,
-                      confirm_sha256: str | None = None, allow_checkout: bool = False) -> int:
-    """Operator-only: write ``<old>.retired.json``, the snapshot of ``old``'s signatures, signed with key ``new``.
-
-    Shares ``--sign-toolchain-group``'s path: pre-key refusals, display, review digest and confirmation, preflight
-    (integrity, key file, install location), sign, then verify against ``team_dir``'s store before writing.
-
-    Args:
-        old: The key being retired.
-        new: The key that signs the record (not retired, present in the store).
-        team_dir: The team dir whose store holds both keys.
-        includes: Further signed files whose signatures under ``old`` the snapshot keeps.
-        confirm_sha256: ``--confirm-review-sha256`` (no terminal); None prompts on a terminal.
-        allow_checkout: ``--allow-checkout-signing``.
-
-    Returns:
-        0 when signed and written, 1 otherwise (fail-closed).
-    """
-    from agentteams.atomicio import replace_no_follow
-    from agentteams.cli import operator_signing as ops
-    from agentteams.cli import signed_ledger as sl
-
-    team_dir = Path(team_dir)
-    refusal = _pre_key_refusal(old, new, team_dir)
-    try:
-        labelled = [] if refusal else collect_signatures(team_dir, old, includes)
-    except RuntimeError as exc:
-        refusal = str(exc)
-    spoof = None if refusal else ops._spoofing_problem([label for label, _ in labelled], "source labels")
-    if refusal or spoof:
-        print(f"Error: {refusal or spoof}. The key was not read.", file=sys.stderr)
-        return 1
-    record = {"key_id": old, "not_after": date.today().isoformat(), "signed_by": new,
-              "signature_sha256": sorted({digest for _, digest in labelled})}
-    preflight = ops._signing_preflight(ops._project_roots(team_dir), allow_checkout, new)
-    if preflight is None:
-        return 1
-    keyfile, _overridden = preflight
-    print(f"About to retire verify key {old!r}: from now on only the {len(record['signature_sha256'])} signature(s) "
-          "below verify under it, anywhere this team's store is read.")
-    print(f"  retired key : {old}  (public key sha256 {_fingerprint(team_dir, old)})")
-    print(f"  signing key : {new}  (public key sha256 {_fingerprint(team_dir, new)})")
-    print(f"  team dir    : {team_dir.resolve()}")
-    print(f"  not_after   : {record['not_after']}")
-    for label, digest in labelled:
-        print(f"  keeps       : {digest[:16]}  {label}")
-    print(f"  values      : {json.dumps(signed_values(record), ensure_ascii=True)}")
-    if not ops._confirm(ops.review_digest("key-retirement", record, team_dir, new), confirm_sha256):
-        return 1
-    private_pem = ops._read_operator_private_key(keyfile)
-    if private_pem is None:
-        return 1
-    try:
-        record["signature"] = sl.ed25519_sign(private_pem, signed_values(record))
-        _verify_doc(team_dir, validate(record, old))
-        replace_no_follow(record_path(team_dir, old),
-                          json.dumps({k: record[k] for k in _FIELDS}, indent=2, ensure_ascii=True) + "\n")
-    except (OSError, RuntimeError) as exc:
-        print(f"Error: {exc}. Nothing written.", file=sys.stderr)
-        return 1
-    print(f"\nWrote {record_path(team_dir, old)}. Commit it where the team dir is tracked; keep {old}.pub.pem.")
-    return 0
-
-
-def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add ``--retire-verify-key`` and ``--include`` (``--key-id`` and ``--team-dir`` are shared with other modes).
-
-    Args:
-        parser: The agentteams argument parser.
-
-    Returns:
-        None.
-    """
-    parser.add_argument(
-        "--retire-verify-key", dest="retire_verify_key", default=None, metavar="OLD",
-        help=("Operator-only: retire verify key OLD without revoking what it already signed. Writes "
-              "<team-dir>/references/authorized-verify-keys/OLD.retired.json, the sha256 of every signature under OLD "
-              "in the team's decisions log, the project's grants log, carve-out registry, toolchain group and dev-merge "
-              "authorization, and each --include file, signed with --key-id NEW (a different key that is not "
-              "retired), after the same preflight, review digest and confirmation as --sign-decision. Afterwards a "
-              "signature under OLD verifies only if it is listed; new signing under OLD is refused."))
-    parser.add_argument(
-        "--include", dest="include", action="append", default=None, metavar="FILE",
-        help=("With --retire-verify-key (repeatable): another signed CSV log or JSON document whose signatures under "
-              "OLD the retirement keeps; it must hold at least one."))
-
-
-def run_retire_verify_key(args: argparse.Namespace) -> int:
-    """``--retire-verify-key OLD --key-id NEW --team-dir DIR [--include FILE ...]``: the CLI runner.
-
-    Args:
-        args: The parsed CLI namespace.
-
-    Returns:
-        2 when ``--key-id`` or ``--team-dir`` is missing, else :func:`retire_verify_key`'s exit code.
-    """
-    if not getattr(args, "key_id", None) or not getattr(args, "team_dir", None):
-        print("Error: --retire-verify-key needs --key-id NEW (the signing key) and --team-dir DIR", file=sys.stderr)
-        return 2
-    return retire_verify_key(args.retire_verify_key, args.key_id, Path(args.team_dir), list(args.include or []),
-                             confirm_sha256=getattr(args, "confirm_review_sha256", None),
-                             allow_checkout=bool(getattr(args, "allow_checkout_signing", False)))
+# ---------------------------------------------------------------------------------------------------- the report
 
 
 def _committed_digests(path: Path) -> set[str] | None:
@@ -467,6 +381,20 @@ def _committed_digests(path: Path) -> set[str] | None:
     return {d for d in digests if isinstance(d, str)} if isinstance(digests, list) else None
 
 
+def _committed_missing(team_dir: Path) -> list[str]:
+    """Record file names the committed (HEAD) tree holds in ``team_dir``'s store but the disk does not."""
+    from agentteams.git_exec import run_git
+
+    try:
+        res = run_git(Path(team_dir), "ls-tree", "--name-only", "HEAD", "--", f"{STORE_REL}/", hardened=True,
+                      timeout=10)
+    except OSError:
+        return []
+    names = [Path(line).name for line in res.stdout.splitlines()] if res.returncode == 0 else []
+    return [n for n in names if n.endswith(RECORD_SUFFIX)
+            and lstat_or_none(Path(team_dir) / STORE_REL / n, "retirement record") is None]
+
+
 def report_lines(team_dir: Path) -> list[str]:
     """``--verify-integrity``'s lines: one per retirement record in ``team_dir``'s store (advisory).
 
@@ -474,15 +402,17 @@ def report_lines(team_dir: Path) -> list[str]:
         team_dir: The team dir.
 
     Returns:
-        Each record's key, ``not_after``, snapshot size, signer and whether it verifies, plus a warning when the
-        record lists digests its committed copy does not (the snapshot should only shrink).
+        Each record's key, ``not_after``, snapshot size, signer and whether it verifies, a warning when the record
+        lists digests its committed copy does not (the snapshot should only shrink), and a warning for each committed
+        record missing on disk (deleting a record un-retires its key).
     """
-    store = Path(team_dir) / STORE_REL
+    lines = [f"  WARNING: {name} is committed but missing on disk, so the key it retired is no longer retired "
+             "here. Removing a record is a governance event for the operator; restore it with git checkout HEAD -- "
+             f"{STORE_REL}/{name} unless the operator removed it." for name in _committed_missing(team_dir)]
     try:
-        paths = sorted(store.glob(f"*{RECORD_SUFFIX}"))
-    except OSError:
-        return []
-    lines: list[str] = []
+        paths = _record_paths(team_dir)
+    except RuntimeError as exc:
+        return [*lines, f"Retired verify keys: the store cannot be listed ({exc})"]
     for path in paths:
         key_id = path.name[: -len(RECORD_SUFFIX)]
         try:
@@ -506,6 +436,6 @@ def report_lines(team_dir: Path) -> list[str]:
     return lines
 
 
-__all__ = ["PURPOSE", "RECORD_SUFFIX", "add_arguments", "assert_signature_permitted", "collect_signatures",
-           "payload_claims_retirement_purpose", "record_path", "report_lines", "retire_verify_key",
-           "run_retire_verify_key", "signature_digest", "signed_values", "validate", "verified_record"]
+__all__ = ["PURPOSE", "RECORD_SUFFIX", "STORE_REL", "applicable_records", "assert_signature_permitted", "material",
+           "payload_claims_retirement_purpose", "record_path", "report_lines", "scan_dirs", "signature_digest",
+           "signed_values", "validate", "verified_record"]

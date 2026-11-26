@@ -34,6 +34,7 @@ from agentteams.cli.app import main  # noqa: E402
 OLD, NEW, THIRD = "op-old", "op-new", "op-third"
 _KEY_ENV = "AGENTTEAMS_DECISION_ED25519_KEYFILE"
 _RETIRED = "is retired"
+ALIAS = "op-alias"
 _UNTRUSTED = "cannot be trusted"
 _SEQ = itertools.count(1)  # Ed25519 is deterministic: each document differs, so each signature does
 
@@ -87,10 +88,20 @@ def _record(team: Path, keys: dict[str, str], signatures: list[str], *, signer: 
 
 # ------------------------------------------------------------------------------------------- the seven verify sites
 
-def _decision_site(team: Path, keys: dict[str, str], key_id: str = OLD):
+_ROW_FIELDS = ("date", "action_reviewed", "verdict", "conditions_verified", "author", "prev_digest", "sig_scheme",
+               "key_id", "signature")
+
+
+def _decision_row(keys: dict[str, str], key_id: str = OLD, *, sign_as: str | None = None) -> dict[str, str]:
+    """A signed decision row under ``key_id`` (signed with ``sign_as``'s private key, default ``key_id``'s)."""
     row = {"date": "2026-11-01", "action_reviewed": "cleanup-x", "verdict": "PASS", "conditions_verified": f"c{next(_SEQ)}",
            "author": "security", "prev_digest": "", "sig_scheme": "ed25519", "key_id": key_id}
-    row["signature"] = sl.ed25519_sign(keys[key_id], dl._decision_signature_values(row))
+    row["signature"] = sl.ed25519_sign(keys[sign_as or key_id], dl._decision_signature_values(row))
+    return row
+
+
+def _decision_site(team: Path, keys: dict[str, str], key_id: str = OLD):
+    row = _decision_row(keys, key_id)
 
     def verify() -> None:
         dl._assert_ed25519_sufficient(row, output_dir=team, action="cleanup-x")
@@ -110,11 +121,16 @@ def _carveout_site(team: Path, keys: dict[str, str], key_id: str = OLD):
     return value, verify
 
 
-def _group_site(team: Path, keys: dict[str, str], key_id: str = OLD):
+def _group_doc(keys: dict[str, str], key_id: str = OLD) -> dict:
     doc = {"version": tg.FORMAT_VERSION, "scope": tg.SCOPE, "group": ["acme/tool"], "purpose": tg.PURPOSE,
-           "workspaces": [{"repo": "acme/app", "team": "app"}], "sequence": next(_SEQ), "key_id": key_id,
-           "derives_from": ""}
+           "workspaces": [{"repo": "repo:acme/app", "team": "team:app"}], "sequence": next(_SEQ), "key_id": key_id,
+           "derives_from": "approved-policy"}
     doc["signature"] = sl.ed25519_sign(keys[key_id], tg.signed_values(doc))
+    return doc
+
+
+def _group_site(team: Path, keys: dict[str, str], key_id: str = OLD):
+    doc = _group_doc(keys, key_id)
     return doc["signature"], lambda: tg.verify_signature(doc, team)
 
 
@@ -239,6 +255,84 @@ def test_untrustworthy_record_refuses_everything(damage, tmp_path, keys):
         verify()
 
 
+# ------------------------------------------------------------------------- key material, not ids (aliases)
+
+def _alias(team: Path, of: str = OLD, name: str = ALIAS) -> None:
+    store = team / kr.STORE_REL
+    (store / f"{name}.pub.pem").write_bytes((store / f"{of}.pub.pem").read_bytes())
+
+
+def test_an_alias_of_the_retired_key_cannot_sign_its_record(tmp_path, keys):
+    team = _team(tmp_path)
+    kept, verify = _direct_load_site(team, keys)
+    _alias(team)
+    keys[ALIAS] = keys[OLD]
+    _record(team, keys, [kept], signer=ALIAS)  # the old key, under a second file name, signs its own retirement
+    with pytest.raises(RuntimeError, match="same key"):
+        verify()
+    _record(team, keys, [kept])  # negative control: a genuinely different key signs
+    verify()
+
+
+def test_a_new_signature_under_an_alias_id_is_refused(tmp_path, keys):
+    team = _team(tmp_path)
+    _alias(team)
+    keys[ALIAS] = keys[OLD]
+    _record(team, keys, [])
+    with pytest.raises(RuntimeError, match=_RETIRED):
+        _decision_site(team, keys, key_id=ALIAS)[1]()
+    with pytest.raises(RuntimeError, match=_RETIRED):
+        _direct_load_site(team, keys, key_id=ALIAS)[1]()
+    _decision_site(team, keys, key_id=THIRD)[1]()  # negative control: a genuinely different key verifies
+
+
+# ------------------------------------------------------------------------------- every store in the project
+
+def _sibling(tmp_path: Path, keys: dict[str, str]) -> Path:
+    """A second canonical team dir in the same project holding the old key (only)."""
+    sib = tmp_path / "proj" / ".github" / "agents"
+    (sib / kr.STORE_REL).mkdir(parents=True)
+    (sib / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
+    src = _team(tmp_path) / kr.STORE_REL / f"{OLD}.pub.pem"
+    (sib / kr.STORE_REL / f"{OLD}.pub.pem").write_bytes(src.read_bytes())
+    return sib
+
+
+@pytest.mark.parametrize("git", [True, False])
+def test_a_record_binds_the_key_in_every_store_of_the_project(git, tmp_path, keys):
+    team = _team(tmp_path)
+    sib = _sibling(tmp_path, keys)
+    if git:
+        _git(tmp_path / "proj", "init", "-q")
+    root = tmp_path / "proj"
+    registry = {"decision_log": ".github/agents", "sequence": next(_SEQ), "carveouts": []}
+    value = sl.ed25519_sign(keys[OLD], carveouts.signed_fields(registry, OLD))
+    signed = {**registry, "signature": {"scheme": "ed25519", "key_id": OLD, "value": value}}
+    assert carveouts.decision_dir(root, signed) == sib.resolve()
+    assert carveouts.signature_problem(root, signed) is None  # negative control: before the retirement
+    _record(team, keys, [])  # retired in .claude/agents only
+    problem = carveouts.signature_problem(root, signed)
+    assert problem is not None and _RETIRED in problem.detail
+
+
+def test_the_verb_refuses_a_store_the_others_would_not_see(tmp_path, keys, monkeypatch, capsys):
+    team = _team(tmp_path)
+    _git(tmp_path / "proj", "init", "-q")
+    gates = tmp_path / "proj" / "gates"
+    (gates / kr.STORE_REL).mkdir(parents=True)
+    (gates / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
+    for key_id in (OLD, NEW):
+        (gates / kr.STORE_REL / f"{key_id}.pub.pem").write_bytes((team / kr.STORE_REL / f"{key_id}.pub.pem").read_bytes())
+    monkeypatch.setattr(ops, "_confirm", lambda digest, confirm: True)
+    monkeypatch.setenv(_KEY_ENV, str(_keyfile(tmp_path, keys, NEW)))
+    assert _retire(gates) == 1
+    err = capsys.readouterr().err
+    assert ".claude/agents" in err and "The key was not read." in err
+    assert _retire(team) == 0  # negative control: retiring from the canonical dir works and binds the gates dir
+    with pytest.raises(RuntimeError, match=_RETIRED):
+        _direct_load_site(gates, keys)[1]()
+
+
 # --------------------------------------------------------------------------------------------- domain separation
 
 def test_retirement_payload_does_not_verify_as_a_decision_row(tmp_path, keys):
@@ -319,36 +413,74 @@ def test_retired_key_refuses_new_group_signing(tmp_path, keys, monkeypatch, caps
 
 # -------------------------------------------------------------------------------------- the operator verb
 
-def _log_with(team: Path, signatures: list[str]) -> None:
+def _log_with(team: Path, rows: list[dict[str, str]]) -> None:
     with (team / "references" / "security-decisions.log.csv").open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.writer(fh)
-        writer.writerow(["date", "action_reviewed", "verdict", "sig_scheme", "key_id", "signature"])
-        for n, sig in enumerate(signatures):
-            writer.writerow(["2026-11-01", f"act-{n}", "PASS", "ed25519", OLD, sig])
-        writer.writerow(["2026-11-02", "other", "PASS", "ed25519", NEW, "ab" * 64])  # another key: not kept
+        writer = csv.DictWriter(fh, fieldnames=_ROW_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _retire(team: Path, *extra: str) -> int:
+    return main(["--retire-verify-key", OLD, "--key-id", NEW, "--team-dir", str(team), *extra])
 
 
 def test_retire_verb_snapshots_the_logs_and_includes(tmp_path, keys, monkeypatch, capsys):
     team = _team(tmp_path)
     monkeypatch.setattr(ops, "_confirm", lambda digest, confirm: True)
-    in_log, verify_log = _direct_load_site(team, keys)
-    group_sig, verify_group = _group_site(team, keys)
-    unlisted, verify_unlisted = _direct_load_site(team, keys)
-    _log_with(team, [in_log])
-    group_doc = {"key_id": OLD, "signature": group_sig}
+    kept_row, other_key_row = _decision_row(keys), _decision_row(keys, NEW)
+    _log_with(team, [kept_row, other_key_row])  # the NEW row is not kept
+    group = _group_doc(keys)
     include = tmp_path / "toolchain-group.json"
-    include.write_text(json.dumps(group_doc), encoding="utf-8")
+    include.write_text(json.dumps(group), encoding="utf-8")
+    unlisted, verify_unlisted = _direct_load_site(team, keys)
     monkeypatch.setenv(_KEY_ENV, str(_keyfile(tmp_path, keys, NEW)))
-    rc = main(["--retire-verify-key", OLD, "--key-id", NEW, "--team-dir", str(team), "--include", str(include)])
+    rc = _retire(team, "--retire-include", str(include))
     out = capsys.readouterr().out
     assert rc == 0, out
-    assert "security-decisions.log.csv line 2: 2026-11-01 act-0 PASS" in out and "toolchain-group.json" in out
+    assert "decision cleanup-x PASS (security-decisions.log.csv line 2)" in out
+    assert f"toolchain group sequence {group['sequence']} (toolchain-group.json)" in out
     record = json.loads(kr.record_path(team, OLD).read_text(encoding="utf-8"))
     assert record["signed_by"] == NEW and len(record["signature_sha256"]) == 2
-    verify_log()
-    verify_group()
+    dl._assert_ed25519_sufficient(kept_row, output_dir=team, action="cleanup-x")
+    tg.verify_signature(group, team)
     with pytest.raises(RuntimeError, match=_RETIRED):
         verify_unlisted()
+
+
+@pytest.mark.parametrize("plant", ["log-row", "include-row"])
+def test_a_planted_signature_that_does_not_verify_blocks_the_retirement(plant, tmp_path, keys, monkeypatch, capsys):
+    team = _team(tmp_path)
+    monkeypatch.setattr(ops, "_confirm", lambda digest, confirm: True)
+    monkeypatch.setenv(_KEY_ENV, str(_keyfile(tmp_path, keys, NEW)))
+    future, _ = _direct_load_site(team, keys)  # a real OLD signature over some other document
+    planted = {**_decision_row(keys), "signature": future}  # hidden in a copied row
+    good = _decision_row(keys)
+    if plant == "log-row":
+        _log_with(team, [good, planted])
+        extra: tuple[str, ...] = ()
+    else:
+        _log_with(team, [good])
+        other = tmp_path / "other-log.csv"
+        with other.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=_ROW_FIELDS)
+            writer.writeheader()
+            writer.writerow(planted)
+        extra = ("--retire-include", str(other))
+    assert _retire(team, *extra) == 1
+    err = capsys.readouterr().err
+    assert "does not verify" in err and f"line {3 if plant == 'log-row' else 2}" in err
+    assert not kr.record_path(team, OLD).exists()
+    _log_with(team, [good])  # negative control: the genuine row alone retires
+    assert _retire(team) == 0
+
+
+def test_an_include_of_an_unknown_document_type_is_refused(tmp_path, keys, monkeypatch, capsys):
+    team = _team(tmp_path)
+    odd = tmp_path / "odd.json"
+    odd.write_text(json.dumps({"key_id": OLD, "signature": "ab" * 64}), encoding="utf-8")
+    monkeypatch.setenv(_KEY_ENV, str(tmp_path / "absent.key"))
+    assert _retire(team, "--retire-include", str(odd)) == 1
+    assert "not a document type" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("case", ["same-key", "signer-retired", "include-without-signature", "agent-session"])
@@ -363,7 +495,7 @@ def test_retire_verb_refuses_before_the_key_is_read(case, tmp_path, keys, monkey
     elif case == "include-without-signature":
         empty = tmp_path / "empty.json"
         empty.write_text("{}", encoding="utf-8")
-        argv += ["--include", str(empty)]
+        argv += ["--retire-include", str(empty)]
     else:
         monkeypatch.setattr(dev_merge, "agent_session", lambda: "claude-code")
     assert main(argv) == 1
@@ -409,6 +541,29 @@ def test_verify_integrity_warns_when_the_snapshot_grew(tmp_path, keys, capsys):
     _record(team, keys, [kept, later])  # re-signed wider than the committed copy
     main(["--verify-integrity", "--output", str(team)])
     assert "1 digest(s) added since the committed copy" in capsys.readouterr().out
+
+
+def test_verify_integrity_warns_when_a_committed_record_is_missing(tmp_path, keys, capsys):
+    team = _team(tmp_path)
+    root = team.parent.parent
+    _git(root, "init", "-q")
+    _record(team, keys, [])
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "retire")
+    main(["--verify-integrity", "--output", str(team)])
+    assert "missing" not in capsys.readouterr().out  # negative control: the record is on disk
+    kr.record_path(team, OLD).unlink()
+    main(["--verify-integrity", "--output", str(team)])
+    out = capsys.readouterr().out
+    assert f"{OLD}.retired.json is committed but missing on disk" in out
+
+
+def test_include_still_abbreviates_include_claude():
+    from agentteams.cli.parser import _build_parser
+
+    args = _build_parser().parse_args(["--sync-agent-docs", "--apply", "--include"])
+    assert args.sync_include_claude is True
+    assert _build_parser().parse_args(["--retire-include", "f.json"]).retire_include == ["f.json"]
 
 
 def test_signature_digest_is_over_the_decoded_bytes():

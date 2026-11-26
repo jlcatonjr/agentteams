@@ -61,6 +61,7 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/decision_authors.py",  # imported by decision_log at module level
     "agentteams/cli/sign_decision_refusals.py",  # sign_decision's refusals, run before the key read
     "agentteams/cli/key_retirement.py",  # every verify-key load applies a retired key's snapshot
+    "agentteams/cli/key_retirement_verb.py",  # --retire-verify-key: collects, verifies and signs
     "agentteams/cli/action_ids.py",  # imported by decision_log at module level
     "agentteams/cli/decision_chain.py",  # imported by decision_log at module level
     "agentteams/cli/grants.py",

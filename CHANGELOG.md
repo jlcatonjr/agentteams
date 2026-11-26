@@ -11,19 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Before:** stopping use of an Ed25519 verify key meant either keeping its `.pub.pem`, so anything signed with it
   later still verified, or removing it, so every relaxing decision, grant, carve-out registry, toolchain group and
   dev-merge authorization under it failed closed.
-- **Added:** `--retire-verify-key OLD --key-id NEW --team-dir DIR [--include FILE ...]` writes
+- **Added:** `--retire-verify-key OLD --key-id NEW --team-dir DIR [--retire-include FILE ...]` writes
   `references/authorized-verify-keys/OLD.retired.json` in the team's store: the sha256 of every signature under `OLD`
   in the team's decisions log, the project's grants log, carve-out registry, toolchain group and dev-merge
-  authorization, and each `--include` file, signed with `NEW`. It runs the same pre-key checks as the other signers
-  (agent-session refusal, integrity, install location, review digest and confirmation) and verifies the record
-  before writing it.
-- **Enforced at every Ed25519 verify site:** a signature under a retired key verifies only when its digest is in the
-  record, so new signing under it is refused too. The record must be signed by a different key that is not retired;
-  one signed by the retired key, by an absent or retired signer, edited after signing, malformed or a symbolic link
-  refuses every signature under the key. The retirement date is recorded and reported, not compared. Retirement
-  payloads have their own purpose tag, which the decision minter and verifier refuse.
-- **Reported:** `--verify-integrity` prints one line per retired key and warns when a record lists digests its
-  committed copy does not (report-only).
+  authorization, and each `--retire-include` file, each verified under `OLD` against its own document, signed with
+  `NEW`. It runs the same pre-key checks as the other signers (agent-session refusal, integrity, install location,
+  review digest and confirmation) and verifies the record before writing it.
+- **Enforced at every Ed25519 verify site of a team dir:** a signature under a retired key verifies only when its
+  digest is in the record, so new signing under it is refused too. Keys are matched by their bytes, so the same key
+  under a second file name is retired as well, and a record binds the key in every team dir store of the project. The
+  record must be signed by a key that differs by its bytes and is not retired; one signed by the retired key, by an
+  absent or retired signer, edited after signing, malformed or a symbolic link refuses every signature under the key.
+  The retirement date is recorded and reported, not compared. Retirement payloads have their own purpose tag, which
+  the decision minter and verifier refuse.
+- **Not covered:** `~/.config/agentteams/verify-keys/` (MCP-direct and vulnscan grants). Retiring a key there means
+  removing its `.pub.pem`; the README says what that ends.
+- **Reported:** `--verify-integrity` prints one line per retired key, warns when a record lists digests its
+  committed copy does not, and warns when a committed record is missing on disk (report-only).
 - **Who notices:** nobody until an operator writes a record; a store without one behaves exactly as before. Code
   outside agentteams that calls `decision_log._load_verify_key` must now pass the `signature=` it verifies.
 

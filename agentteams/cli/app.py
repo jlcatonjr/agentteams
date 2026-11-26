@@ -332,7 +332,7 @@ def _main_dispatch(
 
         return run_toolchain_group(args)
     if getattr(args, "retire_verify_key", None):
-        from agentteams.cli.key_retirement import run_retire_verify_key
+        from agentteams.cli.key_retirement_verb import run_retire_verify_key
 
         return run_retire_verify_key(args)
 
