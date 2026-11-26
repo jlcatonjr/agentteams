@@ -60,8 +60,9 @@ def write_steps(path: Path | str, rows: list[dict[str, str]],
         fieldnames: Column order (default: the keys of the first row).
 
     Raises:
-        ValueError: No rows and no ``fieldnames``, a row has a key outside ``fieldnames``, or the
-            text would not read back as the rows given. Nothing is written.
+        ValueError: No rows and no ``fieldnames``, a row has a key outside ``fieldnames``, a
+            ``status`` outside :data:`KNOWN_STATUSES` (an empty one included), or the text would
+            not read back as the rows given. Nothing is written.
         OSError: The file cannot be written.
     """
     if not rows and not fieldnames:
@@ -81,9 +82,19 @@ def write_steps(path: Path | str, rows: list[dict[str, str]],
             raise ValueError(f"row {row.get('step')!r} has columns outside the header: {sorted(extra)}")
         writer.writerow({k: row.get(k, "") for k in cols})
     expected = [{k: str(r.get(k, "") or "") for k in cols} for r in rows if r.get("step")]
+    if "status" in cols:
+        for row in expected:
+            _check_status(row["status"], row["step"])
     if _parse_steps(buf.getvalue(), path) != expected:
         raise ValueError(f"{path}: the table would not read back as the rows given; nothing was written")
     _replace_text(target, buf.getvalue())
+
+
+def _check_status(value: str, step: str) -> None:
+    """Raise ``ValueError`` when *value* is not a status the tools know (the legacy ``completed`` is accepted)."""
+    if value.strip().lower() not in KNOWN_STATUSES:
+        raise ValueError(f"step {step!r} has status {value!r}, not one of {sorted(STATUSES)} "
+                         "(or the legacy 'completed'); nothing was written")
 
 
 def _replace_text(target: Path, text: str) -> None:
@@ -103,8 +114,9 @@ def update_step(path: Path | str, step: str, **fields: str) -> None:
     """Set ``fields`` on one step of an existing steps CSV by rewriting that row only.
 
     Every other byte of the file is kept: line endings, blank lines, quoting, and rows that are
-    themselves malformed. Any column may be set and the values are not checked against a
-    vocabulary; :func:`set_step` is the form that checks a status. Before 1.4.0 this rewrote
+    themselves malformed. Any column may be set; a ``status`` must be one of
+    :data:`KNOWN_STATUSES`, which still admits the legacy ``completed`` that :func:`set_step`
+    does not write. Before 1.4.0 this rewrote
     the whole table, which converted CRLF line endings, dropped cells from rows wider than the
     header, and set every row that shared the id.
 
@@ -116,13 +128,15 @@ def update_step(path: Path | str, step: str, **fields: str) -> None:
 
     Raises:
         KeyError: ``step`` is not in the file.
-        ValueError: A field is not a header column, a duplicated ``step`` id, a header with a
-            repeated column, a target row wider than the header, or a result that does not
+        ValueError: A field is not a header column, a ``status`` outside the vocabulary, a
+            duplicated ``step`` id, a header with a repeated column, a target row wider than the header, or a result that does not
             read back as intended. Nothing is written.
         OSError: The file cannot be read or written.
     """
     if not fields:
         return
+    if "status" in fields:
+        _check_status(str(fields["status"]), str(step))
     _set_cells(path, step, {k: str(v) for k, v in fields.items()}, unknown="not header columns: {names}")
 
 

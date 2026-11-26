@@ -21,7 +21,7 @@ def test_write_and_update_roundtrip_with_commas(tmp_path):
 
 def test_unknown_column_and_step_refused(tmp_path):
     p = tmp_path / "x.steps.csv"
-    write_steps(p, [{c: "1" if c == "step" else "" for c in _COLS}], _COLS)
+    write_steps(p, [{c: "1" if c == "step" else "pending" if c == "status" else "" for c in _COLS}], _COLS)
     with pytest.raises(ValueError):
         update_step(p, "1", bogus="x")
     with pytest.raises(KeyError):
@@ -51,9 +51,9 @@ def test_update_step_refuses_a_duplicate_id_and_a_wide_target_row(tmp_path):
     assert p.read_text(encoding="utf-8") == text
 
 
-def test_update_step_sets_any_column_without_a_vocabulary(tmp_path):
+def test_update_step_sets_any_column_and_accepts_the_legacy_status(tmp_path):
     p = tmp_path / "x.steps.csv"
-    write_steps(p, [{c: "1" if c == "step" else "" for c in _COLS}], _COLS)
+    write_steps(p, [{c: "1" if c == "step" else "pending" if c == "status" else "" for c in _COLS}], _COLS)
     update_step(p, "1", status="completed", agent="@b")
     (row,) = read_steps(p)
     assert row["status"] == "completed" and row["agent"] == "@b"
@@ -66,7 +66,7 @@ def test_write_steps_refuses_before_touching_the_file(tmp_path):
     p = tmp_path / "x.steps.csv"
     p.write_text("step,status\n1,pending\n", encoding="utf-8")
     with pytest.raises(ValueError, match="nothing was written"):
-        write_steps(p, [{"step": "1", "status": "a\rb"}], ["step", "status"])
+        write_steps(p, [{"step": "1", "status": "done", "notes": "a\rb"}], ["step", "status", "notes"])
     with pytest.raises(ValueError, match="outside the header"):
         write_steps(p, [{"step": "1", "status": "x", "extra": "y"}], ["step", "status"])
     assert p.read_text(encoding="utf-8") == "step,status\n1,pending\n"
@@ -84,3 +84,17 @@ def test_write_steps_keeps_crlf_and_a_symlink(tmp_path):
     new = tmp_path / "new.steps.csv"
     write_steps(new, [{"step": "1", "status": "done"}], ["step", "status"])
     assert new.read_bytes() == b"step,status\n1,done\n"
+
+
+def test_a_status_outside_the_vocabulary_is_refused_at_write_time(tmp_path):
+    # R5: 64 of 332 recent step tables carried a status the tools do not know; the writers now refuse one.
+    p = tmp_path / "x.steps.csv"
+    for bad in ("finished", "", "DONE!"):
+        with pytest.raises(ValueError, match="not one of"):
+            write_steps(p, [{"step": "1", "status": bad}], ["step", "status"])
+    assert not p.exists()
+    write_steps(p, [{"step": "1", "status": "Pending "}, {"step": "2", "status": "completed"}], ["step", "status"])
+    with pytest.raises(ValueError, match="not one of"):
+        update_step(p, "1", status="finished")
+    assert p.read_text(encoding="utf-8") == "step,status\n1,Pending \n2,completed\n"
+    write_steps(p, [{"step": "1", "notes": "no status column, nothing to check"}], ["step", "notes"])

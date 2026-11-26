@@ -16,8 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`write_steps` checks the text before it touches the file** and writes by rename. Before, it wrote first and
   checked after, so a refused table had already replaced the old file. It also keeps CRLF line endings when the
   file already uses them, and keeps a symlink a symlink.
+- **A status outside the vocabulary is refused at write time.** `write_steps` and `update_step` raise `ValueError`,
+  and write nothing, for a `status` other than `pending`, `in_progress`, `done`, `blocked` or the legacy
+  `completed`; an empty status is refused too. A table without a `status` column is not checked. Of 332 recent
+  step tables, 64 carried some other value.
 - **Checked on real tables:** `update_step` run over copies of 907 step tables from this repository changed one
   row only in 889 and refused 18 with the file untouched.
+- **The orchestrator names `--set`:** its step-table guidance now gives
+  `python -m agentteams.plan_steps --set PLAN.steps.csv STEP --status done` for marking one step. Expect one
+  changed line in the orchestrator agent on update.
 - **If you call `update_step` to set several rows that share an id,** fix the duplicate id first; that call now
   raises `ValueError`.
 

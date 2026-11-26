@@ -56,8 +56,8 @@ for finding in findings:
 
 Sets one step's status, its notes, or both, and returns the updated row. It rewrites that row only: every other
 byte of the file is kept, including line endings, blank lines, and other rows that are themselves malformed.
-(`update_step(path, step, **fields)` does the same for any column, without the status check; `write_steps` replaces
-the whole table.) The result is checked before anything is written, and the write is a
+(`update_step(path, step, **fields)` does the same for any column and also accepts the legacy `completed`; `write_steps`
+replaces the whole table and refuses a status outside the vocabulary.) The result is checked before anything is written, and the write is a
 rename. Use it, or the `--set` command below, instead of a one-off script that edits the CSV.
 
 It refuses, and leaves the file unchanged, when:
