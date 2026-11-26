@@ -22,9 +22,19 @@ from typing import Any
 
 
 def read_steps(path: Path | str) -> list[dict[str, str]]:
-    """Read a plan steps.csv. Returns a list of dicts keyed by header column.
+    """Read a plan steps.csv.
 
     A quoted cell that spans lines keeps its line breaks. Rows with an empty ``step`` are skipped.
+    A row with more cells than the header raises a warning and loses the extra cells.
+
+    Args:
+        path: The ``.steps.csv`` path.
+
+    Returns:
+        One dict per step, keyed by header column.
+
+    Raises:
+        OSError: The file cannot be read.
     """
     with Path(path).open(encoding="utf-8", newline="") as fh:  # newline="": a CRLF inside a cell is kept as written
         return _parse_steps(fh.read(), path)
@@ -203,7 +213,7 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
         The updated row, keyed by header column.
 
     Raises:
-        KeyError: ``step`` is not in the file.
+        KeyError: ``step`` is empty or not in the file.
         ValueError: Nothing to set, both ``note`` and ``append_note`` given, an empty appended
             note, a status outside the vocabulary, a duplicated ``step`` id, a header with a
             repeated or missing column, a target row wider than the header, or a result that

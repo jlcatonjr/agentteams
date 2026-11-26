@@ -52,12 +52,43 @@ for finding in findings:
 
 ---
 
+### `write_steps(path, rows, fieldnames=None)`
+
+Writes `rows` as a whole steps CSV, replacing any file at `path`. Returns `None`.
+
+- The text is checked before the file is touched, and the write is a rename: a refusal leaves an existing file as
+  it was.
+- A file whose header line ends in CRLF is written with CRLF throughout. A symlink stays a link.
+- Raises `ValueError`, writing nothing, when there are no rows and no `fieldnames`, a row has a key outside
+  `fieldnames`, or a `status` is not `pending`, `in_progress`, `done`, `blocked` or the legacy `completed` (an
+  empty status included). A table with no `status` column is not checked.
+- Raises `PermissionError` when the file is read-only.
+
+To change one step of an existing table, use `update_step` or `set_step`: they keep every other row as it is.
+
+---
+
+### `update_step(path, step, **fields)`
+
+Sets `fields` on one step by rewriting that row only. Returns `None`. Any column may be set. With no fields it
+looks the step up and writes nothing.
+
+- Every other byte of the file is kept: line endings, blank lines, quoting, and rows that are themselves malformed.
+- The step id is matched with surrounding spaces ignored.
+- Raises `KeyError` when `step` is empty or not in the file.
+- Raises `ValueError`, writing nothing, when a field is not a header column, a `status` is outside the vocabulary
+  above, the id names more than one row, the header repeats a column, or the target row has more cells than the
+  header.
+- Raises `PermissionError` when the file is read-only.
+
+---
+
 ### `set_step(path, step, *, status, note, append_note)`
 
 Sets one step's status, its notes, or both, and returns the updated row. It rewrites that row only: every other
 byte of the file is kept, including line endings, blank lines, and other rows that are themselves malformed.
-(`update_step(path, step, **fields)` does the same for any column and also accepts the legacy `completed`; `write_steps`
-replaces the whole table and refuses a status outside the vocabulary.) The result is checked before anything is written, and the write is a
+(`update_step` does the same for any column and also accepts the legacy `completed`, which `set_step` does not
+write.) The result is checked before anything is written, and the write is a
 rename. Use it, or the `--set` command below, instead of a one-off script that edits the CSV.
 
 It refuses, and leaves the file unchanged, when:

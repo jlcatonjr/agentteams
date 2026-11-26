@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### fixed (`plan_steps.update_step` rewrites one row; `write_steps` checks before it writes)
+### changed (`plan_steps.update_step` rewrites one row; the writers check before they write and refuse an unknown status)
 
 - **`update_step` no longer rewrites the whole table.** It replaces the one row and keeps every other byte, as
   `--set` does. Before, an update converted CRLF line endings to LF, dropped cells from any row wider than the
@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names; an empty id is refused; with no fields it only looks the step up. A read-only file is refused by all
   three writers. Writing by rename means another hard link to the file keeps the old content.
 - **`read_steps` keeps a line break inside a quoted cell.** Before, the two lines were joined with nothing between.
-- **A status outside the vocabulary is refused at write time.** `write_steps` and `update_step` raise `ValueError`,
+- **Breaking for some callers: a status outside the vocabulary is refused at write time.** Reading a table
+  that holds one and passing its rows back to `write_steps` now raises; correct the status first. `write_steps` and `update_step` raise `ValueError`,
   and write nothing, for a `status` other than `pending`, `in_progress`, `done`, `blocked` or the legacy
   `completed`; an empty status is refused too. A table without a `status` column is not checked. Of 332 recent
   step tables, 64 carried some other value.
