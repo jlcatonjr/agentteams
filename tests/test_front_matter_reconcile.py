@@ -240,7 +240,12 @@ def test_cli_report_never_writes_even_with_divergence(tmp_path: Path) -> None:
 
 
 def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
-    """And with the explicit flag, it does apply — reporting the capability change."""
+    """And with the explicit flag, it does apply a narrowing — reporting the capability change.
+
+    The generated team's ``team-builder.md`` declares its tools in a different vocabulary from its
+    render, so that divergence cannot be shown to narrow: it is refused without a clearance (exit 1)
+    and its file is left byte-identical, while the narrowing still applies.
+    """
     import subprocess
     import sys
 
@@ -250,6 +255,8 @@ def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
     target.write_text(original.replace("tools: ", "tools: Bash, ", 1), encoding="utf-8")
     other = out / "security.md"
     other_before = other.read_text(encoding="utf-8")
+    builder = out / "team-builder.md"
+    builder_before = builder.read_bytes()
 
     repo = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
@@ -258,7 +265,9 @@ def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
          *seed_offline_intel(out, "claude")],
         cwd=repo, capture_output=True, text=True, timeout=600,
     )
-    assert proc.returncode == 0, proc.stderr[-2000:]
-    assert "CAPABILITY GRANT CHANGED" in proc.stdout, proc.stdout[-1500:]
+    assert proc.returncode == 1, proc.stdout[-3000:] + proc.stderr[-2000:]
+    assert "applied navigator.md: tools  [CAPABILITY GRANT CHANGED]" in proc.stdout, proc.stdout[-1500:]
+    assert "REFUSED team-builder.md: tools" in proc.stdout, proc.stdout[-1500:]
     assert target.read_text(encoding="utf-8") == original, "did not restore the template value"
     assert other.read_text(encoding="utf-8") == other_before, "an unrelated file changed"
+    assert builder.read_bytes() == builder_before, "a refused widening was written"

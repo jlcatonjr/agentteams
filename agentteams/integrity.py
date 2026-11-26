@@ -62,6 +62,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/front_matter_reconcile.py",
     "agentteams/cli/adopt_merge_gate.py",  # C-3 + Rule 15: the one gated path that extends an
                                            # orchestrator's `agents:` grant under --merge
+    "agentteams/cli/reconcile_apply_gate.py",  # C-3: what clears a capability widening by --reconcile-apply
     "agentteams/data/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
                                             # construction, so any change to it must be a reviewed re-record
     "agentteams/data/codex-role-gate.py",  # C-3 on Codex: the PreToolUse role gate (write_policy orchestrator-only);

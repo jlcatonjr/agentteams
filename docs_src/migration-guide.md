@@ -236,7 +236,8 @@ drill). Do the steps below in order. Steps that delete files are destructive and
    `mcp_grants`. `mcp_grants` requires the switch. `agent_policies` is used only by the proposal and runner path.
 3. **Re-render** with `--update --merge`. Then run `--reconcile-front-matter` to see the diverging keys, and
    `--reconcile-front-matter --reconcile-apply` to take the template's values. That restores the agents' tools.
-   Restoring `Write`/`Edit` widens grants (C-3), so review each `[CAPABILITY GRANT CHANGED]` line.
+   Restoring `Write`/`Edit` widens grants (C-3), so each such key is refused until a `reconcile-apply-widen`
+   decision names it (the refusal prints the row to record); review each `[CAPABILITY GRANT CHANGED]` line.
 4. **Remove what the re-render leaves** (row 344):
     - **R1:** the `mcpServers` block naming `agentteams_runner` in each formerly granted agent's front matter.
       Reconcile never removes a key the template no longer declares. Search the agents directory for

@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (`--reconcile-apply` widens a capability grant only under a recorded clearance)
+
+- **Fixed:** `--reconcile-front-matter --reconcile-apply` took the template's value for every diverging
+  front-matter key, so one flag could add tools, an `agents:` slug, an `mcpServers` block or a `model` change with
+  no clearance, while the same `agents:` widening through `--adopt-orphans` needs a signed decision.
+- Each divergence is now classified. A narrowing (a capability list the template shrinks, a `disallowedTools` list
+  it grows) and a non-capability key apply as before. A widening (more items, a capability key absent on disk, any
+  `model` change, or a value either side cannot parse) needs a `reconcile-apply-widen` decision. In a governed
+  workspace that is a PASS row signed with the operator's Ed25519 key, never a waiver, with
+  `scope=reconcile-apply-widen`, `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>`,
+  and room under the exception cap. In an ungoverned workspace an ordinary PASS row from an approved author clears
+  it. Both paths go through the destructive-action gate, so a HALT blocks it, a clearance older than a HALT
+  retraction is void, and a clearance is spent once.
+- Without a clearance the narrowings still apply, each widening prints `REFUSED <file>: <key>` and the row to
+  record, and the run exits 1 (it always exited 0 before). `--dry-run` checks the clearance without spending it.
+- **Who notices:** an operator who uses `--reconcile-apply` to give agents the runner's `mcpServers` block, to
+  restore `Write`/`Edit` after turning `write_policy` off, or to switch a team to the read-only set (which adds
+  `Read` where an agent lacked it); and any script that ignored the command's exit code.
+
 ### added (every team receives a script-consolidation reference)
 
 - **New reference:** `references/script-consolidation.reference.md` gives the procedure for reviewing one-off

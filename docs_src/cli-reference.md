@@ -1785,6 +1785,21 @@ agent named in `mcp_grants`. A missing non-capability key is not reported.
 With `--reconcile-front-matter`, take the template's value for each diverging key.
 **Never implied by the report.** `allowed-tools` is a capability grant, and widening one is a
 privileged change (Constitutional C-3), so it requires saying so explicitly.
+
+A narrowing (a capability list the template shrinks, a `disallowedTools` list it grows) and a
+non-capability key apply on the flag alone. A **widening** needs a `reconcile-apply-widen`
+clearance first: more items in a capability list, a capability key absent on disk, any `model`
+change, and any value either side cannot parse (an `mcpServers` or `hooks` block, a list in a
+different vocabulary). In a governed workspace (`enforce_decision_signing`) the clearance is a
+PASS row signed with the operator's Ed25519 key, never a waiver, with `scope=reconcile-apply-widen`
+and `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>` (separated
+by `;`); it counts against the exception cap. In an ungoverned workspace an ordinary
+`reconcile-apply-widen` PASS row from an approved author clears it (a waiver still does not, and
+a row that lists `effect_grants` must list exactly this run's). An unretracted HALT on the action
+blocks it, a clearance older than a HALT retraction is void, and a clearance is spent once.
+Without one, the narrowings still apply, each widening is printed as `REFUSED <file>: <key>` with
+the row to record, nothing from the widening set is written, and the run exits 1. With
+`--dry-run` the clearance is checked without being spent.
 A key absent on disk is added at the end of the front matter (printed `ADDED (absent)`), and a
 block value (such as `mcpServers`) is replaced whole; each capability change is printed as
 `[CAPABILITY GRANT CHANGED]`. Some keys are never *added*: `hooks`, `memory`, `agents`, and a

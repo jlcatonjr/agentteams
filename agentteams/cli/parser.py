@@ -929,8 +929,8 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="reconcile_apply",
         help=(
             "With --reconcile-front-matter, take the template's value for each diverging key. "
-            "Never implied by the report: `allowed-tools` is a capability grant and widening "
-            "one is a privileged change, so it requires saying so explicitly."
+            "Never implied by the report. A value that widens a capability grant needs a 'reconcile-apply-widen' "
+            "decision naming it, else it is refused (exit 1) while the other keys still apply."
         ),
     )
     # -----------------------------------------------------------------------
