@@ -191,3 +191,23 @@ def test_rows_from_stdin_cannot_point_outside_their_root(tree: Path, tmp_path: P
     big = {"path": "week1/big.py", "root": "tmp"}
     assert sc.mark_copies([big], repo=tree, max_bytes=1000)[0]["copy_kind"] == "missing"
     assert sc.mark_copies([big], repo=tree)[0]["copy_kind"] == "authored"
+
+
+def test_folders_above_an_absolute_root_are_not_snapshot_markers(tmp_path: Path) -> None:
+    repo = tmp_path / "archive" / "repo"          # a checkout that merely lives under archive/
+    (repo / "tools").mkdir(parents=True)
+    (repo / "tools" / "a.py").write_text("pass\n", encoding="utf-8")
+    (repo / "tools" / "snapshots").mkdir()
+    (repo / "tools" / "snapshots" / "b.py").write_text("pass\n", encoding="utf-8")
+    _git(repo, "init", "-q")
+    rows, _ = sc.inventory([repo / "tools"])
+    assert [r["copy_kind"] for r in sc.mark_copies(rows, repo=repo)] == ["authored", "snapshot"]
+
+
+def test_bad_limits_are_refused(tree: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(sc.CensusError, match="negative"):
+        sc.inventory([tree / "tmp"], max_bytes=-1)
+    with pytest.raises(sc.CensusError, match="negative"):
+        sc.mark_copies([], repo=tree, max_bytes=-1)
+    assert sc.main(["inventory", str(tree / "tmp"), "--ext", " , "]) == 2
+    assert "names no extension" in capsys.readouterr().err

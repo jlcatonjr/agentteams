@@ -92,6 +92,12 @@ Validate a project description dict and return a list of error strings.
 
 ---
 
+## Constants
+
+- `PRUNE_DIRS`: the folder names the project scan never enters (caches, virtual environments, build output,
+  `.git`, backups). Public so that another module can extend the set instead of restating it; `script_census`
+  does.
+
 ## Retrieval Inference Notes
 
 `load()` supplements retrieval integration using conservative heuristics when scanning a project and when the input brief does not already provide `retrieval_integration`.

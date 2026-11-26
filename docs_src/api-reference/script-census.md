@@ -20,8 +20,8 @@ They are the first steps of the review in `references/script-consolidation.refer
 
 **What it never does.** It never follows or reads a symbolic link below a root, and it refuses a
 root that is itself a link. It never enters a nested checkout or project. It never runs git inside
-a scanned folder: git is asked one question, at the top of the one repository you name, and the blob
-ids of scanned files are computed in Python.
+a scanned folder: git is asked only about the one repository you name (where its top is, and what
+it tracks), and the blob ids of scanned files are computed in Python.
 
 **Mind the `root` column.** A root is written to the CSV exactly as you gave it. Give relative
 roots when the output will be saved in the repository, so that no home path lands in a file.
@@ -43,8 +43,8 @@ python -m agentteams.script_census inventory tmp scripts | python -m agentteams.
 ```
 
 Exit status: 0 when the table was written; 2 when a root is not a directory or is a symbolic link,
-the input is not an inventory, a row's `path` is absolute or has a `..` component, or `--repo` is not
-a git repository.
+the input is not an inventory, a row's `path` is absolute or has a `..` component, `--max-bytes` is
+negative, `--ext` names no extension, or `--repo` is not a git repository.
 
 ## Inventory columns
 
@@ -80,7 +80,7 @@ Each is counted on stderr under the name shown.
 
 | `copy_kind` | Meaning |
 |---|---|
-| `snapshot` | A folder in the file's path matches a snapshot marker: the backup folder, `snapshots`, `snapshots-*`, `.worktrees`, `worktrees`, `archive`, or a pattern given with `--snapshot-marker` |
+| `snapshot` | A folder in `path`, or in a relative `root`, matches a snapshot marker (folders above an absolute root are not looked at): the backup folder, `snapshots`, `snapshots-*`, `.worktrees`, `worktrees`, `archive`, or a pattern given with `--snapshot-marker` |
 | `missing` | The file can no longer be read below its root: it is gone, larger than `--max-bytes`, or now reached through a symbolic link |
 | `tracked-duplicate` | The file is not itself tracked by the repository, and its bytes equal a file the repository tracks |
 | `authored` | None of the above |

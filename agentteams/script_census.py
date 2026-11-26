@@ -10,9 +10,9 @@ The first two steps of a script-consolidation review (``references/script-consol
   the repository tracks, ``authored`` otherwise, and ``missing`` when the file can no longer be read.
 
 Both are read-only and print to stdout. A symbolic link below a root is never followed or read, and a
-root that is itself a link is refused. git is asked one question, at the top of the one repository
-named: its own listing of tracked content. It is never run inside
-a nested checkout, and the blob ids of scanned files are computed here in Python.
+root that is itself a link is refused. git is asked only about the one repository named: where its
+top is, and what it tracks. It is never run inside a nested checkout, and the blob ids of scanned
+files are computed here in Python.
 
 Classification, usage ranking and fleet-wide runs are not part of this module.
 """
@@ -104,9 +104,11 @@ def inventory(roots: Sequence[Path | str], *, extensions: Iterable[str] | None =
         ``symlink``, ``oversize``, ``other-extension``, ``unreadable``, ``unreadable-dir``.
 
     Raises:
-        CensusError: A root is not a directory, or is itself a symbolic link.
+        CensusError: A root is not a directory or is itself a symbolic link, or *max_bytes* is negative.
     """
     wanted = frozenset(e.lower() for e in (extensions if extensions is not None else SCRIPT_EXTENSIONS))
+    if max_bytes < 0:
+        raise CensusError("max_bytes must not be negative")
     rows: list[dict[str, str]] = []
     pruned: Counter[str] = Counter()
     for root in roots:
@@ -223,8 +225,9 @@ def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
                 snapshot_markers: Sequence[str] = SNAPSHOT_MARKERS, max_bytes: int = MAX_BYTES) -> list[dict[str, str]]:
     """Add ``copy_kind`` to inventory rows.
 
-    Checked in this order: ``snapshot`` when a component of ``root`` joined with ``path`` matches a
-    snapshot marker; ``missing`` when the file can no longer be read as a regular file below its
+    Checked in this order: ``snapshot`` when a folder in ``path``, or in a relative ``root``,
+    matches a snapshot marker (the folders above an absolute root are not looked at: a checkout
+    that happens to live under ``archive/`` is not a snapshot); ``missing`` when the file can no longer be read as a regular file below its
     root (it is gone, larger than *max_bytes*, or now reached through a symbolic link);
     ``tracked-duplicate`` when the file is not itself tracked by *repo* and its bytes equal a file
     *repo* tracks; otherwise ``authored``. Two tracked files with the same bytes are both
@@ -245,8 +248,10 @@ def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
 
     Raises:
         CensusError: A row lacks ``path`` or ``root``, a ``path`` is absolute or has a ``..``
-            component, or *repo* is not a git repository.
+            component, *max_bytes* is negative, or *repo* is not a git repository.
     """
+    if max_bytes < 0:
+        raise CensusError("max_bytes must not be negative")
     blobs = tracked_blobs(repo)
     top = _repo_root(repo)
     hex_length = len(next(iter(blobs))) if blobs else 40
@@ -258,7 +263,8 @@ def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
         if not rel.parts or rel.is_absolute() or ".." in rel.parts or os.path.isabs(row["path"]):
             raise CensusError(f"path {row['path']!r} is not a relative path below its root")
         full = os.path.join(row["root"], *rel.parts)
-        parts = Path(os.path.normpath(full)).parts
+        above = () if os.path.isabs(row["root"]) else Path(os.path.normpath(row["root"])).parts
+        parts = (*above, *rel.parts[:-1])
         if any(fnmatch.fnmatchcase(part, marker) for part in parts for marker in snapshot_markers):
             kind = "snapshot"
         else:
@@ -313,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
             extensions = None
             if args.ext is not None:
                 extensions = [e if e.startswith(".") else f".{e}" for e in (p.strip() for p in args.ext.split(",")) if e]
+                if not extensions:
+                    raise CensusError("--ext names no extension")
             rows, pruned = inventory(args.roots, extensions=extensions, max_bytes=args.max_bytes)
             _write_csv(rows, INVENTORY_COLUMNS)
             print(f"# {len(rows)} script(s) under {len(args.roots)} root(s)", file=sys.stderr)
