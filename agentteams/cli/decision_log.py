@@ -31,6 +31,7 @@ from agentteams.cli.decision_authors import (  # noqa: F401  (re-exported: tests
 from agentteams.cli.decision_lineage import (  # noqa: F401  (re-exported: tests and callers)
     _DERIVES_FROM_FIELD,
     _build_lineage_map,
+    _halt_scan_targets,
     _row_action_id,
     _row_lineage,
     _transitive_ancestors,
@@ -918,17 +919,8 @@ def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
     _assert_decision_chain_intact(rows, fieldnames)
     signing_active = _decision_signing_active(fieldnames)
 
-    targets: list[tuple[str, bool]] = [(action, False)]  # (id, is_ancestor)
-    if _DERIVES_FROM_FIELD in {c.strip() for c in fieldnames}:
-        try:
-            ancestors = _transitive_ancestors(action, _build_lineage_map(rows))
-        except RuntimeError as exc:
-            raise RuntimeError(
-                f"lineage traversal for action '{action}' failed closed: {exc}"
-            ) from exc
-        targets.extend((ancestor, True) for ancestor in sorted(ancestors))
-
-    for target, is_ancestor in targets:
+    for position, target in enumerate(_halt_scan_targets(action, rows, fieldnames)):   # the action, then ancestors
+        is_ancestor = position > 0
         skipped: list[str] = []
         offending = _open_halt_for(
             rows, target, output_dir=output_dir, signing_active=signing_active, skipped=skipped

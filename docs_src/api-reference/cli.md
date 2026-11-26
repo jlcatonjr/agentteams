@@ -40,7 +40,6 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `decision_log.py` | Authenticates rows in the security-decisions log (HMAC signing/verification, calls `decision_chain` for the chain check); carved from `security_gate.py` at its own CH-07 ceiling. |
 | `action_ids.py` | How a decision row's `action_reviewed` id is matched: `action_matches` (strict, decides which rows can clear an action) and `halt_names_action` (a HALT also blocks every action named as a token run in its id). A HALT whose id has no letter or digit blocks every action (`halt_blocks`) and is retracted by its row handle (`halt_row_handle`). Integrity-pinned. |
 | `decision_chain.py` | The security-decisions log's hash chain in one place: `verify_chain` (including the pre-1.0 legacy prefix), `chain_tip` for every writer, and `describe_log_chain` for `--verify-integrity`. Integrity-pinned. |
-| `decision_uses.py` | A decision row may appear only once (`assert_no_duplicate_clearing_rows`, run with the chain check), and each use of a clearance is recorded as its own `USED` row (`append_use_row`); `is_spent` reads either record. Integrity-pinned. |
 | `open_halts.py` | **Beta.** `open_halts(team_dir, action=None)`: a read-only listing of the decisions log's HALT rows, judged by the gate's own HALT scan. Integrity-pinned. See [below](#beta-api-open_haltsopen_halts). |
 | `decision_log_migrate.py` | `--migrate-decision-log`: appends the missing signing columns to a team's decisions-log header (never `prev_digest`), padding short legacy rows with empty cells (signed payloads unchanged), and lists the unsigned authorizing rows that signing revokes. A separate module because `decision_log.py` is integrity-pinned. See [below](#decision-log-migration). |
 | `adopt_only.py` | `--adopt-only`: adopts a named subset of orphan agents by rewriting only the orchestrator's adopted routing rows (and, gated, its `agents:` list). `tools_grant` reports each slug's `tools:` line, wider than read-only unless every tool is. |
@@ -379,8 +378,9 @@ Which actions a HALT blocks (the gate's rules, `action_ids.halt_blocks`):
 Things to know before relying on it:
 
 - **It writes nothing**, and it is a point-in-time read: call it immediately before acting on the answer.
-- **It refuses what the gate refuses.** An unreadable or malformed log, a broken hash chain, a signed decision row that
-  appears twice, or (with `action`) a `derives_from` lineage that cannot be walked raises `RuntimeError`.
+- **It refuses what the gate refuses.** An unreadable or malformed log, a log that fails the gate's chain check, or
+  (with `action`) a `derives_from` lineage that cannot be walked raises `RuntimeError`. A `team_dir` that is not a
+  `pathlib.Path`, or an `action` that is not a string, raises `TypeError`; an empty `action` raises `ValueError`.
 - **One id, one log.** With `action` it answers the destructive-action gate's HALT check for that one id in this one
   team directory. A gate that also checks a family id (a sandbox relaxation checks `sandbox-os-off` as well as
   `sandbox-os-off:claude`, so a HALT on a sibling instance blocks it) or reads HALTs from other directories

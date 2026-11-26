@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`row`, `halt_id`, `is_open`, `retracted_by`, `blocks`). With `action`, it lists the HALT rows that block that
   action now, found as the gate finds them: on the action and its `derives_from` ancestors, with the colon family
   rule and the gate's retraction rules. Without one, it lists every HALT row and whether it is retracted, judged by
-  exact id. It calls the gate's own scan rather than repeating it, and refuses a log the gate would refuse.
+  exact id. It calls the gate's own scan and lineage walk rather than repeating them, refuses a log the gate would
+  refuse, and refuses a `team_dir` that is not a `Path` or an empty or non-string `action`.
 - **Separators, stated:** only `:` makes a family. A HALT on `family` or `family/gate` does not block
   `family/gate/study:sha256-...`; a HALT on `family/gate/study` does. The API reference page lists the strict, family
   and token rules.

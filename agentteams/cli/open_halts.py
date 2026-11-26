@@ -36,14 +36,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agentteams.cli.action_ids import halt_display_id, halt_retraction_id
+from agentteams.cli.decision_lineage import _halt_scan_targets
 from agentteams.cli.decision_log import (
-    _DERIVES_FROM_FIELD,
     _assert_decision_chain_intact,
-    _build_lineage_map,
     _decision_signing_active,
     _open_halt_for,
     _read_decision_rows,
-    _transitive_ancestors,
 )
 
 
@@ -88,9 +86,17 @@ def open_halts(team_dir: Path, action: str | None = None) -> list[HaltRow]:
         :class:`HaltRow` entries in row order; empty when the log is absent or holds no HALT.
 
     Raises:
-        RuntimeError: The gate would refuse to read the log: it is unreadable or malformed, its hash chain is broken,
-            a signed decision row appears twice, or (with *action*) the ``derives_from`` lineage cannot be walked.
+        TypeError: *team_dir* is not a :class:`pathlib.Path`, or *action* is neither a ``str`` nor None.
+        ValueError: *action* is empty or only whitespace.
+        RuntimeError: The gate would refuse to read the log (it is unreadable or malformed, or fails the gate's chain
+            check), or (with *action*) the ``derives_from`` lineage cannot be walked.
     """
+    if not isinstance(team_dir, Path):
+        raise TypeError("team_dir must be a pathlib.Path")
+    if action is not None and not isinstance(action, str):
+        raise TypeError("action must be a str or None")
+    if action is not None and not action.strip():
+        raise ValueError("action must name an action id")
     read = _read_decision_rows(team_dir)
     if read is None or not read[0]:
         return []
@@ -104,11 +110,8 @@ def open_halts(team_dir: Path, action: str | None = None) -> list[HaltRow]:
         return outcome
 
     if action is not None:
-        targets = [action]
-        if _DERIVES_FROM_FIELD in fieldnames:
-            targets += sorted(_transitive_ancestors(action, _build_lineage_map(rows)))
         found: dict[int, HaltRow] = {}
-        for target in targets:
+        for target in _halt_scan_targets(action, rows, fieldnames):   # the gate's own walk: action, then ancestors
             for index, cleared in judge(target).items():
                 if cleared is None and index not in found:
                     found[index] = HaltRow(index + 1, halt_display_id(_reviewed(rows[index]), index + 1, rows[index]),

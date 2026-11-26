@@ -137,3 +137,18 @@ def test_it_reads_only_and_refuses_what_the_gate_refuses(tmp_path):
     with pytest.raises(RuntimeError, match="chain broken"):
         open_halts(tmp_path)
     assert _gate_blocks(tmp_path, "prune")
+
+
+@pytest.mark.parametrize("team_dir, action, error", [
+    ("references", None, TypeError), (None, None, TypeError), (Path("."), 7, TypeError), (Path("."), "  ", ValueError),
+])
+def test_it_refuses_inputs_of_the_wrong_kind(team_dir, action, error):
+    with pytest.raises(error):
+        open_halts(team_dir, action)
+
+
+def test_a_lineage_that_cannot_be_walked_refuses_as_the_gate_does(tmp_path):
+    _log(tmp_path, _row("child-op", "PASS", derives_from="nowhere"))
+    with pytest.raises(RuntimeError, match="lineage traversal for action 'child-op' failed closed"):
+        open_halts(tmp_path, "child-op")
+    assert _gate_blocks(tmp_path, "child-op")
