@@ -62,15 +62,24 @@ fail-closed rule. A command naming such a key stays silent only when both hold:
   (`--comment`, which takes the next word, and any abbreviation are never skipped).
 
 Everything else asks, so quoting, expansion, substitution and continuation cannot make a write look like a read.
-
-**Section renames.** git honours `git config --rename-section foo core` (and `git config rename-section foo core`):
-a `foo.hooksPath` set earlier then reads back as `core.hooksPath`, with no command naming the key. So a rename asks
-when either section name begins, in any case, with `alias`, `push`, `remote`, `url`, `credential`, `core`,
-`include` (which covers `includeIf`) or `agentteams`. Any `--ren…` abbreviation, extra arguments or an unknown
-option ask, under the same plain-text rule. `git config --rename-section a b` stays silent.
 Reads that need any of those characters ask too: a quoted key (a key with a space always does), a read in a command
 that quotes or expands something elsewhere, a `~` path, a `\`-continued line, CRLF line endings, or a read run
 through a wrapper such as `sudo`.
+
+**Section renames and removals.** git honours `git config --rename-section foo core` (and `git config
+rename-section foo core`): a `foo.hooksPath` set earlier then reads back as `core.hooksPath`, with no command naming
+the key. Removing a section unsets every key in it: `git config --remove-section core` (or `remove-section core`)
+clears `core.hooksPath` exactly as `--unset core.hooksPath` does. So a rename or a removal asks when any section
+name it takes begins, in any case, with `alias`, `push`, `remote`, `url`, `credential`, `core`, `include` (which
+covers `includeIf`) or `agentteams`. Any `--ren…` or `--rem…` abbreviation, extra arguments or an unknown option ask,
+under the same plain-text rule. `git config --rename-section a b` and `git config --remove-section a` stay silent.
+
+**Program variables.** An assignment of `GIT_EDITOR`, `EDITOR`, `VISUAL`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`,
+`PAGER`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_EXTERNAL_DIFF` or `GIT_PROXY_COMMAND` on the
+same line as a later `git` command asks under `git-alias-config`: `GIT_EDITOR=/path/x git config --edit` runs
+`/path/x`. That covers `VAR=x git …`, `env VAR=x git …` and `export VAR=x; git …` on one line. An assignment on an
+earlier line or in an earlier command, or set by a sourced file, is not seen. Like every trigger it also matches
+quoted text, so `git commit -m "EDITOR=vim"` asks.
 
 `git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation
 row 699, with the same class ids. One narrowing came with them: the `f` of `-f` is case-sensitive (git push has

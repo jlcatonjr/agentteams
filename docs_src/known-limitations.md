@@ -393,8 +393,11 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   - direct edits of the config file: a Write or Edit of `.git/config`, or a shell copy, `sed -i` or redirect into it,
     asks; `git config -e` (or `git config edit`), which opens it in an editor, does not, and nor does an edit made
     by an interpreter (`python3 -c "open('.git/config', 'a')…"`).
-- **Also not covered:** `git push --no-verify`, and the `GIT_SSH_COMMAND`, `GIT_SSH`, `GIT_ASKPASS`, `SSH_ASKPASS` and
-  `GIT_EXEC_PATH` environment variables.
+- **Also not covered:** `git push --no-verify`, and the `GIT_EXEC_PATH` environment variable. The variables
+  that name a program git runs (`GIT_EDITOR`, `EDITOR`, `VISUAL`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`, `PAGER`,
+  `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_EXTERNAL_DIFF`, `GIT_PROXY_COMMAND`) ask only
+  when assigned on the same line as a later `git` command; one set on an earlier line, in an earlier command, by a
+  sourced file or in the session's inherited environment is not seen.
 - **Who:** all Claude teams with the gate hook installed.
 - **Mitigation:** the gate is a review prompt, not a boundary. Run with the Claude sandbox on, and review
   `.git/config` changes before a push.

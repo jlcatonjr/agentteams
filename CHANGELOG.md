@@ -70,6 +70,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--ren`) asks when either name begins with `alias`, `push`, `remote`, `url`, `credential`, `core`, `include` or
   `agentteams`, in any case. git honours the rename, so `foo.hooksPath` set earlier becomes `core.hooksPath` with no
   command naming the key. A rename between other sections stays silent.
+- **Section removals:** `git config --remove-section core` (or `remove-section`, or `--rem`) asks for the same
+  section families: removing a section unsets every key in it, so it clears `core.hooksPath` just as
+  `--unset core.hooksPath` does, which already asked. Removing another section stays silent.
+- **Program variables:** `GIT_EDITOR=/path/x git config --edit` ran `/path/x` with no prompt. An assignment of
+  `GIT_EDITOR`, `EDITOR`, `VISUAL`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`, `PAGER`, `GIT_SSH`, `GIT_SSH_COMMAND`,
+  `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_EXTERNAL_DIFF` or `GIT_PROXY_COMMAND` on the same line as a later `git`
+  command now asks (`VAR=x git …`, `env VAR=x git …`, `export VAR=x; git …`). Who notices: a session that sets
+  an editor or pager inline for git (`GIT_PAGER=cat git log`) now gets a prompt.
 - **Newly silent:** `git config get …` and `git config list` (git 2.46 and later) are reads, for every key, including
   `alias.`, `push.`, `remote.` and `url.`, which asked before.
 - **Who notices the stricter reads:** a read naming one of these keys now asks when anything in the same Bash

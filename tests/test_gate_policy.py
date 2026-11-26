@@ -376,6 +376,48 @@ def test_an_ungated_section_rename_stays_silent(tmp_path: Path, cmd: str) -> Non
     assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
 
 
+# Removing a section unsets every key in it (checked against git 2.50): `git config --remove-section core`
+# clears core.hooksPath just as `--unset core.hooksPath` does, which asks.
+@pytest.mark.parametrize("cmd", [
+    "git config --remove-section core", "git config remove-section core", "git config --remove-section CORE",
+    "git config --remove-section agentteams", "git config --rem core", "git config --remov alias",
+    "git config --global --remove-section credential", "git config remove-section includeIf.gitdir:/x/",
+    "git config --remove-section a b", "git config --remove-section 'a'",
+])
+def test_removing_a_gated_section_asks(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
+
+
+@pytest.mark.parametrize("cmd", ["git config --remove-section a", "git config remove-section old-name",
+                                 "git config --global --remove-section foo"])
+def test_removing_an_ungated_section_stays_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert verdict(gate, "Bash", {"command": cmd})[0] == "pass", cmd
+
+
+# An environment assignment that names the program git runs hands over execution, whatever git command follows.
+GIT_PROGRAM_VARIABLES = ["GIT_EDITOR", "EDITOR", "VISUAL", "GIT_SEQUENCE_EDITOR", "GIT_PAGER", "PAGER", "GIT_SSH",
+                         "GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_EXTERNAL_DIFF", "GIT_PROXY_COMMAND"]
+
+
+@pytest.mark.parametrize("var", GIT_PROGRAM_VARIABLES)
+@pytest.mark.parametrize("form", ["{v}=/path/x git config --edit", "{v}=/path/x git config -e", "env {v}=/x git fetch",
+                                  "export {v}=/x; git log", "A=1 {v}='/x y' git diff"])
+def test_an_env_prefix_naming_gits_program_asks(tmp_path: Path, var: str, form: str) -> None:
+    gate = install(tmp_path, None)
+    cmd = form.format(v=var)
+    assert verdict(gate, "Bash", {"command": cmd})[:2] == ("ask", "bash-trigger"), cmd
+    assert "git-alias-config" in {c for c, _ in gate._bash_matches(cmd)}, cmd
+
+
+@pytest.mark.parametrize("cmd", ["git config --edit", "git config -e", "MY_EDITOR=/x git log", "EDITOR=vi make",
+                                 "echo $EDITOR; git log", "git log --format=GIT_PAGER"])
+def test_editor_variables_without_an_assignment_before_git_stay_silent(tmp_path: Path, cmd: str) -> None:
+    gate = install(tmp_path, None)
+    assert "git-alias-config" not in {c for c, _ in gate._bash_matches(cmd)}, cmd
+
+
 @pytest.mark.parametrize("cmd", ["git config --get user.name\ngit config core.hooksPath /tmp/h",
                                  "git config --get core.hooksPath ; git config --unset core.hooksPath"])
 def test_a_write_after_a_read_on_the_same_command_asks(tmp_path: Path, cmd: str) -> None:

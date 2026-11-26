@@ -98,12 +98,18 @@ _GIT_PUBLISH_KEYS = (r"\b(?:(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:instead
 #: Per class, a line naming `git`, `config` and such a key; _config_write() exempts only commands it proves are reads.
 _GIT_CONFIG_WRITES = {
     "publication-channel": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*{_GIT_PUBLISH_KEYS})", re.IGNORECASE),
-    "git-alias-config": re.compile(rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*(?:\s['\"]?{_GIT_EXEC_KEYS}|\brename-section\b|\s--ren))",
-                                   re.IGNORECASE),
+    "git-alias-config": re.compile(
+        rf"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*(?:\s['\"]?{_GIT_EXEC_KEYS}|\bre(?:name|move)-section\b|\s--re[nm]))",
+        re.IGNORECASE),
 }
+#: An assignment, on the same line as a `git` command, of a variable that names a program git runs: `GIT_EDITOR=x
+#: git config --edit` runs x. Covers `VAR=x git …`, `env VAR=x git …` and `export VAR=x; git …` on one line.
+_GIT_PROGRAM_ENV = (r"\b(?:GIT_EDITOR|EDITOR|VISUAL|GIT_SEQUENCE_EDITOR|GIT_PAGER|PAGER|GIT_SSH|GIT_SSH_COMMAND|GIT_ASKPASS"
+                    r"|SSH_ASKPASS|GIT_EXTERNAL_DIFF|GIT_PROXY_COMMAND)=(?=[^\n]*\bgit\b)")
 #: Section families those keys live in. git honours a section rename, so `git config --rename-section foo core`
-#: turns `foo.hooksPath` into core.hooksPath with no command naming the key; a rename into or out of one asks.
-#: git takes any unambiguous abbreviation (`--ren` is `--rename-section`), so any `--ren…` option is a candidate.
+#: turns `foo.hooksPath` into core.hooksPath with no command naming the key, and removing a section unsets every
+#: key in it (`--remove-section core` clears core.hooksPath, like `--unset`). Renaming into or out of one, or
+#: removing one, asks. git takes any unambiguous abbreviation (`--ren`, `--rem`), so `--ren…`/`--rem…` are candidates.
 _GATED_SECTIONS = re.compile(r"(?:alias|push|remote|url|credential|core|include|agentteams)", re.IGNORECASE)
 
 #: Bash patterns that match a Mandatory Review Trigger in security.template.md. Each is a
@@ -170,9 +176,10 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str, str], ...] = (
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
     # `git config` writes of these keys are matched by _config_write(); `-c`/`--config-env` set them for one command.
     ("git-alias-config",
-     r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?" + _GIT_EXEC_KEYS,
+     r"\bgit\b[^\n]*\s(?:\$?['\"]|\\)*(?:-c['\"]?\s+|--config-env[=\s]+)['\"]?" + _GIT_EXEC_KEYS + "|" + _GIT_PROGRAM_ENV,
      "git configuration that can hide or redirect a push, hand the credential to a program, or run a program "
-     "(alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor, agentteams.hook*)"),
+     "(alias/push/remote/url, credential.*, core.hooksPath/sshCommand/askPass/fsmonitor, agentteams.hook*, or an "
+     "environment variable naming the editor, pager, ssh, askpass, diff or proxy program for a git command)"),
     ("interpreter-send", r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
@@ -525,19 +532,25 @@ def _is_config_read(words: "list[str]") -> bool:
     return False
 
 
-def _is_ungated_rename(words: "list[str]") -> bool:
-    """True for ``git config [--]rename-section OLD NEW`` where neither name is in :data:`_GATED_SECTIONS`.
+#: Section-changing `git config` actions and how many section names each takes.
+_SECTION_ACTIONS = {"rename-section": 2, "remove-section": 1}
 
-    Exactly two names, and only known options around them; an abbreviated ``--rename-sec`` is unknown.
+
+def _is_ungated_section_change(words: "list[str]") -> bool:
+    """True for a section rename or removal where no name is in :data:`_GATED_SECTIONS`.
+
+    ``git config --rename-section OLD NEW`` / ``rename-section OLD NEW`` or ``--remove-section NAME`` /
+    ``remove-section NAME``: exactly that many names and only known options around them. An abbreviated
+    action (``--ren``, ``--rem``) is an unknown option, so it is never exempt.
     """
     args = _config_args(words)
     if args is None:
         return False
     names: list[str] = []
-    flagged, i = False, 0
+    action, i = "", 0
     while i < len(args):
-        if args[i] == "--rename-section":
-            flagged, i = True, i + 1
+        if args[i][2:] in _SECTION_ACTIONS and args[i].startswith("--") and not action:
+            action, i = args[i][2:], i + 1
         elif args[i].startswith("-"):
             span = _option_span(args[i], _CONFIG_VALUE_OPTIONS, _CONFIG_FLAG_OPTIONS)
             if span is None:
@@ -546,11 +559,11 @@ def _is_ungated_rename(words: "list[str]") -> bool:
         else:
             names.append(args[i])
             i += 1
-    if not flagged:
-        if names[:1] != ["rename-section"]:
+    if not action:
+        if not names or names[0] not in _SECTION_ACTIONS:
             return False
-        names = names[1:]
-    return len(names) == 2 and not any(_GATED_SECTIONS.match(name) for name in names)
+        action, names = names[0], names[1:]
+    return len(names) == _SECTION_ACTIONS[action] and not any(_GATED_SECTIONS.match(name) for name in names)
 
 
 def _config_write(class_id: str, line: str, plain: bool) -> bool:
@@ -558,7 +571,7 @@ def _config_write(class_id: str, line: str, plain: bool) -> bool:
 
     A positive, fail-closed rule. Exempt only when the whole Bash command is plain text (``plain``, see
     :data:`_PLAIN_COMMAND`) and every command on the line naming such a key parses as a read, or as a
-    section rename that touches no gated section.
+    section rename or removal that touches no gated section.
     """
     pattern = _GIT_CONFIG_WRITES.get(class_id)
     if pattern is None or not pattern.search(line):
@@ -566,7 +579,7 @@ def _config_write(class_id: str, line: str, plain: bool) -> bool:
     if not plain:
         return True
     named = [words for words in _shell_commands(line) or [] if pattern.search(" ".join(words))]
-    return not named or not all(_is_config_read(words) or _is_ungated_rename(words) for words in named)
+    return not named or not all(_is_config_read(words) or _is_ungated_section_change(words) for words in named)
 
 
 def _bash_matches(command: str, first_only: bool = False,
