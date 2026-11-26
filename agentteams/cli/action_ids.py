@@ -232,7 +232,7 @@ def newly_blocking_halts(rows: list[dict[str, str]]) -> list[tuple[int, str, str
 
 
 def family_halts(rows: list[dict[str, str]]) -> list[tuple[int, str, str]]:
-    """List unretracted HALTs with a usable id: since 1.3.1 each also blocks every id under it after a colon (#636).
+    """List unretracted HALTs with a usable id: since 1.3.2 each also blocks every id under it after a colon (#636).
 
     Consumer-defined ids are listed too: a HALT on ``deploy`` now blocks a consumer gate's ``deploy:prod``.
 
@@ -287,7 +287,7 @@ def describe_newly_blocking_halts(team_dir: Path) -> list[str]:
     families = [f for f in family_halts(rows) if f[0] not in named]   # each HALT is listed once
     if families:
         lines.append(f"Other unretracted HALT rows ({len(families)}): each blocks every id under it after a colon "
-                     "(since 1.3.1) and any id your own gates check (check_clearance) that appears as a token in it:")
+                     "(since 1.3.2) and any id your own gates check (check_clearance) that appears as a token in it:")
         lines += [f"  row {n}: '{rid}' now also blocks every id under it ('{rid}:...'), "
                   + (f"in agentteams gate family '{fam}'" if fam else "including ids your own gates check")
                   for n, rid, fam in families]

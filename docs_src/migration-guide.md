@@ -70,7 +70,7 @@ Read two parts of the report.
 - **HALTs that newly block.** The report lists:
     - each unretracted HALT that newly blocks an agentteams gate action, with the **exact id** to retract it by;
     - every other unretracted HALT, because it blocks any action that your own `check_clearance` gates use and
-      that its id names, and from 1.3.1 every id under it after a colon (`server-apply` blocks
+      that its id names, and from 1.3.2 every id under it after a colon (`server-apply` blocks
       `server-apply:remove-path:…`; `deploy` blocks your own `deploy:prod`; only `:` counts, and a trailing colon
       on the HALT's id is ignored). Each line names the agentteams gate family the id belongs to, if any. Every
       HALT is listed once.
