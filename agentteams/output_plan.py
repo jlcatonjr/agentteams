@@ -258,6 +258,16 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Script consolidation (always — the evidence-gathering procedure behind @code-hygiene's CH-08 / CH-27
+    # judgment: phases, the reviewer brief, the two audit prompts, the "Reference branch" line every coverage
+    # verdict carries (agentteams.ref_branch), and a USER-EDITABLE placement decision rule).
+    files.append({
+        "path": "references/script-consolidation.reference.md",
+        "template": f"{agents_dir}script-consolidation.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Sandbox operator handoff (always — @orchestrator's Sandbox Operator Handoff sub-protocol,
     # Workflow 0's capability-gap check, Workflow 11's closeout gates, @git-operations). How a
     # sandboxed agent hands refused work to the operator as a reviewable .sh script plus the complete

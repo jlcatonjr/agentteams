@@ -12,6 +12,7 @@ way otherwise — and the failure mode it deliberately accepts.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -572,3 +573,130 @@ def test_fleet_release_lock_lift_requires_authorization(command: str) -> None:
 def test_a_fleet_run_without_a_lock_lift_is_not_gated() -> None:
     code, decision = _run_template("agentteams --fleet . --update --merge --fleet-exclude 'agentteams*'")
     assert code == 0 and decision is None
+
+
+# ── The scanner check covers the hook's project, the cwd and the imported tree ─────────────────────
+
+def _gate_in_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scan_digest: str | None):
+    """Install the gate in ``tmp_path/proj`` with a manifest pinning ``agentteams/scan.py``; cwd ``proj/sub``."""
+    import hashlib
+    import importlib.util
+
+    proj = tmp_path / "proj"
+    (proj / ".claude" / "hooks").mkdir(parents=True)
+    (proj / "sub").mkdir()
+    (proj / "agentteams").mkdir()
+    (proj / "references").mkdir()
+    scan = (REPO / "agentteams" / "scan.py").read_bytes()
+    (proj / "agentteams" / "scan.py").write_bytes(scan)
+    digest = scan_digest if scan_digest is not None else hashlib.sha256(scan).hexdigest()
+    (proj / "references" / "enforcement-integrity.json").write_text(
+        json.dumps({"modules": {"agentteams/scan.py": digest}}), encoding="utf-8")
+    hook = proj / ".claude" / "hooks" / "constitutional-gate.py"
+    hook.write_bytes(TEMPLATE.read_bytes())
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(proj / "sub")
+    spec = importlib.util.spec_from_file_location(f"_gate_root_{tmp_path.name}", hook)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    return gate, proj
+
+
+def _write_verdict(gate) -> tuple[str, str]:
+    try:
+        return "pass", gate.main({"tool_name": "Write", "tool_input": {"file_path": "notes.md", "content": "hello"}})
+    except gate._Verdict as v:
+        return v.decision, v.reason_id
+
+
+def test_gate_verifies_project_manifest_from_subdirectory_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gate, _ = _gate_in_project(tmp_path, monkeypatch, "0" * 64)
+    assert _write_verdict(gate) == ("ask", "scanner-unverified")
+
+
+def test_gate_passes_a_matching_project_manifest_from_subdirectory_cwd(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gate, _ = _gate_in_project(tmp_path, monkeypatch, None)
+    assert _write_verdict(gate) == ("pass", "scan")
+
+
+def test_gate_verifies_the_tree_agentteams_is_imported_from(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams import integrity
+
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))  # the same root twice: verified once
+    seen: list[Path] = []
+    real = integrity.verify
+    monkeypatch.setattr(integrity, "verify", lambda root: seen.append(Path(root).resolve()) or real(root))
+    assert _write_verdict(gate) == ("pass", "scan")
+    imported = Path(integrity.__file__).resolve().parents[1]
+    assert {proj.resolve(), (proj / "sub").resolve(), imported} <= set(seen)
+    assert len(seen) == len(set(seen))
+
+
+@pytest.mark.parametrize("manifest", ["{not json", '{"modules": []}', "[]", '{"modules": {"agentteams/scan.py": 5}}'])
+def test_an_unreadable_project_manifest_asks_instead_of_crashing(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest: str) -> None:
+    # An exception escaping the gate lets the write through in the cooperative profile.
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    (proj / "references" / "enforcement-integrity.json").write_text(manifest, encoding="utf-8")
+    assert _write_verdict(gate) == ("ask", "scanner-unverified")
+
+
+@pytest.mark.parametrize("manifest", [b"\xff", ("[" * 200000 + "]" * 200000).encode()])
+def test_an_undecodable_or_too_deep_manifest_asks_instead_of_crashing(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest: bytes) -> None:
+    # Not UTF-8 raises UnicodeDecodeError (a ValueError); too deep raises RecursionError (a RuntimeError).
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    (proj / "references" / "enforcement-integrity.json").write_bytes(manifest)
+    assert _write_verdict(gate) == ("ask", "scanner-unverified")
+
+
+def test_an_unreadable_pinned_scanner_asks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gate, proj = _gate_in_project(tmp_path, monkeypatch, None)
+    scan = proj / "agentteams" / "scan.py"
+    scan.chmod(0)
+    try:
+        if os.access(scan, os.R_OK):
+            pytest.skip("running as a user who can read a mode-000 file")
+        assert _write_verdict(gate) == ("ask", "scanner-unverified")
+    finally:
+        scan.chmod(0o644)
+
+
+@pytest.mark.parametrize("layout", [".claude/hooks", ".github/hooks", ".grok/hooks"])
+def test_every_framework_hook_layout_counts_its_project_as_a_root(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, layout: str) -> None:
+    # Pins today's behaviour: narrowing _project_roots() to some layouts would drop Grok's project from the
+    # pin and integrity checks. A user-level install (~/.claude/hooks) likewise makes the home directory a root.
+    import importlib.util
+
+    hook = tmp_path / "proj" / layout / "constitutional-gate.py"
+    hook.parent.mkdir(parents=True)
+    hook.write_bytes(TEMPLATE.read_bytes())
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    spec = importlib.util.spec_from_file_location(f"_gate_layout_{layout.replace('/', '_')}", hook)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    assert gate._project_roots() == [(tmp_path / "proj").resolve()]
+
+
+# ── The git hook's interpreter and import path (agentteams._hook_python) are execution keys ───────────
+
+def _hook_config_keys() -> tuple[str, str]:
+    from agentteams._hook_python import CONFIG_IMPORT_PATH, CONFIG_PYTHON
+    return CONFIG_PYTHON, CONFIG_IMPORT_PATH
+
+
+@pytest.mark.parametrize("form", ["git config {k} /x", "git config --local {k} /x", "git -c {k}=/x status",
+                                  "git config --add {k} /x", "git config --unset {k}", "git config set {k} /x"])
+def test_writing_the_git_hooks_interpreter_or_import_path_asks(form: str) -> None:
+    """End to end: the keys the generated git hook executes and imports from, as git_hooks writes them."""
+    for key in _hook_config_keys():
+        code, decision = _run_template(form.format(k=key))
+        assert code == 0 and decision is not None and decision["permissionDecision"] == "ask", (form, key)
+
+
+def test_reading_the_git_hooks_interpreter_or_import_path_is_silent() -> None:
+    for key in _hook_config_keys():
+        assert _run_template(f"git config --get {key}") == (0, None), key

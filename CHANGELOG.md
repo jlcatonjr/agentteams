@@ -14,6 +14,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Until 1.3.2 the workaround stands: record no PASS on an id with an open HALT, and after a retraction treat rows
   newer than the HALT as void and record a fresh PASS.
 
+### added (every team receives a script-consolidation reference)
+
+- **New reference:** `references/script-consolidation.reference.md` gives the procedure for reviewing one-off
+  scripts and planning which recurring ones become maintained tools: the phases, the brief each reviewer works
+  to, an accuracy audit and a design audit. `@code-hygiene` points to it for CH-08 and CH-27.
+- **Reference branch on every verdict:** a statement that a tool exists, is missing or only partly covers a need
+  carries the line `python -m agentteams.ref_branch` prints, so a stale checkout cannot pass as the truth.
+- **Placement Decision Rule:** a USER-EDITABLE section for the project's own answer to where each kind of tool
+  lives. `--update` keeps it.
+- **What it is not:** a conformance check. CH-08 and CH-27 remain judgment rules, and their text is unchanged.
+  The orchestrator gains no lines.
+- **Expect on update:** one new file under `references/`, and nine added lines in the code-hygiene agent.
+
+### changed (the pre-commit hook no longer stages working-tree maps into an agent session's commit)
+
+- The hook rebuilt `references/pipeline-graph.*` and `references/architecture-graph.*` from the working tree and
+  staged them, so an agent's one-file commit also carried map changes caused by other sessions' uncommitted edits.
+- When any agent-host variable that `update_lock.INVOKER_ENV_MARKERS` lists (the variables Claude Code, Goose and
+  Codex set in the shells they start) is set to a non-empty value, the hook now skips both map refreshes and prints one line saying how to refresh them. `git config
+  agentteams.hookAgentRefresh true` keeps the old behaviour. The env-file guard, the code-index warm-up and the API
+  impact check, strict mode included, are unchanged.
+- The markers are advisory: a shell that exports one also skips the refresh, which loses a convenience, not a gate.
+- Existing hooks change only when reinstalled (`agentteams --install-git-hooks`, or an `--update` that reinstalls).
+
+### security (a git hook installed into a tracked hooks dir no longer carries this machine's paths)
+
+- The pre-commit and pre-push hooks had the agentteams checkout path and the installing interpreter written into
+  them. With `core.hooksPath` pointing inside the working tree (a tracked `.githooks/`, say), committing the hooks
+  published a home-directory path, and on other machines the hook fell back or ran another checkout.
+- For a hooks dir inside the working tree, the installer now writes both into local git config
+  (`agentteams.hookImportPath`, `agentteams.hookPython`, in `.git/config`) and the hook reads them at run time; it
+  prints a notice saying so. The import path must be an absolute directory outside the working tree, and the
+  interpreter passes the same checks as before (3.11+, not inside the tree).
+- The default `.git/hooks` install is unchanged. A hook committed by an older version keeps its paths until it is
+  reinstalled (`agentteams --install-git-hooks`).
+
+### security (the gate checks the scanner in its own project and in the code it imports, not only the cwd)
+
+- **Fixed:** before trusting `agentteams.scan`, the constitutional gate verified the integrity manifest of the
+  working directory only. A session started in a subdirectory or another worktree checked a different manifest,
+  or none, so a changed `scan.py` in the hook's own project went unnoticed. The gate now verifies the union of
+  the hook's project roots (its install location and `$CLAUDE_PROJECT_DIR`), the working directory, and the tree
+  `agentteams` is imported from, which under an editable install is the code that actually runs.
+- **Unreadable manifest:** a manifest in any of those trees that cannot be decoded or parsed (not UTF-8, invalid or
+  too deeply nested JSON, an I/O error) or that holds a non-string digest now asks
+  (`scanner-unverified`, reason `manifest-unreadable`) in both profiles. Before, it raised out of the gate, and in
+  the cooperative profile an exception lets the write through.
+- **Gate log:** `AGENTTEAMS_GATE_LOG` is refused when it lies inside any of the hook's project roots or the working
+  directory, with the same "path is inside the project" note; before, only the working directory counted.
+- **Newly asks or refuses, nothing newly allowed:** a mismatched scanner in any of those trees asks
+  (`scanner-unverified`), and a gate log inside the project but outside the working directory is not written.
+  Every root checked before is still checked.
+
+### security (the gate asks on git config that runs a program or hands over the push credential)
+
+- **Fixed:** the constitutional gate's `git-alias-config` class now also asks on `credential.*`, `core.hooksPath`,
+  `core.sshCommand`, `core.askPass` and `core.fsmonitor`, and on `agentteams.hookPython` and
+  `agentteams.hookImportPath` (the generated git hook runs that interpreter with that import path), set or unset
+  through `git config`, `git -c` or `git --config-env`. Before, `git config core.hooksPath x` ran with no prompt, and the next commit, push or `git status` (the
+  operator's too) ran whatever it named; `credential.helper` handed the push credential to a program.
+- **Effect on headless sessions:** these commands now ask, which a headless session denies. Setup steps run
+  through agent Bash, such as `git config credential.helper osxkeychain`, `git config core.sshCommand "ssh -i …"` or
+  `git -c core.hooksPath=/dev/null …`, need an operator or must run outside the session. A project policy that
+  denies `git-alias-config` (and the `strict` preset) now denies them too. The class id is unchanged.
+- **How a read is told from a write:** a positive, fail-closed rule instead of a regular-expression lookahead. A
+  `git config` command naming one of these keys is exempt as a read only when the whole Bash command is plain text
+  (ASCII letters and digits, space, tab, a plain newline between commands, `. _ - / : = @ , + %` and `; & |`), and
+  the command parses as `git [global options] config` followed by `get` or `list`, or with `--get…`, `--list` or
+  `-l` before the key, where only options git is known to accept may come first. With no quote, `$`, backtick,
+  backslash, brace, bracket, parenthesis, glob, `~`, `<`, `>`, `#` or `!`, and no other line break, nothing the
+  shell does can change the words git receives. Before, quoting, comments, nested commands, brace expansion, word
+  splitting and `$'…'` quoting could each make a write look like a read. The same rule covers the
+  `publication-channel` keys (`remote.*.url`, `url.*.insteadOf`, and any `include.` or `includeIf.` key).
+- **Section renames:** `git config --rename-section foo core` (or `rename-section`, or an abbreviation such as
+  `--ren`) asks when either name begins with `alias`, `push`, `remote`, `url`, `credential`, `core`, `include` or
+  `agentteams`, in any case. git honours the rename, so `foo.hooksPath` set earlier becomes `core.hooksPath` with no
+  command naming the key. A rename between other sections stays silent.
+- **Section removals:** `git config --remove-section core` (or `remove-section`, or `--rem`) asks for the same
+  section families: removing a section unsets every key in it, so it clears `core.hooksPath` just as
+  `--unset core.hooksPath` does, which already asked. Removing another section stays silent.
+- **Program variables:** `GIT_EDITOR=/path/x git config --edit` ran `/path/x` with no prompt. An assignment of
+  `GIT_EDITOR`, `EDITOR`, `VISUAL`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`, `PAGER`, `GIT_SSH`, `GIT_SSH_COMMAND`,
+  `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_EXTERNAL_DIFF` or `GIT_PROXY_COMMAND` on the same line as a later `git`
+  command now asks (`VAR=x git …`, `env VAR=x git …`, `export VAR=x; git …`). Who notices: a session that sets
+  an editor or pager program inline for git now gets a prompt. Turning paging off stays silent: `GIT_PAGER` or
+  `PAGER` set to the bare word `cat` or to nothing (`GIT_PAGER=cat git log`) is exempt, because sessions do it
+  constantly and a prompt there would be approved unread. For `GIT_PAGER` this starts no program (git documents
+  an empty value or `cat` as "launch no pager"); for `PAGER` it may at most run `cat` from `PATH` as the pager.
+- **Newly silent:** `git config get …` and `git config list` (git 2.46 and later) are reads, for every key, including
+  `alias.`, `push.`, `remote.` and `url.`, which asked before.
+- **Who notices the stricter reads:** a read naming one of these keys now asks when anything in the same Bash
+  command is not plain text: a quoted key (`git config --get 'alias.p'`, so a key with a space always asks), a quote,
+  `$` or `#` anywhere else in the command (`git config --get alias.p && git commit -m "x"`,
+  `git config --get alias.p; echo $?`), a `~` path (`git -C ~/repo config --get alias.p`), a `\`-continued line,
+  CRLF line endings, or a read run through a wrapper (`sudo git config --get alias.p`). So does a read behind an
+  option outside git's known set or an abbreviated one, `--show-origin` without a read flag, and any `git config`
+  naming an `include.` or `includeIf.` key other than `.path`. All of these passed silently before. Plain reads,
+  such as `git config --get remote.origin.url` or `git -C path config --get core.hooksPath`, stay silent.
+- **Not covered:** other keys that run a program (`core.pager`, `core.editor`, `filter.*` and more) are listed in
+  the known limitations.
+
 ### docs (a retraction in another team directory does not void this log's older clearances)
 
 - **Documented:** in known-limitations: gates that read HALTs from other team or surface directories block on an
