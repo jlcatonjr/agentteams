@@ -793,3 +793,40 @@ def test_scan_does_not_set_primary_output_dir_to_src(tmp_path):
     result = load(brief_path, scan_project=True)
     assert result.get("primary_output_dir") != "src/"
     assert result.get("primary_output_dir") is None
+
+
+# --- scratch and backup trees are not read ---------------------------------------------------
+
+
+def test_manifests_under_tmp_and_backups_are_not_read(tmp_path):
+    (tmp_path / "tmp" / "handoff").mkdir(parents=True)
+    (tmp_path / "tmp" / "handoff" / "package.json").write_text('{"dependencies": {"scratchpkg-zz": "1.0"}}')
+    (tmp_path / ".agentteams-backups" / "x").mkdir(parents=True)
+    (tmp_path / ".agentteams-backups" / "x" / "requirements.txt").write_text("backuppkg-zz==1.0\n")
+    names = {t["name"] for t in parse_dependency_manifests(tmp_path)}
+    assert "scratchpkg-zz" not in names and "backuppkg-zz" not in names
+    # Negative control: the same manifest under an ordinary package directory is read.
+    (tmp_path / "packages" / "foo").mkdir(parents=True)
+    (tmp_path / "packages" / "foo" / "package.json").write_text('{"dependencies": {"scratchpkg-zz": "1.0"}}')
+    assert "scratchpkg-zz" in {t["name"] for t in parse_dependency_manifests(tmp_path)}
+
+
+def test_language_detection_ignores_tmp(tmp_path):
+    from agentteams.ingest import _walk_depth
+    (tmp_path / "tmp").mkdir()
+    (tmp_path / "tmp" / "scratch.rs").write_text("fn main() {}\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.go").write_text("package main\n")
+    names = {p.name for p in _walk_depth(tmp_path)}
+    assert "scratch.rs" not in names and "app.go" in names
+
+
+def test_ingest_names_the_manifest_each_tool_came_from(tmp_path, capsys):
+    (tmp_path / "svc").mkdir()
+    (tmp_path / "svc" / "requirements.txt").write_text("alpha-zz==1\nbeta-zz==2\n")
+    (tmp_path / "package.json").write_text('{"dependencies": {"alpha-zz": "1"}}')
+    from agentteams.ingest import _supplement_from_directory
+    desc = _supplement_from_directory({"tools": [{"name": "beta-zz"}]}, tmp_path)
+    assert [t["name"] for t in desc["tools"]] == ["beta-zz", "alpha-zz"]
+    err = capsys.readouterr().err
+    assert "[ingest] tools from svc/requirements.txt: 1" in err and "package.json" not in err

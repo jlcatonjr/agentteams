@@ -1,13 +1,15 @@
 """user_regions.py — the user-editable regions of generated files, and carrying them across ``--overwrite``.
 
-Two regions are user-owned and outside every ``AGENTTEAMS`` fence:
+Three regions are user-owned and outside every ``AGENTTEAMS`` fence:
 
 * ``## Project-Specific Notes``, at the end of every agent persona: Markdown, a Codex ``developer_instructions``
   body, and (from P5a) a Goose recipe's ``instructions: |`` block. A fresh Copilot ``.agent.md`` render puts it
   before the body's first named-section fence instead (baseAgent P4: GitHub truncates a body past 30,000 characters);
 * ``## Project-Specific Rules``, in the rendered instruction files (``CLAUDE.md``, ``.claude/CLAUDE.md``,
   ``AGENTS.md``, ``.github/copilot-instructions.md``), and in ``AGENTS.override.md`` / ``.goosehints`` when
-  :mod:`agentteams.rules_projection` adds one there.
+  :mod:`agentteams.rules_projection` adds one there;
+* ``## Project Layout``, after the Directory Structure fence of those instruction files
+  (:mod:`agentteams.project_notes`). Only :func:`carry_regions` handles it; :data:`HEADINGS` keeps the two above.
 
 ``--merge`` keeps them because it keeps everything outside a fence. ``--overwrite`` used to write the new
 render straight over the file, so a team's own rules and duties were lost. mathAgents lost its orchestrator's
@@ -32,8 +34,12 @@ import re
 import sys
 import tomllib
 
+from agentteams.project_notes import _PROJECT_LAYOUT_HEADING as LAYOUT_HEADING
+
 HEADINGS = ("## Project-Specific Notes", "## Project-Specific Rules")
 _NOTES_HEADING, _RULES_HEADING = HEADINGS
+#: The regions ``--overwrite`` carries: :data:`HEADINGS` plus the instruction files' Project Layout.
+CARRIED_HEADINGS = HEADINGS + (LAYOUT_HEADING,)
 
 # A learned-block marker *line* (:mod:`agentteams.learned_blocks` matches whole stripped lines). The word in
 # prose is not a marker: a region that only mentions it is carried. Whitespace inside the comment is optional
@@ -50,7 +56,7 @@ def find_region(text: str, heading: str) -> tuple[int, int, str] | None:
 
     Args:
         text: The file content.
-        heading: One of :data:`HEADINGS`.
+        heading: One of :data:`CARRIED_HEADINGS`.
 
     Returns:
         ``(start, end, indent)``, or ``None`` when the heading is absent.
@@ -159,7 +165,7 @@ def carry_regions(old: str, new: str, *, toml: bool = False) -> tuple[str, list[
     carried: list[tuple[str, int, str]] = []
     problems: list[str] = []
     content = new
-    for heading in HEADINGS:
+    for heading in CARRIED_HEADINGS:
         old_span = find_region(old, heading)
         if old_span is None:
             continue
@@ -193,9 +199,10 @@ def carry_regions(old: str, new: str, *, toml: bool = False) -> tuple[str, list[
             continue
         if new_span is None:
             # A region the render doesn't declare that holds only generated text (the USER-EDITABLE note and a
-            # rules_projection block, which the next projection writes again) has nothing of the operator's to keep.
+            # rules_projection block, which the next projection writes again, and the template's ``---`` rule before
+            # the next fence) has nothing of the operator's to keep.
             body = _PROJECTED_BLOCK_RE.sub("", region).splitlines(keepends=True)[1:]
-            if not any(ln.strip() for ln in body[skip_banner(body):]):
+            if not any(ln.strip() not in ("", "---") for ln in body[skip_banner(body):]):
                 continue
             problems.append(f"the new render has no '{heading}' region to carry the existing one into")
             continue

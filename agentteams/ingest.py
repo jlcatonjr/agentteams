@@ -15,10 +15,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from agentteams._utils import _slugify
+from agentteams.backup import BACKUP_DIR_NAME
 from agentteams._ingest_authority import has_list_or_table as _has_list_or_table
 from agentteams._ingest_authority import parse_authority_sources as _parse_authority_sources
 from agentteams.tool_version_source import version_source_errors
@@ -334,10 +337,14 @@ def _supplement_from_directory(desc: dict[str, Any], project_path: Path) -> dict
 
     # Supplement tools with dependency manifest contents
     existing_names = {t.get("name", "").lower() for t in desc.get("tools", [])}
-    for dep in parse_dependency_manifests(project_path):
+    added_from: Counter[str] = Counter()
+    for dep, source in _manifest_tools(project_path):
         if dep["name"].lower() not in existing_names:
             desc.setdefault("tools", []).append(dep)
             existing_names.add(dep["name"].lower())
+            added_from[source] += 1
+    for source, count in added_from.items():  # provenance: which manifest put tools into the brief
+        print(f"[ingest] tools from {source}: {count}", file=sys.stderr)
 
     # Detect primary_output_dir from common patterns if not set
     if "primary_output_dir" not in desc:
@@ -515,7 +522,12 @@ def parse_dependency_manifests(project_path: Path, *, max_depth: int = 2) -> lis
     Returns:
         List of tool dicts with name, version (if available), and category.
     """
-    tools: list[dict[str, Any]] = []
+    return [dep for dep, _source in _manifest_tools(project_path, max_depth=max_depth)]
+
+
+def _manifest_tools(project_path: Path, *, max_depth: int = 2) -> list[tuple[dict[str, Any], str]]:
+    """:func:`parse_dependency_manifests`, each tool paired with its manifest's project-relative path."""
+    tools: list[tuple[dict[str, Any], str]] = []
     seen: set[str] = set()
 
     parsers: list[tuple[str, Any]] = [
@@ -534,7 +546,7 @@ def parse_dependency_manifests(project_path: Path, *, max_depth: int = 2) -> lis
                     name_lower = dep["name"].lower()
                     if name_lower not in seen:
                         seen.add(name_lower)
-                        tools.append(dep)
+                        tools.append((dep, manifest_path.relative_to(project_path).as_posix()))
             except (OSError, ValueError, KeyError):
                 continue  # CH-24: skip unreadable / malformed / missing-key manifests
 
@@ -670,6 +682,7 @@ def _walk_depth(path: Path, max_depth: int = 3) -> list[Path]:
     results: list[Path] = []
     for root, dirs, files in os.walk(path):
         depth = len(Path(root).relative_to(path).parts)
+        dirs[:] = [d for d in dirs if d not in _PRUNE_DIRS]
         if depth >= max_depth:
             dirs.clear()
         for fname in files:
@@ -677,7 +690,9 @@ def _walk_depth(path: Path, max_depth: int = 3) -> list[Path]:
     return results
 
 
-_PRUNE_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", ".tox", "dist", "build", "vendor"}
+#: Installed packages, build output, and scratch / backup / report trees whose stale manifest copies would add tools.
+_PRUNE_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", ".tox", "dist", "build", "vendor",
+               "tmp", BACKUP_DIR_NAME, ".agentteams-fleet", ".pytest_cache", ".mypy_cache"}
 
 
 def _find_manifests(project_path: Path, filename: str, max_depth: int) -> list[Path]:
@@ -690,7 +705,8 @@ def _find_manifests(project_path: Path, filename: str, max_depth: int) -> list[P
     (e.g. ``packages/foo/package.json``).
 
     Well-known non-source directories (``node_modules``, ``.venv``, ``vendor``,
-    etc.) are pruned before descent to prevent installed-package pollution.
+    ``tmp``, ``.agentteams-backups``, etc.) are pruned before descent to prevent
+    installed-package and stale-copy pollution.
     """
     results: list[Path] = []
     for root, dirs, files in os.walk(project_path):

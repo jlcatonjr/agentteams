@@ -5,7 +5,7 @@ before/after snapshot that watches ``.agentteams`` by stat, so before the fix an
 tick failed with "command wrote outside its declared writes: .agentteams/runner.heartbeat" (mathAgents M6, rc.13).
 
 These tests simulate "a sandbox ran" without needing one (``_sandbox_for`` returns a name, ``wrap`` is the identity),
-and simulate the runner's heartbeat with a thread that rewrites the file while the command sleeps.
+and drive the runner's own heartbeat from a thread while the command sleeps.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import pytest
 from agentteams import confinement as C
 from agentteams import proposal_runner
 from agentteams import proposals as P
+from agentteams import runner_mcp
 
 PY = sys.executable
 PY_DIRS = sorted({os.path.dirname(os.path.dirname(os.path.realpath(PY))), os.path.dirname(PY)})
@@ -59,19 +60,25 @@ def _simulate(monkeypatch, sandbox: str | None):
 
 
 def _beating(root):
-    """The runner's heartbeat: rewrite the file (new inode, as the runner does) until stopped."""
-    hb = root / P.RUNNER_HEARTBEAT_REL
-    hb.parent.mkdir(exist_ok=True)
-    hb.write_text("0")
+    """The runner's own heartbeat (``Runner._heartbeat``: real lock, real temp naming) every 0.1 s until stopped.
+
+    An earlier simulator wrote ``runner.heartbeat.tmp`` without the lock, a name the runner never produces; a snapshot
+    could catch it mid-beat and report it (issue #502).
+    """
+    (root / ".agentteams").mkdir(exist_ok=True)
+    # A rendered team ships the status tree's ignore file, so the status beat stays out of `git status`.
+    for rel, content in runner_mcp.install_files({"write_policy": "orchestrator-only"}):
+        dest = root / rel.removeprefix("../../")
+        dest.parent.mkdir(exist_ok=True)
+        dest.write_text(content)
+    runner = proposal_runner.Runner.__new__(proposal_runner.Runner)
+    runner.root = root
+    runner._heartbeat()
     stop = threading.Event()
 
     def beat():
-        n = 0
         while not stop.wait(0.1):
-            n += 1
-            tmp = hb.with_name(hb.name + ".tmp")
-            tmp.write_text(str(n))
-            os.replace(tmp, hb)
+            runner._heartbeat()
 
     t = threading.Thread(target=beat, daemon=True)
     t.start()
@@ -102,6 +109,15 @@ def test_heartbeat_during_a_sandboxed_command_is_not_an_undeclared_write(project
         stop.set()
         t.join()
     assert result["exit"] == 0 and result["undeclared_writes"] == []
+
+
+def test_a_temp_file_beside_the_heartbeat_is_still_an_undeclared_write(project, monkeypatch):
+    """The exemption is the exact heartbeat path, not a prefix: a ``runner.heartbeat.tmp`` is still reported."""
+    _simulate(monkeypatch, "seatbelt")
+    (project / ".agentteams").mkdir(exist_ok=True)
+    code = "open('.agentteams/runner.heartbeat.tmp', 'w').write('x')"
+    with pytest.raises(P.UndeclaredWritesError, match=r"\.agentteams/runner\.heartbeat\.tmp"):
+        _run(project, code)
 
 
 def test_other_control_plane_change_still_fails_under_a_sandbox(project, monkeypatch):

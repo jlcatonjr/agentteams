@@ -34,6 +34,7 @@ from agentteams.sync_pin import DEFAULT_CANONICAL_REL, read_pin
 
 __all__ = [
     "HubRefreshResult",
+    "agent_team_roster_mismatch",
     "pin_instruction_problem",
     "refresh_hub_binding",
     "refresh_hub_for_projection",
@@ -43,6 +44,10 @@ __all__ = [
 
 #: Reads the fence id and both versions back out of a ``keep_newer_fences`` "kept" notice.
 _KEPT_RE = re.compile(r"'(?P<sid>[a-z][a-z0-9_]*)' at v=(?P<peer>\d+) \(incoming v=(?P<pin>\d+)")
+#: A whole fenced region, for comparing the text outside fences.
+_FENCED_BLOCK_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN (?P<sid>\S+)[^>]*-->.*?<!-- AGENTTEAMS:END (?P=sid) -->", re.DOTALL)
+#: An agent handle in the ``agent_team`` fence: `` `@slug` ``.
+_HANDLE_RE = re.compile(r"`@([A-Za-z0-9][A-Za-z0-9_.-]*)`")
 
 
 @dataclass
@@ -235,20 +240,55 @@ def refresh_hub_binding(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]
     return result
 
 
-def refuse_unsafe_pin_instructions(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any]) -> None:
+def refuse_unsafe_pin_instructions(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], *,
+                                   existing_hub_dir: Path | None = None) -> None:
     """Refuse a sync whose pin instruction file would spread bad content, before anything is written.
 
     Args:
         root: The pinned project root.
         pin_doc: The parsed pin (``pinned_framework`` and ``frameworks``).
         hub: The canonical team about to be projected.
+        existing_hub_dir: ``--sync-init``'s hub directory. When a hub is already there it is checked too: *hub*
+            is then the seed exported from the pin, which has no instruction content when the pin's file is
+            missing, and materializing it would empty the existing hub's instruction content.
 
     Raises:
         ValueError: :func:`pin_instruction_problem` found a problem.
     """
-    problem = pin_instruction_problem(root, pin_doc, hub)
-    if problem:
-        raise ValueError(f"refusing to sync, nothing was written: {problem}")
+    hubs = [hub]
+    if existing_hub_dir is not None and (Path(existing_hub_dir) / TEAM_FILE_NAME).is_file():
+        hubs.append(load_canonical(existing_hub_dir))
+    for candidate in hubs:
+        problem = pin_instruction_problem(root, pin_doc, candidate)
+        if problem:
+            raise ValueError(f"refusing to sync, nothing was written: {problem}")
+
+
+def agent_team_roster_mismatch(content: str, hub: dict[str, Any]) -> str:
+    """Compare the ``agent_team`` fence's `` `@slug` `` handles with the hub's agents.
+
+    The fence is moved verbatim from the pin, so it can name agents the roster lacks or omit ones it has. This
+    only reports; the fence is not rewritten.
+
+    Args:
+        content: Instruction content (the hub's, after the refresh).
+        hub: The canonical team.
+
+    Returns:
+        The notice, or ``""`` when the lists match or there is no ``agent_team`` fence.
+    """
+    from agentteams.fences import _extract_fenced_regions
+
+    regions = _extract_fenced_regions(content)
+    if not isinstance(regions, dict) or "agent_team" not in regions:
+        return ""
+    listed = set(_HANDLE_RE.findall(regions["agent_team"]))
+    roster = {str(a["slug"]) for a in hub.get("agents") or [] if isinstance(a, dict) and a.get("slug")}
+    extra, missing = sorted(listed - roster), sorted(roster - listed)
+    if not (extra or missing):
+        return ""
+    return (f"agent_team fence lists agents the roster lacks ({', '.join(extra) or 'none'}) and omits roster agents "
+            f"({', '.join(missing) or 'none'}); regenerate the pin natively (--update --merge)")
 
 
 def refresh_hub_for_projection(root: Path, pin_doc: dict[str, Any], hub: dict[str, Any], canonical_dir: Path, *,
@@ -276,6 +316,13 @@ def refresh_hub_for_projection(root: Path, pin_doc: dict[str, Any], hub: dict[st
         return
     notices.extend(result.notices)
     notices.extend(_peer_fences_replaced(root, pin_doc, hub))
+    hub_text = str(hub.get("instructions_binding", {}).get("content", ""))
+    if mismatch := agent_team_roster_mismatch(hub_text, hub):
+        notices.append(mismatch)
+    if _outside_fences(_deployed_instructions(root, pin_doc["pinned_framework"])) != _outside_fences(hub_text):
+        notices.append("the pin's text outside AGENTTEAMS fences differs from the hub's; a peer instruction file "
+                       "that is missing gets the hub's (from --sync-init), not the pin's. Copy Project-Specific "
+                       "Rules across with rules projection, or re-run --sync-init")
     if not result.changed:
         return
     moved = ", ".join(result.refreshed + result.added) or "content outside fences only"
@@ -307,6 +354,11 @@ def _peer_fences_replaced(root: Path, pin_doc: dict[str, Any], hub: dict[str, An
             out.append(f"{fw}: instruction fences {', '.join(differ)} differ from the pin's and get the pin's text "
                        f"(the projection backup keeps {fw}'s copy)")
     return out
+
+
+def _outside_fences(text: str) -> str:
+    """*text* without its fenced regions, whitespace collapsed (so blank-line drift is not a difference)."""
+    return " ".join(_FENCED_BLOCK_RE.sub(" ", text).split())
 
 
 def _deployed_instructions(root: Path, framework: str) -> str:

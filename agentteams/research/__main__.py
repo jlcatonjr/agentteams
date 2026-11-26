@@ -13,6 +13,9 @@ Deliberately separate from ``agentteams``'s own console-script CLI (``build_team
 ``agentteams``/``build-team`` entry points) — adding a flag there would touch ``agentteams.1``
 and this repo's man-page-regen/SemVer obligations, a different boundary than this subpackage's.
 This module's ``python -m`` invocation touches neither.
+
+Exit codes: 0 on success (``search`` included when a backend answered with no hits); 3 when ``search`` got no
+answer from any backend, so an empty list is not mistaken for evidence that nothing exists.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 
 from agentteams.research.scholarly import SOURCES, format_citation, scholarly_search
 from agentteams.research.search import fetch_text, web_search_with_provenance
@@ -109,6 +113,10 @@ def main(argv: list[str] | None = None) -> int:
             f"query_used={prov.query_used!r} tried={','.join(prov.backends_tried) or 'none'}",
             file=sys.stderr,
         )
+        if not results and not prov.backend:  # exit 3: a dead search must not read as "no results"
+            print(f"note: no search backend answered (tried {','.join(prov.backends_tried) or 'none'}); the empty "
+                  "result is not evidence of absence", file=sys.stderr)
+            return 3
         return 0
 
     if args.command == "scholar":
@@ -118,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         payload: list[dict[str, object]] = []
         for work in works:
-            record: dict[str, object] = dict(work.__dict__)
+            record: dict[str, object] = asdict(work)  # authorships are nested dataclasses
             if args.citations:
                 record["citation"] = format_citation(work)
             payload.append(record)

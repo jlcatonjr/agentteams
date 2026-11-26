@@ -212,3 +212,23 @@ def test_schema_file_present_and_parses():
     data = json.loads(schema.read_text(encoding="utf-8"))
     assert data.get("$schema", "").startswith("https://json-schema.org/")
     assert "recipients" in data["properties"]
+
+
+# ----------------------------- the PR personas create the labels they apply ----------------------------------
+
+_TEMPLATES = Path(__file__).resolve().parents[1] / "agentteams" / "templates" / "domain"
+
+
+def _invariant_core(name: str) -> str:
+    text = (_TEMPLATES / f"{name}.template.md").read_text(encoding="utf-8")
+    return text.split("<!-- AGENTTEAMS:BEGIN invariant_core", 1)[1].split("<!-- AGENTTEAMS:END invariant_core", 1)[0]
+
+
+def test_pr_templates_create_their_labels():
+    lines = _invariant_core("pr-manager").splitlines()
+    for label in ("pr-mgmt", "awaiting-review"):
+        # One whole command per line, so --force belongs to this label's create and not to a neighbour's.
+        own = [ln for ln in lines if f"`gh label create {label} " in ln]
+        assert len(own) == 1 and own[0].rstrip().endswith("--force`"), (label, own)
+    # The notifier has no shell: it relies on @pr-manager having created the labels its command applies.
+    assert "@pr-manager" in _invariant_core("pr-notifier") and "gh label create" in _invariant_core("pr-notifier")

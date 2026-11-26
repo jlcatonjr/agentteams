@@ -34,7 +34,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 import httpx
@@ -71,6 +71,36 @@ _ARXIV_NS = {"atom": "http://www.w3.org/2005/Atom"}
 SOURCES: tuple[str, ...] = ("openalex", "crossref", "arxiv")
 
 
+_ARXIV_EXT = "{http://arxiv.org/schemas/atom}"
+
+
+@dataclass
+class Affiliation:
+    """One institution an author lists on a work, exactly as the source gives it (Rule 5: nothing inferred).
+
+    Crossref and arXiv carry only a name, so ``openalex_id`` and ``country_code`` stay ``None`` there.
+    """
+
+    name: str
+    openalex_id: str | None = None
+    country_code: str | None = None
+
+
+@dataclass
+class Authorship:
+    """One author of a work: the name plus whatever identifiers and affiliations the source carries.
+
+    Values are kept as given (an ORCID stays in URL form if that is what arrives); an absent value is
+    ``None`` / ``[]``, never a guess.
+    """
+
+    name: str
+    openalex_id: str | None = None
+    orcid: str | None = None
+    affiliations: list[Affiliation] = field(default_factory=list)
+    country_codes: list[str] = field(default_factory=list)
+
+
 @dataclass
 class ScholarlyWork:
     """One work as returned by a scholarly index.
@@ -88,6 +118,49 @@ class ScholarlyWork:
     abstract: str = ""
     venue: str = ""
     source: str = ""
+    authorships: list[Authorship] = field(default_factory=list)
+    language: str | None = None
+
+
+def _str_or_none(value: Any) -> str | None:
+    """*value* when it is a non-empty string, else ``None`` (a malformed sub-field is empty, not a crash)."""
+    return value if isinstance(value, str) and value else None
+
+
+def _openalex_authorship(a: Any) -> Authorship | None:
+    """One OpenAlex ``authorships[]`` entry, or ``None`` when it names no author."""
+    if not isinstance(a, dict) or not isinstance(a.get("author"), dict):
+        return None
+    author = a["author"]
+    name = author.get("display_name")
+    if not name:
+        return None
+    institutions = a.get("institutions") if isinstance(a.get("institutions"), list) else []
+    countries = a.get("countries") if isinstance(a.get("countries"), list) else []
+    return Authorship(
+        name=str(name), openalex_id=_str_or_none(author.get("id")), orcid=_str_or_none(author.get("orcid")),
+        affiliations=[Affiliation(str(i["display_name"]), _str_or_none(i.get("id")), _str_or_none(i.get("country_code")))
+                      for i in institutions if isinstance(i, dict) and i.get("display_name")],
+        country_codes=[c for c in countries if isinstance(c, str) and c])
+
+
+def _work_from_dict(item: Any) -> ScholarlyWork | None:
+    """Rebuild a cached work (nested authorships included); unknown keys are ignored, a bad item gives ``None``."""
+    if not isinstance(item, dict):
+        return None
+
+    def known(cls: type, data: dict[str, Any]) -> dict[str, Any]:
+        return {f.name: data[f.name] for f in fields(cls) if f.name in data}
+
+    try:
+        work = ScholarlyWork(**known(ScholarlyWork, item))
+        work.authorships = [
+            Authorship(**{**known(Authorship, a), "affiliations": [
+                Affiliation(**known(Affiliation, f)) for f in a.get("affiliations") or [] if isinstance(f, dict)]})
+            for a in work.authorships if isinstance(a, dict)]
+    except TypeError:
+        return None
+    return work if isinstance(work.authors, list) else None
 
 
 def _contact_email() -> str:
@@ -194,14 +267,8 @@ def _parse_openalex(payload: Any, k: int) -> list[ScholarlyWork]:
     for item in results[:k]:
         if not isinstance(item, dict):
             continue
-        authorships = item.get("authorships")
-        authors = []
-        if isinstance(authorships, list):
-            for a in authorships:
-                if isinstance(a, dict) and isinstance(a.get("author"), dict):
-                    name = a["author"].get("display_name")
-                    if name:
-                        authors.append(str(name))
+        raw = item.get("authorships")
+        authorships = [s for s in map(_openalex_authorship, raw if isinstance(raw, list) else []) if s]
         venue = ""
         primary = item.get("primary_location")
         if isinstance(primary, dict) and isinstance(primary.get("source"), dict):
@@ -211,13 +278,15 @@ def _parse_openalex(payload: Any, k: int) -> list[ScholarlyWork]:
         out.append(
             ScholarlyWork(
                 title=str(item.get("title") or item.get("display_name") or ""),
-                authors=authors,
+                authors=[a.name for a in authorships],
                 year=year if isinstance(year, int) else None,
                 doi=str(doi).replace("https://doi.org/", "") if doi else None,
                 url=str(item.get("id") or ""),
                 abstract=_reconstruct_openalex_abstract(item.get("abstract_inverted_index")),
                 venue=venue,
                 source="openalex",
+                authorships=authorships,
+                language=_str_or_none(item.get("language")),
             )
         )
     return out
@@ -243,7 +312,7 @@ def _parse_crossref(payload: Any, k: int) -> list[ScholarlyWork]:
             continue
         titles = item.get("title")
         title = str(titles[0]) if isinstance(titles, list) and titles else ""
-        authors = []
+        authorships: list[Authorship] = []
         raw_authors = item.get("author")
         if isinstance(raw_authors, list):
             for a in raw_authors:
@@ -251,7 +320,9 @@ def _parse_crossref(payload: Any, k: int) -> list[ScholarlyWork]:
                     continue
                 name = " ".join(p for p in (a.get("given"), a.get("family")) if p)
                 if name:
-                    authors.append(name)
+                    affs = a.get("affiliation") if isinstance(a.get("affiliation"), list) else []
+                    authorships.append(Authorship(name=name, orcid=_str_or_none(a.get("ORCID")), affiliations=[
+                        Affiliation(str(f["name"])) for f in affs if isinstance(f, dict) and f.get("name")]))
         year = None
         issued = item.get("issued")
         if isinstance(issued, dict):
@@ -264,13 +335,15 @@ def _parse_crossref(payload: Any, k: int) -> list[ScholarlyWork]:
         out.append(
             ScholarlyWork(
                 title=title,
-                authors=authors,
+                authors=[a.name for a in authorships],
                 year=year,
                 doi=str(item["DOI"]) if item.get("DOI") else None,
                 url=str(item.get("URL") or ""),
                 abstract=re.sub(r"<[^>]+>", "", str(item.get("abstract") or "")).strip(),
                 venue=venue,
                 source="crossref",
+                authorships=authorships,
+                language=_str_or_none(item.get("language")),
             )
         )
     return out
@@ -297,25 +370,28 @@ def _parse_arxiv(xml_text: str, k: int) -> list[ScholarlyWork]:
         summary_el = entry.find("atom:summary", _ARXIV_NS)
         id_el = entry.find("atom:id", _ARXIV_NS)
         published_el = entry.find("atom:published", _ARXIV_NS)
-        authors = [
-            (name.text or "").strip()
-            for name in entry.findall("atom:author/atom:name", _ARXIV_NS)
-            if (name.text or "").strip()
+        authorships = [
+            Authorship(name=(name_el.text or "").strip(), affiliations=[
+                Affiliation(aff.text.strip()) for aff in author.findall(f"{_ARXIV_EXT}affiliation")
+                if (aff.text or "").strip()])
+            for author in entry.findall("atom:author", _ARXIV_NS)
+            if (name_el := author.find("atom:name", _ARXIV_NS)) is not None and (name_el.text or "").strip()
         ]
         year = None
         if published_el is not None and (published_el.text or "")[:4].isdigit():
             year = int(published_el.text[:4])
-        doi_el = entry.find("{http://arxiv.org/schemas/atom}doi")
+        doi_el = entry.find(f"{_ARXIV_EXT}doi")
         out.append(
             ScholarlyWork(
                 title=re.sub(r"\s+", " ", (title_el.text or "")).strip() if title_el is not None else "",
-                authors=authors,
+                authors=[a.name for a in authorships],
                 year=year,
                 doi=(doi_el.text or "").strip() if doi_el is not None and doi_el.text else None,
                 url=(id_el.text or "").strip() if id_el is not None else "",
                 abstract=re.sub(r"\s+", " ", (summary_el.text or "")).strip() if summary_el is not None else "",
                 venue="arXiv",
                 source="arxiv",
+                authorships=authorships,
             )
         )
     return out
@@ -491,10 +567,12 @@ def scholarly_search(
     if not chosen:
         return []
 
-    cache_key = _cache_key("scholar", query, k, *chosen)
+    # "scholar-v2": entries from before authorships existed must not be served as "the source gave none", and an
+    # older release (which rebuilds with ScholarlyWork(**item)) must never read the new shape.
+    cache_key = _cache_key("scholar-v2", query, k, *chosen)
     cached = _cache_load(cache_key)
     if isinstance(cached, list):
-        return [ScholarlyWork(**item) for item in cached if isinstance(item, dict)][:k]
+        return [w for w in map(_work_from_dict, cached) if w is not None][:k]
 
     collected: list[ScholarlyWork] = []
     with ThreadPoolExecutor(max_workers=len(chosen)) as pool:
@@ -505,7 +583,7 @@ def scholarly_search(
 
     result = _dedupe(collected)[:k]
     if result:
-        _cache_store(cache_key, [w.__dict__ for w in result])
+        _cache_store(cache_key, [asdict(w) for w in result])
     return result
 
 

@@ -810,7 +810,7 @@ def run_fleet(args, parser) -> int:
             if not apply:
                 # Dry-run: report intent; no diff (nothing written).
                 would = "would update"
-                if (rc != 0 and "Error" in out) or _region_refusal(out):  # a refused user region is a FAIL (#533)
+                if rc != 0 or _region_refusal(out):  # a non-zero exit or a refused user region is a FAIL (#533)
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 else:
                     tr.status, tr.detail = "WOULD-UPDATE", would
@@ -838,7 +838,7 @@ def run_fleet(args, parser) -> int:
                 tr.twins_ack_unreviewed = _twin_acks.unreviewed(seen_acks, str(ws), target, tr.twins_acknowledged)
                 tr.duplicates = cls["duplicates"]
                 tr.handoffs_kept = cls["handoffs_kept"]
-                if (rc != 0 and _is_hard_error(out)) or _region_refusal(out):
+                if rc != 0 or _region_refusal(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
                     # A malformed-fence render must not be pushed — surface it above the
@@ -887,8 +887,8 @@ def run_fleet(args, parser) -> int:
                 # created by emit (direct targets) and by run_bridge (bridge
                 # targets) before any overwrite/merge of an existing file.
                 switch_reason = _switch_reason(_switch_review_lines(out))
-                tr.status = "OK" if rc == 0 and not switch_reason else "REVIEW"
-                tr.detail = "; ".join(filter(None, (
+                tr.status = "FAIL" if rc != 0 else "REVIEW" if switch_reason else "OK"
+                tr.detail = "; ".join(filter(None, (_first_error(out) if rc != 0 else  # a FAIL wrote nothing to recover
                     "non-git workspace — recovery via .agentteams-backups (pre-write snapshot)", switch_reason)))
             print(f"    {target}: {tr.status}  (+{tr.added_lines}/-{tr.removed_lines}, "
                   f"{len(tr.shrink_notices)} shrink, {len(tr.user_editable_deletions)} UE-del, "
@@ -902,10 +902,6 @@ def run_fleet(args, parser) -> int:
     if apply:   # after the report, so a notice is recorded as seen only once a report has shown it
         _twin_acks.record_seen(report_root, (tr for wr in results for tr in wr.targets), seen_acks)
     return rc
-
-
-def _is_hard_error(out: str) -> bool:
-    return any(l.strip().startswith("Error") or "Traceback (most recent call last)" in l for l in out.splitlines())
 
 
 def _slug(ws: Path, parent: Path) -> str:

@@ -566,9 +566,13 @@ def test_path_b_overwrite_false_skips_existing(tmp_path):
     from agentteams.convert import convert_team
 
     source_dir = tmp_path / "source"
-    target_dir = tmp_path / "target"
+    # The real layout: convert resolves host features from the privilege profile (default confined), so a claude
+    # target also gets the OS-sandbox launcher sidecars at the project root, two levels above the agents dir. A flat
+    # tmp_path/"target" put them in pytest's session directory, shared by every test, so whether they counted as
+    # "skipped" depended on test order and on the platform's sidecar set.
+    target_dir = tmp_path / "project" / ".claude" / "agents"
     source_dir.mkdir()
-    target_dir.mkdir()
+    target_dir.mkdir(parents=True)
 
     (source_dir / "navigator.agent.md").write_text(
         _make_minimal_vscode_agent("navigator"), encoding="utf-8"
@@ -587,7 +591,8 @@ def test_path_b_overwrite_false_skips_existing(tmp_path):
     )
 
     assert result.success
-    assert len(result.skipped) == 1
+    # Only the pre-existing agent is skipped; every sidecar is new in this fresh project.
+    assert [Path(p).name for p in result.skipped] == ["navigator.agent.md"]
     # Existing content must be unchanged
     assert existing.read_text(encoding="utf-8") == "EXISTING CONTENT"
 

@@ -11,7 +11,7 @@ import sys
 import re
 from pathlib import Path
 
-from agentteams.frameworks.registry import conflict_log_path_for
+from agentteams.frameworks.canonical_paths import canonical_path_placeholders
 from typing import Any
 
 # _plan_output_files extracted to agentteams/output_plan.py (CH-07);
@@ -463,7 +463,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         agent_slug_list=_format_agent_list(all_slugs),
         domain_agent_slugs=_format_agent_list(domain_agent_slugs),
         workstream_expert_slugs=_format_agent_list(workstream_expert_slugs),
-        conflict_log_path=conflict_log_path_for(framework),
+        **canonical_path_placeholders(framework),  # TEAM_INSTRUCTIONS_FILE, TEAM_AGENTS_DIR, CONFLICT_LOG_PATH, ...
         workstream_source_map=_format_workstream_source_map(components),
         style_rules_summary=_format_style_rules(description.get("style_rules", [])),
         domain_agent_list=_format_domain_agent_list(ALWAYS_INCLUDED_DOMAIN_AGENTS + list(archetypes)),

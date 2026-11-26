@@ -44,7 +44,9 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
   sandbox files are written only after every framework's team marker exists, so each framework's
   sibling denies include a team created in the same pass.
 - **Change detection is commit-to-commit** (operator decision): a framework is "changed" when a
-  path under its agents directory moved between the last synced commit and HEAD. A framework's
+  path under its agents directory, or its instruction file (`interop_helpers.instructions_path`: edited, added or
+  deleted; a shared root `AGENTS.md` marks every framework that writes it), moved between the last synced commit
+  and HEAD (#462). A framework's
   own projected-but-uncommitted output therefore never re-triggers a sync.
 
 ---
@@ -52,7 +54,8 @@ Builds entirely on shipped primitives — `interop.export_to_cai` / `import_from
 ## Public constants
 
 - `CONFLICT_LOG_SUBPATH` (`".agentteams/sync-conflicts.log.csv"`): the durable, append-only,
-  human-reviewable conflict log.
+  human-reviewable conflict log. A dry run writes nothing to it; `--sync --dry-run` instead prints the first 50
+  conflicts it would resolve (`framework agent field: classification -> resolution`) and how many more.
 
 ## Public types
 
@@ -77,7 +80,10 @@ fence-merge also never lowers an existing fence's version: a deployed fence with
 reported, except one no release writes (no template or emitter has it): its versions are hand-written, so
 the pin's copy wins and a peer can't block every sync by raising one. A hub with no fences is replaced by
 the pin's fenced file (it could never be fence-merged). Fences one framework owns (`grok_runtime`,
-`goose_bridge_entry`, `goose_bridge_hints`) are stripped from every other framework's instruction file. A
+`goose_bridge_entry`, `goose_bridge_hints`) are stripped from every other framework's instruction file. An
+existing instruction file that shares no template-owned fence with the projection (a short pointer `AGENTS.md`
+holding one bridge fence, say) stays a pointer: only its own fences are refreshed, and a notice names the
+template sections not added (#461). When a fence-merge adds sections to any other file, the notice names them. A
 dry `--sync` keeps the hub in memory between frameworks, so it reports what a real pass would.
 
 ## Public functions
@@ -87,7 +93,8 @@ dry `--sync` keeps the hub in memory between frameworks, so it reports what a re
 Bootstrap the pinned sync: export the pin framework to canonical, materialize the hub, project
 to every framework in the set, and record all baselines plus the change-detection anchor.
 Writes `.agentteams/pin.json`. Raises `ValueError` for an unregistered pin or a pin outside the
-sync set.
+sync set, and, when a hub already exists, for a pin whose instruction file is missing while the hub has fences
+(a re-init would otherwise empty the hub's instruction content).
 
 ### `run_sync`
 

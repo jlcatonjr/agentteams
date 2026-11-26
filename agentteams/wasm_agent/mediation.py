@@ -321,8 +321,8 @@ class Mediator:
             reply = MP.complete(self.provider, self.model, request, system=self.system, tools=self.tools,
                                 max_tokens=self.max_tokens, timeout=timeout)
         except MP.ModelProviderError as exc:
-            if exc.attempts > 0:   # possibly billed: keep the worst case
-                self.ledger.commit(reservation, reservation.tokens, None)
+            if exc.attempts > 0:   # possibly billed: keep the worst case, tokens and (when priced) USD
+                self.ledger.commit(reservation, reservation.tokens, reservation.usd if self.prices else None)
             else:
                 self.ledger.refund(reservation)
             code = f"provider-error:{exc.kind}" if exc.kind in _FATAL_KINDS else "provider-unavailable"
