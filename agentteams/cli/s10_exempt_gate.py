@@ -160,6 +160,8 @@ def _check_new(team_dir: Path, action: str) -> dict[str, str]:
     exempt_action, exempt_family = action, S10_EXEMPT_KIND
     security_gate._assert_no_unretracted_halt(team_dir, action=exempt_family)   # the family (C-2)
     security_gate._assert_destructive_action_allowed(team_dir, action=exempt_action, consume=False)
+    # #616 over the family too: a retracted HALT on a sibling repository voids this older row as well.
+    security_gate._assert_newest_clearance_not_void(team_dir, action=exempt_action, also=(exempt_family,))
     return row
 
 

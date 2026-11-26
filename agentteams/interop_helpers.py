@@ -16,6 +16,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from agentteams.backup import BACKUP_DIR_NAME
 from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS
 from agentteams.yaml_frontmatter import (
     FRONT_MATTER_MODEL_LINE_RE,
@@ -126,14 +127,16 @@ def capture_references(source_dir: Path) -> list[dict[str, Any]]:
 
     Each file becomes ``{"rel_path": str, "content": str}`` — the same shape
     ``canonical.materialize_canonical`` writes and ``load_canonical`` reads back.
-    Returns an empty list when no ``references/`` directory exists.
+    Returns an empty list when no ``references/`` directory exists. Backup trees
+    (``.agentteams-backups/``, where a governance-log repair keeps its copy of a
+    private log) are left out, so they never reach the hub or a peer.
     """
     refs_dir = source_dir / "references"
     if not refs_dir.is_dir():
         return []
     refs: list[dict[str, Any]] = []
     for p in sorted(refs_dir.rglob("*")):
-        if not p.is_file():
+        if not p.is_file() or BACKUP_DIR_NAME in p.relative_to(refs_dir).parts:
             continue
         rel_path = str(p.relative_to(source_dir))
         try:
@@ -569,6 +572,49 @@ def keep_newer_fences(rendered: str, existing: str) -> tuple[str, list[str]]:
     return rendered, notices
 
 
+def instructions_rel(framework: str) -> str:
+    """The instruction file's path relative to *framework*'s agents directory, as its adapter emits it.
+
+    Taken from the adapter's own ``finalize_output_path`` for the generic instructions entry (what the render
+    pipeline writes), not from a second table: ``../CLAUDE.md`` for claude, ``../../AGENTS.md`` for goose, codex
+    and grok, ``../TEAM.md`` for wasm.
+
+    Args:
+        framework: A registered framework id.
+
+    Returns:
+        The relative path, ``/``-separated.
+
+    Raises:
+        KeyError: *framework* is not registered.
+    """
+    from agentteams.frameworks.format_spec import COPILOT_INSTRUCTIONS_FILENAME
+    from agentteams.frameworks.registry import FRAMEWORKS
+
+    return FRAMEWORKS[framework]().finalize_output_path(f"../{COPILOT_INSTRUCTIONS_FILENAME}", "instructions")
+
+
+def instructions_path(agents_dir: Path, framework: str) -> Path:
+    """Where *framework*'s instruction file sits for a team whose agents directory is *agents_dir*.
+
+    The path is relative to the agents directory, exactly as a native render places it, so a team rendered with a
+    custom ``--output`` has its file at the same offset from that directory (for goose, codex and grok: two levels
+    up, at what is the project root under the default layout). ``import_from_cai`` writes there and ``multi_sync``
+    watches it for changes.
+
+    Args:
+        agents_dir: The framework's agents directory.
+        framework: A registered framework id.
+
+    Returns:
+        The instruction file's path (normalised, not resolved).
+
+    Raises:
+        KeyError: *framework* is not registered.
+    """
+    return Path(os.path.normpath(agents_dir / instructions_rel(framework)))
+
+
 def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, str]:
     """Fence-merge a projected instruction file into the one already on disk.
 
@@ -578,6 +624,11 @@ def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, st
     carries — is kept from *existing*. When *existing* has no parseable fences it is not
     replaced at all (it may be project-owned).
 
+    A *pointer* file — one sharing no template-owned fence with *rendered* (its fences are all
+    :data:`~agentteams.frameworks._agents_md_ownership.FRAMEWORK_OWNED_FENCE_IDS` or ids the render
+    lacks) — only has its own fences refreshed; the sections it lacks are named in the notice, not
+    added (#461). Sections added to any other file are named in the notice too.
+
     Args:
         rendered: The instruction content being projected.
         existing: The instruction file currently on disk.
@@ -586,13 +637,26 @@ def merge_instruction_file(rendered: str, existing: str) -> tuple[str | None, st
         ``(content, notice)``: the content to write (``None`` = leave the file as it is) and a
         human-readable notice ("" when nothing needs saying).
     """
-    from agentteams.fences import _merge_fenced_content
+    from agentteams.fences import _extract_fenced_regions, _merge_fenced_content
+    from agentteams.frameworks._agents_md_ownership import FRAMEWORK_OWNED_FENCE_IDS
 
-    rendered, kept = keep_newer_fences(rendered, existing)
-    notice = "; ".join(kept)
+    rendered, notices = keep_newer_fences(rendered, existing)
+    have, offered = _extract_fenced_regions(existing), _extract_fenced_regions(rendered)
+    if isinstance(have, dict) and have and isinstance(offered, dict) \
+            and not set(have) & (set(offered) - set(FRAMEWORK_OWNED_FENCE_IDS)):
+        skipped = [sid for sid in offered if sid not in have]
+        for sid in skipped:
+            rendered = rendered.replace(offered[sid], "", 1)
+        if skipped:
+            notices.append(f"pointer instruction file (fences: {', '.join(have)}): {len(skipped)} template "
+                           f"section(s) not added: {', '.join(skipped)}; regenerate it natively (--update --merge) "
+                           "to adopt them")
     result = _merge_fenced_content(rendered, existing, preserve_on_shrink=True)
     if result.parse_errors or not result.merged_content:
         return None, "existing instruction file has no mergeable AGENTTEAMS fences; left untouched"
+    if result.sections_added:
+        notices.append(f"added section(s): {', '.join(result.sections_added)}")
+    notice = "; ".join(notices)
     if result.merged_content == existing:
         return None, notice
     return result.merged_content, notice

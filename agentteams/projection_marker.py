@@ -194,11 +194,11 @@ def _switch_value(source_dir: Path, agents_dir: Path) -> bool:
         ValueError: The source switch is unusable (C2), or a governed team's existing target
             switch is not ``true`` (C1).
     """
-    source = _read_switch(source_dir / _SWITCH_REL)
+    source = _read_switch(source_dir / _SWITCH_REL, source_dir)
     governed = is_governed(source_dir, agents_dir)
     if not governed:
         return bool(source)
-    if _read_switch(agents_dir / _SWITCH_REL) is False:  # never leave a governed team OFF
+    if _read_switch(agents_dir / _SWITCH_REL, agents_dir) is False:  # never leave a governed team OFF
         raise ValueError(f"{agents_dir / _SWITCH_REL} is false in a signing-governed team")
     return True  # C1: a governed source or target always projects ON, never false
 

@@ -90,6 +90,21 @@ def test_an_ed25519_retraction_clears_its_halt_without_an_hmac_key(tmp_path: Pat
     dl._assert_no_unretracted_halt(tmp_path, action="restore-backup")
 
 
+@pytest.mark.parametrize("governed", [True, False])
+def test_a_signed_row_handle_retraction_clears_a_halt_with_no_usable_id(tmp_path: Path, governed: bool) -> None:
+    """In a signing-active log the handle retraction authenticates like any other; unsigned, it retracts nothing."""
+    from agentteams.cli.action_ids import halt_row_handle
+
+    private_pem = _team(tmp_path, governed=governed)
+    halt = _row("", "HALT")
+    retraction = _row(halt_row_handle(1, halt), "HALT-RETRACTED", evidence="written without an id; superseded")
+    _write(tmp_path, [halt, retraction])
+    with pytest.raises(RuntimeError, match="no usable action id"):
+        dl._assert_no_unretracted_halt(tmp_path, action="restore-backup")
+    _write(tmp_path, [halt, _ed25519(retraction, private_pem)])
+    dl._assert_no_unretracted_halt(tmp_path, action="restore-backup")
+
+
 def test_an_ed25519_retraction_still_needs_evidence(tmp_path: Path) -> None:
     private_pem = _team(tmp_path, governed=True)
     _write(tmp_path, [_row("restore-backup", "HALT"),

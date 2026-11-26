@@ -649,12 +649,13 @@ def _runner_block_problem(content: str, slug: str, grant: dict[str, Any]) -> tup
 
 
 def _write_policy_problems(content: str, agent_ext: str, framework: str, slug: str = "",
-                           grant: dict[str, Any] | None = None) -> tuple[list[str], list[str]]:
+                           grant: dict[str, Any] | None = None,
+                           readfs_deny: tuple[str, ...] = ()) -> tuple[list[str], list[str]]:
     """Return ``(errors, warnings)`` for one non-orchestrator agent file under the switch.
 
     ``grant`` (R6) is the agent's ``mcp_grants`` entry: its canonical ``agentteams_runner`` block (Claude) or
     extension (Goose) and exact tool names are then allowed, and any shell becomes an error (the agent executes
-    only through the runner).
+    only through the runner). ``readfs_deny`` is the team's ``readfs_deny_globs``; the readfs entry must carry them.
     """
     errors: list[str] = []
     warnings: list[str] = []
@@ -719,7 +720,7 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str, slug: s
         # The read server is allowed by what it runs, not by its name: a recipe could reuse the name for any
         # program. It must match the shipped entry (type, cmd, args), carry no other keys (`env`, `envs`,
         # `env_keys` or `cwd` could make the same script run other code) and grant only read tools.
-        shipped = readfs_extension(protected=True)  # this check runs only under the switch
+        shipped = readfs_extension(protected=True, deny=readfs_deny)  # this check runs only under the switch
         for ext in (e for e in extensions if e["name"] == READFS_NAME):
             extra = sorted(set(ext["keys"]) - _READFS_KEYS)
             if (ext["type"], ext["cmd"], ext["args"]) != (shipped["type"], shipped["cmd"], shipped["args"]):
@@ -783,6 +784,7 @@ def _check_write_policy(
     enabled: bool,
     unreadable: list[str] | None = None,
     mcp_grants: dict[str, Any] | None = None,
+    readfs_deny: tuple[str, ...] = (),
 ) -> list[AuditFinding]:
     """Under ``write_policy: "orchestrator-only"``, check that only the orchestrator can write.
 
@@ -824,6 +826,8 @@ def _check_write_policy(
             them as agents, so each is an error rather than a silent skip.
         mcp_grants: The manifest's ``mcp_grants`` (R6). A granted agent may carry exactly the canonical
             ``agentteams_runner`` block or extension and its exact tool names; a shell on it is an error.
+        readfs_deny: The team's ``goose_tool_scoping.readfs_deny_globs(manifest)``: a Goose recipe's readfs
+            entry must carry exactly these ``--deny`` globs, so a hand-removed one is an error.
 
     Returns:
         The findings (none when the switch is off).
@@ -890,7 +894,8 @@ def _check_write_policy(
         slug = _agent_slug(rel_path, agent_ext)
         grant = (mcp_grants or {}).get(slug)
         errors, warnings = _write_policy_problems(content, agent_ext, framework, slug,
-                                                  grant if isinstance(grant, dict) and grant.get("tools") else None)
+                                                  grant if isinstance(grant, dict) and grant.get("tools") else None,
+                                                  readfs_deny)
         # Every team under the switch relies on no non-orchestrator agent holding a shell (@security C4, verification
         # condition 1; 2026-10-11): the OS sandbox can't tell agents apart, so a shell could create runner requests and
         # read their sealed results in .agentteams-status/, which is the orchestrator's own channel.

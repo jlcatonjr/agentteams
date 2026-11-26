@@ -572,3 +572,23 @@ def test_security_intelligence_freshness_rejects_future_timestamp(tmp_path):
 
     with pytest.raises(RuntimeError, match="stale"):
         _assert_security_intelligence_fresh(placeholders, output_dir=tmp_path)
+
+
+def test_a_waiver_behind_a_symlinked_references_dir_does_not_clear(tmp_path, monkeypatch):
+    # A references/ linked to a dir with no decisions log must not let the gate read the waivers log through the link.
+    waiver_key = "test-waiver-key-0123456789abcdef"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
+    waiver = {
+        "timestamp": _past_iso(2), "waiver_id": "waiver-prune-link", "action_reviewed": "prune",
+        "expires_at": _future_iso(2), "max_uses": "1", "uses": "0", "approver": "security",
+        "ticket_id": "SEC-1", "reason_code": "maintenance", "conditions_verified": "verified", "signature": "",
+    }
+    waiver["signature"] = _waiver_signature(waiver, waiver_key)
+    real = tmp_path / "real"
+    _write_security_waiver_log(real, [waiver])
+    _assert_destructive_action_allowed(real, action="prune", consume=False)   # negative control: it clears here
+    team = tmp_path / "team"
+    team.mkdir()
+    (team / "references").symlink_to(real / "references", target_is_directory=True)
+    with pytest.raises(RuntimeError, match="symlink"):
+        _assert_destructive_action_allowed(team, action="prune", consume=False)

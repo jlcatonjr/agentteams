@@ -32,6 +32,7 @@ from agentteams.audit_agent_contract import (  # re-exported for callers/tests (
     _check_writer_dispatch_grants,
 )
 from agentteams.frameworks.goose import _tool_name as _goose_tool_name
+from agentteams.frameworks.goose_tool_scoping import readfs_deny_globs
 from agentteams.audit_types import (  # re-exported for callers/tests
     AuditFinding,
     _agent_file_count,  # noqa: F401
@@ -210,7 +211,7 @@ def run_post_audit(
     result.agent_refactor_findings.extend(_check_write_policy(
         file_map, agent_ext=agent_ext, framework=str(manifest.get("framework", "")),
         enabled=manifest.get("write_policy") == "orchestrator-only", unreadable=unreadable,
-        mcp_grants=manifest.get("mcp_grants"),
+        mcp_grants=manifest.get("mcp_grants"), readfs_deny=readfs_deny_globs(manifest),
     ))
     result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map, agent_ext=agent_ext))
     result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir, agent_ext=agent_ext))
