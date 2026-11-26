@@ -78,7 +78,8 @@ def add_branch_arguments(parser: argparse.ArgumentParser) -> None:
         "--team-dir", metavar="DIR", dest="team_dir", default=None,
         help="Team agents dir holding the security log, roster and verify keys: one of "
              ".claude/agents, .github/agents or .codex/agents under --project (default: the "
-             "first that exists). Any other path is refused.",
+             "first that exists). Any other path is refused. With --retire-verify-key: the team dir whose "
+             "references/authorized-verify-keys holds both keys.",
     )
     group.add_argument("--team-id", metavar="ID", dest="team_id", default=None,
                        help="Grant holder id for --branch-post-merge (default: from build-log); this workspace's team id "

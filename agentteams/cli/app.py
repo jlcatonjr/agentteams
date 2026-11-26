@@ -331,6 +331,10 @@ def _main_dispatch(
         from agentteams.cli.toolchain_group_commands import run_toolchain_group
 
         return run_toolchain_group(args)
+    if getattr(args, "retire_verify_key", None):
+        from agentteams.cli.key_retirement import run_retire_verify_key
+
+        return run_retire_verify_key(args)
 
     # -----------------------------------------------------------------------
     # --verify-integrity / --verify-backup: standalone read-only integrity

@@ -24,6 +24,7 @@ from agentteams.mcp_servers import SERVERS as _MCP_SERVERS
 from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
 from agentteams.cli.dev_merge_switch import add_dev_merge_arguments
+from agentteams.cli.key_retirement import add_arguments as add_key_retirement_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
 from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS, agents_dir_for
 
@@ -1396,7 +1397,7 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Operator-only (R5): remove AGENT's direct-write grant. Restart the runner.")
     parser.add_argument("--key-id", metavar="ID", dest="key_id", default=None,
                         help="With --sign-mcp-direct-grant: the operator key's id (its public half is installed under "
-                             "~/.config/agentteams/verify-keys/).")
+                             "~/.config/agentteams/verify-keys/). With --retire-verify-key: the key that signs the record.")
     parser.add_argument("--grant-days", metavar="N", dest="grant_days", type=int, default=None,
                         help="With --sign-mcp-direct-grant: days until the grant expires (1-30; default 7).")
     parser.add_argument("--max-writes", metavar="N", dest="max_writes", type=int, default=None,
@@ -1727,6 +1728,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     add_dev_merge_arguments(parser)
+    add_key_retirement_arguments(parser)
     parser.add_argument(
         "--pin-repos",
         dest="pin_repos",

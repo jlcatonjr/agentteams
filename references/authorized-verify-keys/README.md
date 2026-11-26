@@ -78,8 +78,81 @@ CI. Until then the sandboxes also deny the legacy files transitionally.
 references/authorized-verify-keys/provision-operator-signing-key.sh --migrate
 ```
 
-## Rotation / revocation
+## Rotation, retirement and revocation
 
-New key = run the helper with a new `key-id` and sign new rows under it; old rows keep verifying
-against their retained `.pub.pem`. Revoke by removing the `.pub.pem` (rows under that `key_id`
-then fail closed). Both are git-visible acts.
+There are three ways to stop using a key. All three are git-visible acts.
+
+- **Rotate only.** Provision a new `key-id` and sign new rows under it. The old `.pub.pem` stays, so
+  old rows keep verifying, and so would anything signed with the old key from now on.
+- **Revoke.** Remove the `.pub.pem`. Every row and document under that `key_id` then fails closed,
+  including the ones you still rely on (relaxing decisions, grants, the carve-out registry, a
+  toolchain group, a dev-merge authorization).
+- **Retire.** Keep the `.pub.pem` and add a signed retirement record, `<key-id>.retired.json`, beside it.
+  Signatures the old key made before the retirement keep verifying; any other signature under it is
+  refused, and so is new signing with it. Use this to rotate a key you still have history under.
+
+### The retirement record
+
+`<key-id>.retired.json` holds `key_id`, `not_after` (the retirement date), `signed_by`,
+`signature_sha256` (the sorted sha256 of the decoded bytes of every signature the old key made) and
+`signature`. Every Ed25519 verify path loads keys through `decision_log._load_verify_key`, which applies
+the record (`agentteams/cli/key_retirement.py`):
+
+- a signature under a retired key verifies only when its digest is in `signature_sha256`. `not_after` is
+  recorded and reported but never compared, because many signed documents carry no date;
+- the record must be signed by a **different** key in the same store that has no retirement record of its
+  own. A record signed by the retired key itself, or by a key that is absent or retired, is refused;
+- a record that is a symbolic link, malformed, or edited after signing (a digest added, for example) is
+  refused, and then every signature under the key is refused. That is the same as revoking it;
+- the record's payload starts with `agentteams-key-retirement-v1`, which no decision, grant, carve-out
+  registry, toolchain group or dev-merge authorization payload can start with.
+
+`--verify-integrity` prints one line per record: key, `not_after`, how many signatures it keeps, the
+signer, and whether it verifies. It also warns when the record lists a digest its committed copy does
+not: a snapshot should only shrink. That warning is report-only, because whoever holds the signing key can
+re-sign a wider snapshot.
+
+The record is per store. Write one in every team dir whose store holds the old key (for example both
+`.claude/agents` and `.github/agents`); a store without one still accepts new signatures under the key.
+
+### Retiring a key (operator, on your own machine)
+
+Run these from your own terminal, never inside an agent session (the verb refuses there), using the
+trusted install described in `SECURITY.md` ("Signing from a trusted install"). `<old>` is the key you
+retire, `<new>` the key that signs the record, and `<team>` the team dir, such as
+`<project>/.claude/agents`.
+
+1. Provision the new key if you have not: run the helper above with `--team-dir <team> <new>`.
+2. Check the signing code and the store: `agentteams --verify-integrity --output <team>`.
+3. Write the record:
+
+   ```
+   agentteams --retire-verify-key <old> --key-id <new> --team-dir <team> \
+       [--include <signed file> ...]
+   ```
+
+   It collects every Ed25519 signature under `<old>` from the team's decisions log and, at the project
+   root, the capability-grants log, `.agentteams/carveouts.json`, `.agentteams/toolchain-group.json` and
+   `.agentteams/dev-merge-authorization.json`. Pass `--include` for any other signed CSV log or JSON
+   document under `<old>` (another workspace's toolchain group, for example); an include that holds no
+   signature under `<old>` is refused. The private key is found as for `--sign-decision`
+   (`~/.config/agentteams/keys/decision-signing-<new>.pem`, or `AGENTTEAMS_DECISION_ED25519_KEYFILE`).
+4. Check the displayed review before you answer `y` (or before you pass `--confirm-review-sha256` with no
+   terminal; the digest covers today's date, so confirm on the same day):
+   - `retired key` is `<old>` and `signing key` is `<new>`, and the `sha256` shown for `<new>` matches
+     `shasum -a 256 <team>/references/authorized-verify-keys/<new>.pub.pem` for the key you provisioned;
+   - `team dir` is the store you mean;
+   - every `keeps` line is a row or document you signed. A line you do not recognise is a signature you did
+     not make: if the old key may be compromised, stop and revoke it instead;
+   - nothing you still need is missing. A signed document that is not listed stops verifying once the
+     record exists: re-run with `--include` for it.
+   The record is verified against `<new>.pub.pem` before it is written.
+5. Confirm: `agentteams --verify-integrity --output <team>` prints
+   `Retired verify key <old>: not after <date>, <n> signature(s) kept, signed by <new>, verifies`. The
+   verify verbs you use (`--verify-carveouts`, `--verify-toolchain-group`,
+   `--verify-dev-merge-authorization`, `--verify-grants`) should still pass.
+6. Commit the record where the team dir is tracked, keep `<old>.pub.pem`, and repeat for every other team
+   dir that holds the old key. Then move the old private key out of `~/.config/agentteams/keys/`.
+
+If you later retire `<new>` as well, records it signed stop verifying (their signer is now retired):
+re-run step 3 for each of them with the next key.

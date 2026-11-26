@@ -1084,7 +1084,7 @@ def test_load_verify_key_treats_a_sentinel_only_store_as_absent(tmp_path):
 
     def _err(root: Path, key_id: str) -> str:
         with pytest.raises(RuntimeError) as exc:
-            _load_verify_key(root, key_id)
+            _load_verify_key(root, key_id, signature="")
         return str(exc.value)
 
     absent = tmp_path / "absent"

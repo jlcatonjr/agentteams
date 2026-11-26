@@ -185,6 +185,12 @@ carries no marker; a signed marker is planned for the next grant schema version.
 - a `.pth` file runs `import` lines;
 - the current directory is on `sys.path`.
 
+**Retiring a key.** `agentteams --retire-verify-key <old> --key-id <new> --team-dir <team>` signs a retirement record
+for `<old>` with `<new>` from this same trusted install, with the same review digest, confirmation and
+verify-before-write. Signatures `<old>` made before then keep verifying; no other signature under it does. Check every
+listed signature in the review before confirming: see `references/authorized-verify-keys/README.md`
+("Retiring a key").
+
 ## Advisories
 
 ### 2026-11-21 — Python 3.14: an unreadable team dir, decisions log or signing switch hides HALTs (agentteams < 1.3.0)
