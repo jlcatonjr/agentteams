@@ -15,6 +15,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 _SHADOWING_DIRS = (".github", "docs")
 _LINK_TO_SHADOW = re.compile(r"(?:\]\(|github\.com/\S*?/)\S*?(?:\.github|docs)/SECURITY\.md", re.I)
+#: Who answers a public-issue fallback, so a third party commenting on the issue is not trusted.
+_FALLBACK_CONTACT = ("Contact will come only from a repository maintainer listed in `.github/CODEOWNERS`; do not share "
+                     "details with anyone else who asks on the issue.")
 _TEXT_SUFFIXES = {".md", ".yml", ".yaml", ".html", ".txt", ".toml", ".json"}
 
 
@@ -37,6 +40,8 @@ def _policy_problems(root: Path) -> list[str]:
         problems.append("offers a private issue, which GitHub does not have")
     if "public issue that says only that you have a security report" not in text:
         problems.append("has no fallback for a reporter without the Security tab")
+    elif _FALLBACK_CONTACT not in " ".join(text.split()):
+        problems.append("does not say who makes contact after a public-issue fallback")
     return problems
 
 
@@ -86,6 +91,9 @@ def test_the_root_policy_has_no_private_issue_fallback(tmp_path: Path) -> None:
     assert _policy_problems(old) == ["has no fallback for a reporter without the Security tab"]
     (old / "SECURITY.md").write_text("security/advisories/new\nOpen a private coordination issue.\n")
     assert "offers a private issue, which GitHub does not have" in _policy_problems(old)
+    (old / "SECURITY.md").write_text(
+        "security/advisories/new\nopen a public issue that says only that you have a security report.\n")
+    assert _policy_problems(old) == ["does not say who makes contact after a public-issue fallback"]
 
 
 def test_codeowners_protects_the_root_policy(tmp_path: Path) -> None:

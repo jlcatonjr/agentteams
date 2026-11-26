@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SECURITY.md` is the only policy and keeps its response targets (acknowledgement within 3 business days, a fix
   target within 10).
 - The root policy now gives the one fallback for a reporter without the Security tab: a public issue that says
-  only that they have a security report and asks to be contacted, with no details.
+  only that they have a security report and asks to be contacted, with no details. Contact comes only from a
+  repository maintainer listed in `.github/CODEOWNERS`, and the reporter shares details with no one else who asks
+  on the issue.
 - `.github/CODEOWNERS` protects `/SECURITY.md` in place of the deleted path, and a test keeps exactly one policy
   file, keeps the private-issue text out, and keeps tracked docs from linking to a policy outside the root.
 - **Who notices:** a reporter reading the repository's Security policy page, which shows the root text once this
