@@ -105,9 +105,10 @@ which applies the record (`agentteams/cli/key_retirement.py`):
   wider or planted record can only narrow what verifies;
 - `binding` is `<project>:<team dir>`: the slug of `project_name` in the team dir's
   `references/build-log.json` and the team dir's path from the project root (`proj:.claude/agents`).
-  It does not depend on git or on where the checkout sits. A record whose binding is not its own store's
-  (moved from another team dir, or replayed from another project) is refused, and then every signature
-  under the key is;
+  A record whose binding is not its own store's (copied to another team dir, or from another project) is
+  refused, and then every signature under the key is. The binding catches mistakes, not an adversary:
+  whoever can edit the build log can make a foreign record's binding match (such a record still only
+  narrows what verifies, because records intersect);
 - keys are compared by their **bytes**, not their file names: the same public key stored under a second
   `key-id` is retired too;
 - a record binds the key in **every team dir store of the project**: the generated team dirs
@@ -125,6 +126,11 @@ which applies the record (`agentteams/cli/key_retirement.py`):
   refused, and then every signature under the key is refused. That is the same as revoking it;
 - the record's payload starts with `agentteams-key-retirement-v1`, which no decision, grant, carve-out
   registry, toolchain group or dev-merge authorization payload can start with.
+
+**What the checks do not catch.** If the live record is replaced, in its own store, by an older and wider
+record with the same binding, every check above passes. Only `--verify-integrity`'s comparison with the
+committed copy shows it, and only while the narrower record is the one committed. Commit each record as
+soon as it is written, and treat a warning you did not cause as an incident.
 
 `--verify-integrity` prints one line per record in every store above (naming the store when it is not
 `--output`'s): key, `not_after`, how many signatures it keeps, the signer, and whether it verifies. It
@@ -168,10 +174,14 @@ retire, `<new>` the key that signs the record, and `<team>` the team dir, such a
    (another workspace's toolchain group, for example); an include of another kind, or with no signature
    under `<old>`, is refused. Each signature is verified under `<old>` against its own document before it
    is kept: one that does not verify (a hex string pasted into a row, for example) refuses the retirement
-   and names the row or file. Use a generated team dir: a gates-only team dir is refused. If `<old>`
-   signed other keys' retirement records, the same run re-signs each of them with `<new>`, snapshot
-   unchanged (every such store must hold `<new>`, or the run is refused naming it). A record anywhere in
-   the project that does not verify refuses the run too: repair or remove it first. The private key is
+   and names the row or file. Use a generated team dir: a gates-only team dir is refused, and so is a
+   team dir in a nested repository when an outer repository's store holds the same key (the outer store
+   would not read the record; run from the outermost repository's team dir). If `<old>` signed other
+   keys' retirement records, the same run re-signs each of them with `<new>`, keeping its snapshot. Each
+   is first compared with its committed copy: one that lists digests its committed copy does not is
+   refused, and one with no committed copy is shown as such. Every such store must hold `<new>`, or the
+   run is refused naming it. A record anywhere in the project that does not verify refuses the run too:
+   repair or remove it first. The private key is
    found as for `--sign-decision` (`~/.config/agentteams/keys/decision-signing-<new>.pem`, or
    `AGENTTEAMS_DECISION_ED25519_KEYFILE`).
    Before the review, the verb runs the same preflight as `--sign-decision` (integrity, key file,
@@ -187,7 +197,9 @@ retire, `<new>` the key that signs the record, and `<team>` the team dir, such a
      may be compromised, stop and revoke it instead;
    - nothing you still need is missing. A signed document that is not listed stops verifying once the
      record exists: re-run with `--retire-include` for it;
-   - each `re-signs` line says `snapshot unchanged` and names a record you expect `<old>` to have signed.
+   - each `re-signs` line names a record you expect `<old>` to have signed, and says
+     `snapshot unchanged from the committed copy` (or `narrower`). A line saying `no committed copy to
+     compare` means you must check that snapshot yourself: stop if you did not write it.
    Every record is verified against `<new>.pub.pem` before anything is written.
 5. Confirm: `agentteams --verify-integrity --output <team>` prints
    `Retired verify key <old>: not after <date>, <n> signature(s) kept, signed by <new>, verifies`. The

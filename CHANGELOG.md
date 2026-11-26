@@ -27,8 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the decision minter and verifier refuse.
 - **Not covered:** `~/.config/agentteams/verify-keys/` (MCP-direct and vulnscan grants). Retiring a key there means
   removing its `.pub.pem`; the README says what that ends.
-- **Retiring a record's signer:** the same run re-signs the records the retired key signed with the new key, snapshot
-  unchanged, so what they kept keeps verifying.
+- **Retiring a record's signer:** the same run re-signs the records the retired key signed with the new key, keeping
+  their snapshots, so what they kept keeps verifying. A record that lists digests its committed copy does not is
+  refused rather than re-signed. A team dir in a nested repository is refused when an outer repository's store holds
+  the same key, because the outer store would not read its record.
 - **Reported:** `--verify-integrity` prints one line per retired key in every team dir store of the project, and warns
   when a record lists digests its committed copy does not, when a committed record is missing on disk, and when a
   record's own `.pub.pem` is missing (report-only).

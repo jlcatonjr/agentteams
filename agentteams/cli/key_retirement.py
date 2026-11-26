@@ -230,9 +230,9 @@ def binding(team_dir: Path) -> str:
     """What a record in ``team_dir``'s store is bound to: ``<project>:<team dir relative to the project root>``.
 
     ``<project>`` is the slug of ``project_name`` in the team dir's ``references/build-log.json`` (written by every
-    generate, kept by a clone or a copy, independent of git and of where the checkout sits). A record moved to
-    another team dir, or replayed from another project, then names a binding that is not its store's, and is
-    refused.
+    generate and kept by a clone or a copy). A record copied to another team dir, or from another project, then
+    names a binding that is not its store's, and is refused. This catches mistakes, not an adversary who can edit
+    the build log; records intersect, so a record let in that way can still only narrow what verifies.
 
     Args:
         team_dir: A generated team dir.
@@ -436,8 +436,15 @@ def assert_signature_permitted(team_dir: Path, key_id: str, signature: str) -> N
 # ---------------------------------------------------------------------------------------------------- the report
 
 
-def _committed_digests(path: Path) -> set[str] | None:
-    """The digests of the record's committed (HEAD) copy, or None when git has none."""
+def committed_digests(path: Path) -> set[str] | None:
+    """The digests of a record's committed (HEAD) copy, read with hardened git.
+
+    Args:
+        path: The record's path on disk.
+
+    Returns:
+        The committed copy's digests, or None when git has no committed copy (untracked, or no repository).
+    """
     from agentteams.git_exec import run_git
 
     try:
@@ -511,7 +518,7 @@ def _store_lines(team_dir: Path, label: str) -> list[str]:
             continue
         lines.append(f"Retired verify key {key_id}{label}: not after {doc['not_after']}, "
                      f"{len(doc['signature_sha256'])} signature(s) kept, signed by {doc['signed_by']}, {verdict}")
-        committed = _committed_digests(path)
+        committed = committed_digests(path)
         if committed is None:
             lines[-1] += " (no committed copy, so the shrink-only check did not run)"
         added = set(doc["signature_sha256"]) - committed if committed is not None else set()
@@ -556,6 +563,6 @@ def report_lines(team_dir: Path) -> list[str]:
 
 
 __all__ = ["KEY_ID_RE", "MAX_BYTES", "PURPOSE", "RECORD_FIELDS", "RECORD_SUFFIX", "STORE_REL", "applicable_records",
-           "assert_signature_permitted", "binding", "material", "payload_claims_retirement_purpose", "project_root",
+           "assert_signature_permitted", "binding", "committed_digests", "material", "payload_claims_retirement_purpose", "project_root",
            "record_path", "records_signed_by", "report_lines", "scan_dirs", "signature_digest", "signed_values",
            "validate", "verified_record", "verify_signed_record"]

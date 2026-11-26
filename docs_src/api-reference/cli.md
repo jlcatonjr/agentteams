@@ -180,8 +180,8 @@ binding, digests]`, where `binding(team_dir)` is `<project_name slug>:<team dir 
 key bytes under two ids, a non-team or gates-only dir, a missing `.pub.pem` for either key, a retired `new`, a store
 whose record `old` signed but which lacks `new`, an include of an unknown kind or with no signature under `old`, a
 signature that does not verify, and display-spoofing characters. Then the preflight, the display, confirm, the key
-read, signing of the new record and of each record `old` signed (re-signed by `new`, snapshot unchanged,
-`records_signed_by`), and verification of each (`verify_signed_record`) before anything is written.
+read, signing of the new record and of each record `old` signed (re-signed by `new` with its snapshot,
+`records_signed_by`, after a comparison with its committed copy that refuses a widened one), and verification of each (`verify_signed_record`) before anything is written.
 `assert_signature_permitted` is called by `decision_log._load_verify_key(output_dir, key_id, *, signature)`: it
 matches the key by its bytes against every record in `scan_dirs(team_dir)` (`clearance_binding.halt_scan_dirs` plus,
 outside git, the generated team dirs beside it, a symbolic link in their paths refusing); with none, nothing changes;

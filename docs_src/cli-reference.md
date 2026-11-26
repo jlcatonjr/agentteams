@@ -1476,7 +1476,9 @@ document first; one that does not verify refuses the run and is named. The recor
 must differ from `OLD` by its bytes and must not be retired, and is bound to `<project>:<team dir>` (the build log's
 `project_name` slug and the team dir's path from the project root). `DIR` must be a generated team dir
 (`.claude/agents`, `.github/agents`, ...); a gates-only team dir is refused, as is an agent session. Records `OLD`
-signed for other keys are re-signed with `NEW` in the same run, snapshot unchanged. The order is `--sign-decision`'s:
+signed for other keys are re-signed with `NEW` in the same run, keeping their snapshots; one that lists digests its
+committed copy does not is refused, and one with no committed copy is shown as such. A team dir in a nested
+repository is refused when an outer repository's store holds the same key. The order is `--sign-decision`'s:
 pre-key refusals, preflight (integrity, key file, install location), display of every kept signature and its document
 and every re-signed record, review digest and confirmation (`--confirm-review-sha256` without a terminal), the key
 read, signing, then verification of each record before anything is written. Afterwards, in every team dir store of

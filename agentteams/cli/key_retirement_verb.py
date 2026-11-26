@@ -173,10 +173,46 @@ def _fingerprint(team_dir: Path, key_id: str) -> str:
         return "unreadable"
 
 
-def _resign_plan(team_dir: Path, old: str, new: str) -> list[tuple[Path, dict]]:
-    """``(store, unsigned record)`` for each live record ``old`` signed, re-pointed at ``new`` (raises RuntimeError).
+def _unseen_stores(team_dir: Path, old: str) -> list[Path]:
+    """Stores reachable from ``team_dir`` that hold ``old``'s key bytes but whose own scan would not see its record.
 
-    Every such store must hold ``new`` (the same key bytes as in ``team_dir``), or the run is refused naming it.
+    :func:`~agentteams.cli.key_retirement.scan_dirs` looks outward (every enclosing git root, a ``parent_team``) but
+    not back, so a team dir in a nested repository reaches an outer store that never reads the nested one.
+    """
+    key = kr.material(Path(team_dir) / kr.STORE_REL / f"{old}.pub.pem")
+    here = Path(team_dir).resolve()
+    unseen = []
+    for d in kr.scan_dirs(team_dir)[1:]:
+        store = d / kr.STORE_REL
+        if lstat_or_none(store, "verify-key store") is None:
+            continue
+        if any(kr.material(pem) == key for pem in sorted(store.glob("*.pub.pem"))) \
+                and here not in {x.resolve() for x in kr.scan_dirs(d)}:
+            unseen.append(d)
+    return unseen
+
+
+def _snapshot_note(d: Path, doc: dict) -> str:
+    """How a record about to be re-signed compares with its committed copy (raises RuntimeError when wider)."""
+    listed = set(doc["signature_sha256"])
+    committed = kr.committed_digests(kr.record_path(d, doc["key_id"]))
+    if committed is None:
+        return "no committed copy to compare, so check this snapshot yourself"
+    added = listed - committed
+    if added:
+        raise RuntimeError(f"the retirement record of {doc['key_id']!r} in {d} lists {len(added)} digest(s) its "
+                           "committed copy does not; it was widened after it was committed, so it is not re-signed. "
+                           "Restore the committed copy, or review and commit the change, then re-run")
+    if listed == committed:
+        return "snapshot unchanged from the committed copy"
+    return f"snapshot narrower than the committed copy ({len(committed - listed)} fewer)"
+
+
+def _resign_plan(team_dir: Path, old: str, new: str) -> list[tuple[Path, dict, str]]:
+    """``(store, unsigned record, note)`` for each live record ``old`` signed, re-pointed at ``new``.
+
+    Every such store must hold ``new`` (the same key bytes as in ``team_dir``), and no record may list digests its
+    committed copy does not (:func:`_snapshot_note`), or the run is refused naming it (RuntimeError).
     """
     store = Path(team_dir) / kr.STORE_REL
     new_key = kr.material(store / f"{new}.pub.pem")
@@ -187,7 +223,8 @@ def _resign_plan(team_dir: Path, old: str, new: str) -> list[tuple[Path, dict]]:
             raise RuntimeError(f"{old!r} signed the retirement record of {doc['key_id']!r} in {d}, which would stop "
                                f"verifying once {old!r} is retired, and that store does not hold {new!r} to re-sign "
                                f"it; provision {new!r} there first")
-        plan.append((d, {k: doc[k] for k in kr.RECORD_FIELDS if k != "signature"} | {"signed_by": new}))
+        note = _snapshot_note(d, doc)
+        plan.append((d, {k: doc[k] for k in kr.RECORD_FIELDS if k != "signature"} | {"signed_by": new}, note))
     return plan
 
 
@@ -213,6 +250,11 @@ def _pre_key_refusal(old: str, new: str, team_dir: Path) -> str | None:
         return f"{old!r} and {new!r} are the same key under two names; sign with a different key"
     if kr.applicable_records(team_dir, kr.material(store / f"{new}.pub.pem")):
         return f"key {new!r} is itself retired, so it cannot sign a retirement record"
+    unseen = _unseen_stores(team_dir, old)
+    if unseen:
+        return (f"{', '.join(map(str, unseen))} hold(s) the key {old!r} but would not see a record written in "
+                f"{team_dir} (an outer repository does not read a nested one); retire it from the outermost "
+                "repository's team dir instead")
     return None
 
 
@@ -242,7 +284,7 @@ def retire_verify_key(old: str, new: str, team_dir: Path, includes: list[str], *
 
     team_dir = Path(team_dir)
     labelled: list[tuple[str, str]] = []
-    resign: list[tuple[Path, dict]] = []
+    resign: list[tuple[Path, dict, str]] = []
     try:
         refusal = _pre_key_refusal(old, new, team_dir)
         labelled = [] if refusal else collect_signatures(team_dir, old, includes)
@@ -268,27 +310,35 @@ def retire_verify_key(old: str, new: str, team_dir: Path, includes: list[str], *
     print(f"  not_after   : {record['not_after']}")
     for label, digest in labelled:
         print(f"  keeps       : {digest[:16]}  {label}")
-    for d, doc in resign:
-        print(f"  re-signs    : the retirement record of {doc['key_id']!r} in {d}: snapshot unchanged "
+    for d, doc, note in resign:
+        print(f"  re-signs    : the retirement record of {doc['key_id']!r} in {d}: {note} "
               f"({len(doc['signature_sha256'])} signature(s)), signer {old} -> {new}")
     print(f"  values      : {json.dumps(kr.signed_values(record), ensure_ascii=True)}")
-    spec = {"record": record, "re_signs": [[str(d.resolve()), doc] for d, doc in resign]}
+    spec = {"record": record, "re_signs": [[str(d.resolve()), doc] for d, doc, _ in resign]}
     if not ops._confirm(ops.review_digest("key-retirement", spec, team_dir, new), confirm_sha256):
         return 1
     private_pem = ops._read_operator_private_key(keyfile)
     if private_pem is None:
         return 1
+    writes = [(d, dict(doc)) for d, doc, _ in resign] + [(team_dir, record)]
     try:
-        writes = [(d, dict(doc)) for d, doc in resign] + [(team_dir, record)]
         for d, doc in writes:
             doc["signature"] = sl.ed25519_sign(private_pem, kr.signed_values(doc))
             kr.verify_signed_record(d, kr.validate(doc, doc["key_id"]))
-        for d, doc in writes:  # the re-signed records first: they verify whether or not the new record lands
-            replace_no_follow(kr.record_path(d, doc["key_id"]),
-                              json.dumps({k: doc[k] for k in kr.RECORD_FIELDS}, indent=2, ensure_ascii=True) + "\n")
-    except (OSError, RuntimeError) as exc:
+    except RuntimeError as exc:
         print(f"Error: {exc}. Nothing written.", file=sys.stderr)
         return 1
+    paths = [kr.record_path(d, doc["key_id"]) for d, doc in writes]
+    for n, (path, (_d, doc)) in enumerate(zip(paths, writes)):  # re-signed records first: each verifies alone
+        try:
+            replace_no_follow(path, json.dumps({k: doc[k] for k in kr.RECORD_FIELDS}, indent=2, ensure_ascii=True)
+                              + "\n")
+        except OSError as exc:
+            done = ", ".join(map(str, paths[:n])) or "none"
+            print(f"Error: cannot write {path}: {exc}. Already written: {done}; not written: "
+                  f"{', '.join(map(str, paths[n:]))}. Each written record verifies on its own; re-run to finish.",
+                  file=sys.stderr)
+            return 1
     print(f"\nWrote {kr.record_path(team_dir, old)}. Commit it where the team dir is tracked; keep {old}.pub.pem. "
           "Also remove the old key from ~/.config/agentteams/verify-keys/ if it is there (that store has no "
           "retirement records).")
