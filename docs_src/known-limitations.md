@@ -380,6 +380,44 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   (next entry).
 - **Tracking:** remediation log rows 388 and 413. Threat model v3, section 2a.
 
+### The gate asks on some git config that runs a program, not all
+
+- **What:** `git-alias-config` asks on `alias.`, `push.`, `remote.`, `url.`, `credential.` and `core.hooksPath`,
+  `core.sshCommand`, `core.askPass`, `core.fsmonitor`, `agentteams.hookPython`, `agentteams.hookImportPath`, set through `git config`, `git -c` or `git --config-env`.
+  Other git configuration also runs a program and does not ask:
+  - `core.pager`, `core.editor`, `core.gitProxy`, `sequence.editor`, `diff.external`, `diff.*.textconv`,
+    `merge.*.driver`, `filter.*` and `gpg.program`, by any route;
+  - `include.path` through `git -c` (`git config include.path` asks, as `publication-channel`);
+  - `GIT_CONFIG_COUNT` and its key/value variables ask (`publication-channel`), but the reason shown names a
+    publication channel, not code execution;
+  - direct edits of the config file: a Write or Edit of `.git/config`, or a shell copy, `sed -i` or redirect into it,
+    asks; `git config -e` (or `git config edit`), which opens it in an editor, does not, and nor does an edit made
+    by an interpreter (`python3 -c "open('.git/config', 'a')…"`).
+- **Also not covered:** `git push --no-verify`, and these environment variables, none of which the gate looks at:
+  `GIT_EXEC_PATH`, `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_TEMPLATE_DIR`, `HOME`, `XDG_CONFIG_HOME` and
+  `PATH`. Each can point git at configuration or programs the agent controls. The variables that name a program
+  git runs (`GIT_EDITOR`, `EDITOR`, `VISUAL`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`, `PAGER`, `GIT_SSH`,
+  `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_EXTERNAL_DIFF`, `GIT_PROXY_COMMAND`) ask only when assigned
+  before a `git` command on the same line; one set on an earlier line or in an earlier Bash call, by a sourced file
+  or in the session's inherited environment is not seen.
+- **Who:** all Claude teams with the gate hook installed.
+- **Mitigation:** the gate is a review prompt, not a boundary. Run with the Claude sandbox on, and review
+  `.git/config` changes before a push.
+- **Tracking:** remediation log rows 702 and 730.
+
+### A user-level gate install treats the home directory as the project
+
+- **What:** the gate takes its project root from where it is installed: the directory two levels above the hook
+  (`<project>/.claude/hooks`, `.github/hooks` or `.grok/hooks`), plus `$CLAUDE_PROJECT_DIR`. A copy installed at
+  user level, in `~/.claude/hooks`, therefore makes the home directory a project root. Every check that uses the
+  roots then covers the whole home directory: the scanner's integrity manifest is looked for there, the interpreter
+  pin may not point inside it, and `AGENTTEAMS_GATE_LOG` may not be written inside it.
+- **Who:** anyone who installs the gate in a user-level hooks directory instead of a project.
+- **Mitigation:** install the gate per project, as agentteams renders it. Put the gate log and the pinned interpreter
+  outside the home directory if a user-level copy is used.
+- **Tracking:** the gate does not restrict roots to the known layouts on purpose. Narrowing them would also drop
+  Grok's `.grok/hooks` project from the pin and integrity checks.
+
 ### The project gate policy is advisory where nothing write-protects the gate
 
 - **What:** the policy's digest is recorded in the installed gate. On Copilot, on Grok, and in any team whose OS

@@ -43,11 +43,52 @@ The default `ask` classes:
 - `elevated-privilege`, `remote-pipe-shell`, `persistence`, `package-install`, `git-history-destructive`,
   `git-force-push-short` (`git push -f`, `-uf`, or a `+refspec`, quoted or not), `fleet-lock-lift`;
 - `outbound-upload`, `outbound-derived`, `raw-socket`, `dns-exfil`, `publication-channel`,
-  `git-alias-config` (`git -c`, `git --config-env` or `git config` for `alias.`, `push.`, `remote.` or `url.`),
-  `interpreter-send`;
+  `git-alias-config` (`git -c`, `git --config-env` or `git config` for `alias.`, `push.`, `remote.`, `url.`,
+  `credential.`, `core.hooksPath`, `core.sshCommand`, `core.askPass`, `core.fsmonitor`, `agentteams.hookPython` or
+  `agentteams.hookImportPath`, including `--add`, `--replace-all` and unset), `interpreter-send`;
 - `gh-delete`, `pr-merge`, `git-remote-delete`, `git-ref-delete`, `agentteams-branch-delete`;
 - `fs-delete`, `infra-delete`, `db-delete`, `interpreter-delete`;
 - `command-too-long`, `git-config-write`, `scanner-unverified`, `no-interpreter`.
+
+**Reads of git config.** For `git-alias-config` and the `git config` keys of `publication-channel`
+(`remote.*.url`, `url.*.insteadOf`, any `include.` or `includeIf.` key), the read exemption is a positive,
+fail-closed rule. A command naming such a key stays silent only when both hold:
+
+- the whole Bash command is plain text: ASCII letters and digits, space, tab, a plain newline between commands,
+  `. _ - / : = @ , + %` and the separators `; & |`. No quote of any kind, `$`, backtick, backslash, brace, bracket,
+  parenthesis, glob, `~`, `<`, `>`, `#` or `!`, and no other line break (`\r`, form feed, `\x85`, U+2028…);
+- each command naming the key parses as `git [global options] config` followed by `get` or `list`, or with
+  `--get…`, `--list` or `-l` before the key, where only options git is known to accept may come first
+  (`--comment`, which takes the next word, and any abbreviation are never skipped).
+
+Everything else asks, so quoting, expansion, substitution and continuation cannot make a write look like a read.
+Reads that need any of those characters ask too: a quoted key (a key with a space always does), a read in a command
+that quotes or expands something elsewhere, a `~` path, a `\`-continued line, CRLF line endings, or a read run
+through a wrapper such as `sudo`.
+
+**Section renames and removals.** git honours `git config --rename-section foo core` (and `git config
+rename-section foo core`): a `foo.hooksPath` set earlier then reads back as `core.hooksPath`, with no command naming
+the key. Removing a section unsets every key in it: `git config --remove-section core` (or `remove-section core`)
+clears `core.hooksPath` exactly as `--unset core.hooksPath` does. So a rename or a removal asks when any section
+name it takes begins, in any case, with `alias`, `push`, `remote`, `url`, `credential`, `core`, `include` (which
+covers `includeIf`) or `agentteams`. Any `--ren…` or `--rem…` abbreviation, extra arguments or an unknown option ask,
+under the same plain-text rule. `git config --rename-section a b` and `git config --remove-section a` stay silent.
+
+**Program variables.** An assignment of `GIT_EDITOR`, `EDITOR`, `VISUAL`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`,
+`PAGER`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_EXTERNAL_DIFF` or `GIT_PROXY_COMMAND` on the
+same line as a later `git` command asks under `git-alias-config`: `GIT_EDITOR=/path/x git config --edit` runs
+`/path/x`. That covers `VAR=x git …`, `env VAR=x git …` and `export VAR=x; git …` on one line. An assignment on an
+earlier line or in an earlier Bash call, or set by a sourced file, is not seen. The assignment must come before a
+`git` on its line, and like every trigger it also matches quoted text: `echo "EDITOR=vim" | git commit -F -` asks,
+while `git commit -m "EDITOR=vim"` (no `git` after the assignment) does not.
+
+One exemption: `GIT_PAGER` or `PAGER` set to the bare word `cat`, or to nothing, followed by whitespace
+(`GIT_PAGER=cat git log`, `PAGER= git diff`) stays silent. That is how agent sessions turn paging off, and asking on
+it would fire constantly and train operators to approve this class without reading it. It starts no program for
+`GIT_PAGER`: git documents (git(1), `GIT_PAGER`) that an empty value or the value `cat` means it launches no pager.
+For `PAGER`, git's documentation does not say the same; at worst the exemption runs `cat` as found on `PATH` as
+the pager. Any other value asks (`/tmp/x`, `./cat`, `cat;x`, `"cat"`, `less -R`), the
+other ten variables have no exemption, and the exemption never covers a git config write on the same line.
 
 `git-force-push-short` and `git-alias-config` were policy-only in #456. They are default asks since remediation
 row 699, with the same class ids. One narrowing came with them: the `f` of `-f` is case-sensitive (git push has
