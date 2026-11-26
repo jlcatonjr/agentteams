@@ -305,12 +305,13 @@ def ledger_dir(repo: Path) -> Path:
 
 
 def _default_branch(repo: Path) -> str:
-    for ref in ("origin/HEAD", "origin/main", "origin/master"):
-        name = _git(repo, "rev-parse", "--abbrev-ref", "-q", ref, check=False).decode().strip()
-        if name and name != "origin/HEAD":
-            return name
-    return next((b for b in ("main", "master")
-                 if _git(repo, "rev-parse", "--verify", "-q", f"refs/heads/{b}", check=False)), "")
+    """The default-branch ref from :mod:`agentteams.ref_branch` (the shared resolver), or ``""`` when there is none."""
+    from agentteams import ref_branch
+
+    try:
+        return ref_branch.default_ref(repo)
+    except ref_branch.RefBranchError:
+        return ""
 
 
 def resolve_base(repo: Path) -> str | None:
