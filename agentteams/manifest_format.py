@@ -330,7 +330,6 @@ def _format_domain_agent_list(agent_slugs: list[str]) -> str:
         "reference-manager": "manages the reference/bibliography database",
         "output-compiler": "assembles components into the final deliverable package",
         "visual-designer": "creates and revises diagrams and figures",
-        "devops-bloat": "advisory review of whether each process gate earns what it costs",
     }
     for slug in _dedupe_keep_order(agent_slugs):
         desc = descriptions.get(slug, "specialized domain agent")

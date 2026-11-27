@@ -24,7 +24,9 @@ release merge makes it an ancestor of the default branch. Reading it can only *a
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -240,8 +242,10 @@ def integration_branch_from_project(root: Path) -> str | None:
     if (reason := brief_unusable_reason(root)) is not None:
         raise ValueError(reason)
     path = brief_candidate(root)
-    if path is None:
-        return None
+    return None if path is None else _branch_from_brief(path)
+
+
+def _branch_from_brief(path: Path) -> str | None:
     try:
         brief = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -254,6 +258,45 @@ def integration_branch_from_project(root: Path) -> str | None:
         raise ValueError(f"{path}: {exc}") from exc
     return record["integration_branch"] if record else None
 
+
+#: Fleet discovery's brief candidates, in order (``fleet._resolve_descriptor``; a test keeps the two equal).
+BRIEF_CANDIDATES: tuple[str, ...] = (".agentteams/brief.json", "brief.json", ".github/agents/_build-description.json")
+
+
+def integration_branch_for_merge(root: Path) -> str | None:
+    """The integration branch for ``--merge-pr``: as :func:`integration_branch_from_project`, using only this module.
+
+    The unprompted-merge route may load only integrity-pinned modules (1.3.2), and the general lookup imports fleet
+    discovery. This takes the first of :data:`BRIEF_CANDIDATES` that is there, and refuses one that is a symbolic
+    link, not a regular file, outside the project, or cannot be stat'd, rather than read a later candidate.
+
+    Args:
+        root: The repository root.
+
+    Returns:
+        The integration branch name, or None (no brief, or a trunk model).
+
+    Raises:
+        ValueError: The first brief there is unusable, or its ``git_workflow`` block is malformed.
+    """
+    root = Path(root)
+    for rel in BRIEF_CANDIDATES:
+        path = root / rel
+        try:
+            st: os.stat_result | None = path.lstat()
+        except (FileNotFoundError, NotADirectoryError):
+            st = None   # absent: the next candidate
+        except OSError as exc:
+            raise ValueError(f"the brief {path} cannot be stat'd ({exc})") from exc
+        if st is None:
+            continue
+        if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+            raise ValueError(f"the brief {path} is a symbolic link or not a regular file")
+        if not path.resolve().is_relative_to(root.resolve()):
+            raise ValueError(f"the brief {path} is outside the project")
+        return _branch_from_brief(path)
+    return None
+
 __all__ = [
     "CADENCES",
     "DEFAULT_CADENCE",
@@ -265,6 +308,7 @@ __all__ = [
     "VALUE_PLACEHOLDERS",
     "default_placeholders",
     "enabled",
+    "integration_branch_for_merge",
     "integration_branch_from_project",
     "plan_files",
     "populate_placeholders",
