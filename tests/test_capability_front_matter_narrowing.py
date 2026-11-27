@@ -122,7 +122,7 @@ def test_a_non_superset_grant_beyond_the_template_is_flagged():
     assert merged["tools"] == "Bash, Read, Write, Edit", "the value is never rewritten without consent"
     hit = [p for p in proposals if "GRANTS MORE" in p]
     assert hit and "['Bash', 'Edit', 'Write']" in hit[0], proposals
-    assert "`agentteams --reconcile-front-matter`" in hit[0] and "`--reconcile-apply` applies ALL" in hit[0]
+    assert "`agentteams --reconcile-front-matter`" in hit[0] and "`--reconcile-apply` applies them, a widening only under a recorded clearance" in hit[0]
 
 
 @pytest.mark.parametrize("legacy", ["Bash, Edit", "Bash, Read, Write, Edit"])
@@ -136,7 +136,7 @@ def test_a_renamed_legacy_grant_is_flagged_whatever_its_provenance(legacy):
     hit = [p for p in proposals if "GRANTS MORE" in p]
     assert hit, proposals
     assert "ENFORCED from now on" in hit[0]
-    assert "`agentteams --reconcile-front-matter`" in hit[0] and "`--reconcile-apply` applies ALL" in hit[0]
+    assert "`agentteams --reconcile-front-matter`" in hit[0] and "`--reconcile-apply` applies them, a widening only under a recorded clearance" in hit[0]
 
 
 def test_a_renamed_grant_within_the_template_is_not_flagged():

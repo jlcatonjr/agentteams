@@ -19,6 +19,10 @@ Report it privately through GitHub: open the repository's **Security** tab and c
 vulnerability** (<https://github.com/jlcatonjr/agentteams/security/advisories/new>). Only the
 maintainers can see the report.
 
+If the Security tab is unavailable to you, open a public issue that says only that you have a security report
+and asks a maintainer to contact you; put no details in it. Contact will come only from a repository maintainer
+listed in `.github/CODEOWNERS`; do not share details with anyone else who asks on the issue.
+
 Please include:
 - A description of the vulnerability.
 - Steps to reproduce, or a proof-of-concept.
@@ -184,6 +188,13 @@ carries no marker; a signed marker is planned for the next grant schema version.
   too);
 - a `.pth` file runs `import` lines;
 - the current directory is on `sys.path`.
+
+**Retiring a key.** `agentteams --retire-verify-key <old> --key-id <new> --team-dir <team>` signs a retirement record
+for `<old>` with `<new>` from this same trusted install, with the same review digest, confirmation and
+verify-before-write. In the team dir stores of the project, signatures `<old>` made before then keep verifying and no
+other signature under it does. The user-level `~/.config/agentteams/verify-keys/` has no retirement records: remove
+`<old>.pub.pem` there too, which ends outstanding MCP-direct and vulnscan grants under it. Check every listed
+signature in the review before confirming: see `references/authorized-verify-keys/README.md` ("Retiring a key").
 
 ## Advisories
 

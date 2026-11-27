@@ -1463,6 +1463,33 @@ Read-only: list every entry in `references/exception-registry.json` under `--out
 
 **Operator-only.** Sign a first-party toolchain group file (`.agentteams/toolchain-group.json`: `version` 2, `scope`, `group`, `workspaces`, `purpose`, `sequence`, `key_id`, `derives_from`) in place with the Ed25519 decision key. It uses `--sign-decision`'s path: shape check, display of the group and every workspace, review digest and confirmation (`--confirm-review-sha256` without a terminal), preflight (key file, integrity, install location), then verification against `--output`'s `references/authorized-verify-keys/<key_id>.pub.pem` before it writes. The signature covers every field except itself. Commit the same signed bytes in every listed workspace. The file lifts Rule S-10's cooldown and the per-release pin row for releases of its repositories, in its workspaces; see the constitution's "First-party toolchain group" section.
 
+### `--retire-verify-key` / `--retire-include`
+
+**Operator-only.** `--retire-verify-key OLD --key-id NEW --team-dir DIR [--retire-include FILE ...]` retires the
+Ed25519 verify key `OLD` without revoking what it already signed. It writes
+`DIR/references/authorized-verify-keys/OLD.retired.json`: the sha256 of every signature under `OLD` in the team's
+decisions log and, at the project root, the capability-grants log, `.agentteams/carveouts.json`,
+`.agentteams/toolchain-group.json` and `.agentteams/dev-merge-authorization.json`, plus each `--retire-include` file
+(a decisions log, capability-grants log, carve-out registry, toolchain group or dev-merge authorization, repeatable;
+another kind, or one with no signature under `OLD`, is refused). Each signature is verified under `OLD` against its own
+document first; one that does not verify refuses the run and is named. The record is signed with key `NEW`, which
+must differ from `OLD` by its bytes and must not be retired, and is bound to `<project>:<team dir>` (the build log's
+`project_name` slug and the team dir's path from the project root). `DIR` must be a generated team dir
+(`.claude/agents`, `.github/agents`, ...); a gates-only team dir is refused, as is an agent session. Records `OLD`
+signed for other keys are re-signed with `NEW` in the same run, keeping their snapshots; one that lists digests its
+committed copy does not is refused, and one with no committed copy is shown as such. A team dir in a nested
+repository is refused when an outer repository's store holds the same key. The order is `--sign-decision`'s:
+pre-key refusals, preflight (integrity, key file, install location), display of every kept signature and its document
+and every re-signed record, review digest and confirmation (`--confirm-review-sha256` without a terminal), the key
+read, signing, then verification of each record before anything is written. Afterwards, in every team dir store of
+the project (and under any other file name holding the same key), a signature under `OLD` verifies only when every
+record retiring that key lists its digest, and new signing under `OLD` is refused. A record that does not verify, or
+whose binding is not its store's, refuses every signature under `OLD`; a symbolic link at a generated team dir path
+refuses every Ed25519 verify of the project. The user-level `~/.config/agentteams/verify-keys/` is not covered: remove
+the old key there. `--verify-integrity` reports the records of every store and warns when one is missing on disk or
+its own `.pub.pem` is. Procedure and what
+to check in the review: `references/authorized-verify-keys/README.md` ("Retiring a key").
+
 ### `--verify-toolchain-group`
 
 Read-only. Verify this workspace's `.agentteams/toolchain-group.json` against `--output`'s governed team dir: the signature, the workspace binding (`repo:` from the git `origin`, which must be a github.com URL, and `team:` from `--team-id`, else the brief's `team_id`, else its slugified `project_name`; the brief is `--description`, else the project's own brief as fleet discovery finds it), HALTs on `s10-toolchain-group` and on any `s10-cooldown-exempt` action, the signed `derives_from` lineage (each parent an authentic authorizing decision in the governed log, its chain recorded and acyclic, and no unretracted HALT on it or any ancestor), and the recorded `sequence`. Prints the group a render would use. **Exit code:** `0` when it verifies and at least one member remains; `1` otherwise, including an ungoverned workspace (a render never applies the group there) and a group whose every member a HALT drops.
@@ -1497,9 +1524,21 @@ With `--verify-toolchain-pin`: the ssh `allowed_signers` file naming the operato
 - every check on its head completed with `SUCCESS` (at least one), every required check is present and passed, and every check the signed file's `required_checks` lists is reported and passed (so a partial rollup, with only the fast jobs in, never qualifies);
 - every GitHub Actions workflow run for the head commit completed with `success` (at least one, at most 100 read);
 - it touches no agent, harness, workflow, `.agentteams/` or governance-target path;
+- it is not release mechanics, a pin move or an enforcement-code change (1.3.2): no commit reachable from `main`, a
+  `release/*` branch or a `v*` tag, and none with the same patch as a release-only commit; no change to the package
+  version, no `pyproject.toml` change, no `LAST_RELEASE_TAG` change or new CHANGELOG release heading; no `*.lock`,
+  requirements, constraints, workflow-named or pin-line file, packaging input, start-up hook, new top-level module,
+  integrity-pinned module (or a module shadowing one) or `agentteams/capability_hints.py`. These are read from the
+  remote into a temporary repository, and any read error refuses;
 - a recorded `@security` PASS names `dev-merge:<owner/name>:pr-<N>-<head sha>`. The PASS is spent before `gh` runs, so one PASS is one merge.
 
 Immediately before merging it re-reads the head and base, then runs exactly `gh pr merge N -R <owner/name> --merge --match-head-commit <sha>` (never `--admin`, `--auto`, `--squash`, `--rebase` or `--delete-branch`). Afterwards it checks that the result is a two-parent merge commit at the branch tip. `--output` names the team dir; `--team-id` as for `--verify-toolchain-group`. **Exit code:** `0` merged; `2` not authorized; `1` an error, or an `ALARM` when the result does not check out.
+
+`agentteams --merge-pr N --team-id <id>` runs through a dedicated entry point (`agentteams.cli.merge_pr_main`) that
+loads only the merge gate's integrity-pinned modules. `--team-id` is required on this route. The installed console
+script is the only supported route: `python build_team.py --merge-pr` and `python -m agentteams.cli.merge_pr_main`
+refuse. The route also refuses if a module it has loaded is not pinned; that check is a tripwire against accidental
+unpinned imports, not a control against hostile code already in the install.
 
 ### `--sign-dev-merge-authorization`
 
@@ -1785,6 +1824,29 @@ agent named in `mcp_grants`. A missing non-capability key is not reported.
 With `--reconcile-front-matter`, take the template's value for each diverging key.
 **Never implied by the report.** `allowed-tools` is a capability grant, and widening one is a
 privileged change (Constitutional C-3), so it requires saying so explicitly.
+
+A narrowing (a capability list the template shrinks, a `disallowedTools` list it grows) and a
+non-capability key apply on the flag alone. A **widening** needs a `reconcile-apply-widen`
+clearance first: more items in a capability list, a capability key absent on disk, any `model`
+change, and any value either side cannot parse (an `mcpServers` or `hooks` block, a list in a
+different vocabulary). In a governed workspace (`enforce_decision_signing`) the clearance is a
+PASS row signed with the operator's Ed25519 key, never a waiver, with `scope=reconcile-apply-widen`
+and `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>@sha256:<hex>`
+(separated by `;`); it counts against the exception cap. The digest is of the value that will be
+written (a list's sorted items, otherwise its text), so a clearance covers the value the operator
+reviewed and refuses a different one rendered for the key later. The refusal prints each token
+in full. In an ungoverned workspace an ordinary
+`reconcile-apply-widen` PASS row from an approved author clears it (a waiver still does not, and
+a row that lists `effect_grants` must list exactly this run's). An unretracted HALT recorded as
+`reconcile-apply-widen` or `reconcile-apply` blocks it, a clearance older than the retraction of
+either is void, and a clearance is spent once.
+Without one, the narrowings still apply, each widening is printed as `REFUSED <file>: <key>` with
+the row to record, and the run exits 1. A refused list key still loses what the template removes:
+an allow list is set to the items both sides share (the read-only switch drops `Write`/`Edit` at
+once, and only the added `Read` waits), and a `disallowedTools` list gains the template's new
+denials and keeps the ones it drops. When an allow list would be left empty, the whole key is
+refused and left as it is, because an empty tools list can mean every tool (Grok, Goose). With
+`--dry-run` the clearance is checked without being spent.
 A key absent on disk is added at the end of the front matter (printed `ADDED (absent)`), and a
 block value (such as `mcpServers`) is replaced whole; each capability change is printed as
 `[CAPABILITY GRANT CHANGED]`. Some keys are never *added*: `hooks`, `memory`, `agents`, and a

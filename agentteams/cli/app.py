@@ -321,8 +321,13 @@ def _main_dispatch(
         return _run_list_exceptions(args)
     if getattr(args, "sign_decision", None):
         return _run_sign_decision(args)
-    if (getattr(args, "merge_pr", None) is not None or getattr(args, "sign_dev_merge_authorization", None)
-            or getattr(args, "verify_dev_merge_authorization", False)):
+    if getattr(args, "merge_pr", None) is not None:
+        # 1.3.2 (operator ruling 2026-11-26): the unprompted merge runs only through its own entry point, which loads
+        # just the pinned gate modules; this CLI loads the whole render pipeline first.
+        print("Error: --merge-pr runs only through its dedicated entry point, which loads just the pinned merge-gate "
+              f"modules: the installed `agentteams --merge-pr {args.merge_pr}` command.", file=sys.stderr)
+        return 2
+    if getattr(args, "sign_dev_merge_authorization", None) or getattr(args, "verify_dev_merge_authorization", False):
         from agentteams.cli.dev_merge_commands import run_dev_merge
 
         return run_dev_merge(args)
@@ -331,6 +336,10 @@ def _main_dispatch(
         from agentteams.cli.toolchain_group_commands import run_toolchain_group
 
         return run_toolchain_group(args)
+    if getattr(args, "retire_verify_key", None):
+        from agentteams.cli.key_retirement_verb import run_retire_verify_key
+
+        return run_retire_verify_key(args)
 
     # -----------------------------------------------------------------------
     # --verify-integrity / --verify-backup: standalone read-only integrity

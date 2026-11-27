@@ -266,6 +266,10 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
 
     for line in describe_newly_blocking_halts(output_dir):  # advisory: review before upgrading
         print(line)
+    from agentteams.cli.key_retirement import report_lines
+
+    for line in report_lines(output_dir):  # advisory: each retired verify key and its signed snapshot
+        print(line)
     log_problems = check_logs(output_dir)
     if log_problems:
         enforcement_rc = 1
