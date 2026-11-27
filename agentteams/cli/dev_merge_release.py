@@ -16,7 +16,10 @@ only, so it could not see them:
 * **Pins and enforcement code.** A ``*.lock`` file, a lockfile the base's workflows name, a file that holds
   ``NAME=owner/repo@<40-hex>`` pin lines at the base or the head (so removing or deleting a pin counts), every module
   the base's integrity manifest pins, ``agentteams/capability_hints.py`` (the merge gate imports it), and the other
-  packaging inputs setuptools reads at install: ``setup.py``, ``setup.cfg`` and ``MANIFEST.in``.
+  packaging inputs setuptools reads at install: ``setup.py``, ``setup.cfg`` and ``MANIFEST.in``. Also any ``*.pth``,
+  ``sitecustomize.py`` or ``usercustomize.py`` (they run at interpreter start), a new top-level module or package (it
+  could shadow an import), and a ``requirements*``/``constraints*`` file the workflows name. Paths are compared
+  casefolded.
 
 Every check reads the remote, not this checkout: the base, the head, ``main``, every ``release/*`` and every ``v*``
 tag are fetched into a temporary bare repository, and the fetched base and head must be the SHAs ``gh`` reported.
@@ -50,7 +53,10 @@ _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _RELEASE_HEADING = re.compile(r"^## \[(\d+\.\d+\.\d+[^\]]*)\]", re.MULTILINE)
 _LAST_RELEASE_TAG = re.compile(r"^LAST_RELEASE_TAG\s*(?::[^=]*)?=\s*(.+?)\s*$", re.MULTILINE)
 _PIN_LINE = re.compile(r"^\s*[A-Za-z0-9_.-]+\s*=\s*[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}\s*$", re.MULTILINE)
-_WORKFLOW_LOCK = re.compile(r"""(?<![A-Za-z0-9_./-])([A-Za-z0-9_./-]+\.lock)\b""")
+_WORKFLOW_LOCK = re.compile(r"""(?<![A-Za-z0-9_./-])([A-Za-z0-9_./-]+\.lock|(?:[A-Za-z0-9_.-]+/)*"""
+                            r"""(?:requirements|constraints)[A-Za-z0-9_.-]*\.txt)\b""")
+#: Interpreter start-up hooks: a ``*.pth`` file or ``sitecustomize``/``usercustomize`` runs code at every start.
+_STARTUP_HOOKS = frozenset({"sitecustomize.py", "usercustomize.py"})
 
 
 class ReleaseCheckError(RuntimeError):
@@ -119,6 +125,8 @@ def _pyproject_keys(text: str | None) -> dict:
     return {"project.version": project.get("version"), "project.dynamic": project.get("dynamic"),
             "project.scripts": project.get("scripts"), "project.gui-scripts": project.get("gui-scripts"),
             "project.entry-points": project.get("entry-points"),
+            "project.dependencies": project.get("dependencies"),
+            "project.optional-dependencies": project.get("optional-dependencies"),
             "tool.setuptools": (data.get("tool") or {}).get("setuptools"), "build-system": data.get("build-system")}
 
 
@@ -251,16 +259,25 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
         if why:
             return why
 
-        pinned = pinned_modules(_show(git, d, "refs/r/base", MANIFEST_REL))
+        # Compared casefolded: on a case-insensitive filesystem `DEV_MERGE.py` replaces `dev_merge.py` at checkout.
+        pinned = {m.casefold() for m in pinned_modules(_show(git, d, "refs/r/base", MANIFEST_REL))}
         wf_names = _ok(git, ["ls-tree", "--name-only", "refs/r/base", ".github/workflows/"], d).split()
-        locks = workflow_lockfiles([_show(git, d, "refs/r/base", n) or "" for n in wf_names])
+        locks = {x.casefold() for x in workflow_lockfiles([_show(git, d, "refs/r/base", n) or "" for n in wf_names])}
+        fixed = {CAPABILITY_HINTS_REL.casefold(), *(f.casefold() for f in PACKAGING_FILES)}
+        base_top = {line.strip().casefold() for line in _ok(git, ["ls-tree", "--name-only", "refs/r/base"], d).splitlines()}
         touched: list[str] = []
         for path in files:
             p = path.strip()
             while p.startswith("./"):
                 p = p[2:]
-            if (p in pinned or p == CAPABILITY_HINTS_REL or p in PACKAGING_FILES or p.lower().endswith(".lock")
-                    or p in locks):
+            low = p.casefold()
+            name = low.rsplit("/", 1)[-1]
+            top = low.split("/", 1)[0]
+            new_root_module = "/" not in low and low.endswith(".py") and low not in base_top
+            new_root_package = ("/" in low and top not in base_top
+                                and git(["cat-file", "-e", f"refs/r/head:{p.split('/', 1)[0]}/__init__.py"], d).returncode == 0)
+            if (low in pinned or low in fixed or low.endswith((".lock", ".pth")) or low in locks
+                    or name in _STARTUP_HOOKS or new_root_module or new_root_package):
                 touched.append(p)
                 continue
             # Pin lines on EITHER side: adding, editing, removing or deleting a pin is a pin move (D3).
@@ -272,8 +289,8 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
                     touched.append(p)
                     break
         if touched:
-            return (f"it changes a pinned enforcement module, a lockfile or a pin file ({', '.join(sorted(touched)[:5])}),"
-                    " which the operator merges")
+            return (f"it changes a pinned enforcement module, a packaging input, a start-up hook, a new top-level "
+                    f"module, a lockfile or a pin file ({', '.join(sorted(touched)[:5])}), which the operator merges")
     return None
 
 
