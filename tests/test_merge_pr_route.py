@@ -82,13 +82,15 @@ from tests._sandbox_gate_helpers import _stub_sig
 dl.verify_by_scheme = lambda scheme, values, signature, public_pem=None: signature == _stub_sig(values)
 dm.run_gh = gh                     # no network: the canned gh of the dev-merge tests
 dm.release_check = lambda *a: None  # the release checks need the remote; they have their own tests
-rc = merge_pr_main.main(["--merge-pr", "7", "--project", root, "--output", team, "--team-id", "consumer"])
+extra = [] if sys.argv[4] == "default-output" else ["--output", team]
+rc = merge_pr_main.main(["--merge-pr", "7", "--project", root, *extra, "--team-id", "consumer"])
 print(json.dumps({"rc": rc, "merged": [c for c in gh.calls if c[:2] == ["pr", "merge"]],
                   "unpinned": dm.unpinned_loaded()}))
 """
 
 
-def test_an_end_to_end_merge_through_the_entry_point_with_the_real_guard(tmp_path):
+@pytest.mark.parametrize("output", ["explicit-output", "default-output"])
+def test_an_end_to_end_merge_through_the_entry_point_with_the_real_guard(tmp_path, output):
     from tests.test_dev_merge import _doc, _pass, _project, _write
 
     root, team, private = _project(tmp_path)
@@ -96,10 +98,13 @@ def test_an_end_to_end_merge_through_the_entry_point_with_the_real_guard(tmp_pat
     _pass(team)
     (root / ".agentteams" / "brief.json").write_text(
         json.dumps({"git_workflow": {"branch_model": "integration", "integration_branch": "dev"}}))
-    proc = subprocess.run([sys.executable, "-I", "-c", _PROBE, str(_ROOT), str(root), str(team)], cwd=tmp_path,
+    proc = subprocess.run([sys.executable, "-I", "-c", _PROBE, str(_ROOT), str(root), str(team), output], cwd=tmp_path,
                           capture_output=True, text=True, timeout=120, check=False)
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout.strip().splitlines()[-1])
     assert out["unpinned"] is None, out["unpinned"]
+    if output == "default-output":   # without --output the resolver refuses this layout: no merge, nothing unpinned
+        assert out["rc"] == 2 and out["merged"] == [] and "not a team dir" in proc.stderr
+        return
     assert out["rc"] == 0, proc.stderr
     assert out["merged"] == [["pr", "merge", "7", "-R", "acme/consumer", "--merge", "--match-head-commit", "a" * 40]]

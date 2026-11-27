@@ -175,6 +175,18 @@ def test_any_change_to_capability_hints_is_refused(origin):
     assert "the operator merges" in (_check(origin, "hints", sha, ["agentteams/capability_hints.py"]) or "")
 
 
+def test_a_submodule_or_gitmodules_change_is_refused(origin):
+    _g(origin, "switch", "-q", "-c", "sub", "dev")
+    _g(origin, "update-index", "--add", "--cacheinfo", f"160000,{'f' * 40},vendor/lib")
+    _write(origin, ".gitmodules", '[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = https://x/lib\n')
+    _g(origin, "add", ".gitmodules")
+    _g(origin, "commit", "-q", "-m", "a submodule")
+    sha = _g(origin, "rev-parse", "HEAD")
+    _g(origin, "switch", "-q", "dev")
+    assert "the operator merges" in (_check(origin, "sub", sha, ["vendor/lib"]) or "")
+    assert "the operator merges" in (_check(origin, "sub", sha, [".gitmodules"]) or "")
+
+
 def test_a_v_prefixed_release_heading_is_refused(origin):
     sha = _pr(origin, "vhead", **{"CHANGELOG.md": "# C\n\n## [v1.4.0] - d\n\n## [1.3.0] - d\n"})
     assert "CHANGELOG release section" in (_check(origin, "vhead", sha, ["CHANGELOG.md"]) or "")
