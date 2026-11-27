@@ -120,6 +120,9 @@ def test_release_commits_are_refused(origin, files, why):
     ("tools/pins.lock", "anything\n"),                    # named by the base's workflow
     ("deps/versions.txt", "lib=owner/lib@" + "b" * 40 + "\n"),   # a pin line in an unlisted file
     ("agentteams/cli/dev_merge.py", "GATE = 0\n"),        # a module the base's manifest pins
+    ("setup.py", "import setuptools; setuptools.setup()\n"),   # packaging inputs setuptools reads at install
+    ("setup.cfg", "[metadata]\nname = x\n"),
+    ("MANIFEST.in", "include *.txt\n"),
 ])
 def test_pins_and_enforcement_code_are_refused(origin, rel, text):
     sha = _pr(origin, "pin", **{rel.replace("/", "__"): text})
