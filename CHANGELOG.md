@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `capability_hints.LAST_RELEASE_TAG`, or a new release heading in `CHANGELOG.md`;
   - a change to a `*.lock` file, a lockfile the base's workflows name, a file holding `NAME=owner/repo@<sha>` pin
     lines at the base or the head (removing or deleting a pin counts), any module the base's integrity manifest
-    pins, or `agentteams/capability_hints.py`.
+    pins, `agentteams/capability_hints.py`, or a packaging input (`setup.py`, `setup.cfg`, `MANIFEST.in`).
 - **`agentteams --merge-pr` now runs through its own entry point.** The `agentteams` console script
   (`agentteams.cli.entry`) sends a `--merge-pr` invocation to `agentteams.cli.merge_pr_main` before the CLI and
   render pipeline load, so only the gate's integrity-pinned modules run before the gate. Two tests check that tree,

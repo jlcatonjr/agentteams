@@ -15,7 +15,8 @@ only, so it could not see them:
   new ``## [X.Y.Z…]`` heading in ``CHANGELOG.md``.
 * **Pins and enforcement code.** A ``*.lock`` file, a lockfile the base's workflows name, a file that holds
   ``NAME=owner/repo@<40-hex>`` pin lines at the base or the head (so removing or deleting a pin counts), every module
-  the base's integrity manifest pins, and ``agentteams/capability_hints.py`` (the merge gate imports it).
+  the base's integrity manifest pins, ``agentteams/capability_hints.py`` (the merge gate imports it), and the other
+  packaging inputs setuptools reads at install: ``setup.py``, ``setup.cfg`` and ``MANIFEST.in``.
 
 Every check reads the remote, not this checkout: the base, the head, ``main``, every ``release/*`` and every ``v*``
 tag are fetched into a temporary bare repository, and the fetched base and head must be the SHAs ``gh`` reported.
@@ -43,6 +44,8 @@ MAX_SCAN_BYTES = 2_000_000
 
 MANIFEST_REL = "references/enforcement-integrity.json"
 CAPABILITY_HINTS_REL = "agentteams/capability_hints.py"
+#: Other packaging inputs setuptools reads at install (a ``setup.py`` also runs code): never merged unprompted.
+PACKAGING_FILES = frozenset({"setup.py", "setup.cfg", "MANIFEST.in"})
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _RELEASE_HEADING = re.compile(r"^## \[(\d+\.\d+\.\d+[^\]]*)\]", re.MULTILINE)
 _LAST_RELEASE_TAG = re.compile(r"^LAST_RELEASE_TAG\s*(?::[^=]*)?=\s*(.+?)\s*$", re.MULTILINE)
@@ -256,7 +259,8 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
             p = path.strip()
             while p.startswith("./"):
                 p = p[2:]
-            if p in pinned or p == CAPABILITY_HINTS_REL or p.lower().endswith(".lock") or p in locks:
+            if (p in pinned or p == CAPABILITY_HINTS_REL or p in PACKAGING_FILES or p.lower().endswith(".lock")
+                    or p in locks):
                 touched.append(p)
                 continue
             # Pin lines on EITHER side: adding, editing, removing or deleting a pin is a pin move (D3).
