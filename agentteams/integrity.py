@@ -386,6 +386,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/update_lock.py",                 # imported by --merge-pr's toolchain group (1.3.2: import tree)
     "agentteams/cli/commands_output.py",         # --merge-pr's output helpers (1.3.2: import tree)
     "agentteams/gitdirs.py",                     # git-dir resolution in --merge-pr's import tree (1.3.2)
+    "agentteams/cli/merge_pr_main.py",           # the dedicated --merge-pr entry point (1.3.2)
+    "agentteams/cli/entry.py",                   # the `agentteams` console script: routes --merge-pr before the CLI (1.3.2)
+    "agentteams/__init__.py",                    # runs on every import, before the gate (1.3.2)
+    "agentteams/cli/__init__.py",                # runs on every agentteams.cli import, before the gate (1.3.2)
     "agentteams/cli/toolchain_group_commands.py",  # resolves the governance dir for both signed-file verbs
     "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state

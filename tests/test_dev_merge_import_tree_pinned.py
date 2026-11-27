@@ -13,9 +13,10 @@ from pathlib import Path
 from agentteams.integrity import ENFORCEMENT_MODULES
 
 _ROOT = Path(__file__).resolve().parents[1]
-_GATE = ("agentteams/cli/dev_merge.py", "agentteams/cli/dev_merge_release.py", "agentteams/cli/dev_merge_commands.py")
-#: Named exemptions. capability_hints holds LAST_RELEASE_TAG, which changes at every release; pinning it would force a
-#: manifest re-pin into each version commit. dev_merge_release refuses any change to that tag instead.
+_GATE = ("agentteams/cli/entry.py", "agentteams/cli/merge_pr_main.py", "agentteams/cli/dev_merge.py",
+         "agentteams/cli/dev_merge_release.py", "agentteams/cli/dev_merge_commands.py")
+#: Named exemptions. capability_hints changes at every release (LAST_RELEASE_TAG), so it is not pinned; instead
+#: dev_merge_release refuses EVERY change to it in an unprompted merge (@security, 2026-11-26).
 _EXEMPT = frozenset({"agentteams/capability_hints.py"})
 
 
@@ -52,10 +53,12 @@ def _tree() -> set[str]:
 def test_every_module_the_merge_gate_loads_is_pinned():
     tree = _tree()
     assert set(_GATE) <= tree
-    unpinned = sorted(p for p in tree if p not in ENFORCEMENT_MODULES and p not in _EXEMPT
-                      and not p.endswith("__init__.py"))
+    unpinned = sorted(p for p in tree if p not in ENFORCEMENT_MODULES and p not in _EXEMPT)
     assert not unpinned, unpinned
 
 
-def test_the_exemptions_are_still_in_the_tree():
+def test_the_exemptions_are_still_in_the_tree_and_refused_by_the_gate():
+    from agentteams.cli import dev_merge_release as dmr
+
     assert _EXEMPT <= _tree()   # an exemption that no longer applies must be removed
+    assert dmr.CAPABILITY_HINTS_REL in _EXEMPT

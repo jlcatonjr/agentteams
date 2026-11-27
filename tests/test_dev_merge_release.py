@@ -122,6 +122,26 @@ def test_pins_and_enforcement_code_are_refused(origin, rel, text):
     assert "the operator merges" in (_check(origin, "pin", sha, [rel]) or "")
 
 
+def test_removing_or_deleting_a_pin_is_refused(origin):
+    # The base holds a pin line in an unlisted file; a PR that removes the line, or deletes the file, moves the pin.
+    _g(origin, "switch", "-q", "dev")
+    _commit(origin, "add a pin file", **{"deps__pins.txt": "lib=owner/lib@" + "e" * 40 + "\n"})
+    edit = _pr(origin, "unpin", **{"deps__pins.txt": "nothing pinned here\n"})
+    assert "the operator merges" in (_check(origin, "unpin", edit, ["deps/pins.txt"]) or "")
+    _g(origin, "switch", "-q", "-c", "drop", "dev")
+    _g(origin, "rm", "-q", "deps/pins.txt")
+    _g(origin, "commit", "-q", "-m", "drop the pin file")
+    drop = _g(origin, "rev-parse", "HEAD")
+    _g(origin, "switch", "-q", "dev")
+    assert "the operator merges" in (_check(origin, "drop", drop, ["deps/pins.txt"]) or "")
+
+
+def test_any_change_to_capability_hints_is_refused(origin):
+    # The merge gate imports it and it is not pinned (it changes every release), so every change is refused.
+    sha = _pr(origin, "hints", **{"agentteams__capability_hints.py": "HINT = 'reworded'\n"})
+    assert "the operator merges" in (_check(origin, "hints", sha, ["agentteams/capability_hints.py"]) or "")
+
+
 def test_a_moved_head_is_refused(origin):
     _pr(origin, "feat2", **{"src__app.py": "x = 3\n"})
     assert "head moved" in (_check(origin, "feat2", "c" * 40, ["src/app.py"]) or "")
