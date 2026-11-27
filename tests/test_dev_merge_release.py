@@ -103,6 +103,10 @@ def test_a_cherry_picked_release_commit_is_refused_by_patch_id(origin):
     ({"pyproject.toml": _PYPROJECT.format(v="1.4.0")}, "project.version"),
     ({"pyproject.toml": '[project]\nname = "x"\ndynamic = ["version"]\n\n[build-system]\nrequires = ["setuptools==84.2.1"]\n'},
      "project.dynamic"),
+    ({"pyproject.toml": _PYPROJECT.format(v="1.4.0.dev0") + '\n[project.scripts]\nagentteams = "elsewhere:main"\n'},
+     "project.scripts"),
+    ({"pyproject.toml": _PYPROJECT.format(v="1.4.0.dev0") + '\n[tool.setuptools]\npy-modules = ["shadow"]\n'},
+     "tool.setuptools"),
     ({"CHANGELOG.md": "# C\n\n## [1.4.0] - d\n\n## [1.3.0] - d\n"}, "CHANGELOG release section"),
     ({"agentteams__capability_hints.py": 'LAST_RELEASE_TAG = "v1.4.0"\n'}, "LAST_RELEASE_TAG"),
 ])
