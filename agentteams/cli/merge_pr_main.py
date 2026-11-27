@@ -3,7 +3,9 @@
 ``agentteams --merge-pr N`` (the console script sends it here, see :mod:`agentteams.cli.entry`) or
 ``python -m agentteams.cli.merge_pr_main --merge-pr N`` merges pull request *N* into the
 integration branch without the gate's prompt, under the signed authorization. It loads only the merge gate's own
-modules, every one of them integrity-pinned (``tests/test_merge_pr_entry_tree.py`` runs a merge and checks), so no
+modules, every one of them integrity-pinned (``tests/test_merge_pr_entry_tree.py`` imports the route and the gate's
+deferred imports in a fresh interpreter and checks what loaded; ``tests/test_dev_merge_import_tree_pinned.py`` checks
+the same tree from the source), so no
 module outside the pinned trust path runs before the gate. The full ``agentteams`` CLI loads ~190 modules, most of
 them the render pipeline; ``python build_team.py --merge-pr`` therefore refuses and points here.
 

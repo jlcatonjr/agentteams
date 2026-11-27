@@ -16,9 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - a pull request that carries a commit reachable from `main`, a `release/*` branch or a `v*` tag, or a commit
     with the same patch as a release-only commit (a rebased or cherry-picked release). The check fetches those refs
     from the remote into a temporary repository; any fetch or read error refuses;
-  - a change to `pyproject.toml`'s version or build settings (`project.version`, `project.dynamic`,
-    `tool.setuptools.dynamic`, `build-system`), to `capability_hints.LAST_RELEASE_TAG`, or a new release heading in
-    `CHANGELOG.md`;
+  - a change to `pyproject.toml`'s version, console scripts or packaging (`project.version`, `project.dynamic`,
+    `project.scripts`, `project.gui-scripts`, `project.entry-points`, `[tool.setuptools]`, `build-system`), to
+    `capability_hints.LAST_RELEASE_TAG`, or a new release heading in `CHANGELOG.md`;
   - a change to a `*.lock` file, a lockfile the base's workflows name, a file holding `NAME=owner/repo@<sha>` pin
     lines at the base or the head (removing or deleting a pin counts), any module the base's integrity manifest
     pins, or `agentteams/capability_hints.py`.

@@ -9,8 +9,9 @@ only, so it could not see them:
   a ``release/*`` branch or a ``v*`` tag) and by content (a commit whose ``git patch-id --stable`` equals a
   release-only commit's: a rebase or cherry-pick). A squash of several release commits has no single matching
   patch-id; the CHANGELOG check below names its usual footprint, a new release heading.
-* **Release commits.** A change to the package version (``pyproject.toml``: ``project.version``,
-  ``project.dynamic``, ``tool.setuptools.dynamic``, ``build-system``), to ``capability_hints.LAST_RELEASE_TAG``, or a
+* **Release commits and packaging.** A change to the package version or to what is installed and run
+  (``pyproject.toml``: ``project.version``, ``project.dynamic``, ``project.scripts``, ``project.gui-scripts``,
+  ``project.entry-points``, ``[tool.setuptools]``, ``build-system``), to ``capability_hints.LAST_RELEASE_TAG``, or a
   new ``## [X.Y.Z…]`` heading in ``CHANGELOG.md``.
 * **Pins and enforcement code.** A ``*.lock`` file, a lockfile the base's workflows name, a file that holds
   ``NAME=owner/repo@<40-hex>`` pin lines at the base or the head (so removing or deleting a pin counts), every module
@@ -110,9 +111,12 @@ def _pyproject_keys(text: str | None) -> dict:
     except tomllib.TOMLDecodeError as exc:
         raise ReleaseCheckError(f"pyproject.toml does not parse ({exc})") from exc
     project = data.get("project") or {}
-    setuptools = ((data.get("tool") or {}).get("setuptools") or {})
+    # The version, and everything that decides which code is installed and run as a command: the console scripts
+    # route `agentteams --merge-pr` to the pinned gate entry, and [tool.setuptools] picks the packages and modules.
     return {"project.version": project.get("version"), "project.dynamic": project.get("dynamic"),
-            "tool.setuptools.dynamic": setuptools.get("dynamic"), "build-system": data.get("build-system")}
+            "project.scripts": project.get("scripts"), "project.gui-scripts": project.get("gui-scripts"),
+            "project.entry-points": project.get("entry-points"),
+            "tool.setuptools": (data.get("tool") or {}).get("setuptools"), "build-system": data.get("build-system")}
 
 
 def version_problem(base_pyproject: str | None, head_pyproject: str | None, base_hints: str | None,
