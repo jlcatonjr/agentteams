@@ -35,7 +35,7 @@
     "agentteams/cli/governance_targets.py": "7289d3ae60951439f24aea3e9c18f32e885f412f578cb3fff1194e86445dea98",
     "agentteams/cli/grants.py": "4ea34acbb15d53cfaafe46d738782b98dd6e1d4ae675e0053d63be0ba0f29c1c",
     "agentteams/cli/key_retirement.py": "c2545fdd38b362e7317700135f791c02393757a23e9c5f208bb284dee2f42166",
-    "agentteams/cli/key_retirement_verb.py": "b6fee61979b9eab7a8fd37a32efdd1b3d5963d790c31a5f45b93b84eeee68eab",
+    "agentteams/cli/key_retirement_verb.py": "02c68055ba6988634435874f560ffca9f87396b4f10122077be219eab276adfc",
     "agentteams/cli/management_directives.py": "2eb9a585c8beb90c5a538f06014ec076ef9be062d3e7cc3e8b1ceb70cfe9f72b",
     "agentteams/cli/mcp_grant_commands.py": "5b5787ba1bb9d016860f0d81b51212b165b962ce288c60ab9b9e7c07dec72cbe",
     "agentteams/cli/open_halts.py": "ff8d2cf4d2f5d821e6da43c24db527c78389b4788869a7c11e87387cb2978bfd",

@@ -174,9 +174,11 @@ retire, `<new>` the key that signs the record, and `<team>` the team dir, such a
    (another workspace's toolchain group, for example); an include of another kind, or with no signature
    under `<old>`, is refused. Each signature is verified under `<old>` against its own document before it
    is kept: one that does not verify (a hex string pasted into a row, for example) refuses the retirement
-   and names the row or file. Use a generated team dir: a gates-only team dir is refused, and so is a
-   team dir in a nested repository when an outer repository's store holds the same key (the outer store
-   would not read the record; run from the outermost repository's team dir). If `<old>` signed other
+   and names the row or file. Use a generated team dir: a gates-only team dir is refused. So is a team
+   dir when another store it reads holds the same key but would not read its record: an outer
+   repository's store does not read a nested one, nor a `parent_team` store its child. The refusal names
+   those stores; retire the key from a team dir they read instead (for a nested repository, the outermost
+   repository's team dir). If `<old>` signed other
    keys' retirement records, the same run re-signs each of them with `<new>`, keeping its snapshot. Each
    is first compared with its committed copy: one that lists digests its committed copy does not is
    refused, and one with no committed copy is shown as such. Every such store must hold `<new>`, or the

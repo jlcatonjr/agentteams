@@ -11,7 +11,9 @@ import csv
 import itertools
 import json
 import os
+import shutil
 import subprocess
+import types
 from pathlib import Path
 
 import pytest
@@ -781,3 +783,101 @@ def test_a_record_without_a_binding_is_refused(tmp_path, keys):
     kr.record_path(team, OLD).write_text(json.dumps(unbound), encoding="utf-8")
     with pytest.raises(RuntimeError, match=_UNTRUSTED):
         verify()
+
+
+# ------------------------------------------------------------------------------ release gaps (integrated tree)
+
+def _nested_team(tmp_path: Path, keys: dict[str, str], parent: str | None) -> tuple[Path, Path]:
+    """``proj/sub/.claude/agents`` (no inner ``.git``) declaring ``parent``; returns (team dir, gates dir)."""
+    root = tmp_path / "proj"
+    _git(root, "init", "-q")
+    team = _standard(tmp_path, "sub/.claude/agents", OLD, NEW)
+    src = team / kr.STORE_REL
+    shutil.rmtree(root / ".claude")  # the fixture's key source: no generated team dir directly under the root
+    if parent is not None:
+        (team / "references" / "agent-privilege.json").write_text(json.dumps({"parent_team": parent}),
+                                                                  encoding="utf-8")
+    gates = root / "gates"
+    (gates / kr.STORE_REL).mkdir(parents=True)
+    (gates / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
+    (gates / kr.STORE_REL / f"{NEW}.pub.pem").write_bytes((src / f"{NEW}.pub.pem").read_bytes())
+    return team, gates
+
+
+def test_a_non_generated_parent_team_holding_the_key_that_would_not_see_the_record_refuses(tmp_path, keys, monkeypatch,
+                                                                                         capsys):
+    team, gates = _nested_team(tmp_path, keys, "gates")
+    monkeypatch.setattr(ops, "_confirm", lambda digest, confirm: True)
+    monkeypatch.setenv(_KEY_ENV, str(_keyfile(tmp_path, keys, NEW)))
+    assert _retire(team) == 0, capsys.readouterr().err  # negative control: the parent does not hold the key
+    kr.record_path(team, OLD).unlink()
+    (gates / kr.STORE_REL / f"{OLD}.pub.pem").write_bytes((team / kr.STORE_REL / f"{OLD}.pub.pem").read_bytes())
+    assert _retire(team) == 1
+    err = capsys.readouterr().err
+    assert str(gates) in err and "would not see" in err and "The key was not read." in err
+    assert not kr.record_path(team, OLD).exists()
+
+
+@pytest.mark.parametrize("case", ["outside-root", "symlink"])
+def test_a_parent_team_outside_the_root_or_linked_refuses_cleanly(case, tmp_path, keys, monkeypatch, capsys):
+    team, gates = _nested_team(tmp_path, keys, "../outside" if case == "outside-root" else "linked")
+    if case == "symlink":
+        (tmp_path / "proj" / "linked").symlink_to(gates)
+    monkeypatch.setenv(_KEY_ENV, str(tmp_path / "absent.key"))
+    assert _retire(team) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Error:") and "parent_team" in err and "The key was not read." in err
+
+
+def test_an_unlistable_sibling_store_refuses_cleanly(tmp_path, keys, monkeypatch, capsys):
+    team = _team(tmp_path)
+    sibling = _standard(tmp_path, ".github/agents", OLD)
+    real_glob = Path.glob
+
+    def glob(self, pattern):
+        if self == sibling / kr.STORE_REL and pattern == "*.pub.pem":
+            raise OSError("permission denied")
+        return real_glob(self, pattern)
+
+    monkeypatch.setattr(Path, "glob", glob)
+    monkeypatch.setenv(_KEY_ENV, str(tmp_path / "absent.key"))
+    assert _retire(team) == 1
+    err = capsys.readouterr().err
+    assert "cannot be listed" in err and "The key was not read." in err
+
+
+# -------------------------------------------------------------------------- the reconcile-apply widening gate
+
+def test_reconcile_apply_refuses_a_widening_pass_signed_by_a_retired_key(tmp_path, keys):
+    from agentteams import front_matter_reconcile as fmr
+    from agentteams import front_matter_widening as fmw
+    from agentteams.cli import reconcile_apply_gate as rgate
+    from tests._sandbox_gate_helpers import _KEY_ID, _log, _row
+    from tests._sandbox_gate_helpers import _team as _gate_team
+
+    disk = "---\nname: o\ndescription: old\ntools: Read\nagents:\n  - a\n---\nbody\n"
+    tmpl = "---\nname: o\ndescription: old\ntools: Read\nagents:\n  - a\n  - b\n---\nbody\n"
+    token = rgate.grant_token("orchestrator.md", "agents", fmw.value_digest("agents", "\n  - a\n  - b"))
+    src = _team(tmp_path) / kr.STORE_REL
+
+    def attempt(where: Path, *, signer: str, listed: bool) -> tuple[int, str]:
+        team = _gate_team(where)
+        store = team / kr.STORE_REL
+        (store / f"{_KEY_ID}.pub.pem").write_bytes((src / f"{OLD}.pub.pem").read_bytes())  # _KEY_ID is the old key
+        (store / f"{NEW}.pub.pem").write_bytes((src / f"{NEW}.pub.pem").read_bytes())
+        (team / "references" / "build-log.json").write_text(json.dumps({"project_name": "proj"}), encoding="utf-8")
+        orch = team / "orchestrator.md"
+        orch.write_text(disk, encoding="utf-8")
+        key_id, private = (_KEY_ID, keys[OLD]) if signer == OLD else (NEW, keys[NEW])
+        row = _row(rgate.ACTION, grants=token, relaxes="") | {"key_id": key_id}
+        row["signature"] = sl.ed25519_sign(private, dl._decision_signature_values(row))
+        _log(team, row)
+        keys[_KEY_ID] = keys[OLD]
+        _record(team, keys, [row["signature"]] if listed else [], key_id=_KEY_ID)
+        rc = fmr.run_reconcile(types.SimpleNamespace(reconcile_apply=True, dry_run=False),
+                               [("orchestrator.md", tmpl)], team)
+        return rc, orch.read_text(encoding="utf-8")
+
+    assert attempt(tmp_path / "retired", signer=OLD, listed=False) == (1, disk)
+    assert attempt(tmp_path / "listed", signer=OLD, listed=True) == (0, tmpl)  # negative control: in the snapshot
+    assert attempt(tmp_path / "new-key", signer=NEW, listed=False) == (0, tmpl)  # negative control: the new key
