@@ -20,8 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `tool.setuptools.dynamic`, `build-system`), to `capability_hints.LAST_RELEASE_TAG`, or a new release heading in
     `CHANGELOG.md`;
   - a change to a `*.lock` file, a lockfile the base's workflows name, a file holding `NAME=owner/repo@<sha>` pin
-    lines, or any module the base's integrity manifest pins.
-- Every module the gate loads is now pinned, and a test checks the gate's import tree.
+    lines at the base or the head (removing or deleting a pin counts), any module the base's integrity manifest
+    pins, or `agentteams/capability_hints.py`.
+- **`agentteams --merge-pr` now runs through its own entry point.** The `agentteams` console script
+  (`agentteams.cli.entry`) sends a `--merge-pr` invocation to `agentteams.cli.merge_pr_main` before the CLI and
+  render pipeline load, so only the gate's integrity-pinned modules run before the gate. Two tests check that tree,
+  from the source and in a fresh interpreter. `python build_team.py --merge-pr` now refuses and names the entry
+  point; `python -m agentteams.cli.merge_pr_main --merge-pr N` is the equivalent of the installed command.
 - A stale integrity manifest now fails the test suite instead of printing a warning.
 - **Remaining residue:** a forward merge squashed into one commit has no single matching patch. It is caught when
   it brings a release heading or a version change, which a `.0` forward merge does.

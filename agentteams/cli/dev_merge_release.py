@@ -12,8 +12,9 @@ only, so it could not see them:
 * **Release commits.** A change to the package version (``pyproject.toml``: ``project.version``,
   ``project.dynamic``, ``tool.setuptools.dynamic``, ``build-system``), to ``capability_hints.LAST_RELEASE_TAG``, or a
   new ``## [X.Y.Z…]`` heading in ``CHANGELOG.md``.
-* **Pins and enforcement code.** A ``*.lock`` file, a lockfile the base's workflows name, a file holding
-  ``NAME=owner/repo@<40-hex>`` pin lines, and every module the base's integrity manifest pins.
+* **Pins and enforcement code.** A ``*.lock`` file, a lockfile the base's workflows name, a file that holds
+  ``NAME=owner/repo@<40-hex>`` pin lines at the base or the head (so removing or deleting a pin counts), every module
+  the base's integrity manifest pins, and ``agentteams/capability_hints.py`` (the merge gate imports it).
 
 Every check reads the remote, not this checkout: the base, the head, ``main``, every ``release/*`` and every ``v*``
 tag are fetched into a temporary bare repository, and the fetched base and head must be the SHAs ``gh`` reported.
@@ -27,8 +28,8 @@ import re
 import subprocess
 import tempfile
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 #: A git runner: argv (without ``git``) and a working directory, to a completed process.
 GitRunner = Callable[[list[str], Path], "subprocess.CompletedProcess[str]"]
@@ -89,7 +90,7 @@ def _patch_ids(git: GitRunner, cwd: Path, shas: list[str]) -> set[str]:
         return set()
     proc = subprocess.run(
         ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "log", "--stdin", "--no-walk=unsorted",
-         "-p", "--no-merges", "--no-color", "--format=commit %H"],
+         "-p", "--no-merges", "--no-color", "--no-ext-diff", "--no-textconv", "--format=commit %H"],
         cwd=cwd, input="\n".join(shas) + "\n", capture_output=True, text=True, timeout=600, check=False)
     if proc.returncode != 0:
         raise ReleaseCheckError(f"`git log -p` failed: {proc.stderr.strip()[:300]}")
@@ -158,7 +159,7 @@ def workflow_lockfiles(workflows: list[str]) -> set[str]:
     found: set[str] = set()
     for text in workflows:
         for match in _WORKFLOW_LOCK.findall(text):
-            found.add(match[2:] if match.startswith("./") else match)
+            found.add(match.removeprefix("./"))
     return found
 
 
@@ -251,23 +252,31 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
             p = path.strip()
             while p.startswith("./"):
                 p = p[2:]
-            if p in pinned or p.lower().endswith(".lock") or p in locks:
+            if p in pinned or p == CAPABILITY_HINTS_REL or p.lower().endswith(".lock") or p in locks:
                 touched.append(p)
                 continue
-            size = git(["cat-file", "-s", f"refs/r/head:{p}"], d)
-            if size.returncode != 0:
-                continue  # deleted at the head: path-based checks above cover it
-            if int(size.stdout.strip() or "0") > MAX_SCAN_BYTES:
-                touched.append(p)
-                continue
-            text = _show(git, d, "refs/r/head", p) or ""
-            if _PIN_LINE.search(text):
-                touched.append(p)
+            # Pin lines on EITHER side: adding, editing, removing or deleting a pin is a pin move (D3).
+            for ref in ("refs/r/head", "refs/r/base"):
+                size = git(["cat-file", "-s", f"{ref}:{p}"], d)
+                if size.returncode != 0:
+                    continue   # absent on this side (added or deleted)
+                if int(size.stdout.strip() or "0") > MAX_SCAN_BYTES or _PIN_LINE.search(_show(git, d, ref, p) or ""):
+                    touched.append(p)
+                    break
         if touched:
             return (f"it changes a pinned enforcement module, a lockfile or a pin file ({', '.join(sorted(touched)[:5])}),"
                     " which the operator merges")
     return None
 
 
-__all__ = ["GitRunner", "MAX_PR_COMMITS", "MAX_RELEASE_ONLY", "ReleaseCheckError", "pinned_modules",
-           "release_problem", "run_git", "version_problem", "workflow_lockfiles"]
+__all__ = [
+    "MAX_PR_COMMITS",
+    "MAX_RELEASE_ONLY",
+    "GitRunner",
+    "ReleaseCheckError",
+    "pinned_modules",
+    "release_problem",
+    "run_git",
+    "version_problem",
+    "workflow_lockfiles",
+]

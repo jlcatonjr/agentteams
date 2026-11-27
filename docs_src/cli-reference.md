@@ -1490,9 +1490,18 @@ With `--verify-toolchain-pin`: the ssh `allowed_signers` file naming the operato
 - every check on its head completed with `SUCCESS` (at least one), every required check is present and passed, and every check the signed file's `required_checks` lists is reported and passed (so a partial rollup, with only the fast jobs in, never qualifies);
 - every GitHub Actions workflow run for the head commit completed with `success` (at least one, at most 100 read);
 - it touches no agent, harness, workflow, `.agentteams/` or governance-target path;
+- it is not release mechanics, a pin move or an enforcement-code change (1.3.2): no commit reachable from `main`, a
+  `release/*` branch or a `v*` tag, and none with the same patch as a release-only commit; no change to the package
+  version or build settings, `LAST_RELEASE_TAG` or a new CHANGELOG release heading; no `*.lock`, workflow-named
+  lockfile, pin-line file, integrity-pinned module or `agentteams/capability_hints.py`. These are read from the
+  remote into a temporary repository, and any read error refuses;
 - a recorded `@security` PASS names `dev-merge:<owner/name>:pr-<N>-<head sha>`. The PASS is spent before `gh` runs, so one PASS is one merge.
 
 Immediately before merging it re-reads the head and base, then runs exactly `gh pr merge N -R <owner/name> --merge --match-head-commit <sha>` (never `--admin`, `--auto`, `--squash`, `--rebase` or `--delete-branch`). Afterwards it checks that the result is a two-parent merge commit at the branch tip. `--output` names the team dir; `--team-id` as for `--verify-toolchain-group`. **Exit code:** `0` merged; `2` not authorized; `1` an error, or an `ALARM` when the result does not check out.
+
+`agentteams --merge-pr` runs through a dedicated entry point (`agentteams.cli.merge_pr_main`) that loads only the
+merge gate's integrity-pinned modules; `python -m agentteams.cli.merge_pr_main --merge-pr N` is the same command.
+`python build_team.py --merge-pr` refuses.
 
 ### `--sign-dev-merge-authorization`
 
