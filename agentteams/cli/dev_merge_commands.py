@@ -20,10 +20,11 @@ from agentteams.cli.toolchain_group_commands import _resolve, _team_id
 
 def _integration_branch(root: Path) -> str | None:
     """The brief's integration branch, or None (trunk, or no brief; an unusable brief or malformed block is refused, never guessed)."""
-    from agentteams.branch_model import integration_branch_from_project
+    # The pinned, fleet-free lookup: the --merge-pr route may load only integrity-pinned modules (1.3.2).
+    from agentteams.branch_model import integration_branch_for_merge
 
     try:
-        return integration_branch_from_project(root)
+        return integration_branch_for_merge(root)
     except ValueError as exc:
         print(f"Error: the brief cannot give the integration branch ({exc}); refusing.", file=sys.stderr)
         return None
