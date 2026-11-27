@@ -16,7 +16,8 @@ only, so it could not see them:
 * **Pins and enforcement code.** A ``*.lock`` file, a lockfile the base's workflows name, a file that holds
   ``NAME=owner/repo@<40-hex>`` pin lines at the base or the head (so removing or deleting a pin counts), every module
   the base's integrity manifest pins, ``agentteams/capability_hints.py`` (the merge gate imports it), and the other
-  packaging inputs setuptools reads at install: ``setup.py``, ``setup.cfg`` and ``MANIFEST.in``. Also any ``*.pth``,
+  packaging inputs setuptools reads at install: ``setup.py``, ``setup.cfg`` and ``MANIFEST.in``; a submodule
+  (gitlink) on either side and ``.gitmodules``. Also any ``*.pth``,
   ``sitecustomize.py`` or ``usercustomize.py`` (they run at interpreter start), a new top-level module or package (it
   could shadow an import), and a ``requirements*``/``constraints*`` file the workflows name. Paths are compared
   casefolded.
@@ -95,6 +96,12 @@ def _show(git: GitRunner, cwd: Path, ref: str, path: str) -> str | None:
     if not _ok(git, ["ls-tree", ref, "--", path], cwd).strip():
         return None
     return _ok(git, ["cat-file", "-p", f"{ref}:{path}"], cwd)
+
+
+def _tree_mode(git: GitRunner, cwd: Path, ref: str, path: str) -> str | None:
+    """The tree-entry mode of *path* at *ref* (``160000`` is a submodule), or None when absent; a git error raises."""
+    out = _ok(git, ["ls-tree", ref, "--", path], cwd).strip()
+    return out.split(None, 1)[0] if out else None
 
 
 def _patch_ids(git: GitRunner, cwd: Path, shas: list[str]) -> set[str]:
@@ -267,7 +274,8 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
         pinned = {m.casefold() for m in pinned_modules(_show(git, d, "refs/r/base", MANIFEST_REL))}
         wf_names = _ok(git, ["ls-tree", "--name-only", "refs/r/base", ".github/workflows/"], d).split()
         locks = {x.casefold() for x in workflow_lockfiles([_show(git, d, "refs/r/base", n) or "" for n in wf_names])}
-        fixed = {CAPABILITY_HINTS_REL.casefold(), "pyproject.toml", *(f.casefold() for f in PACKAGING_FILES)}
+        fixed = {CAPABILITY_HINTS_REL.casefold(), "pyproject.toml", ".gitmodules",
+                 *(f.casefold() for f in PACKAGING_FILES)}
         # A package or compiled module next to a pinned module shadows it at import (Python prefers the package).
         stems = {m[:-3] for m in pinned if m.endswith(".py") and not m.endswith("/__init__.py")}
         base_top = {line.strip().casefold() for line in _ok(git, ["ls-tree", "--name-only", "refs/r/base"], d).splitlines()}
@@ -281,7 +289,7 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
             top = low.split("/", 1)[0]
             new_root_module = "/" not in low and low.endswith((".py", ".pyc", ".so", ".pyd")) and low not in base_top
             new_root_package = ("/" in low and top not in base_top
-                                and git(["cat-file", "-e", f"refs/r/head:{p.split('/', 1)[0]}/__init__.py"], d).returncode == 0)
+                                and _tree_mode(git, d, "refs/r/head", f"{p.split('/', 1)[0]}/__init__.py") is not None)
             shadows = any(low.startswith((stem + "/", f"{stem.rpartition('/')[0]}/__pycache__/{stem.rpartition('/')[2]}."))
                           or (low.startswith(stem + ".") and low.endswith((".py", ".pyc", ".so", ".pyd")))
                           for stem in stems)
@@ -290,12 +298,16 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
                     or shadows):
                 touched.append(p)
                 continue
-            # Pin lines on EITHER side: adding, editing, removing or deleting a pin is a pin move (D3).
-            for ref in ("refs/r/head", "refs/r/base"):
-                size = git(["cat-file", "-s", f"{ref}:{p}"], d)
-                if size.returncode != 0:
+            # A submodule (gitlink) on either side is a pin move (D3); so are pin lines on either side.
+            modes = {ref: _tree_mode(git, d, ref, p) for ref in ("refs/r/head", "refs/r/base")}
+            if "160000" in modes.values():
+                touched.append(p)
+                continue
+            for ref, mode in modes.items():
+                if mode is None:
                     continue   # absent on this side (added or deleted)
-                if int(size.stdout.strip() or "0") > MAX_SCAN_BYTES or _PIN_LINE.search(_show(git, d, ref, p) or ""):
+                size = int(_ok(git, ["cat-file", "-s", f"{ref}:{p}"], d).strip() or "0")
+                if size > MAX_SCAN_BYTES or _PIN_LINE.search(_show(git, d, ref, p) or ""):
                     touched.append(p)
                     break
         if touched:
