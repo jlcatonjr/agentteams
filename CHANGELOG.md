@@ -93,8 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removing its `.pub.pem`; the README says what that ends.
 - **Retiring a record's signer:** the same run re-signs the records the retired key signed with the new key, keeping
   their snapshots, so what they kept keeps verifying. A record that lists digests its committed copy does not is
-  refused rather than re-signed. A team dir in a nested repository is refused when an outer repository's store holds
-  the same key, because the outer store would not read its record.
+  refused rather than re-signed. A team dir is refused when another store it reads holds the same key but would not
+  read its record (an outer repository's store, or a `parent_team` store), and the refusal names those stores.
 - **Reported:** `--verify-integrity` prints one line per retired key in every team dir store of the project, and warns
   when a record lists digests its committed copy does not, when a committed record is missing on disk, and when a
   record's own `.pub.pem` is missing (report-only).
