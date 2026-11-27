@@ -13,6 +13,8 @@ only, so it could not see them:
   (``pyproject.toml``: ``project.version``, ``project.dynamic``, ``project.scripts``, ``project.gui-scripts``,
   ``project.entry-points``, ``[tool.setuptools]``, ``build-system``), to ``capability_hints.LAST_RELEASE_TAG``, or a
   new ``## [X.Y.Z…]`` heading in ``CHANGELOG.md``.
+* **Compiled code.** Any added or changed ``.so``, ``.pyd``, ``.pyc`` or ``.pyo`` file, and anything under a
+  ``__pycache__/`` directory, anywhere in the tree: each can stand in for a module's source at import.
 * **Pins and enforcement code.** A ``*.lock`` file, a lockfile the base's workflows name, a file that holds
   ``NAME=owner/repo@<40-hex>`` pin lines at the base or the head (so removing or deleting a pin counts), every module
   the base's integrity manifest pins, ``agentteams/capability_hints.py`` (the merge gate imports it), and the other
@@ -276,8 +278,11 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
         locks = {x.casefold() for x in workflow_lockfiles([_show(git, d, "refs/r/base", n) or "" for n in wf_names])}
         fixed = {CAPABILITY_HINTS_REL.casefold(), "pyproject.toml", ".gitmodules",
                  *(f.casefold() for f in PACKAGING_FILES)}
-        # A package or compiled module next to a pinned module shadows it at import (Python prefers the package).
+        # A package or compiled module next to a module the route may load shadows it at import (Python prefers a
+        # package, and an extension module or cached bytecode can stand in for the source). Every pinned module, every
+        # pinned __init__ (its package directory) and the named unpinned exemption are covered.
         stems = {m[:-3] for m in pinned if m.endswith(".py") and not m.endswith("/__init__.py")}
+        stems.add(CAPABILITY_HINTS_REL[:-3].casefold())
         base_top = {line.strip().casefold() for line in _ok(git, ["ls-tree", "--name-only", "refs/r/base"], d).splitlines()}
         touched: list[str] = []
         for path in files:
@@ -293,7 +298,8 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
             shadows = any(low.startswith((stem + "/", f"{stem.rpartition('/')[0]}/__pycache__/{stem.rpartition('/')[2]}."))
                           or (low.startswith(stem + ".") and low.endswith((".py", ".pyc", ".so", ".pyd")))
                           for stem in stems)
-            if (low in pinned or low in fixed or low.endswith((".lock", ".pth")) or low in locks
+            compiled = low.endswith((".so", ".pyd", ".pyc", ".pyo")) or "/__pycache__/" in f"/{low}"
+            if (low in pinned or low in fixed or low.endswith((".lock", ".pth")) or low in locks or compiled
                     or _REQUIREMENTS_NAME.search(low) or name in _STARTUP_HOOKS or new_root_module or new_root_package
                     or shadows):
                 touched.append(p)

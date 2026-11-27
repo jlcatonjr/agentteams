@@ -23,7 +23,8 @@ from pathlib import Path
 import agentteams.cli.entry as entry
 assert entry._is_merge_pr(["--merge-pr", "7"])
 import agentteams.cli.merge_pr_main
-gate = ["agentteams/cli/dev_merge.py", "agentteams/cli/dev_merge_release.py", "agentteams/cli/dev_merge_commands.py"]
+gate = ["agentteams/cli/merge_pr_main.py", "agentteams/cli/dev_merge.py", "agentteams/cli/dev_merge_release.py",
+        "agentteams/cli/dev_merge_commands.py"]
 for rel in gate:   # the gate's function-local imports, as a merge runs them
     for n in ast.walk(ast.parse(Path(rel).read_text(encoding="utf-8"))):
         if isinstance(n, ast.ImportFrom) and n.module and n.module.startswith("agentteams"):
