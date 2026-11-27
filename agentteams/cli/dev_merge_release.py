@@ -50,11 +50,15 @@ CAPABILITY_HINTS_REL = "agentteams/capability_hints.py"
 #: Other packaging inputs setuptools reads at install (a ``setup.py`` also runs code): never merged unprompted.
 PACKAGING_FILES = frozenset({"setup.py", "setup.cfg", "MANIFEST.in"})
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-_RELEASE_HEADING = re.compile(r"^## \[(\d+\.\d+\.\d+[^\]]*)\]", re.MULTILINE)
+_RELEASE_HEADING = re.compile(r"^##\s*\[\s*v?(\d+\.\d+\.\d+[^\]]*)\]", re.MULTILINE | re.IGNORECASE)
 _LAST_RELEASE_TAG = re.compile(r"^LAST_RELEASE_TAG\s*(?::[^=]*)?=\s*(.+?)\s*$", re.MULTILINE)
 _PIN_LINE = re.compile(r"^\s*[A-Za-z0-9_.-]+\s*=\s*[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}\s*$", re.MULTILINE)
-_WORKFLOW_LOCK = re.compile(r"""(?<![A-Za-z0-9_./-])([A-Za-z0-9_./-]+\.lock|(?:[A-Za-z0-9_.-]+/)*"""
-                            r"""(?:requirements|constraints)[A-Za-z0-9_.-]*\.txt)\b""")
+_WORKFLOW_LOCK = re.compile(r"""(?<![A-Za-z0-9_./-])([A-Za-z0-9_./-]+\.lock)\b""")
+#: ``pip install -r/-c/--requirement/--constraint <path>`` in a workflow: that file decides what CI installs.
+_WORKFLOW_PIP_FILE = re.compile(r"""(?:\s-r|\s-c|--requirement|--constraint)(?:\s+|=)["']?([A-Za-z0-9_./-]+)""")
+#: A requirements or constraints file anywhere (``.github/docs-requirements.txt``, ``requirements/dev.txt`` ...).
+_REQUIREMENTS_NAME = re.compile(r"(?:^|/)[^/]*(?:requirements|constraints)[^/]*\.(?:txt|in)$"
+                                r"|(?:^|/)(?:requirements|constraints)/[^/]+$")
 #: Interpreter start-up hooks: a ``*.pth`` file or ``sitecustomize``/``usercustomize`` runs code at every start.
 _STARTUP_HOOKS = frozenset({"sitecustomize.py", "usercustomize.py"})
 
@@ -75,7 +79,8 @@ def run_git(argv: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     """
     base = ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
             "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential"]
-    return subprocess.run([*base, *argv], cwd=cwd, capture_output=True, text=True, timeout=600, check=False)
+    return subprocess.run([*base, *argv], cwd=cwd, capture_output=True, text=True, errors="replace", timeout=600,
+                          check=False)
 
 
 def _ok(git: GitRunner, argv: list[str], cwd: Path) -> str:
@@ -86,9 +91,8 @@ def _ok(git: GitRunner, argv: list[str], cwd: Path) -> str:
 
 
 def _show(git: GitRunner, cwd: Path, ref: str, path: str) -> str | None:
-    """The text of *path* at *ref*, or None when it is absent there."""
-    proc = git(["cat-file", "-e", f"{ref}:{path}"], cwd)
-    if proc.returncode != 0:
+    """The text of *path* at *ref*, or None when it is absent there (a git error raises: fail closed)."""
+    if not _ok(git, ["ls-tree", ref, "--", path], cwd).strip():
         return None
     return _ok(git, ["cat-file", "-p", f"{ref}:{path}"], cwd)
 
@@ -163,7 +167,7 @@ def version_problem(base_pyproject: str | None, head_pyproject: str | None, base
 
 
 def workflow_lockfiles(workflows: list[str]) -> set[str]:
-    """Paths ending in ``.lock`` that the base's workflow files name.
+    """Lockfiles and ``pip -r``/``-c`` files the base's workflow files name.
 
     Args:
         workflows: The text of each ``.github/workflows/*`` file at the base.
@@ -173,7 +177,7 @@ def workflow_lockfiles(workflows: list[str]) -> set[str]:
     """
     found: set[str] = set()
     for text in workflows:
-        for match in _WORKFLOW_LOCK.findall(text):
+        for match in [*_WORKFLOW_LOCK.findall(text), *_WORKFLOW_PIP_FILE.findall(text)]:
             found.add(match.removeprefix("./"))
     return found
 
@@ -263,7 +267,9 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
         pinned = {m.casefold() for m in pinned_modules(_show(git, d, "refs/r/base", MANIFEST_REL))}
         wf_names = _ok(git, ["ls-tree", "--name-only", "refs/r/base", ".github/workflows/"], d).split()
         locks = {x.casefold() for x in workflow_lockfiles([_show(git, d, "refs/r/base", n) or "" for n in wf_names])}
-        fixed = {CAPABILITY_HINTS_REL.casefold(), *(f.casefold() for f in PACKAGING_FILES)}
+        fixed = {CAPABILITY_HINTS_REL.casefold(), "pyproject.toml", *(f.casefold() for f in PACKAGING_FILES)}
+        # A package or compiled module next to a pinned module shadows it at import (Python prefers the package).
+        stems = {m[:-3] for m in pinned if m.endswith(".py") and not m.endswith("/__init__.py")}
         base_top = {line.strip().casefold() for line in _ok(git, ["ls-tree", "--name-only", "refs/r/base"], d).splitlines()}
         touched: list[str] = []
         for path in files:
@@ -276,8 +282,12 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
             new_root_module = "/" not in low and low.endswith((".py", ".pyc", ".so", ".pyd")) and low not in base_top
             new_root_package = ("/" in low and top not in base_top
                                 and git(["cat-file", "-e", f"refs/r/head:{p.split('/', 1)[0]}/__init__.py"], d).returncode == 0)
+            shadows = any(low.startswith((stem + "/", f"{stem.rpartition('/')[0]}/__pycache__/{stem.rpartition('/')[2]}."))
+                          or (low.startswith(stem + ".") and low.endswith((".py", ".pyc", ".so", ".pyd")))
+                          for stem in stems)
             if (low in pinned or low in fixed or low.endswith((".lock", ".pth")) or low in locks
-                    or name in _STARTUP_HOOKS or new_root_module or new_root_package):
+                    or _REQUIREMENTS_NAME.search(low) or name in _STARTUP_HOOKS or new_root_module or new_root_package
+                    or shadows):
                 touched.append(p)
                 continue
             # Pin lines on EITHER side: adding, editing, removing or deleting a pin is a pin move (D3).

@@ -27,7 +27,7 @@ def _g(repo: Path, *argv: str) -> str:
 def _local_git(argv, cwd):
     # The verb's runner without the gh credential helper (the origin is a local path).
     return subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *argv], cwd=cwd, env=_ENV,
-                          capture_output=True, text=True, check=False)
+                          capture_output=True, text=True, errors="replace", check=False)
 
 
 def _write(repo: Path, rel: str, text: str) -> None:
@@ -132,6 +132,12 @@ def test_release_commits_are_refused(origin, files, why):
     ("lib/sitecustomize.py", "print(1)\n"),
     ("shadow.py", "x = 1\n"),                            # a new top-level module could shadow an import
     ("shadow.so", "binary\n"),                           # so could a compiled one
+    ("agentteams/cli/dev_merge.cpython-312.so", "x\n"),  # a compiled module beside a pinned one shadows it
+    ("agentteams/cli/dev_merge/__init__.py", "x = 1\n"),  # so does a package (Python prefers it at import)
+    ("agentteams/cli/__pycache__/dev_merge.cpython-312.pyc", "x\n"),
+    (".github/docs-requirements.txt", "mkdocs==1.6.1\n"),  # a requirements file anywhere
+    ("requirements/dev.txt", "pytest==9.0.3\n"),
+    ("pyproject.toml", _PYPROJECT.format(v="1.4.0.dev0") + '\n[tool.pytest.ini_options]\naddopts = "-k not gate"\n'),
 ])
 def test_pins_and_enforcement_code_are_refused(origin, rel, text):
     sha = _pr(origin, "pin", **{rel.replace("/", "__"): text})
@@ -167,6 +173,27 @@ def test_any_change_to_capability_hints_is_refused(origin):
     # The merge gate imports it and it is not pinned (it changes every release), so every change is refused.
     sha = _pr(origin, "hints", **{"agentteams__capability_hints.py": "HINT = 'reworded'\n"})
     assert "the operator merges" in (_check(origin, "hints", sha, ["agentteams/capability_hints.py"]) or "")
+
+
+def test_a_v_prefixed_release_heading_is_refused(origin):
+    sha = _pr(origin, "vhead", **{"CHANGELOG.md": "# C\n\n## [v1.4.0] - d\n\n## [1.3.0] - d\n"})
+    assert "CHANGELOG release section" in (_check(origin, "vhead", sha, ["CHANGELOG.md"]) or "")
+
+
+def test_a_binary_change_is_read_without_failing(origin):
+    _g(origin, "switch", "-q", "-c", "bin", "dev")
+    (origin / "img.bin").write_bytes(bytes(range(256)) * 4)
+    _g(origin, "add", "-A")
+    _g(origin, "commit", "-q", "-m", "binary")
+    sha = _g(origin, "rev-parse", "HEAD")
+    _g(origin, "switch", "-q", "dev")
+    assert _check(origin, "bin", sha, ["img.bin"]) is None
+
+
+def test_workflow_pip_files_are_named():
+    assert dmr.workflow_lockfiles(["run: pip install -r .github/docs-requirements.txt",
+                                   "pip install --constraint=c/pins.txt -e .", "x: tools/a.lock"]) == {
+        ".github/docs-requirements.txt", "c/pins.txt", "tools/a.lock"}
 
 
 def test_a_moved_head_is_refused(origin):

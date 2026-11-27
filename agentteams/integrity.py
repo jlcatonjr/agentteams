@@ -380,6 +380,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/entry.py",                   # the `agentteams` console script: routes --merge-pr before the CLI (1.3.2)
     "agentteams/__init__.py",                    # runs on every import, before the gate (1.3.2)
     "agentteams/cli/__init__.py",                # runs on every agentteams.cli import, before the gate (1.3.2)
+    "agentteams/frameworks/__init__.py",         # runs when the gate's s10 check imports frameworks._sandbox_emit (1.3.2)
+    "agentteams/prompt_roots.py",                # imported by the gate's s10 check on the --merge-pr route (1.3.2)
     "agentteams/cli/toolchain_group_commands.py",  # resolves the governance dir for both signed-file verbs
     "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
