@@ -1,0 +1,8 @@
+{
+  "patch_id": "94e82ee2255b2e00f3ecc42b2427e681d3cf2198",
+  "commit": "526128fe93701a9e2f306a7ba1b0c3a140be7612",
+  "subject": "feat(scripts): add a counts-only gate catch ledger and its method reference",
+  "impact": "1 modules added, 9 symbols added, 3 cli added, 1 structural added",
+  "note": "Docs and references updated in the same change: API page docs_src/api-reference/gate-catch-ledger.md (new module, 10 public functions, CLI flags --framework/--team-dir/--security-log), index row, mkdocs nav, CHANGELOG, STABILITY beta note; schema wording for pr_management and mcp_catalog; analyze.md, mcp-catalog.md and the non-orchestrator-mcp reference name the third PR-triggered agent. Reviewed by @code-hygiene, @technical-validator, @security (PASS) and an @adversarial/@conflict-auditor checkpoint. No man page change (no main-parser flag). The earlier commit on this branch (526128fe) is superseded by the later one: its script and root reference moved into the package and the template library.",
+  "recorded_at": "2026-11-27T22:36:51Z"
+}
