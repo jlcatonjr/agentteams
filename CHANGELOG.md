@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New agent template:** `devops-bloat` judges whether each process gate (an audit, a clearance, a review, a
   required artifact) earns what it costs. It is advisory, holds `read` and `search` only, and returns a findings table
   for the operator. It may not recommend below a stated floor: the Constitutional Core, the constraint-relaxing rule,
-  the closing conflict audit, the `@security` review triggers, scanning, destructive-action clearance, signed releases.
+  the closing conflict audit, the `@security` review triggers, scanning, destructive-action clearance, signed releases,
+  and its own tier classification (it may say a path is tiered too low, never that a tier should be lowered).
 - **Who gets it:** teams whose brief sets `pr_management: true` or opts into `github-read` / `github-write`, the same
   trigger as `pr-manager` and `pr-notifier`. **An existing team with that trigger gains the agent and
   `references/devops-bloat.reference.md` on its next `--update`.** On Copilot, the orchestrator's widened `agents:`
