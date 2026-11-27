@@ -1,4 +1,4 @@
-"""Tests for scripts/gate_catch_ledger.py — the read-only, counts-only gate catch ledger.
+"""Tests for agentteams.gate_catch_ledger — the read-only, counts-only gate catch ledger.
 
 Every fixture here is synthetic. The live governance logs are private and are never read:
 ``test_the_tests_never_read_the_live_logs`` pins that.
@@ -6,19 +6,28 @@ Every fixture here is synthetic. The live governance logs are private and are ne
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = REPO_ROOT / "scripts" / "gate_catch_ledger.py"
+from agentteams import gate_catch_ledger as ledger_mod
 
-_spec = importlib.util.spec_from_file_location("gate_catch_ledger", SCRIPT)
-assert _spec is not None and _spec.loader is not None
-ledger_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(ledger_mod)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TEAM = Path(".github") / "agents"
+
+
+def _refs(base: Path, team: Path = TEAM) -> Path:
+    """Create and return a synthetic team's references directory."""
+    refs = base / team / "references"
+    refs.mkdir(parents=True, exist_ok=True)
+    return refs
+
+
+def _build(base: Path) -> dict:
+    """Build the ledger for a synthetic repository with at most one team."""
+    return ledger_mod.build_ledger(base, ledger_mod.resolve_team_dir(base))
+
 
 SECRET_CELLS = (
     "SYNTHETIC-DESCRIPTION-ZQ1",
@@ -81,11 +90,9 @@ STEPS_CSV = (
 
 @pytest.fixture()
 def root(tmp_path: Path) -> Path:
-    """A synthetic repository root holding one of each log."""
-    (tmp_path / "references").mkdir()
-    (tmp_path / "references" / "security-decisions.log.csv").write_text(SECURITY_CSV, encoding="utf-8")
-    refs = tmp_path / ".github" / "agents" / "references"
-    refs.mkdir(parents=True)
+    """A synthetic repository root holding one team with both logs and two plan files."""
+    refs = _refs(tmp_path)
+    (refs / "security-decisions.log.csv").write_text(SECURITY_CSV, encoding="utf-8")
     (refs / "conflict-log.csv").write_text(CONFLICT_CSV, encoding="utf-8")
     week = tmp_path / "tmp" / "by-week" / "2031-W05"
     week.mkdir(parents=True)
@@ -142,6 +149,7 @@ def test_security_status_classes(status: str, expected: str) -> None:
         ("recorded", "PASS after fixes", "pass"),
         ("PASS", "CONDITIONAL PASS", "pass"),
         ("HALT-RETRACTED", "HALT-RETRACTED", "other"),
+        ("HALT RETRACTED", "HALT: refused", "other"),
         ("open", "merge-gate-slug", "other"),
     ],
 )
@@ -152,36 +160,81 @@ def test_a_verdict_in_the_decision_cell_is_read_when_status_is_bookkeeping(
 
 
 def test_decision_cell_verdicts_and_retractions_are_counted_correctly(tmp_path: Path) -> None:
-    (tmp_path / "references").mkdir()
-    log = tmp_path / "references" / "security-decisions.log.csv"
+    log = _refs(tmp_path) / "security-decisions.log.csv"
     log.write_text(SECURITY_CSV + SECURITY_DECISION_ROWS, encoding="utf-8")
-    sec = ledger_mod.build_ledger(tmp_path)["security"]
+    sec = _build(tmp_path)["security"]
     assert (sec["halt"], sec["conditional"], sec["pass"]) == (2, 3, 3)
     assert sec["unclassified"] == 4  # closed, recorded, the retraction, the sentinel
     assert set().union(*sec["by_month"].values()) <= set(ledger_mod.VERDICT_CLASSES)
 
 
 def test_the_legacy_verdict_schema_is_read(tmp_path: Path) -> None:
-    (tmp_path / "references").mkdir()
-    (tmp_path / "references" / "security-decisions.log.csv").write_text(LEGACY_SECURITY_CSV, encoding="utf-8")
-    sec = ledger_mod.build_ledger(tmp_path)["security"]
+    (_refs(tmp_path) / "security-decisions.log.csv").write_text(LEGACY_SECURITY_CSV, encoding="utf-8")
+    sec = _build(tmp_path)["security"]
     assert (sec["halt"], sec["pass"], sec["firings"]) == (1, 1, 2)
     assert list(sec["by_month"]) == ["2031-04"]
 
 
-def test_signed_team_ledgers_are_counted_separately(root: Path) -> None:
-    team = root / ".github" / "agents" / "references" / "security-decisions.log.csv"
-    team.write_text(LEGACY_SECURITY_CSV, encoding="utf-8")
-    result = ledger_mod.build_ledger(root)
-    assert result["security"]["firings"] == 5, "team ledger rows must not be summed into the main log"
-    assert result["coverage"]["team_security_ledgers_found"] == 1
-    assert result["team_security_ledgers"][0]["halt"] == 1
+def test_a_repository_with_two_teams_is_refused_not_guessed(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    other = _refs(root, Path(".claude") / "agents")
+    (other / "security-decisions.log.csv").write_text(LEGACY_SECURITY_CSV, encoding="utf-8")
+    with pytest.raises(ValueError, match="more than one team directory"):
+        ledger_mod.resolve_team_dir(root)
+    assert ledger_mod.main(["--root", str(root)]) == 2
+    assert "pass --framework or --team-dir" in capsys.readouterr().err
+
+
+def test_framework_and_team_dir_select_the_team(root: Path) -> None:
+    other = _refs(root, Path(".claude") / "agents")
+    (other / "security-decisions.log.csv").write_text(LEGACY_SECURITY_CSV, encoding="utf-8")
+    claude = ledger_mod.build_ledger(root, ledger_mod.resolve_team_dir(root, framework="claude"))
+    assert claude["security"]["firings"] == 2 and claude["conflict_auditor"] is None
+    assert claude["coverage"]["conflict_log"] == "absent"
+    copilot = ledger_mod.build_ledger(root, ledger_mod.resolve_team_dir(root, team_dir=TEAM))
+    assert copilot["security"]["firings"] == 5 and copilot["conflict_auditor"] is not None
+    with pytest.raises(ValueError):
+        ledger_mod.resolve_team_dir(root, framework="no-such-framework")
+
+
+def test_a_named_team_directory_that_does_not_exist_is_a_usage_error(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(ValueError, match="team directory not found: no/such/dir"):
+        ledger_mod.resolve_team_dir(root, team_dir=Path("no/such/dir"))
+    assert ledger_mod.main(["--root", str(root), "--framework", "goose"]) == 2
+    assert ledger_mod.main(["--root", str(root), "--team-dir", "no/such/dir"]) == 2
+    assert str(root) not in capsys.readouterr().err, "errors name directories relative to the root"
+
+
+def test_the_ambiguity_error_names_no_absolute_path(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    other = _refs(root, Path(".claude") / "agents")
+    (other / "conflict-log.csv").write_text(CONFLICT_CSV, encoding="utf-8")
+    assert ledger_mod.main(["--root", str(root)]) == 2
+    message = capsys.readouterr().err
+    assert ".claude/agents" in message and ".github/agents" in message
+    assert str(root) not in message and str(Path.home()) not in message
+
+
+def test_a_log_with_no_recognisable_verdict_has_no_denominator(tmp_path: Path) -> None:
+    log = _refs(tmp_path) / "security-decisions.log.csv"
+    log.write_text(SECURITY_CSV.splitlines()[0] + "\n2031-01-01,p,1,d,recorded,c,,e,@security\n", encoding="utf-8")
+    result = _build(tmp_path)
+    assert result["security"] is None and result["coverage"]["security_log"] == "found"
+    assert result["coverage"]["gates_with_denominator"] == []
+
+
+def test_an_explicit_security_log_replaces_the_team_log(root: Path, tmp_path: Path) -> None:
+    elsewhere = tmp_path / "elsewhere.csv"
+    elsewhere.write_text(LEGACY_SECURITY_CSV, encoding="utf-8")
+    result = ledger_mod.build_ledger(root, root / TEAM, security_log=elsewhere)
+    assert result["security"]["firings"] == 2
+    assert result["conflict_auditor"]["claimed_catches"] == 3
 
 
 def test_severity_and_status_are_closed_label_sets(root: Path) -> None:
-    log = root / ".github" / "agents" / "references" / "conflict-log.csv"
+    log = root / TEAM / "references" / "conflict-log.csv"
     log.write_text(CONFLICT_CSV + CONFLICT_EXTRA_ROWS, encoding="utf-8")
-    con = ledger_mod.build_ledger(root)["conflict_auditor"]
+    con = _build(root)["conflict_auditor"]
     # Three from the base fixture, plus NONE/OK and CONFLICT_AUDIT. A finding whose *resolution*
     # mentions a clean audit stays a finding: a later clean re-check does not erase the catch.
     assert con["clean_audit_rows"] == 5
@@ -194,10 +247,10 @@ def test_severity_and_status_are_closed_label_sets(root: Path) -> None:
 
 
 def test_an_unreadable_log_is_not_reported_as_absent(root: Path) -> None:
-    log = root / "references" / "security-decisions.log.csv"
+    log = root / TEAM / "references" / "security-decisions.log.csv"
     log.unlink()
     log.mkdir()  # something is there, but it cannot be read as a log
-    result = ledger_mod.build_ledger(root)
+    result = _build(root)
     assert result["coverage"]["security_log"] == "unreadable"
     assert result["security"] is None
     assert result["coverage"]["gates_with_denominator"] == []
@@ -214,21 +267,19 @@ def test_rows_read_before_a_csv_failure_are_kept(root: Path, monkeypatch: pytest
             yield row
 
     monkeypatch.setattr(ledger_mod.csv, "DictReader", failing_reader)
-    state, rows = ledger_mod._read_rows(root / "references" / "security-decisions.log.csv")
+    state, rows = ledger_mod._read_rows(root / TEAM / "references" / "security-decisions.log.csv")
     assert state == "unreadable" and len(rows) == 2
 
 
 def test_an_empty_conflict_log_renders(tmp_path: Path) -> None:
-    refs = tmp_path / ".github" / "agents" / "references"
-    refs.mkdir(parents=True)
-    (refs / "conflict-log.csv").write_text(CONFLICT_CSV.splitlines()[0] + "\n", encoding="utf-8")
-    result = ledger_mod.build_ledger(tmp_path)
+    (_refs(tmp_path) / "conflict-log.csv").write_text(CONFLICT_CSV.splitlines()[0] + "\n", encoding="utf-8")
+    result = _build(tmp_path)
     assert result["coverage"]["conflict_log"] == "found" and result["conflict_auditor"] is None
     assert "No data." in ledger_mod.render_markdown(result)
 
 
 def test_security_ledger_counts_only_verdicts_as_firings(root: Path) -> None:
-    sec = ledger_mod.build_ledger(root)["security"]
+    sec = _build(root)["security"]
     assert (sec["halt"], sec["conditional"], sec["pass"], sec["unclassified"]) == (1, 2, 2, 2)
     assert sec["firings"] == 5
     assert sec["halt_rate"] == pytest.approx(0.2)
@@ -238,17 +289,16 @@ def test_security_ledger_counts_only_verdicts_as_firings(root: Path) -> None:
 
 
 def test_a_clean_security_record_gets_a_rule_of_three_bound(tmp_path: Path) -> None:
-    (tmp_path / "references").mkdir()
     rows = "".join(f"2031-01-{d:02d},p,{d},d,PASS,c,,e,@security\n" for d in range(1, 31))
-    log = tmp_path / "references" / "security-decisions.log.csv"
+    log = _refs(tmp_path) / "security-decisions.log.csv"
     log.write_text(SECURITY_CSV.splitlines()[0] + "\n" + rows, encoding="utf-8")
-    sec = ledger_mod.build_ledger(tmp_path)["security"]
+    sec = _build(tmp_path)["security"]
     assert sec["halt"] == 0 and sec["firings"] == 30
     assert sec["halt_rate_upper_bound_if_zero"] == pytest.approx(0.1)
 
 
 def test_conflict_ledger_separates_clean_rows_and_false_catches(root: Path) -> None:
-    con = ledger_mod.build_ledger(root)["conflict_auditor"]
+    con = _build(root)["conflict_auditor"]
     assert con["clean_audit_rows"] == 3  # category CLEAN, code CLEAN, and prose-only
     assert con["claimed_catches"] == 3
     assert con["resolved_as_false"] == 1
@@ -258,7 +308,7 @@ def test_conflict_ledger_separates_clean_rows_and_false_catches(root: Path) -> N
 
 
 def test_plan_ledger_counts_gate_mentions_and_skips_non_week_folders(root: Path) -> None:
-    plans = ledger_mod.build_ledger(root)["plans"]
+    plans = _build(root)["plans"]
     assert plans["plans"] == 2 and plans["steps"] == 8
     assert plans["weeks_covered"] == ["2031-W05"]
     assert plans["gate_steps"]["conflict-auditor"] == 4
@@ -282,9 +332,13 @@ def test_gate_names_tolerate_spacing_and_case(cell: str, expected: set[str]) -> 
 
 
 def test_missing_logs_are_reported_not_raised(tmp_path: Path) -> None:
-    result = ledger_mod.build_ledger(tmp_path)
+    result = _build(tmp_path)
     assert result["security"] is None and result["conflict_auditor"] is None
     assert result["coverage"]["security_log"] == "absent"
+    assert result["coverage"]["team_dir_found"] is False
+    assert result["plans"] is None and result["coverage"]["plan_steps"] == "absent"
+    rendered_plans = ledger_mod.render_markdown(result)
+    assert "No readable plan step files found: no denominator." in rendered_plans and "| @security | 0 |" not in rendered_plans
     assert result["coverage"]["gates_with_denominator"] == []
     assert result["coverage"]["gates_without_denominator"][0] == "security"
     rendered = ledger_mod.render_markdown(result)
@@ -294,9 +348,9 @@ def test_missing_logs_are_reported_not_raised(tmp_path: Path) -> None:
 
 def test_output_never_carries_a_log_cell(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Counts only: no cell of any log, status and severity included, may reach the output."""
-    security_log = root / "references" / "security-decisions.log.csv"
+    security_log = root / TEAM / "references" / "security-decisions.log.csv"
     security_log.write_text(SECURITY_CSV + SECURITY_DECISION_ROWS, encoding="utf-8")
-    conflict_log = root / ".github" / "agents" / "references" / "conflict-log.csv"
+    conflict_log = root / TEAM / "references" / "conflict-log.csv"
     conflict_log.write_text(CONFLICT_CSV + CONFLICT_EXTRA_ROWS, encoding="utf-8")
     assert ledger_mod.main(["--root", str(root)]) == 0
     markdown = capsys.readouterr().out

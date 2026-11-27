@@ -1,34 +1,40 @@
-#!/usr/bin/env python3
-"""gate_catch_ledger.py — derive a per-gate catch ledger from the governance logs a team already keeps.
+"""Derive a per-gate catch ledger from the governance logs a team already keeps.
 
 **Why.** A process gate (an audit, a clearance, a review) earns its place only if what it catches is
 worth more than what it costs to run. That needs two numbers per gate: how often it *fired* and how
 often it *caught* something. This reporter derives what the existing logs can support and says plainly
 what they cannot. It adds no logging duty: it only reads.
 
-What it reads, all under ``--root``:
+What it reads:
 
-* ``references/security-decisions.log.csv`` — ``@security`` verdicts. Verdicts are logged as a rule, so
-  this is the one gate with a usable denominator. HALT and CONDITIONAL verdicts are counted as catches,
-  PASS-like ones as clean firings. The verdict is read from ``status`` (or legacy ``verdict``) and, when
-  that cell holds bookkeeping (open, closed, cleared ...), from a verdict word leading ``decision``.
-  Signed team ledgers under the agent directories are counted separately, never summed in.
-* ``.github/agents/references/conflict-log.csv`` — ``@conflict-auditor`` findings (claimed catches).
-  Clean audits are logged only sometimes, so this gate has **no reliable denominator**.
-* ``tmp/by-week/<week>/*.steps.csv`` — plan steps that name a gate agent: a *lower bound* on firings.
+* the team's security decisions log, ``<team dir>/references/security-decisions.log.csv`` (or the file
+  given with ``--security-log``) — ``@security`` verdicts. Verdicts are logged as a rule, so this is the
+  one gate with a usable denominator. HALT and CONDITIONAL verdicts are counted as catches, PASS-like
+  ones as clean firings. The verdict is read from ``status`` (or ``verdict``) and, when that cell holds
+  bookkeeping (open, closed, cleared ...), from a verdict word leading ``decision``.
+* the team's conflict log, ``<team dir>/references/conflict-log.csv`` — ``@conflict-auditor`` findings
+  (claimed catches). Clean audits are logged only sometimes, so this gate has **no reliable denominator**.
+* the gitignored plan-step files under ``<root>/tmp/by-week/<week>/`` — steps that name a gate agent: a
+  *lower bound* on firings.
 
-**Privacy.** Those logs are local and unpublished. This script emits **counts only**, keyed by a closed
+The team directory is the framework's agents directory (``.claude/agents``, ``.github/agents`` ...). It
+is taken from ``--team-dir`` or ``--framework``; with neither, it is detected, and a repository holding
+more than one team is refused instead of guessed.
+
+**Privacy.** Those logs are local and unpublished. This module emits **counts only**, keyed by a closed
 set of labels. No cell of any log — description, conditions, evidence, file, status or severity text —
 is ever copied into the output. Keep the output itself in an untracked location all the same.
 
 **Limits it reports rather than hides.** A logged catch is a *claim* (some audit findings are wrong).
 A clean record may be caused by the gate (authors comply in advance). ``@adversarial`` reviews leave
 no log row at all. Plan step files are scratch and are cleaned up, so old weeks are covered unevenly.
-Classification is by leading verdict word and is approximate; unclassified rows are counted.
+A re-recorded verdict counts as another firing. Classification is by leading verdict word and is
+approximate; unclassified rows are counted. A source that is absent is reported as absent, never as zero.
 
-Run: ``python scripts/gate_catch_ledger.py [--root DIR] [--json] [--output FILE]``. Exit 0 whatever
-the ledger shows (this reports; it does not gate); exit 1 when ``--output`` cannot be written; exit 2
-on a usage error.
+Run: ``python -m agentteams.gate_catch_ledger [--root DIR] [--framework ID | --team-dir DIR]
+[--security-log FILE] [--json] [--output FILE]``. Exit 0 whatever the ledger shows (this reports; it
+does not gate); exit 1 when ``--output`` cannot be written; exit 2 on a usage error, including a
+repository with more than one team and no ``--framework`` or ``--team-dir``.
 """
 
 from __future__ import annotations
@@ -44,19 +50,13 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
+from agentteams.liaison_logs import CONFLICT_LOG_CSV, SECURITY_DECISIONS_CSV
+from agentteams.plan_steps import read_steps
 
-from agentteams.plan_steps import read_steps  # noqa: E402
-
-SECURITY_LOG = Path("references/security-decisions.log.csv")
-#: Signed team ledgers. Reported separately: their rows may repeat verdicts in the main log.
-TEAM_SECURITY_LOGS = (
-    Path(".claude/agents/references/security-decisions.log.csv"),
-    Path(".github/agents/references/security-decisions.log.csv"),
-)
-CONFLICT_LOG = Path(".github/agents/references/conflict-log.csv")
-PLAN_GLOB = "tmp/by-week/*/*.steps.csv"
+#: Log locations inside a team directory (the framework's agents directory).
+SECURITY_LOG = Path("references") / SECURITY_DECISIONS_CSV
+CONFLICT_LOG = Path("references") / CONFLICT_LOG_CSV
+PLAN_GLOB = "tmp/by-week/*/*.steps.csv"  # gitignored plan-step files
 
 #: Gate agents whose plan-step mentions are counted as recorded firings.
 GATE_AGENTS = (
@@ -168,6 +168,8 @@ def classify_security_status(status: str, decision: str = "") -> str:
         The verdict class. Rows with no leading verdict word in either cell are ``other`` and are
         not counted as firings.
     """
+    if _SPACE_RE.sub(" ", status.strip().upper()).startswith("HALT RETRACT"):
+        return "other"  # a retraction row is never a firing, whatever its decision cell says
     from_status = _verdict_word(status)
     bare_clear = bool(_BARE_CLEAR_RE.match(_SPACE_RE.sub(" ", status.strip().upper())))
     if from_status is None or bare_clear:
@@ -277,7 +279,7 @@ def plan_ledger(root: Path) -> dict[str, Any]:
     """Count plan steps that name a gate agent, per ISO week.
 
     Args:
-        root: Repository root holding ``tmp/by-week``.
+        root: Repository root holding the plan-step files (``tmp/by-week``).
 
     Returns:
         Weeks covered, plan and step totals, per-gate step counts (a lower bound on firings), the
@@ -315,54 +317,99 @@ def plan_ledger(root: Path) -> dict[str, Any]:
     }
 
 
-def build_ledger(root: Path) -> dict[str, Any]:
-    """Build the whole ledger for one repository root.
+def resolve_team_dir(root: Path, framework: str | None = None, team_dir: Path | None = None) -> Path | None:
+    """Find the team directory whose logs the ledger reads.
 
     Args:
-        root: Repository root to read the logs from.
+        root: Repository root.
+        framework: A registered framework id; its agents directory is used.
+        team_dir: An explicit team directory (absolute, or relative to ``root``). Wins over ``framework``.
 
     Returns:
-        A JSON-serialisable dict with ``coverage``, ``security``, ``team_security_ledgers``,
-        ``conflict_auditor`` and ``plans`` sections. A log that is absent or yields no rows gives
-        ``None`` for its section; its state is in ``coverage``.
+        The team directory, or ``None`` when neither argument is given and no team with a governance
+        log is found under ``root``.
+
+    Raises:
+        ValueError: ``framework`` is not registered; the directory an argument names does not exist;
+            or neither argument is given and more than one team directory under ``root`` holds a
+            governance log. The message names directories relative to ``root``, never an absolute path.
     """
-    security_state, security_rows = _read_rows(root / SECURITY_LOG)
-    conflict_state, conflict_rows = _read_rows(root / CONFLICT_LOG)
-    team_ledgers = []
-    for index, rel in enumerate(TEAM_SECURITY_LOGS, start=1):
-        state, rows = _read_rows(root / rel)
-        if state != "absent":
-            summary = security_ledger(rows)
-            team_ledgers.append({"ledger": index, "state": state, **{k: summary[k] for k in (
-                "rows", "firings", "halt", "conditional", "pass", "unclassified")}})
+    from agentteams.frameworks import registry  # deferred: it loads every framework adapter
+
+    if team_dir is not None or framework is not None:
+        chosen = registry.agents_dir_for(framework, root) if team_dir is None else (
+            team_dir if team_dir.is_absolute() else root / team_dir)
+        if not chosen.is_dir():
+            shown = chosen.relative_to(root).as_posix() if chosen.is_relative_to(root) else chosen.name
+            raise ValueError(f"team directory not found: {shown}")
+        return chosen
+    found: list[Path] = []
+    for name in registry.FRAMEWORKS:
+        candidate = registry.agents_dir_for(name, root)
+        if candidate in found:
+            continue
+        if (candidate / SECURITY_LOG).exists() or (candidate / CONFLICT_LOG).exists():
+            found.append(candidate)
+    if len(found) > 1:
+        names = ", ".join(sorted(path.relative_to(root).as_posix() for path in found))
+        raise ValueError(
+            f"more than one team directory holds a governance log ({names}); pass --framework or --team-dir"
+        )
+    return found[0] if found else None
+
+
+def build_ledger(root: Path, team_dir: Path | None = None, security_log: Path | None = None) -> dict[str, Any]:
+    """Build the whole ledger for one repository and team.
+
+    Args:
+        root: Repository root (plan-step files are read from here).
+        team_dir: The team directory holding ``references/``; ``None`` when the repository has no team.
+        security_log: A security decisions log to read instead of the team directory's own.
+
+    Returns:
+        A JSON-serialisable dict with ``coverage``, ``security``, ``conflict_auditor`` and ``plans``
+        sections. A source that is absent, unreadable or yields nothing countable gives ``None`` for
+        its section (no denominator, never zero); its state is in ``coverage``.
+    """
+    absent: tuple[str, list[dict[str, str]]] = ("absent", [])
+    if security_log is not None:
+        security_state, security_rows = _read_rows(security_log)
+    else:
+        security_state, security_rows = _read_rows(team_dir / SECURITY_LOG) if team_dir else absent
+    conflict_state, conflict_rows = _read_rows(team_dir / CONFLICT_LOG) if team_dir else absent
     plans = plan_ledger(root)
+    security = security_ledger(security_rows) if security_state == "found" and security_rows else None
+    if security is not None and not security["firings"]:
+        security = None  # rows but no recognisable verdict: no denominator
+    conflict = conflict_ledger(conflict_rows) if conflict_state == "found" and conflict_rows else None
     without = ["conflict-auditor"] + [g for g in GATE_AGENTS if g not in {"security", "conflict-auditor"}]
-    if not security_rows:
+    if security is None:
         without.insert(0, "security")
     coverage = {
         "generated": datetime.date.today().isoformat(),
+        "team_dir_found": team_dir is not None,
         "security_log": security_state,
         "conflict_log": conflict_state,
-        "team_security_ledgers_found": len(team_ledgers),
+        "plan_steps": "found" if plans["plans"] else "absent",
         "plan_weeks": plans["weeks_covered"],
-        "gates_with_denominator": ["security"] if security_rows else [],
+        "gates_with_denominator": ["security"] if security is not None else [],
         "gates_without_denominator": without,
         "notes": [
             "A logged catch is a claim; some audit findings are wrong.",
             "Security verdicts are classed by leading verdict word; unclassified rows are not firings.",
-            "Signed team security ledgers are counted separately and may repeat rows of the main log.",
+            "A re-recorded security verdict counts as another firing.",
             "Clean conflict audits are logged inconsistently: no catch rate can be computed for that gate.",
             "Plan-step mentions are a lower bound on firings; reviews not written as a step are invisible.",
             "Plan step files are scratch and are cleaned up; older weeks are covered unevenly.",
+            "A source reported absent means no denominator, not zero firings.",
             "Do not retire a gate on absence of catches alone: first show it still fires on a seeded defect.",
         ],
     }
     return {
         "coverage": coverage,
-        "security": security_ledger(security_rows) if security_rows else None,
-        "team_security_ledgers": team_ledgers,
-        "conflict_auditor": conflict_ledger(conflict_rows) if conflict_rows else None,
-        "plans": plans,
+        "security": security,
+        "conflict_auditor": conflict,
+        "plans": plans if plans["plans"] else None,
     }
 
 
@@ -391,8 +438,8 @@ def render_markdown(ledger: dict[str, Any]) -> str:
     out += ["## Coverage", "", f"- Generated: {cov['generated']}"]
     out.append(f"- Security decisions log: {cov['security_log'].upper()}")
     out.append(f"- Conflict log: {cov['conflict_log'].upper()}")
-    out.append(f"- Signed team security ledgers found: {cov['team_security_ledgers_found']}")
-    out.append(f"- Plan step files: {len(weeks)} week(s)" + (f", {weeks[0]} to {weeks[-1]}" if weeks else ""))
+    out.append(f"- Team directory: {'found' if cov['team_dir_found'] else 'NOT FOUND'}")
+    out.append("- Plan step files: " + (f"{len(weeks)} week(s), {weeks[0]} to {weeks[-1]}" if weeks else "ABSENT"))
     out.append(f"- Gates with a firing count: {', '.join(cov['gates_with_denominator']) or 'none'}")
     out.append(f"- Gates without a denominator: {', '.join(cov['gates_without_denominator'])}")
     out += [f"- {note}" for note in cov["notes"]]
@@ -419,15 +466,6 @@ def render_markdown(ledger: dict[str, Any]) -> str:
                 f"| {month} | {counts.get('halt', 0)} | {counts.get('conditional', 0)} | {counts.get('pass', 0)} |"
             )
         out.append("")
-    for team in ledger["team_security_ledgers"]:
-        out.append(
-            f"- Signed team ledger {team['ledger']} ({team['state']}): {team['rows']} row(s); "
-            f"HALT {team['halt']}, CONDITIONAL {team['conditional']}, PASS {team['pass']}, "
-            f"unclassified {team['unclassified']}"
-        )
-    if ledger["team_security_ledgers"]:
-        out.append("")
-
     con = ledger["conflict_auditor"]
     out += ["## @conflict-auditor (no denominator)", ""]
     if con is None:
@@ -445,6 +483,9 @@ def render_markdown(ledger: dict[str, Any]) -> str:
 
     plans = ledger["plans"]
     out += ["## Plan steps naming a gate agent (lower bound on firings)", ""]
+    if plans is None:
+        out += ["No readable plan step files found: no denominator.", ""]
+        return "\n".join(out)
     out.append(
         f"{plans['plans']} plan(s), {plans['steps']} step(s), {plans['unreadable_files']} unreadable file(s), "
         f"{plans['files_with_malformed_rows']} file(s) with malformed rows."
@@ -464,16 +505,29 @@ def main(argv: list[str] | None = None) -> int:
         argv: Argument list (defaults to ``sys.argv[1:]``).
 
     Returns:
-        0 whatever the ledger shows; 1 when ``--output`` cannot be written.
+        0 whatever the ledger shows; 1 when ``--output`` cannot be written; 2 on a usage error.
     """
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--root", type=Path, default=REPO_ROOT,
-                        help="Repository root holding the logs (default: this script's repository).")
+    parser = argparse.ArgumentParser(prog="python -m agentteams.gate_catch_ledger",
+                                     description=(__doc__ or "").splitlines()[0])
+    parser.add_argument("--root", type=Path, default=Path("."),
+                        help="Repository root (default: the current directory).")
+    where = parser.add_mutually_exclusive_group()
+    where.add_argument("--framework", default=None,
+                       help="Framework id whose agents directory holds the team's logs (e.g. claude).")
+    where.add_argument("--team-dir", type=Path, default=None,
+                       help="The team directory holding references/ (absolute, or relative to --root).")
+    parser.add_argument("--security-log", type=Path, default=None,
+                        help="Read this security decisions log instead of the team directory's own.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown.")
     parser.add_argument("--output", type=Path, default=None,
                         help="Write the report here instead of printing it. Use an untracked location.")
     args = parser.parse_args(argv)
-    ledger = build_ledger(args.root)
+    try:
+        team_dir = resolve_team_dir(args.root, args.framework, args.team_dir)
+    except ValueError as exc:
+        print(f"gate_catch_ledger: {exc}", file=sys.stderr)
+        return 2
+    ledger = build_ledger(args.root, team_dir, args.security_log)
     text = json.dumps(ledger, indent=2, sort_keys=True) if args.json else render_markdown(ledger)
     if args.output is None:
         print(text)
