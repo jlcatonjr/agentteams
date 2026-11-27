@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from agentteams.cli.dev_merge_commands import run_dev_merge
 
@@ -34,7 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="the pull-request number")
     parser.add_argument("--project", default=None, help="the project root (default: the current directory)")
     parser.add_argument("--output", default=None, help="the governed team dir (default: resolved from the project)")
-    parser.add_argument("--team-id", dest="team_id", default=None, help="this workspace's team id")
+    parser.add_argument("--team-id", dest="team_id", required=True,
+                        help="this workspace's team id (required here: deriving it would load the render pipeline)")
     parser.add_argument("--description", default=None, help="the project brief (to read the team id)")
     return parser
 
@@ -48,6 +50,12 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         0 merged; 2 a condition does not hold (ask the operator); 1 an error.
     """
+    # `python -m` puts the current directory first on sys.path, so a local `agentteams/` there would be imported in
+    # place of the installed, pinned package. The console script, or `python -I -m`, does not.
+    if not sys.flags.isolated and sys.path and Path(sys.path[0] or ".").resolve() == Path.cwd().resolve():
+        print("Error: run the installed `agentteams --merge-pr N`, or `python -I -m agentteams.cli.merge_pr_main` "
+              "(the current directory is first on sys.path).", file=sys.stderr)
+        return 1
     args = build_parser().parse_args(argv)
     args.sign_dev_merge_authorization = None      # the attributes the shared resolvers read
     args.verify_dev_merge_authorization = False

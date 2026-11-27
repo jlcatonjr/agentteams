@@ -312,7 +312,7 @@ class _FakeGh:
 
 def _merge(root, team, monkeypatch, gh, branch=_BRANCH) -> int:
     return dm.merge_pr(root, team, team_id=_TEAM, number=7, integration_branch=branch, origin=_REPO, gh=gh,
-                       release=lambda *_: None)
+                       release=lambda *_: None, loaded=lambda: None)
 
 
 def _pass(team: Path) -> None:
@@ -336,7 +336,7 @@ def test_a_qualifying_merge_runs_exactly_the_merge_commit_command_and_spends_the
 
 def _merge_with(root, team, gh, release) -> int:
     return dm.merge_pr(root, team, team_id=_TEAM, number=7, integration_branch=_BRANCH, origin=_REPO, gh=gh,
-                       release=release)
+                       release=release, loaded=lambda: None)
 
 
 @pytest.mark.parametrize("release, why", [

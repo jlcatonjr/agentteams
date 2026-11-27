@@ -16,23 +16,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - a pull request that carries a commit reachable from `main`, a `release/*` branch or a `v*` tag, or a commit
     with the same patch as a release-only commit (a rebased or cherry-picked release). The check fetches those refs
     from the remote into a temporary repository; any fetch or read error refuses;
-  - a change to `pyproject.toml`'s version, console scripts or packaging (`project.version`, `project.dynamic`,
-    `project.scripts`, `project.gui-scripts`, `project.entry-points`, `project.dependencies`,
-    `project.optional-dependencies`, `[tool.setuptools]`, `build-system`), to
-    `capability_hints.LAST_RELEASE_TAG`, or a new release heading in `CHANGELOG.md`;
+  - any change to `pyproject.toml` (its version, scripts, dependencies, packaging and tool tables all decide what is
+    installed or tested), to `capability_hints.LAST_RELEASE_TAG`, or a new release heading in `CHANGELOG.md`
+    (`## [X.Y.Z]` or `## [vX.Y.Z]`);
   - a change to a `*.lock` file, a lockfile the base's workflows name, a file holding `NAME=owner/repo@<sha>` pin
     lines at the base or the head (removing or deleting a pin counts), any module the base's integrity manifest
     pins, `agentteams/capability_hints.py`, a packaging input (`setup.py`, `setup.cfg`, `MANIFEST.in`), an
     interpreter start-up hook (`*.pth`, `sitecustomize.py`, `usercustomize.py`), a new top-level module or package,
-    or a `requirements*`/`constraints*` file the workflows name. Paths are compared casefolded.
+    a requirements or constraints file anywhere, a file the workflows pass to `pip -r`/`-c`, or a package or
+    compiled module beside a pinned module (it would shadow it at import). Paths are compared casefolded.
 - **`agentteams --merge-pr` now runs through its own entry point.** The `agentteams` console script
   (`agentteams.cli.entry`) sends a `--merge-pr` invocation to `agentteams.cli.merge_pr_main` before the CLI and
   render pipeline load, so only the gate's integrity-pinned modules run before the gate. Two tests check that tree,
   from the source and in a fresh interpreter. `python build_team.py --merge-pr` now refuses and names the entry
-  point; `python -m agentteams.cli.merge_pr_main --merge-pr N` is the equivalent of the installed command.
+  point; `python -I -m agentteams.cli.merge_pr_main --merge-pr N` is the equivalent of the installed command.
+  The route requires `--team-id` and reads the brief through a pinned reader, so it never loads the render pipeline
+  or fleet discovery, and it refuses to merge if any module it has loaded is not integrity-pinned. A test merges a
+  pull request end to end through the entry point with that check on.
 - A stale integrity manifest now fails the test suite instead of printing a warning.
-- **Remaining residue:** a forward merge squashed into one commit has no single matching patch. It is caught when
-  it brings a release heading or a version change, which a `.0` forward merge does.
+- **Accepted residue (operator ruling, 2026-11-26):** a forward merge squashed into one commit, or with each commit
+  edited, has no matching patch. It is refused when it brings a version change or a release heading, which a `.0`
+  forward merge does; one that brings neither is not detected mechanically.
 - These are refusals only: an ordinary feature or fix pull request still merges unprompted.
 ### added (a read-only listing of a team directory's open HALTs, judged by the gate's own rules; beta)
 
