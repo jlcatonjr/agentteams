@@ -86,7 +86,9 @@ def _floor(path: Path) -> list[str]:
 def test_the_agent_and_reference_state_the_same_floor() -> None:
     assert _floor(AGENT) == _floor(REFERENCE)
     for path in (AGENT, REFERENCE):
-        assert "re-verifying" not in path.read_text(encoding="utf-8"), "name only rules a generated team has"
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        assert "re-verifying" not in text, "name only rules a generated team has"
+        assert "tiered too low" in text and re.search(r"(never|does not) recommend lowering a tier", text)
 
 
 @pytest.mark.parametrize("template", [AGENT, REFERENCE], ids=lambda path: path.name)

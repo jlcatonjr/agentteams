@@ -215,6 +215,15 @@ def test_the_ambiguity_error_names_no_absolute_path(root: Path, capsys: pytest.C
     assert str(root) not in message and str(Path.home()) not in message
 
 
+def test_plan_files_that_cannot_be_read_are_unreadable_not_absent(tmp_path: Path) -> None:
+    week = tmp_path / "tmp" / "by-week" / "2031-W06"
+    week.mkdir(parents=True)
+    (week / "broken.steps.csv").mkdir()  # something is there, but it cannot be read as a plan file
+    result = _build(tmp_path)
+    assert result["plans"] is None and result["coverage"]["plan_steps"] == "unreadable"
+    assert "Plan step files: UNREADABLE" in ledger_mod.render_markdown(result)
+
+
 def test_a_log_with_no_recognisable_verdict_has_no_denominator(tmp_path: Path) -> None:
     log = _refs(tmp_path) / "security-decisions.log.csv"
     log.write_text(SECURITY_CSV.splitlines()[0] + "\n2031-01-01,p,1,d,recorded,c,,e,@security\n", encoding="utf-8")

@@ -390,7 +390,7 @@ def build_ledger(root: Path, team_dir: Path | None = None, security_log: Path | 
         "team_dir_found": team_dir is not None,
         "security_log": security_state,
         "conflict_log": conflict_state,
-        "plan_steps": "found" if plans["plans"] else "absent",
+        "plan_steps": "found" if plans["plans"] else ("unreadable" if plans["unreadable_files"] else "absent"),
         "plan_weeks": plans["weeks_covered"],
         "gates_with_denominator": ["security"] if security is not None else [],
         "gates_without_denominator": without,
@@ -439,7 +439,8 @@ def render_markdown(ledger: dict[str, Any]) -> str:
     out.append(f"- Security decisions log: {cov['security_log'].upper()}")
     out.append(f"- Conflict log: {cov['conflict_log'].upper()}")
     out.append(f"- Team directory: {'found' if cov['team_dir_found'] else 'NOT FOUND'}")
-    out.append("- Plan step files: " + (f"{len(weeks)} week(s), {weeks[0]} to {weeks[-1]}" if weeks else "ABSENT"))
+    plan_state = f"{len(weeks)} week(s), {weeks[0]} to {weeks[-1]}" if weeks else cov["plan_steps"].upper()
+    out.append(f"- Plan step files: {plan_state}")
     out.append(f"- Gates with a firing count: {', '.join(cov['gates_with_denominator']) or 'none'}")
     out.append(f"- Gates without a denominator: {', '.join(cov['gates_without_denominator'])}")
     out += [f"- {note}" for note in cov["notes"]]

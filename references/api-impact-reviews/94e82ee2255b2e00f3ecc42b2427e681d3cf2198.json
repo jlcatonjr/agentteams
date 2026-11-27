@@ -3,6 +3,6 @@
   "commit": "526128fe93701a9e2f306a7ba1b0c3a140be7612",
   "subject": "feat(scripts): add a counts-only gate catch ledger and its method reference",
   "impact": "1 modules added, 9 symbols added, 3 cli added, 1 structural added",
-  "note": "Docs and references updated in the same change: API page docs_src/api-reference/gate-catch-ledger.md (new module, 10 public functions, CLI flags --framework/--team-dir/--security-log), index row, mkdocs nav, CHANGELOG, STABILITY beta note; schema wording for pr_management and mcp_catalog; analyze.md, mcp-catalog.md and the non-orchestrator-mcp reference name the third PR-triggered agent. Reviewed by @code-hygiene, @technical-validator, @security (PASS) and an @adversarial/@conflict-auditor checkpoint. No man page change (no main-parser flag). The earlier commit on this branch (526128fe) is superseded by the later one: its script and root reference moved into the package and the template library.",
+  "note": "First commit of the branch: a repo script (scripts/gate_catch_ledger.py), its test, and a hand-written method reference (references/devops-bloat.reference.md). No package module, schema or docs page in this commit, so no API reference update was owed by it. Reviewed by @code-hygiene, @technical-validator and @security. Superseded by 1c7c4f08, which moved the script into the package as agentteams.gate_catch_ledger and the reference into the template library, with their docs.",
   "recorded_at": "2026-11-27T22:36:51Z"
 }
