@@ -93,7 +93,7 @@ Issues = "https://github.com/jlcatonjr/agentteams/issues"
 Documentation = "https://jlcatonjr.github.io/agentteams/"
 
 [project.scripts]
-agentteams = "build_team:main"
+agentteams = "agentteams.cli.entry:main"   # 1.3.2: --merge-pr goes to the pinned gate entry; the rest to build_team
 build-team = "build_team:_deprecated_build_team_entry"   # deprecated alias; removed at 2.0 (see STABILITY.md)
 
 [tool.setuptools]

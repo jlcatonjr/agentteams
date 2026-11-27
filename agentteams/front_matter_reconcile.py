@@ -28,6 +28,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentteams import front_matter_widening
 from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_front_matter
 
@@ -287,6 +288,31 @@ def find_divergences(
     return sorted(found, key=lambda d: (d.rel_path, d.key))
 
 
+def classify(d: Divergence) -> str:
+    """Return ``"safe"`` or ``"widening"`` for applying the template's value of one divergence.
+
+    The rule is :func:`agentteams.front_matter_widening.classify`: a non-capability key or a capability list the
+    template narrows is safe; everything else among capability keys, including any value that is not read
+    strictly, widens.
+
+    Args:
+        d: The divergence.
+
+    Returns:
+        ``"safe"`` or ``"widening"``.
+    """
+    return front_matter_widening.classify(d.key, d.deployed, d.template)
+
+
+def _is_written(d: Divergence) -> bool:
+    """Whether :func:`apply_divergences` would write *d* (it skips ambiguous and never-added keys)."""
+    if d.ambiguous:
+        return False
+    if d.deployed is None or d.key == "permissionMode":
+        return _never_added(d.key, d.template) is None
+    return True
+
+
 def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[str]:
     """Rewrite each deployed file's front-matter key to the template's value.
 
@@ -444,7 +470,8 @@ def format_report(divergences: list[Divergence]) -> str:
     lines.append(
         "Nothing has been changed. Re-run with --reconcile-apply to take the template's "
         "values; a deployed value may be a deliberate project choice, so this is never "
-        "applied automatically."
+        "applied automatically, and a value that widens a capability grant needs a "
+        "'reconcile-apply-widen' clearance first."
     )
     return "\n".join(lines)
 
@@ -457,16 +484,62 @@ def run_reconcile(args, rendered: list[tuple[str, str]], output_dir: Path) -> in
     argument parser's. It also kept `generate.py` under the CH-07 ceiling, which the inline
     version had pushed it into the warning margin of.
 
+    A divergence :func:`classify` calls widening is written only when
+    :mod:`agentteams.cli.reconcile_apply_gate` clears this run's exact set of them (C-3). When it
+    does not, the safe ones are still applied, a refused list key still loses what the template removes
+    (:func:`agentteams.front_matter_widening.safe_part`), and every widening is listed as refused.
+
     Returns:
-        Process exit code. Always 0: divergence is a finding to read, not an error.
+        Process exit code: 0, or 1 when a widening was refused.
     """
+    from agentteams.cli import reconcile_apply_gate as gate
+
     divergences = find_divergences(rendered, output_dir)
     print(format_report(divergences))
     if not (getattr(args, "reconcile_apply", False) and divergences):
         return 0
+    widening = [d for d in divergences if _is_written(d) and classify(d) == "widening"]
+    tokens = {_token(d) for d in widening}
+    refusal = ""
+    if widening:
+        try:
+            gate.authorize(output_dir, tokens, consume=False)
+        except gate.ReconcileApplyError as exc:
+            refusal = str(exc)
     if getattr(args, "dry_run", False):
-        print("\n[DRY RUN] --reconcile-apply would change the keys listed above.")
+        print("\n[DRY RUN] --reconcile-apply would change the keys listed above"
+              + (", except these widenings, which are not cleared (a list key's removals would still apply):"
+                 if refusal else "."))
+        if refusal:
+            _print_refusals(widening, refusal, gate.record_hint(tokens, governed=gate.is_governed(output_dir)))
         return 0
-    for line in apply_divergences(divergences, output_dir):
+    if widening and not refusal:
+        try:
+            gate.authorize(output_dir, tokens, consume=True)
+        except gate.ReconcileApplyError as exc:
+            refusal = str(exc)
+    apply = [d for d in divergences if not (refusal and d in widening)]
+    if refusal:  # a refused list key still loses what the template removes (the narrowing part applies now)
+        apply += [Divergence(d.rel_path, d.key, d.deployed, part) for d in widening
+                  if (part := front_matter_widening.safe_part(d.key, d.deployed, d.template)) is not None]
+    for line in apply_divergences(apply, output_dir):
         print(f"  {line}")
+    if refusal:
+        _print_refusals(widening, refusal, gate.record_hint(tokens, governed=gate.is_governed(output_dir)))
+        return 1
     return 0
+
+
+def _token(d: Divergence) -> str:
+    from agentteams.cli.reconcile_apply_gate import grant_token
+
+    return grant_token(d.rel_path, d.key, front_matter_widening.value_digest(d.key, d.template))
+
+
+def _print_refusals(widening: list[Divergence], reason: str, hint: str) -> None:
+    for d in widening:
+        part = front_matter_widening.safe_part(d.key, d.deployed, d.template)
+        held = f"; its removals applied, and it is set to {part.strip()!r} until then" if part else ""
+        print(f"  REFUSED {d.rel_path}: {d.key} — widens a capability grant (C-3){held}; record a "
+              f"'reconcile-apply-widen' decision granting {_token(d)}")
+    print(f"  Not cleared: {reason}\n  To apply them, {hint}, then re-run.")

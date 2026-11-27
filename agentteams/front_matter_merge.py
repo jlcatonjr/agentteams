@@ -419,7 +419,7 @@ def _merge_front_matter(
                     f"front matter: {key!r} on disk GRANTS MORE than the template — extra: "
                     f"{extra}. Not applied: {why}. Review it, then set `{key}: {template_value}` to "
                     f"revoke. (`agentteams --reconcile-front-matter` lists every front-matter divergence in "
-                    f"the team; `--reconcile-apply` applies ALL of them, in both directions.)"
+                    f"the team; `--reconcile-apply` applies them, a widening only under a recorded clearance.)"
                 )
                 continue
 

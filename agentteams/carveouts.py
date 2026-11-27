@@ -635,7 +635,7 @@ def signature_problem(root: Path, registry: dict) -> Problem | None:
     if not isinstance(key_id, str) or not _KEY_ID_RE.match(key_id):
         return Problem("registry", "bad-signature", "signature.key_id is missing or malformed")
     try:
-        public = _load_verify_key(decision_dir(root, registry), key_id)
+        public = _load_verify_key(decision_dir(root, registry), key_id, signature=sig["value"])
         ok = ed25519_verify(public, signed_fields(registry, key_id), sig["value"])
     except RuntimeError as exc:
         return Problem("registry", "bad-signature", f"the signature can't be verified: {exc}")

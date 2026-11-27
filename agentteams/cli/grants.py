@@ -265,10 +265,10 @@ def verify_grant_signature(
         from agentteams.cli.decision_log import _load_verify_key
 
         try:
-            public_pem = _load_verify_key(team_dir, (record.get("key_id") or "").strip())
+            signature = (record.get("signature") or "").strip()
+            public_pem = _load_verify_key(team_dir, (record.get("key_id") or "").strip(), signature=signature)
             return verify_by_scheme(
-                SIG_SCHEME_ED25519, _ed25519_signed_values(record),
-                (record.get("signature") or "").strip(), public_pem=public_pem,
+                SIG_SCHEME_ED25519, _ed25519_signed_values(record), signature, public_pem=public_pem,
             )
         except (RuntimeError, ValueError) as exc:
             raise GrantError(

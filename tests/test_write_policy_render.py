@@ -8,6 +8,7 @@ gets the "Applying proposals" workflow. Without the switch it is the identity.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -159,6 +160,20 @@ def test_switching_on_an_existing_team(tmp_path):
                   if f.code == "AR_WRITE_POLICY" and f.severity == "error"]
     assert still_wide, "front matter is not merged, so the audit must still flag the old tools"
 
+    # The read-only set adds Read where an agent lacked it, so those files widen and need a signed clearance.
+    proc = _cli(*base, "--reconcile-front-matter", "--reconcile-apply", cwd=tmp_path)
+    assert proc.returncode == 1, proc.stdout[-1500:] + proc.stderr[-1500:]
+    tokens = sorted(re.findall(r"REFUSED \S+: \S+ — widens.* granting (\S+)$", proc.stdout, re.M))
+    assert tokens, proc.stdout[-1500:]
+    pytest.importorskip("cryptography", reason="the 'signing' extra is not installed")
+    from agentteams.cli.signed_ledger import ed25519_sign
+    from tests._sandbox_gate_helpers import _KEY_ID, _keypair, _log, _row
+
+    private, public = _keypair()
+    (out / "references" / "authorized-verify-keys" / f"{_KEY_ID}.pub.pem").write_text(public, encoding="utf-8")
+    (out / "references" / "security-decisions.log.csv").unlink()  # the generated legacy header has no signing columns
+    _log(out, _row("reconcile-apply-widen", grants=";".join(tokens), relaxes="",
+                   sign=lambda values: ed25519_sign(private, values)))
     proc = _cli(*base, "--reconcile-front-matter", "--reconcile-apply", cwd=tmp_path)
     assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
     left = [(f.file, f.description[:100]) for f in run_post_audit(out, manifest, ai_audit=False).agent_refactor_findings

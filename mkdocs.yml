@@ -304,6 +304,7 @@ nav:
               - sandbox_handoff: api-reference/sandbox-handoff.md
               - feature-inventory: api-reference/feature-inventory.md
               - front-matter-reconcile: api-reference/front-matter-reconcile.md
+              - front-matter-widening: api-reference/front-matter-widening.md
               - front-matter-baseline: api-reference/front-matter-baseline.md
               - template-pins: api-reference/template-pins.md
           - Host features & bridge emission:
