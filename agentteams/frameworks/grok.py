@@ -606,7 +606,7 @@ def stale_scope_notices(agents_dir: Path) -> list[str]:
                 f"[GROK-SCOPE] {path}: existing grok agent has {'; '.join(problems)}, so grok offers it more than its "
                 "list. This run's render removes these, but --update --merge keeps an edited file's line and never "
                 "auto-applies a deny change: check the file after this run, or run "
-                "--reconcile-front-matter --reconcile-apply."
+                "--reconcile-front-matter --reconcile-apply (a widening there needs a recorded clearance)."
             )
     return found
 

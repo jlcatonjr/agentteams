@@ -45,6 +45,10 @@ The supported import surface is everything documented under
 > **Beta modules.** `agentteams.term_index` and the `--term-check` gate (issue #548, new in 1.3.0) are **beta**:
 > shipped and tested, but their API, register schema and finding codes may change in a minor release.
 
+> **Beta: `agentteams.cli.open_halts.open_halts`** and its `HaltRow` result, a read-only listing of a team directory's
+> HALT rows judged by the gate's own HALT scan. It is shipped and tested, but its signature, the `HaltRow` fields and
+> the rules it applies may change in a minor release. It is not part of the frozen `agentteams.cli` surface.
+
 > **Beta: `agentteams.wasm_session`** (issue #567, new in 1.3.0), the WASM streaming session mode and its
 > `python -I -m agentteams.wasm_session` entry point. It is shipped and tested, but its flags, status records
 > (schema `agentteams-wasm-session/1`) and exit codes may change in a minor release. Any such change bumps the schema

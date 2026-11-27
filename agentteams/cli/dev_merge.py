@@ -254,7 +254,7 @@ def verify_signature(doc: dict, governance_dir: Path) -> None:
         raise DevMergeError("the Ed25519 backend (the 'signing' extra, cryptography) is not installed here, so the "
                             "signed authorization cannot be verified", env=True)
     try:
-        public_pem = dl._load_verify_key(governance_dir, doc["key_id"])
+        public_pem = dl._load_verify_key(governance_dir, doc["key_id"], signature=doc["signature"])
         ok = sl.ed25519_verify(public_pem, signed_values(doc), doc["signature"])
     except RuntimeError as exc:
         raise DevMergeError(str(exc)) from exc

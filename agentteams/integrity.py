@@ -50,7 +50,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                          # check_log and forged-record guards, confirm-time prefix (#470)
     "agentteams/cli/decision_lineage.py",  # C-2: derives_from lineage, so a rename can't evade a HALT
     "agentteams/cli/decision_authors.py",  # C-5: the approver roster and the one roster check the gate uses
+    "agentteams/cli/open_halts.py",  # C-2: the public listing of open HALTs, judged by the gate's own scan
     "agentteams/cli/sign_decision_refusals.py",  # --sign-decision's pre-key refusals (author roster, open HALT)
+    "agentteams/cli/key_retirement.py",  # C-5: a retired verify key verifies only its signed snapshot
+    "agentteams/cli/key_retirement_verb.py",  # --retire-verify-key: what the snapshot keeps, each signature verified
     "agentteams/signing_switch.py",  # C-2/C-5: is_governed (decides fail-closed signing), the switch reads and the
                                      # symlink refusal the decision gate reads its log and switch through
     "agentteams/cli/action_ids.py",      # C-2/C-5: which rows clear an action, which HALTs block it
@@ -60,8 +63,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/unfenced.py",            # C-1: constraint ratchet
     "agentteams/front_matter_merge.py",  # C-3: capability comparison
     "agentteams/front_matter_reconcile.py",
+    "agentteams/front_matter_widening.py",  # C-3: which --reconcile-apply changes widen a grant (strict read)
     "agentteams/cli/adopt_merge_gate.py",  # C-3 + Rule 15: the one gated path that extends an
                                            # orchestrator's `agents:` grant under --merge
+    "agentteams/cli/reconcile_apply_gate.py",  # C-3: what clears a capability widening by --reconcile-apply
     "agentteams/data/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
                                             # construction, so any change to it must be a reviewed re-record
     "agentteams/data/codex-role-gate.py",  # C-3 on Codex: the PreToolUse role gate (write_policy orchestrator-only);

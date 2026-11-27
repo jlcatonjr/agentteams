@@ -90,4 +90,22 @@ def _transitive_ancestors(action: str, lineage_map: dict[str, set[str]]) -> set[
     return ancestors
 
 
+def _halt_scan_targets(action: str, rows: list[dict[str, str]], fieldnames: list[str]) -> list[str]:
+    """The ids the HALT scan checks for *action*: the action, then its transitive ancestors, sorted.
+
+    Ancestors are followed only when the log has a :data:`_DERIVES_FROM_FIELD` column (opt-in, as before).
+
+    Raises:
+        RuntimeError: The lineage has a cycle or a dangling reference (fail closed).
+    """
+    targets = [action]
+    if _DERIVES_FROM_FIELD in {c.strip() for c in fieldnames}:
+        try:
+            ancestors = _transitive_ancestors(action, _build_lineage_map(rows))
+        except RuntimeError as exc:
+            raise RuntimeError(f"lineage traversal for action '{action}' failed closed: {exc}") from exc
+        targets.extend(sorted(ancestors))
+    return targets
+
+
 __all__: list[str] = []
