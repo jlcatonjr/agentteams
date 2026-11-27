@@ -107,6 +107,9 @@ def test_a_cherry_picked_release_commit_is_refused_by_patch_id(origin):
      "project.scripts"),
     ({"pyproject.toml": _PYPROJECT.format(v="1.4.0.dev0") + '\n[tool.setuptools]\npy-modules = ["shadow"]\n'},
      "tool.setuptools"),
+    ({"pyproject.toml": _PYPROJECT.format(v="1.4.0.dev0").replace('[build-system]',
+                                                                   'dependencies = ["requests"]\n\n[build-system]')},
+     "project.dependencies"),
     ({"CHANGELOG.md": "# C\n\n## [1.4.0] - d\n\n## [1.3.0] - d\n"}, "CHANGELOG release section"),
     ({"agentteams__capability_hints.py": 'LAST_RELEASE_TAG = "v1.4.0"\n'}, "LAST_RELEASE_TAG"),
 ])
@@ -123,10 +126,26 @@ def test_release_commits_are_refused(origin, files, why):
     ("setup.py", "import setuptools; setuptools.setup()\n"),   # packaging inputs setuptools reads at install
     ("setup.cfg", "[metadata]\nname = x\n"),
     ("MANIFEST.in", "include *.txt\n"),
+    ("agentteams/cli/DEV_MERGE.py", "GATE = 0\n"),       # case-insensitive collision with a pinned module
+    ("Setup.py", "import setuptools\n"),
+    ("src/evil.pth", "import os\n"),                     # start-up hooks run at every interpreter start
+    ("lib/sitecustomize.py", "print(1)\n"),
+    ("shadow.py", "x = 1\n"),                            # a new top-level module could shadow an import
 ])
 def test_pins_and_enforcement_code_are_refused(origin, rel, text):
     sha = _pr(origin, "pin", **{rel.replace("/", "__"): text})
     assert "the operator merges" in (_check(origin, "pin", sha, [rel]) or "")
+
+
+def test_a_new_top_level_package_is_refused(origin):
+    # A new package at the repository root could shadow an import (e.g. a top-level `json`).
+    _g(origin, "switch", "-q", "-c", "pkg", "dev")
+    _write(origin, "json/__init__.py", "x = 1\n")
+    _g(origin, "add", "-A")
+    _g(origin, "commit", "-q", "-m", "shadow json")
+    sha = _g(origin, "rev-parse", "HEAD")
+    _g(origin, "switch", "-q", "dev")
+    assert "the operator merges" in (_check(origin, "pkg", sha, ["json/__init__.py"]) or "")
 
 
 def test_removing_or_deleting_a_pin_is_refused(origin):
