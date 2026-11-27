@@ -186,8 +186,11 @@ def _unseen_stores(team_dir: Path, old: str) -> list[Path]:
         store = d / kr.STORE_REL
         if lstat_or_none(store, "verify-key store") is None:
             continue
-        if any(kr.material(pem) == key for pem in sorted(store.glob("*.pub.pem"))) \
-                and here not in {x.resolve() for x in kr.scan_dirs(d)}:
+        try:
+            pems = sorted(store.glob("*.pub.pem"))
+        except OSError as exc:
+            raise RuntimeError(f"the verify-key store {store} cannot be listed: {exc}") from exc
+        if any(kr.material(pem) == key for pem in pems) and here not in {x.resolve() for x in kr.scan_dirs(d)}:
             unseen.append(d)
     return unseen
 
@@ -253,8 +256,8 @@ def _pre_key_refusal(old: str, new: str, team_dir: Path) -> str | None:
     unseen = _unseen_stores(team_dir, old)
     if unseen:
         return (f"{', '.join(map(str, unseen))} hold(s) the key {old!r} but would not see a record written in "
-                f"{team_dir} (an outer repository does not read a nested one); retire it from the outermost "
-                "repository's team dir instead")
+                f"{team_dir} (their own scan does not reach it: an outer repository does not read a nested one, nor a "
+                "parent_team its child); retire it from a team dir those stores read instead")
     return None
 
 
