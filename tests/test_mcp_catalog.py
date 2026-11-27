@@ -181,6 +181,7 @@ def test_manifest_carries_selection_only_when_set():
 def test_pr_agents_join_the_roster_only_on_opt_in(kw, expected):
     slugs = analyze.build_manifest(_desc(**kw), framework="claude")["agent_slug_list"]
     assert ("pr-manager" in slugs) is expected and ("pr-notifier" in slugs) is expected
+    assert ("devops-bloat" in slugs) is expected
 
 
 @pytest.mark.parametrize("name", ["pr-manager", "pr-notifier"])
