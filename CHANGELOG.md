@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-27
+
+### release notes
+
+agentteams 1.3.2 hardens the integration-branch merge gate on the 1.3 line (`agentteams --merge-pr`, #649). It now
+refuses, so the operator merges them instead, a pull request that carries release history or a version change, moves
+a pin or a dependency, touches packaging, start-up hooks or compiled code, or changes or shadows the gate's own
+integrity-pinned code. `--merge-pr` runs through a dedicated entry point that loads only pinned modules. **Action for
+existing teams:** reinstall agentteams, so the `agentteams` command uses the new entry point, and pass `--team-id` to
+`--merge-pr`; `python -m agentteams.cli.merge_pr_main` and `python build_team.py --merge-pr` now refuse. No merge
+authorization has been signed on any 1.3 release; nothing else from `dev` is included.
+
 ### security (`--merge-pr` refuses release mechanics, pin moves and gate-code changes; D1, D3, D5)
 
 - **What was wrong:** the integration-branch merge gate checked a pull request's paths only. With a signed
