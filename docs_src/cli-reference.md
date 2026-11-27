@@ -1535,9 +1535,10 @@ With `--verify-toolchain-pin`: the ssh `allowed_signers` file naming the operato
 Immediately before merging it re-reads the head and base, then runs exactly `gh pr merge N -R <owner/name> --merge --match-head-commit <sha>` (never `--admin`, `--auto`, `--squash`, `--rebase` or `--delete-branch`). Afterwards it checks that the result is a two-parent merge commit at the branch tip. `--output` names the team dir; `--team-id` as for `--verify-toolchain-group`. **Exit code:** `0` merged; `2` not authorized; `1` an error, or an `ALARM` when the result does not check out.
 
 `agentteams --merge-pr N --team-id <id>` runs through a dedicated entry point (`agentteams.cli.merge_pr_main`) that
-loads only the merge gate's integrity-pinned modules, and it refuses to merge if any module it has loaded is not
-pinned. `--team-id` is required on this route. `python -I -m agentteams.cli.merge_pr_main --merge-pr N --team-id <id>`
-is the same command; `python build_team.py --merge-pr` refuses.
+loads only the merge gate's integrity-pinned modules. `--team-id` is required on this route. The installed console
+script is the only supported route: `python build_team.py --merge-pr` and `python -m agentteams.cli.merge_pr_main`
+refuse. The route also refuses if a module it has loaded is not pinned; that check is a tripwire against accidental
+unpinned imports, not a control against hostile code already in the install.
 
 ### `--sign-dev-merge-authorization`
 

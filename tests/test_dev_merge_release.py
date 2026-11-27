@@ -175,6 +175,25 @@ def test_any_change_to_capability_hints_is_refused(origin):
     assert "the operator merges" in (_check(origin, "hints", sha, ["agentteams/capability_hints.py"]) or "")
 
 
+@pytest.mark.parametrize("rel", [
+    "agentteams/capability_hints/__init__.py",                       # shadows the unpinned exemption (IM F1)
+    "agentteams/capability_hints.abi3.so",
+    "agentteams/__pycache__/capability_hints.cpython-312.pyc",
+    "agentteams/cli/__init__.abi3.so",                               # shadows a pinned __init__ (IM F2)
+    "agentteams/cli/__pycache__/__init__.cpython-312.pyc",
+    "src/anything.pyc",                                              # compiled code anywhere
+    "docs/__pycache__/notes.txt",                                    # anything under __pycache__/
+])
+def test_compiled_code_and_shadows_of_any_route_module_are_refused(origin, rel):
+    _g(origin, "switch", "-q", "-c", "shadow", "dev")
+    _write(origin, rel, "x = 1\n")
+    _g(origin, "add", "-f", "-A")
+    _g(origin, "commit", "-q", "-m", "shadow")
+    sha = _g(origin, "rev-parse", "HEAD")
+    _g(origin, "switch", "-q", "dev")
+    assert "the operator merges" in (_check(origin, "shadow", sha, [rel]) or "")
+
+
 def test_a_submodule_or_gitmodules_change_is_refused(origin):
     _g(origin, "switch", "-q", "-c", "sub", "dev")
     _g(origin, "update-index", "--add", "--cacheinfo", f"160000,{'f' * 40},vendor/lib")

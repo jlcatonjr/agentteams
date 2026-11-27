@@ -45,6 +45,23 @@ def test_the_loaded_module_guard_names_unpinned_modules_in_this_process():
     assert "not integrity-pinned" in (dm.unpinned_loaded() or "")
 
 
+def test_the_loaded_module_guard_flags_a_module_outside_the_package_root(monkeypatch):
+    import types
+
+    fake = types.ModuleType("agentteams.planted")
+    fake.__file__ = "/elsewhere/agentteams/planted.py"
+    monkeypatch.setitem(sys.modules, "agentteams.planted", fake)
+    assert "/elsewhere/agentteams/planted.py" in (dm.unpinned_loaded() or "")
+
+
+def test_python_dash_m_is_not_a_route(tmp_path):
+    run = (f"import runpy, sys; sys.path.insert(0, {str(_ROOT)!r}); sys.argv = ['x', '--merge-pr', '7', '--team-id', 't'];"
+           " runpy.run_module('agentteams.cli.merge_pr_main', run_name='__main__')")
+    proc = subprocess.run([sys.executable, "-I", "-c", run], cwd=tmp_path, capture_output=True, text=True, timeout=60,
+                          check=False)
+    assert proc.returncode == 1 and "not supported" in proc.stderr
+
+
 def test_the_default_release_check_fetches_the_signed_repo_and_the_pull_ref(monkeypatch):
     from agentteams.cli import dev_merge_release as dmr
 

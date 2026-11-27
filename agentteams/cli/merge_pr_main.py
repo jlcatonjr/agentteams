@@ -1,7 +1,7 @@
 """merge_pr_main.py — the dedicated entry point for ``--merge-pr`` (1.3.2; operator ruling 2026-11-26).
 
-``agentteams --merge-pr N`` (the console script sends it here, see :mod:`agentteams.cli.entry`) or
-``python -m agentteams.cli.merge_pr_main --merge-pr N`` merges pull request *N* into the
+``agentteams --merge-pr N`` (the console script sends it here, see :mod:`agentteams.cli.entry`; it is the only
+supported route, and ``python -m agentteams.cli.merge_pr_main`` refuses) merges pull request *N* into the
 integration branch without the gate's prompt, under the signed authorization. It loads only the merge gate's own
 modules, every one of them integrity-pinned (``tests/test_merge_pr_entry_tree.py`` imports the route and the gate's
 deferred imports in a fresh interpreter and checks what loaded; ``tests/test_dev_merge_import_tree_pinned.py`` checks
@@ -17,8 +17,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-
-from agentteams.cli.dev_merge_commands import run_dev_merge
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,12 +48,15 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         0 merged; 2 a condition does not hold (ask the operator); 1 an error.
     """
-    # `python -m` puts the current directory first on sys.path, so a local `agentteams/` there would be imported in
-    # place of the installed, pinned package. The console script, or `python -I -m`, does not.
+    # A tripwire, before any gate import: with the current directory first on sys.path a local `agentteams/` would
+    # be imported in place of the installed, pinned package. (If this very module came from such a copy, the copy's
+    # own code is running and no check here can help: the installed console script is the only supported route.)
     if not sys.flags.isolated and sys.path and Path(sys.path[0] or ".").resolve() == Path.cwd().resolve():
-        print("Error: run the installed `agentteams --merge-pr N`, or `python -I -m agentteams.cli.merge_pr_main` "
-              "(the current directory is first on sys.path).", file=sys.stderr)
+        print("Error: run the installed `agentteams --merge-pr N` (the current directory is first on sys.path).",
+              file=sys.stderr)
         return 1
+    from agentteams.cli.dev_merge_commands import run_dev_merge
+
     args = build_parser().parse_args(argv)
     args.sign_dev_merge_authorization = None      # the attributes the shared resolvers read
     args.verify_dev_merge_authorization = False
@@ -65,5 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     return run_dev_merge(args)
 
 
-if __name__ == "__main__":   # pragma: no cover - exercised through the console script
-    sys.exit(main())
+if __name__ == "__main__":   # pragma: no cover
+    # `python -m` is not a supported route: the package it imports is whatever sys.path finds first (IM F4).
+    print("Error: run the installed `agentteams --merge-pr N`; `python -m agentteams.cli.merge_pr_main` is not "
+          "supported.", file=sys.stderr)
+    sys.exit(1)
