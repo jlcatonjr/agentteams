@@ -1,5 +1,5 @@
 feature_id,category,name,surface,kind,tier,external_dep,proof_test,negative_control,status,notes
-F-001,Core Pipeline,Agent Teams Module,,feature,unit,none,tests/test_console_script_entrypoints.py::test_console_script_target_module_is_shipped[agentteams-build_team-main],,UNPROVEN,
+F-001,Core Pipeline,Agent Teams Module,,feature,unit,none,tests/test_console_script_entrypoints.py::test_console_script_target_module_is_shipped[agentteams-agentteams.cli.entry-main],,UNPROVEN,
 F-002,Core Pipeline,Four-Tier Agent Architecture,,feature,unit,none,,,UNPROVEN,
 F-003,Core Pipeline,Project Description Ingestion,,feature,unit,none,,,UNPROVEN,
 F-004,Core Pipeline,Project Directory Scanning,,feature,unit,none,,,UNPROVEN,

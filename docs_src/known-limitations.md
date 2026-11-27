@@ -24,7 +24,8 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 ### Turning `write_policy` off is not a clean rollback
 
 - **What:** removing the switch from the brief and re-rendering (`--update --merge`, then
-  `--reconcile-front-matter --reconcile-apply`) restores tools, Goose extensions and the settings example. It
+  `--reconcile-front-matter --reconcile-apply`, whose widenings need a `reconcile-apply-widen` clearance)
+  restores tools, Goose extensions and the settings example. It
   leaves three things behind:
   - **(R1)** each granted agent's `mcpServers` `agentteams_runner` block, because reconcile never removes a key
     the template no longer declares;

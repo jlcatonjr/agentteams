@@ -125,6 +125,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`sandbox_handoff`](sandbox-handoff.md) | Operator handoff scripts: the reviewable `.sh` plus hash-checked command a sandboxed agent gives the operator for work the sandbox refuses |
 | [`feature_inventory`](feature-inventory.md) | Generated inventory of the shipped feature surface |
 | [`front_matter_reconcile`](front-matter-reconcile.md) | Report (and optionally apply) template-vs-deployed YAML front-matter divergence |
+| [`front_matter_widening`](front-matter-widening.md) | Whether a reconcile change widens a capability grant, read strictly |
 | [`front_matter_baseline`](front-matter-baseline.md) | The three-way front-matter merge's baseline (what agentteams authored, version 2) and the guard that restores dropped hand-written handoffs |
 | [`template_pins`](template-pins.md) | Trust root for installed template digests (`--pin-templates`) |
 

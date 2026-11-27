@@ -248,7 +248,7 @@ def verify_signature(doc: dict, governance_dir: Path) -> None:
             "the Ed25519 backend (the 'signing' extra, cryptography) is not installed here, so the signed group "
             "cannot be verified; install the extra in this environment (CI included)", env=True)
     try:
-        public_pem = dl._load_verify_key(governance_dir, doc["key_id"])
+        public_pem = dl._load_verify_key(governance_dir, doc["key_id"], signature=doc["signature"])
         ok = sl.ed25519_verify(public_pem, signed_values(doc), doc["signature"])
     except RuntimeError as exc:
         raise ToolchainGroupError(str(exc)) from exc

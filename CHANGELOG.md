@@ -31,6 +31,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mind:** a snippet returned by `--query-index` can hold an email address or a host name from a work summary.
   Scan it before copying it into a tracked file or an outbound message.
 
+### security (`--merge-pr` refuses release mechanics, pin moves and gate-code changes; D1, D3, D5)
+
+- **What was wrong:** the integration-branch merge gate checked a pull request's paths only. With a signed
+  authorization it would have merged, without the prompt, a forward merge of `main` or a release line into the
+  integration branch, a version bump, a `toolchain.lock` pin move, and a change to the gate's own modules. Those
+  modules are integrity-pinned, but a stale manifest only printed a warning, so the change could reach CI green.
+- **Now `--merge-pr` refuses, before the PASS is spent and again at merge time:**
+  - a pull request that carries a commit reachable from `main`, a `release/*` branch or a `v*` tag, or a commit
+    with the same patch as a release-only commit (a rebased or cherry-picked release). The check fetches those refs
+    from the remote into a temporary repository; any fetch or read error refuses;
+  - any change to `pyproject.toml` (its version, scripts, dependencies, packaging and tool tables all decide what is
+    installed or tested), to `capability_hints.LAST_RELEASE_TAG`, or a new release heading in `CHANGELOG.md`
+    (`## [X.Y.Z]` or `## [vX.Y.Z]`);
+  - a change to a `*.lock` file, a lockfile the base's workflows name, a file holding `NAME=owner/repo@<sha>` pin
+    lines at the base or the head (removing or deleting a pin counts), any module the base's integrity manifest
+    pins, `agentteams/capability_hints.py`, a packaging input (`setup.py`, `setup.cfg`, `MANIFEST.in`), an
+    interpreter start-up hook (`*.pth`, `sitecustomize.py`, `usercustomize.py`), a new top-level module or package,
+    a requirements or constraints file anywhere, a file the workflows pass to `pip -r`/`-c`, a package beside a
+    module the route may load (it would shadow it at import), or any added or changed `.so`, `.pyd`, `.pyc` or
+    `.pyo` file or anything under a `__pycache__/` directory. Paths are compared casefolded.
+- **`agentteams --merge-pr` now runs through its own entry point.** The `agentteams` console script
+  (`agentteams.cli.entry`) sends a `--merge-pr` invocation to `agentteams.cli.merge_pr_main` before the CLI and
+  render pipeline load, so only the gate's integrity-pinned modules run before the gate. Two tests check that tree,
+  from the source and in a fresh interpreter. The installed console script is the only supported route:
+  `python build_team.py --merge-pr` and `python -m agentteams.cli.merge_pr_main` refuse. The route requires
+  `--team-id` and reads the brief through a pinned reader, so it never loads the render pipeline or fleet discovery.
+  A test merges a pull request end to end through the entry point.
+- **A tripwire, not a control.** Before the PASS is spent and before `gh pr merge`, the route also refuses if any
+  `agentteams` module it has loaded is not in the integrity manifest's module list. It compares names, trusts each
+  module's `__file__`, skips modules without one and checks no hashes, so it catches an accidental unpinned import;
+  hostile code already in the install is stopped by the pins and the refusals above, not by this check.
+- A stale integrity manifest now fails the test suite instead of printing a warning.
+- **Accepted residue (operator ruling, 2026-11-26):** a forward merge squashed into one commit, or with each commit
+  edited, has no matching patch. It is refused when it brings a version change or a release heading, which a `.0`
+  forward merge does; one that brings neither is not detected mechanically.
+- **Known limits (accepted residue):** `pytest.ini`, `tox.ini` and an existing `conftest.py` are not sensitive
+  (they can deselect tests, which CI then does not run); a workflow's `pip -r "$VAR"` is not resolved; a new
+  top-level namespace package without an `__init__.py` is not refused; a bracketless `## v1.3.2` heading is not a
+  release heading; `--description` is accepted on the route but unused; the patch-id comparison refuses a pull
+  request whose patches are not valid UTF-8 (it fails closed).
+- These are refusals only: an ordinary feature or fix pull request still merges unprompted.
+### added (a read-only listing of a team directory's open HALTs, judged by the gate's own rules; beta)
+
+- **New beta function:** `agentteams.cli.open_halts.open_halts(team_dir, action=None)` returns `HaltRow` entries
+  (`row`, `halt_id`, `is_open`, `retracted_by`, `blocks`). With `action`, it lists the HALT rows that block that
+  action now, found as the gate finds them: on the action and its `derives_from` ancestors, with the colon family
+  rule and the gate's retraction rules. Without one, it lists every HALT row and whether it is retracted, judged by
+  exact id. It calls the gate's own scan and lineage walk rather than repeating them, refuses a log the gate would
+  refuse, and refuses a `team_dir` that is not a `Path` or an empty or non-string `action`.
+- **Separators, stated:** only `:` makes a family. A HALT on `family` or `family/gate` does not block
+  `family/gate/study:sha256-...`; a HALT on `family/gate/study` does. The API reference page lists the strict, family
+  and token rules.
+- **Who notices:** tools that re-implemented the retraction rules can call this instead. Nothing in the gate changes.
+
+### docs (one security policy, the root `SECURITY.md`, which is the one GitHub shows)
+
+- **Fixed:** the repository carried two policies. GitHub shows `.github/SECURITY.md` ahead of the root file, so
+  reporters saw a stale copy whose fallback, "a private coordination issue", does not exist on GitHub and would
+  have sent a report to a public issue, which the root policy forbids. That copy is deleted; the root
+  `SECURITY.md` is the only policy and keeps its response targets (acknowledgement within 3 business days, a fix
+  target within 10).
+- The root policy now gives the one fallback for a reporter without the Security tab: a public issue that says
+  only that they have a security report and asks to be contacted, with no details. Contact comes only from a
+  repository maintainer listed in `.github/CODEOWNERS`, and the reporter shares details with no one else who asks
+  on the issue.
+- `.github/CODEOWNERS` protects `/SECURITY.md` in place of the deleted path, and a test keeps exactly one policy
+  file, keeps the private-issue text out, and keeps tracked docs from linking to a policy outside the root.
+- **Who notices:** a reporter reading the repository's Security policy page, which shows the root text once this
+  reaches the default branch.
+
+### security (`--reconcile-apply` widens a capability grant only under a recorded clearance)
+
+- **Fixed:** `--reconcile-front-matter --reconcile-apply` took the template's value for every diverging
+  front-matter key, so one flag could add tools, an `agents:` slug, an `mcpServers` block or a `model` change with
+  no clearance, while the same `agents:` widening through `--adopt-orphans` needs a signed decision.
+- Each divergence is now classified. A narrowing (a capability list the template shrinks, a `disallowedTools` list
+  it grows) and a non-capability key apply as before. A widening (more items, a capability key absent on disk, any
+  `model` change, or a value either side cannot read strictly: a list counts only when every item in it is well
+  formed, so an unquoted item in a flow list or a trailing comma widens) needs a `reconcile-apply-widen` decision. In a governed
+  workspace that is a PASS row signed with the operator's Ed25519 key, never a waiver, with
+  `scope=reconcile-apply-widen`, `effect_grants` naming exactly this run's widenings as `frontmatter:<file>#<key>@sha256:<hex>`
+  (a digest of the value that will be written, so a value changed after signing refuses), and room under the
+  exception cap. In an ungoverned workspace an ordinary PASS row from an approved author clears
+  it. Both paths go through the destructive-action gate, so a HALT recorded as `reconcile-apply-widen` or
+  `reconcile-apply` blocks it, a clearance older than the retraction of either is void, and a clearance is spent
+  once. The gate checks the grants on the row it selects in its one
+  read of the log and spends only a row identical to that one, so a row appended meanwhile is neither checked in
+  its place nor spent.
+- Without a clearance the narrowings still apply, each widening prints `REFUSED <file>: <key>` and the row to
+  record, and the run exits 1 (it always exited 0 before). A refused list key still loses what the template
+  removes: an allow list keeps only the items both sides share, so switching to the read-only set drops
+  `Write`/`Edit` at once and only the added `Read` waits; a `disallowedTools` list gains its new denials at once.
+  If an allow list would be left empty, the whole key is refused, since an empty list can mean every tool. `--dry-run` checks the clearance without spending it.
+- **Who notices:** an operator who uses `--reconcile-apply` to give agents the runner's `mcpServers` block, to
+  restore `Write`/`Edit` after turning `write_policy` off, or to add `Read` when switching a team to the
+  read-only set; and any script that ignored the command's exit code.
+
+### docs (correction: #616 is not fixed in 1.3.1; it is planned for 1.3.2)
+
+- The [1.3.0] and [1.3.0-rc.1] release notes said the known issue #616 would be fixed in 1.3.1. 1.3.1 shipped with
+  only the fix for a HALT with no usable id, so those two lines now say 1.3.2 here. The released text on `main` and
+  `release/1.3` is unchanged; the v1.3.1 GitHub release notes carry the same correction.
+- Until 1.3.2 the workaround stands: record no PASS on an id with an open HALT, and after a retraction treat rows
+  newer than the HALT as void and record a fresh PASS.
+
+### security (an operator can retire a verify key without revoking what it already signed)
+
+- **Before:** stopping use of an Ed25519 verify key meant either keeping its `.pub.pem`, so anything signed with it
+  later still verified, or removing it, so every relaxing decision, grant, carve-out registry, toolchain group and
+  dev-merge authorization under it failed closed.
+- **Added:** `--retire-verify-key OLD --key-id NEW --team-dir DIR [--retire-include FILE ...]` writes
+  `references/authorized-verify-keys/OLD.retired.json` in the team's store: the sha256 of every signature under `OLD`
+  in the team's decisions log, the project's grants log, carve-out registry, toolchain group and dev-merge
+  authorization, and each `--retire-include` file, each verified under `OLD` against its own document, signed with
+  `NEW`. It runs the same pre-key checks as the other signers (agent-session refusal, integrity, install location,
+  review digest and confirmation) and verifies the record before writing it.
+- **Enforced at every Ed25519 verify site of a team dir:** a signature under a retired key verifies only when its
+  digest is in the record (in every record, when several retire the same key), so new signing under it is refused
+  too. Keys are matched by their bytes, so the same key under a second file name is retired as well, and a record
+  binds the key in every team dir store of the project. Each record is bound to its project and team dir and is
+  refused anywhere else. The record must be signed by a key that differs by its bytes and is not retired; one signed by the retired key, by an
+  absent or retired signer, edited after signing, malformed or a symbolic link refuses every signature under the key.
+  The retirement date is recorded and reported, not compared. Retirement payloads have their own purpose tag, which
+  the decision minter and verifier refuse.
+- **Not covered:** `~/.config/agentteams/verify-keys/` (MCP-direct and vulnscan grants). Retiring a key there means
+  removing its `.pub.pem`; the README says what that ends.
+- **Retiring a record's signer:** the same run re-signs the records the retired key signed with the new key, keeping
+  their snapshots, so what they kept keeps verifying. A record that lists digests its committed copy does not is
+  refused rather than re-signed. A team dir is refused when another store it reads holds the same key but would not
+  read its record (an outer repository's store, or a `parent_team` store), and the refusal names those stores.
+- **Reported:** `--verify-integrity` prints one line per retired key in every team dir store of the project, and warns
+  when a record lists digests its committed copy does not, when a committed record is missing on disk, and when a
+  record's own `.pub.pem` is missing (report-only).
+- **Who notices:** every Ed25519 verify (decisions, grants, carve-outs, toolchain groups, dev-merge authorizations)
+  now also looks for retirement records in every generated team dir of the project. A project with a symbolic link at
+  a generated team dir path (`.github/agents` linked elsewhere, say) has every such verify refused, naming the path,
+  even with no record anywhere; otherwise a store without a record behaves as before. Code outside agentteams that
+  calls `decision_log._load_verify_key` must now pass the `signature=` it verifies.
+
 ### added (every team receives a script-consolidation reference)
 
 - **New reference:** `references/script-consolidation.reference.md` gives the procedure for reviewing one-off
@@ -571,22 +710,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bumping an action** now takes a reviewed PR: `references/git-procedures.md` section J. Dependabot's weekly
   action PR now waits 14 days after a release (`cooldown`), and is completed by updating the pins file in the same PR.
 
-### security (a HALT with no usable id blocks every gated action; it used to block none)
-
-- A HALT row whose `action_reviewed` is empty, blank or punctuation only names no action, so no gate attributed it and
-  a later PASS cleared the action. It now blocks every gated action (C-2: a HALT the gate reads but cannot attribute
-  must block, never vanish).
-- It is retracted only by a `HALT-RETRACTED` row whose `action_reviewed` is exactly its row handle,
-  `halt-row:<N>:<digest>`, with evidence and authenticated like any retraction. The handle binds the row's number
-  and a digest of its signed fields (date, id, verdict, `conditions_verified`, author, chain link, and every
-  optional signed column the row fills in, such as `scope` or `text_digest`), so a HALT shifted by rows added or
-  removed before it blocks again. Free-text `conditions` and `evidence` are covered only through `text_digest`.
-- The gate's refusal names the handle as the HALT's id, so `vulnscan halts` prints a retraction that works.
-- **On upgrade:** a log holding such a row refuses every gated action, the scheduled vulnerability remediation
-  included, until the row is reviewed. `--verify-integrity` and `--migrate-decision-log --dry-run` list each one
-  with its handle.
-- Free-text HALT matching is unchanged: such a HALT blocks the actions whose id appears in it as a whole token.
-
 ### security (two warnings: Codex sealed results, and a Goose exclusive egress that reaches Ollama)
 
 - **Codex:** with `write_policy: "orchestrator-only"`, a Codex render now warns that sealed results are not
@@ -607,6 +730,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including one whose derived class, printed four lines below, was `non-relaxing`. It now reads "non-relaxing" for
   such a row. An indeterminate row still reads "constraint-relaxing", because every gate treats it as relaxing.
 - Nothing about what is signed, refused or confirmed changes.
+
+## [1.3.1] - 2026-11-25
+
+### release notes
+
+agentteams 1.3.1 backports one security fix from `dev` to the 1.3 line: a HALT with no usable id now blocks every
+gated action (it blocked none through 1.3.0). **Action for existing teams:** run `--verify-integrity` after
+upgrading. A decisions log that holds such a HALT refuses every gated action, the scheduled vulnerability
+remediation included, until the row is reviewed and either retracted by its row handle or left in force. Nothing
+else from `dev` is included.
+
+### security (a HALT with no usable id blocks every gated action; it used to block none)
+
+- A HALT row whose `action_reviewed` is empty, blank or punctuation only names no action, so no gate attributed it and
+  a later PASS cleared the action. It now blocks every gated action (C-2: a HALT the gate reads but cannot attribute
+  must block, never vanish).
+- It is retracted only by a `HALT-RETRACTED` row whose `action_reviewed` is exactly its row handle,
+  `halt-row:<N>:<digest>`, with evidence and authenticated like any retraction. The handle binds the row's number
+  and a digest of its signed fields (date, id, verdict, `conditions_verified`, author, chain link, and every
+  optional signed column the row fills in, such as `scope` or `text_digest`), so a HALT shifted by rows added or
+  removed before it blocks again. Free-text `conditions` and `evidence` are covered only through `text_digest`.
+- The gate's refusal names the handle as the HALT's id, so `vulnscan halts` prints a retraction that works.
+- **On upgrade:** a log holding such a row refuses every gated action, the scheduled vulnerability remediation
+  included, until the row is reviewed. `--verify-integrity` and `--migrate-decision-log --dry-run` list each one
+  with its handle.
+- Free-text HALT matching is unchanged: such a HALT blocks the actions whose id appears in it as a whole token.
 
 ## [1.3.0] - 2026-11-24
 
@@ -629,8 +778,8 @@ rc.2, so the candidates were checked by CI and review only. The full changes are
   `--shrink-policy=allow`. Where a merge prints a stale cross-surface notice (F10), re-render that surface with
   `--update --overwrite` or delete the quoted lines.
 - **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568).
-- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
-  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+- **Known issue (#616), to be fixed in 1.3.2.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.2, record no PASS on an id with an open HALT, and after a retraction treat
   rows newer than the HALT as void and record a fresh PASS.
 
 Install it from its signed tag, and verify the tag before installing.
@@ -699,8 +848,8 @@ stays at v1.2.2 until 1.3.0 is released. The entries below it are everything tha
   `--update --overwrite`, or delete the quoted lines by hand.
 - **Supported from 1.3.0:** the WASM sandbox core is under SemVer (STABILITY.md §7, #568). **Beta:**
   `agentteams.term_index` and `--term-check` (#548), and the WASM streaming session mode (#567).
-- **Known issue (#616), to be fixed in 1.3.1.** A PASS recorded for an action while a HALT on it is open takes effect
-  when that HALT is retracted. Until 1.3.1, record no PASS on an id with an open HALT, and after a retraction treat
+- **Known issue (#616), to be fixed in 1.3.2.** A PASS recorded for an action while a HALT on it is open takes effect
+  when that HALT is retracted. Until 1.3.2, record no PASS on an id with an open HALT, and after a retraction treat
   rows newer than the HALT as void and record a fresh PASS.
 
 Release-candidate soak: v1.3.0 follows once infrastructureManagement reports that every consumer repository rendered

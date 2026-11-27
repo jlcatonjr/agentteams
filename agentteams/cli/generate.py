@@ -388,7 +388,7 @@ def _run_generate_locked(
             print("  ⚠  write_policy orchestrator-only: --update merges the proposal sections and Goose recipe "
                   "extensions (their tool grants follow the template), but never Markdown front matter or Codex TOML "
                   "grants, so those agents keep their old tools (the audit reports each as AR_WRITE_POLICY). "
-                  "Markdown agents (claude, copilot): run --reconcile-front-matter --reconcile-apply. Codex TOML: "
+                  "Markdown agents: --reconcile-front-matter --reconcile-apply (a widening needs a clearance). Codex TOML: "
                   "regenerate them (a fresh build, or --overwrite, which needs a recorded @security clearance).")
 
         from agentteams import drift

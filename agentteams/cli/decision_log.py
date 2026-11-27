@@ -31,6 +31,7 @@ from agentteams.cli.decision_authors import (  # noqa: F401  (re-exported: tests
 from agentteams.cli.decision_lineage import (  # noqa: F401  (re-exported: tests and callers)
     _DERIVES_FROM_FIELD,
     _build_lineage_map,
+    _halt_scan_targets,
     _row_action_id,
     _row_lineage,
     _transitive_ancestors,
@@ -542,19 +543,21 @@ _VERIFY_KEY_STORE_REL = "references/authorized-verify-keys"
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
-def _load_verify_key(output_dir: Path, key_id: str) -> str:
+def _load_verify_key(output_dir: Path, key_id: str, *, signature: str) -> str:
     """Return the PEM of the Ed25519 public verify key named by ``key_id`` (fail-closed).
 
     Args:
         output_dir: The team root.
         key_id: The signed ``key_id`` selecting which public key to verify against.
+        signature: The signature about to be verified (checked against a retired key's snapshot).
 
     Returns:
         The PEM text.
 
     Raises:
         RuntimeError: ``key_id`` is malformed, the key file is missing (the relaxing path is then
-            *unavailable* — the availability gate), or it cannot be read / escapes the store.
+            *unavailable* — the availability gate), or it cannot be read / escapes the store, or
+            the key is retired and ``signature`` is not in its signed snapshot (``key_retirement``).
     """
     if not key_id or not _KEY_ID_RE.match(key_id):
         raise RuntimeError(f"relaxing authorization names a missing/invalid key_id ({key_id!r})")
@@ -567,6 +570,9 @@ def _load_verify_key(output_dir: Path, key_id: str) -> str:
             f"no Ed25519 verify key for key_id {key_id!r} at {_VERIFY_KEY_STORE_REL}/"
             f"{key_id}.pub.pem — the relaxing authorization path is unavailable (fail-closed)."
         )
+    from agentteams.cli.key_retirement import assert_signature_permitted
+
+    assert_signature_permitted(output_dir, key_id, signature)
     try:
         return path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -600,17 +606,17 @@ def _assert_ed25519_sufficient(row: dict[str, str], *, output_dir: Path, action:
             f"operator's Ed25519 signature can authorize this."
         )
     from agentteams.cli.grants import payload_claims_grant_purpose
+    from agentteams.cli.key_retirement import payload_claims_retirement_purpose as _retirement
 
-    if payload_claims_grant_purpose(_decision_signature_values(row)):
-        # PR-E domain separation: the same operator key signs grants, whose payloads begin with
-        # the grant purpose tag. A decision whose payload lies in that domain could be a replayed
-        # grant signature — refuse it (--sign-decision refuses to mint one, too).
-        raise RuntimeError(
-            f"decision authorizing action '{action}' has a payload in the capability-"
-            f"grant signing domain (it begins with the grant purpose tag); refused (fail-closed)."
-        )
-    public_pem = _load_verify_key(output_dir, (row.get("key_id") or "").strip())
+    grant = payload_claims_grant_purpose(_decision_signature_values(row))
+    if grant or _retirement(_decision_signature_values(row)):
+        # PR-E domain separation: the same operator key signs grants and key-retirement records, whose payloads
+        # begin with their purpose tags. A decision payload in either domain could be a replayed signature.
+        raise RuntimeError(f"decision authorizing action '{action}' has a payload in the "
+                           f"{'capability-grant' if grant else 'key-retirement'} signing domain (it begins with "
+                           "that purpose tag); refused (fail-closed).")
     signature = (row.get("signature") or "").strip()
+    public_pem = _load_verify_key(output_dir, (row.get("key_id") or "").strip(), signature=signature)
     try:
         ok = verify_by_scheme(
             SIG_SCHEME_ED25519,
@@ -825,7 +831,7 @@ def _read_decision_rows_locked(log_path: Path, check_log) -> tuple[list[dict[str
 
 def _open_halt_for(
     rows: list[dict[str, str]], target: str, *, output_dir: Path, signing_active: bool,
-    skipped: list[str] | None = None, retracted: list[int] | None = None,
+    skipped: list[str] | None = None, retracted: list[int] | None = None, outcome: dict[int, int | None] | None = None,
 ) -> tuple[int, dict[str, str]] | None:
     """Return the first unretracted HALT that blocks *target* (one with no usable id blocks every target), or None.
 
@@ -834,7 +840,8 @@ def _open_halt_for(
     duplicating the retraction authentication or evidence requirement. A retraction that fails
     authentication or has no evidence retracts nothing and is skipped, its reason appended to *skipped*:
     one unsigned historical row in an append-only signed log must not wedge the scan (rc.12 fix). *retracted*, when given, collects the 0-based index of each
-    accepted retraction that cleared a HALT on *target*.
+    accepted retraction that cleared a HALT on *target*; *outcome* maps each HALT that blocks *target* to the index
+    of the retraction that cleared it, or None while it is open (``open_halts``).
     """
     # (index, row, retraction id, not matched as family). A HALT blocks every action named in its id, and every
     # action when it has no usable id (halt_blocks); unless matched as family it is retracted only by its exact id.
@@ -866,7 +873,11 @@ def _open_halt_for(
             kept = [h for h in open_halts if not ((whole and not h[3]) or h[2] == reviewed.lower())]
             if retracted is not None and len(kept) < len(open_halts):
                 retracted.append(index)
+            if outcome is not None:
+                outcome.update({h[0]: index for h in open_halts if h not in kept})
             open_halts = kept
+    if outcome is not None:
+        outcome.update({h[0]: None for h in open_halts})
     return (open_halts[0][0], open_halts[0][1]) if open_halts else None
 
 
@@ -908,17 +919,8 @@ def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
     _assert_decision_chain_intact(rows, fieldnames)
     signing_active = _decision_signing_active(fieldnames)
 
-    targets: list[tuple[str, bool]] = [(action, False)]  # (id, is_ancestor)
-    if _DERIVES_FROM_FIELD in {c.strip() for c in fieldnames}:
-        try:
-            ancestors = _transitive_ancestors(action, _build_lineage_map(rows))
-        except RuntimeError as exc:
-            raise RuntimeError(
-                f"lineage traversal for action '{action}' failed closed: {exc}"
-            ) from exc
-        targets.extend((ancestor, True) for ancestor in sorted(ancestors))
-
-    for target, is_ancestor in targets:
+    for position, target in enumerate(_halt_scan_targets(action, rows, fieldnames)):   # the action, then ancestors
+        is_ancestor = position > 0
         skipped: list[str] = []
         offending = _open_halt_for(
             rows, target, output_dir=output_dir, signing_active=signing_active, skipped=skipped
