@@ -273,7 +273,7 @@ def release_problem(*, repo_url: str, base_branch: str, head_ref: str, head_sha:
             low = p.casefold()
             name = low.rsplit("/", 1)[-1]
             top = low.split("/", 1)[0]
-            new_root_module = "/" not in low and low.endswith(".py") and low not in base_top
+            new_root_module = "/" not in low and low.endswith((".py", ".pyc", ".so", ".pyd")) and low not in base_top
             new_root_package = ("/" in low and top not in base_top
                                 and git(["cat-file", "-e", f"refs/r/head:{p.split('/', 1)[0]}/__init__.py"], d).returncode == 0)
             if (low in pinned or low in fixed or low.endswith((".lock", ".pth")) or low in locks
