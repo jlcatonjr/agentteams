@@ -131,6 +131,7 @@ def test_release_commits_are_refused(origin, files, why):
     ("src/evil.pth", "import os\n"),                     # start-up hooks run at every interpreter start
     ("lib/sitecustomize.py", "print(1)\n"),
     ("shadow.py", "x = 1\n"),                            # a new top-level module could shadow an import
+    ("shadow.so", "binary\n"),                           # so could a compiled one
 ])
 def test_pins_and_enforcement_code_are_refused(origin, rel, text):
     sha = _pr(origin, "pin", **{rel.replace("/", "__"): text})
