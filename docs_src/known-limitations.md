@@ -160,6 +160,17 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Workaround:** record the HALT on the exact id the gate checks, as well as on the short id.
 - **Status:** the fix is on `dev` and is not on the 1.3 line.
 
+### Every 1.3 release: a HALT recorded after a sandbox relaxation is registered does not end it (fixed on `dev`)
+
+- **What (agentteams 1.3.0 to 1.3.3):** a standing sandbox relaxation, meaning one with an active entry in the
+  exception registry or the pre-governance carve-out, carries over to each later render without the HALT checks
+  that a new relaxation gets. A HALT recorded on the sandbox action or its family after the relaxation was
+  registered therefore does not stop it.
+- **Who:** teams that hold a standing sandbox relaxation and record a HALT to stop it.
+- **Workaround:** a HALT alone does not end a standing relaxation on these releases. Turn the sandbox back on in
+  the brief and render again, or retire the relaxation's entry in `references/exception-registry.json`.
+- **Status:** the fix is on `dev` and is not on the 1.3 line.
+
 ### Through 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.1)
 
 - **What (agentteams ≤ 1.3.0):** a HALT row whose `action_reviewed` was empty, blank or punctuation only matched no
