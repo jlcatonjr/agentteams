@@ -2344,8 +2344,8 @@ python -m agentteams.ref_branch [REPO] --show PATH
 A read-only module CLI for the first steps of a script review: which scripts exist, and which are copies.
 
 ```
-python -m agentteams.script_census inventory ROOT [ROOT ...] [--ext LIST] [--max-bytes N]
-python -m agentteams.script_census mark-copies [--repo DIR] [--max-bytes N] [--snapshot-marker NAME] < inventory.csv
+python -m agentteams.script_census inventory ROOT [ROOT ...] [OPTIONS] > inventory.csv
+python -m agentteams.script_census mark-copies [OPTIONS] < inventory.csv
 ```
 
 - `inventory` writes one CSV row per script to stdout: `path, size, lines, sha256, ext, root`. What it leaves
@@ -2355,7 +2355,7 @@ python -m agentteams.script_census mark-copies [--repo DIR] [--max-bytes N] [--s
 - A symbolic link below a root is never followed or read, a root that is a link is refused, and git is never
   run inside a scanned folder.
 - Exit status: 0 when the table was written, 2 for a request that cannot be carried out.
-- API: [`script_census`](api-reference/script-census.md).
+- Options and API: [`script_census`](api-reference/script-census.md).
 
 ## Plan Step Helper
 
