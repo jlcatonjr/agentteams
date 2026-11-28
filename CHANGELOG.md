@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (a `devops-bloat` agent for teams that manage pull requests, and a counts-only gate catch ledger; beta)
+
+- **New agent template:** `devops-bloat` judges whether each process gate (an audit, a clearance, a review, a
+  required artifact) earns what it costs. It is advisory, holds `read` and `search` only, and returns a findings table
+  for the operator. It may not recommend below a stated floor: the Constitutional Core, the constraint-relaxing rule,
+  the closing conflict audit, the `@security` review triggers, scanning, destructive-action clearance, signed releases,
+  and its own tier classification (it may say a path is tiered too low, never that a tier should be lowered).
+- **Who gets it:** teams whose brief sets `pr_management: true` or opts into `github-read` / `github-write`, the same
+  trigger as `pr-manager` and `pr-notifier`. **An existing team with that trigger gains the agent and
+  `references/devops-bloat.reference.md` on its next `--update`.** On Copilot, the orchestrator's widened `agents:`
+  list is held as a proposal until `--reconcile-front-matter --reconcile-apply`. Teams without the trigger are unchanged.
+- **New beta module:** `python -m agentteams.gate_catch_ledger` derives, from the logs a team already keeps, how
+  often each gate fired and how often it caught something. Only `@security` has a usable denominator; the report says
+  so for every other gate instead of implying a rate. It emits counts only, never a log cell, and writes nothing unless
+  given `--output`. A repository with more than one team needs `--framework` or `--team-dir`.
+- **No rule or gate changes.** Other agents' text changes only by the new roster entry (the domain-agent list, and
+  on Copilot the orchestrator's `agents:` proposal). The agent is not a step any plan must pass, and nothing it
+  reports exempts a change from a required audit.
+
 ## [1.3.2] - 2026-11-27
 
 ### release notes
