@@ -6,6 +6,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-27
+
+### release notes
+
+agentteams 1.3.2 hardens the integration-branch merge gate on the 1.3 line (`agentteams --merge-pr`, #649). It now
+refuses, so the operator merges them instead, a pull request that carries release history or a version change, moves
+a pin or a dependency, touches packaging, start-up hooks or compiled code, or changes or shadows the gate's own
+integrity-pinned code. `--merge-pr` runs through a dedicated entry point that loads only pinned modules. **Action for
+existing teams:** reinstall agentteams, so the `agentteams` command uses the new entry point, and pass `--team-id` to
+`--merge-pr`; `python -m agentteams.cli.merge_pr_main` and `python build_team.py --merge-pr` now refuse. No merge
+authorization has been signed on any 1.3 release; nothing else from `dev` is included.
+
+### security (`--merge-pr` refuses release mechanics, pin moves and gate-code changes; D1, D3, D5)
+
+- **What was wrong:** the integration-branch merge gate checked a pull request's paths only. With a signed
+  authorization it would have merged, without the prompt, a forward merge of `main` or a release line into the
+  integration branch, a version bump, a `toolchain.lock` pin move, and a change to the gate's own modules. Those
+  modules are integrity-pinned, but a stale manifest only printed a warning, so the change could reach CI green.
+- **Now `--merge-pr` refuses, before the PASS is spent and again at merge time:**
+  - a pull request that carries a commit reachable from `main`, a `release/*` branch or a `v*` tag, or a commit
+    with the same patch as a release-only commit (a rebased or cherry-picked release). The check fetches those refs
+    from the remote into a temporary repository; any fetch or read error refuses;
+  - any change to `pyproject.toml` (its version, scripts, dependencies, packaging and tool tables all decide what is
+    installed or tested), to `capability_hints.LAST_RELEASE_TAG`, or a new release heading in `CHANGELOG.md`
+    (`## [X.Y.Z]` or `## [vX.Y.Z]`);
+  - a change to a `*.lock` file, a lockfile the base's workflows name, a file holding `NAME=owner/repo@<sha>` pin
+    lines at the base or the head (removing or deleting a pin counts), any module the base's integrity manifest
+    pins, `agentteams/capability_hints.py`, a packaging input (`setup.py`, `setup.cfg`, `MANIFEST.in`), an
+    interpreter start-up hook (`*.pth`, `sitecustomize.py`, `usercustomize.py`), a new top-level module or package,
+    a requirements or constraints file anywhere, a file the workflows pass to `pip -r`/`-c`, a package beside a
+    module the route may load (it would shadow it at import), or any added or changed `.so`, `.pyd`, `.pyc` or
+    `.pyo` file or anything under a `__pycache__/` directory. Paths are compared casefolded.
+- **`agentteams --merge-pr` now runs through its own entry point.** The `agentteams` console script
+  (`agentteams.cli.entry`) sends a `--merge-pr` invocation to `agentteams.cli.merge_pr_main` before the CLI and
+  render pipeline load, so only the gate's integrity-pinned modules run before the gate. Two tests check that tree,
+  from the source and in a fresh interpreter. The installed console script is the only supported route:
+  `python build_team.py --merge-pr` and `python -m agentteams.cli.merge_pr_main` refuse. The route requires
+  `--team-id` and reads the brief through a pinned reader, so it never loads the render pipeline or fleet discovery.
+  A test merges a pull request end to end through the entry point.
+- **A tripwire, not a control.** Before the PASS is spent and before `gh pr merge`, the route also refuses if any
+  `agentteams` module it has loaded is not in the integrity manifest's module list. It compares names, trusts each
+  module's `__file__`, skips modules without one and checks no hashes, so it catches an accidental unpinned import;
+  hostile code already in the install is stopped by the pins and the refusals above, not by this check.
+- A stale integrity manifest now fails the test suite instead of printing a warning.
+- **Accepted residue (operator ruling, 2026-11-26):** a forward merge squashed into one commit, or with each commit
+  edited, has no matching patch. It is refused when it brings a version change or a release heading, which a `.0`
+  forward merge does; one that brings neither is not detected mechanically.
+- **Known limits (accepted residue):** `pytest.ini`, `tox.ini` and an existing `conftest.py` are not sensitive
+  (they can deselect tests, which CI then does not run); a workflow's `pip -r "$VAR"` is not resolved; a new
+  top-level namespace package without an `__init__.py` is not refused; a bracketless `## v1.3.2` heading is not a
+  release heading; `--description` is accepted on the route but unused; the patch-id comparison refuses a pull
+  request whose patches are not valid UTF-8 (it fails closed).
+- These are refusals only: an ordinary feature or fix pull request still merges unprompted.
+
 ## [1.3.1] - 2026-11-25
 
 ### release notes

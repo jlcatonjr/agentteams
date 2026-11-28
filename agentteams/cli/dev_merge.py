@@ -548,8 +548,72 @@ def _gather(gh: GhRunner, repo: str, number: int) -> tuple[str, dict, dict, list
     return default_branch, pull, view, _required_checks(gh, repo, number), files, runs
 
 
+#: The one unpinned module the --merge-pr route may load: it changes at every release (LAST_RELEASE_TAG), and
+#: dev_merge_release refuses every change to it in an unprompted merge.
+UNPINNED_ALLOWED: frozenset[str] = frozenset({"agentteams/capability_hints.py"})
+
+
+def unpinned_loaded() -> str | None:
+    """Why this process may not merge unprompted: an ``agentteams`` module it has loaded is not integrity-pinned.
+
+    The unprompted route runs through :mod:`agentteams.cli.merge_pr_main` and should load only pinned modules; any
+    other module that ran (a lazy import, a stray dependency) could have changed the gate. Checked just before the
+    PASS is spent and again just before ``gh pr merge``.
+
+    Returns:
+        A one-line reason naming up to five such modules, or None.
+    """
+    from agentteams.integrity import ENFORCEMENT_MODULES
+
+    root = Path(__file__).resolve().parents[2]   # the directory that holds the `agentteams` package
+    bad: list[str] = []
+    for name, module in list(sys.modules.items()):
+        if name != "agentteams" and not name.startswith("agentteams."):
+            continue
+        origin = getattr(module, "__file__", None)
+        if not origin:
+            continue
+        try:
+            rel = Path(origin).resolve().relative_to(root).as_posix()
+        except ValueError:
+            bad.append(origin)
+            continue
+        if rel not in ENFORCEMENT_MODULES and rel not in UNPINNED_ALLOWED:
+            bad.append(rel)
+    if bad:
+        return f"this process has loaded module(s) that are not integrity-pinned: {', '.join(sorted(bad)[:5])}"
+    return None
+
+
+#: A release-mechanics checker: (repo, branch, number, head sha, files) to a reason or None; raises on an error.
+ReleaseChecker = Callable[[str, str, int, str, list[str]], "str | None"]
+
+
+def release_check(repo: str, branch: str, number: int, head_sha: str, files: list[str]) -> str | None:
+    """The 1.3.2 release-mechanics refusals (:mod:`agentteams.cli.dev_merge_release`) for pull request *number*.
+
+    Args:
+        repo: ``owner/name``.
+        branch: The integration branch.
+        number: The pull-request number.
+        head_sha: The checked head.
+        files: Every path the pull request changes.
+
+    Returns:
+        A reason, or None.
+
+    Raises:
+        dev_merge_release.ReleaseCheckError: A check could not be completed.
+    """
+    from agentteams.cli import dev_merge_release as dmr
+
+    return dmr.release_problem(repo_url=f"https://github.com/{repo}.git", base_branch=branch,
+                               head_ref=f"refs/pull/{number}/head", head_sha=head_sha, files=files)
+
+
 def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: int, integration_branch: str | None,
-             halt_dirs: tuple[Path, ...] = (), origin: str | None = None, gh: GhRunner | None = None) -> int:
+             halt_dirs: tuple[Path, ...] = (), origin: str | None = None, gh: GhRunner | None = None,
+             release: ReleaseChecker | None = None, loaded: Callable[[], str | None] | None = None) -> int:
     """``agentteams --merge-pr N``: merge pull request *N* into the integration branch without the gate's prompt.
 
     Args:
@@ -561,14 +625,20 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
         halt_dirs: Every team dir whose HALTs bind.
         origin: This checkout's ``owner/name`` (default: the git origin).
         gh: The ``gh`` runner (default :func:`run_gh`).
+        release: The release-mechanics checker (default :func:`release_check`; tests pass a stub).
+        loaded: The loaded-module guard (default :func:`unpinned_loaded`; in-process tests, which load the whole
+            package, pass a stub; ``tests/test_merge_pr_entry_tree.py`` runs the real one through the entry point).
 
     Returns:
         0 merged; 2 a condition does not hold (ask the operator: the ordinary prompted path); 1 an error, or an alarm
         after a merge whose result does not check out.
     """
+    from agentteams.cli import dev_merge_release as dmr
     from agentteams.cli import security_gate
 
     gh = gh or run_gh
+    release = release or release_check
+    loaded = loaded or unpinned_loaded
 
     def refuse(why: str) -> int:
         print(f"Not merged: {why}. Ask the operator (a direct `gh pr merge` goes through the gate's prompt).",
@@ -599,7 +669,15 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
     if problem:
         return refuse(f"pull request #{number} does not qualify: {problem}")
     head_sha = str(pull["head"]["sha"]).lower()
+    try:   # D1/D3/D5: release mechanics, pin moves and enforcement code stay with the operator (fails closed)
+        problem = release(repo, branch, number, head_sha, files)
+    except (dmr.ReleaseCheckError, OSError, subprocess.SubprocessError, ValueError) as exc:   # fail closed
+        return refuse(f"pull request #{number} could not be checked for release mechanics ({exc})")
+    if problem:
+        return refuse(f"pull request #{number} does not qualify: {problem}")
     merge_action = merge_action_id(repo, number, head_sha)
+    if (why := loaded()) is not None:
+        return refuse(why)
     allowed, why = security_gate.check_clearance(governance_dir, action=merge_action)
     if not allowed:
         return refuse(f"no usable @security PASS for {merge_action} ({why})")
@@ -621,6 +699,14 @@ def merge_pr(project_root: Path, governance_dir: Path, *, team_id: str, number: 
                       runs=again_runs)
     if late:
         return refuse(f"at merge time pull request #{number} no longer qualifies: {late} (the PASS is spent)")
+    try:
+        late = release(repo, branch, number, head_sha, again_files)
+    except (dmr.ReleaseCheckError, OSError, subprocess.SubprocessError, ValueError) as exc:   # fail closed
+        return refuse(f"at merge time the release-mechanics check could not be completed ({exc}) (the PASS is spent)")
+    if late:
+        return refuse(f"at merge time pull request #{number} no longer qualifies: {late} (the PASS is spent)")
+    if (why := loaded()) is not None:
+        return refuse(f"{why} (the PASS is spent)")
     argv = ["pr", "merge", str(number), "-R", repo, "--merge", "--match-head-commit", head_sha]
     if set(argv) & set(FORBIDDEN_MERGE_FLAGS):  # never reached: the argv above is fixed; kept as a tripwire
         print("Error: a forbidden merge flag reached the merge command.", file=sys.stderr)
