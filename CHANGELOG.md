@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.3-rc.1] - 2026-11-27
+
+### release notes
+
+agentteams 1.3.3-rc.1 is a release candidate on the 1.3 line that carries one feature from `dev`: the `devops-bloat`
+agent template, its method reference and the `agentteams.gate_catch_ledger` module (cherry-picked from `526128fe`,
+`1c7c4f08` and `9ad79700`). **This is an exception to the backport policy, made by the maintainer.** A patch line
+normally takes only security, correctness and documentation fixes, and `STABILITY.md` classes a new template, a new
+documented module and a schema addition as a minor release. As a release candidate it sits outside the SemVer
+contract; whether the final 1.3.3 keeps the feature is decided at that release. **Who is affected:** a team whose
+brief sets `pr_management: true` or opts into `github-read` / `github-write` gains one advisory agent holding `read`
+and `search` only, and `references/devops-bloat.reference.md`, on its next `--update`. There is no separate switch:
+the only way to avoid it is not to trigger the PR agents. It applies only on upgrading to this tag: a team pinned to
+`v1.3.2` or earlier is unaffected, and staying on `v1.3.2` is the way to opt out. To check a team, look in its brief
+for `pr_management`, or for `github-read` / `github-write` under `mcp_catalog`. Nothing else from `dev` is included.
+
 ### added (a `devops-bloat` agent for teams that manage pull requests, and a counts-only gate catch ledger; beta)
 
 - **New agent template:** `devops-bloat` judges whether each process gate (an audit, a clearance, a review, a
