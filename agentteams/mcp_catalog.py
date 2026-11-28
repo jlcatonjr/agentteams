@@ -34,7 +34,7 @@ from typing import Any
 CATALOG_DIR = Path(__file__).resolve().parent / "templates" / "mcp"
 #: Keys that exist only in the catalogue and are stripped before an entry reaches the manifest.
 CATALOG_KEYS = ("catalog_default", "role_scope", "pin")
-#: Catalogue ids that bring the PR agents (``pr-manager``, ``pr-notifier``) into the roster.
+#: Catalogue ids that bring the PR agents (``pr-manager``, ``pr-notifier``, ``devops-bloat``) into the roster.
 GITHUB_IDS = frozenset({"github-read", "github-write"})
 #: ``role_scope`` group tokens, resolved against the manifest (a token is never itself an agent slug).
 ROLE_GROUPS = {"@workstream-experts": "workstream_expert_slugs"}
@@ -96,7 +96,7 @@ def wants_pr_agents(description: dict[str, Any]) -> bool:
         description: The project brief.
 
     Returns:
-        Whether ``pr-manager`` and ``pr-notifier`` join the roster.
+        Whether ``pr-manager``, ``pr-notifier`` and ``devops-bloat`` join the roster.
     """
     opted = description.get("mcp_catalog") or []
     return description.get("pr_management") is True or (

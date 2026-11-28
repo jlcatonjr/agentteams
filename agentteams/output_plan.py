@@ -378,6 +378,16 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Process-bloat method (only with the devops-bloat agent, which joins the roster with the PR agents):
+    # tiers, admission test, gate-retention test, the floor; backed by agentteams.gate_catch_ledger.
+    if "devops-bloat" in archetypes:
+        files.append({
+            "path": "references/devops-bloat.reference.md",
+            "template": f"{agents_dir}devops-bloat.reference.template.md",
+            "type": "reference",
+            "component_slug": None,
+        })
+
     if "retrieval-integrator" in archetypes:
         files.append({
             "path": "references/retrieval-integration.reference.md",
