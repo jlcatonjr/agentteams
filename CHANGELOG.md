@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`script_census classify` and `fragments`: families and repeated fragments, by the repository's rules)
+
+- **Two more commands** on `python -m agentteams.script_census`, both reading an inventory on stdin:
+  - `classify` adds a `family` column. The first family rule that matches a script's path, its text, or both
+    names the family; a script no rule matches is `unclassified`.
+  - `fragments` writes `path<TAB>fragment`, one row for each fragment rule found in a script.
+- **The rules are the repository's.** They live in `references/script-census.json` (or the agent directory's
+  `references/`), or the file `--config` names, and are checked against a bundled schema
+  (`agentteams/schemas/script-census-config.schema.json`). No family or fragment rule ships with the tool.
+- **A slow pattern is stopped.** Python's `re` has no time limit, so all matching runs in one worker process
+  that is stopped after `--timeout` seconds (default 60). The refusal names the rule and the script.
+- `inventory` and `mark-copies` accept `--config` too: `inventory` then walks the configured `roots` when no
+  `ROOT` is named, and `mark-copies` adds the configured `snapshot_markers`. `inventory` with neither a `ROOT`
+  nor configured roots exits 2, where it was an argument error before.
+- The configuration file is read without following a symbolic link, and one larger than 1,000,000 bytes is
+  refused.
+- New module `agentteams/script_census_rules.py` (`find_config`, `load_config`, `classify`, `fragments`), and
+  public `script_census.read_row` and `read_regular`. `mark_copies` is unchanged in behaviour.
+- Shared, not copied: `api_impact.AGENT_DIRS` (the agent-directory order `ledger_dir` already used) and
+  `handoff_payloads.worker_mp_context` (was the private `_validation_mp_context`).
+- Slice 2 of the script-consolidation plan. The recurrence check (Slice 3) is not built.
+
 ### added (`script_census`: an inventory of scripts, and which of them are copies)
 
 - **New:** `python -m agentteams.script_census inventory ROOT…` writes one CSV row per script to stdout

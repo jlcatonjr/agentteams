@@ -123,6 +123,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`plan_priority`](plan-priority.md) | Expected-net-benefit ordering of plan items (severity, breadth, cost, confidence) |
 | [`ref_branch`](ref-branch.md) | The default-branch ref: read files from it, and report how far behind and how recently fetched a checkout is |
 | [`script_census`](script-census.md) | Scripts under one or more folders: an inventory with every omission counted, and which files are copies |
+| [`script_census_rules`](script-census-rules.md) | Families and repeated fragments among inventoried scripts, by rules the repository writes; slow patterns are stopped |
 | [`doc_overlap`](doc-overlap.md) | Repeated passages across Markdown files: detect, move to a docs-site snippet, and hold a baseline |
 | [`sandbox_handoff`](sandbox-handoff.md) | Operator handoff scripts: the reviewable `.sh` plus hash-checked command a sandboxed agent gives the operator for work the sandbox refuses |
 | [`feature_inventory`](feature-inventory.md) | Generated inventory of the shipped feature surface |

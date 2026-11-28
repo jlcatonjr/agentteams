@@ -201,7 +201,8 @@ category, an `impactful` property and `summary()`.
 
 ### `ledger_dir(repo: Path) -> Path`
 
-Where review records live.
+Where review records live. The repository root's `references/` when it exists; otherwise the first of `AGENT_DIRS`
+(`.github/agents`, `.claude/agents`, `agents`) that has a `references/` folder.
 
 ### `resolve_base(repo: Path) -> str | None`
 

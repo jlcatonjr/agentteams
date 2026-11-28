@@ -14,7 +14,9 @@ root that is itself a link is refused. git is asked only about the one repositor
 top is, and what it tracks. It is never run inside a nested checkout, and the blob ids of scanned
 files are computed here in Python.
 
-Classification, usage ranking and fleet-wide runs are not part of this module.
+``classify`` and ``fragments`` take the same inventory and apply rules the repository supplies; they
+live in :mod:`agentteams.script_census_rules`. Usage ranking and fleet-wide runs are not part of this
+module.
 """
 
 from __future__ import annotations
@@ -63,11 +65,19 @@ class CensusError(ValueError):
     """A request that cannot be carried out: a root that is not a directory, or input that is not an inventory."""
 
 
-def _read_regular(path: str, max_bytes: int) -> bytes | None:
+def read_regular(path: str, max_bytes: int) -> bytes | None:
     """The bytes of *path* when it is a regular file opened without following a link; otherwise ``None``.
 
     ``None`` also when the file is larger than *max_bytes* or cannot be read. At most ``max_bytes + 1``
-    bytes are read, so a file that grows after it is opened cannot be read without bound.
+    bytes are read, so a file that grows after it is opened cannot be read without bound. A FIFO or a
+    device is not opened for reading: the open does not block, and anything but a regular file is refused.
+
+    Args:
+        path: The file.
+        max_bytes: A larger file is not returned.
+
+    Returns:
+        The bytes, or ``None``.
     """
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0)
     try:
@@ -84,6 +94,41 @@ def _read_regular(path: str, max_bytes: int) -> bytes | None:
         return None
     finally:
         os.close(fd)
+
+
+def _row_target(row: dict[str, str]) -> tuple[str, PurePosixPath]:
+    """The file an inventory row names, as ``(joined path, path below the root)``.
+
+    Raises:
+        CensusError: The row lacks ``path`` or ``root``, or ``path`` is absolute or has a ``..`` component.
+    """
+    if "path" not in row or "root" not in row:
+        raise CensusError("a row has no 'path' or 'root' column: the input is not an inventory")
+    rel = PurePosixPath(row["path"])
+    if not rel.parts or rel.is_absolute() or ".." in rel.parts or os.path.isabs(row["path"]):
+        raise CensusError(f"path {row['path']!r} is not a relative path below its root")
+    return os.path.join(row["root"], *rel.parts), rel
+
+
+def read_row(row: dict[str, str], max_bytes: int = MAX_BYTES) -> bytes | None:
+    """The bytes of the script an inventory row names, or ``None`` when it cannot be read below its root.
+
+    The row is text from stdin, so it is not trusted: the file is read only when it is a regular
+    file that really lies below the row's ``root`` (no symbolic link stands in the way).
+
+    Args:
+        row: An inventory row (at least ``path`` and ``root``).
+        max_bytes: A larger file is not read.
+
+    Returns:
+        The bytes, or ``None`` when the file is gone, too large, or reached through a link.
+
+    Raises:
+        CensusError: The row lacks ``path`` or ``root``, or ``path`` is absolute or has a ``..`` component.
+    """
+    full, rel = _row_target(row)
+    inside = os.path.realpath(full) == os.path.join(os.path.realpath(row["root"]), *rel.parts)
+    return read_regular(full, max_bytes) if inside else None  # not inside: a link stands in the way
 
 
 def inventory(roots: Sequence[Path | str], *, extensions: Iterable[str] | None = None,
@@ -151,7 +196,7 @@ def inventory(roots: Sequence[Path | str], *, extensions: Iterable[str] | None =
                 except OSError:
                     pruned["unreadable"] += 1
                     continue
-                data = _read_regular(full, max_bytes)
+                data = read_regular(full, max_bytes)
                 if data is None:
                     pruned["unreadable"] += 1
                     continue
@@ -257,19 +302,13 @@ def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
     hex_length = len(next(iter(blobs))) if blobs else 40
     out: list[dict[str, str]] = []
     for row in rows:
-        if "path" not in row or "root" not in row:
-            raise CensusError("a row has no 'path' or 'root' column: the input is not an inventory")
-        rel = PurePosixPath(row["path"])
-        if not rel.parts or rel.is_absolute() or ".." in rel.parts or os.path.isabs(row["path"]):
-            raise CensusError(f"path {row['path']!r} is not a relative path below its root")
-        full = os.path.join(row["root"], *rel.parts)
+        full, rel = _row_target(row)
         above = () if os.path.isabs(row["root"]) else Path(os.path.normpath(row["root"])).parts
         parts = (*above, *rel.parts[:-1])
         if any(fnmatch.fnmatchcase(part, marker) for part in parts for marker in snapshot_markers):
             kind = "snapshot"
         else:
-            inside = os.path.realpath(full) == os.path.join(os.path.realpath(row["root"]), *rel.parts)
-            data = _read_regular(full, max_bytes) if inside else None  # not inside: a link stands in the way
+            data = read_row(row, max_bytes)
             if data is None:
                 kind = "missing"
             else:
@@ -281,8 +320,9 @@ def mark_copies(rows: Iterable[dict[str, str]], *, repo: Path | str = ".",
     return out
 
 
-def _write_csv(rows: Iterable[dict[str, str]], columns: Sequence[str]) -> None:
-    writer = csv.DictWriter(sys.stdout, fieldnames=list(columns), lineterminator="\n", extrasaction="ignore")
+def _write_csv(rows: Iterable[dict[str, str]], columns: Sequence[str], *, delimiter: str = ",") -> None:
+    writer = csv.DictWriter(sys.stdout, fieldnames=list(columns), lineterminator="\n", extrasaction="ignore",
+                            delimiter=delimiter)
     writer.writeheader()
     writer.writerows(rows)
 
@@ -294,17 +334,21 @@ def main(argv: list[str] | None = None) -> int:
         argv: Arguments, or ``None`` for ``sys.argv[1:]``.
 
     Returns:
-        0 when the table was written; 2 for a request that cannot be carried out.
+        0 when the table was written; 2 for a request that cannot be carried out, which includes
+        pattern matching that did not finish in time.
 
     Raises:
         Nothing. Refusals are printed to stderr and returned as exit status 2.
     """
+    from agentteams import script_census_rules as rules  # imported here: the rules module imports this one
+
     parser = argparse.ArgumentParser(
         prog="python -m agentteams.script_census",
-        description="Inventory the scripts under directories, and mark which are copies. Read-only; CSV on stdout.")
+        description="Inventory the scripts under directories, mark which are copies, and apply the repository's "
+                    "family and fragment rules. Read-only; a table on stdout.")
     sub = parser.add_subparsers(dest="command", required=True)
     inv = sub.add_parser("inventory", help="one CSV row per script under each ROOT; what is left out is counted on stderr")
-    inv.add_argument("roots", nargs="+", metavar="ROOT", help="directory to walk")
+    inv.add_argument("roots", nargs="*", metavar="ROOT", help="directory to walk (default: the configuration's roots)")
     inv.add_argument("--ext", metavar="LIST", help="comma-separated extensions that count as scripts (default: a built-in set)")
     inv.add_argument("--max-bytes", type=int, default=MAX_BYTES, metavar="N", help=f"leave out larger files (default {MAX_BYTES})")
     mark = sub.add_parser("mark-copies", help="read an inventory on stdin and add copy_kind")
@@ -313,17 +357,33 @@ def main(argv: list[str] | None = None) -> int:
                       help=f"the limit the inventory was made with (default {MAX_BYTES}); a larger file is 'missing'")
     mark.add_argument("--snapshot-marker", action="append", default=[], metavar="NAME",
                       help="another folder-name pattern that marks a snapshot (repeatable)")
+    cls = sub.add_parser("classify", help="read an inventory on stdin and add family, by the first matching family rule")
+    frag = sub.add_parser("fragments", help="read an inventory on stdin and write path<TAB>fragment for each fragment rule found")
+    for cmd in (cls, frag):
+        cmd.add_argument("--max-bytes", type=int, default=MAX_BYTES, metavar="N",
+                         help=f"the limit the inventory was made with (default {MAX_BYTES}); a larger file is not read")
+        cmd.add_argument("--timeout", type=float, default=None, metavar="SECONDS",
+                         help=f"stop all pattern matching after this long (default {rules.MATCH_TIMEOUT:g})")
+    for cmd in (inv, mark, cls, frag):
+        cmd.add_argument("--config", metavar="FILE",
+                         help="the rules file (default for classify and fragments: references/script-census.json, "
+                              "then the agent directory's references/)")
     args = parser.parse_args(argv)
     try:
+        needs_config = args.command in ("classify", "fragments")
+        config = rules.load_config(args.config) if (args.config or needs_config) else {}
         if args.command == "inventory":
+            roots = args.roots or list(config.get("roots", []))
+            if not roots:
+                raise CensusError("no ROOT given, and no configuration with roots (--config FILE)")
             extensions = None
             if args.ext is not None:
                 extensions = [e if e.startswith(".") else f".{e}" for e in (p.strip() for p in args.ext.split(",")) if e]
                 if not extensions:
                     raise CensusError("--ext names no extension")
-            rows, pruned = inventory(args.roots, extensions=extensions, max_bytes=args.max_bytes)
+            rows, pruned = inventory(roots, extensions=extensions, max_bytes=args.max_bytes)
             _write_csv(rows, INVENTORY_COLUMNS)
-            print(f"# {len(rows)} script(s) under {len(args.roots)} root(s)", file=sys.stderr)
+            print(f"# {len(rows)} script(s) under {len(roots)} root(s)", file=sys.stderr)
             for reason in sorted(pruned):
                 print(f"# left out, {reason}: {pruned[reason]}", file=sys.stderr)
             return 0
@@ -331,7 +391,24 @@ def main(argv: list[str] | None = None) -> int:
         header = list(reader.fieldnames or [])
         if "path" not in header or "root" not in header:
             raise CensusError("stdin is not an inventory: it has no 'path' and 'root' columns")
-        marked = mark_copies(reader, repo=args.repo, snapshot_markers=(*SNAPSHOT_MARKERS, *args.snapshot_marker),
+        if needs_config:
+            timeout = args.timeout if args.timeout is not None else rules.MATCH_TIMEOUT
+            if args.command == "classify":
+                classified, unreadable = rules.classify(reader, config, max_bytes=args.max_bytes, timeout=timeout)
+                _write_csv(classified, [*(c for c in header if c != "family"), "family"])
+                tally = Counter(r["family"] for r in classified)
+                for family in sorted(tally):
+                    print(f"# {family}: {tally[family]}", file=sys.stderr)
+            else:
+                found, unreadable = rules.fragments(reader, config, max_bytes=args.max_bytes, timeout=timeout)
+                _write_csv(found, rules.FRAGMENT_COLUMNS, delimiter="\t")
+                tally = Counter(r["fragment"] for r in found)
+                for fragment in sorted(tally):
+                    print(f"# {fragment}: {tally[fragment]} script(s)", file=sys.stderr)
+            print(f"# could not be read: {unreadable}", file=sys.stderr)
+            return 0
+        marked = mark_copies(reader, repo=args.repo,
+                             snapshot_markers=(*SNAPSHOT_MARKERS, *config.get("snapshot_markers", []), *args.snapshot_marker),
                              max_bytes=args.max_bytes)
         _write_csv(marked, [*(c for c in header if c != "copy_kind"), "copy_kind"])
         counts = Counter(r["copy_kind"] for r in marked)
@@ -344,7 +421,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 __all__ = ["COPY_KINDS", "CensusError", "GIT_TIMEOUT", "INVENTORY_COLUMNS", "MAX_BYTES", "PRUNE_DIR_NAMES",
-           "SCRIPT_EXTENSIONS", "SNAPSHOT_MARKERS", "inventory", "main", "mark_copies", "tracked_blobs"]
+           "SCRIPT_EXTENSIONS", "SNAPSHOT_MARKERS", "inventory", "main", "mark_copies", "read_regular", "read_row",
+           "tracked_blobs"]
 
 if __name__ == "__main__":
     sys.exit(main())

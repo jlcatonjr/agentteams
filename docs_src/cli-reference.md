@@ -2341,11 +2341,14 @@ python -m agentteams.ref_branch [REPO] --show PATH
 
 ## Script Census Helper
 
-A read-only module CLI for the first steps of a script review: which scripts exist, and which are copies.
+A read-only module CLI for the first steps of a script review: which scripts exist, which are copies,
+which family each belongs to, and which fragments recur.
 
 ```
-python -m agentteams.script_census inventory ROOT [ROOT ...] [OPTIONS] > inventory.csv
+python -m agentteams.script_census inventory [ROOT ...] [OPTIONS] > inventory.csv
 python -m agentteams.script_census mark-copies [OPTIONS] < inventory.csv
+python -m agentteams.script_census classify [OPTIONS] < inventory.csv
+python -m agentteams.script_census fragments [OPTIONS] < inventory.csv
 ```
 
 - `inventory` writes one CSV row per script to stdout: `path, size, lines, sha256, ext, root`. What it leaves
@@ -2354,8 +2357,11 @@ python -m agentteams.script_census mark-copies [OPTIONS] < inventory.csv
   `missing`.
 - A symbolic link below a root is never followed or read, a root that is a link is refused, and git is never
   run inside a scanned folder.
+- `classify` adds `family` and `fragments` writes `path<TAB>fragment`, both by rules in the repository's
+  `references/script-census.json`. No rule ships with the tool, and a pattern that runs too long is stopped.
 - Exit status: 0 when the table was written, 2 for a request that cannot be carried out.
-- Options and API: [`script_census`](api-reference/script-census.md).
+- Options and API: [`script_census`](api-reference/script-census.md) and
+  [`script_census_rules`](api-reference/script-census-rules.md).
 
 ## Plan Step Helper
 
