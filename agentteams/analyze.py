@@ -375,7 +375,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
 
     mcp_catalog_opt_ins, mcp_catalog_excludes = mcp_catalog.selection(description)
     if mcp_catalog.wants_pr_agents(description):
-        archetypes = list(archetypes) + [a for a in ("pr-manager", "pr-notifier") if a not in archetypes]
+        archetypes = [*archetypes, *(a for a in ("pr-manager", "pr-notifier", "devops-bloat") if a not in archetypes)]
 
     # A research-type project with no research capability declared is the single most common way
     # this framework ships a literature-review team that cannot look anything up: measured

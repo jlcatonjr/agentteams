@@ -6,6 +6,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-28
+
+### release notes
+
+agentteams 1.3.3 is v1.3.3-rc.1 with no further change. **The final keeps the backported feature**, the
+`devops-bloat` agent template, its method reference and the beta `agentteams.gate_catch_ledger` module, by the
+maintainer's decision. This is the exception to the backport policy stated in [1.3.3-rc.1]: a patch line normally
+takes only security, correctness and documentation fixes. The candidate was signed and published as a GitHub
+prerelease (`v1.3.3-rc.1`, 2026-11-28) but not soaked: no consumer installed it, so it was checked by CI and review
+only. The full change is in the [1.3.3-rc.1] section below; in short:
+
+- **Who is affected:** a team whose brief sets `pr_management: true`, or opts into `github-read` / `github-write`
+  under `mcp_catalog`, gains the advisory `devops-bloat` agent (`read` and `search` only) and
+  `references/devops-bloat.reference.md` on its next `--update`. On Copilot, the orchestrator's widened `agents:`
+  list is held as a proposal until `--reconcile-front-matter --reconcile-apply`. Other teams are unchanged.
+- **Opting out:** stay on `v1.3.2`. There is no separate switch.
+- **Unchanged:** no rule or gate changes; no new or required brief keys; no new console script. `devops-bloat` and
+  `agentteams.gate_catch_ledger` are beta (`STABILITY.md`).
+
+Install it from its signed tag, and verify the tag before installing.
+
+## [1.3.3-rc.1] - 2026-11-27
+
+### release notes
+
+agentteams 1.3.3-rc.1 is a release candidate on the 1.3 line that carries one feature from `dev`: the `devops-bloat`
+agent template, its method reference and the `agentteams.gate_catch_ledger` module (cherry-picked from `526128fe`,
+`1c7c4f08` and `9ad79700`). **This is an exception to the backport policy, made by the maintainer.** A patch line
+normally takes only security, correctness and documentation fixes, and `STABILITY.md` classes a new template, a new
+documented module and a schema addition as a minor release. As a release candidate it sits outside the SemVer
+contract; whether the final 1.3.3 keeps the feature is decided at that release. **Who is affected:** a team whose
+brief sets `pr_management: true` or opts into `github-read` / `github-write` gains one advisory agent holding `read`
+and `search` only, and `references/devops-bloat.reference.md`, on its next `--update`. There is no separate switch:
+the only way to avoid it is not to trigger the PR agents. It applies only on upgrading to this tag: a team pinned to
+`v1.3.2` or earlier is unaffected, and staying on `v1.3.2` is the way to opt out. To check a team, look in its brief
+for `pr_management`, or for `github-read` / `github-write` under `mcp_catalog`. Nothing else from `dev` is included.
+
+### added (a `devops-bloat` agent for teams that manage pull requests, and a counts-only gate catch ledger; beta)
+
+- **New agent template:** `devops-bloat` judges whether each process gate (an audit, a clearance, a review, a
+  required artifact) earns what it costs. It is advisory, holds `read` and `search` only, and returns a findings table
+  for the operator. It may not recommend below a stated floor: the Constitutional Core, the constraint-relaxing rule,
+  the closing conflict audit, the `@security` review triggers, scanning, destructive-action clearance, signed releases,
+  and its own tier classification (it may say a path is tiered too low, never that a tier should be lowered).
+- **Who gets it:** teams whose brief sets `pr_management: true` or opts into `github-read` / `github-write`, the same
+  trigger as `pr-manager` and `pr-notifier`. **An existing team with that trigger gains the agent and
+  `references/devops-bloat.reference.md` on its next `--update`.** On Copilot, the orchestrator's widened `agents:`
+  list is held as a proposal until `--reconcile-front-matter --reconcile-apply`. Teams without the trigger are unchanged.
+- **New beta module:** `python -m agentteams.gate_catch_ledger` derives, from the logs a team already keeps, how
+  often each gate fired and how often it caught something. Only `@security` has a usable denominator; the report says
+  so for every other gate instead of implying a rate. It emits counts only, never a log cell, and writes nothing unless
+  given `--output`. A repository with more than one team needs `--framework` or `--team-dir`.
+- **No rule or gate changes.** Other agents' text changes only by the new roster entry (the domain-agent list, and
+  on Copilot the orchestrator's `agents:` proposal). The agent is not a step any plan must pass, and nothing it
+  reports exempts a change from a required audit.
+
 ## [1.3.2] - 2026-11-27
 
 ### release notes

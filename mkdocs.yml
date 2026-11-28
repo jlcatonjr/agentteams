@@ -243,6 +243,7 @@ nav:
               - launcher_lineage: api-reference/launcher-lineage.md
               - redteam: api-reference/redteam.md
               - session_scan: api-reference/session_scan.md
+              - gate_catch_ledger: api-reference/gate-catch-ledger.md
               - audit: api-reference/audit.md
               - integrity: api-reference/integrity.md
               - gate_policy: api-reference/gate-policy.md
