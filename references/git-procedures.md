@@ -656,3 +656,28 @@ cannot read branch protection (no admin rights): hand that step to the operator.
 `--repo owner/name` overrides the repository read from the checkout. Set `GH` to choose the `gh` binary. Writes to a
 branch-protection or ruleset endpoint, and `--apply`, prompt through the constitutional gate where hooks run.
 
+
+---
+
+## J. `--merge-pr` Runs Only from the Pinned Install (operator ruling D10, 2026-11-28)
+
+The signed `.agentteams/dev-merge-authorization.json` lets `agentteams --merge-pr N` merge a pull request into
+`dev` without the gate's prompt (`references/integration-branch.reference.md`). Its parent decision row,
+`integration-branch-merges-2026-11`, sits in the shared checkout's gitignored governance log, so the authorization
+verifies only there. Agents run `--merge-pr` only as exactly this command, which uses the root-owned agentteams
+1.3.2 install at `/opt/agentteams-signer/venv-v1.3.2-pyorg`:
+
+```bash
+env -i HOME="$HOME" PATH=/opt/homebrew/bin:/usr/bin:/bin /opt/agentteams-signer/venv-v1.3.2-pyorg/bin/agentteams --merge-pr N --team-id agentteamsmodule --output "$HOME/githubrepositories/agentteams/.github/agents"
+```
+
+To check the authorization, use the same command with `--verify-dev-merge-authorization` in place of `--merge-pr N`.
+The project root is the team dir's parent project, so the command works from any directory.
+
+- Never through `python -m`, never from another install (an editable install or a worktree checkout included), and
+  never with any `PYTHON*` variable set.
+- **Why:** older agentteams copies on this machine also accept the signed file, but without the 1.3.2 refusals. The
+  file carries no minimum version until 1.4.0, so the install that runs it is the only safeguard.
+- The install's path and version change only by an operator-merged edit of this section, never by substituting a
+  newer install informally.
+- This binds cooperative agents only. It does not stop a hostile process.
