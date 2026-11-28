@@ -6,11 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### docs (known limitations: two gate gaps fixed on `dev` are still present on the 1.3 line)
+## [1.3.3] - 2026-11-28
 
-- `docs_src/known-limitations.md` now says that, in every 1.3 release so far (1.3.0 to 1.3.2, and 1.3.3-rc.1), a
-  clearance recorded while a HALT is open takes effect once that HALT is retracted (#616), and a HALT on a short id
-  does not block a longer id under it at most gates (#636). Each entry gives a workaround. Both fixes are on `dev` and have not been backported.
+### release notes
+
+agentteams 1.3.3 is v1.3.3-rc.1 with no further change. **The final keeps the backported feature**, the
+`devops-bloat` agent template, its method reference and the beta `agentteams.gate_catch_ledger` module, by the
+maintainer's decision. This is the exception to the backport policy stated in [1.3.3-rc.1]: a patch line normally
+takes only security, correctness and documentation fixes. The candidate was not tagged or soaked; it was checked by
+CI and review only. The full change is in the [1.3.3-rc.1] section below; in short:
+
+- **Who is affected:** a team whose brief sets `pr_management: true`, or opts into `github-read` / `github-write`
+  under `mcp_catalog`, gains the advisory `devops-bloat` agent (`read` and `search` only) and
+  `references/devops-bloat.reference.md` on its next `--update`. On Copilot, the orchestrator's widened `agents:`
+  list is held as a proposal until `--reconcile-front-matter --reconcile-apply`. Other teams are unchanged.
+- **Opting out:** stay on `v1.3.2`. There is no separate switch.
+- **Unchanged:** no rule or gate changes; no new or required brief keys; no new console script. `devops-bloat` and
+  `agentteams.gate_catch_ledger` are beta (`STABILITY.md`).
+- **Known gate gaps, now documented:** two gate gaps that are fixed on `dev` are present in every 1.3 release,
+  this one included (#616 and #636). `docs_src/known-limitations.md` describes each and gives a workaround.
+
+Install it from its signed tag, and verify the tag before installing.
+
+### docs (known limitations: two gate gaps fixed on `dev` are present in every 1.3 release)
+
+- `docs_src/known-limitations.md` now says that, in every 1.3 release (1.3.0 to 1.3.3), a clearance recorded while a
+  HALT is open takes effect once that HALT is retracted (#616), and a HALT on a short id does not block a longer id
+  under it at most gates (#636). Each entry gives a workaround. Both fixes are on `dev` and have not been backported.
 - This corrects earlier release notes, which said #616 would be fixed in 1.3.1. No code changes.
 
 ## [1.3.3-rc.1] - 2026-11-27
