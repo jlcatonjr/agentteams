@@ -106,6 +106,16 @@ The function first runs `_assert_bounded_schema` to reject schemas deeper than `
 
 ---
 
+### `worker_mp_context()`
+
+> *Source: `agentteams/handoff_payloads.py`*
+
+The `multiprocessing` context the package's bounded workers start in: `fork` where the platform has it, otherwise `spawn`. `fork` does not re-run the caller's `__main__`. Used by `validate` here and by pattern matching in [`script_census_rules`](script-census-rules.md). Use it only for a worker that takes no inherited lock, does bounded work and exits.
+
+**Returns:** a `multiprocessing` context.
+
+---
+
 ### `audit_handoff_chain(steps, *, today=None)`
 
 > *Source: `agentteams/handoff_payloads.py`*

@@ -19,6 +19,7 @@ that the caller stops after a wall-clock limit; the refusal names the rule and t
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import time
@@ -27,8 +28,9 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from agentteams.handoff_payloads import _validation_mp_context as _mp_context
-from agentteams.script_census import MAX_BYTES, CensusError, read_row
+from agentteams.api_impact import AGENT_DIRS
+from agentteams.handoff_payloads import worker_mp_context
+from agentteams.script_census import MAX_BYTES, CensusError, read_regular, read_row
 
 #: File name of the configuration, looked for under ``references/``.
 CONFIG_NAME: str = "script-census.json"
@@ -38,22 +40,26 @@ MATCH_TIMEOUT: float = 60.0
 UNCLASSIFIED: str = "unclassified"
 #: The columns ``fragments`` writes.
 FRAGMENT_COLUMNS: tuple[str, ...] = ("path", "fragment")
+#: A configuration file larger than this is refused.
+MAX_CONFIG_BYTES: int = 1_000_000
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "script-census-config.schema.json"
-_AGENT_DIRS: tuple[str, ...] = (".github/agents", ".claude/agents", "agents")
 
 
 def find_config(repo: Path | str = ".") -> Path | None:
-    """Where the configuration is, by the lookup ``api_impact.ledger_dir`` uses for its ledger.
+    """Where the configuration is, in the order ``api_impact.ledger_dir`` looks for its ledger.
 
     Args:
-        repo: Repository root.
+        repo: The directory to look in: the repository root.
 
     Returns:
         ``references/script-census.json`` at the root when it exists, else the same name under the
         first agent directory's ``references/`` that has it, else ``None``.
+
+    Raises:
+        Nothing.
     """
     root = Path(repo)
-    for base in ("", *_AGENT_DIRS):
+    for base in ("", *AGENT_DIRS):
         candidate = root / base / "references" / CONFIG_NAME
         if candidate.is_file():
             return candidate
@@ -65,22 +71,28 @@ def load_config(path: Path | str | None = None, *, repo: Path | str = ".") -> di
 
     Args:
         path: The file, or ``None`` to use :func:`find_config`.
-        repo: Repository root for the lookup when *path* is ``None``.
+        repo: The directory :func:`find_config` looks in when *path* is ``None`` (default: the
+            current directory).
 
     Returns:
         The configuration. Every pattern in it compiles.
 
     Raises:
-        CensusError: No file is found, it is not JSON, it does not match the schema, a pattern does
-            not compile, or ``jsonschema`` is not installed.
+        CensusError: No file is found; it is a symbolic link, not a regular file, or larger than
+            :data:`MAX_CONFIG_BYTES`; it is not JSON; it does not match the schema; a pattern does
+            not compile; or ``jsonschema`` is not installed.
     """
     found = Path(path) if path is not None else find_config(repo)
     if found is None:
         raise CensusError(f"no configuration: pass --config FILE or create references/{CONFIG_NAME}")
+    raw = read_regular(str(found), MAX_CONFIG_BYTES)  # no link followed, no FIFO or device, bounded
+    if raw is None:
+        raise CensusError(f"{found} is not a readable regular file of at most {MAX_CONFIG_BYTES} bytes "
+                          "(a symbolic link is not followed)")
     try:
-        config = json.loads(found.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise CensusError(f"{found} cannot be read as JSON: {exc}") from exc
+        config = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+        raise CensusError(f"{found} cannot be read as JSON: {type(exc).__name__}: {exc}"[:300]) from exc
     try:
         import jsonschema
     except ImportError as exc:  # a declared dependency; absent only in a stripped install
@@ -106,7 +118,7 @@ def _match_worker(rows: list[dict[str, str]], rules: list[dict[str, str]], first
                   conn: Any) -> None:
     """Run in the worker process: match every rule against every row and send what was found.
 
-    Messages: ``("at", row number, rule name)`` before each content match, so the caller can name
+    Messages: ``("at", row number, rule name)`` before each rule is tried, so the caller can name
     what was running when it stopped the worker; ``("row", row number, [names], readable)`` after
     each row; ``("done",)`` at the end; ``("error", text)`` for a row that is refused.
     """
@@ -119,14 +131,11 @@ def _match_worker(rows: list[dict[str, str]], rules: list[dict[str, str]], first
             text = data.decode("utf-8", errors="replace") if data is not None else None
             names: list[str] = []
             for name, path_re, content_re in compiled:
+                conn.send(("at", number, name))
                 if path_re is not None and not path_re.search(row["path"]):
                     continue
-                if content_re is not None:
-                    if text is None:
-                        continue
-                    conn.send(("at", number, name))
-                    if not content_re.search(text):
-                        continue
+                if content_re is not None and (text is None or not content_re.search(text)):
+                    continue
                 names.append(name)
                 if first_only:
                     break
@@ -143,14 +152,14 @@ def _match(rows: list[dict[str, str]], rules: list[dict[str, str]], *, first_onl
     """The rule names matching each row, and how many rows could not be read; stops the worker at *timeout*."""
     if max_bytes < 0:
         raise CensusError("max_bytes must not be negative")
-    if timeout <= 0:
-        raise CensusError("timeout must be greater than zero")
-    ctx = _mp_context()
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise CensusError("timeout must be a number of seconds greater than zero")
+    ctx = worker_mp_context()
     receiver, sender = ctx.Pipe(duplex=False)
     proc = ctx.Process(target=_match_worker, args=(rows, rules, first_only, max_bytes, sender))
     with warnings.catch_warnings():
         # The worker takes no inherited lock and only reads files and matches text; see
-        # handoff_payloads._validation_mp_context for why fork is the start method.
+        # handoff_payloads.worker_mp_context for why fork is the start method.
         warnings.filterwarnings("ignore", message=r".*fork.*may lead to deadlocks in the child.*",
                                 category=DeprecationWarning)
         proc.start()
@@ -196,6 +205,9 @@ def classify(rows: Iterable[dict[str, str]], config: dict[str, Any], *, max_byte
     ``content`` when it is found in the script's text; a rule with both when both are. A script that
     can no longer be read can match only a rule without ``content``.
 
+    The rows are text, so they are not trusted, and ``root`` is whatever the row says: a row can name
+    any regular file the caller can read. What the result reveals about it is which rules matched.
+
     Args:
         rows: Inventory rows (at least ``path`` and ``root``).
         config: A configuration from :func:`load_config`.
@@ -207,8 +219,8 @@ def classify(rows: Iterable[dict[str, str]], config: dict[str, Any], *, max_byte
         :data:`UNCLASSIFIED`, and the number of scripts that could not be read.
 
     Raises:
-        CensusError: A row is not an inventory row, *max_bytes* is negative, *timeout* is not
-            positive, or matching did not finish in *timeout* seconds.
+        CensusError: A row is not an inventory row, *max_bytes* is negative, *timeout* is not a
+            finite number above zero, or matching did not finish in *timeout* seconds.
     """
     listed = [dict(row) for row in rows]
     rules = [{"name": rule["family"], **{k: rule[k] for k in ("path", "content") if k in rule}}
@@ -246,5 +258,5 @@ def fragments(rows: Iterable[dict[str, str]], config: dict[str, Any], *, max_byt
     return out, unreadable
 
 
-__all__ = ["CONFIG_NAME", "FRAGMENT_COLUMNS", "MATCH_TIMEOUT", "UNCLASSIFIED", "classify",
+__all__ = ["CONFIG_NAME", "FRAGMENT_COLUMNS", "MATCH_TIMEOUT", "MAX_CONFIG_BYTES", "UNCLASSIFIED", "classify",
            "find_config", "fragments", "load_config"]

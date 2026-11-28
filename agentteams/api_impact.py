@@ -55,6 +55,7 @@ from agentteams._api_surface import cli_label, cli_term, surface
 
 #: Review ledger, relative to the directory that holds the project's ``references/``.
 LEDGER_SUBDIR = "api-impact-reviews"
+AGENT_DIRS: tuple[str, ...] = (".github/agents", ".claude/agents", "agents")  # order their references/ is tried in
 
 #: Path prefixes whose added/removed/renamed files are not structural API changes.
 STRUCTURAL_EXCLUDES: tuple[str, ...] = (
@@ -298,7 +299,7 @@ def ledger_dir(repo: Path) -> Path:
     root = Path(repo).resolve()
     if (root / "references").is_dir():
         return root / "references" / LEDGER_SUBDIR
-    for agents in (".github/agents", ".claude/agents", "agents"):
+    for agents in AGENT_DIRS:
         if (root / agents / "references").is_dir():
             return root / agents / "references" / LEDGER_SUBDIR
     return root / "references" / LEDGER_SUBDIR

@@ -20,8 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `inventory` and `mark-copies` accept `--config` too: `inventory` then walks the configured `roots` when no
   `ROOT` is named, and `mark-copies` adds the configured `snapshot_markers`. `inventory` with neither a `ROOT`
   nor configured roots exits 2, where it was an argument error before.
-- New module `agentteams/script_census_rules.py` (`find_config`, `load_config`, `classify`, `fragments`) and a
-  public `script_census.read_row`. `mark_copies` is unchanged in behaviour.
+- The configuration file is read without following a symbolic link, and one larger than 1,000,000 bytes is
+  refused.
+- New module `agentteams/script_census_rules.py` (`find_config`, `load_config`, `classify`, `fragments`), and
+  public `script_census.read_row` and `read_regular`. `mark_copies` is unchanged in behaviour.
+- Shared, not copied: `api_impact.AGENT_DIRS` (the agent-directory order `ledger_dir` already used) and
+  `handoff_payloads.worker_mp_context` (was the private `_validation_mp_context`).
 - Slice 2 of the script-consolidation plan. The recurrence check (Slice 3) is not built.
 
 ### added (`script_census`: an inventory of scripts, and which of them are copies)

@@ -5,7 +5,7 @@
 
 - Modules mapped: **508**
 - Packages: **14**
-- Internal import edges: **1935**
+- Internal import edges: **1936**
 - Distinct external dependencies: **11**
 
 ---
@@ -85,7 +85,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.ai_bad_habits` | — | `agentteams.cli.generate` |
 | `agentteams.analyze` | `agentteams._utils`, `agentteams.adopted_agents`, `agentteams.agent_refactor_codes`, `agentteams.analyze_tools`, `agentteams.branch_model`, `agentteams.frameworks.canonical_paths`, `agentteams.github_management`, `agentteams.host_features`, `agentteams.manifest_format`, `agentteams.mcp_catalog`, `agentteams.mcp_detect`, `agentteams.mcp_emit`, `agentteams.output_plan`, `agentteams.recipe_fields`, `agentteams.sandbox_state`, `agentteams.tool_metadata_catalog`, `agentteams.wasm_agent.team`, `agentteams.wasm_policy`, `agentteams.write_policy` | `agentteams.cli.adopt_step`, `agentteams.cli.generate`, `agentteams.cli.toolchain_group_commands`, `agentteams.output_plan`, `agentteams.rank_conformance` |
 | `agentteams.analyze_tools` | `agentteams._utils`, `agentteams.tool_metadata_catalog` | `agentteams.analyze` |
-| `agentteams.api_impact` | `agentteams._api_impact_categories`, `agentteams._api_impact_checklist`, `agentteams._api_impact_range`, `agentteams._api_surface`, `agentteams._hook_python`, `agentteams.ref_branch` | `agentteams._api_impact_categories` |
+| `agentteams.api_impact` | `agentteams._api_impact_categories`, `agentteams._api_impact_checklist`, `agentteams._api_impact_range`, `agentteams._api_surface`, `agentteams._hook_python`, `agentteams.ref_branch` | `agentteams._api_impact_categories`, `agentteams.script_census_rules` |
 | `agentteams.architecture` | `agentteams.backup`, `agentteams.svg_render` | `agentteams.git_hooks` |
 | `agentteams.atomicio` | — | `agentteams._fleet_twin_acks`, `agentteams.backup`, `agentteams.canonical`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.adopt_only`, `agentteams.cli.artifacts`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.exception_registry`, `agentteams.cli.grants`, `agentteams.cli.key_retirement`, `agentteams.cli.key_retirement_verb`, `agentteams.cli.management_directives`, `agentteams.cli.mcp_grant_commands`, `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.cli.signed_ledger`, `agentteams.cli.wasm_agent_commands`, `agentteams.codex_mcp_emit`, `agentteams.confinement`, `agentteams.emit`, `agentteams.enrich._enrich`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.gitdirs`, `agentteams.hooks_emit`, `agentteams.interop_write_policy`, `agentteams.launcher_lineage`, `agentteams.liaison_logs`, `agentteams.mcp_emit`, `agentteams.memory_index_store`, `agentteams.model_providers._stub`, `agentteams.plan_steps_todo`, `agentteams.proposal_runner`, `agentteams.proposal_staging`, `agentteams.proposals`, `agentteams.redteam.findings_ledger`, `agentteams.redteam.stage_markers`, `agentteams.sandbox_handoff`, `agentteams.sandbox_projection`, `agentteams.schedule_emit`, `agentteams.signing_switch`, `agentteams.sync_baseline`, `agentteams.sync_pin`, `agentteams.team_package`, `agentteams.update_lock`, `agentteams.vulnscan.subproc_confine_ssh`, `agentteams.wasm_agent.team`, `agentteams.wasm_agent.transcript` |
 | `agentteams.audit` | `agentteams.audit_agent_contract`, `agentteams.audit_types`, `agentteams.backup`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.living_doc`, `agentteams.placeholder_scan` | `agentteams.cli.generate`, `agentteams.cli.write_policy_warning` |
@@ -406,7 +406,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.scan_operational` | — | `agentteams.scan` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.script_census` | `agentteams.backup`, `agentteams.git_exec`, `agentteams.ingest`, `agentteams.script_census_rules` | `agentteams.script_census_rules` |
-| `agentteams.script_census_rules` | `agentteams.handoff_payloads`, `agentteams.script_census` | `agentteams.script_census` |
+| `agentteams.script_census_rules` | `agentteams.api_impact`, `agentteams.handoff_payloads`, `agentteams.script_census` | `agentteams.script_census` |
 | `agentteams.sealed_result` | — | `agentteams.proposal_runner` |
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
 | `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.security_feed_render`, `agentteams.security_refs_data` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch` |
@@ -5155,6 +5155,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/script_census_rules.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.api_impact",
         "agentteams.handoff_payloads",
         "agentteams.script_census"
       ],
@@ -12436,6 +12437,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.script_census",
       "target": "agentteams.script_census_rules"
+    },
+    {
+      "source": "agentteams.script_census_rules",
+      "target": "agentteams.api_impact"
     },
     {
       "source": "agentteams.script_census_rules",

@@ -17,8 +17,14 @@ No rule ships with the tool.
 - `fragments` writes one `path<TAB>fragment` row for each fragment rule found in a script.
 - Both read an inventory on stdin, are read-only, and write only to stdout and stderr.
 
-**What it never does.** It never reads a file outside the row's root: a row whose path is absolute or
-has a `..` component is refused, and a file now reached through a symbolic link is not read.
+**What it never does.** It never follows a symbolic link: a row whose path is absolute or has a `..`
+component is refused, and a file now reached through a link is not read. The configuration file is
+read the same way, and one larger than 1,000,000 bytes is refused.
+
+**The `root` column is not a fence.** The inventory is text on stdin and `root` is whatever a row
+says, so a hand-made row can name any regular file you can read; what comes back is only which rules
+matched it. Feed these commands an inventory you made, and give relative roots so that no home path
+lands in a saved table.
 
 **Slow patterns are stopped.** The patterns are regular expressions you wrote, and Python's `re` has
 no time limit; a pattern such as `(a+)+$` can run without end. All matching therefore runs in one
@@ -50,8 +56,9 @@ or matching did not finish in time.
 
 ## The configuration file
 
-Without `--config`, `classify` and `fragments` read `references/script-census.json` at the repository
-root, or the same file name under the agent directory's `references/` folder. `inventory` and
+Without `--config`, `classify` and `fragments` read `references/script-census.json` in the current
+directory, or the same file name under the agent directory's `references/` folder there. Run them from
+the repository root. `inventory` and
 `mark-copies` read a configuration only when `--config` names one.
 
 ```json
@@ -103,8 +110,8 @@ The configuration file under `references/` at the root, else under the first age
 ### load_config(path, *, repo)
 
 Reads the file and checks it against the schema; every pattern compiles. Raises `CensusError`
-when no file is found, it is not JSON, it does not match the schema, a pattern does not compile, or
-`jsonschema` is not installed.
+when no file is found, it is a symbolic link or larger than `MAX_CONFIG_BYTES`, it is not JSON, it
+does not match the schema, a pattern does not compile, or `jsonschema` is not installed.
 
 ### classify(rows, config, *, max_bytes, timeout)
 
@@ -118,4 +125,4 @@ order and then rule order. Raises as `classify`.
 
 ### Constants
 
-`CONFIG_NAME`, `MATCH_TIMEOUT`, `UNCLASSIFIED`, `FRAGMENT_COLUMNS`.
+`CONFIG_NAME`, `MATCH_TIMEOUT`, `MAX_CONFIG_BYTES`, `UNCLASSIFIED`, `FRAGMENT_COLUMNS`.

@@ -65,11 +65,19 @@ class CensusError(ValueError):
     """A request that cannot be carried out: a root that is not a directory, or input that is not an inventory."""
 
 
-def _read_regular(path: str, max_bytes: int) -> bytes | None:
+def read_regular(path: str, max_bytes: int) -> bytes | None:
     """The bytes of *path* when it is a regular file opened without following a link; otherwise ``None``.
 
     ``None`` also when the file is larger than *max_bytes* or cannot be read. At most ``max_bytes + 1``
-    bytes are read, so a file that grows after it is opened cannot be read without bound.
+    bytes are read, so a file that grows after it is opened cannot be read without bound. A FIFO or a
+    device is not opened for reading: the open does not block, and anything but a regular file is refused.
+
+    Args:
+        path: The file.
+        max_bytes: A larger file is not returned.
+
+    Returns:
+        The bytes, or ``None``.
     """
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOCTTY", 0)
     try:
@@ -120,7 +128,7 @@ def read_row(row: dict[str, str], max_bytes: int = MAX_BYTES) -> bytes | None:
     """
     full, rel = _row_target(row)
     inside = os.path.realpath(full) == os.path.join(os.path.realpath(row["root"]), *rel.parts)
-    return _read_regular(full, max_bytes) if inside else None  # not inside: a link stands in the way
+    return read_regular(full, max_bytes) if inside else None  # not inside: a link stands in the way
 
 
 def inventory(roots: Sequence[Path | str], *, extensions: Iterable[str] | None = None,
@@ -188,7 +196,7 @@ def inventory(roots: Sequence[Path | str], *, extensions: Iterable[str] | None =
                 except OSError:
                     pruned["unreadable"] += 1
                     continue
-                data = _read_regular(full, max_bytes)
+                data = read_regular(full, max_bytes)
                 if data is None:
                     pruned["unreadable"] += 1
                     continue
@@ -332,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
     Raises:
         Nothing. Refusals are printed to stderr and returned as exit status 2.
     """
+    from agentteams import script_census_rules as rules  # imported here: the rules module imports this one
+
     parser = argparse.ArgumentParser(
         prog="python -m agentteams.script_census",
         description="Inventory the scripts under directories, mark which are copies, and apply the repository's "
@@ -353,15 +363,13 @@ def main(argv: list[str] | None = None) -> int:
         cmd.add_argument("--max-bytes", type=int, default=MAX_BYTES, metavar="N",
                          help=f"the limit the inventory was made with (default {MAX_BYTES}); a larger file is not read")
         cmd.add_argument("--timeout", type=float, default=None, metavar="SECONDS",
-                         help="stop all pattern matching after this long (default 60)")
+                         help=f"stop all pattern matching after this long (default {rules.MATCH_TIMEOUT:g})")
     for cmd in (inv, mark, cls, frag):
         cmd.add_argument("--config", metavar="FILE",
                          help="the rules file (default for classify and fragments: references/script-census.json, "
                               "then the agent directory's references/)")
     args = parser.parse_args(argv)
     try:
-        # Imported here: the rules module imports this one.
-        from agentteams import script_census_rules as rules
         needs_config = args.command in ("classify", "fragments")
         config = rules.load_config(args.config) if (args.config or needs_config) else {}
         if args.command == "inventory":
@@ -386,9 +394,9 @@ def main(argv: list[str] | None = None) -> int:
         if needs_config:
             timeout = args.timeout if args.timeout is not None else rules.MATCH_TIMEOUT
             if args.command == "classify":
-                sorted_rows, unreadable = rules.classify(reader, config, max_bytes=args.max_bytes, timeout=timeout)
-                _write_csv(sorted_rows, [*(c for c in header if c != "family"), "family"])
-                tally = Counter(r["family"] for r in sorted_rows)
+                classified, unreadable = rules.classify(reader, config, max_bytes=args.max_bytes, timeout=timeout)
+                _write_csv(classified, [*(c for c in header if c != "family"), "family"])
+                tally = Counter(r["family"] for r in classified)
                 for family in sorted(tally):
                     print(f"# {family}: {tally[family]}", file=sys.stderr)
             else:
@@ -413,7 +421,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 __all__ = ["COPY_KINDS", "CensusError", "GIT_TIMEOUT", "INVENTORY_COLUMNS", "MAX_BYTES", "PRUNE_DIR_NAMES",
-           "SCRIPT_EXTENSIONS", "SNAPSHOT_MARKERS", "inventory", "main", "mark_copies", "read_row", "tracked_blobs"]
+           "SCRIPT_EXTENSIONS", "SNAPSHOT_MARKERS", "inventory", "main", "mark_copies", "read_regular", "read_row",
+           "tracked_blobs"]
 
 if __name__ == "__main__":
     sys.exit(main())

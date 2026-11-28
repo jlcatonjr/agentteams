@@ -119,13 +119,31 @@ def test_a_row_pointing_outside_its_root_is_refused(repo: Path) -> None:
 def test_a_runaway_pattern_is_stopped_and_named(repo: Path) -> None:
     (repo / "scripts" / "long.py").write_text("a" * 40 + "!\n", encoding="utf-8")
     config = {"fragment_rules": [{"fragment": "runaway", "pattern": r"(a+)+$"}]}
-    with pytest.raises(sc.CensusError, match=r"exceeded 0\.5s while rule 'runaway' was matching 'long\.py'"):
-        rules.fragments(_inventory(), config, timeout=0.5)
+    with pytest.raises(sc.CensusError, match=r"exceeded 2s while rule 'runaway' was matching 'long\.py'"):
+        rules.fragments(_inventory(), config, timeout=2)
+
+
+def test_a_runaway_path_pattern_is_named_too(repo: Path) -> None:
+    rows = [{"path": "a" * 40 + "!.py", "root": "scripts"}]
+    config = {"family_rules": [{"family": "ok", "content": "x"}, {"family": "slow-path", "path": r"(a+)+$"}]}
+    with pytest.raises(sc.CensusError, match=r"exceeded 2s while rule 'slow-path' was matching"):
+        rules.classify(rows, config, timeout=2)
+
+
+def test_a_worker_that_dies_is_reported(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def dies(rows: object, rule_list: object, first_only: object, max_bytes: object, conn: object) -> None:
+        import os
+        os._exit(3)
+
+    monkeypatch.setattr(rules, "_match_worker", dies)
+    with pytest.raises(sc.CensusError, match="stopped without a result"):
+        rules.classify(_inventory(), CONFIG)
 
 
 def test_bad_limits_are_refused(repo: Path) -> None:
-    with pytest.raises(sc.CensusError, match="timeout"):
-        rules.classify(_inventory(), CONFIG, timeout=0)
+    for bad in (0, -1, float("inf"), float("nan")):
+        with pytest.raises(sc.CensusError, match="timeout"):
+            rules.classify(_inventory(), CONFIG, timeout=bad)
     with pytest.raises(sc.CensusError, match="max_bytes"):
         rules.classify(_inventory(), CONFIG, max_bytes=-1)
 
@@ -142,6 +160,29 @@ def test_a_config_the_schema_or_re_rejects_is_refused(repo: Path, change: dict[s
     path.write_text(json.dumps(change), encoding="utf-8")
     with pytest.raises(sc.CensusError, match=message):
         rules.load_config(path)
+
+
+def test_a_config_that_is_a_link_too_large_or_too_deep_is_refused(repo: Path) -> None:
+    real = repo / "references" / rules.CONFIG_NAME
+    link = repo / "link.json"
+    link.symlink_to(real)
+    with pytest.raises(sc.CensusError, match="not a readable regular file"):
+        rules.load_config(link)
+    big = repo / "big.json"
+    big.write_text(json.dumps({"roots": ["x" * 200] * 50}) + " " * rules.MAX_CONFIG_BYTES, encoding="utf-8")
+    with pytest.raises(sc.CensusError, match="not a readable regular file"):
+        rules.load_config(big)
+    deep = repo / "deep.json"
+    deep.write_text("[" * 200_000 + "]" * 200_000, encoding="utf-8")
+    with pytest.raises(sc.CensusError, match="cannot be read as JSON: RecursionError"):
+        rules.load_config(deep)
+
+
+def test_a_missing_jsonschema_is_a_refusal_not_a_traceback(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    monkeypatch.setitem(sys.modules, "jsonschema", None)
+    with pytest.raises(sc.CensusError, match="jsonschema is not installed"):
+        rules.load_config()
 
 
 def test_config_lookup_order_and_absence(repo: Path) -> None:

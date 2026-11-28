@@ -105,6 +105,11 @@ directory, as `inventory` wrote it. The rows are text, so they are not trusted: 
 relative with no `..` component. Raises `CensusError` when a row has no `path` or `root`, a `path`
 is absolute or has a `..` component, or `repo` is not a git repository.
 
+### read_regular(path, max_bytes)
+
+The bytes of a regular file opened without following a link, or `None` when it is a link, a FIFO or
+device, larger than `max_bytes`, or unreadable.
+
 ### read_row(row, max_bytes)
 
 The bytes of the script a row names, or `None` when it cannot be read below its root: it is gone,

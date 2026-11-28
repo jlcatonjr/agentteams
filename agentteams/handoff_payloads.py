@@ -95,8 +95,12 @@ def _assert_bounded_schema(schema: Any, *, max_depth: int = MAX_DEPTH) -> None:
     walk(schema, 0)
 
 
-def _validation_mp_context() -> "multiprocessing.context.BaseContext":
+def worker_mp_context() -> "multiprocessing.context.BaseContext":
     """Pick a start method that does not re-execute the caller's ``__main__``.
+
+    Shared by every bounded worker in the package (``validate`` here, pattern matching in
+    ``script_census_rules``). The argument below holds for any worker that takes no inherited lock,
+    does bounded work and exits; a caller whose worker does more must not use this.
 
     ``spawn`` (macOS/Windows default) and ``forkserver`` both re-import the
     caller's ``__main__`` to bootstrap the child/server; a caller that invokes
@@ -137,12 +141,12 @@ def validate(
     ``_worker`` is an injection seam for tests; production callers must omit it.
     """
     _assert_bounded_schema(schema)
-    ctx = _validation_mp_context()
+    ctx = worker_mp_context()
     queue: multiprocessing.Queue = ctx.Queue()
     target = _worker if _worker is not None else _validate_worker
     proc = ctx.Process(target=target, args=(payload, schema, queue))
     with warnings.catch_warnings():
-        # See _validation_mp_context: fork-of-multithreaded is safe for this
+        # See worker_mp_context: fork-of-multithreaded is safe for this
         # lock-free, short-lived worker; suppress only that specific advisory.
         warnings.filterwarnings(
             "ignore",
