@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 agentteams 1.3.3 is v1.3.3-rc.1 with no further change. **The final keeps the backported feature**, the
 `devops-bloat` agent template, its method reference and the beta `agentteams.gate_catch_ledger` module, by the
 maintainer's decision. This is the exception to the backport policy stated in [1.3.3-rc.1]: a patch line normally
-takes only security, correctness and documentation fixes. The candidate was not tagged or soaked; it was checked by
-CI and review only. The full change is in the [1.3.3-rc.1] section below; in short:
+takes only security, correctness and documentation fixes. The candidate was signed and published as a GitHub
+prerelease (`v1.3.3-rc.1`, 2026-11-28) but not soaked: no consumer installed it, so it was checked by CI and review
+only. The full change is in the [1.3.3-rc.1] section below; in short:
 
 - **Who is affected:** a team whose brief sets `pr_management: true`, or opts into `github-read` / `github-write`
   under `mcp_catalog`, gains the advisory `devops-bloat` agent (`read` and `search` only) and
