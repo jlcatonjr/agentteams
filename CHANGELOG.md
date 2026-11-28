@@ -22,6 +22,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   byte-identical copies of tracked files.
 - **Not included:** classifying scripts into families, a recurrence check, usage ranking, fleet-wide runs.
 
+### changed (memory search finds a document by the words of its file name and title)
+
+- **What changed:** the memory index counts each word of a document's file name and title as a term, and
+  splits a hyphenated or underscored name into its words. Before, the file name was not indexed at all and a
+  slug such as `doc-overlap-mechanism` was one token, so a query for `overlap mechanism` often missed the file.
+- **Measured on this repository's plans, reports and work summaries** (1,231 documents, 300 queries each):
+  a query made of a file's name words ranks that file first in 74% of cases, up from 39%, and in the top five
+  in 94%, up from 67%. Title queries rise from 85% to 92% first. Content queries are unchanged at 89%.
+- **In a query,** a hyphenated word is split only when the index does not know it whole. Splitting every one
+  lowered content queries by four points in the same measurement.
+- **Expect on update:** the index format is `json-bm25-postings-v4`. An existing index is treated as stale and
+  rebuilt on the next refresh; nothing needs doing by hand. Scores differ from before.
+
+### changed (this repository's own memory index covers plans and work summaries)
+
+- **What changed:** the self-build description template no longer excludes `workSummaries` and
+  `references/plans` from the memory index. `references/plans/snapshots-*` stays excluded: those folders hold
+  copies of agent files.
+- **Who it affects:** only builds of this repository itself. Generated teams for other projects are unchanged.
+- **Why it is safe:** both folders are gitignored here, and so is every place the index is written. `@security`
+  reviewed it (conditional pass). Canonical-doc retrieval was unchanged with the larger corpus (8 of 10 first,
+  9 of 10 in the top three, with and without).
+- **Mind:** a snippet returned by `--query-index` can hold an email address or a host name from a work summary.
+  Scan it before copying it into a tracked file or an outbound message.
+
 ### changed (`plan_steps.update_step` rewrites one row; the writers check before they write and refuse an unknown status)
 
 - **`update_step` no longer rewrites the whole table.** It replaces the one row and keeps every other byte, as
