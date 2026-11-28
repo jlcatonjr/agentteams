@@ -2,8 +2,9 @@
 
 Introduced by Cluster C (typed handoffs). Tolerates quoted multi-line cells
 because that is the existing convention in ``tmp/by-week/**/*.steps.csv``.
-:func:`write_steps` / :func:`update_step` (#21, 2026-10-01) write through ``csv.DictWriter``
-with a read-back check, so a hand-written unquoted comma can no longer shift a column.
+:func:`write_steps` (#21, 2026-10-01) writes through ``csv.DictWriter`` and checks the text reads
+back before it replaces the file, so a hand-written unquoted comma can no longer shift a column.
+:func:`update_step` and :func:`set_step` change one row and leave every other byte as it was.
 """
 
 from __future__ import annotations
@@ -21,9 +22,27 @@ from typing import Any
 
 
 def read_steps(path: Path | str) -> list[dict[str, str]]:
-    """Read a plan steps.csv. Returns a list of dicts keyed by header column."""
-    text = Path(path).read_text(encoding="utf-8")
-    reader = csv.DictReader(text.splitlines())
+    """Read a plan steps.csv.
+
+    A quoted cell that spans lines keeps its line breaks. Rows with an empty ``step`` are skipped.
+    A row with more cells than the header raises a warning and loses the extra cells.
+
+    Args:
+        path: The ``.steps.csv`` path.
+
+    Returns:
+        One dict per step, keyed by header column.
+
+    Raises:
+        OSError: The file cannot be read.
+    """
+    with Path(path).open(encoding="utf-8", newline="") as fh:  # newline="": a CRLF inside a cell is kept as written
+        return _parse_steps(fh.read(), path)
+
+
+def _parse_steps(text: str, path: Path | str) -> list[dict[str, str]]:
+    """Parse steps-CSV *text* the way :func:`read_steps` does; *path* only labels the warning."""
+    reader = csv.DictReader(io.StringIO(text, newline=""))  # not splitlines(): that drops a newline inside a quoted cell
     rows: list[dict[str, str]] = []
     for row in reader:
         if not row.get("step"):
@@ -42,59 +61,108 @@ def read_steps(path: Path | str) -> list[dict[str, str]]:
 
 def write_steps(path: Path | str, rows: list[dict[str, str]],
                 fieldnames: list[str] | None = None) -> None:
-    """Write ``rows`` as a steps CSV (quoted as needed) and verify it reads back identically.
+    """Write ``rows`` as a whole steps CSV (quoted as needed), replacing any file at ``path``.
+
+    The text is checked before the file is touched: it must read back as the rows given. The
+    write is a rename, so a refusal or a failure leaves an existing file as it was. A file whose
+    header line ends in CRLF is written with CRLF throughout; a symlink stays a link. To change one step of an
+    existing table use :func:`update_step` or :func:`set_step`, which keep every other row.
 
     Args:
         path: The ``.steps.csv`` path.
         rows: Row dicts keyed by column name.
         fieldnames: Column order (default: the keys of the first row).
 
+    Returns:
+        None.
+
     Raises:
-        ValueError: No rows and no ``fieldnames``, a row has a key outside ``fieldnames``, or the
-            read-back differs.
+        ValueError: No rows and no ``fieldnames``, a row has a key outside ``fieldnames``, a
+            ``status`` outside :data:`KNOWN_STATUSES` (an empty one included), or the text would
+            not read back as the rows given. Nothing is written.
+        OSError: The file cannot be written; ``PermissionError`` when it is read-only.
     """
     if not rows and not fieldnames:
         raise ValueError("write_steps needs rows or explicit fieldnames")
     cols = list(fieldnames or list(rows[0]))
+    target = Path(path).resolve()
+    ending = "\n"
+    if target.is_file():
+        with target.open("rb") as fh:
+            ending = "\r\n" if fh.readline().endswith(b"\r\n") else "\n"
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=cols, lineterminator="\n")
+    writer = csv.DictWriter(buf, fieldnames=cols, lineterminator=ending)
     writer.writeheader()
     for row in rows:
         extra = set(row) - set(cols)
         if extra:
             raise ValueError(f"row {row.get('step')!r} has columns outside the header: {sorted(extra)}")
         writer.writerow({k: row.get(k, "") for k in cols})
-    Path(path).write_text(buf.getvalue(), encoding="utf-8")
-    back = read_steps(path)
     expected = [{k: str(r.get(k, "") or "") for k in cols} for r in rows if r.get("step")]
-    if back != expected:
-        raise ValueError(f"{path}: read-back differs from what was written")
+    if "status" in cols:
+        for row in expected:
+            _check_status(row["status"], row["step"])
+    if _parse_steps(buf.getvalue(), path) != expected:
+        raise ValueError(f"{path}: the table would not read back as the rows given; nothing was written")
+    _replace_text(target, buf.getvalue())
+
+
+def _check_status(value: str, step: str) -> None:
+    """Raise ``ValueError`` when *value* is not a status the tools know (the legacy ``completed`` is accepted)."""
+    if value.strip().lower() not in KNOWN_STATUSES:
+        raise ValueError(f"step {step!r} has status {value!r}, not one of {sorted(STATUSES)} "
+                         "(or the legacy 'completed'); nothing was written")
+
+
+def _replace_text(target: Path, text: str) -> None:
+    """Write *text* to *target* by rename, keeping the mode of a file already there.
+
+    A rename would replace a read-only file, so that case is refused first. Other hard links to
+    the old file keep the old content.
+    """
+    if target.exists() and not os.access(target, os.W_OK):
+        raise PermissionError(f"{target} is read-only")
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        if target.exists():
+            shutil.copymode(target, tmp)
+        os.replace(tmp, target)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def update_step(path: Path | str, step: str, **fields: str) -> None:
-    """Set ``fields`` on one step of an existing steps CSV, preserving every other cell.
+    """Set ``fields`` on one step of an existing steps CSV by rewriting that row only.
+
+    Every other byte of the file is kept: line endings, blank lines, quoting, and rows that are
+    themselves malformed. Any column may be set; a ``status`` must be one of
+    :data:`KNOWN_STATUSES`, which still admits the legacy ``completed`` that :func:`set_step`
+    does not write. Before 1.4.0 this rewrote
+    the whole table, which converted CRLF line endings, dropped cells from rows wider than the
+    header, and set every row that shared the id.
 
     Args:
         path: The ``.steps.csv`` path.
-        step: The ``step`` id to update.
-        **fields: Column values to set (each column must already exist in the header).
+        step: The ``step`` id to update, compared with surrounding spaces ignored. It must name
+            exactly one row.
+        **fields: Column values to set (each column must already exist in the header). With
+            none, the step is looked up and nothing is written.
+
+    Returns:
+        None.
 
     Raises:
-        KeyError: ``step`` is not in the file.
-        ValueError: A field is not a header column, or the read-back differs.
+        KeyError: ``step`` is empty or not in the file.
+        ValueError: A field is not a header column, a ``status`` outside the vocabulary, a
+            duplicated ``step`` id, a header with a repeated column, a target row wider than the header, or a result that does not
+            read back as intended. Nothing is written.
+        OSError: The file cannot be read or written; ``PermissionError`` when it is read-only.
     """
-    text = Path(path).read_text(encoding="utf-8")
-    header = next(csv.reader(text.splitlines()))
-    rows = read_steps(path)
-    unknown = set(fields) - set(header)
-    if unknown:
-        raise ValueError(f"not header columns: {sorted(unknown)}")
-    hits = [r for r in rows if r["step"] == str(step)]
-    if not hits:
-        raise KeyError(step)
-    for row in hits:
-        row.update({k: str(v) for k, v in fields.items()})
-    write_steps(path, rows, header)
+    if "status" in fields:
+        _check_status(str(fields["status"]), str(step))
+    _set_cells(path, step, {k: str(v) for k, v in fields.items()}, unknown="not header columns: {names}")
 
 
 #: The Rule 9 contract: the columns every plan steps CSV carries (``depends_on`` is optional).
@@ -128,9 +196,8 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
     """Set one step's status and/or notes by rewriting that row only.
 
     The command-line form of a step update: it exists so that a session marks a step with one
-    command instead of writing its own CSV-editing script. Unlike :func:`update_step`, which
-    rewrites the whole table, this replaces the physical lines of the one row and leaves every
-    other byte of the file as it was: line endings, blank lines, quoting, and rows that are
+    command instead of writing its own CSV-editing script. It replaces the physical lines of the
+    one row and leaves every other byte of the file as it was: line endings, blank lines, quoting, and rows that are
     themselves malformed. The new text is checked before anything is written, and the write is
     a rename, so a refusal or a failure leaves the file untouched.
 
@@ -146,7 +213,7 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
         The updated row, keyed by header column.
 
     Raises:
-        KeyError: ``step`` is not in the file.
+        KeyError: ``step`` is empty or not in the file.
         ValueError: Nothing to set, both ``note`` and ``append_note`` given, an empty appended
             note, a status outside the vocabulary, a duplicated ``step`` id, a header with a
             repeated or missing column, a target row wider than the header, or a result that
@@ -167,6 +234,20 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
             raise ValueError(f"status {status!r} is not one of {sorted(STATUSES)}{hint}")
         changes["status"] = value
 
+    if note is not None:
+        changes["notes"] = note
+    return _set_cells(path, step, changes, append_note=append_note)
+
+
+def _set_cells(path: Path | str, step: str, changes: dict[str, str], *, append_note: str | None = None,
+               unknown: str | None = None) -> dict[str, str]:
+    """Replace the physical lines of one step's row with *changes* applied; the core of the row writers.
+
+    *append_note* is added after the row's existing ``notes``. *unknown* is the message for a column the
+    header lacks (``{names}`` is filled in); the default names the missing column. Raises as
+    :func:`set_step` documents.
+    """
+    changes = dict(changes)
     target = Path(path).resolve()  # a symlinked table stays a link: the rename replaces what it points to
     with target.open(encoding="utf-8", newline="") as fh:
         text = fh.read()
@@ -176,12 +257,18 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
     header = [c.strip() for c in records[0][2]]
     if len(set(header)) != len(header):
         raise ValueError("the header repeats a column")
-    wanted = ["step", *changes, *(["notes"] if (note is not None or append_note is not None) else [])]
-    missing = [c for c in wanted if c not in header]
+    if "step" not in header:
+        raise ValueError("the table has no 'step' column")
+    wanted = [*changes, *(["notes"] if append_note is not None else [])]
+    missing = [c for c in dict.fromkeys(wanted) if c not in header]
     if missing:
+        if unknown:
+            raise ValueError(unknown.format(names=sorted(missing)))
         raise ValueError(f"the table has no {' or '.join(repr(m) for m in missing)} column")
     step_at = header.index("step")
     key = str(step).strip()
+    if not key:
+        raise KeyError(step)  # a row with no id is not a step: read_steps skips it
     hits = [r for r in records[1:] if len(r[2]) > step_at and r[2][step_at].strip() == key]
     if not hits:
         raise KeyError(step)
@@ -191,9 +278,9 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
     if len(cells) > len(header):
         raise ValueError(f"step {step!r} has more cells than the header (an unquoted comma?); fix the row first")
     cells = cells + [""] * (len(header) - len(cells))
-    if note is not None:
-        changes["notes"] = note
-    elif append_note is not None:
+    if not changes and append_note is None:
+        return dict(zip(header, cells))  # a lookup: the step exists and is unambiguous; nothing to write
+    if append_note is not None:
         existing = cells[header.index("notes")].strip()
         changes["notes"] = f"{existing}; {append_note}" if existing else append_note
     for column, value in changes.items():
@@ -209,14 +296,7 @@ def set_step(path: Path | str, step: str, *, status: str | None = None, note: st
     expected[records.index(hits[0])] = cells
     if [r[2] for r in after] != expected:
         raise ValueError("the updated table does not read back as intended; nothing was written")
-    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
-    try:
-        with tmp.open("w", encoding="utf-8", newline="") as fh:
-            fh.write(new_text)
-        shutil.copymode(target, tmp)
-        os.replace(tmp, target)
-    finally:
-        tmp.unlink(missing_ok=True)
+    _replace_text(target, new_text)
     return dict(zip(header, cells))
 
 
