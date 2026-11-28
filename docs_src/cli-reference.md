@@ -2339,6 +2339,24 @@ python -m agentteams.ref_branch [REPO] --show PATH
 - Exit status: 0 normally, 1 stale or path absent, 2 when no default ref can be resolved.
 - API: [`ref_branch`](api-reference/ref-branch.md).
 
+## Script Census Helper
+
+A read-only module CLI for the first steps of a script review: which scripts exist, and which are copies.
+
+```
+python -m agentteams.script_census inventory ROOT [ROOT ...] [OPTIONS] > inventory.csv
+python -m agentteams.script_census mark-copies [OPTIONS] < inventory.csv
+```
+
+- `inventory` writes one CSV row per script to stdout: `path, size, lines, sha256, ext, root`. What it leaves
+  out is counted on stderr by reason.
+- `mark-copies` reads that CSV on stdin and adds `copy_kind`: `authored`, `snapshot`, `tracked-duplicate` or
+  `missing`.
+- A symbolic link below a root is never followed or read, a root that is a link is refused, and git is never
+  run inside a scanned folder.
+- Exit status: 0 when the table was written, 2 for a request that cannot be carried out.
+- Options and API: [`script_census`](api-reference/script-census.md).
+
 ## Plan Step Helper
 
 A module CLI that checks a plan's `.steps.csv`, or updates one step of it.
