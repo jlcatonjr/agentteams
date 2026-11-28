@@ -1,0 +1,8 @@
+{
+  "patch_id": "7e1c1f6e7c05991a2039af57cd8b9e9dbf9d53ab",
+  "commit": "1c7c4f08cdd2f9cd224fdd3075444ce6b28b8fcb",
+  "subject": "feat(templates): ship devops-bloat to teams that manage pull requests",
+  "impact": "1 modules renamed, 1 symbols added, 1 symbols changed, 3 cli added, 1 schemas changed, 2 structural added, 1 structural removed",
+  "note": "Docs and references updated in the same change: API page docs_src/api-reference/gate-catch-ledger.md (new module, 10 public functions, CLI flags --framework/--team-dir/--security-log), index row, mkdocs nav, CHANGELOG, STABILITY beta note; schema wording for pr_management and mcp_catalog; analyze.md, mcp-catalog.md and the non-orchestrator-mcp reference name the third PR-triggered agent. Reviewed by @code-hygiene, @technical-validator, @security (PASS) and an @adversarial/@conflict-auditor checkpoint. No man page change (no main-parser flag). The earlier commit on this branch (526128fe) is superseded by the later one: its script and root reference moved into the package and the template library.",
+  "recorded_at": "2026-11-27T22:36:51Z"
+}
