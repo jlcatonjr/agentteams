@@ -193,7 +193,7 @@ Since 2026-10-07 agentteams ships a catalogue (`agentteams/templates/mcp/`, API 
     reach a repository outside the project.
 - **`gh pr merge` is routed to the operator** by the constitutional gate where hooks run. `pr-notifier` has no
   shell, and neither PR agent is in `github-write`'s scope.
-- **A GitHub opt-in (or `pr_management: true`) adds the `pr-manager` and `pr-notifier` agents.**
+- **A GitHub opt-in (or `pr_management: true`) adds the `pr-manager`, `pr-notifier` and `devops-bloat` agents.**
 
 ## 6. Giving an agent application-specific capability today
 

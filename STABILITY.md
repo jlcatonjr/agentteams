@@ -49,6 +49,10 @@ The supported import surface is everything documented under
 > HALT rows judged by the gate's own HALT scan. It is shipped and tested, but its signature, the `HaltRow` fields and
 > the rules it applies may change in a minor release. It is not part of the frozen `agentteams.cli` surface.
 
+> **Beta: `agentteams.gate_catch_ledger`**, a read-only, counts-only report of how often each process gate fired and
+> caught something, and the `devops-bloat` agent template that reads it. Shipped and tested, but the functions, the
+> report's keys, the classification rules and the template's text may change in a minor release.
+
 > **Beta: `agentteams.wasm_session`** (issue #567, new in 1.3.0), the WASM streaming session mode and its
 > `python -I -m agentteams.wasm_session` entry point. It is shipped and tested, but its flags, status records
 > (schema `agentteams-wasm-session/1`) and exit codes may change in a minor release. Any such change bumps the schema

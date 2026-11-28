@@ -39,6 +39,7 @@ def test_every_archetype_the_analyzer_can_select_is_known():
 
     selectable = {slug for _, slug in analyze._ARCHETYPE_TRIGGERS} | set(analyze._MODULE_DOC_ARCHETYPES)
     selectable |= {"retrieval-integrator", "research-analyst", "agentteams-updater", "vuln-remediation"}
+    selectable |= {"pr-manager", "pr-notifier", "devops-bloat"}
     assert selectable <= brief_schema.known_archetypes()
 
 

@@ -32,7 +32,7 @@ Credentials are referenced by name only (`GITHUB_PERSONAL_ACCESS_TOKEN`), never 
 | `GITHUB_IDS` | `github-read`, `github-write`: the ids that bring in the PR agents and are withheld under the switch. |
 | `load_catalog() -> dict` | Every entry by `server_id`. Raises `ValueError` for an unreadable file or a `server_id` that does not match the file name. |
 | `selection(description) -> (opt_ins, excludes)` | Validates the brief's `mcp_catalog` and `mcp_catalog_exclude`. Raises `ValueError` for a non-list or an unknown id. |
-| `wants_pr_agents(description) -> bool` | True for `pr_management: true` or a GitHub opt-in; `pr-manager` and `pr-notifier` then join the roster. |
+| `wants_pr_agents(description) -> bool` | True for `pr_management: true` or a GitHub opt-in; `pr-manager`, `pr-notifier` and `devops-bloat` then join the roster. |
 | `expand(manifest, framework_id) -> list[str]` | Adds the selected servers to `manifest["mcp_servers"]` after any declared ones and returns notices. |
 
 ## Expansion rules

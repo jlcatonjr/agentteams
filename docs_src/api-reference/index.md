@@ -54,6 +54,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`env_hygiene`](env-hygiene.md) | `.env` files are gitignored and kept out of Docker build contexts (audit + append-only `--fix`) |
 | [`redteam`](redteam.md) | The `agentteams/redteam/` package — audit internals + corpus coverage/density (F2). The model-scoring + attack-generation *scripts* are in the [Red-Team Model Scoring & Attack Generation](../redteam-model-scoring-guide.md) guide |
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
+| [`gate_catch_ledger`](gate-catch-ledger.md) | Counts-only catch ledger per process gate, derived from a team's existing governance logs (beta) |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
 | [`integrity`](integrity.md) | Hash manifest over the modules that enforce the constitution itself |
 | [`gate_policy`](gate-policy.md) | Project verdict policy for the constitutional gate: ask→deny classes, pinned at render, fail-closed when tampered (#456) |
