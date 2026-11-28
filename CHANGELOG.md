@@ -31,6 +31,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mind:** a snippet returned by `--query-index` can hold an email address or a host name from a work summary.
   Scan it before copying it into a tracked file or an outbound message.
 
+### changed (`plan_steps.update_step` rewrites one row; the writers check before they write and refuse an unknown status)
+
+- **`update_step` no longer rewrites the whole table.** It replaces the one row and keeps every other byte, as
+  `--set` does. Before, an update converted CRLF line endings to LF, dropped cells from any row wider than the
+  header, removed blank lines, and set every row that shared the step id.
+- **Now refused, with nothing written:** a step id that names more than one row, a target row with more cells
+  than the header, and a header that repeats a column. An unknown column and an unknown step are refused as before.
+- **`write_steps` checks the text before it touches the file** and writes by rename. Before, it wrote first and
+  checked after, so a refused table had already replaced the old file. It also keeps CRLF line endings when the
+  file already uses them, and keeps a symlink a symlink.
+- **Smaller changes in `update_step`:** the step id is matched with surrounding spaces ignored, as are header
+  names; an empty id is refused; with no fields it only looks the step up. A read-only file is refused by all
+  three writers. Writing by rename means another hard link to the file keeps the old content.
+- **`read_steps` keeps a line break inside a quoted cell.** Before, the two lines were joined with nothing between.
+- **Breaking for some callers: a status outside the vocabulary is refused at write time.** Reading a table
+  that holds one and passing its rows back to `write_steps` now raises; correct the status first. `write_steps` and `update_step` raise `ValueError`,
+  and write nothing, for a `status` other than `pending`, `in_progress`, `done`, `blocked` or the legacy
+  `completed`; an empty status is refused too. A table without a `status` column is not checked. Of 332 recent
+  step tables, 64 carried some other value.
+- **Checked on real tables:** `update_step` run over copies of 907 step tables from this repository changed one
+  row only in 889 and refused 18 with the file untouched.
+- **The orchestrator names `--set`:** its step-table guidance now gives
+  `python -m agentteams.plan_steps --set PLAN.steps.csv STEP --status done` for marking one step. Expect one
+  changed line in the orchestrator agent on update.
+- **If you call `update_step` to set several rows that share an id,** fix the duplicate id first; that call now
+  raises `ValueError`.
+
 ### added (a `devops-bloat` agent for teams that manage pull requests, and a counts-only gate catch ledger; beta)
 
 - **New agent template:** `devops-bloat` judges whether each process gate (an audit, a clearance, a review, a
@@ -689,8 +716,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `completed` is still read, but not written); a step id that names no row or more than one; a step row with
   more cells than the header; a table that lacks the column being set.
 - **Checked on real tables:** run over copies of 812 step tables from this repository, 794 changed in the one row
-  only and 18 were refused with the file untouched. The whole-table writer (`update_step`) is unchanged; on the
-  same tables it converts CRLF line endings and drops cells from rows wider than the header.
+  only and 18 were refused with the file untouched. At that point the whole-table writer (`update_step`), on
+  the same tables, converted CRLF line endings and dropped cells from rows wider than the header; the `fixed`
+  entry on `update_step` changes that.
 - **Symlinks:** a steps file reached through a symlink stays a symlink; the file it points to is updated.
 - **Tracing:** the workflow tracer counts a `--set` on a steps CSV as a write to it.
 - **Not changed:** the agent templates do not mention the command yet.
