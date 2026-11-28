@@ -134,6 +134,31 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
 - **Tracking:** the same CHANGELOG entry. A `verified:<evidence>` form is not in 1.1; it is planned for a later
   release.
 
+### Every 1.3 release so far: a clearance recorded while a HALT is open takes effect once it is retracted (#616; fixed on `dev`)
+
+- **What (agentteams 1.3.0 to 1.3.2, and 1.3.3-rc.1):** a PASS or CONDITIONAL PASS recorded for an action while a
+  HALT on it is open clears the action as soon as that HALT is retracted. Nobody reviews the older clearance at
+  retraction time. Once the HALT is retracted, the same older row can also register a standing sandbox or S-10
+  exception. A PASS recorded before the HALT does not revive: the HALT is then the newest row.
+- **Who:** teams that retract a HALT and have a clearance for the same action that was recorded while the HALT was
+  open, which can then also register a standing exception.
+- **Workaround:** record no PASS on an id that has an open HALT. After a retraction, treat every earlier clearance
+  for that action as void and record a fresh decision.
+- **Status:** the fix is on `dev` and is not on the 1.3 line. Earlier release notes said it would be fixed in 1.3.1;
+  it was not, and 1.3.2 did not include it either. It reaches a 1.3 release only if it is backported.
+
+### Every 1.3 release so far: a HALT on a short id does not block a longer id under it at most gates (#636; fixed on `dev`)
+
+- **What (agentteams 1.3.0 to 1.3.2, and 1.3.3-rc.1):** a HALT blocks an action only when the action's id is the
+  HALT's id, a leading part of it before a `-`, `_`, `.` or `:` separator, or a run of whole tokens inside it. So a
+  HALT on a short id, for example `server-apply` or `server-apply:remove-path:<host>`, does not stop a PASS on a
+  longer id under it, such as `server-apply:remove-path:<host>:<path>`, from clearing that action. The
+  sandbox-relaxation, S-10 and integration-merge gates are the exception: they also check the bare family id.
+- **Who:** teams whose decisions log holds a HALT on a short id that their own gates' ids extend after a colon (for
+  example `deploy` and `deploy:prod`).
+- **Workaround:** record the HALT on the exact id the gate checks, as well as on the short id.
+- **Status:** the fix is on `dev` and is not on the 1.3 line.
+
 ### Through 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.1)
 
 - **What (agentteams ≤ 1.3.0):** a HALT row whose `action_reviewed` was empty, blank or punctuation only matched no

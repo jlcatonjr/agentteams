@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (known limitations: two gate gaps fixed on `dev` are still present on the 1.3 line)
+
+- `docs_src/known-limitations.md` now says that, in every 1.3 release so far (1.3.0 to 1.3.2, and 1.3.3-rc.1), a
+  clearance recorded while a HALT is open takes effect once that HALT is retracted (#616), and a HALT on a short id
+  does not block a longer id under it at most gates (#636). Each entry gives a workaround. Both fixes are on `dev` and have not been backported.
+- This corrects earlier release notes, which said #616 would be fixed in 1.3.1. No code changes.
+
 ## [1.3.3-rc.1] - 2026-11-27
 
 ### release notes
