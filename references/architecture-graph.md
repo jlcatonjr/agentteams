@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **507**
+- Modules mapped: **508**
 - Packages: **14**
-- Internal import edges: **1932**
+- Internal import edges: **1935**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 216 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.redteam`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 217 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.redteam`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 78 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -296,7 +296,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.graph` | `agentteams.graph_inputs`, `agentteams.svg_render` | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.git_hooks` |
 | `agentteams.graph_inputs` | `agentteams.yaml_frontmatter` | `agentteams.graph` |
 | `agentteams.grok_config_emit` | `agentteams.codex_mcp_emit`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._sandbox_emit`, `agentteams.mcp_emit`, `agentteams.toml_write`, `agentteams.wasm_mcp` | `agentteams.cli.artifacts`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.mcp_catalog` |
-| `agentteams.handoff_payloads` | — | `agentteams.behavioral_drift` |
+| `agentteams.handoff_payloads` | — | `agentteams.behavioral_drift`, `agentteams.script_census_rules` |
 | `agentteams.hooks_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.host_features` | — | `agentteams.analyze`, `agentteams.cli.app`, `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.multi_sync`, `agentteams.wasm_config` |
 | `agentteams.hygiene_rules` | `agentteams.fences`, `agentteams.scan` | `agentteams.doctor`, `agentteams.emit` |
@@ -405,7 +405,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.scan` | `agentteams._scan_public_hashes`, `agentteams.backup`, `agentteams.scan_operational` | `agentteams._fleet_snapshot`, `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.hygiene_rules`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.research.screen`, `agentteams.sandbox_handoff`, `agentteams.vulnscan.publish`, `agentteams.whole_body_migration` |
 | `agentteams.scan_operational` | — | `agentteams.scan` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
-| `agentteams.script_census` | `agentteams.backup`, `agentteams.git_exec`, `agentteams.ingest` | — |
+| `agentteams.script_census` | `agentteams.backup`, `agentteams.git_exec`, `agentteams.ingest`, `agentteams.script_census_rules` | `agentteams.script_census_rules` |
+| `agentteams.script_census_rules` | `agentteams.handoff_payloads`, `agentteams.script_census` | `agentteams.script_census` |
 | `agentteams.sealed_result` | — | `agentteams.proposal_runner` |
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
 | `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.security_feed_render`, `agentteams.security_refs_data` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch` |
@@ -5143,9 +5144,23 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.backup",
         "agentteams.git_exec",
-        "agentteams.ingest"
+        "agentteams.ingest",
+        "agentteams.script_census_rules"
       ],
       "external": [],
+      "repo_local": []
+    },
+    "agentteams.script_census_rules": {
+      "package": "agentteams",
+      "path": "agentteams/script_census_rules.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.handoff_payloads",
+        "agentteams.script_census"
+      ],
+      "external": [
+        "jsonschema"
+      ],
       "repo_local": []
     },
     "agentteams.sealed_result": {
@@ -12417,6 +12432,18 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.script_census",
       "target": "agentteams.ingest"
+    },
+    {
+      "source": "agentteams.script_census",
+      "target": "agentteams.script_census_rules"
+    },
+    {
+      "source": "agentteams.script_census_rules",
+      "target": "agentteams.handoff_payloads"
+    },
+    {
+      "source": "agentteams.script_census_rules",
+      "target": "agentteams.script_census"
     },
     {
       "source": "agentteams.security_refs",

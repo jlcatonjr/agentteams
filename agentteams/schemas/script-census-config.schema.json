@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jlcatonjr/agentteams/schemas/script-census-config.schema.json",
+  "title": "Script census configuration",
+  "description": "Rules a repository supplies to python -m agentteams.script_census. No rule ships with the tool.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "roots": {
+      "description": "Directories the inventory walks when none is named on the command line. Relative to the current directory.",
+      "type": "array",
+      "maxItems": 50,
+      "items": {"type": "string", "minLength": 1, "maxLength": 300}
+    },
+    "snapshot_markers": {
+      "description": "Folder-name patterns (fnmatch) that mark a snapshot, added to the built-in ones.",
+      "type": "array",
+      "maxItems": 50,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    },
+    "family_rules": {
+      "description": "Tried in order; the first rule that matches names the script's family.",
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family"],
+        "anyOf": [{"required": ["path"]}, {"required": ["content"]}],
+        "properties": {
+          "family": {"$ref": "#/$defs/name"},
+          "path": {"$ref": "#/$defs/pattern", "description": "Regular expression searched in the script's path below its root."},
+          "content": {"$ref": "#/$defs/pattern", "description": "Regular expression searched in the script's text, with ^ and $ matching at each line. When path is also given, both must match."}
+        }
+      }
+    },
+    "fragment_rules": {
+      "description": "Every rule whose pattern is found in a script's text reports one fragment for that script.",
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fragment", "pattern"],
+        "properties": {
+          "fragment": {"$ref": "#/$defs/name"},
+          "pattern": {"$ref": "#/$defs/pattern", "description": "Regular expression searched in the script's text, with ^ and $ matching at each line."}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+    "pattern": {"type": "string", "minLength": 1, "maxLength": 500}
+  }
+}

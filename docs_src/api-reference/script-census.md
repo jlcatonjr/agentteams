@@ -26,15 +26,19 @@ it tracks), and the blob ids of scanned files are computed in Python.
 **Mind the `root` column.** A root is written to the CSV exactly as you gave it. Give relative
 roots when the output will be saved in the repository, so that no home path lands in a file.
 
-**Not in this module.** Classifying scripts into families, ranking them by use, and running across
-several repositories.
+**Not in this module.** Sorting scripts into families and finding repeated fragments are in
+[`script_census_rules`](script-census-rules.md), reached through the same command. Ranking scripts by
+use and running across several repositories are not built.
 
 ## Command line
 
 ```
-python -m agentteams.script_census inventory ROOT [ROOT ...] [--ext LIST] [--max-bytes N]
-python -m agentteams.script_census mark-copies [--repo DIR] [--max-bytes N] [--snapshot-marker NAME] < inventory.csv
+python -m agentteams.script_census inventory [ROOT ...] [--ext LIST] [--max-bytes N] [--config FILE]
+python -m agentteams.script_census mark-copies [--repo DIR] [--max-bytes N] [--snapshot-marker NAME] [--config FILE] < inventory.csv
 ```
+
+`--config FILE` names a [configuration](script-census-rules.md#the-configuration-file): `inventory`
+then needs no `ROOT`, and `mark-copies` adds the configured snapshot markers.
 
 The two are meant to be piped:
 
@@ -100,6 +104,12 @@ Returns the rows, in order, each with `copy_kind` set. A relative `root` is read
 directory, as `inventory` wrote it. The rows are text, so they are not trusted: `path` must be
 relative with no `..` component. Raises `CensusError` when a row has no `path` or `root`, a `path`
 is absolute or has a `..` component, or `repo` is not a git repository.
+
+### read_row(row, max_bytes)
+
+The bytes of the script a row names, or `None` when it cannot be read below its root: it is gone,
+too large, or reached through a symbolic link. Raises `CensusError` for a row with no `path` or
+`root`, or a `path` that is absolute or has a `..` component.
 
 ### tracked_blobs(repo)
 

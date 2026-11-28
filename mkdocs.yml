@@ -301,6 +301,7 @@ nav:
               - plan-priority: api-reference/plan-priority.md
               - ref-branch: api-reference/ref-branch.md
               - script-census: api-reference/script-census.md
+              - script-census-rules: api-reference/script-census-rules.md
               - doc-overlap: api-reference/doc-overlap.md
               - sandbox_handoff: api-reference/sandbox-handoff.md
               - feature-inventory: api-reference/feature-inventory.md
