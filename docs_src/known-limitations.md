@@ -168,7 +168,8 @@ An archetype in `selected_archetypes` with no agentteams template is reported as
   registered therefore does not stop it.
 - **Who:** teams that hold a standing sandbox relaxation and record a HALT to stop it.
 - **Workaround:** a HALT alone does not end a standing relaxation on these releases. Turn the sandbox back on in
-  the brief and render again, or retire the relaxation's entry in `references/exception-registry.json`.
+  the brief and render again, or retire the relaxation's entry in `references/exception-registry.json`. A
+  pre-governance relaxation has no registry entry, so only the first applies to it.
 - **Status:** the fix is on `dev` and is not on the 1.3 line.
 
 ### Through 1.3.0: a HALT with no usable id blocked nothing (fixed in 1.3.1)
