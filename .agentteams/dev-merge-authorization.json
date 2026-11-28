@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "scope": "integration-pr-merge",
+  "branch": "dev",
+  "required_checks": [
+    "docs-build",
+    "macos-seatbelt",
+    "template-lineage",
+    "test (macos-latest, 3.11)",
+    "test (macos-latest, 3.12)",
+    "test (ubuntu-26.04, 3.11)",
+    "test (ubuntu-26.04, 3.12)",
+    "ubuntu-26-confinement",
+    "wasm-live"
+  ],
+  "workspaces": [
+    {
+      "repo": "repo:jlcatonjr/agentteams",
+      "team": "team:agentteamsmodule"
+    }
+  ],
+  "purpose": "agentteams-dev-merge-authorization-v1",
+  "sequence": 1,
+  "key_id": "opr-2026-11",
+  "derives_from": "integration-branch-merges-2026-11"
+}

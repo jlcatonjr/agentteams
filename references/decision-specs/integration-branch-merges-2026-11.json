@@ -1,0 +1,15 @@
+{
+ "requesting_agent": "security",
+ "action_reviewed": "integration-branch-merges-2026-11",
+ "verdict": "PASS",
+ "conditions": "Operator rulings 2026-11-26 (2026-W48 request, D1-D6, confirmed by picker): agents may merge non-release pull requests into this repository's integration branch dev through agentteams --merge-pr under the operator-signed .agentteams/dev-merge-authorization.json (D1); patch-release PRs are not covered until the 1.4.0 machinery exists (D2); governance paths (.github/agents/, .github/workflows/, .claude/, .agentteams/ and every governance target) stay operator merges (D3); no dev authorization is signed until the --merge-pr gaps close (D5, shipped in agentteams 1.3.2). Each merge still needs the signed required checks green on the head, a merge commit with --match-head-commit, an @security PASS on dev-merge:<owner/name>:pr-<N>-<head sha>, and no release, version, pin or enforcement-module change (dev_merge_release). A HALT on integration-merge or dev-merge ends it (C-2).",
+ "conditions_verified": "agentteams v1.3.2 tag object beabb1fd06a3478d39c4115e52575ca01a97eba6 peels to 142f9e0c8860e6a27278917c6888888066d4ccd7 (release/1.3), git tag -v Good signature by SHA256:IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM; releases/latest v1.3.2; tag, dispatch and push CI green on 142f9e0c; the 1.3.2 fix is on dev through #650 (merge 98a53e3034289c7ec09dfac0a6b8f880f97bed80); .github/agents decision signing on; opr-2026-11.pub.pem present in .github/agents/references/authorized-verify-keys; no integration-merge or dev-merge row or HALT in this log; brief git_workflow.branch_model integration, integration_branch dev; dev is protected (no deletion, no force push); pull_request CI runs on PRs into dev and reports the nine required checks of main.",
+ "scope": "integration-branch-merges-2026-11",
+ "evidence": "unsigned .agentteams/dev-merge-authorization.json (sequence 1, key opr-2026-11, workspace repo:jlcatonjr/agentteams = team:agentteamsmodule, derives_from integration-branch-merges-2026-11) on branch chore/dev-merge-authorization-phase-a from origin/dev 95b71db3; plan tmp/by-week/2026-W48/merge-gate-d5-1.3.2.plan.md step 6",
+ "author": "operator",
+ "effect_destructive": "false",
+ "effect_cross_repo": "false",
+ "effect_bulk": "false",
+ "date": "2026-11-28",
+ "key_id": "opr-2026-11"
+}
